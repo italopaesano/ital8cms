@@ -1,0 +1,9 @@
+{
+        "name": "dbApi",
+        "version": "1.0.0",
+        "description": "fornira le API per poter usare  slqlite3",
+        "author": "Italo Paesano",
+        "email": "italopaesano@protonmail.com",
+        "licenze": "MIT",
+        "note": "any note"
+}

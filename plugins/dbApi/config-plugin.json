@@ -1,0 +1,9 @@
+{
+  "active": 1,
+  "isInstalled": 1,
+  "weight": 0,
+  "dependency": {},
+  "nodeModuleDependency": {
+    "better-sqlite3": "^9.2.2"
+  }
+}

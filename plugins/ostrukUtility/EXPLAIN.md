@@ -1,0 +1,1 @@
+# questo plugin serve per caricare e mostrare vari media , come immagini video ecc

@@ -1,0 +1,9 @@
+{
+        "name": "examplePlugin",
+        "version": "1.0.0",
+        "description": " an example of examplePlugin",
+        "author": "Italo Paesano",
+        "email": "italopaesano@protonmail.com",
+        "licenze": "MIT",
+        "note": "any note"
+}

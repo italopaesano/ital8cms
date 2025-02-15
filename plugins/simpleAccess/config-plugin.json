@@ -1,0 +1,9 @@
+{
+  "active": 0,
+  "isInstalled": 0,
+  "weight": 0,
+  "dependency": {},
+  "nodeModuleDependency": {
+    "koa-session": "^7.0.2"
+  }
+}

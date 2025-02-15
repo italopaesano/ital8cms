@@ -1,0 +1,9 @@
+{
+        "name": "bootstrap",
+        "version": "1.0.0",
+        "description": " load bootstrap module in web page",
+        "author": "Italo Paesano",
+        "email": "italopaesano@protonmail.com",
+        "licenze": "MIT",
+        "note": "any note"
+}

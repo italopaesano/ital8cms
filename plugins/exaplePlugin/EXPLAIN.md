@@ -1,0 +1,1 @@
+# in questo file devi spiegare le funzionalita del plufin come usarlo ed i dettagli di funzionamento

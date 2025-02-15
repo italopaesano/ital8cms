@@ -1,0 +1,9 @@
+{
+        "name": "simpleAccess",
+        "version": "1.0.0",
+        "description": " plugin che implmenta le Accessi con koa-session",
+        "author": "Italo Paesano",
+        "email": "italopaesano@protonmail.com",
+        "licenze": "MIT",
+        "note": "any note"
+}
