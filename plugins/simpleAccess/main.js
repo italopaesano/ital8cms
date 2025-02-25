@@ -2,6 +2,8 @@
 const fs = require('fs');
 const path = require('path');
 
+const koaSession = require('koa-session');// dipendenza di questo plugin
+
 let pluginConfig = require(`${__dirname}/config-plugin.json`);// let perchè questa varibile può cambiare di valore 
 const pluginName = path.basename(  __dirname );// restituisce il nome della directory che contiene il file corrente e che è anche il nome del plugin
 const sharedObject = {};// ogetto che avrà gliogetti condiviso con gli altri plugin ES {dbApi: newdbApi} 
@@ -21,6 +23,29 @@ function unistallPlugin(){
 function upgradePlugin(){
 
 };
+
+function getMiddlewareToAdd( app ){// qui saranno elencati i Middleware che poi verranno aggiunti all'instanza di koa.js, app è l'istanza : const app = new koa();
+  const middlewareArray = Array();
+
+  app.keys = ['una-chiave-segreta-di-sessione-kgjgugbfbdresewayt5435654757156']; // Imposta le chiavi della sessione 
+
+  // Configurazione della sessione
+  const sessionCONFIG = {
+    key: 'koa.sess',
+    maxAge: 86400000,
+    overwrite: true,
+    httpOnly: true,
+    signed: true,
+    rolling: false,
+    renew: false
+  };
+
+  middlewareArray.push( // ritorna un array di midlware
+    koaSession(sessionCONFIG, app) // vedi documentazione koa-session
+  );
+
+  return middlewareArray;
+}
 
 function getObjectToShareToWebPages(){// restituisce un ogetto che sarà condiviso con i modori di template come sotto ogetto fi PassData.plugin.['nomePlugin']
 
@@ -42,17 +67,26 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
   
   const routeArray = Array();
   //ES.
-  /* routeArray.push(
+  routeArray.push(
     {
       method: 'GET',
-      path: '/css/bootstrap.min.css', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
+      path: '/login', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       handler: async (ctx) => { 
-        const bootstrapCssPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','css','bootstrap.min.css');
-        ctx.body = fs.createReadStream(bootstrapCssPath);
-        ctx.set('Content-Type', 'text/css');
+        const loginPage = path.join( __dirname , 'htmlPages', 'login.html' );
+        ctx.body = fs.createReadStream(loginPage);
+        ctx.set('Content-Type', 'text/html');
+       }
+    },
+    {
+      method: 'GET',
+      path: '/logout', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
+      handler: async (ctx) => { 
+        const logoutPage = path.join( __dirname , 'htmlPages', 'logout.html' );
+        ctx.body = fs.createReadStream(logoutPage);
+        ctx.set('Content-Type', 'text/html');
        }
     }
-  ); */
+  );
 
   return routeArray;
 }
@@ -90,6 +124,7 @@ module.exports = {
   pluginName: pluginName,
   getRouteArray: getRouteArray,
   pluginConfig: pluginConfig,
-  getHooksPage: getHooksPage
+  getHooksPage: getHooksPage,
+  getMiddlewareToAdd: getMiddlewareToAdd
 
 }

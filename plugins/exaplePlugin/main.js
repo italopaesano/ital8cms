@@ -22,6 +22,17 @@ function upgradePlugin(){
 
 };
 
+function getMiddlewareToAdd( app ){// qui saranno elencati i Middleware che poi verranno aggiunti all'instanza di koa.js, app è l'istanza : const app = new koa();
+  const middlewareArray = Array();
+
+/*   middlewareArray.push( // ritorna un array di midlware
+    {
+
+    }
+  ); */
+  return middlewareArray;
+}
+
 function getObjectToShareToWebPages(){// restituisce un ogetto che sarà condiviso con i modori di template come sotto ogetto fi PassData.plugin.['nomePlugin']
 
   return {};
@@ -90,6 +101,7 @@ module.exports = {
   pluginName: pluginName,
   getRouteArray: getRouteArray,
   pluginConfig: pluginConfig,
-  getHooksPage: getHooksPage
+  getHooksPage: getHooksPage,
+  getMiddlewareToAdd: getMiddlewareToAdd
 
 }

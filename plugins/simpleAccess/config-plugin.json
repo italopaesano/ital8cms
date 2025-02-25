@@ -1,6 +1,6 @@
 {
-  "active": 0,
-  "isInstalled": 0,
+  "active": 1,
+  "isInstalled": 1,
   "weight": 0,
   "dependency": {},
   "nodeModuleDependency": {

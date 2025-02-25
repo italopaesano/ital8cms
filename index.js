@@ -18,6 +18,10 @@ const pluginSys = new ( require("./core/pluginSys") )(); // carico il sistema di
 // carico le rotte di tutti i plugin
 pluginSys.loadRoutes( router , `/${ital8Conf.apiPrefix}`);// il secondo paramentro è il primo prefix
 const getObjectsToShareInWebPages = pluginSys.getObjectsToShareInWebPages();
+const middlewaresToLoad = pluginSys.getMiddlewaresToLoad();// questi midlware andranno caricati nell'app koa.js const app = new koa();
+middlewaresToLoad.forEach( (midlwareFn) => {
+  app.use( midlwareFn(app) ); // ricordiamo che alcuni midlware vogliono come argomento l'app di koa ,const app = new koa(); per questo midlwareFn(app)
+});
 //console.log( 'getObjectsToShareInWebPages', getObjectsToShareInWebPages);
 
 // carico il themesys

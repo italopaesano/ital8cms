@@ -36,13 +36,19 @@
   Es :
 
   ```json
-  {
-    "api": "api",
-    "admin": "admin",
-    "views": "views",
-    "baseThemePath": "../themes/default",
-    "debugMode": 1
-  }
+{
+  "apiPrefix": "api",
+  "adminPrefix": "admin",
+  "viewsPrefix": "views",
+  "baseThemePath": "../",
+  "activeTheme": "default",
+  "wwwPath": "/www",
+  "debugMode": 1,
+  "httpPort": 3000,
+  "useHttps": false,
+  "httpsPort": "",
+  "AutoRedirectHttpPortToHttpsPort": false
+}
   '''
 
 

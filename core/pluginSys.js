@@ -5,9 +5,10 @@ const semver = require('semver');
 
 class pluginSys{
 
-  #hooksPage;// variabile provata che conterrà la mappa degli hookdella pagina
+  #pluginsMiddlewares = Array();//Variabile privata che contiene l'elenco dei midlware dei plugin da aggiungere 
+  #hooksPage;// variabile privata che conterrà la mappa degli hookdella pagina
   #routes;// variabile privata che conterrà le rotte aggiunte dai vari plugin
-  #objectToShareToWebPages = {};// variabile che conterà gli ogetti restituiti dai vari plugin che saranno messi a dispozione del otore ejs e degli altri moduli
+  #objectToShareToWebPages = {};// variabile che conterà gli ogetti restituiti dai vari plugin che saranno messi a dispozione del motore ejs e degli altri moduli
   #activePlugins = new Map();// Mappa che conterrà i plugin attivi
   #pluginsToActive = new Map();// plugin da attivare non ancora attivati perchè bisogna controllare le dipendenze
 
@@ -69,6 +70,11 @@ class pluginSys{
         //aggiungi gli ogetti da condividere nei template engine
         if(plugin.getObjectToShareToWebPages){
           this.#objectToShareToWebPages[pluginName] = plugin.getObjectToShareToWebPages();
+        }
+
+        //aggiungo i midlware di ogli plugin
+        if(plugin.getMiddlewareToAdd){
+          this.#pluginsMiddlewares.concat( plugin.getMiddlewareToAdd );// concatena gli array dei vari midlware
         }
 
         // loadPluginn(); // viene chiamato dopo perchè durante il caricamento potrebbe acadere che abbia bisogno di librerie di altri plugin
@@ -173,6 +179,10 @@ class pluginSys{
 
   }// END constructor()
 
+  getMiddlewaresToLoad(){
+    return this.#pluginsMiddlewares;
+  }
+  
   getObjectsToShareInWebPages(){ // ritorno gli ogetti da condividere con gli altri 
     return this.#objectToShareToWebPages;
   }
