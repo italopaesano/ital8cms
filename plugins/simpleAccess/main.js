@@ -1,12 +1,26 @@
 
+const ital8Conf = require('../../ital8-conf.json');// questo serve a caricare le impostazioni generali del modulo ed in particolare lìapi Prefix
+
 const fs = require('fs');
 const path = require('path');
 
 const koaSession = require('koa-session');// dipendenza di questo plugin
+const ejs = require("ejs"); // serve per aggiungere il supporto ejs , che fral'altro serve a caricare bootstrap
 
 let pluginConfig = require(`${__dirname}/config-plugin.json`);// let perchè questa varibile può cambiare di valore 
 const pluginName = path.basename(  __dirname );// restituisce il nome della directory che contiene il file corrente e che è anche il nome del plugin
 const sharedObject = {};// ogetto che avrà gliogetti condiviso con gli altri plugin ES {dbApi: newdbApi} 
+
+const ejsData = {// i dati che verranno passati a èjs
+  bootstrapCss: 
+  `<link rel='stylesheet' href='/${ital8Conf.apiPrefix}/bootstrap/css/bootstrap.min.css' type='text/css'  media='all' />\n
+  <link rel='stylesheet' href='/${ital8Conf.apiPrefix}/bootstrap/css/bootstrap.min.css.map' type='text/css'  media='all' />`,
+
+  bootstrapJs: 
+  `<script src="/${ital8Conf.apiPrefix}/bootstrap/js/bootstrap.min.js" type="text/javascript" ></script>\n
+  <script src="/${ital8Conf.apiPrefix}/bootstrap/js/bootstrap.min.js.map" type="text/javascript" ></script>
+  `
+}
 
 function loadPlugin(){
   //console.log( 'sharedObject: ', sharedObject );
@@ -25,6 +39,7 @@ function upgradePlugin(){
 };
 
 function getMiddlewareToAdd( app ){// qui saranno elencati i Middleware che poi verranno aggiunti all'instanza di koa.js, app è l'istanza : const app = new koa();
+
   const middlewareArray = Array();
 
   app.keys = ['una-chiave-segreta-di-sessione-kgjgugbfbdresewayt5435654757156']; // Imposta le chiavi della sessione 
@@ -72,8 +87,8 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       method: 'GET',
       path: '/login', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       handler: async (ctx) => { 
-        const loginPage = path.join( __dirname , 'htmlPages', 'login.html' );
-        ctx.body = fs.createReadStream(loginPage);
+        const loginPage = path.join( __dirname , 'webPages', 'login.ejs' );
+        ctx.body = await ejs.renderFile( loginPage, ejsData);
         ctx.set('Content-Type', 'text/html');
        }
     },
@@ -81,8 +96,8 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       method: 'GET',
       path: '/logout', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       handler: async (ctx) => { 
-        const logoutPage = path.join( __dirname , 'htmlPages', 'logout.html' );
-        ctx.body = fs.createReadStream(logoutPage);
+        const logoutPage = path.join( __dirname , 'webPages', 'logout.ejs' );
+        ctx.body = await ejs.renderFile( logoutPage, ejsData);
         ctx.set('Content-Type', 'text/html');
        }
     }

@@ -2,8 +2,11 @@
   "active": 1,
   "isInstalled": 1,
   "weight": 0,
-  "dependency": {},
+  "dependency": {
+    "bootstrap": "^1.0.0"
+  },
   "nodeModuleDependency": {
-    "koa-session": "^7.0.2"
+    "koa-session": "^7.0.2",
+    "ejs": "^3.1.9"
   }
 }
