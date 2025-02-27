@@ -1,0 +1,16 @@
+{
+    "users": {
+        "oxtor": {
+        "email": "italopaesano@gmail.com",
+        "hashPassword": "$2b$10$pkmDu0mjqASXk14REJGLl.rpJzSNzKLtUNEfI2N2wlppFtK6vA1Lu"
+        },
+        "utente2": {
+        "email": "utente2@example.com",
+        "hashPassword": "hash_della_password"
+        },
+        "utente3": {
+        "email": "utente2@example.com",
+        "hashPassword": "hash_della_password"
+        }
+    }    
+}

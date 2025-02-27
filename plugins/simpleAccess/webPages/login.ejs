@@ -7,8 +7,78 @@
     <%- bootstrapCss %>
 </head>
 <body>
-    Pagina di login 
-
+    <%- apiPrefix %>
     <%- bootstrapJs %>
+
+    <div class="container">
+        <div class="row justify-content-center align-items-center vh-100">
+          <div class="col-md-6 col-xl-4">
+            <div class="card">
+              <div class="card-body">
+                <h3 class="card-title text-center mb-6 xl-4">Login</h3>
+                <form id="loginForm">
+                  <div class="mb-3">
+                    <label for="username" class="form-label">Username</label>
+                    <input type="text" class="form-control" id="username" name="username" required>
+                  </div>
+                  <div class="mb-3">
+                    <label for="password" class="form-label">Password</label>
+                    <input type="password" class="form-control" id="password" name="password" required>
+                  </div>
+                  <button type="button"  id="loginButton" class="btn btn-primary w-100">Accedi</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+       
+           // Funzione che esegue la chiamata POST
+        function loginUser() {
+          // Recupera i valori inseriti
+          const username = document.getElementById('username').value;
+          const password = document.getElementById('password').value;
+          
+          // Specifica l'endpoint a cui inviare la richiesta POST
+          const endpoint = `login`;
+          console.log("endpoint", endpoint);
+          
+          // Dati da inviare
+          const data = { username, password };
+          
+          // Esegue la chiamata POST utilizzando fetch
+          fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+          })
+          .then(response => response.json())
+          .then(result => {
+            console.log('Successo:', result);
+            // Qui puoi gestire la risposta, ad esempio reindirizzare l'utente o mostrare un messaggio
+          })
+          .catch(error => {
+            console.error('Errore:', error);
+            // Gestione errori
+          });
+        }
+
+        // Attiva la funzione al click sul bottone
+      document.getElementById('loginButton').addEventListener('click', loginUser);
+
+      // Attiva la funzione alla pressione del tasto Invio all'interno del form
+      document.getElementById('loginForm').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();  // Previene il comportamento di default del form
+          loginUser();
+        }
+      });
+
+      </script>
+
 </body>
 </html>

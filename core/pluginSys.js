@@ -74,7 +74,7 @@ class pluginSys{
 
         //aggiungo i midlware di ogli plugin
         if(plugin.getMiddlewareToAdd){
-          this.#pluginsMiddlewares.concat( plugin.getMiddlewareToAdd );// concatena gli array dei vari midlware
+          this.#pluginsMiddlewares.push( plugin.getMiddlewareToAdd );// sarà un array di funzioni che generano un array
         }
 
         // loadPluginn(); // viene chiamato dopo perchè durante il caricamento potrebbe acadere che abbia bisogno di librerie di altri plugin

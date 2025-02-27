@@ -10,7 +10,7 @@ il sistema di plugin funziona nel seguente modo:
 
 4) all'interno del file main.js ci saranno le seguenti funzioni:
  loadPlugin() installPlugin() unistallPlugin() upgradePlugin() getObjectToShare()
- getRouteArray()
+ getRouteArray() getMiddlewareToAdd()
 
 queste funzionisaranno poi rese disponibili attraverso un esportazione del tipo :
 
@@ -24,7 +24,9 @@ module.exports = {
         getObjectToShare: getObjectToShare,// rstituisce un ogetto che verrà condiviso con il template (es EJS) passData.plugins.['nomePlugin'] oppure con gli altri moduli
         getRouteArray: getRouteArray, //questa funzione restituirà tutte le rotte proprie del plugin
         getHooksPage: getHooksPage, // questa funzione restituirà una mappa che farà in modo che verrà eseguito un codice nelle parte ti pagina html desiderata es header main ecc
-        pluginConfig: pluginConfig
+        pluginConfig: pluginConfig,
+        getHooksPage: getHooksPage,
+        getMiddlewareToAdd: getMiddlewareToAdd
 
 }
 ```
@@ -78,7 +80,8 @@ il risultato finale del path sarà qualcosa di simile a : path: `${api_prefox}/$
         "isInstalled": 0,
         "weight": 0,
         "dependency": {},
-        "nodeModuleDependency": {}
+        "nodeModuleDependency": {},
+        "custom": {} // qui saranno inserite tutte le impostazioni specifiche del modulo 
 }
 ```
 

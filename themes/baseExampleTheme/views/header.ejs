@@ -1,6 +1,12 @@
 
 <body>
 
+<span id="apiPrefix" style="display: none;"><%- passData.apiPrefix %></span>
+<script>
+    const apiPrefix = document.getElementById('apiPrefix').innerText;
+    alert(apiPrefix);
+</script>
+
 <%- passData.pluginSys.hookPage("header", passData); %>
 
 <%- passData.pluginSys.hookPage("body", passData); %>

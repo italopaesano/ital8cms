@@ -6,7 +6,20 @@
     "bootstrap": "^1.0.0"
   },
   "nodeModuleDependency": {
+    "bcryptjs": "^3.0.2",
     "koa-session": "^7.0.2",
     "ejs": "^3.1.9"
+  },
+  "custom": {
+    "sessionKeys": "una-chiave-segreta-di-sessione-kgjgugbfbdresewayt5435654757156",
+    "sessionCONFIG" :{
+      "key": "koa.sess",
+      "maxAge": 86400000,
+      "overwrite": true,
+      "httpOnly": true,
+      "signed": true,
+      "rolling": false,
+      "renew": false
+    }
   }
 }

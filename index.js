@@ -3,6 +3,7 @@ const koa = require('koa');
 const app = new koa();
 const koaClassicServer = require("koa-classic-server");
 const ejs = require("ejs");
+const bodyParser = require('koa-bodyparser');// rendere opzionale il caricamento , possibile utilitàper i moduli 
 const ital8Conf = require('./ital8-conf.json');
 
 
@@ -10,6 +11,7 @@ const ital8Conf = require('./ital8-conf.json');
 const koaRouter = require('@koa/router');
 const router = new koaRouter();// { prefix: '/api' } = iniziale del percorso in maniera predfinita
 
+app.use(bodyParser());// non indispenzabile per il funzionamento base ma potenzialmente importante per molti moduli , gestire un caricamento opzionale ?
 app.use(router.routes());
 app.use(router.allowedMethods());
 //END librerie per il routing
@@ -21,8 +23,12 @@ const getObjectsToShareInWebPages = pluginSys.getObjectsToShareInWebPages();
 // adesso faccio in modo di caricare tutti i vari midlware dei vari pugin
 const middlewaresToLoad = pluginSys.getMiddlewaresToLoad();// questi midlware andranno caricati nell'app koa.js const app = new koa();
 middlewaresToLoad.forEach( (midlwareFn) => {
-  app.use( midlwareFn(app) ); // ricordiamo che alcuni midlware vogliono come argomento l'app di koa ,const app = new koa(); per questo midlwareFn(app)
+  const middlewareArrey = midlwareFn(app);// questa funzione restituirà un array i midlware che poi dovranno essere agiunti singolarmente , ogni plugin quindi restituirà il suo array di midlway da aggiungere
+  middlewareArrey.forEach( (middleware) =>{
+    app.use(  middleware );
+  });
 });
+console.log( "--------app.middleware ----------" , app.middleware);// visualizza quali midlware sono caricati 
 //console.log( 'getObjectsToShareInWebPages', getObjectsToShareInWebPages);
 
 // carico il themesys

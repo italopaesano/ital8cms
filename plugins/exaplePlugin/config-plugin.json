@@ -3,5 +3,6 @@
   "isInstalled": 0,
   "weight": 0,
   "dependency": {},
-  "nodeModuleDependency": {}
+  "nodeModuleDependency": {},
+  "custom": {}
 }
