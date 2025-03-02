@@ -28,7 +28,7 @@ middlewaresToLoad.forEach( (midlwareFn) => {
     app.use(  middleware );
   });
 });
-console.log( "--------app.middleware ----------" , app.middleware);// visualizza quali midlware sono caricati 
+//console.log( "--------app.middleware ----------" , app.middleware);// visualizza quali midlware sono caricati 
 //console.log( 'getObjectsToShareInWebPages', getObjectsToShareInWebPages);
 
 // carico il themesys

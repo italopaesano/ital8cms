@@ -59,6 +59,7 @@
           .then(response => response.json())
           .then(result => {
             console.log('Successo:', result);
+            window.location.replace('/logged');// redirect
             // Qui puoi gestire la risposta, ad esempio reindirizzare l'utente o mostrare un messaggio
           })
           .catch(error => {

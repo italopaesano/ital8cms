@@ -11,15 +11,18 @@
     "ejs": "^3.1.9"
   },
   "custom": {
+    "loginReservedPrefix": ["/reserved", "/private", "/lib"],
+    "defaultLoginRedirectURL": "/logged",
     "sessionKeys": "una-chiave-segreta-di-sessione-kgjgugbfbdresewayt5435654757156",
     "sessionCONFIG" :{
       "key": "koa.sess",
       "maxAge": 86400000,
       "overwrite": true,
-      "httpOnly": true,
-      "signed": true,
-      "rolling": false,
-      "renew": false
+      "httpOnly": true, 
+      "signed": true, 
+      "rolling": false, 
+      "renew": false, 
+      "secure": true
     }
   }
 }

@@ -55,17 +55,15 @@ function getMiddlewareToAdd( app ){// qui saranno elencati i Middleware che poi 
 
   app.keys = pluginConfig.custom.sessionKeys; // Imposta le chiavi della sessione 
 
-  const item = koaSession(pluginConfig.custom.sessionCONFIG, app) // vedi documentazione koa-session
-  console.log("typeof koaSession:" , typeof item);
   middlewareArray.push( // ritorna un array di midlware
-    item,
-    async (ctx, next) => {
+    koaSession(pluginConfig.custom.sessionCONFIG, app),
+/*     async (ctx, next) => {
       // Attende l'esecuzione dei middleware successivi
       await next();
       // Se esiste già una risposta, aggiunge del testo alla fine,
       // altrimenti imposta la risposta con il testo
       ctx.body = (ctx.body || '') + "\nTesto aggiunto dal middleware!";
-    }
+    } */
   );
 
   return middlewareArray;
@@ -107,7 +105,8 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       handler: async (ctx) => {//
         const { username, password } = ctx.request.body;
         if( await libAccess.autenticate( username, password ) ){// login riuscito 
-          //ctx.session.user = { name: username };// inizializzo una sessione
+          ctx.session.user = { name: username };// inizializzo una sessione
+          //ctx.redirect(pluginConfig.custom.defaultLoginRedirectURL);
           ctx.status = 200;
           ctx.body = { message: 'Login riuscito!', user: username };
           return;
@@ -118,6 +117,14 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         }
         /* ctx.body = await ejs.renderFile( loginPage, ejsData);
         ctx.set('Content-Type', 'text/html'); */
+       }
+    },
+    {
+      method: 'GET',
+      path: '/logged', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
+      handler: async (ctx) => { 
+        ctx.body = `complimenti sei loggato ${ctx.session.user}`;
+        ctx.set('Content-Type', 'text/html');
        }
     },
     {
