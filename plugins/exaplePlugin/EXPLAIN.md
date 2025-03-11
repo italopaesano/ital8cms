@@ -10,6 +10,7 @@ nel file config-plugin.json ci sarà una struttura di questo tipo
   "weight": 0,
   "dependency": {},
   "nodeModuleDependency": {},
+  "nodeModuleDependencyPriority": {},// dipendenze gestite da priorityMiddlewares.js moduli di node per cui è importante l'ordine di caricamento Es koa-session deve essere caricato prima di '@koa/router 
   "custom": {} // qui saranno inserite tutte le impostazioni specifiche del modulo 
 }
 ```

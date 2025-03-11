@@ -4,7 +4,6 @@
 const fs = require('fs');
 const path = require('path');
 
-const koaSession = require('koa-session').default || require('koa-session');//dovuto al fatto che originariamente è un modulo sviluppato per ES module
 const ejs = require("ejs"); // serve per aggiungere il supporto ejs , che fral'altro serve a caricare bootstrap
 
 const ital8Conf = require('../../ital8-conf.json');// questo serve a caricare le impostazioni generali del modulo ed in particolare lìapi Prefix
@@ -53,17 +52,19 @@ function getMiddlewareToAdd( app ){// qui saranno elencati i Middleware che poi 
 
   const middlewareArray = Array();
 
-  app.keys = pluginConfig.custom.sessionKeys; // Imposta le chiavi della sessione 
-
   middlewareArray.push( // ritorna un array di midlware
-    koaSession(pluginConfig.custom.sessionCONFIG, app),
-/*     async (ctx, next) => {
-      // Attende l'esecuzione dei middleware successivi
+
+    async (ctx, next) => {// questo midlware permette laccessp a determinati prefix solo a gli utenti loggati
+      if (pluginConfig.custom.loggedReservedPrefix.some(prefix => ctx.path.startsWith(prefix))) {
+        if (!ctx.session || !ctx.session.authenticated) {
+          ctx.status = 401;
+          ctx.body = { message: 'Accesso negato. Effettua il login per accedere a questa risorsa.' };
+          return; // Interrompi l'esecuzione del middleware
+        }
+      }
       await next();
-      // Se esiste già una risposta, aggiunge del testo alla fine,
-      // altrimenti imposta la risposta con il testo
-      ctx.body = (ctx.body || '') + "\nTesto aggiunto dal middleware!";
-    } */
+ 
+    }
   );
 
   return middlewareArray;
@@ -94,9 +95,12 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       method: 'GET',
       path: '/login', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       handler: async (ctx) => { 
-        const loginPage = path.join( __dirname , 'webPages', 'login.ejs' );
-        ctx.body = await ejs.renderFile( loginPage, ejsData);
-        ctx.set('Content-Type', 'text/html');
+
+          const loginPage = path.join( __dirname , 'webPages', 'login.ejs' );
+          ctx.body = await ejs.renderFile( loginPage, ejsData);
+          ctx.set('Content-Type', 'text/html');
+          return;
+
        }
     },
     { //questo end point POST verrà chemato dal suo corrispondente GET per implementare il login se le credenziali sono corrette
@@ -105,15 +109,17 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       handler: async (ctx) => {//
         const { username, password } = ctx.request.body;
         if( await libAccess.autenticate( username, password ) ){// login riuscito 
+
+          ctx.session.authenticated = true;
           ctx.session.user = { name: username };// inizializzo una sessione
-          //ctx.redirect(pluginConfig.custom.defaultLoginRedirectURL);
-          ctx.status = 200;
-          ctx.body = { message: 'Login riuscito!', user: username };
+          ctx.redirect(pluginConfig.custom.defaultLoginRedirectURL);
           return;
+
         }else{//login fallito
-          ctx.status = 401;
-          ctx.body = { error: 'Credenziali non valide' };
+          //console.log('----------------login fallito --------------');
+          ctx.redirect(`/${ital8Conf.apiPrefix}/${pluginName}/login?error=invalid`);// se il login fallissce si viene reindirizzati nella pagina di login
           return;
+
         }
         /* ctx.body = await ejs.renderFile( loginPage, ejsData);
         ctx.set('Content-Type', 'text/html'); */
@@ -123,8 +129,18 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       method: 'GET',
       path: '/logged', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       handler: async (ctx) => { 
-        ctx.body = `complimenti sei loggato ${ctx.session.user}`;
-        ctx.set('Content-Type', 'text/html');
+        if (!ctx.session || !ctx.session.authenticated) {
+
+          ctx.body = `NON sei loggato : ${ JSON.stringify( ctx.session) }`;
+          ctx.type = 'text';
+
+        }else{
+
+          ctx.body = `complimenti sei loggato ${ctx.session.user} sessione: ${ JSON.stringify( ctx.session) }`;
+          ctx.type = 'text';
+
+        }
+        //ctx.set('Content-Type', 'text/plain');
        }
     },
     {
@@ -140,6 +156,9 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       method: 'POST', 
       path: '/logout', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       handler: async (ctx) => {//
+        ctx.session = null;
+        ctx.body = 'Logout effettuato con successo';
+        ctx.type = 'text';
         /* ctx.body = await ejs.renderFile( loginPage, ejsData);
         ctx.set('Content-Type', 'text/html'); */
        }

@@ -3,18 +3,11 @@ const koa = require('koa');
 const app = new koa();
 const koaClassicServer = require("koa-classic-server");
 const ejs = require("ejs");
-const bodyParser = require('koa-bodyparser');// rendere opzionale il caricamento , possibile utilitàper i moduli 
 const ital8Conf = require('./ital8-conf.json');
 
-
-// setto le librerie per il routing questi percorsi devono essere esclusi da koa-classic-server
-const koaRouter = require('@koa/router');
-const router = new koaRouter();// { prefix: '/api' } = iniziale del percorso in maniera predfinita
-
-app.use(bodyParser());// non indispenzabile per il funzionamento base ma potenzialmente importante per molti moduli , gestire un caricamento opzionale ?
-app.use(router.routes());
-app.use(router.allowedMethods());
-//END librerie per il routing
+const priorityMiddlewares = require('./core/priorityMiddlewares/priorityMiddlewares.js')(app);
+router = priorityMiddlewares.router ;
+//const priorityMiddlewares(app); // carico i imidlware che vanno impostati in ordine preciso di caricamento
 
 const pluginSys = new ( require("./core/pluginSys") )(); // carico il sistema di plugin e ne istanzio pure un ogetto
 // carico le rotte di tutti i plugin

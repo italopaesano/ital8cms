@@ -12,6 +12,17 @@
 
     pagina di logout
 
+    <div class="container d-flex align-items-center justify-content-center" style="min-height: 100vh;">
+        <div class="card shadow p-4" style="width: 100%; max-width: 400px;">
+          <h3 class="card-title text-center mb-4">Logout</h3>
+          <p class="text-center">Sei sicuro di voler effettuare il logout?</p>
+          <!-- Il form invia una richiesta POST all'endpoint /logout -->
+          <form method="POST">
+            <button type="submit" class="btn btn-danger w-100">Logout</button>
+          </form>
+        </div>
+      </div>
+
     <%- bootstrapJs %>
 </body>
 </html>

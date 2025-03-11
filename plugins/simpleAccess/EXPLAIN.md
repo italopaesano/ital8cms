@@ -44,8 +44,18 @@ essendo la sua filosofia minimale non implemento neanche un database ma i dati d
     "ejs": "^3.1.9"
   },
   "custom": {
-    "loginReservedPrefix": ["/reserved", "/private", "/lib"],// prfix nei quali sarà automaticamente richiesta di essere logati 
-    "sessionKeys": "una-chiave-segreta-di-sessione-kgjgugbfbdresewayt5435654757156", //dato che serve 
+    "loggedReservedPrefix": ["/reserved", "/private", "/lib"],// prfix nei quali sarà automaticamente richiesta di essere logati 
+    "defaultLoginRedirectURL": "/api/simpleAccess/logged",// url di default per il redirect dopo che illogi ha avuto successo
+    }
+  }
+}
+
+```
+
+#OLD
+```js
+//OLD QUESTO CONFIGURAZIONI ORA VENGONOGESTITE IN : prioritaryMidlware.js
+"sessionKeys": "una-chiave-segreta-di-sessione-kgjgugbfbdresewayt5435654757156", //dato che serve 
     "sessionCONFIG" :{
       "key": "koa.sess",
       "maxAge": 86400000,
@@ -57,9 +67,7 @@ essendo la sua filosofia minimale non implemento neanche un database ma i dati d
       "renew": false, 
       "secure": true, 
       "sameSite": null //ATTENZIONE QUESTO VALORE   NON DEVE ESSERE null , altrimenti il programmada error  citato nella configurazione di koa-session ma meglio rimuoverlo
-    }
-  }
-}
+
 
 ```
 

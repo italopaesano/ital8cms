@@ -7,22 +7,25 @@
   },
   "nodeModuleDependency": {
     "bcryptjs": "^3.0.2",
-    "koa-session": "^7.0.2",
     "ejs": "^3.1.9"
   },
+  "nodeModuleDependencyPriority": {
+    "koa-session": "^7.0.2"
+  },
   "custom": {
-    "loginReservedPrefix": ["/reserved", "/private", "/lib"],
-    "defaultLoginRedirectURL": "/logged",
+    "loggedReservedPrefix": ["/reserved", "/private", "/lib"],
+    "defaultLoginRedirectURL": "/api/simpleAccess/logged",
     "sessionKeys": "una-chiave-segreta-di-sessione-kgjgugbfbdresewayt5435654757156",
     "sessionCONFIG" :{
       "key": "koa.sess",
       "maxAge": 86400000,
+      "autoCommit": true,
       "overwrite": true,
       "httpOnly": true, 
       "signed": true, 
       "rolling": false, 
       "renew": false, 
-      "secure": true
+      "secure": false
     }
   }
 }

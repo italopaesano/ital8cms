@@ -4,5 +4,6 @@
   "weight": 0,
   "dependency": {},
   "nodeModuleDependency": {},
+  "nodeModuleDependencyPriority": {},
   "custom": {}
 }
