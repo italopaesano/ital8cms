@@ -1,0 +1,25 @@
+{
+    "_comment": "ATTENZIONE al momento non ci possono essere piu account con lo stesso exchange perchè con nomi uguali l'ultimo sovrappone il precedente exchangeName de corrispondere ad uno dei nomi di ccxt.exchanges altrimenti non funziona id è semplicemente prograssivo, accountName serve perchè ogni excange può anche avere più account ",
+
+
+    "exchanges": [
+
+        {
+            "exchangeName": "binance",
+            "id": 0,
+            "accountName": "main account",
+            "refCoin": "USDT",
+            "apiKey": "u46d06xi5uGxT9Esy7FMN6N5NX4xRG5exwJv50n8wYh9xcKI4v1z0UEwrPLBjT8c",
+            "secret": "coifhhHuLSUBA5Yo6AH9OUQa9j4VhfFdTYWdfKpJskz1QRJukC3f2pYoYXoj8iJ6"
+        },
+        {
+            "exchangeName": "cryptocom",
+            "id": 1,
+            "accountName": "main account",
+            "refCoin": "USDT",
+            "apiKey": "hpUtfTTNMhcrbKR6ALsetx",
+            "secret": "JHD2guk7SwLrN8vevJVN8H"
+        }
+
+    ]
+}

@@ -1,0 +1,9 @@
+{
+        "name": "ccxt",
+        "version": "1.0.0",
+        "description": " L'account binance con le mie credenziali api",
+        "author": "Italo Paesano",
+        "email": "italopaesano@protonmail.com",
+        "licenze": "MIT",
+        "note": "any note"
+}
