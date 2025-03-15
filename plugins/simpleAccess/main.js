@@ -97,6 +97,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       handler: async (ctx) => { 
 
           const loginPage = path.join( __dirname , 'webPages', 'login.ejs' );
+          ejsData.referrerTo = ctx.headers.referer || '/'; //aggiungo hai dati passati referrerTo che serve a sapere dove poter reindirizzare la pagina dopo il login
           ctx.body = await ejs.renderFile( loginPage, ejsData);
           ctx.set('Content-Type', 'text/html');
           return;
@@ -107,17 +108,21 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       method: 'POST',
       path: '/login', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       handler: async (ctx) => {//
-        const { username, password } = ctx.request.body;
+        const { username, password, referrerTo } = ctx.request.body;
         if( await libAccess.autenticate( username, password ) ){// login riuscito 
 
           ctx.session.authenticated = true;
           ctx.session.user = { name: username };// inizializzo una sessione
-          ctx.redirect(pluginConfig.custom.defaultLoginRedirectURL);
+          if(pluginConfig.custom.redirectToHttpReferer){// se è impostata questa variabile la redirezione avverrà nella pagina dalla quale è partita il click per l appagina di login
+            ctx.redirect(referrerTo);
+          }else{// altrimenti rediriggo la pagina in un url di default definito nella configurazione
+            ctx.redirect(pluginConfig.custom.defaultLoginRedirectURL);
+          }
           return;
 
         }else{//login fallito
           //console.log('----------------login fallito --------------');
-          ctx.redirect(`/${ital8Conf.apiPrefix}/${pluginName}/login?error=invalid`);// se il login fallissce si viene reindirizzati nella pagina di login
+          ctx.redirect(`/${ital8Conf.apiPrefix}/${pluginName}/login?error=invalid&referrerTo=${referrerTo}`);// se il login fallissce si viene reindirizzati nella pagina di login
           return;
 
         }
@@ -148,6 +153,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       path: '/logout', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       handler: async (ctx) => { 
         const logoutPage = path.join( __dirname , 'webPages', 'logout.ejs' );
+        ejsData.referrerTo = ctx.headers.referer || '/'; //aggiungo hai dati passati referrerTo che serve a sapere dove poter reindirizzare la pagina dopo il logout
         ctx.body = await ejs.renderFile( logoutPage, ejsData);
         ctx.set('Content-Type', 'text/html');
        }
@@ -156,11 +162,11 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       method: 'POST', 
       path: '/logout', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       handler: async (ctx) => {//
+        const {referrerTo } = ctx.request.body;
         ctx.session = null;
-        ctx.body = 'Logout effettuato con successo';
-        ctx.type = 'text';
-        /* ctx.body = await ejs.renderFile( loginPage, ejsData);
-        ctx.set('Content-Type', 'text/html'); */
+        /* ctx.body = 'Logout effettuato con successo';
+        ctx.type = 'text'; */
+        ctx.redirect(referrerTo);
        }
     }
   );
@@ -175,12 +181,48 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
 
 function getHooksPage(){
 
-  const fnInPageMap = new Map();
 
+
+  const HookMap = new Map();
+
+  if(pluginConfig.custom.useLoginStatusBox){ // visualizzo lo LoginStatusBox solo se la corrispettiva variabile è settata nelle impostazioni 
+    HookMap.set( 'header', (passData) => {
+      let message; 
+
+      if(passData.session.user){
+        message = `ciao ${passData.session.user.name} <br> <a href="/${ital8Conf.apiPrefix}/simpleAccess/logout">Logout</a>` ;
+      }else{
+        message = `non sei loggato <br> <a href="/${ital8Conf.apiPrefix}/simpleAccess/login">Login</a>`;
+      }
+      
+      return `
+      <style>
+      #loginStatusBox {
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        z-index: 1050;
+      }
+      </style>
+
+      <!-- Riquadro stato login -->
+    <div id="loginStatusBox" class="card shadow border-primary">
+      <div class="card-body p-2">
+        <div id="loginStatus" class="text-end">
+          <!-- Contenuto dinamico qui -->
+          <span class="text-muted">${ message }</span>
+        </div>
+      </div>
+    </div>
+      
+        `;
+      });
+
+    }
   //fnInPageMap.set( 'body', (passData) => '<h3>ciao a tutti</h3>');
   //fnInPageMap.set('footer', (passData) => '<b>sono nel footer</b>');
 
-  return fnInPageMap;
+  return HookMap;
   
 /*   new Map(
     ['body', function(passData) {return 'ciao a tutti';}],

@@ -75,12 +75,12 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
 
 function getHooksPage(){
 
-  const fnInPageMap = new Map();
+  const HookMap = new Map();
 
-  //fnInPageMap.set( 'body', (passData) => '<h3>ciao a tutti</h3>');
-  //fnInPageMap.set('footer', (passData) => '<b>sono nel footer</b>');
+  //HookMap.set( 'body', (passData) => '<h3>ciao a tutti</h3>');
+  //HookMap.set('footer', (passData) => '<b>sono nel footer</b>');
 
-  return fnInPageMap;
+  return HookMap;
   
 /*   new Map(
     ['body', function(passData) {return 'ciao a tutti';}],

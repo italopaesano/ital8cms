@@ -4,6 +4,25 @@
 questo plugin cerca di realizare un semplice modulo di autenticazione 
 essendo la sua filosofia minimale non implemento neanche un database ma i dati dei clienti saranno immagzinati in un file .json
 
+# nota sul redirezione della pagina dopo il login 
+
+Quando un utente accede alla pagina di login, l’indirizzo della pagina di origine (cioè quella da cui è arrivato) viene recuperato leggendo l’header HTTP Referer, che in Koa.js è disponibile tramite ctx.headers.referer.
+
+Questo indirizzo viene passato nel form come parametro nascosto referrerTo, in modo da poterlo usare per la redirezione dopo un login riuscito.
+
+Se il login ha successo, l’utente viene reindirizzato a referrerTo, tornando così automaticamente alla pagina da cui era partito.
+
+Se invece il login fallisce, la pagina di login viene semplicemente ricaricata con un messaggio d’errore, ma conservando ancora referrerTo nella query string, così da mantenerlo anche per il tentativo successivo.
+
+quindi se presente nei paramenti delle querystring un paramentro referrerTo viene usanto questo per sapere dove reindirizzare la pagina 
+se non esiste questo paramentro nella query sting allora viene usato l'header httom refere che in koa.js viene contenuto in ctx.headers.referer.
+questo per fare in modo che dopo il login si venga reindirizzati correttamente alla pagina di origin anche se vi è stato qualche tentativo di login fallito 
+
+esempio di URL che viene ricaricato quando un login fallisce http://localhost:3003/login?error=invalid&referrerTo=http://localhost:3003/
+error=invali -> mostra il messaggio di errore 
+referrerTo=http://localhost:3003/ --> è l'url dove rediriggere la pagina in caso dilogin riuscito 
+se l'utente insrisce correttamente i dati al primo colpo , allora l'url di redirezione sara l'header refer che si trova in ctx.headers.referer.
+
 # i dati degli utenti vengono immagazinatinel file:
 ## usersAccounts.json
 // struttura di esempio del file

@@ -14,18 +14,8 @@
   },
   "custom": {
     "loggedReservedPrefix": ["/reserved", "/private", "/lib"],
+    "redirectToHttpReferer": true,
     "defaultLoginRedirectURL": "/api/simpleAccess/logged",
-    "sessionKeys": "una-chiave-segreta-di-sessione-kgjgugbfbdresewayt5435654757156",
-    "sessionCONFIG" :{
-      "key": "koa.sess",
-      "maxAge": 86400000,
-      "autoCommit": true,
-      "overwrite": true,
-      "httpOnly": true, 
-      "signed": true, 
-      "rolling": false, 
-      "renew": false, 
-      "secure": false
-    }
+    "useLoginStatusBox" : true
   }
 }

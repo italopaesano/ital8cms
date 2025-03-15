@@ -18,6 +18,7 @@
           <p class="text-center">Sei sicuro di voler effettuare il logout?</p>
           <!-- Il form invia una richiesta POST all'endpoint /logout -->
           <form method="POST">
+            <input type="hidden" id="referrerTo" name="referrerTo" value="<%- referrerTo %>">
             <button type="submit" class="btn btn-danger w-100">Logout</button>
           </form>
         </div>

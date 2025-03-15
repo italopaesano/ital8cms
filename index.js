@@ -46,6 +46,7 @@ app.use(
               filePath: filePath,
               href: ctx.href,
               query: ctx.query,
+              session: ctx.session || undefined, // DA MIGLIORARE qusta variabile serve al  Plugin simpleAccess per gestire la visualizazione dele sessioni nell'hook page
             }
           });
         },

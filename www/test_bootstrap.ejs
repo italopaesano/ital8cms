@@ -1,5 +1,5 @@
-<%- include(`${passData.baseThemePath}/views/head`) %>
-<%- include(`${passData.baseThemePath}/views/header`); %>
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs' ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs' ) ) %>
 
 <div class="container">
   <div class="row">
@@ -9,4 +9,4 @@
   </div>
 </div>
 
-<%- include(`${passData.baseThemePath}/views/footer`) %>
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs' ) ) %>

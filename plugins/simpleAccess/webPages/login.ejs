@@ -22,18 +22,25 @@
                   <label class="form-label text-danger">Credenziali non valide</label>
                 </div>
 
-                  <!-- Script lato client per gestire il messaggio di errore -->
+                <!-- Script lato client per gestire il messaggio di errore -->
                 <script>
                   document.addEventListener("DOMContentLoaded", function() {
                     const params = new URLSearchParams(window.location.search);
+
+                    // Se esiste il parametro "referrerTo", aggiorna il campo hidden
+                    if (params.has("referrerTo")) {
+                      document.getElementById("referrerTo").value = params.get("referrerTo");
+                    }
+
+                    // Se esiste il parametro "error", mostra il messaggio d'errore
                     if (params.has('error')) {
-                      // Se il parametro error è presente, rendi visibile il messaggio d'errore
                       document.getElementById('errorDiv').classList.remove('d-none');
                     }
                   });
                 </script>
 
                 <form id="loginForm" method="POST">
+                  <input type="hidden" id="referrerTo" name="referrerTo" value="<%- referrerTo %>">
                   <div class="mb-3">
                     <label for="username" class="form-label">Username</label>
                     <input type="text" class="form-control" id="username" name="username" required>
