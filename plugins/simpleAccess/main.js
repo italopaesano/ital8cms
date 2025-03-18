@@ -189,8 +189,8 @@ function getHooksPage(){
     HookMap.set( 'header', (passData) => {
       let message; 
 
-      if(passData.session.user){
-        message = `ciao ${passData.session.user.name} <br> <a href="/${ital8Conf.apiPrefix}/simpleAccess/logout">Logout</a>` ;
+      if(passData.ctx.session.user){
+        message = `ciao ${passData.ctx.session.user.name} <br> <a href="/${ital8Conf.apiPrefix}/simpleAccess/logout">Logout</a>` ;
       }else{
         message = `non sei loggato <br> <a href="/${ital8Conf.apiPrefix}/simpleAccess/login">Login</a>`;
       }
