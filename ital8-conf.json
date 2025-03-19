@@ -1,12 +1,13 @@
 {
   "apiPrefix": "api",
   "adminPrefix": "admin",
+  "enableAdmin": true,
   "viewsPrefix": "views",
   "baseThemePath": "../",
   "activeTheme": "default",
   "wwwPath": "/www",
   "debugMode": 1,
-  "httpPort": 3000,
+  "httpPort": 3001,
   "useHttps": false,
   "httpsPort": "",
   "AutoRedirectHttpPortToHttpsPort": false
