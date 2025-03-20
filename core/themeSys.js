@@ -6,15 +6,21 @@ class themeSys{
 
   //#fnInPageMap;// variabile privata
 
-  constructor( theItal8Conf , activeTheme = theItal8Conf.activeTheme ){// OLD OpluginSys. incorpora un istanza della classe pluginSys quindi un oggetto pluginSys da questo la O grande iniziale
+  constructor( theItal8Conf ){// OLD OpluginSys. incorpora un istanza della classe pluginSys quindi un oggetto pluginSys da questo la O grande iniziale
     this.ital8Conf = theItal8Conf ;//OLD require('../ital8-conf.json');
-    this.activeTheme = activeTheme;// nome del tema attivoQUESTA DEFINIZIONE SERVE A PERMETTERE DI IMPOSTARE UN TEMA ATTIVO DIVERSO DA QUELLO IMPOSTATO NEL FIEL DI CONFIGUAZIONE , AD ESEMPIO  PER I FILE DI ADMIN IL TEMA ATTIVO SARÀ SEMPRE QUELLO DI DEFULT 
+    //this.activeTheme = activeTheme;// nome del tema attivoQUESTA DEFINIZIONE SERVE A PERMETTERE DI IMPOSTARE UN TEMA ATTIVO DIVERSO DA QUELLO IMPOSTATO NEL FIEL DI CONFIGUAZIONE , AD ESEMPIO  PER I FILE DI ADMIN IL TEMA ATTIVO SARÀ SEMPRE QUELLO DI DEFULT 
     //this.#fnInPageMap = OpluginSys.fnInPage;
   }
 
   getThemePartPath( partName ){// partName Es footer.ejs header.ejs ecc
     //console.log(`${__dirname}/themes/${ital8Conf.activeTheme}/views/${partName}`);
-    return `${__dirname}/../themes/${this.activeTheme}/views/${partName}`;
+    return `${__dirname}/../themes/${this.ital8Conf.activeTheme}/views/${partName}`;
+  }
+
+  // questa funzionesarà chiamata nela Pagine .ejs di amministrazione in core/admin/webPage
+  getAdminThemePartPath( partName ){// partName Es footer.ejs header.ejs ecc
+    //console.log(`${__dirname}/themes/${ital8Conf.activeTheme}/views/${partName}`);
+    return `${__dirname}/../themes/${this.ital8Conf.adminActiveTheme}/views/${partName}`;
   }
   /* 
   questo metodo prenderà comeparamentro la parte della pagina chesu vuole generare

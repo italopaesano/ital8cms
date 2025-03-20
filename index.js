@@ -61,8 +61,6 @@ app.use(
 //START ADESSO CARICO LA PARTE DI ADMIN SE RICHIESTA 
 if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
 
-  const adminThemeSys = new ( require('./core/themeSys') ) ( ital8Conf , "default" );// viene creato un altro theme system per impostare staticamente il tema per l'admin al tema di : ---> "default" e carciare quindi quello 
-
   app.use( 
     koaClassicServer(
       path.join(__dirname, 'core', 'admin', 'webPages'),// punto alla cartedda delle pagine di admin
@@ -78,7 +76,7 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
                 apiPrefix: ital8Conf.apiPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamare in modo corretto e flessibile le api ad esempio dei vari plugin
                 pluginSys: pluginSys, // sistema dei plugin
                 plugin: getObjectsToShareInWebPages,// quicondivo gli ogetti publidi dei plugin
-                themeSys: adminThemeSys,// thema dei temi con il tema in usao qullo di --->default
+                themeSys: themeSys,// thema dei temi con il tema in usao qullo di --->default
                 //baseThemePath: `${ital8Conf.baseThemePath}` ,OLD -> mi sa che non serve più// default -> "../themes/default" -->baseThemePath contiene il percorso di base del tema corrente
                 filePath: filePath,
                 href: ctx.href,

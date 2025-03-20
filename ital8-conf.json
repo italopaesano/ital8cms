@@ -5,9 +5,10 @@
   "viewsPrefix": "views",
   "baseThemePath": "../",
   "activeTheme": "default",
+  "adminActiveTheme": "default",
   "wwwPath": "/www",
   "debugMode": 1,
-  "httpPort": 3001,
+  "httpPort": 3000,
   "useHttps": false,
   "httpsPort": "",
   "AutoRedirectHttpPortToHttpsPort": false
