@@ -24,24 +24,28 @@ referrerTo=http://localhost:3003/ --> è l'url dove rediriggere la pagina in cas
 se l'utente insrisce correttamente i dati al primo colpo , allora l'url di redirezione sara l'header refer che si trova in ctx.headers.referer.
 
 # i dati degli utenti vengono immagazinatinel file:
-## usersAccounts.json
+## userAccount.json
 // struttura di esempio del file
 ```js
+//ATTENZIONE PIÙ È BASSO L'ID DEL RUOLO E PIÒ PERMESSI HA UN iD = 0 --> utente Root di defoult ha accesso a tutto
 {
-    "users": {
-        "oxtor": {
+  "users": {
+      "oxtor": {
         "email": "italopaesano@gmail.com",
-        "hashPassword": "$2b$10$pkmDu0mjqASXk14REJGLl.rpJzSNzKLtUNEfI2N2wlppFtK6vA1Lu"
-        },
-        "utente2": {
+        "hashPassword": "$2b$10$pkmDu0mjqASXk14REJGLl.rpJzSNzKLtUNEfI2N2wlppFtK6vA1Lu",
+        "roleId": 1
+      },
+      "utente2": {
         "email": "utente2@example.com",
-        "hashPassword": "hash_della_password"
-        },
-        "utente3": {
+        "hashPassword": "hash_della_password",
+        "roleId": 2
+      },
+      "utente3": {
         "email": "utente2@example.com",
-        "hashPassword": "hash_della_password"
-        }
-    }    
+        "hashPassword": "hash_della_password",
+        "roleId": 3
+      }
+    }
 }
 
 ```

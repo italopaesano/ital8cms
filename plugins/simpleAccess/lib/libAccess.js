@@ -1,7 +1,7 @@
 // in questo file vi sarà il codice per gesire l'a sessione .
 
 const bcrypt = require('bcryptjs');// serve per calcolare l' hash della passord
-const usersAccounts = require('../usersAccounts.json');
+const usersAccounts = require('../userAccount.json');
 
 async function autenticate( username ,password){
 

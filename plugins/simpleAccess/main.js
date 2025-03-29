@@ -14,6 +14,8 @@ let pluginConfig = require(`${__dirname}/config-plugin.json`);// let perchè que
 const pluginName = path.basename(  __dirname );// restituisce il nome della directory che contiene il file corrente e che è anche il nome del plugin
 const sharedObject = {};// ogetto che avrà gliogetti condiviso con gli altri plugin ES {dbApi: newdbApi} 
 
+const userManagement = require('./userManagement');// necessario per gestire gli utenti 
+
 const ejsData = {// i dati che verranno passati a èjs
   apiPrefix: 
   `<span id="apiPrefix" style="display: none;">${ital8Conf.apiPrefix}</span><!-- questa parte di codice serve ad impostare la variabile apiPrefix -->
@@ -167,6 +169,53 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         /* ctx.body = 'Logout effettuato con successo';
         ctx.type = 'text'; */
         ctx.redirect(referrerTo);
+       }
+    },
+      // ATTENZIONE BISOGNA LIMITARE l'ACCESSO A QUESTO RL SOLO A UTENTI LOGGATI
+    { // url richiesto(dalla pagina di amministrazione) per ottenere la lista degli utenti attivi nel sito 
+      method: 'GET', 
+      path: '/userList', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
+      handler: async (ctx) => {//
+        const userFilePath = path.join(__dirname, 'userAccount.json');
+        try {
+          const userAccountData = fs.readFileSync(userFilePath, 'utf8');
+          const userAccount = JSON.parse(userAccountData);
+          ctx.body = Object.keys(userAccount.users); // RESTITUISCE UN ARRAY CONTENTENTE TUTTI I NOMI DEGLI UTENTI
+        } catch (error) {
+          ctx.status = 500;
+          ctx.body = { error: 'Unable to retrieve users list' };
+        }
+
+        ctx.type = 'application/json'; // oppure semplicemente 'json'
+       }
+    },
+    { // url richiesto(dalla pagina di amministrazione) per ottenere la lista degli utenti attivi nel sito 
+      method: 'GET', 
+      path: '/roleList', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
+      handler: async (ctx) => {//
+        const roleFilePath = path.join(__dirname, 'userRole.json');
+        try {
+          const roleData = fs.readFileSync(roleFilePath, 'utf8');
+          ctx.body = JSON.parse(roleData);
+        } catch (error) {
+          ctx.status = 500;
+          ctx.body = { error: 'Unable to retrieve roles list' };
+        }
+
+        ctx.type = 'application/json'; // oppure semplicemente 'json'
+       }
+    },
+    //START CURA USER create update delete user
+    { // url richiesto(dalla pagina di amministrazione) per ottenere la lista degli utenti attivi nel sito 
+      method: 'POST', 
+      path: '/createUser', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
+      handler: async (ctx) => {//
+
+        const { username, email, password } = ctx.request.body;
+        const result = await userManagement.addUser(username, password, email);
+        ctx.body = result;// result contiene un oggettocon linformazioni dell'errore se c'è stato un errore altrimenti contiene semplicemente un messaggio di successo in caso affermativo
+        ctx.type = 'application/json'; // oppure semplicemente 'json'
+
        }
     }
   );

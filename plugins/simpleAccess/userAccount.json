@@ -1,0 +1,19 @@
+{
+  "users": {
+      "oxtor": {
+        "email": "italopaesano@gmail.com",
+        "hashPassword": "$2b$10$pkmDu0mjqASXk14REJGLl.rpJzSNzKLtUNEfI2N2wlppFtK6vA1Lu",
+        "roleId": 1
+      },
+      "utente2": {
+        "email": "utente2@example.com",
+        "hashPassword": "hash_della_password",
+        "roleId": 2
+      },
+      "utente3": {
+        "email": "utente2@example.com",
+        "hashPassword": "hash_della_password",
+        "roleId": 3
+      }
+    }
+}

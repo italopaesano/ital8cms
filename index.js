@@ -40,6 +40,7 @@ app.use(
           ctx.body = await ejs.renderFile(filePath, {
             passData :{ 
               apiPrefix: ital8Conf.apiPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamare in modo corretto e flessibile le api ad esempio dei vari plugin
+              //adminPrefix: ital8Conf.adminPrefix,//ATTENZIONE PER NESSUN MOTIVO DOVRÀ ESSERE PASSATO adminPrefix nelle pagine web non di amministrazione per non svelare ad utenti potenzialmente pericolosi la locazion della sezione di admin
               pluginSys: pluginSys, // sistema dei plugin
               plugin: getObjectsToShareInWebPages,// quicondivo gli ogetti publidi dei plugin
               themeSys: themeSys, // sistema dei temi
@@ -66,7 +67,7 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
       path.join(__dirname, 'core', 'admin', 'webPages'),// punto alla cartedda delle pagine di admin
       (opt = {
         index: 'index.ejs',
-        urlPrefix: "/admin",
+        urlPrefix: `/${ital8Conf.adminPrefix}`,
         showDirContents: true,
         urlsReserved: Array( `/${ital8Conf.apiPrefix}`,`/${ital8Conf.viewsPrefix}`),//,'/api','/views' -> questi sarebbero i percorsi di defoult pero adesso sono configurabili  
         template: {
@@ -74,6 +75,7 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
             ctx.body = await ejs.renderFile(filePath, {
               passData :{ 
                 apiPrefix: ital8Conf.apiPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamare in modo corretto e flessibile le api ad esempio dei vari plugin
+                adminPrefix: ital8Conf.adminPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamamare correttamente le pagine di admin con il corretto prefix
                 pluginSys: pluginSys, // sistema dei plugin
                 plugin: getObjectsToShareInWebPages,// quicondivo gli ogetti publidi dei plugin
                 themeSys: themeSys,// thema dei temi con il tema in usao qullo di --->default
