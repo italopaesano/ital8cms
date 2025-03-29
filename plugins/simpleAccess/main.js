@@ -180,10 +180,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         try {
           const userAccountData = fs.readFileSync(userFilePath, 'utf8');
           const userAccount = JSON.parse(userAccountData);
-          ctx.body = Object.keys(userAccount.users); // RESTITUISCE UN ARRAY CONTENTENTE TUTTI I NOMI DEGLI UTENTI
+          ctx.body = Object.entries(userAccount.users).map(([username, userData]) => ({//CON QUESTE ISTRUZIONI GENERO UN ARRAY CONTENETE OGETTI CON DUE CAMPI username , roleId
+            username,
+            roleId: userData.roleId
+          }));
         } catch (error) {
           ctx.status = 500;
-          ctx.body = { error: 'Unable to retrieve users list' };
+          ctx.body = { error: `Unable to retrieve users list: ${error}` };
         }
 
         ctx.type = 'application/json'; // oppure semplicemente 'json'

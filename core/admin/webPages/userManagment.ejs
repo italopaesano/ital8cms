@@ -29,25 +29,47 @@
         const userList = document.getElementById('userList');
 
         try {
-            const response = await fetch(`/${apiPrefix}/simpleAccess/userList`, {
+            // Fetch user list
+            const userResponse = await fetch(`/${apiPrefix}/simpleAccess/userList`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json'
                 }
             });
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+            if (!userResponse.ok) {
+                throw new Error(`HTTP error! status: ${userResponse.status}`);
             }
 
-            const users = await response.json();
+            const users = await userResponse.json();
+
+            // Fetch role list
+            const roleResponse = await fetch(`/${apiPrefix}/simpleAccess/roleList`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!roleResponse.ok) {
+                throw new Error(`HTTP error! status: ${roleResponse.status}`);
+            }
+
+            const rolesData = await roleResponse.json();
+            const roles = rolesData.roles;
 
             if (Array.isArray(users) && users.length > 0) {
-                users.forEach(userName => {
+                users.forEach(user => {
                     const userItem = document.createElement('a');
                     userItem.href = "#";
                     userItem.className = "list-group-item list-group-item-action";
-                    userItem.textContent = userName;
+
+                    const roleName = roles[user.roleId] ? roles[user.roleId].name : 'Ruolo sconosciuto';
+
+                    userItem.innerHTML = `
+                        <strong>Username:</strong> ${user.username} <br>
+                        <strong>Role:</strong> ${roleName}
+                    `;
                     userList.appendChild(userItem);
                 });
             } else {
@@ -55,7 +77,7 @@
             }
         } catch (error) {
             console.error('Errore:', error);
-            userList.innerHTML = '<p class="text-danger">Errore nel recupero della lista utenti.</p>';
+            userList.innerHTML = '<p class="text-danger">Errore nel recupero della lista utenti o ruoli.</p>';
         }
     });
 </script>
