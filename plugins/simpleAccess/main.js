@@ -192,6 +192,26 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         ctx.type = 'application/json'; // oppure semplicemente 'json'
        }
     },
+    { // url richiesto(dalla pagina di amministrazione) per ottenere tutte le informazioni sull'utente
+      method: 'GET', 
+      path: '/userInfo', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
+      handler: async (ctx) => {//
+        const username = ctx.query.username; //username pasatocon la queystrng
+        const userFilePath = path.join(__dirname, 'userAccount.json');
+        try {
+          const userAccountData = fs.readFileSync(userFilePath, 'utf8');
+          const userAccount = JSON.parse(userAccountData);
+          userAccount.users[username].hashPassword = undefined;// non voglioesporre l'hashPassword per ragioni di sicurezza
+          console.log('userAccount[username]', userAccount.users[username]);
+          ctx.body = userAccount.users[username];//ATTENZIONE CONSIGLIATO NON USARE JSON.stringify() , come -->  ctx.body = JSON.stringify(userAccount.users[username]); vedi articolo --> https://chatgpt.com/share/67e8e119-aa58-8012-ba93-0a69499c9186
+        } catch (error) {
+          ctx.status = 500;
+          ctx.body = { error: `Unable to retrieve users Info: ${error}` };
+        }
+
+        ctx.type = 'application/json'; // oppure semplicemente 'json'
+       }
+    },
     { // url richiesto(dalla pagina di amministrazione) per ottenere la lista degli utenti attivi nel sito 
       method: 'GET', 
       path: '/roleList', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
@@ -214,8 +234,8 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       path: '/createUser', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       handler: async (ctx) => {//
 
-        const { username, email, password } = ctx.request.body;
-        const result = await userManagement.addUser(username, password, email);
+        const { username, email, password, roleId } = ctx.request.body;
+        const result = await userManagement.addUser(username, password, email, roleId);
         ctx.body = result;// result contiene un oggettocon linformazioni dell'errore se c'è stato un errore altrimenti contiene semplicemente un messaggio di successo in caso affermativo
         ctx.type = 'application/json'; // oppure semplicemente 'json'
 

@@ -15,7 +15,7 @@
     const adminPrefix = document.getElementById('adminPrefix').innerText;
 </script>
 
-<h1>Gestione degli utenti </h1>
+<h3>Gestione utenti : </h3>
 
 <div class="container mt-4">
     <h2>Lista Utenti</h2>
@@ -25,8 +25,11 @@
 </div>
 
 <script>
-    document.addEventListener("DOMContentLoaded", async function () {
+    async function loadUserList() {
         const userList = document.getElementById('userList');
+        userList.innerHTML = ''; // Clear the list before populating
+        const roleSelect = document.getElementById('role');
+        roleSelect.innerHTML = ''; // Clear the select options before populating
 
         try {
             // Fetch user list
@@ -58,19 +61,41 @@
             const rolesData = await roleResponse.json();
             const roles = rolesData.roles;
 
+            // Populate role select dropdown
+            if (roles && Object.keys(roles).length > 0) {
+                Object.keys(roles).forEach(roleId => {
+                    const roleOption = document.createElement('option');
+                    roleOption.value = roleId;
+                    roleOption.textContent = roles[roleId].name;
+                    roleSelect.appendChild(roleOption);
+                });
+            } else {
+                const noRoleOption = document.createElement('option');
+                noRoleOption.value = "";
+                noRoleOption.textContent = "Nessun ruolo disponibile";
+                noRoleOption.disabled = true;
+                roleSelect.appendChild(noRoleOption);
+            }
+
+            // Populate user list
             if (Array.isArray(users) && users.length > 0) {
                 users.forEach(user => {
-                    const userItem = document.createElement('a');
-                    userItem.href = "#";
-                    userItem.className = "list-group-item list-group-item-action";
+                    const userContainer = document.createElement('div');
+                    userContainer.className = "list-group-item";
 
                     const roleName = roles[user.roleId] ? roles[user.roleId].name : 'Ruolo sconosciuto';
 
-                    userItem.innerHTML = `
-                        <strong>Username:</strong> ${user.username} <br>
-                        <strong>Role:</strong> ${roleName}
+                    userContainer.innerHTML = `
+                        <p><strong>Username:</strong> ${user.username}</p>
+                        <p><strong>Role:</strong> ${roleName}</p>
+                        <div class="text-start">
+                            <a href="/${adminPrefix}/userManagment/userView.ejs?username=${user.username}" class="btn btn-info btn-sm me-2">Visualizza</a>
+                            <a href="/${adminPrefix}/userManagment/userEdit.ejs?username=${user.username}" class="btn btn-warning btn-sm me-2">Modifica</a>
+                            <a href="/${adminPrefix}/userManagment/userDelete.ejs?username=${user.username}" class="btn btn-danger btn-sm">Elimina</a>
+                        </div>
                     `;
-                    userList.appendChild(userItem);
+
+                    userList.appendChild(userContainer);
                 });
             } else {
                 userList.innerHTML = '<p class="text-danger">Nessun utente trovato.</p>';
@@ -79,7 +104,8 @@
             console.error('Errore:', error);
             userList.innerHTML = '<p class="text-danger">Errore nel recupero della lista utenti o ruoli.</p>';
         }
-    });
+    }
+    document.addEventListener("DOMContentLoaded", loadUserList);
 </script>
 
 <div class="container mt-4">
@@ -100,6 +126,13 @@
             <label for="password" class="form-label">Password</label>
             <input type="password" class="form-control" id="password" placeholder="Inserisci password" required>
         </div>
+        <div class="mb-3">
+            <label for="role" class="form-label">Ruolo</label>
+            <select class="form-select" id="role" required>
+                <option value="" disabled selected>Seleziona un ruolo</option>
+                <!-- Options will be dynamically populated -->
+            </select>
+        </div>
         <button type="submit" class="btn btn-success">Salva</button>
     </form>
 </div>
@@ -108,6 +141,7 @@
     document.getElementById('createUserBtn').addEventListener('click', function () {//questo evento rende visibile il form
         const form = document.getElementById('createUserForm');
         form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     });
 
     document.getElementById('createUserForm').addEventListener('submit', async function (event) {
@@ -116,6 +150,9 @@
         const username = document.getElementById('username').value;
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
+        const roleId = document.getElementById('role').value;
+
+        //console.log('{ username, email, password, roleId }', { username, email, password, roleId });
 
         try {
             const response = await fetch(`/${apiPrefix}/simpleAccess/createUser`, {
@@ -123,7 +160,7 @@
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ username, email, password })
+                body: JSON.stringify({ username, email, password, roleId })
             });
 
             if (!response.ok) {
@@ -134,19 +171,26 @@
 
             if (result.success) {
                 const successMessage = document.createElement('div');
+                successMessage.id = 'successMessage';
                 successMessage.className = 'alert alert-success mt-3';
                 successMessage.textContent = result.success; //qui conterrà il messaggio di successo
                 document.getElementById('createUserForm').style.display = 'none';
                 document.getElementById('createUserForm').after(successMessage);
+                const existingErrorMessage = document.getElementById('errorMessage');// cancello eventuali messaggi di errore precedenti 
+                if (existingErrorMessage) {
+                    existingErrorMessage.textContent = '';
+                }               
+                loadUserList(); // Ricarica la lista utenti
             } else if (result.error) {
                 const errorMessage = document.createElement('div');
+                errorMessage.id = 'errorMessage';
                 errorMessage.className = 'alert alert-danger mt-3';
                 errorMessage.textContent = result.error; // Messaggio di errore
                 document.getElementById('createUserForm').after(errorMessage);
 
                 if (result.errorType === 'all') {
                     // Evidenzia tutti i campi
-                    ['username', 'email', 'password'].forEach(field => {
+                    ['username', 'email', 'password', 'role'].forEach(field => {
                         const inputField = document.getElementById(field);
                         if (inputField) {
                             inputField.classList.add('is-invalid');
@@ -162,18 +206,15 @@
             } else {
                 throw new Error('Errore sconosciuto.');
             }
-            alert('Utente creato con successo!');
+            //alert('Utente creato con successo!');
             document.getElementById('createUserForm').reset();
             document.getElementById('createUserForm').style.display = 'none';
         } catch (error) {
             console.error('Errore:', error);
-            alert('Errore nella creazione dell\'utente.');
+            alert('Errore nella creazione dell\'utente. error: ' + error.message);
         }
     });
 </script>
-
-
-
 
 
 <%- include( passData.themeSys.getAdminThemePartPath( 'footer.ejs' ) ) %>

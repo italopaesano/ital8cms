@@ -1,19 +1,64 @@
 {
   "users": {
-      "oxtor": {
-        "email": "italopaesano@gmail.com",
-        "hashPassword": "$2b$10$pkmDu0mjqASXk14REJGLl.rpJzSNzKLtUNEfI2N2wlppFtK6vA1Lu",
-        "roleId": 1
-      },
-      "utente2": {
-        "email": "utente2@example.com",
-        "hashPassword": "hash_della_password",
-        "roleId": 2
-      },
-      "utente3": {
-        "email": "utente2@example.com",
-        "hashPassword": "hash_della_password",
-        "roleId": 3
-      }
+    "oxtor": {
+      "email": "italopaesano@gmail.com",
+      "hashPassword": "$2b$10$pkmDu0mjqASXk14REJGLl.rpJzSNzKLtUNEfI2N2wlppFtK6vA1Lu",
+      "roleId": 1
+    },
+    "utente2": {
+      "email": "utente2@example.com",
+      "hashPassword": "hash_della_password",
+      "roleId": 2
+    },
+    "utente3": {
+      "email": "utente2@example.com",
+      "hashPassword": "hash_della_password",
+      "roleId": 3
+    },
+    "prova creazione": {
+      "hashPassword": "$2b$10$g0hAIHjdi.lw3NV0XS67i.iVbunCD./4LKCSYRVWN8PaAU5i1eaXK",
+      "email": "greherb@wgrw.it",
+      "roleId": "2"
+    },
+    "kvhgi": {
+      "hashPassword": "$2b$10$oqKImYP7fbswNvd1/ruaUuOGUMcKz/TqICi8aAvqDTMtF9XrBdiNC",
+      "email": "dwgwrgb@bgre.it",
+      "roleId": "2"
+    },
+    "fbfb": {
+      "hashPassword": "$2b$10$lbGcWNwrlcwSRZW4V5TRqey2YeVBa5EBB268Ay5kDoHBJ/mLKLvje",
+      "email": "brbr@ebr.it",
+      "roleId": "3"
+    },
+    "reetet": {
+      "hashPassword": "$2b$10$0smD9IuAuRxz/bf2Myi6suqZUr52RokuLlcpca4ljXMu/lR9uCJ0i",
+      "email": "etw@wgrg.it",
+      "roleId": "1"
+    },
+    "fdngfn": {
+      "hashPassword": "$2b$10$gwQuiy/u4hdBgsamjPat3e7JoS6Rz4Gi85EZSArNlrzY.jKbWaVry",
+      "email": "fdt@fhf.it",
+      "roleId": "1"
+    },
+    "dbsbr": {
+      "hashPassword": "$2b$10$83ry3VLYOecxmPUw1QPJN.R5om4fOHpvN7HGlapKgnHhiMp2q5URC",
+      "email": "brbr@ebbbr.it",
+      "roleId": "0"
+    },
+    "ntntggggggggggggggggggggggggggggggggggggggggggggggggggg": {
+      "hashPassword": "$2b$10$KkBzzWs.GnOerF64CWbPxOWmIViclctpjHJVmo51uQAgjznEihwci",
+      "email": "tntrntrn@tntn.it",
+      "roleId": "2"
+    },
+    "yjty": {
+      "hashPassword": "$2b$10$gfxnyE0Q3BVLGBPF7nJ.R.7XddhUb6/0.hA3hznDQaStaZwX/fBPq",
+      "email": "tht@f.it",
+      "roleId": "0"
+    },
+    "gjyjgdddddddddddddddddddddd": {
+      "hashPassword": "$2b$10$0saYhtkGf.hUykiZ5Smk9.rVXKub859diNWvUOzQi3azZj5wp1OBe",
+      "email": "jyj@rhre.it",
+      "roleId": "0"
     }
+  }
 }

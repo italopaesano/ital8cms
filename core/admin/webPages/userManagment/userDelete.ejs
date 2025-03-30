@@ -1,0 +1,20 @@
+<!-- TEMPLTE PER LA CREAZIONE DELLEE PAGINE DI AMMINISTRAZIONE  -->
+<!-- ATTENZIONE  nelle pagine di admin sarà chiamata la funzone getAdminThemePartPath() e non la funzione getThemePartPath() -->
+<%- include( passData.themeSys.getAdminThemePartPath( 'head.ejs' ) ) %>
+<%- include( passData.themeSys.getAdminThemePartPath( 'header.ejs' ) ) %>
+
+<!-- api prefix -->
+<span id="apiPrefix" style="display: none;"><%- passData.apiPrefix %></span>
+<script>
+    const apiPrefix = document.getElementById('apiPrefix').innerText;
+</script>
+
+<!-- adminPrefix -->
+<span id="adminPrefix" style="display: none;"><%- passData.adminPrefix %></span>
+<script>
+    const adminPrefix = document.getElementById('adminPrefix').innerText;
+</script>
+
+<h1>pagina di admin ed adessio vediamo come fare</h1>
+
+<%- include( passData.themeSys.getAdminThemePartPath( 'footer.ejs' ) ) %>

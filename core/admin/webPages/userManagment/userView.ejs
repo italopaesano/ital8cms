@@ -1,0 +1,97 @@
+<!-- TEMPLTE PER LA CREAZIONE DELLEE PAGINE DI AMMINISTRAZIONE  -->
+<!-- ATTENZIONE  nelle pagine di admin sarà chiamata la funzone getAdminThemePartPath() e non la funzione getThemePartPath() -->
+<%- include( passData.themeSys.getAdminThemePartPath( 'head.ejs' ) ) %>
+<%- include( passData.themeSys.getAdminThemePartPath( 'header.ejs' ) ) %>
+
+<!-- api prefix -->
+<span id="apiPrefix" style="display: none;"><%- passData.apiPrefix %></span>
+<script>
+    const apiPrefix = document.getElementById('apiPrefix').innerText;
+</script>
+
+<!-- adminPrefix -->
+<span id="adminPrefix" style="display: none;"><%- passData.adminPrefix %></span>
+<script>
+    const adminPrefix = document.getElementById('adminPrefix').innerText;
+</script>
+
+<h1>visualizza le informazioni di un utente</h1>
+
+<div class="container mt-5 user-management admin-section">
+    <div id="user-info-container" class="card user-info-card"></div>
+        <div class="card-header user-info-header">
+            <h2>Informazioni Utente</h2>
+        </div>
+        <div class="card-body user-info-body">
+            <div class="mb-3 user-info-item">
+                <label for="username" class="form-label"><strong>Nome Utente:</strong></label>
+                <p id="username" class="user-info-value">Utente non trovato</p>
+            </div>
+            <div class="mb-3 user-info-item">
+                <label for="email" class="form-label"><strong>Email:</strong></label>
+                <p id="email" class="user-info-value">N/A</p>
+            </div>
+            <div class="mb-3 user-info-item">
+                <label for="role" class="form-label"><strong>Ruolo:</strong></label>
+                <p id="role" class="user-info-value">Ruolo non trovato</p>
+            </div>
+            <div class="mb-3 user-info-item">
+                <label for="role-description" class="form-label"><strong>Descrizione Ruolo:</strong></label>
+                <p id="role-description" class="user-info-value">Ruolo non trovato</p>
+            </div>
+        </div>
+        <div class="card-footer text-center user-info-footer">
+            <a href="/<%- passData.adminPrefix %>/userManagment/index.ejs" class="btn btn-primary me-2 user-action-btn">Torna alla Index</a>
+            <a href="#" id="edit-user-btn" class="btn btn-warning me-2 user-action-btn" >Modifica Dati</a> <!-- l' href di questolink verrà aggiornato da uno script più in basso -->
+            <a href="#" id="delete-user-btn" class="btn btn-danger user-action-btn" >Elimina Utente</a> <!-- l' href di questolink verrà aggiornato da uno script più in basso -->
+        </div>
+    </div>
+    <div id="error-message" class="alert alert-warning" style="display: none;">
+        Non è stato indicato l'utente di cui caricare le informazioni.
+    </div>
+</div>
+
+<script>
+    const queryParams = new URLSearchParams(window.location.search);
+    const username = queryParams.get('username');
+
+    if (!username) {
+        document.getElementById('error-message').style.display = 'block';
+    } else {
+        fetch(`/${apiPrefix}/simpleAccess/userInfo?username=${username}`)
+            .then(response => response.json())
+            .then(userInfo => {
+                if (userInfo && userInfo.roleId) {
+                    document.getElementById('username').innerText = username || 'N/A';
+                    document.getElementById('email').innerText = userInfo.email || 'N/A';
+
+                    fetch(`/${apiPrefix}/simpleAccess/roleList`)
+                        .then(response => response.json())
+                        .then(roleList => {
+                            const roles = roleList.roles;
+                            const role = roles && roles[userInfo.roleId];
+                            //const role = roleList.find(r => r.id === userInfo.roleId);
+                            document.getElementById('role').innerText = role ? role.name : 'Ruolo non trovato';
+                            document.getElementById('role-description').innerText = role ? role.description : 'nessuna descrizione del ruolo';
+                        })
+                        .catch(() => {
+                            document.getElementById('role').innerText = 'Errore nel caricamento del ruolo';
+                        });
+
+                    document.getElementById('edit-user-btn').href = `${adminPrefix}/userManagment/userEdit.ejs?username=${username}`;
+                    document.getElementById('delete-user-btn').href = `${adminPrefix}/userManagment/userDelete.ejs?username=${username}`;
+                    document.getElementById('user-info-container').style.display = 'block';
+                } else {
+                    document.getElementById('error-message').innerText = 'Utente non trovato.';
+                    document.getElementById('error-message').style.display = 'block';
+                }
+            })
+            .catch(() => {
+                document.getElementById('error-message').innerText = 'Errore nel caricamento delle informazioni utente.';
+                document.getElementById('error-message').style.display = 'block';
+            });
+    }
+</script>
+
+
+<%- include( passData.themeSys.getAdminThemePartPath( 'footer.ejs' ) ) %>

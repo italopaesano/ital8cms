@@ -50,6 +50,30 @@ se l'utente insrisce correttamente i dati al primo colpo , allora l'url di redir
 
 ```
 
+# mentre user Role contiene la descrizione dei ruoli utente 
+```js
+{
+    "roles": {
+        "0": {
+        "name": "root",
+        "description": "il root full and authorized to do anything."
+        },
+        "1": {
+        "name": "admin",
+        "description": "Has full access to all resources and actions."
+        },
+        "2": {
+        "name": "editor",
+        "description": "Can create, read, and update resources."
+        },
+        "3": {
+        "name": "viewer",
+        "description": "Can only read resources."
+        }
+      }
+}
+```
+
 # ecco inceve il file di configrazione nello specifico 
 ## config-plugin.json
 ```js
