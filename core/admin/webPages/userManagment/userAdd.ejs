@@ -126,7 +126,7 @@
                 successMessage.textContent = result.success; //qui conterrà il messaggio di successo
                 document.getElementById('createUserForm').style.display = 'none';
                 document.getElementById('createUserForm').after(successMessage); */
-                allert(result.success);
+                alert(result.success);
                 const existingErrorMessage = document.getElementById('errorMessage');// cancello eventuali messaggi di errore precedenti 
                 if (existingErrorMessage) {
                     existingErrorMessage.textContent = '';

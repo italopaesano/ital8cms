@@ -28,8 +28,8 @@
     async function loadUserList() {
         const userList = document.getElementById('userList');
         userList.innerHTML = ''; // Clear the list before populating
-        const roleSelect = document.getElementById('role');
-        roleSelect.innerHTML = ''; // Clear the select options before populating
+        //const roleSelect = document.getElementById('role');
+        //roleSelect.innerHTML = ''; // Clear the select options before populating
 
         try {
             // Fetch user list
@@ -62,7 +62,7 @@
             const roles = rolesData.roles;
 
             // Populate role select dropdown
-            if (roles && Object.keys(roles).length > 0) {
+/*             if (roles && Object.keys(roles).length > 0) {
                 Object.keys(roles).forEach(roleId => {
                     const roleOption = document.createElement('option');
                     roleOption.value = roleId;
@@ -75,7 +75,7 @@
                 noRoleOption.textContent = "Nessun ruolo disponibile";
                 noRoleOption.disabled = true;
                 roleSelect.appendChild(noRoleOption);
-            }
+            } */
 
             // Populate user list
             if (Array.isArray(users) && users.length > 0) {
@@ -106,18 +106,19 @@
         }
     }
     document.addEventListener("DOMContentLoaded", loadUserList);
+
 </script>
 
 
 
 <div class="container mt-4">
-    <button id="createUserBtn" class="btn btn-primary">
+    <!-- <button id="createUserBtn" class="btn btn-primary">
         <i class="bi bi-plus"></i> Crea Utente
-    </button>
+    </button> -->
 
     <a href="/<%- passData.adminPrefix %>/userManagment/userAdd.ejs" class="btn btn-primary">Crea nuovo Utente</a>
 
-    <form id="createUserForm" class="mt-3" style="display: none;">
+<!--     <form id="createUserForm" class="mt-3" style="display: none;">
         <div class="mb-3">
             <label for="username" class="form-label">Username</label>
             <input type="text" class="form-control" id="username" placeholder="Inserisci username" required>
@@ -134,15 +135,16 @@
             <label for="role" class="form-label">Ruolo</label>
             <select class="form-select" id="role" required>
                 <option value="" disabled selected>Seleziona un ruolo</option>
-                <!-- Options will be dynamically populated -->
+                <!-- Options will be dynamically populated --> <!--
             </select>
         </div>
         <button type="submit" class="btn btn-success">Salva</button>
-    </form>
+    </form> -->
+
 </div>
 
 <script>
-    document.getElementById('createUserBtn').addEventListener('click', function () {//questo evento rende visibile il form
+    /* document.getElementById('createUserBtn').addEventListener('click', function () {//questo evento rende visibile il form
         const form = document.getElementById('createUserForm');
         form.style.display = form.style.display === 'none' ? 'block' : 'none';
         window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
@@ -217,7 +219,7 @@
             console.error('Errore:', error);
             alert('Errore nella creazione dell\'utente. error: ' + error.message);
         }
-    });
+    }); */
 </script>
 
 

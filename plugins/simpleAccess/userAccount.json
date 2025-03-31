@@ -64,6 +64,21 @@
       "hashPassword": "$2b$10$WnBOBL9vD0kwLLuVMGLNi./F91yOQVB8QQW9igKckK7MDH7mJxdNu",
       "email": "fnngng@feh.it",
       "roleId": "2"
+    },
+    "tttttt": {
+      "hashPassword": "$2b$10$FGUhpRkHD3kIyUghGLD27egb4npkvjQQQXA2xsB93oHxxE3QhFRUS",
+      "email": "eehteht@htrh.it",
+      "roleId": "2"
+    },
+    "jtyjytj": {
+      "hashPassword": "$2b$10$9XfwPlgQ67Fo8Gz.FOma/O6CxD817riCgFu7cXZ5DTS1TtxxGSa7.",
+      "email": "ytmtym@fht.it",
+      "roleId": "0"
+    },
+    "rhrh": {
+      "hashPassword": "$2b$10$wzIyKxG7i/zwsnJpeC0xRORNqIxq2wQHx.JJ.AUgOgySns6vaJ9Eu",
+      "email": "rhethet@rrg.it",
+      "roleId": "2"
     }
   }
 }
