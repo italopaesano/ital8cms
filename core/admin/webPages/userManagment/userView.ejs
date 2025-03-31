@@ -78,8 +78,8 @@
                             document.getElementById('role').innerText = 'Errore nel caricamento del ruolo';
                         });
 
-                    document.getElementById('edit-user-btn').href = `${adminPrefix}/userManagment/userEdit.ejs?username=${username}`;
-                    document.getElementById('delete-user-btn').href = `${adminPrefix}/userManagment/userDelete.ejs?username=${username}`;
+                    document.getElementById('edit-user-btn').href = `/${adminPrefix}/userManagment/userEdit.ejs?username=${username}`;
+                    document.getElementById('delete-user-btn').href = `/${adminPrefix}/userManagment/userDelete.ejs?username=${username}`;
                     document.getElementById('user-info-container').style.display = 'block';
                 } else {
                     document.getElementById('error-message').innerText = 'Utente non trovato.';

@@ -59,6 +59,11 @@
       "hashPassword": "$2b$10$0saYhtkGf.hUykiZ5Smk9.rVXKub859diNWvUOzQi3azZj5wp1OBe",
       "email": "jyj@rhre.it",
       "roleId": "0"
+    },
+    "kvhgillllllllllllllllllllllllllllllllllllllLLLLLLLLLLLLLLLLLLLLLLLLLLLLl": {
+      "hashPassword": "$2b$10$WnBOBL9vD0kwLLuVMGLNi./F91yOQVB8QQW9igKckK7MDH7mJxdNu",
+      "email": "fnngng@feh.it",
+      "roleId": "2"
     }
   }
 }
