@@ -1,4 +1,5 @@
-<!-- TEMPLTE PER LA CREAZIONE DELLEE PAGINE DI AMMINISTRAZIONE  -->
+<!-- UPSERT -> importato da sql per upsert si indemde una pagina che gestisca sia l'aggiornamentp diun utente che la creazione
+ visto che il filo json si indiciza in base alnome utente allora se il nome utente esiste gia si aggiorna altrimenti si crea , il nome eventualmente da aggionare viene passato tramite una query  string-->
 <!-- ATTENZIONE  nelle pagine di admin sarà chiamata la funzone getAdminThemePartPath() e non la funzione getThemePartPath() -->
 <%- include( passData.themeSys.getAdminThemePartPath( 'head.ejs' ) ) %>
 <%- include( passData.themeSys.getAdminThemePartPath( 'header.ejs' ) ) %>
@@ -14,11 +15,29 @@
 <script>
     const adminPrefix = document.getElementById('adminPrefix').innerText;
 </script>
+<!-- se la query string contiene un valore valido di username allora si tratta si un aggiornamento altrimenti di un nuovo utente ed in questo caso isNewUser sarà true -->
+<script>
+    // Funzione per ottenere il valore della query string
+    const urlParams = new URLSearchParams(window.location.search);
+    const isNewUser = !urlParams.has('username') || !urlParams.get('username').trim();
+
+    document.addEventListener('DOMContentLoaded', () => {
+       
+        const usernameField = document.getElementById('username');
+
+        if (isNewUser) {//se l'utente è nuovo allora il campo username è editabile
+            usernameField.disabled = false;
+        } else {// se l'utente è già esistente allora il campo username non è editabile
+            usernameField.disabled = true;
+            usernameField.value = urlParams.get('username') || '';
+        }
+    });
+</script>
+
 
 <div class="text-center mb-4">
     <h1 class="text-center">Aggiungi un nuovo utente</h1>
 </div>
-
 
 <div class="container mt-4">
 
@@ -97,20 +116,20 @@
     document.getElementById('createUserForm').addEventListener('submit', async function (event) {
         event.preventDefault();
 
-        const username = document.getElementById('username').value;
+        const username = isNewUser ? document.getElementById('username').value : urlParams.get('username');
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
         const roleId = document.getElementById('role').value;
 
-        //console.log('{ username, email, password, roleId }', { username, email, password, roleId });
+        //console.log({ username, email, password, roleId, isNewUser })
 
         try {
-            const response = await fetch(`/${apiPrefix}/simpleAccess/createUser`, {
+            const response = await fetch(`/${apiPrefix}/simpleAccess/usertUser`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ username, email, password, roleId })
+                body: JSON.stringify({ username, email, password, roleId, isNewUser })
             });
 
             if (!response.ok) {

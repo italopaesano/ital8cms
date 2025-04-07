@@ -231,11 +231,11 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     //START CURA USER create update delete user
     { // url richiesto(dalla pagina di amministrazione) per ottenere la lista degli utenti attivi nel sito 
       method: 'POST', 
-      path: '/createUser', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
+      path: '/usertUser', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       handler: async (ctx) => {//
 
-        const { username, email, password, roleId } = ctx.request.body;
-        const result = await userManagement.addUser(username, password, email, roleId);
+        const { username, email, password, roleId, isNewUser } = ctx.request.body;
+        const result = await userManagement.userUsert(username, password, email, roleId, isNewUser);
         ctx.body = result;// result contiene un oggettocon linformazioni dell'errore se c'è stato un errore altrimenti contiene semplicemente un messaggio di successo in caso affermativo
         ctx.type = 'application/json'; // oppure semplicemente 'json'
 
