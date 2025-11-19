@@ -3,5 +3,6 @@
   "isInstalled": 1,
   "weight": 0,
   "dependency": {},
-  "nodeModuleDependency": {}
+  "nodeModuleDependency": {},
+  "version": "1.0.0"
 }
