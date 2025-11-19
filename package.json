@@ -16,6 +16,7 @@
     "ccxt": "^4.1.70",
     "ejs": "^3.1.9",
     "fs": "^0.0.1-security",
+    "json5": "^2.2.3",
     "koa": "^3.1.1",
     "koa-bodyparser": "^4.4.1",
     "koa-classic-server": "^2.1.2",
