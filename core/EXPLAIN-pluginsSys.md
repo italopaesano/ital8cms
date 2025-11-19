@@ -1,102 +1,678 @@
+# Sistema Plugin - pluginSys.js
 
-  
-  
-  # mostreremo il funzionamento del sistema dei plugin 
-  ## per come creare un plugin e quali regole seguire per crearne uno si ci rifaccia alla documentazione corrispondente
-  ##  in : /plugins/EXPLAIN.md
-  
- quando si scrive un plaugin si hanno a disposizione le seguenfi funzione per estendere le funzionalità di ital8
- getRouteArray(); getHooksPage(); le cunzioni verranno analizzate una a una 
+## Panoramica
 
-  ### getRouteArray(); questa funzione restituisce un Array che rappresenterà le totte e le sue funioni corrispondenti
-  ### questa funzione deve restituire la seguente struttura dati:
-  # getRouteArray()
+Il sistema plugin (`core/pluginSys.js`) è il cuore di ital8cms. Gestisce il caricamento, l'inizializzazione e la comunicazione tra i plugin.
+
+**Per creare un plugin**: vedere `/plugins/EXPLAIN.md` e `/plugins/exampleComplete/`
+
+---
+
+## Funzionalità Disponibili per i Plugin
+
+Ogni plugin può esportare le seguenti funzioni in `main.js`:
+
+### Funzioni del Ciclo di Vita
+- `loadPlugin(pluginSys, pathPluginFolder)` - Chiamata ad ogni avvio
+- `installPlugin(pluginSys, pathPluginFolder)` - Prima installazione
+- `upgradePlugin(pluginSys, pathPluginFolder, oldVersion, newVersion)` - Aggiornamento versione
+- `uninstallPlugin(pluginSys, pathPluginFolder)` - Disinstallazione
+
+### Funzioni di Estensione
+- `getRouteArray(router, pluginSys, pathPluginFolder)` - Definisce route API
+- `getHooksPage(section, passData, pluginSys, pathPluginFolder)` - Inietta contenuti nelle pagine
+- `getMiddlewareToAdd(pluginSys, pathPluginFolder)` - Aggiunge middleware Koa
+
+### Funzioni di Condivisione
+- `getObjectToShareToOthersPlugin(forPlugin, pluginSys, pathPluginFolder)` - Espone oggetti ad altri plugin
+- `setSharedObject(fromPlugin, sharedObject)` - Riceve oggetti da altri plugin
+- `getObjectToShareToWebPages(pluginSys, pathPluginFolder)` - Espone oggetti ai template EJS
+
+---
+
+## 1. getRouteArray()
+
+Restituisce un Array di route che verranno registrate sotto `/api/{pluginName}/`.
+
+### Struttura
+
 ```js
-function getRouteArray(){
-
-  const routeArray = Array(
+function getRouteArray(router, pluginSys, pathPluginFolder) {
+  return [
     {
-      method: 'GET',
-      path: '/css/bootstrap.min.css', // l'url completo avra la forma /api/binance/css -> se vengono mantenute le impostazioni di default
-      handler: async (ctx) => { 
-        const bootstrapCssPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','css','bootstrap.min.css');
-        ctx.body = fs.createReadStream(bootstrapCssPath);
-        ctx.set('Content-Type', 'text/css');
-       }
-    },
-    {
-      method: 'GET',
-      path: '/js/bootstrap.min.js', // // l'url completo avra la forma /api/binance/js -> se vengono mantenute le impostazioni di default
-      handler: async (ctx) => { 
-        const bootstrapJsPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','js','bootstrap.min.js');
-        ctx.body = fs.createReadStream(bootstrapJsPath);
-        ctx.set('Content-Type', 'text/javascript');
-       }
+      method: 'get',      // 'get', 'post', 'put', 'del', 'all'
+      path: '/endpoint',  // URL: /api/{pluginName}/endpoint
+      func: async (ctx) => {
+        ctx.body = { message: 'Hello' };
+      }
     }
-  );
-  
-  return routeArray;
+  ];
 }
+```
 
-  ```
-
-  # getHooksPage();
-  ### getHooksPage(); questa funzione restiuisce una struttura dati che associerà ad agni hook di ogni pagina una funzione che a sua volta rstituira un astringa da accodare alle vari pagine web in base all' hook chiamato
-
-  ### hookMap.set( hookNmale, Fn ); fn = function( PassData ) { return "someString"; } 
-
-  ### Es.
-
-  ```js
-  function getHooksPage(){
-
-  const HookMap = new Map();
-  HookMap.set( 'head', (passData) => `<link rel='stylesheet' href='${ital8Conf.apiPrefix}/bootstrap/css/bootstrap.min.css' type='text/css'  media='all' />` );
-  HookMap.set('script', (passData) => `<script src="${ital8Conf.apiPrefix}/bootstrap/js/bootstrap.min.js" type="text/javascript" ></script>` );
-
-  return HookMap;
-}
-  ```
-
-# le funzioni getObjectToShareToWebPages() getObjectToShareToOthersPlugin() setSharedObject()
-## getObjectToShareToWebPages() sarà l oggetto che si trovera nei template es passData.plugins[nome plugin] 
-## mentre getObjectToShareToOthersPlugin() setSharedObject() dei plugin permetto ad ogni plugin di condividere ogetti personalizato con tuti gli altri plugin
-
-### function setSharedObject( pluginName, object ){// pluginName = nome dell'altro plugin con cui sarà condiviso questo serve a creare comportamenti personalizati in base al plugin con cui si condivi
-
-### function getObjectToShareToOthersPlugin( pluginName ){// pluginName = nome dell'altro plugin con cui sarà condiviso questo serve a creare comportamenti personalizati in base al plugin con cui si condivi
-
-# a questo proposito mostriamo la parte di codice in pluginSys.js che mostra come gli ogetti condivisi fra i plugin vengono creati 
-
+### Esempio Completo
 
 ```js
-
-//START CARICO GLI OGGETTI CONDIVISI PRIMA DI CHIAMARE LA FUNZION loadPlugin() ed installPlugin permettendo di utilizare gli ogetti condivisi in fase d'installazione o di loading 
-//adesso crea e carico gli ogetti confivisi fra i plugin : ogni plugin chiamerà la funzione getObjectToShareToOthersPlugin( pluginName); passando il proprio nome come parametro ed ottenendo l'ogetto a lui destinato immagazinandolo con la funzione : setSharedObject( pluginName, object ) dove in questo caso pluginname è il nome del plugin dal quale si riceve l'ogetto o object l'aogetto che si riceve 
-this.#activePlugins.forEach( ( plugin0, nomePlugin0  ) => { // per ogni plugin itero per tutti gli altri plugins escludendo se stesso
-  if(plugin0.getObjectToShareToOthersPlugin){// mi assicuro che la funzione appropiata esista
-    this.#activePlugins.forEach( ( plugin1, nomePlugin1 ) => {
-        if( nomePlugin0 !== nomePlugin1){// mi assicuro che il plugin non richiami le funzioni su sse stesso
-          if(plugin1.setSharedObject){// mi assicuro che la funzione appropiata esiste 
-            plugin1.setSharedObject( nomePlugin0, plugin0.getObjectToShareToOthersPlugin( nomePlugin1 ) );
-          }
+function getRouteArray(router, pluginSys, pathPluginFolder) {
+  return [
+    // GET - Servire file statici
+    {
+      method: 'get',
+      path: '/css/bootstrap.min.css',
+      func: async (ctx) => {
+        const cssPath = path.join(__dirname, '..', '..', 'node_modules', 'bootstrap', 'dist', 'css', 'bootstrap.min.css');
+        ctx.body = fs.createReadStream(cssPath);
+        ctx.set('Content-Type', 'text/css');
+      }
+    },
+    // GET - Ritornare JSON
+    {
+      method: 'get',
+      path: '/info',
+      func: async (ctx) => {
+        ctx.body = { name: 'myPlugin', version: '1.0.0' };
+      }
+    },
+    // GET - Query parameters
+    {
+      method: 'get',
+      path: '/search',
+      func: async (ctx) => {
+        const query = ctx.query.q || '';
+        ctx.body = { results: [], query };
+      }
+    },
+    // POST - Body JSON
+    {
+      method: 'post',
+      path: '/create',
+      func: async (ctx) => {
+        const data = ctx.request.body;
+        // Validazione
+        if (!data.name) {
+          ctx.status = 400;
+          ctx.body = { error: 'Name required' };
+          return;
         }
-    });
-  }// if(plugin0.getObjectToShareToOthersPlugin){/
-});// this.#activePlugins.forEach( ( nomePlugin0, plugin0 ) => {
-
-
-//adesso crea e carico gli ogetti confivisi fra i plugin : ogni plugin chiamerà la funzione getObjectToShareToOthersPlugin( pluginName); passando il proprio nome come parametro ed ottenendo l'ogetto a lui destinato immagazinandolo con la funzione : setSharedObject( pluginName, object ) dove in questo caso pluginname è il nome del plugin dal quale si riceve l'ogetto o object l'aogetto che si riceve 
-//OLD OLD OLD OLD 
-    /* this.#activePlugins.forEach( ( nomePlugin0, plugin0 ) => { // per ogni plugin itero per tutti gli altri plugins escludendo se stesso
-      if(plugin0.getObjectToShareToOthersPlugin){// mi assicuro che la funzione appropiata esista
-        this.#activePlugins.forEach( ( nomePlugin1, plugin1 ) => {
-            if( nomePlugin0 =! nomePlugin1){// mi assicuro che il plugin non richiami le funzioni su sse stesso
-              if(plugin1.setSharedObject){// mi assicuro che la funzione appropiata esiste 
-                plugin1.setSharedObject( nomePlugin0, plugin0.getObjectToShareToOthersPlugin( nomePlugin1 ) );
-              }
-            }
-        });
-      }// if(plugin0.getObjectToShareToOthersPlugin){/
-    });// this.#activePlugins.forEach( ( nomePlugin0, plugin0 ) => { */
+        ctx.body = { success: true, id: 123 };
+      }
+    },
+    // Route protetta (richiede autenticazione)
+    {
+      method: 'get',
+      path: '/protected',
+      func: async (ctx) => {
+        if (!ctx.session.authenticated) {
+          ctx.status = 401;
+          ctx.body = { error: 'Unauthorized' };
+          return;
+        }
+        ctx.body = { secret: 'data' };
+      }
+    }
+  ];
+}
 ```
+
+---
+
+## 2. getHooksPage()
+
+Inietta contenuti HTML nelle sezioni delle pagine. Chiamata durante il rendering EJS.
+
+### Sezioni Disponibili
+- `head` - Dentro `<head>` (CSS, meta tags)
+- `header` - Dopo apertura `<body>` (banner, notifiche)
+- `body` - Nel contenuto principale
+- `footer` - Prima della chiusura (footer content)
+- `script` - Prima di `</body>` (JavaScript)
+
+### Struttura
+
+```js
+function getHooksPage(section, passData, pluginSys, pathPluginFolder) {
+  if (section === 'head') {
+    return '<link rel="stylesheet" href="/api/myPlugin/style.css">';
+  }
+  if (section === 'script') {
+    return '<script src="/api/myPlugin/script.js"></script>';
+  }
+  return '';
+}
+```
+
+### Esempio con Map (alternativo)
+
+```js
+function getHooksPage(section, passData, pluginSys, pathPluginFolder) {
+  const hookMap = new Map();
+
+  hookMap.set('head', (data) =>
+    `<link rel='stylesheet' href='/api/bootstrap/css/bootstrap.min.css'>`
+  );
+
+  hookMap.set('script', (data) =>
+    `<script src="/api/bootstrap/js/bootstrap.min.js"></script>`
+  );
+
+  hookMap.set('header', (data) => {
+    if (data.ctx.session.authenticated) {
+      return `<div class="alert">Benvenuto ${data.ctx.session.user.username}</div>`;
+    }
+    return '';
+  });
+
+  const hookFn = hookMap.get(section);
+  return hookFn ? hookFn(passData) : '';
+}
+```
+
+---
+
+## 3. getMiddlewareToAdd()
+
+Aggiunge middleware Koa che verranno eseguiti per ogni richiesta.
+
+### Struttura
+
+```js
+function getMiddlewareToAdd(pluginSys, pathPluginFolder) {
+  return [
+    {
+      func: async (ctx, next) => {
+        // Esegui prima del handler
+        console.log(`${ctx.method} ${ctx.url}`);
+
+        await next();  // Continua al prossimo middleware/handler
+
+        // Esegui dopo il handler
+        ctx.set('X-Response-Time', `${Date.now() - start}ms`);
+      }
+    }
+  ];
+}
+```
+
+### Esempio Completo
+
+```js
+function getMiddlewareToAdd(pluginSys, pathPluginFolder) {
+  return [
+    // Logging richieste
+    {
+      func: async (ctx, next) => {
+        const start = Date.now();
+        await next();
+        const ms = Date.now() - start;
+        console.log(`${ctx.method} ${ctx.url} - ${ms}ms`);
+      }
+    },
+    // Header personalizzati
+    {
+      func: async (ctx, next) => {
+        ctx.set('X-Powered-By', 'ital8cms');
+        await next();
+      }
+    },
+    // Rate limiting (esempio base)
+    {
+      func: async (ctx, next) => {
+        const ip = ctx.ip;
+        // Implementa logica rate limiting
+        await next();
+      }
+    }
+  ];
+}
+```
+
+---
+
+## 4. Object Sharing tra Plugin
+
+Permette ai plugin di condividere oggetti, funzioni e dati.
+
+### getObjectToShareToOthersPlugin()
+
+Definisce cosa condividere con gli altri plugin.
+
+```js
+// In dbApi plugin
+function getObjectToShareToOthersPlugin(forPlugin, pluginSys, pathPluginFolder) {
+  // Condivisione selettiva basata sul plugin richiedente
+  if (forPlugin === 'admin') {
+    // Admin riceve accesso completo
+    return {
+      db: this.db,
+      query: this.query,
+      exec: this.exec,
+      adminFunctions: this.adminFunctions
+    };
+  }
+
+  // Altri plugin ricevono accesso limitato
+  return {
+    db: this.db,
+    query: this.query
+  };
+}
+```
+
+### setSharedObject()
+
+Riceve oggetti condivisi da altri plugin.
+
+```js
+// In simpleAccess plugin
+let dbApi = null;
+
+function setSharedObject(fromPlugin, sharedObject) {
+  if (fromPlugin === 'dbApi') {
+    dbApi = sharedObject;
+    // Ora posso usare dbApi.db, dbApi.query, etc.
+  }
+}
+
+async function loadPlugin(pluginSys, pathPluginFolder) {
+  // Uso l'oggetto condiviso
+  const users = dbApi.db.prepare('SELECT * FROM users').all();
+}
+```
+
+### Flusso di Condivisione
+
+```
+Plugin A                              Plugin B
+─────────                             ─────────
+
+getObjectToShareToOthersPlugin('B')
+    │
+    └──────────────────────────────► setSharedObject('A', object)
+                                          │
+                                          ▼
+                                      this.aData = object
+```
+
+### Codice in pluginSys.js
+
+```js
+// Per ogni coppia di plugin (A, B) dove A != B:
+this.#activePlugins.forEach((pluginA, nomePluginA) => {
+  if (pluginA.getObjectToShareToOthersPlugin) {
+    this.#activePlugins.forEach((pluginB, nomePluginB) => {
+      if (nomePluginA !== nomePluginB) {
+        if (pluginB.setSharedObject) {
+          const sharedObject = pluginA.getObjectToShareToOthersPlugin(nomePluginB);
+          pluginB.setSharedObject(nomePluginA, sharedObject);
+        }
+      }
+    });
+  }
+});
+```
+
+---
+
+## 5. getObjectToShareToWebPages()
+
+Espone dati ai template EJS tramite `passData.plugin.{pluginName}`.
+
+```js
+function getObjectToShareToWebPages(pluginSys, pathPluginFolder) {
+  return {
+    db: this.webDb,
+    config: this.publicConfig,
+    helpers: {
+      formatDate: (date) => date.toLocaleDateString('it-IT'),
+      truncate: (str, len) => str.length > len ? str.slice(0, len) + '...' : str
+    }
+  };
+}
+```
+
+### Uso nei Template EJS
+
+```ejs
+<%
+  const dbApi = passData.plugin.dbApi;
+  const items = dbApi.db.prepare('SELECT * FROM items').all();
+%>
+
+<ul>
+<% items.forEach(item => { %>
+  <li><%= passData.plugin.myPlugin.helpers.truncate(item.name, 50) %></li>
+<% }); %>
+</ul>
+```
+
+---
+
+## 6. Ciclo di Vita Plugin
+
+### loadPlugin()
+
+Chiamata **ogni volta** che il server si avvia. Inizializza il plugin.
+
+```js
+async function loadPlugin(pluginSys, pathPluginFolder) {
+  // Carica configurazione
+  this.config = require('./config-plugin.json');
+
+  // Inizializza variabili
+  this.counter = 0;
+  this.loadedAt = new Date();
+
+  // Connetti a servizi
+  this.db = pluginSys.getSharedObject('dbApi').db;
+
+  console.log('MyPlugin loaded!');
+}
+```
+
+### installPlugin()
+
+Chiamata **una sola volta** quando `isInstalled === 0`. Esegue setup iniziale.
+
+```js
+async function installPlugin(pluginSys, pathPluginFolder) {
+  const db = pluginSys.getSharedObject('dbApi').db;
+
+  // Crea tabelle
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS my_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Inserisci dati iniziali
+  db.prepare('INSERT INTO my_items (name) VALUES (?)').run('Default Item');
+
+  console.log('MyPlugin installed!');
+
+  // IMPORTANTE: Aggiorna config-plugin.json
+  // isInstalled verrà impostato a 1 automaticamente
+}
+```
+
+### upgradePlugin()
+
+Chiamata quando la versione in `description-plugin.json` è maggiore di `installedVersion` in `config-plugin.json`.
+
+```js
+async function upgradePlugin(pluginSys, pathPluginFolder, oldVersion, newVersion) {
+  const db = pluginSys.getSharedObject('dbApi').db;
+
+  // Migrazione da 1.0.0 a 1.1.0
+  if (oldVersion === '1.0.0' && newVersion === '1.1.0') {
+    db.exec('ALTER TABLE my_items ADD COLUMN description TEXT');
+  }
+
+  // Migrazione da 1.1.0 a 2.0.0
+  if (oldVersion === '1.1.0' && newVersion === '2.0.0') {
+    db.exec('CREATE INDEX idx_items_name ON my_items(name)');
+  }
+
+  console.log(`MyPlugin upgraded: ${oldVersion} → ${newVersion}`);
+
+  // installedVersion verrà aggiornato automaticamente
+}
+```
+
+### uninstallPlugin()
+
+Chiamata quando il plugin viene disinstallato. Pulisce risorse.
+
+```js
+async function uninstallPlugin(pluginSys, pathPluginFolder) {
+  const db = pluginSys.getSharedObject('dbApi').db;
+
+  // Rimuovi tabelle
+  db.exec('DROP TABLE IF EXISTS my_items');
+
+  // Elimina file temporanei
+  const tempDir = path.join(pathPluginFolder, 'temp');
+  if (fs.existsSync(tempDir)) {
+    fs.rmSync(tempDir, { recursive: true });
+  }
+
+  console.log('MyPlugin uninstalled!');
+}
+```
+
+---
+
+## 7. Sistema di Validazione Dipendenze
+
+### Dipendenze Plugin
+
+In `config-plugin.json`:
+
+```json
+{
+  "dependency": {
+    "dbApi": "^1.0.0",
+    "simpleAccess": "^1.0.0"
+  }
+}
+```
+
+Il sistema verifica:
+- Il plugin dipendenza esiste ed è attivo
+- La versione soddisfa il requisito semver
+
+### Dipendenze npm (nodeModuleDependency)
+
+```json
+{
+  "nodeModuleDependency": {
+    "bcryptjs": "^3.0.0",
+    "semver": "^7.0.0"
+  }
+}
+```
+
+Il sistema verifica:
+- Il modulo npm è installato
+- La versione soddisfa il requisito semver
+
+Se mancano dipendenze, il plugin **non viene caricato** e viene mostrato un warning con il comando npm da eseguire:
+
+```
+WARN: Plugin "myPlugin" - dipendenze npm mancanti:
+      - bcryptjs (required: ^3.0.0)
+      Esegui: npm install bcryptjs@^3.0.0
+```
+
+### Rilevamento Dipendenze Circolari
+
+Il sistema rileva automaticamente cicli come `A → B → C → A` e li segnala:
+
+```
+ERROR: Dipendenza circolare rilevata: pluginA → pluginB → pluginC → pluginA
+```
+
+---
+
+## 8. Ordine di Caricamento
+
+I plugin vengono caricati in base a:
+
+1. **Weight** (crescente: 0, 1, 2...)
+2. **Dipendenze** (prima i plugin senza dipendenze)
+3. **Nome alfabetico** (se weight uguale)
+
+```json
+// config-plugin.json
+{
+  "weight": 0    // Caricato prima (es. dbApi)
+}
+
+{
+  "weight": 10   // Caricato dopo (es. admin)
+}
+```
+
+---
+
+## 9. Sistema di Logging
+
+Il plugin system usa il logger centralizzato (`core/logger.js`):
+
+```js
+const logger = require('./logger');
+
+logger.debug('PluginSys', 'Dettaglio debug');
+logger.info('PluginSys', 'Plugin caricato', { name: 'myPlugin' });
+logger.warn('PluginSys', 'Attenzione', { issue: '...' });
+logger.error('PluginSys', 'Errore critico', error);
+```
+
+### Livelli di Log
+
+- `DEBUG` - Dettagli per sviluppo
+- `INFO` - Informazioni generali
+- `WARN` - Avvisi (dipendenze mancanti, etc.)
+- `ERROR` - Errori critici
+
+Configura il livello in `ital8-conf.json`:
+
+```json
+{
+  "logLevel": "INFO"
+}
+```
+
+O via variabile ambiente:
+
+```bash
+LOG_LEVEL=DEBUG npm start
+```
+
+---
+
+## 10. Accesso al Plugin System
+
+### Nei Plugin
+
+```js
+async function loadPlugin(pluginSys, pathPluginFolder) {
+  // Ottieni oggetto condiviso da altro plugin
+  const dbApi = pluginSys.getSharedObject('dbApi');
+
+  // Accedi alla configurazione
+  const apiPrefix = pluginSys.apiPrefix;
+}
+```
+
+### Nei Template EJS
+
+```ejs
+<%
+  // Accedi al plugin system
+  const pluginSys = passData.pluginSys;
+
+  // Chiama hook
+  const headerContent = await pluginSys.hookPage('header', passData);
+%>
+
+<%- headerContent %>
+```
+
+---
+
+## 11. Esempio Plugin Completo
+
+Vedi `/plugins/exampleComplete/` per un esempio completo che dimostra tutte le funzionalità:
+
+- Tutte le funzioni del ciclo di vita
+- Route API (GET, POST, validazione, auth)
+- Page hooks
+- Middleware
+- Object sharing
+
+Per attivarlo:
+1. Modifica `plugins/exampleComplete/config-plugin.json`: `"active": 1`
+2. Riavvia il server
+3. Visita `http://localhost:3000/api/exampleComplete/demo`
+
+---
+
+## 12. Best Practices
+
+### Sicurezza
+
+```js
+// Valida sempre l'input
+if (!data.name || typeof data.name !== 'string') {
+  ctx.status = 400;
+  ctx.body = { error: 'Invalid name' };
+  return;
+}
+
+// Usa prepared statements
+const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+
+// Verifica autenticazione
+if (!ctx.session.authenticated) {
+  ctx.status = 401;
+  return;
+}
+```
+
+### Performance
+
+```js
+// Inizializza risorse pesanti in loadPlugin
+async function loadPlugin(pluginSys, pathPluginFolder) {
+  this.preparedStatements = {
+    getUser: db.prepare('SELECT * FROM users WHERE id = ?'),
+    listUsers: db.prepare('SELECT * FROM users LIMIT ?')
+  };
+}
+
+// Riusa nelle route
+{
+  method: 'get',
+  path: '/user/:id',
+  func: async (ctx) => {
+    const user = this.preparedStatements.getUser.get(ctx.params.id);
+    ctx.body = user;
+  }
+}
+```
+
+### Gestione Errori
+
+```js
+{
+  method: 'post',
+  path: '/create',
+  func: async (ctx) => {
+    try {
+      const result = db.prepare('INSERT INTO items (name) VALUES (?)').run(name);
+      ctx.body = { success: true, id: result.lastInsertRowid };
+    } catch (error) {
+      logger.error('MyPlugin', 'Errore creazione item', error);
+      ctx.status = 500;
+      ctx.body = { error: 'Internal server error' };
+    }
+  }
+}
+```
+
+---
+
+## Riferimenti
+
+- **Diagramma di flusso completo**: `CLAUDE-DOC/PLUGIN_SYSTEM_FLOWCHART.md`
+- **Documentazione API**: `CLAUDE-DOC/API_DOCUMENTATION.md`
+- **Sistema di logging**: `CLAUDE-DOC/LOGGING_SYSTEM.md`
+- **Test suite**: `CLAUDE-DOC/TEST_SUITE.md`
+- **Plugin di esempio**: `plugins/exampleComplete/`
+
+---
+
+**Versione**: 2.0.0
+**Ultimo aggiornamento**: 2025-11-19
