@@ -110,6 +110,37 @@ class themeSys{
     return themes;
   }
 
+  /**
+   * Restituisce l'URL per un asset del tema
+   * @param {string} assetPath - Path relativo dell'asset (es. 'css/theme.css', 'js/theme.js')
+   * @returns {string} - URL completo dell'asset (es. '/theme-assets/css/theme.css')
+   * @example
+   * // Nel template EJS:
+   * // <link rel="stylesheet" href="<%= passData.themeSys.getAssetUrl('css/theme.css') %>">
+   */
+  getAssetUrl(assetPath) {
+    // Rimuove eventuali slash iniziali dal path
+    const cleanPath = assetPath.replace(/^\/+/, '');
+    return `/theme-assets/${cleanPath}`;
+  }
+
+  /**
+   * Restituisce il path assoluto della cartella assets del tema attivo
+   * @returns {string} - Path assoluto della cartella assets
+   */
+  getAssetsPath() {
+    return path.join(__dirname, '../themes', this.ital8Conf.activeTheme, 'assets');
+  }
+
+  /**
+   * Verifica se la cartella assets esiste per il tema attivo
+   * @returns {boolean} - true se la cartella assets esiste
+   */
+  hasAssets() {
+    const assetsPath = this.getAssetsPath();
+    return fs.existsSync(assetsPath) && fs.statSync(assetsPath).isDirectory();
+  }
+
   getThemePartPath( partName ){// partName Es footer.ejs header.ejs ecc
     //console.log(`${__dirname}/themes/${ital8Conf.activeTheme}/views/${partName}`);
     return `${__dirname}/../themes/${this.ital8Conf.activeTheme}/views/${partName}`;
