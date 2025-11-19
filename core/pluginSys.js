@@ -166,6 +166,68 @@ class pluginSys{
 
       if( pluginConfig.active == 1 ){// il plugin è attivo quindi lo carico e dopo ( nell funzione caricate plugin controllo anche se è installato )
 
+        // VALIDAZIONE DIPENDENZE NPM (nodeModuleDependency)
+        // Controlla che tutti i moduli npm richiesti siano installati e compatibili
+        if (pluginConfig.nodeModuleDependency && Object.keys(pluginConfig.nodeModuleDependency).length > 0) {
+          const missingModules = [];
+          const incompatibleModules = [];
+
+          for (const [moduleName, requiredVersion] of Object.entries(pluginConfig.nodeModuleDependency)) {
+            try {
+              // Verifica se il modulo è installato
+              require.resolve(moduleName);
+
+              // Ottieni la versione installata dal package.json del modulo
+              const modulePackagePath = path.join(__dirname, '..', 'node_modules', moduleName, 'package.json');
+              const modulePackage = require(modulePackagePath);
+              const installedVersion = modulePackage.version;
+
+              // Verifica compatibilità versione con semver
+              if (!semver.satisfies(installedVersion, requiredVersion)) {
+                incompatibleModules.push({
+                  name: moduleName,
+                  required: requiredVersion,
+                  installed: installedVersion
+                });
+              }
+            } catch (error) {
+              // Modulo non trovato
+              missingModules.push({
+                name: moduleName,
+                required: requiredVersion
+              });
+            }
+          }
+
+          // Se ci sono moduli mancanti o incompatibili, genera errore descrittivo
+          if (missingModules.length > 0 || incompatibleModules.length > 0) {
+            let errorMessage = `[pluginSys] ERRORE: Il plugin "${nameFile}" ha dipendenze npm non soddisfatte:\n`;
+
+            if (missingModules.length > 0) {
+              errorMessage += `\nModuli mancanti:\n`;
+              missingModules.forEach(m => {
+                errorMessage += `  - ${m.name}@${m.required}\n`;
+              });
+            }
+
+            if (incompatibleModules.length > 0) {
+              errorMessage += `\nModuli con versione incompatibile:\n`;
+              incompatibleModules.forEach(m => {
+                errorMessage += `  - ${m.name}: richiesta ${m.required}, installata ${m.installed}\n`;
+              });
+            }
+
+            // Genera comando npm install per risolvere
+            const allModules = [
+              ...missingModules.map(m => `${m.name}@${m.required}`),
+              ...incompatibleModules.map(m => `${m.name}@${m.required}`)
+            ];
+            errorMessage += `\nPer risolvere, eseguire:\n  npm install ${allModules.join(' ')}\n`;
+
+            throw new Error(errorMessage);
+          }
+        }
+
         const pluginVersion = require(`../plugins/${nameFile}/description-plugin.json`).version;
         pluginsVersionMap.set( nameFile, pluginVersion);// nameFile = nome plugin , creo la mappa : nomeplugin --> versione
 
