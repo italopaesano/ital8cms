@@ -131,6 +131,62 @@ class pluginSys{
 
     });
 
+    // CONTROLLO DIPENDENZE CIRCOLARI (Punto 2 e 3)
+    // Algoritmo DFS per rilevare cicli nel grafo delle dipendenze
+    function detectCircularDependencies(pluginsToActive) {
+      const visited = new Set();
+      const recursionStack = new Set();
+      const cyclePath = [];
+
+      function hasCycle(pluginName) {
+        visited.add(pluginName);
+        recursionStack.add(pluginName);
+        cyclePath.push(pluginName);
+
+        const dependencies = pluginsToActive.get(pluginName);
+        if (dependencies) {
+          for (const [depName] of dependencies) {
+            // Ignora dipendenze già caricate (senza dipendenze proprie)
+            if (!pluginsToActive.has(depName)) {
+              continue;
+            }
+
+            if (!visited.has(depName)) {
+              if (hasCycle(depName)) {
+                return true;
+              }
+            } else if (recursionStack.has(depName)) {
+              // Ciclo trovato! Costruisci il percorso del ciclo
+              cyclePath.push(depName);
+              return true;
+            }
+          }
+        }
+
+        cyclePath.pop();
+        recursionStack.delete(pluginName);
+        return false;
+      }
+
+      for (const [pluginName] of pluginsToActive) {
+        if (!visited.has(pluginName)) {
+          if (hasCycle(pluginName)) {
+            // Trova il punto di inizio del ciclo nel path
+            const cycleStart = cyclePath.indexOf(cyclePath[cyclePath.length - 1]);
+            const cycle = cyclePath.slice(cycleStart);
+            throw new Error(
+              `ERRORE: Dipendenza circolare rilevata!\n` +
+              `Ciclo: ${cycle.join(' -> ')}\n` +
+              `I plugin non possono dipendere circolarmente l'uno dall'altro.`
+            );
+          }
+        }
+      }
+    }
+
+    // Esegui controllo dipendenze circolari
+    detectCircularDependencies(this.#pluginsToActive);
+
     //END CONTROLLO ERRORI
 
 
