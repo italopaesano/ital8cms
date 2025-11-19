@@ -28,6 +28,9 @@ middlewaresToLoad.forEach( (midlwareFn) => {
 // carico il themesys (passo anche pluginSys per il controllo delle dipendenze)
 const themeSys = new ( require('./core/themeSys') ) ( ital8Conf, pluginSys );
 
+// Imposta il riferimento a themeSys in pluginSys per permettere ai plugin di accedervi
+pluginSys.setThemeSys(themeSys);
+
 // Static server per gli asset del tema attivo
 // Gli asset sono accessibili tramite /theme-assets/css/, /theme-assets/js/, ecc.
 app.use(

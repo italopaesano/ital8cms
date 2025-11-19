@@ -1,0 +1,21 @@
+{
+  "name": "baseExampleTheme",
+  "version": "1.0.0",
+  "description": "Tema esempio minimalista per mostrare la struttura base di un tema ital8cms",
+  "author": "Italo Paesano",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC",
+  "screenshot": null,
+  "tags": ["example", "minimal", "starter"],
+  "supportedHooks": [
+    "head",
+    "header",
+    "footer",
+    "script"
+  ],
+  "features": {
+    "assets": false,
+    "pluginCustomization": false,
+    "responsive": false
+  }
+}
