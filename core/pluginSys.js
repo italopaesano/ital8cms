@@ -235,6 +235,43 @@ class pluginSys{
 
   }
 
+  /**
+   * Verifica se un plugin è attivo
+   * @param {string} pluginName - Nome del plugin
+   * @returns {boolean} - true se il plugin è attivo
+   */
+  isPluginActive(pluginName) {
+    return this.#activePlugins.has(pluginName);
+  }
+
+  /**
+   * Restituisce la versione di un plugin attivo
+   * @param {string} pluginName - Nome del plugin
+   * @returns {string|null} - Versione del plugin o null se non trovato
+   */
+  getPluginVersion(pluginName) {
+    if (!this.isPluginActive(pluginName)) {
+      return null;
+    }
+
+    try {
+      const descriptionPath = path.join(__dirname, '../plugins', pluginName, 'description-plugin.json');
+      const description = JSON.parse(fs.readFileSync(descriptionPath, 'utf8'));
+      return description.version || null;
+    } catch (error) {
+      console.warn(`[pluginSys] Impossibile leggere versione del plugin '${pluginName}':`, error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Restituisce la lista dei nomi dei plugin attivi
+   * @returns {Array<string>} - Array con i nomi dei plugin attivi
+   */
+  getActivePluginNames() {
+    return Array.from(this.#activePlugins.keys());
+  }
+
 }
 
 module.exports = pluginSys ;

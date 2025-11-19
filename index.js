@@ -25,8 +25,8 @@ middlewaresToLoad.forEach( (midlwareFn) => {
 //console.log( "--------app.middleware ----------" , app.middleware);// visualizza quali midlware sono caricati 
 //console.log( 'getObjectsToShareInWebPages', getObjectsToShareInWebPages);
 
-// carico il themesys
-const themeSys = new ( require('./core/themeSys') ) ( ital8Conf );
+// carico il themesys (passo anche pluginSys per il controllo delle dipendenze)
+const themeSys = new ( require('./core/themeSys') ) ( ital8Conf, pluginSys );
 
 // Static server per gli asset del tema attivo
 // Gli asset sono accessibili tramite /theme-assets/css/, /theme-assets/js/, ecc.

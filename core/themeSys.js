@@ -2,14 +2,16 @@
 const ejs = require('ejs');
 const fs = require('fs');
 const path = require('path');
+const semver = require('semver');
 //let ital8Conf;
 
 class themeSys{
 
   //#fnInPageMap;// variabile privata
 
-  constructor( theItal8Conf ){// OLD OpluginSys. incorpora un istanza della classe pluginSys quindi un oggetto pluginSys da questo la O grande iniziale
+  constructor( theItal8Conf, thePluginSys = null ){// OLD OpluginSys. incorpora un istanza della classe pluginSys quindi un oggetto pluginSys da questo la O grande iniziale
     this.ital8Conf = theItal8Conf ;//OLD require('../ital8-conf.json');
+    this.pluginSys = thePluginSys; // Riferimento al sistema dei plugin per il check delle dipendenze
     //this.activeTheme = activeTheme;// nome del tema attivoQUESTA DEFINIZIONE SERVE A PERMETTERE DI IMPOSTARE UN TEMA ATTIVO DIVERSO DA QUELLO IMPOSTATO NEL FIEL DI CONFIGUAZIONE , AD ESEMPIO  PER I FILE DI ADMIN IL TEMA ATTIVO SARÀ SEMPRE QUELLO DI DEFULT
     //this.#fnInPageMap = OpluginSys.fnInPage;
 
@@ -23,6 +25,14 @@ class themeSys{
       console.log(`[themeSys] Tema pubblico '${this.ital8Conf.activeTheme}' caricato correttamente`);
     }
 
+    // Controlla dipendenze del tema pubblico (se pluginSys è disponibile)
+    if (this.pluginSys) {
+      const publicDeps = this.checkDependencies(this.ital8Conf.activeTheme);
+      if (!publicDeps.satisfied) {
+        console.warn(`[themeSys] Dipendenze tema pubblico non soddisfatte: ${publicDeps.errors.join(', ')}`);
+      }
+    }
+
     // Valida tema admin con fallback automatico
     const adminValidation = this.validateTheme(this.ital8Conf.adminActiveTheme);
     if (!adminValidation.valid) {
@@ -32,6 +42,82 @@ class themeSys{
     } else {
       console.log(`[themeSys] Tema admin '${this.ital8Conf.adminActiveTheme}' caricato correttamente`);
     }
+
+    // Controlla dipendenze del tema admin (se pluginSys è disponibile e tema diverso da pubblico)
+    if (this.pluginSys && this.ital8Conf.adminActiveTheme !== this.ital8Conf.activeTheme) {
+      const adminDeps = this.checkDependencies(this.ital8Conf.adminActiveTheme);
+      if (!adminDeps.satisfied) {
+        console.warn(`[themeSys] Dipendenze tema admin non soddisfatte: ${adminDeps.errors.join(', ')}`);
+      }
+    }
+  }
+
+  /**
+   * Controlla le dipendenze di un tema (plugin e moduli NPM)
+   * @param {string} themeName - Nome del tema da controllare
+   * @returns {object} - { satisfied: boolean, errors: Array<string> }
+   */
+  checkDependencies(themeName) {
+    const errors = [];
+    const themePath = path.join(__dirname, '../themes', themeName);
+    const configPath = path.join(themePath, 'config-theme.json');
+
+    // Leggi configurazione tema
+    let config;
+    try {
+      config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } catch (error) {
+      return { satisfied: false, errors: [`Impossibile leggere config-theme.json: ${error.message}`] };
+    }
+
+    // Controlla dipendenze plugin
+    const pluginDeps = config.pluginDependency || {};
+    for (const [pluginName, versionRequired] of Object.entries(pluginDeps)) {
+      if (!this.pluginSys.isPluginActive(pluginName)) {
+        errors.push(`Plugin '${pluginName}' richiesto ma non attivo`);
+        continue;
+      }
+
+      // Verifica versione se specificata
+      if (versionRequired && versionRequired !== '*') {
+        const installedVersion = this.pluginSys.getPluginVersion(pluginName);
+        if (installedVersion && !semver.satisfies(installedVersion, versionRequired)) {
+          errors.push(`Plugin '${pluginName}' versione ${installedVersion} non soddisfa requisito ${versionRequired}`);
+        }
+      }
+    }
+
+    // Controlla dipendenze moduli NPM
+    const nodeDeps = config.nodeModuleDependency || {};
+    for (const [moduleName, versionRequired] of Object.entries(nodeDeps)) {
+      try {
+        // Verifica che il modulo sia installato
+        const modulePath = require.resolve(moduleName);
+
+        // Verifica versione se specificata
+        if (versionRequired && versionRequired !== '*') {
+          try {
+            const packageJsonPath = path.join(path.dirname(modulePath), '..', 'package.json');
+            const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+            const installedVersion = packageJson.version;
+
+            if (installedVersion && !semver.satisfies(installedVersion, versionRequired)) {
+              errors.push(`Modulo NPM '${moduleName}' versione ${installedVersion} non soddisfa requisito ${versionRequired}`);
+            }
+          } catch {
+            // Se non riesce a leggere la versione, considera comunque il modulo installato
+            console.warn(`[themeSys] Impossibile verificare versione del modulo '${moduleName}'`);
+          }
+        }
+      } catch {
+        errors.push(`Modulo NPM '${moduleName}' richiesto ma non installato`);
+      }
+    }
+
+    return {
+      satisfied: errors.length === 0,
+      errors: errors
+    };
   }
 
   /**
