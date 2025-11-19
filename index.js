@@ -35,8 +35,8 @@ app.use(
     (opt = {
       showDirContents: true,
       urlsReserved: [`/${ital8Conf.adminPrefix}`, `/${ital8Conf.apiPrefix}`, `/${ital8Conf.viewsPrefix}`], // '/admin','/api','/views' -> questi sarebbero i percorsi di default pero adesso sono configurabili
-      enableCaching: true, // Koa v3 + koa-classic-server v2.1.2: HTTP caching abilitato (ETag, Last-Modified)
-      cacheMaxAge: 86400, // 24 ore di cache per file statici
+      enableCaching: false, // Disabilitato per facilitare i test durante lo sviluppo
+      cacheMaxAge: 86400, // 24 ore di cache per file statici (usato solo se enableCaching: true)
       template: {
         render: async (ctx, next, filePath) => {
           ctx.body = await ejs.renderFile(filePath, {
@@ -72,8 +72,8 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
         urlPrefix: `/${ital8Conf.adminPrefix}`,
         showDirContents: true,
         urlsReserved: [`/${ital8Conf.apiPrefix}`, `/${ital8Conf.viewsPrefix}`], // '/api','/views' -> questi sarebbero i percorsi di default pero adesso sono configurabili
-        enableCaching: true, // Koa v3 + koa-classic-server v2.1.2: HTTP caching abilitato
-        cacheMaxAge: 3600, // 1 ora di cache per pagine admin (meno di public per aggiornamenti più frequenti)
+        enableCaching: false, // Disabilitato per facilitare i test durante lo sviluppo
+        cacheMaxAge: 3600, // 1 ora di cache per pagine admin (usato solo se enableCaching: true)
         template: {
           render: async (ctx, next, filePath) => {
             ctx.body = await ejs.renderFile(filePath, {
