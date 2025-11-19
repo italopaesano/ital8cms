@@ -1,0 +1,10 @@
+{
+  "name": "exampleComplete",
+  "version": "1.0.0",
+  "description": "Plugin di esempio completo che dimostra tutte le funzionalità del sistema plugin di ital8cms",
+  "author": "ital8cms Team",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC",
+  "keywords": ["example", "demo", "tutorial", "reference"],
+  "repository": "https://github.com/italopaesano/ital8cms"
+}

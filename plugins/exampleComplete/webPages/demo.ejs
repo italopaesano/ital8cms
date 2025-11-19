@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %> - ital8cms</title>
+  <link rel="stylesheet" href="/api/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/api/exampleComplete/style.css">
+</head>
+<body>
+  <div class="container mt-4">
+    <h1 class="mb-4"><%= title %></h1>
+
+    <div class="row">
+      <div class="col-md-6">
+        <div class="card mb-4">
+          <div class="card-header">
+            <h5 class="mb-0">Stato del Plugin</h5>
+          </div>
+          <div class="card-body">
+            <table class="table table-sm">
+              <tr>
+                <td><strong>Counter:</strong></td>
+                <td><span id="counter-value"><%= counter %></span></td>
+              </tr>
+              <tr>
+                <td><strong>Caricato:</strong></td>
+                <td><%= loadedAt %></td>
+              </tr>
+              <tr>
+                <td><strong>Max Items:</strong></td>
+                <td><%= config.maxItems %></td>
+              </tr>
+              <tr>
+                <td><strong>Banner:</strong></td>
+                <td><%= config.showBanner ? 'Attivo' : 'Disattivo' %></td>
+              </tr>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-6">
+        <div class="card mb-4">
+          <div class="card-header">
+            <h5 class="mb-0">Azioni</h5>
+          </div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label">Incrementa Counter</label>
+              <div class="input-group">
+                <input type="number" id="increment-amount" class="form-control" value="1" min="1">
+                <button class="btn btn-primary" onclick="incrementCounter()">Incrementa</button>
+              </div>
+            </div>
+            <div id="result-message" class="alert d-none"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header">
+        <h5 class="mb-0">API Endpoints Disponibili</h5>
+      </div>
+      <div class="card-body">
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>Metodo</th>
+              <th>Endpoint</th>
+              <th>Descrizione</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="badge bg-success">GET</span></td>
+              <td><code>/api/exampleComplete/demo</code></td>
+              <td>Questa pagina</td>
+            </tr>
+            <tr>
+              <td><span class="badge bg-success">GET</span></td>
+              <td><code>/api/exampleComplete/info</code></td>
+              <td>Informazioni del plugin (JSON)</td>
+            </tr>
+            <tr>
+              <td><span class="badge bg-success">GET</span></td>
+              <td><code>/api/exampleComplete/search?q=test</code></td>
+              <td>Ricerca con parametri</td>
+            </tr>
+            <tr>
+              <td><span class="badge bg-primary">POST</span></td>
+              <td><code>/api/exampleComplete/increment</code></td>
+              <td>Incrementa il counter</td>
+            </tr>
+            <tr>
+              <td><span class="badge bg-primary">POST</span></td>
+              <td><code>/api/exampleComplete/create</code></td>
+              <td>Crea con validazione</td>
+            </tr>
+            <tr>
+              <td><span class="badge bg-warning text-dark">GET</span></td>
+              <td><code>/api/exampleComplete/protected</code></td>
+              <td>Richiede autenticazione</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0">Funzionalità Dimostrate</h5>
+      </div>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+          <li class="list-group-item">
+            <strong>Ciclo di Vita:</strong> loadPlugin, installPlugin, upgradePlugin, uninstallPlugin
+          </li>
+          <li class="list-group-item">
+            <strong>Route API:</strong> GET, POST, query parameters, validazione, autenticazione
+          </li>
+          <li class="list-group-item">
+            <strong>Page Hooks:</strong> head (CSS), header (banner), script (JavaScript)
+          </li>
+          <li class="list-group-item">
+            <strong>Middleware:</strong> Header personalizzati, logging richieste
+          </li>
+          <li class="list-group-item">
+            <strong>Object Sharing:</strong> Condivisione dati tra plugin e con pagine web
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script src="/api/bootstrap/js/bootstrap.min.js"></script>
+  <script>
+    async function incrementCounter() {
+      const amount = parseInt(document.getElementById('increment-amount').value) || 1;
+      const resultDiv = document.getElementById('result-message');
+
+      try {
+        const response = await fetch('/api/exampleComplete/increment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          document.getElementById('counter-value').textContent = data.newValue;
+          resultDiv.className = 'alert alert-success';
+          resultDiv.textContent = `Counter aggiornato a ${data.newValue}`;
+        } else {
+          resultDiv.className = 'alert alert-danger';
+          resultDiv.textContent = 'Errore: ' + (data.error || 'Sconosciuto');
+        }
+      } catch (error) {
+        resultDiv.className = 'alert alert-danger';
+        resultDiv.textContent = 'Errore di rete: ' + error.message;
+      }
+
+      resultDiv.classList.remove('d-none');
+    }
+  </script>
+</body>
+</html>
