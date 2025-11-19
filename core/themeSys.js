@@ -121,6 +121,58 @@ class themeSys{
   }
 
   /**
+   * Restituisce tutte le dipendenze di un tema
+   * @param {string} themeName - Nome del tema
+   * @returns {object} - { plugins: {}, nodeModules: {} }
+   */
+  getThemeDependencies(themeName) {
+    const themePath = path.join(__dirname, '../themes', themeName);
+    const configPath = path.join(themePath, 'config-theme.json');
+
+    try {
+      if (fs.existsSync(configPath)) {
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        return {
+          plugins: config.pluginDependency || {},
+          nodeModules: config.nodeModuleDependency || {}
+        };
+      }
+    } catch (error) {
+      console.warn(`[themeSys] Errore lettura dipendenze per ${themeName}: ${error.message}`);
+    }
+
+    return { plugins: {}, nodeModules: {} };
+  }
+
+  /**
+   * Verifica se un tema richiede un determinato plugin
+   * @param {string} themeName - Nome del tema
+   * @param {string} pluginName - Nome del plugin
+   * @returns {boolean|string} - false se non richiesto, altrimenti la versione richiesta
+   */
+  themeRequiresPlugin(themeName, pluginName) {
+    const deps = this.getThemeDependencies(themeName);
+    return deps.plugins[pluginName] || false;
+  }
+
+  /**
+   * Restituisce la lista dei plugin richiesti dal tema attivo
+   * @returns {object} - Oggetto { pluginName: versionRequired }
+   */
+  getActiveThemePluginDependencies() {
+    const deps = this.getThemeDependencies(this.ital8Conf.activeTheme);
+    return deps.plugins;
+  }
+
+  /**
+   * Verifica se tutte le dipendenze del tema attivo sono soddisfatte
+   * @returns {object} - { satisfied: boolean, errors: Array }
+   */
+  checkActiveThemeDependencies() {
+    return this.checkDependencies(this.ital8Conf.activeTheme);
+  }
+
+  /**
    * Valida un tema verificando che esista e abbia tutti i file necessari
    * @param {string} themeName - Nome del tema da validare
    * @returns {object} - { valid: boolean, error: string|null }
