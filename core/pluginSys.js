@@ -62,6 +62,44 @@ class pluginSys{
           });
         }// if( pluginConfig.isInstalled == 0 ){
 
+        // SISTEMA DI UPGRADE: controlla se la versione del plugin è cambiata
+        const pluginDescription = require(`../plugins/${pluginName}/description-plugin.json`);
+        const newVersion = pluginDescription.version;
+        const oldVersion = pluginConfig.version || '0.0.0'; // Se non esiste, assume 0.0.0
+
+        if (semver.valid(newVersion) && semver.valid(oldVersion) && semver.gt(newVersion, oldVersion)) {
+          // Nuova versione rilevata! Esegui upgrade
+          console.log(`[pluginSys] ⬆ Upgrade plugin ${pluginName}: ${oldVersion} -> ${newVersion}`);
+
+          if (plugin.upgradePlugin) {
+            try {
+              plugin.upgradePlugin(oldVersion, newVersion);
+              console.log(`[pluginSys]   Upgrade completato con successo`);
+            } catch (upgradeError) {
+              console.error(`[pluginSys] Errore durante upgrade plugin ${pluginName}:`, upgradeError.message);
+              throw upgradeError;
+            }
+          } else {
+            console.log(`[pluginSys]   Nessuna funzione upgradePlugin() definita, skip migrazione`);
+          }
+
+          // Aggiorna la versione nel config
+          pluginConfig.version = newVersion;
+          const textPluginConfig = JSON.stringify(pluginConfig, null, 2);
+          fs.promises.writeFile(`${__dirname}/../plugins/${pluginName}/config-plugin.json`, textPluginConfig)
+            .catch((error) => {
+              console.error(`[pluginSys] Errore salvataggio versione per ${pluginName}:`, error);
+            });
+        } else if (!pluginConfig.version) {
+          // Prima volta che registriamo la versione
+          pluginConfig.version = newVersion;
+          const textPluginConfig = JSON.stringify(pluginConfig, null, 2);
+          fs.promises.writeFile(`${__dirname}/../plugins/${pluginName}/config-plugin.json`, textPluginConfig)
+            .catch((error) => {
+              console.error(`[pluginSys] Errore salvataggio versione iniziale per ${pluginName}:`, error);
+            });
+        }
+
         // aggiungo le rotte del plugin all'elenco delle rotte da caricare
         if(plugin.getRouteArray){// controllo se è presente la funzione
           this.#routes.set(pluginName, plugin.getRouteArray());// asspcierò al nome del plugin l'array dele rotte
