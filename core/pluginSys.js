@@ -17,56 +17,63 @@ class pluginSys{
     this.#hooksPage = new Map();// new Map(['namelPlugin', new Map(['head', (passData) => {}],['body', ( passData ) => {} ])]);
     this.#routes = new Map();// mappa che conterrà come chiave il nome del plugin da caricare e come valore un array contenete tutti gli ogetti che rappresentano le rotte
 
-    //function caricatePlugin( pluginName, pluginConfig, routes, hooksPage, objectToShareToWebPages, activePlugins ){// questa funzione caricherà e se necessario installeà il plugin passato 
-    // ATTENZIONE USO LA FUNZIONE FRECCIA PER MANTENERE il this locale , però la funzione freccia va dichiarata prima del suo utilizzo 
+    //function caricatePlugin( pluginName, pluginConfig, routes, hooksPage, objectToShareToWebPages, activePlugins ){// questa funzione caricherà e se necessario installeà il plugin passato
+    // ATTENZIONE USO LA FUNZIONE FRECCIA PER MANTENERE il this locale , però la funzione freccia va dichiarata prima del suo utilizzo
     const caricatePlugin = ( pluginName ) => { //, routes, hooksPage, objectToShareToWebPages, activePlugins ){/
       //caricatePlugin = ( pluginName, pluginConfig, routes, hooksPage, objectToShareToWebPages, activePlugins ) => {// q
+
+      try {
         //console.log(pluginConfig);
         const pluginConfig = require(`../plugins/${pluginName}/config-plugin.json`);
-        const plugin = require(`../plugins/${pluginName}/main.js`);// 
+        const plugin = require(`../plugins/${pluginName}/main.js`);//
 
         // setto i plugin attivi prima del loading e dell'onstall i modo che ,, una volta caricati gliogeti condivisi questi potranno essere utilizati nel loading e nell'install
         this.#activePlugins.set( pluginName, plugin);//pluginName è il nome del plugin oltre che aggiungo il plugin alla lista dei plugin attivi
 
-        //START CARICO GLI OGGETTI CONDIVISI PRIMA DI CHIAMARE LA FUNZION loadPlugin() ed installPlugin permettendo di utilizare gli ogetti condivisi in fase d'installazione o di loading 
-        //adesso crea e carico gli ogetti confivisi fra i plugin : ogni plugin chiamerà la funzione getObjectToShareToOthersPlugin( pluginName); passando il proprio nome come parametro ed ottenendo l'ogetto a lui destinato immagazinandolo con la funzione : setSharedObject( pluginName, object ) dove in questo caso pluginname è il nome del plugin dal quale si riceve l'ogetto o object l'aogetto che si riceve 
+        //START CARICO GLI OGGETTI CONDIVISI PRIMA DI CHIAMARE LA FUNZION loadPlugin() ed installPlugin permettendo di utilizare gli ogetti condivisi in fase d'installazione o di loading
+        //adesso crea e carico gli ogetti confivisi fra i plugin : ogni plugin chiamerà la funzione getObjectToShareToOthersPlugin( pluginName); passando il proprio nome come parametro ed ottenendo l'ogetto a lui destinato immagazinandolo con la funzione : setSharedObject( pluginName, object ) dove in questo caso pluginname è il nome del plugin dal quale si riceve l'ogetto o object l'aogetto che si riceve
         this.#activePlugins.forEach( ( plugin0, nomePlugin0  ) => { // per ogni plugin itero per tutti gli altri plugins escludendo se stesso
           if(plugin0.getObjectToShareToOthersPlugin){// mi assicuro che la funzione appropiata esista
             this.#activePlugins.forEach( ( plugin1, nomePlugin1 ) => {
                 if( nomePlugin0 !== nomePlugin1){// mi assicuro che il plugin non richiami le funzioni su sse stesso
-                  if(plugin1.setSharedObject){// mi assicuro che la funzione appropiata esiste 
+                  if(plugin1.setSharedObject){// mi assicuro che la funzione appropiata esiste
                     plugin1.setSharedObject( nomePlugin0, plugin0.getObjectToShareToOthersPlugin( nomePlugin1 ) );
                   }
                 }
             });
           }// if(plugin0.getObjectToShareToOthersPlugin){/
         });// this.#activePlugins.forEach( ( nomePlugin0, plugin0 ) => {
-  
+
         if( pluginConfig.isInstalled == 0 ){// allora il plugin è attivo ma non installto quindi bisogna istallarlo
-          plugin.installPlugin();// installo il plugin e dopo aggiornerò config-plugin.json settando isInstalled = 1
+          try {
+            plugin.installPlugin();// installo il plugin e dopo aggiornerò config-plugin.json settando isInstalled = 1
+          } catch (installError) {
+            console.error(`[pluginSys] Errore durante installazione plugin ${pluginName}:`, installError.message);
+            throw installError; // Rilancia per gestione esterna
+          }
           pluginConfig.isInstalled = 1;//ora devo aggiornare config-plugin.json settando isInstalled = 1
           plugin.pluginConfig = pluginConfig ;// aggiorno anche l'ogetto interno al plugin
-  
+
           // scrivo il nuovo file config-plugin.json con la variabile isInstalled aggiornata correttamente
           const textPluginConfig = JSON.stringify( pluginConfig, null, 2 );
           fs.promises.writeFile( `${__dirname}/../plugins/${pluginName}/config-plugin.json` , textPluginConfig )// aggiorno il file config-plugin.json
           .catch( (error) => {
             console.log(`si è verificato un errore nella scrittura del file config-plugin.json del plugin ${pluginName} , errore:`, error );
-          });    
+          });
         }// if( pluginConfig.isInstalled == 0 ){
-  
+
         // aggiungo le rotte del plugin all'elenco delle rotte da caricare
         if(plugin.getRouteArray){// controllo se è presente la funzione
           this.#routes.set(pluginName, plugin.getRouteArray());// asspcierò al nome del plugin l'array dele rotte
-          // OLD this.routeMap.set(pluginName, plugin.getRouteArray()); // questa mappa conterrà come chiave il nome del modulo e come valore l'array di tutte le rotte del modulo 
+          // OLD this.routeMap.set(pluginName, plugin.getRouteArray()); // questa mappa conterrà come chiave il nome del modulo e come valore l'array di tutte le rotte del modulo
         }
-  
-        // aggiungo gli elementi a this.fnInPage con la struttura descritta nel costruttore 
-        if(plugin.getHooksPage){ // controllo se esiste la funzione  
+
+        // aggiungo gli elementi a this.fnInPage con la struttura descritta nel costruttore
+        if(plugin.getHooksPage){ // controllo se esiste la funzione
           this.#hooksPage.set( pluginName,  plugin.getHooksPage());// aggiungo gli hook alle pagine
           // OLD this.fnInPage.set( pluginName,  plugin.getFnInPageMap());//pluginName corrisponde al nome del plugin
         }
-  
+
         //aggiungi gli ogetti da condividere nei template engine
         if(plugin.getObjectToShareToWebPages){
           this.#objectToShareToWebPages[pluginName] = plugin.getObjectToShareToWebPages();
@@ -78,10 +85,31 @@ class pluginSys{
         }
 
         // loadPluginn(); // viene chiamato dopo perchè durante il caricamento potrebbe acadere che abbia bisogno di librerie di altri plugin
-        plugin.loadPlugin();// questo carica il plugin
-  
-        
-  
+        try {
+          plugin.loadPlugin();// questo carica il plugin
+        } catch (loadError) {
+          console.error(`[pluginSys] Errore durante caricamento plugin ${pluginName}:`, loadError.message);
+          throw loadError; // Rilancia per gestione esterna
+        }
+
+        console.log(`[pluginSys] ✓ Plugin caricato: ${pluginName}`);
+
+      } catch (error) {
+        console.error(`[pluginSys] ✗ Errore fatale nel plugin ${pluginName}:`, error.message);
+        console.error(`[pluginSys]   Stack: ${error.stack}`);
+
+        // Rimuovi il plugin dalla lista dei plugin attivi se era stato aggiunto
+        if (this.#activePlugins.has(pluginName)) {
+          this.#activePlugins.delete(pluginName);
+        }
+
+        // Rilancia l'errore per bloccare il sistema (comportamento critico)
+        // Per permettere al sistema di continuare, commenta la riga seguente
+        throw new Error(`Impossibile caricare il plugin ${pluginName}: ${error.message}`);
+      }
+
+
+
     }// const caricatePlugin = ( pluginName, pluginConfig ) => {
 
     // adesso leggo tutti i file della cartella plugins e ciclo per attivari e caricare quelli per essere caricati
