@@ -10,6 +10,10 @@
 - **Primary Language:** JavaScript (CommonJS)
 - **Code Comments:** Mix of Italian and English (author is Italian)
 
+### Core Philosophy
+
+**Zero Database Dependency:** ital8cms does not require any DBMS by default. The core system and plugins use **JSON files** for structured data storage (user accounts, roles, configurations) and **file-based storage** for web pages. Database systems like SQLite are **optional** and can be added through plugins when needed for specific use cases.
+
 ## Codebase Structure
 
 ```
@@ -62,10 +66,10 @@
 ## Technology Stack
 
 ### Backend
-- **Framework:** Koa.js v2.14.2 (async/await-based web framework)
+- **Framework:** Koa.js v3.1.1 (async/await-based web framework)
 - **Routing:** @koa/router v12.0.1
-- **Middleware:** koa-bodyparser, koa-session, koa-classic-server
-- **Database:** better-sqlite3 v9.6.0 (SQLite)
+- **Middleware:** koa-bodyparser, koa-session, koa-classic-server v2.1.2
+- **Data Storage:** JSON files (no database required)
 - **Authentication:** bcryptjs v3.0.2 (password hashing)
 - **Template Engine:** EJS v3.1.9
 - **Utilities:** semver v7.5.4 (dependency versioning)
@@ -78,8 +82,9 @@
 - **Auto-reload:** nodemon v3.0.1
 - **Version Control:** Git
 
-### Optional Integrations
-- **ccxt v4.1.70:** Cryptocurrency exchange integration
+### Optional Plugin Dependencies
+- **better-sqlite3:** SQLite database (via dbApi plugin - currently disabled)
+- **ccxt v4.1.70:** Cryptocurrency exchange integration (via ccxt plugin)
 
 ## Application Startup Flow
 
@@ -315,60 +320,119 @@ Themes call `pluginSys.hookPage()` to allow plugins to inject content:
 <%- await pluginSys.hookPage("script", passData) %>
 ```
 
-## Database Conventions
+## Data Storage Strategy
 
-### Database Strategy
+### Core Philosophy: File-Based, Database-Free
 
-- **Technology:** SQLite via better-sqlite3
-- **Location:** `/plugins/dbApi/dbFile/`
-- **Per-Plugin Isolation:** Each plugin can have its own database
+**ital8cms does NOT require any database management system (DBMS) to function.** The core system is designed to work entirely with JSON files for structured data and file-based storage for content.
 
-### Database Files
+### Primary Storage: JSON Files
 
+**Structured Data Storage:**
+- **User accounts:** `/plugins/simpleAccess/userAccount.json`
+- **User roles:** `/plugins/simpleAccess/userRole.json`
+- **Plugin configurations:** Each plugin has `config-plugin.json`
+- **Application settings:** `ital8-conf.json`
+
+**Why JSON?**
+- ✅ Zero dependencies - no database installation required
+- ✅ Simple deployment - just copy files
+- ✅ Easy backup - standard file system operations
+- ✅ Human-readable - can be edited manually if needed
+- ✅ Version control friendly - Git can track changes
+- ✅ Perfect for small to medium data sets
+
+### Content Storage: File-Based
+
+**Web Pages:**
+- **Templates:** EJS files in `/www` and `/themes`
+- **Static content:** HTML, CSS, JavaScript served directly
+- **Admin pages:** EJS files in `/core/admin/webPages`
+
+**Media Files:**
+- Managed by media plugin
+- Stored as files in plugin-specific directories
+
+### Optional: Database via Plugins
+
+**When you need a database:**
+Databases like SQLite can be added through plugins when you need:
+- Complex queries with JOINs
+- Full-text search
+- Relational data with many relationships
+- Large datasets requiring indexing
+- ACID transactions
+
+**dbApi Plugin (currently disabled):**
+
+The `dbApi` plugin provides SQLite integration:
+
+```javascript
+// Enable in plugins/dbApi/config-plugin.json
+{
+  "active": 1,  // Set to 1 to enable
+  "nodeModuleDependency": {
+    "better-sqlite3": "^9.2.2"
+  }
+}
+```
+
+Then install the dependency:
+```bash
+npm install better-sqlite3
+```
+
+**Database location when enabled:**
 ```
 plugins/dbApi/dbFile/
 ├── mainDb.db              # Main application database
 ├── webDb.db               # Web-shared data (available in templates)
-├── testDb.db              # Testing database
 └── pluginsDb/             # Per-plugin databases
     ├── admin.db
-    ├── simpleAccess.db
-    └── media.db
+    ├── media.db
+    └── ...
 ```
 
-### Accessing Databases in Plugins
+**Accessing database in plugins (when dbApi is active):**
 
 ```javascript
-// Request database from dbApi
 async loadPlugin(pluginSys, pathPluginFolder) {
   const dbApi = pluginSys.getSharedObject('dbApi')
-  this.db = dbApi.db  // Or specific database
-}
-
-// dbApi creates isolated databases per plugin
-getObjectToShareToOthersPlugin(forPlugin, pluginSys, pathPluginFolder) {
-  const pluginDbPath = path.join(this.dbPluginsPath, `${forPlugin}.db`)
-  const db = new Database(pluginDbPath)
-  return { db }
+  if (dbApi) {
+    this.db = dbApi.db  // SQLite database available
+  }
 }
 ```
 
-### Database in Templates
+### JSON File Operations
 
-The `webDb` is available in all EJS templates:
+**Reading JSON data:**
+```javascript
+const fs = require('fs')
+const path = require('path')
 
-```ejs
-<% const db = passData.plugin.dbApi.db %>
-<%
-  const data = db.prepare('SELECT * FROM my_table').all()
-%>
+// Read user accounts
+const userAccountPath = path.join(pathPluginFolder, 'userAccount.json')
+const users = JSON.parse(fs.readFileSync(userAccountPath, 'utf8'))
 ```
 
-### Current Data Storage
+**Writing JSON data:**
+```javascript
+// Update user accounts
+fs.writeFileSync(
+  userAccountPath,
+  JSON.stringify(users, null, 2),
+  'utf8'
+)
+```
 
-- **User accounts:** JSON file at `/plugins/simpleAccess/userAccount.json`
-- **User roles:** JSON file at `/plugins/simpleAccess/userRole.json`
-- **Future:** Migrate to SQLite for better performance and querying
+**Atomic writes (safer):**
+```javascript
+// Write to temp file first, then rename (atomic operation)
+const tempPath = userAccountPath + '.tmp'
+fs.writeFileSync(tempPath, JSON.stringify(users, null, 2), 'utf8')
+fs.renameSync(tempPath, userAccountPath)
+```
 
 ## Authentication & Authorization
 
@@ -730,11 +794,41 @@ mkdir -p core/admin/webPages/myFeature
 }
 ```
 
-### Database Operations
+### Data Operations
+
+**Primary Method: JSON Files**
 
 ```javascript
-// Get database from dbApi
+const fs = require('fs')
+const path = require('path')
+
+// Read JSON data
+const dataPath = path.join(pathPluginFolder, 'data.json')
+const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'))
+
+// Modify data
+data.items.push({ name: 'New Item', created_at: new Date().toISOString() })
+
+// Save JSON data (atomic write)
+const tempPath = dataPath + '.tmp'
+fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf8')
+fs.renameSync(tempPath, dataPath)
+
+// Query data (using native JavaScript)
+const item = data.items.find(item => item.id === 1)
+const filteredItems = data.items.filter(item => item.name.includes('search'))
+```
+
+**Optional: Database Operations (requires dbApi plugin)**
+
+```javascript
+// Check if dbApi plugin is active
 const dbApi = pluginSys.getSharedObject('dbApi')
+if (!dbApi) {
+  console.log('dbApi plugin not available, using JSON storage')
+  return
+}
+
 const db = dbApi.db
 
 // Create table
@@ -905,12 +999,58 @@ getHooksPage(section, passData, pluginSys, pathPluginFolder) {
 }
 ```
 
-### Task: Create a Database Table
+### Task: Initialize Plugin Data Storage
+
+**Option 1: JSON File (Recommended for most plugins)**
 
 ```javascript
 // In your plugin's loadPlugin() or installPlugin()
 async loadPlugin(pluginSys, pathPluginFolder) {
-  const db = pluginSys.getSharedObject('dbApi').db
+  const fs = require('fs')
+  const path = require('path')
+
+  // Define data file path
+  this.dataPath = path.join(pathPluginFolder, 'data.json')
+
+  // Initialize with default data if file doesn't exist
+  if (!fs.existsSync(this.dataPath)) {
+    const defaultData = {
+      items: [],
+      settings: {
+        created_at: new Date().toISOString()
+      }
+    }
+    fs.writeFileSync(
+      this.dataPath,
+      JSON.stringify(defaultData, null, 2),
+      'utf8'
+    )
+  }
+
+  // Load data
+  this.data = JSON.parse(fs.readFileSync(this.dataPath, 'utf8'))
+}
+
+// Helper method to save data
+saveData() {
+  const tempPath = this.dataPath + '.tmp'
+  fs.writeFileSync(tempPath, JSON.stringify(this.data, null, 2), 'utf8')
+  fs.renameSync(tempPath, this.dataPath)
+}
+```
+
+**Option 2: SQLite Database (Only when needed)**
+
+```javascript
+// Only if dbApi plugin is active
+async loadPlugin(pluginSys, pathPluginFolder) {
+  const dbApi = pluginSys.getSharedObject('dbApi')
+  if (!dbApi) {
+    console.log('dbApi not available, consider using JSON storage')
+    return
+  }
+
+  const db = dbApi.db
 
   // Create table
   db.exec(`
