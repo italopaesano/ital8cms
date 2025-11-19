@@ -1,0 +1,12 @@
+{
+  "active": 1,
+  "isInstalled": 1,
+  "weight": 0,
+  "wwwCustomPath": 1,
+  "pluginDependency": {
+    "bootstrap": "^1.0.0"
+  },
+  "nodeModuleDependency": {
+    "ejs": "^3.0.0"
+  }
+}

@@ -1,0 +1,55 @@
+<%#
+================================================================================
+HEADER.EJS - Apertura <body> e struttura principale
+================================================================================
+Questo partial è OBBLIGATORIO e contiene:
+- Apertura del tag <body>
+- Hook "header" per contenuti in cima alla pagina
+- Include degli altri partials (nav, main, aside)
+
+NOTA: header.ejs NON chiude il tag <body>, quello è compito di footer.ejs
+================================================================================
+%>
+<body>
+    <!--
+    ============================================================================
+    HOOK: header
+    ============================================================================
+    Usato per:
+    - Banner promozionali
+    - Notifiche di sistema
+    - Box di stato login (come fa simpleAccess con useLoginStatusBox)
+    ============================================================================
+    -->
+    <%- passData.pluginSys.hookPage("header", passData); %>
+
+    <!-- Contenitore principale con layout Bootstrap -->
+    <div class="container-fluid">
+        <div class="row">
+
+            <!--
+            ================================================================
+            NAVIGAZIONE
+            Include il partial nav.ejs che contiene il menu di navigazione
+            ================================================================
+            -->
+            <div class="col-12">
+                <%- include('nav.ejs') %>
+            </div>
+
+            <!--
+            ================================================================
+            CONTENUTO PRINCIPALE + SIDEBAR
+            Layout a due colonne: main (9 colonne) + aside (3 colonne)
+            ================================================================
+            -->
+            <div class="col-md-9">
+                <%- include('main.ejs') %>
+            </div>
+
+            <div class="col-md-3">
+                <%- include('aside.ejs') %>
+            </div>
+
+        </div>
+    </div>
