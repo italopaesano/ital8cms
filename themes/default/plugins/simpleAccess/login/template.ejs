@@ -1,0 +1,101 @@
+<%#
+  Template personalizzato per la pagina di login del plugin simpleAccess
+  Questo template sovrascrive quello di default quando presente nel tema
+
+  Variabili disponibili:
+  - apiPrefix: prefisso API
+  - bootstrapCss: link CSS Bootstrap
+  - bootstrapJs: script JS Bootstrap
+  - referrerTo: URL di ritorno dopo il login
+  - customCss: CSS personalizzato del tema (se presente)
+%>
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Tema Personalizzato</title>
+    <%- bootstrapCss %>
+    <style>
+      /* CSS del tema per la pagina di login */
+      <%- customCss || '' %>
+    </style>
+</head>
+<body class="login-page">
+    <%- apiPrefix %>
+    <%- bootstrapJs %>
+
+    <div class="login-container">
+        <div class="container">
+            <div class="row justify-content-center align-items-center min-vh-100">
+              <div class="col-md-6 col-lg-5 col-xl-4">
+                <div class="card login-card shadow-lg">
+                  <div class="card-header text-center">
+                    <h3 class="mb-0">
+                      <i class="login-icon">&#128274;</i> Accesso
+                    </h3>
+                  </div>
+                  <div class="card-body p-4">
+                    <!-- Messaggio di errore nascosto inizialmente -->
+                    <div id="errorDiv" class="alert alert-danger d-none" role="alert">
+                      <strong>Errore!</strong> Credenziali non valide. Riprova.
+                    </div>
+
+                    <!-- Script lato client per gestire il messaggio di errore -->
+                    <script>
+                      document.addEventListener("DOMContentLoaded", function() {
+                        const params = new URLSearchParams(window.location.search);
+
+                        // Se esiste il parametro "referrerTo", aggiorna il campo hidden
+                        if (params.has("referrerTo")) {
+                          document.getElementById("referrerTo").value = params.get("referrerTo");
+                        }
+
+                        // Se esiste il parametro "error", mostra il messaggio d'errore
+                        if (params.has('error')) {
+                          document.getElementById('errorDiv').classList.remove('d-none');
+                        }
+                      });
+                    </script>
+
+                    <form id="loginForm" method="POST">
+                      <input type="hidden" id="referrerTo" name="referrerTo" value="<%- referrerTo %>">
+
+                      <div class="mb-3">
+                        <label for="username" class="form-label fw-bold">Username</label>
+                        <div class="input-group">
+                          <span class="input-group-text">
+                            <i>&#128100;</i>
+                          </span>
+                          <input type="text" class="form-control" id="username" name="username"
+                                 placeholder="Inserisci username" required autofocus>
+                        </div>
+                      </div>
+
+                      <div class="mb-4">
+                        <label for="password" class="form-label fw-bold">Password</label>
+                        <div class="input-group">
+                          <span class="input-group-text">
+                            <i>&#128273;</i>
+                          </span>
+                          <input type="password" class="form-control" id="password" name="password"
+                                 placeholder="Inserisci password" required>
+                        </div>
+                      </div>
+
+                      <button type="submit" id="loginButton" class="btn btn-primary w-100 py-2">
+                        <i>&#10148;</i> Accedi
+                      </button>
+                    </form>
+                  </div>
+                  <div class="card-footer text-center text-muted">
+                    <small>Tema personalizzato - ital8cms</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+    </div>
+
+</body>
+</html>

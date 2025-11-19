@@ -6,12 +6,13 @@ const logger = require('./logger');
 
 class pluginSys{
 
-  #pluginsMiddlewares = Array();//Variabile privata che contiene l'elenco dei midlware dei plugin da aggiungere 
+  #pluginsMiddlewares = Array();//Variabile privata che contiene l'elenco dei midlware dei plugin da aggiungere
   #hooksPage;// variabile privata che conterrà la mappa degli hookdella pagina
   #routes;// variabile privata che conterrà le rotte aggiunte dai vari plugin
   #objectToShareToWebPages = {};// variabile che conterà gli ogetti restituiti dai vari plugin che saranno messi a dispozione del motore ejs e degli altri moduli
   #activePlugins = new Map();// Mappa che conterrà i plugin attivi
   #pluginsToActive = new Map();// plugin da attivare non ancora attivati perchè bisogna controllare le dipendenze
+  #themeSys = null;// riferimento al sistema dei temi (impostato dopo l'inizializzazione)
 
   constructor(){// qui bisognerà andare nella cartelle dai plugin e caricarli uno a uno 
 
@@ -372,8 +373,25 @@ class pluginSys{
     return this.#pluginsMiddlewares;
   }
   
-  getObjectsToShareInWebPages(){ // ritorno gli ogetti da condividere con gli altri 
+  getObjectsToShareInWebPages(){ // ritorno gli ogetti da condividere con gli altri
     return this.#objectToShareToWebPages;
+  }
+
+  /**
+   * Imposta il riferimento al sistema dei temi
+   * Chiamato da index.js dopo la creazione di themeSys
+   * @param {object} themeSys - Istanza di themeSys
+   */
+  setThemeSys(themeSys) {
+    this.#themeSys = themeSys;
+  }
+
+  /**
+   * Restituisce il riferimento al sistema dei temi
+   * @returns {object|null} - Istanza di themeSys o null se non ancora impostato
+   */
+  getThemeSys() {
+    return this.#themeSys;
   }
 
   loadRoutes( router , prefix = "" ){//prefisso delle rotte  questa chiamata farà caricare tutte le istanze di route caricate precedentemente dal costruttore

@@ -14,7 +14,9 @@ let pluginConfig = require(`${__dirname}/config-plugin.json`);// let perchè que
 const pluginName = path.basename(  __dirname );// restituisce il nome della directory che contiene il file corrente e che è anche il nome del plugin
 const sharedObject = {};// ogetto che avrà gliogetti condiviso con gli altri plugin ES {dbApi: newdbApi} 
 
-const userManagement = require('./userManagement');// necessario per gestire gli utenti 
+const userManagement = require('./userManagement');// necessario per gestire gli utenti
+
+let myPluginSys = null;// riferimento al sistema dei plugin per accedere a themeSys
 
 const ejsData = {// i dati che verranno passati a èjs
   apiPrefix: 
@@ -32,8 +34,9 @@ const ejsData = {// i dati che verranno passati a èjs
   `
 }
 
-function loadPlugin(){
+function loadPlugin(pluginSys, pathPluginFolder){
   //console.log( 'sharedObject: ', sharedObject );
+  myPluginSys = pluginSys;// memorizzo il riferimento per usarlo nelle route handlers
 };
 
 function installPlugin(){
@@ -96,10 +99,34 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     {
       method: 'GET',
       path: '/login', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
-      handler: async (ctx) => { 
+      handler: async (ctx) => {
 
-          const loginPage = path.join( __dirname , 'webPages', 'login.ejs' );
+          // Path di default del template
+          const defaultLoginPage = path.join( __dirname , 'webPages', 'login.ejs' );
+
+          // Controllo se esiste un template personalizzato nel tema
+          let loginPage = defaultLoginPage;
+          let customCss = '';
+
+          if (myPluginSys) {
+            const themeSys = myPluginSys.getThemeSys();
+            if (themeSys) {
+              // Risolvi il path del template (usa quello custom se esiste)
+              loginPage = themeSys.resolvePluginTemplatePath(
+                'simpleAccess',
+                'login',
+                defaultLoginPage,
+                'template.ejs'
+              );
+
+              // Carica CSS personalizzato se esiste
+              customCss = themeSys.getPluginCustomCss('simpleAccess', 'login');
+            }
+          }
+
           ejsData.referrerTo = ctx.headers.referer || '/'; //aggiungo hai dati passati referrerTo che serve a sapere dove poter reindirizzare la pagina dopo il login
+          ejsData.customCss = customCss; // CSS personalizzato del tema
+
           ctx.body = await ejs.renderFile( loginPage, ejsData);
           ctx.set('Content-Type', 'text/html');
           return;
@@ -153,9 +180,30 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     {
       method: 'GET',
       path: '/logout', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
-      handler: async (ctx) => { 
-        const logoutPage = path.join( __dirname , 'webPages', 'logout.ejs' );
+      handler: async (ctx) => {
+        // Path di default del template
+        const defaultLogoutPage = path.join( __dirname , 'webPages', 'logout.ejs' );
+
+        // Controllo se esiste un template personalizzato nel tema
+        let logoutPage = defaultLogoutPage;
+        let customCss = '';
+
+        if (myPluginSys) {
+          const themeSys = myPluginSys.getThemeSys();
+          if (themeSys) {
+            logoutPage = themeSys.resolvePluginTemplatePath(
+              'simpleAccess',
+              'logout',
+              defaultLogoutPage,
+              'template.ejs'
+            );
+            customCss = themeSys.getPluginCustomCss('simpleAccess', 'logout');
+          }
+        }
+
         ejsData.referrerTo = ctx.headers.referer || '/'; //aggiungo hai dati passati referrerTo che serve a sapere dove poter reindirizzare la pagina dopo il logout
+        ejsData.customCss = customCss;
+
         ctx.body = await ejs.renderFile( logoutPage, ejsData);
         ctx.set('Content-Type', 'text/html');
        }

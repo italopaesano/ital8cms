@@ -1,0 +1,87 @@
+/*
+  CSS personalizzato per la pagina di login
+  Tema: default
+  Plugin: simpleAccess
+  Endpoint: login
+*/
+
+.login-page {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+}
+
+.login-container {
+  padding: 20px;
+}
+
+.login-card {
+  border: none;
+  border-radius: 15px;
+  overflow: hidden;
+}
+
+.login-card .card-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 1.5rem;
+  border-bottom: none;
+}
+
+.login-card .card-header h3 {
+  font-weight: 600;
+}
+
+.login-icon {
+  font-style: normal;
+  margin-right: 0.5rem;
+}
+
+.login-card .card-body {
+  background: white;
+}
+
+.login-card .card-footer {
+  background: #f8f9fa;
+  border-top: 1px solid #e9ecef;
+}
+
+.login-card .form-control {
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+}
+
+.login-card .form-control:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+.login-card .input-group-text {
+  background: #f8f9fa;
+  border-radius: 8px 0 0 8px;
+}
+
+.login-card .input-group .form-control {
+  border-radius: 0 8px 8px 0;
+}
+
+.login-card .btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.login-card .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.login-card .btn-primary:active {
+  transform: translateY(0);
+}
+
+.alert-danger {
+  border-radius: 8px;
+  border-left: 4px solid #dc3545;
+}

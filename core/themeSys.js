@@ -237,7 +237,201 @@ class themeSys{
     //console.log(`${__dirname}/themes/${ital8Conf.activeTheme}/views/${partName}`);
     return `${__dirname}/../themes/${this.ital8Conf.adminActiveTheme}/views/${partName}`;
   }
-  /* 
+
+  // ============================================================================
+  // PLUGIN ENDPOINT CUSTOMIZATION
+  // Permette ai temi di sovrascrivere i template e gli asset dei plugin
+  // Struttura: themes/{themeName}/plugins/{pluginName}/{endpointName}/
+  // ============================================================================
+
+  /**
+   * Verifica se esiste un template personalizzato nel tema per un endpoint di un plugin
+   * @param {string} pluginName - Nome del plugin (es. 'simpleAccess')
+   * @param {string} endpointName - Nome dell'endpoint (es. 'login')
+   * @param {string} templateFile - Nome del file template (es. 'template.ejs')
+   * @param {boolean} isAdmin - Se true, usa il tema admin invece del tema pubblico
+   * @returns {boolean} - true se il template personalizzato esiste
+   */
+  hasCustomPluginTemplate(pluginName, endpointName, templateFile = 'template.ejs', isAdmin = false) {
+    const customPath = this.getCustomPluginTemplatePath(pluginName, endpointName, templateFile, isAdmin);
+    return customPath !== null;
+  }
+
+  /**
+   * Restituisce il path del template personalizzato se esiste, altrimenti null
+   * @param {string} pluginName - Nome del plugin (es. 'simpleAccess')
+   * @param {string} endpointName - Nome dell'endpoint (es. 'login')
+   * @param {string} templateFile - Nome del file template (es. 'template.ejs')
+   * @param {boolean} isAdmin - Se true, usa il tema admin invece del tema pubblico
+   * @returns {string|null} - Path assoluto del template personalizzato o null
+   */
+  getCustomPluginTemplatePath(pluginName, endpointName, templateFile = 'template.ejs', isAdmin = false) {
+    const themeName = isAdmin ? this.ital8Conf.adminActiveTheme : this.ital8Conf.activeTheme;
+    const customPath = path.join(
+      __dirname,
+      '../themes',
+      themeName,
+      'plugins',
+      pluginName,
+      endpointName,
+      templateFile
+    );
+
+    if (fs.existsSync(customPath)) {
+      return customPath;
+    }
+    return null;
+  }
+
+  /**
+   * Restituisce il path del template da usare per un endpoint di un plugin.
+   * Se esiste un template personalizzato nel tema, usa quello, altrimenti usa il default del plugin.
+   * @param {string} pluginName - Nome del plugin
+   * @param {string} endpointName - Nome dell'endpoint
+   * @param {string} defaultPath - Path di default del template nel plugin
+   * @param {string} templateFile - Nome del file template (default: 'template.ejs')
+   * @param {boolean} isAdmin - Se true, usa il tema admin
+   * @returns {string} - Path assoluto del template da usare
+   */
+  resolvePluginTemplatePath(pluginName, endpointName, defaultPath, templateFile = 'template.ejs', isAdmin = false) {
+    const customPath = this.getCustomPluginTemplatePath(pluginName, endpointName, templateFile, isAdmin);
+    if (customPath) {
+      console.log(`[themeSys] Usando template personalizzato per ${pluginName}/${endpointName}: ${customPath}`);
+      return customPath;
+    }
+    return defaultPath;
+  }
+
+  /**
+   * Verifica se esistono asset personalizzati nel tema per un endpoint di un plugin
+   * @param {string} pluginName - Nome del plugin
+   * @param {string} endpointName - Nome dell'endpoint
+   * @param {string} assetFile - Nome del file asset (es. 'style.css')
+   * @param {boolean} isAdmin - Se true, usa il tema admin
+   * @returns {boolean} - true se l'asset personalizzato esiste
+   */
+  hasCustomPluginAsset(pluginName, endpointName, assetFile, isAdmin = false) {
+    const themeName = isAdmin ? this.ital8Conf.adminActiveTheme : this.ital8Conf.activeTheme;
+    const assetPath = path.join(
+      __dirname,
+      '../themes',
+      themeName,
+      'plugins',
+      pluginName,
+      endpointName,
+      assetFile
+    );
+    return fs.existsSync(assetPath);
+  }
+
+  /**
+   * Restituisce il path assoluto di un asset personalizzato per un plugin
+   * @param {string} pluginName - Nome del plugin
+   * @param {string} endpointName - Nome dell'endpoint
+   * @param {string} assetFile - Nome del file asset
+   * @param {boolean} isAdmin - Se true, usa il tema admin
+   * @returns {string|null} - Path assoluto dell'asset o null se non esiste
+   */
+  getCustomPluginAssetPath(pluginName, endpointName, assetFile, isAdmin = false) {
+    const themeName = isAdmin ? this.ital8Conf.adminActiveTheme : this.ital8Conf.activeTheme;
+    const assetPath = path.join(
+      __dirname,
+      '../themes',
+      themeName,
+      'plugins',
+      pluginName,
+      endpointName,
+      assetFile
+    );
+
+    if (fs.existsSync(assetPath)) {
+      return assetPath;
+    }
+    return null;
+  }
+
+  /**
+   * Restituisce l'URL per un asset personalizzato di un plugin
+   * @param {string} pluginName - Nome del plugin
+   * @param {string} endpointName - Nome dell'endpoint
+   * @param {string} assetFile - Nome del file asset (es. 'style.css')
+   * @returns {string} - URL dell'asset (es. '/theme-plugin-assets/simpleAccess/login/style.css')
+   */
+  getPluginAssetUrl(pluginName, endpointName, assetFile) {
+    return `/theme-plugin-assets/${pluginName}/${endpointName}/${assetFile}`;
+  }
+
+  /**
+   * Legge il contenuto di un asset personalizzato CSS per un plugin
+   * Utile per includere CSS inline nel template
+   * @param {string} pluginName - Nome del plugin
+   * @param {string} endpointName - Nome dell'endpoint
+   * @param {string} cssFile - Nome del file CSS (default: 'style.css')
+   * @param {boolean} isAdmin - Se true, usa il tema admin
+   * @returns {string} - Contenuto del CSS o stringa vuota se non esiste
+   */
+  getPluginCustomCss(pluginName, endpointName, cssFile = 'style.css', isAdmin = false) {
+    const cssPath = this.getCustomPluginAssetPath(pluginName, endpointName, cssFile, isAdmin);
+    if (cssPath) {
+      try {
+        return fs.readFileSync(cssPath, 'utf8');
+      } catch (error) {
+        console.warn(`[themeSys] Errore lettura CSS personalizzato: ${error.message}`);
+        return '';
+      }
+    }
+    return '';
+  }
+
+  /**
+   * Restituisce la lista dei plugin con template personalizzati nel tema attivo
+   * @param {boolean} isAdmin - Se true, usa il tema admin
+   * @returns {Array} - Array di oggetti { pluginName, endpoints: [...] }
+   */
+  getCustomizedPlugins(isAdmin = false) {
+    const themeName = isAdmin ? this.ital8Conf.adminActiveTheme : this.ital8Conf.activeTheme;
+    const pluginsPath = path.join(__dirname, '../themes', themeName, 'plugins');
+    const result = [];
+
+    if (!fs.existsSync(pluginsPath)) {
+      return result;
+    }
+
+    try {
+      const plugins = fs.readdirSync(pluginsPath);
+      for (const pluginName of plugins) {
+        const pluginPath = path.join(pluginsPath, pluginName);
+        if (!fs.statSync(pluginPath).isDirectory()) continue;
+
+        const endpoints = [];
+        const endpointDirs = fs.readdirSync(pluginPath);
+
+        for (const endpointName of endpointDirs) {
+          const endpointPath = path.join(pluginPath, endpointName);
+          if (!fs.statSync(endpointPath).isDirectory()) continue;
+
+          const files = fs.readdirSync(endpointPath);
+          endpoints.push({
+            name: endpointName,
+            files: files
+          });
+        }
+
+        if (endpoints.length > 0) {
+          result.push({
+            pluginName: pluginName,
+            endpoints: endpoints
+          });
+        }
+      }
+    } catch (error) {
+      console.error(`[themeSys] Errore lettura plugin personalizzati: ${error.message}`);
+    }
+
+    return result;
+  }
+
+  /*
   questo metodo prenderà comeparamentro la parte della pagina chesu vuole generare
    Es: head, header, body, booter ecc
    e eseguirà le funzioni corrispondenti e le restituirà
