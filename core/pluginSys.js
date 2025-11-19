@@ -22,6 +22,9 @@ class pluginSys{
     const caricatePlugin = ( pluginName ) => { //, routes, hooksPage, objectToShareToWebPages, activePlugins ){/
       //caricatePlugin = ( pluginName, pluginConfig, routes, hooksPage, objectToShareToWebPages, activePlugins ) => {// q
 
+      // Calcola il percorso della cartella del plugin
+      const pathPluginFolder = path.join(__dirname, '..', 'plugins', pluginName);
+
       try {
         //console.log(pluginConfig);
         const pluginConfig = require(`../plugins/${pluginName}/config-plugin.json`);
@@ -46,7 +49,7 @@ class pluginSys{
 
         if( pluginConfig.isInstalled == 0 ){// allora il plugin è attivo ma non installto quindi bisogna istallarlo
           try {
-            plugin.installPlugin();// installo il plugin e dopo aggiornerò config-plugin.json settando isInstalled = 1
+            plugin.installPlugin(this, pathPluginFolder);// installo il plugin passando pluginSys e path
           } catch (installError) {
             console.error(`[pluginSys] Errore durante installazione plugin ${pluginName}:`, installError.message);
             throw installError; // Rilancia per gestione esterna
@@ -73,7 +76,7 @@ class pluginSys{
 
           if (plugin.upgradePlugin) {
             try {
-              plugin.upgradePlugin(oldVersion, newVersion);
+              plugin.upgradePlugin(this, pathPluginFolder, oldVersion, newVersion);
               console.log(`[pluginSys]   Upgrade completato con successo`);
             } catch (upgradeError) {
               console.error(`[pluginSys] Errore durante upgrade plugin ${pluginName}:`, upgradeError.message);
@@ -124,7 +127,7 @@ class pluginSys{
 
         // loadPluginn(); // viene chiamato dopo perchè durante il caricamento potrebbe acadere che abbia bisogno di librerie di altri plugin
         try {
-          plugin.loadPlugin();// questo carica il plugin
+          plugin.loadPlugin(this, pathPluginFolder);// questo carica il plugin passando pluginSys e path
         } catch (loadError) {
           console.error(`[pluginSys] Errore durante caricamento plugin ${pluginName}:`, loadError.message);
           throw loadError; // Rilancia per gestione esterna
