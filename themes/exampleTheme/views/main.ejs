@@ -1,0 +1,34 @@
+<%#
+================================================================================
+MAIN.EJS - Contenuto principale della pagina
+================================================================================
+Questo partial è OPZIONALE e contiene:
+- Area contenuto principale
+- Hook "main" per contenuto iniettato dai plugin
+- Hook "body" per contenuto dopo il main
+
+NOTA: Il contenuto specifico della pagina va inserito nelle singole pagine,
+non qui. Qui vanno solo gli hook e la struttura base.
+================================================================================
+%>
+<main class="main-content">
+    <!--
+    ============================================================================
+    HOOK: main
+    ============================================================================
+    Usato per il contenuto principale della pagina.
+    I plugin possono iniettare qui articoli, prodotti, form, etc.
+    ============================================================================
+    -->
+    <%- passData.pluginSys.hookPage("main", passData); %>
+</main>
+
+<!--
+============================================================================
+HOOK: body
+============================================================================
+Usato per contenuto aggiuntivo dopo il main.
+Esempio: sezioni "articoli correlati", "prodotti suggeriti", etc.
+============================================================================
+-->
+<%- passData.pluginSys.hookPage("body", passData); %>

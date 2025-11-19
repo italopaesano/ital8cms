@@ -1,0 +1,60 @@
+/*
+================================================================================
+CSS PERSONALIZZATO - Login di simpleAccess per exampleTheme
+================================================================================
+Questo CSS viene passato al template come variabile "customCss" e incluso
+inline nella pagina.
+
+Personalizza qui l'aspetto della pagina di login.
+================================================================================
+*/
+
+.login-page-example {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+}
+
+.login-wrapper {
+    padding: 20px;
+}
+
+.login-card {
+    border: none;
+    border-radius: 10px;
+}
+
+.login-card .card-header {
+    background: white;
+    border-bottom: 1px solid #eee;
+    padding: 1.5rem;
+}
+
+.login-card .card-body {
+    background: white;
+}
+
+.login-card .card-footer {
+    background: #f8f9fa;
+}
+
+.login-card .form-control {
+    border-radius: 5px;
+    padding: 0.75rem 1rem;
+}
+
+.login-card .form-control:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+.login-card .btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    padding: 0.75rem;
+    font-weight: 600;
+}
+
+.login-card .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
