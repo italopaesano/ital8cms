@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const semver = require('semver');
+const logger = require('./logger');
 
 class pluginSys{
 
@@ -51,7 +52,7 @@ class pluginSys{
           try {
             plugin.installPlugin(this, pathPluginFolder);// installo il plugin passando pluginSys e path
           } catch (installError) {
-            console.error(`[pluginSys] Errore durante installazione plugin ${pluginName}:`, installError.message);
+            logger.error('pluginSys', `Errore durante installazione plugin ${pluginName}`, installError);
             throw installError; // Rilancia per gestione esterna
           }
           pluginConfig.isInstalled = 1;//ora devo aggiornare config-plugin.json settando isInstalled = 1
@@ -61,7 +62,7 @@ class pluginSys{
           const textPluginConfig = JSON.stringify( pluginConfig, null, 2 );
           fs.promises.writeFile( `${__dirname}/../plugins/${pluginName}/config-plugin.json` , textPluginConfig )// aggiorno il file config-plugin.json
           .catch( (error) => {
-            console.log(`si è verificato un errore nella scrittura del file config-plugin.json del plugin ${pluginName} , errore:`, error );
+            logger.error('pluginSys', `Errore scrittura config-plugin.json per ${pluginName}`, error);
           });
         }// if( pluginConfig.isInstalled == 0 ){
 
@@ -72,18 +73,18 @@ class pluginSys{
 
         if (semver.valid(newVersion) && semver.valid(oldVersion) && semver.gt(newVersion, oldVersion)) {
           // Nuova versione rilevata! Esegui upgrade
-          console.log(`[pluginSys] ⬆ Upgrade plugin ${pluginName}: ${oldVersion} -> ${newVersion}`);
+          logger.info('pluginSys', `Upgrade plugin ${pluginName}: ${oldVersion} -> ${newVersion}`);
 
           if (plugin.upgradePlugin) {
             try {
               plugin.upgradePlugin(this, pathPluginFolder, oldVersion, newVersion);
-              console.log(`[pluginSys]   Upgrade completato con successo`);
+              logger.info('pluginSys', `Upgrade ${pluginName} completato con successo`);
             } catch (upgradeError) {
-              console.error(`[pluginSys] Errore durante upgrade plugin ${pluginName}:`, upgradeError.message);
+              logger.error('pluginSys', `Errore durante upgrade plugin ${pluginName}`, upgradeError);
               throw upgradeError;
             }
           } else {
-            console.log(`[pluginSys]   Nessuna funzione upgradePlugin() definita, skip migrazione`);
+            logger.debug('pluginSys', `Nessuna funzione upgradePlugin() per ${pluginName}, skip migrazione`);
           }
 
           // Aggiorna la versione nel config
@@ -91,7 +92,7 @@ class pluginSys{
           const textPluginConfig = JSON.stringify(pluginConfig, null, 2);
           fs.promises.writeFile(`${__dirname}/../plugins/${pluginName}/config-plugin.json`, textPluginConfig)
             .catch((error) => {
-              console.error(`[pluginSys] Errore salvataggio versione per ${pluginName}:`, error);
+              logger.error('pluginSys', `Errore salvataggio versione per ${pluginName}`, error);
             });
         } else if (!pluginConfig.version) {
           // Prima volta che registriamo la versione
@@ -99,7 +100,7 @@ class pluginSys{
           const textPluginConfig = JSON.stringify(pluginConfig, null, 2);
           fs.promises.writeFile(`${__dirname}/../plugins/${pluginName}/config-plugin.json`, textPluginConfig)
             .catch((error) => {
-              console.error(`[pluginSys] Errore salvataggio versione iniziale per ${pluginName}:`, error);
+              logger.error('pluginSys', `Errore salvataggio versione iniziale per ${pluginName}`, error);
             });
         }
 
@@ -129,15 +130,14 @@ class pluginSys{
         try {
           plugin.loadPlugin(this, pathPluginFolder);// questo carica il plugin passando pluginSys e path
         } catch (loadError) {
-          console.error(`[pluginSys] Errore durante caricamento plugin ${pluginName}:`, loadError.message);
+          logger.error('pluginSys', `Errore durante caricamento plugin ${pluginName}`, loadError);
           throw loadError; // Rilancia per gestione esterna
         }
 
-        console.log(`[pluginSys] ✓ Plugin caricato: ${pluginName}`);
+        logger.info('pluginSys', `Plugin caricato: ${pluginName}`);
 
       } catch (error) {
-        console.error(`[pluginSys] ✗ Errore fatale nel plugin ${pluginName}:`, error.message);
-        console.error(`[pluginSys]   Stack: ${error.stack}`);
+        logger.error('pluginSys', `Errore fatale nel plugin ${pluginName}`, error);
 
         // Rimuovi il plugin dalla lista dei plugin attivi se era stato aggiunto
         if (this.#activePlugins.has(pluginName)) {
