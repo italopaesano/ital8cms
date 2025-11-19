@@ -150,15 +150,17 @@ class pluginSys{
     }
 
     // controllo che le chiavi della mappa passate come dipendenze siano tutti presenti nella pluginList
-    function isPluginDependenciesSatisfied( pluginsListMap , dependencyMap ){// ritorna vero se i moduli già caricati posso sodisfare le dipendeze del modulo da caricare ,falso altrimenti 
-      //console.log( 'dependencyMap:', dependencyMap ); 
+    function isPluginDependenciesSatisfied( pluginsListMap , dependencyMap ){// ritorna vero se i moduli già caricati posso sodisfare le dipendeze del modulo da caricare ,falso altrimenti
+      //console.log( 'dependencyMap:', dependencyMap );
 
-      dependencyMap.forEach( (version, plugiName) => {
-        if( !pluginsListMap.has( plugiName ) ){
+      // FIX: Usare for...of invece di forEach per permettere il return
+      // Il return dentro forEach non esce dalla funzione ma solo dalla callback
+      for( const [pluginName, version] of dependencyMap ){
+        if( !pluginsListMap.has( pluginName ) ){
           return false;
         }
-      });
-      
+      }
+
       return true;
     }
 
