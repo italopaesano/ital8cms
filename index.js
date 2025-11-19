@@ -29,16 +29,18 @@ middlewaresToLoad.forEach( (midlwareFn) => {
 const themeSys = new ( require('./core/themeSys') ) ( ital8Conf );
 
 // koa classic server
-app.use( 
+app.use(
   koaClassicServer(
     __dirname + `${ital8Conf.wwwPath}`,
     (opt = {
       showDirContents: true,
-      urlsReserved: Array( `/${ital8Conf.adminPrefix}`,`/${ital8Conf.apiPrefix}`,`/${ital8Conf.viewsPrefix}`),//, '/admin','/api','/views' -> questi sarebbero i percorsi di defoult pero adesso sono configurabili  
+      urlsReserved: [`/${ital8Conf.adminPrefix}`, `/${ital8Conf.apiPrefix}`, `/${ital8Conf.viewsPrefix}`], // '/admin','/api','/views' -> questi sarebbero i percorsi di default pero adesso sono configurabili
+      enableCaching: true, // Koa v3 + koa-classic-server v2.1.2: HTTP caching abilitato (ETag, Last-Modified)
+      cacheMaxAge: 86400, // 24 ore di cache per file statici
       template: {
         render: async (ctx, next, filePath) => {
           ctx.body = await ejs.renderFile(filePath, {
-            passData :{ 
+            passData :{
               apiPrefix: ital8Conf.apiPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamare in modo corretto e flessibile le api ad esempio dei vari plugin
               //adminPrefix: ital8Conf.adminPrefix,//ATTENZIONE PER NESSUN MOTIVO DOVRÀ ESSERE PASSATO adminPrefix nelle pagine web non di amministrazione per non svelare ad utenti potenzialmente pericolosi la locazion della sezione di admin
               pluginSys: pluginSys, // sistema dei plugin
@@ -53,32 +55,34 @@ app.use(
             }
           });
         },
-        ext: Array("ejs", "EJS"),
+        ext: ["ejs", "EJS"], // Koa v3: sintassi moderna array literals
       },
     })
   )
 );
 
-//START ADESSO CARICO LA PARTE DI ADMIN SE RICHIESTA 
+//START ADESSO CARICO LA PARTE DI ADMIN SE RICHIESTA
 if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
 
-  app.use( 
+  app.use(
     koaClassicServer(
-      path.join(__dirname, 'core', 'admin', 'webPages'),// punto alla cartedda delle pagine di admin
+      path.join(__dirname, 'core', 'admin', 'webPages'),// punto alla cartella delle pagine di admin
       (opt = {
-        index: 'index.ejs',
+        index: ['index.ejs'], // Koa v3 + koa-classic-server v2.1.2: formato array raccomandato
         urlPrefix: `/${ital8Conf.adminPrefix}`,
         showDirContents: true,
-        urlsReserved: Array( `/${ital8Conf.apiPrefix}`,`/${ital8Conf.viewsPrefix}`),//,'/api','/views' -> questi sarebbero i percorsi di defoult pero adesso sono configurabili  
+        urlsReserved: [`/${ital8Conf.apiPrefix}`, `/${ital8Conf.viewsPrefix}`], // '/api','/views' -> questi sarebbero i percorsi di default pero adesso sono configurabili
+        enableCaching: true, // Koa v3 + koa-classic-server v2.1.2: HTTP caching abilitato
+        cacheMaxAge: 3600, // 1 ora di cache per pagine admin (meno di public per aggiornamenti più frequenti)
         template: {
           render: async (ctx, next, filePath) => {
             ctx.body = await ejs.renderFile(filePath, {
-              passData :{ 
+              passData :{
                 apiPrefix: ital8Conf.apiPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamare in modo corretto e flessibile le api ad esempio dei vari plugin
                 adminPrefix: ital8Conf.adminPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamamare correttamente le pagine di admin con il corretto prefix
                 pluginSys: pluginSys, // sistema dei plugin
                 plugin: getObjectsToShareInWebPages,// quicondivo gli ogetti publidi dei plugin
-                themeSys: themeSys,// thema dei temi con il tema in usao qullo di --->default
+                themeSys: themeSys,// thema dei temi con il tema in uso quello di --->default
                 //baseThemePath: `${ital8Conf.baseThemePath}` ,OLD -> mi sa che non serve più// default -> "../themes/default" -->baseThemePath contiene il percorso di base del tema corrente
                 filePath: filePath,
                 href: ctx.href,
@@ -88,7 +92,7 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
               }
             });
           },
-          ext: Array("ejs", "EJS"),
+          ext: ["ejs", "EJS"], // Koa v3: sintassi moderna array literals
         },
       })
     )
