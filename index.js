@@ -25,8 +25,23 @@ middlewaresToLoad.forEach( (midlwareFn) => {
 //console.log( "--------app.middleware ----------" , app.middleware);// visualizza quali midlware sono caricati 
 //console.log( 'getObjectsToShareInWebPages', getObjectsToShareInWebPages);
 
-// carico il themesys
-const themeSys = new ( require('./core/themeSys') ) ( ital8Conf );
+// carico il themesys (passo anche pluginSys per il controllo delle dipendenze)
+const themeSys = new ( require('./core/themeSys') ) ( ital8Conf, pluginSys );
+
+// Static server per gli asset del tema attivo
+// Gli asset sono accessibili tramite /theme-assets/css/, /theme-assets/js/, ecc.
+app.use(
+  koaClassicServer(
+    path.join(__dirname, 'themes', ital8Conf.activeTheme, 'assets'),
+    {
+      urlPrefix: '/theme-assets',
+      showDirContents: false,
+      enableCaching: true,
+      cacheMaxAge: 86400, // 24 ore di cache per asset del tema
+    }
+  )
+);
+console.log(`[themeSys] Asset del tema serviti da /theme-assets/ -> themes/${ital8Conf.activeTheme}/assets/`);
 
 // koa classic server
 app.use(

@@ -1,0 +1,86 @@
+/**
+ * Theme CSS - Default Theme
+ *
+ * Questo file contiene gli stili personalizzati del tema.
+ * Viene servito automaticamente da /theme-assets/css/theme.css
+ *
+ * Per utilizzarlo, aggiungere nel partial head.ejs:
+ * <link rel="stylesheet" href="/theme-assets/css/theme.css">
+ */
+
+/* Variabili CSS del tema */
+:root {
+  --theme-primary-color: #007bff;
+  --theme-secondary-color: #6c757d;
+  --theme-success-color: #28a745;
+  --theme-danger-color: #dc3545;
+  --theme-warning-color: #ffc107;
+  --theme-info-color: #17a2b8;
+  --theme-light-color: #f8f9fa;
+  --theme-dark-color: #343a40;
+
+  --theme-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --theme-font-size-base: 1rem;
+  --theme-line-height-base: 1.5;
+}
+
+/* Stili base del tema */
+body {
+  font-family: var(--theme-font-family);
+  font-size: var(--theme-font-size-base);
+  line-height: var(--theme-line-height-base);
+  color: var(--theme-dark-color);
+  background-color: var(--theme-light-color);
+}
+
+/* Header del tema */
+header {
+  background-color: var(--theme-primary-color);
+  color: white;
+  padding: 1rem;
+}
+
+/* Navigazione */
+nav {
+  background-color: var(--theme-light-color);
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid #dee2e6;
+}
+
+nav a {
+  color: var(--theme-primary-color);
+  text-decoration: none;
+  margin-right: 1rem;
+}
+
+nav a:hover {
+  text-decoration: underline;
+}
+
+/* Contenuto principale */
+main {
+  padding: 1rem;
+  min-height: 60vh;
+}
+
+/* Sidebar */
+aside {
+  background-color: #f1f1f1;
+  padding: 1rem;
+  border-left: 1px solid #dee2e6;
+}
+
+/* Footer */
+footer {
+  background-color: var(--theme-dark-color);
+  color: white;
+  padding: 1rem;
+  text-align: center;
+  margin-top: auto;
+}
+
+/* Utility classes del tema */
+.theme-text-primary { color: var(--theme-primary-color); }
+.theme-text-secondary { color: var(--theme-secondary-color); }
+.theme-bg-primary { background-color: var(--theme-primary-color); }
+.theme-bg-secondary { background-color: var(--theme-secondary-color); }
