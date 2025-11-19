@@ -180,12 +180,14 @@ class themeSys{
 
         if (stats.isDirectory()) {
           const validation = this.validateTheme(entry);
+          const description = this.getThemeDescription(entry);
           themes.push({
             name: entry,
             valid: validation.valid,
             error: validation.error,
             isActive: entry === this.ital8Conf.activeTheme,
-            isAdminActive: entry === this.ital8Conf.adminActiveTheme
+            isAdminActive: entry === this.ital8Conf.adminActiveTheme,
+            description: description
           });
         }
       }
@@ -194,6 +196,75 @@ class themeSys{
     }
 
     return themes;
+  }
+
+  /**
+   * Restituisce i metadati di un tema dal file description-theme.json
+   * @param {string} themeName - Nome del tema
+   * @returns {object|null} - Oggetto con i metadati o null se non trovato
+   */
+  getThemeDescription(themeName) {
+    const descPath = path.join(__dirname, '../themes', themeName, 'description-theme.json');
+
+    try {
+      if (fs.existsSync(descPath)) {
+        return JSON.parse(fs.readFileSync(descPath, 'utf8'));
+      }
+    } catch (error) {
+      console.warn(`[themeSys] Errore lettura description-theme.json per ${themeName}: ${error.message}`);
+    }
+
+    return null;
+  }
+
+  /**
+   * Restituisce la versione di un tema
+   * @param {string} themeName - Nome del tema
+   * @returns {string|null} - Versione del tema o null
+   */
+  getThemeVersion(themeName) {
+    const description = this.getThemeDescription(themeName);
+    return description ? description.version : null;
+  }
+
+  /**
+   * Restituisce i metadati del tema pubblico attivo
+   * @returns {object|null} - Metadati del tema attivo
+   */
+  getActiveThemeDescription() {
+    return this.getThemeDescription(this.ital8Conf.activeTheme);
+  }
+
+  /**
+   * Restituisce i metadati del tema admin attivo
+   * @returns {object|null} - Metadati del tema admin attivo
+   */
+  getAdminThemeDescription() {
+    return this.getThemeDescription(this.ital8Conf.adminActiveTheme);
+  }
+
+  /**
+   * Verifica se un tema supporta un determinato hook
+   * @param {string} themeName - Nome del tema
+   * @param {string} hookName - Nome dell'hook (es. 'head', 'footer')
+   * @returns {boolean} - true se il tema supporta l'hook
+   */
+  themeSupportsHook(themeName, hookName) {
+    const description = this.getThemeDescription(themeName);
+    if (!description || !description.supportedHooks) {
+      return true; // Assume supporto se non specificato
+    }
+    return description.supportedHooks.includes(hookName);
+  }
+
+  /**
+   * Restituisce le feature supportate da un tema
+   * @param {string} themeName - Nome del tema
+   * @returns {object} - Oggetto con le feature
+   */
+  getThemeFeatures(themeName) {
+    const description = this.getThemeDescription(themeName);
+    return description ? (description.features || {}) : {};
   }
 
   /**
