@@ -13,9 +13,14 @@
     "koa-session": "^7.0.2"
   },
   "custom": {
-    "loggedReservedPrefix": ["/reserved", "/private", "/lib"],
+    "loggedReservedPrefix": [
+      "/reserved",
+      "/private",
+      "/lib"
+    ],
     "redirectToHttpReferer": true,
     "defaultLoginRedirectURL": "/api/simpleAccess/logged",
-    "useLoginStatusBox" : true
-  }
+    "useLoginStatusBox": true
+  },
+  "version": "1.0.0"
 }
