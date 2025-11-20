@@ -30,6 +30,12 @@
 
 **Target audience:** Web developers comfortable with Node.js, HTML/CSS, and server-side templating. Not suitable for non-technical users looking for a WYSIWYG editor.
 
+**JSON5 Configuration Files:** All `.json` configuration files in the project (except `package.json` and `package-lock.json`) are processed with JSON5 and support comments, trailing commas, and other JSON5 features. Each file must have a comment on the first line:
+
+```javascript
+// This file follows the JSON5 standard - comments and trailing commas are supported
+```
+
 ## Codebase Structure
 
 ```
