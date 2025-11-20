@@ -1,0 +1,57 @@
+<%#
+================================================================================
+ASIDE.EJS - Sidebar laterale
+================================================================================
+Questo partial è OPZIONALE e contiene:
+- Sidebar con widget
+- Hook "aside" per widget iniettati dai plugin
+
+NOTA: Se non vuoi una sidebar, rimuovi questo partial da header.ejs
+================================================================================
+%>
+<aside class="sidebar">
+    <div class="card mb-3">
+        <div class="card-header">
+            <strong>Sidebar</strong>
+        </div>
+        <div class="card-body">
+            <p class="card-text">
+                Questa è la sidebar del tema example.
+            </p>
+
+            <!--
+            ================================================================
+            HOOK: aside
+            ================================================================
+            I plugin possono aggiungere widget qui.
+            Esempio: calendario, ultimi post, statistiche, etc.
+            ================================================================
+            -->
+            <%- passData.pluginSys.hookPage("aside", passData); %>
+        </div>
+    </div>
+
+    <!--
+    ================================================================
+    ESEMPIO: Accesso a passData
+    Mostra informazioni dinamiche usando i dati disponibili
+    ================================================================
+    -->
+    <div class="card">
+        <div class="card-header">
+            <strong>Info Sistema</strong>
+        </div>
+        <div class="card-body small">
+            <p><strong>Tema attivo:</strong><br>
+               <%= passData.themeSys.getActiveThemeDescription()?.name || 'N/A' %>
+            </p>
+            <p><strong>Utente:</strong><br>
+               <% if (passData.ctx.session && passData.ctx.session.user) { %>
+                   <%= passData.ctx.session.user.name %>
+               <% } else { %>
+                   Non autenticato
+               <% } %>
+            </p>
+        </div>
+    </div>
+</aside>

@@ -63,11 +63,95 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
   routeArray.push(
     {
       method: 'GET',
-      path: `/${ital8Conf.adminPrefix}/hello`, 
-        handler: async (ctx) => { 
+      path: `/${ital8Conf.adminPrefix}/hello`,
+        handler: async (ctx) => {
           ctx.body = `hellò`
           ctx.type = 'text/css';
        }
+    }
+  );
+
+  // API per cambiare il tema attivo (pubblico o admin)
+  routeArray.push(
+    {
+      method: 'POST',
+      path: `/setTheme`,
+      handler: async (ctx) => {
+        try {
+          // Verifica autenticazione (opzionale ma consigliato)
+          if (!ctx.session || !ctx.session.authenticated) {
+            ctx.status = 401;
+            ctx.body = { error: 'Non autorizzato. Effettua il login.' };
+            return;
+          }
+
+          // Verifica ruolo (solo admin e root possono cambiare tema)
+          const userRole = ctx.session.user ? ctx.session.user.roleId : 999;
+          if (userRole > 1) { // 0 = root, 1 = admin
+            ctx.status = 403;
+            ctx.body = { error: 'Non hai i permessi per modificare i temi.' };
+            return;
+          }
+
+          const { themeName, themeType } = ctx.request.body;
+
+          // Validazione input
+          if (!themeName || !themeType) {
+            ctx.status = 400;
+            ctx.body = { error: 'Parametri mancanti: themeName e themeType sono obbligatori.' };
+            return;
+          }
+
+          if (themeType !== 'public' && themeType !== 'admin') {
+            ctx.status = 400;
+            ctx.body = { error: 'themeType deve essere "public" o "admin".' };
+            return;
+          }
+
+          // Verifica che il tema esista
+          const themesPath = path.join(__dirname, '../../themes');
+          const themePath = path.join(themesPath, themeName);
+
+          if (!fs.existsSync(themePath)) {
+            ctx.status = 404;
+            ctx.body = { error: `Il tema "${themeName}" non esiste.` };
+            return;
+          }
+
+          // Verifica che il tema abbia la cartella views
+          const viewsPath = path.join(themePath, 'views');
+          if (!fs.existsSync(viewsPath)) {
+            ctx.status = 400;
+            ctx.body = { error: `Il tema "${themeName}" non ha una cartella views/ valida.` };
+            return;
+          }
+
+          // Leggi configurazione attuale
+          const configPath = path.join(__dirname, '../../ital8-conf.json');
+          const currentConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+
+          // Aggiorna il tema appropriato
+          if (themeType === 'public') {
+            currentConfig.activeTheme = themeName;
+          } else {
+            currentConfig.adminActiveTheme = themeName;
+          }
+
+          // Salva configurazione aggiornata
+          fs.writeFileSync(configPath, JSON.stringify(currentConfig, null, 2), 'utf8');
+
+          const typeLabel = themeType === 'public' ? 'sito pubblico' : 'pannello admin';
+          ctx.body = {
+            success: true,
+            message: `Tema "${themeName}" attivato per ${typeLabel}. Riavvia il server per applicare le modifiche.`
+          };
+
+        } catch (error) {
+          console.error('Errore nel cambio tema:', error);
+          ctx.status = 500;
+          ctx.body = { error: 'Errore interno del server: ' + error.message };
+        }
+      }
     }
   );
 

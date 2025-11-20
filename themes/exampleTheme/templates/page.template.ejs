@@ -1,0 +1,57 @@
+<%#
+================================================================================
+PAGE.TEMPLATE.EJS - Template base per creare nuove pagine
+================================================================================
+Questo è un template completo che mostra come usare i partials del tema.
+Copia questo file come base per creare nuove pagine nel tuo sito.
+
+USO:
+1. Copia questo file nella tua cartella www/ o dove vuoi creare la pagina
+2. Modifica il contenuto tra header e footer
+3. Accedi alla pagina tramite il browser
+
+NOTA: passData è automaticamente disponibile in tutti i template EJS
+================================================================================
+%>
+
+<%# Include il partial head.ejs del tema attivo %>
+<%- include(passData.themeSys.getThemePartPath('head.ejs')) %>
+
+<%# Include il partial header.ejs (apre body e include nav/main/aside) %>
+<%- include(passData.themeSys.getThemePartPath('header.ejs')) %>
+
+<!--
+================================================================================
+CONTENUTO PERSONALIZZATO DELLA PAGINA
+Inserisci qui il contenuto specifico di questa pagina
+================================================================================
+-->
+
+<div class="container my-4">
+    <div class="row">
+        <div class="col-12">
+            <h1>Titolo della Pagina</h1>
+            <p>Questo è il contenuto della tua pagina personalizzata.</p>
+
+            <!-- Esempio: mostra dati da passData -->
+            <div class="alert alert-info">
+                <strong>URL corrente:</strong> <%= passData.href %>
+            </div>
+
+            <!-- Esempio: controlla autenticazione -->
+            <% if (passData.ctx.session && passData.ctx.session.authenticated) { %>
+                <div class="alert alert-success">
+                    Benvenuto, <%= passData.ctx.session.user.name %>!
+                </div>
+            <% } else { %>
+                <div class="alert alert-warning">
+                    Non sei autenticato.
+                    <a href="/<%= passData.apiPrefix %>/simpleAccess/login">Accedi</a>
+                </div>
+            <% } %>
+        </div>
+    </div>
+</div>
+
+<%# Include il partial footer.ejs (chiude body e html) %>
+<%- include(passData.themeSys.getThemePartPath('footer.ejs')) %>

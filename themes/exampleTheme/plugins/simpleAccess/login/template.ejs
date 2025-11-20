@@ -1,0 +1,105 @@
+<%#
+================================================================================
+TEMPLATE PERSONALIZZATO - Login di simpleAccess
+================================================================================
+Questo template sovrascrive la pagina di login di default del plugin simpleAccess.
+Il sistema dei temi controlla automaticamente questa cartella prima di usare
+il template di default del plugin.
+
+VARIABILI DISPONIBILI:
+- bootstrapCss: Link CSS Bootstrap
+- bootstrapJs: Script JS Bootstrap
+- apiPrefix: Script per variabile apiPrefix client-side
+- referrerTo: URL di ritorno dopo il login
+- customCss: Contenuto di style.css (questo file)
+
+IMPORTANTE: Mantenere i campi del form necessari per il funzionamento:
+- input hidden "referrerTo"
+- input text "username"
+- input password "password"
+================================================================================
+%>
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - exampleTheme</title>
+
+    <!-- Bootstrap CSS dal plugin -->
+    <%- bootstrapCss %>
+
+    <!-- CSS personalizzato di questo tema -->
+    <style>
+        <%- customCss || '' %>
+    </style>
+</head>
+<body class="login-page-example">
+    <!-- Script per apiPrefix -->
+    <%- apiPrefix %>
+
+    <div class="login-wrapper">
+        <div class="container">
+            <div class="row justify-content-center align-items-center min-vh-100">
+                <div class="col-md-6 col-lg-4">
+                    <div class="card login-card shadow">
+                        <div class="card-header text-center">
+                            <h4 class="mb-0">Accesso</h4>
+                            <small class="text-muted">exampleTheme</small>
+                        </div>
+
+                        <div class="card-body p-4">
+                            <!-- Messaggio di errore -->
+                            <div id="errorDiv" class="alert alert-danger d-none">
+                                Credenziali non valide. Riprova.
+                            </div>
+
+                            <!-- Script per gestire errori dalla query string -->
+                            <script>
+                                document.addEventListener("DOMContentLoaded", function() {
+                                    const params = new URLSearchParams(window.location.search);
+                                    if (params.has("referrerTo")) {
+                                        document.getElementById("referrerTo").value = params.get("referrerTo");
+                                    }
+                                    if (params.has('error')) {
+                                        document.getElementById('errorDiv').classList.remove('d-none');
+                                    }
+                                });
+                            </script>
+
+                            <!-- Form di login -->
+                            <form method="POST">
+                                <!-- Campo hidden obbligatorio -->
+                                <input type="hidden" id="referrerTo" name="referrerTo" value="<%- referrerTo %>">
+
+                                <div class="mb-3">
+                                    <label for="username" class="form-label">Username</label>
+                                    <input type="text" class="form-control" id="username" name="username"
+                                           placeholder="Inserisci username" required autofocus>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="password" class="form-label">Password</label>
+                                    <input type="password" class="form-control" id="password" name="password"
+                                           placeholder="Inserisci password" required>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary w-100">
+                                    Accedi
+                                </button>
+                            </form>
+                        </div>
+
+                        <div class="card-footer text-center text-muted">
+                            <small>Tema: exampleTheme</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS dal plugin -->
+    <%- bootstrapJs %>
+</body>
+</html>

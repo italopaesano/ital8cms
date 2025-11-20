@@ -1,0 +1,50 @@
+<%#
+================================================================================
+NAV.EJS - Navigazione principale
+================================================================================
+Questo partial è OPZIONALE e contiene:
+- Barra di navigazione
+- Hook "nav" per menu items iniettati dai plugin
+
+NOTA: Se non usi questo partial, rimuovilo da header.ejs
+================================================================================
+%>
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+    <div class="container-fluid">
+        <!-- Brand/Logo -->
+        <a class="navbar-brand" href="/">
+            <strong>ital8cms</strong> - Example Theme
+        </a>
+
+        <!-- Toggle per mobile -->
+        <button class="navbar-toggler" type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <!-- Menu items -->
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="/">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin">Admin</a>
+                </li>
+            </ul>
+
+            <!--
+            ================================================================
+            HOOK: nav
+            ================================================================
+            I plugin possono aggiungere qui i loro menu items.
+            Esempio: un plugin "shop" potrebbe aggiungere "Carrello"
+            ================================================================
+            -->
+            <div class="navbar-nav">
+                <%- passData.pluginSys.hookPage("nav", passData); %>
+            </div>
+        </div>
+    </div>
+</nav>

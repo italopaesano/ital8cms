@@ -1,0 +1,25 @@
+{
+  "name": "exampleTheme",
+  "version": "1.0.0",
+  "description": "Tema di esempio educativo che dimostra tutte le funzionalità del sistema temi di ital8cms",
+  "author": "ital8cms Team",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC",
+  "screenshot": "screenshot.png",
+  "tags": ["example", "educational", "demo", "bootstrap", "responsive"],
+  "supportedHooks": [
+    "head",
+    "header",
+    "nav",
+    "main",
+    "body",
+    "aside",
+    "footer",
+    "script"
+  ],
+  "features": {
+    "assets": true,
+    "pluginCustomization": true,
+    "responsive": true
+  }
+}

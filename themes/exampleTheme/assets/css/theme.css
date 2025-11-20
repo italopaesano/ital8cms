@@ -1,0 +1,86 @@
+/*
+================================================================================
+THEME.CSS - Stili personalizzati del tema exampleTheme
+================================================================================
+Questo file contiene gli stili specifici del tema.
+È caricato da head.ejs tramite: /theme-assets/css/theme.css
+
+NOTA: Bootstrap viene caricato tramite l'hook "head" dal plugin bootstrap,
+quindi qui puoi usare le classi Bootstrap e sovrascriverle se necessario.
+================================================================================
+*/
+
+/* =============================================================================
+   VARIABILI CSS CUSTOM
+   ============================================================================= */
+:root {
+    --theme-primary: #0d6efd;
+    --theme-secondary: #6c757d;
+    --theme-success: #198754;
+    --theme-danger: #dc3545;
+    --theme-warning: #ffc107;
+    --theme-info: #0dcaf0;
+    --theme-light: #f8f9fa;
+    --theme-dark: #212529;
+}
+
+/* =============================================================================
+   LAYOUT GENERALE
+   ============================================================================= */
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.main-content {
+    flex: 1;
+    padding: 1rem 0;
+}
+
+/* =============================================================================
+   NAVBAR PERSONALIZZATA
+   ============================================================================= */
+.navbar-brand {
+    font-size: 1.5rem;
+}
+
+/* =============================================================================
+   SIDEBAR
+   ============================================================================= */
+.sidebar .card {
+    border-radius: 0.5rem;
+}
+
+.sidebar .card-header {
+    background: var(--theme-primary);
+    color: white;
+    border-radius: 0.5rem 0.5rem 0 0;
+}
+
+/* =============================================================================
+   FOOTER
+   ============================================================================= */
+.footer {
+    margin-top: auto;
+}
+
+/* =============================================================================
+   UTILITY CLASSES
+   ============================================================================= */
+.text-theme-primary {
+    color: var(--theme-primary);
+}
+
+.bg-theme-primary {
+    background-color: var(--theme-primary);
+}
+
+/* =============================================================================
+   RESPONSIVE ADJUSTMENTS
+   ============================================================================= */
+@media (max-width: 768px) {
+    .sidebar {
+        margin-top: 2rem;
+    }
+}

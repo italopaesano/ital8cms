@@ -1,0 +1,50 @@
+<%#
+================================================================================
+HEAD.EJS - Sezione <head> del documento HTML
+================================================================================
+Questo partial è OBBLIGATORIO e contiene:
+- Dichiarazione DOCTYPE e apertura <html>
+- Meta tag (charset, viewport, etc.)
+- Titolo della pagina
+- Hook "head" per l'iniezione di CSS dai plugin
+
+VARIABILI DISPONIBILI in passData:
+- passData.pluginSys   → Sistema dei plugin (per chiamare hookPage)
+- passData.themeSys    → Sistema dei temi
+- passData.ctx         → Contesto Koa (request, response, session)
+- passData.query       → Query string parameters
+- passData.plugin      → Oggetti condivisi dai plugin
+================================================================================
+%>
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <!-- Meta tag essenziali -->
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Titolo della pagina -->
+    <title>ital8cms - Example Theme</title>
+
+    <!--
+    ============================================================================
+    HOOK: head
+    ============================================================================
+    Qui i plugin iniettano i loro CSS, meta tag, favicon, etc.
+    Esempio: il plugin Bootstrap inietta il link al CSS di Bootstrap
+
+    Il risultato sarà qualcosa come:
+    <!-- START bootstrap part -->
+    <link rel='stylesheet' href='/api/bootstrap/css/bootstrap.min.css'>
+    <!-- END bootstrap part -->
+    ============================================================================
+    -->
+    <%- passData.pluginSys.hookPage("head", passData); %>
+
+    <!--
+    CSS del tema - caricato da /theme-assets/css/theme.css
+    Gli asset del tema sono serviti automaticamente dalla cartella assets/
+    -->
+    <link rel="stylesheet" href="/theme-assets/css/theme.css">
+</head>

@@ -1,0 +1,498 @@
+# Sistema dei Temi - ital8cms
+
+Documentazione completa sul funzionamento del sistema dei temi e guida alla creazione di nuovi temi.
+
+## Indice
+
+1. [Panoramica](#1-panoramica)
+2. [Struttura di un Tema](#2-struttura-di-un-tema)
+3. [File di Configurazione](#3-file-di-configurazione)
+4. [Partials e Hook](#4-partials-e-hook)
+5. [Creazione di un Nuovo Tema](#5-creazione-di-un-nuovo-tema)
+6. [Asset del Tema](#6-asset-del-tema)
+7. [Personalizzazione Endpoint Plugin](#7-personalizzazione-endpoint-plugin)
+8. [Sistema delle Dipendenze](#8-sistema-delle-dipendenze)
+9. [API di themeSys](#9-api-di-themesys)
+
+## 1. Panoramica
+
+Il sistema dei temi di ital8cms separa la presentazione dalla logica applicativa. Supporta:
+
+- **Temi separati** per sito pubblico e pannello admin
+- **Validazione automatica** con fallback al tema "default"
+- **Sistema di hook** per l'integrazione con i plugin
+- **Asset management** per CSS, JS e immagini del tema
+- **Personalizzazione endpoint plugin** senza modificare il codice dei plugin
+- **Gestione dipendenze** da plugin e moduli NPM
+
+### Configurazione Globale
+
+In `ital8-conf.json`:
+
+```json
+{
+  "activeTheme": "default",
+  "adminActiveTheme": "default"
+}
+```
+
+## 2. Struttura di un Tema
+
+```
+themes/nomeDelTema/
+  config-theme.json           # Configurazione (obbligatorio)
+  description-theme.json      # Metadati (consigliato)
+  README.md                   # Documentazione tema
+  views/                      # Partials (obbligatorio)
+    head.ejs                  # <head> HTML (obbligatorio)
+    header.ejs                # Apertura <body> (obbligatorio)
+    nav.ejs                   # Navigazione (opzionale)
+    main.ejs                  # Contenuto principale (opzionale)
+    aside.ejs                 # Sidebar (opzionale)
+    footer.ejs                # Footer + chiusura (obbligatorio)
+  templates/                  # Template completi (opzionale)
+    page.template.ejs
+  assets/                     # Asset statici (opzionale)
+    css/
+    js/
+    images/
+  plugins/                    # Override endpoint plugin (opzionale)
+    pluginName/
+      endpointName/
+        template.ejs
+        style.css
+```
+
+### File Obbligatori
+
+- `config-theme.json`
+- `views/head.ejs`
+- `views/header.ejs`
+- `views/footer.ejs`
+
+## 3. File di Configurazione
+
+### config-theme.json
+
+```json
+{
+  "active": 1,
+  "isInstalled": 1,
+  "weight": 0,
+  "wwwCustomPath": 1,
+  "pluginDependency": {
+    "bootstrap": "^1.0.0"
+  },
+  "nodeModuleDependency": {
+    "ejs": "^3.0.0"
+  }
+}
+```
+
+| Campo | Tipo | Descrizione |
+|-------|------|-------------|
+| `active` | number | 1 = attivo, 0 = disattivo |
+| `isInstalled` | number | Stato installazione |
+| `pluginDependency` | object | Plugin richiesti con versione semver |
+| `nodeModuleDependency` | object | Moduli NPM richiesti con versione semver |
+
+### description-theme.json
+
+```json
+{
+  "name": "mioTema",
+  "version": "1.0.0",
+  "description": "Descrizione del tema",
+  "author": "Nome Autore",
+  "email": "email@example.com",
+  "license": "ISC",
+  "screenshot": "screenshot.png",
+  "tags": ["responsive", "minimal", "bootstrap"],
+  "supportedHooks": [
+    "head", "header", "nav", "main",
+    "body", "aside", "footer", "script"
+  ],
+  "features": {
+    "assets": true,
+    "pluginCustomization": true,
+    "responsive": true
+  }
+}
+```
+
+## 4. Partials e Hook
+
+I partials sono componenti riutilizzabili. Ogni partial puo contenere hook che permettono ai plugin di iniettare contenuto.
+
+### head.ejs
+
+```ejs
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Titolo Pagina</title>
+    <%- passData.pluginSys.hookPage("head", passData); %>
+</head>
+```
+
+### header.ejs
+
+```ejs
+<body>
+<%- passData.pluginSys.hookPage("header", passData); %>
+<%- include('nav.ejs') %>
+<%- include('main.ejs') %>
+<%- include('aside.ejs') %>
+```
+
+### footer.ejs
+
+```ejs
+<footer>
+    <%- passData.pluginSys.hookPage("footer", passData); %>
+</footer>
+<%- passData.pluginSys.hookPage("script", passData); %>
+</body>
+</html>
+```
+
+### Tabella Hook Disponibili
+
+| Hook | Posizione | Uso Tipico |
+|------|-----------|------------|
+| `head` | Dentro `<head>` | CSS, meta tag, favicon |
+| `header` | Dopo `<body>` | Banner, notifiche |
+| `nav` | Dentro `<nav>` | Menu items |
+| `main` | Dentro `<main>` | Contenuto principale |
+| `body` | Dopo `<main>` | Widget, sezioni extra |
+| `aside` | Dentro `<aside>` | Sidebar widgets |
+| `footer` | Dentro `<footer>` | Copyright, link |
+| `script` | Prima di `</body>` | File JavaScript |
+
+## 5. Creazione di un Nuovo Tema
+
+### Passo 1: Creare la Struttura
+
+```bash
+mkdir -p themes/mioTema/views
+mkdir -p themes/mioTema/assets/css
+mkdir -p themes/mioTema/assets/js
+```
+
+### Passo 2: Creare config-theme.json
+
+```json
+{
+  "active": 1,
+  "isInstalled": 1,
+  "weight": 0,
+  "wwwCustomPath": 1,
+  "pluginDependency": {
+    "bootstrap": "^1.0.0"
+  },
+  "nodeModuleDependency": {}
+}
+```
+
+### Passo 3: Creare description-theme.json
+
+```json
+{
+  "name": "mioTema",
+  "version": "1.0.0",
+  "description": "Il mio tema personalizzato",
+  "author": "Il Tuo Nome",
+  "email": "tua@email.com",
+  "license": "ISC",
+  "tags": ["custom"],
+  "supportedHooks": ["head", "header", "footer", "script"]
+}
+```
+
+### Passo 4: Creare i Partials Obbligatori
+
+**views/head.ejs:**
+```ejs
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Il Mio Sito</title>
+    <%- passData.pluginSys.hookPage("head", passData); %>
+</head>
+```
+
+**views/header.ejs:**
+```ejs
+<body>
+<%- passData.pluginSys.hookPage("header", passData); %>
+```
+
+**views/footer.ejs:**
+```ejs
+<footer>
+    <p>Copyright 2025 Il Mio Sito</p>
+    <%- passData.pluginSys.hookPage("footer", passData); %>
+</footer>
+<%- passData.pluginSys.hookPage("script", passData); %>
+</body>
+</html>
+```
+
+### Passo 5: Attivare il Tema
+
+In `ital8-conf.json`:
+
+```json
+{
+  "activeTheme": "mioTema"
+}
+```
+
+### Passo 6: Riavviare il Server
+
+```bash
+npm start
+```
+
+## 6. Asset del Tema
+
+Gli asset del tema sono serviti automaticamente dalla cartella `assets/` tramite l'URL `/theme-assets/`.
+
+### Struttura
+
+```
+themes/mioTema/assets/
+  css/
+    theme.css
+  js/
+    theme.js
+  images/
+    logo.png
+```
+
+### Utilizzo nei Template
+
+```ejs
+<!-- CSS -->
+<link rel="stylesheet" href="/theme-assets/css/theme.css">
+
+<!-- JavaScript -->
+<script src="/theme-assets/js/theme.js"></script>
+
+<!-- Immagini -->
+<img src="/theme-assets/images/logo.png" alt="Logo">
+```
+
+### Metodo Helper
+
+```ejs
+<link rel="stylesheet" href="<%= passData.themeSys.getAssetUrl('css/theme.css') %>">
+```
+
+## 7. Personalizzazione Endpoint Plugin
+
+Permette di sovrascrivere l'aspetto degli endpoint dei plugin senza modificare il codice del plugin.
+
+### Struttura
+
+```
+themes/mioTema/plugins/
+  simpleAccess/
+    login/
+      template.ejs
+      style.css
+```
+
+### Come Funziona
+
+1. Quando il plugin carica un template, il sistema controlla se esiste una versione nel tema
+2. Se esiste, usa il template del tema invece di quello di default
+3. Il CSS viene passato come variabile `customCss` al template
+
+### Esempio: Personalizzare la Pagina di Login
+
+**themes/mioTema/plugins/simpleAccess/login/template.ejs:**
+```ejs
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <title>Login Personalizzato</title>
+    <%- bootstrapCss %>
+    <style><%- customCss || '' %></style>
+</head>
+<body>
+    <%- apiPrefix %>
+
+    <div class="login-container">
+        <h1>Benvenuto</h1>
+        <form method="POST">
+            <input type="hidden" name="referrerTo" value="<%- referrerTo %>">
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit">Accedi</button>
+        </form>
+    </div>
+
+    <%- bootstrapJs %>
+</body>
+</html>
+```
+
+### Variabili Disponibili
+
+Per simpleAccess login/logout:
+- `bootstrapCss` - Link CSS Bootstrap
+- `bootstrapJs` - Script JS Bootstrap
+- `apiPrefix` - Script per variabile apiPrefix client-side
+- `referrerTo` - URL di ritorno
+- `customCss` - Contenuto del file style.css
+
+## 8. Sistema delle Dipendenze
+
+Il sistema verifica all'avvio che le dipendenze del tema siano soddisfatte.
+
+### Definire Dipendenze
+
+In `config-theme.json`:
+
+```json
+{
+  "pluginDependency": {
+    "bootstrap": "^1.0.0",
+    "simpleAccess": ">=1.0.0"
+  },
+  "nodeModuleDependency": {
+    "ejs": "^3.0.0"
+  }
+}
+```
+
+### Sintassi Versioni (Semver)
+
+- `^1.0.0` - Compatibile con 1.x.x (minor e patch)
+- `~1.0.0` - Compatibile con 1.0.x (solo patch)
+- `>=1.0.0` - Versione 1.0.0 o superiore
+- `*` - Qualsiasi versione
+
+### Comportamento
+
+All'avvio, se le dipendenze non sono soddisfatte:
+- Il sistema mostra un warning nella console
+- Il tema viene comunque caricato (soft fail)
+
+## 9. API di themeSys
+
+### Metodi per Path dei Partials
+
+```javascript
+// Path partial per sito pubblico
+themeSys.getThemePartPath('head.ejs')
+
+// Path partial per admin
+themeSys.getAdminThemePartPath('footer.ejs')
+```
+
+### Metodi per Asset
+
+```javascript
+// URL asset
+themeSys.getAssetUrl('css/theme.css')
+
+// Path assoluto cartella assets
+themeSys.getAssetsPath()
+
+// Verifica esistenza assets
+themeSys.hasAssets()
+```
+
+### Metodi per Metadati
+
+```javascript
+// Metadati di un tema
+themeSys.getThemeDescription('default')
+
+// Versione tema
+themeSys.getThemeVersion('default')
+
+// Metadati tema attivo
+themeSys.getActiveThemeDescription()
+themeSys.getAdminThemeDescription()
+
+// Verifica supporto hook
+themeSys.themeSupportsHook('default', 'aside')
+
+// Feature del tema
+themeSys.getThemeFeatures('default')
+```
+
+### Metodi per Dipendenze
+
+```javascript
+// Tutte le dipendenze
+themeSys.getThemeDependencies('default')
+
+// Verifica se tema richiede plugin
+themeSys.themeRequiresPlugin('default', 'bootstrap')
+
+// Dipendenze plugin del tema attivo
+themeSys.getActiveThemePluginDependencies()
+
+// Verifica dipendenze soddisfatte
+themeSys.checkActiveThemeDependencies()
+```
+
+### Metodi per Personalizzazione Plugin
+
+```javascript
+// Verifica esistenza template custom
+themeSys.hasCustomPluginTemplate('simpleAccess', 'login')
+
+// Path template custom (o null)
+themeSys.getCustomPluginTemplatePath('simpleAccess', 'login', 'template.ejs')
+
+// Risolvi path (custom o default)
+themeSys.resolvePluginTemplatePath('simpleAccess', 'login', defaultPath)
+
+// Leggi CSS custom
+themeSys.getPluginCustomCss('simpleAccess', 'login')
+
+// Lista plugin personalizzati nel tema
+themeSys.getCustomizedPlugins()
+```
+
+### Metodi per Validazione
+
+```javascript
+// Valida un tema
+themeSys.validateTheme('mioTema')
+
+// Lista temi disponibili con stato
+themeSys.getAvailableThemes()
+
+// Controlla dipendenze
+themeSys.checkDependencies('mioTema')
+```
+
+## Checklist Creazione Tema
+
+- [ ] Creare directory `themes/nomeTema/`
+- [ ] Creare `config-theme.json`
+- [ ] Creare `description-theme.json`
+- [ ] Creare `views/head.ejs` con hook "head"
+- [ ] Creare `views/header.ejs` con hook "header"
+- [ ] Creare `views/footer.ejs` con hook "footer" e "script"
+- [ ] (Opzionale) Creare `views/nav.ejs`, `views/main.ejs`, `views/aside.ejs`
+- [ ] (Opzionale) Creare cartella `assets/` con CSS/JS
+- [ ] (Opzionale) Creare cartella `plugins/` per override endpoint
+- [ ] Attivare in `ital8-conf.json`
+- [ ] Riavviare server e testare
+
+---
+
+**Versione Documento:** 1.0.0
+**Ultima Modifica:** 2025-11-19
+**Autore:** Claude AI Assistant

@@ -1,0 +1,18 @@
+{
+  "active": 0,
+  "isInstalled": 0,
+  "weight": 100,
+  "installedVersion": "0.0.0",
+  "dependency": {
+    "dbApi": "^1.0.0"
+  },
+  "nodeModuleDependency": {
+    "semver": "^7.0.0",
+    "ejs": "^3.0.0"
+  },
+  "custom": {
+    "showBanner": true,
+    "maxItems": 100,
+    "welcomeMessage": "Benvenuto nel plugin di esempio!"
+  }
+}

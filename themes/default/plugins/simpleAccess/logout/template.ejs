@@ -1,0 +1,44 @@
+<%#
+  Template personalizzato per la pagina di logout del plugin simpleAccess
+%>
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logout - Tema Personalizzato</title>
+    <%- bootstrapCss %>
+    <style>
+      <%- customCss || '' %>
+    </style>
+</head>
+<body class="logout-page">
+    <%- apiPrefix %>
+    <%- bootstrapJs %>
+
+    <div class="logout-container">
+        <div class="container d-flex align-items-center justify-content-center min-vh-100">
+            <div class="card logout-card shadow-lg" style="width: 100%; max-width: 400px;">
+              <div class="card-header text-center">
+                <h3 class="mb-0">
+                  <i>&#128682;</i> Logout
+                </h3>
+              </div>
+              <div class="card-body p-4 text-center">
+                <p class="mb-4">Sei sicuro di voler effettuare il logout?</p>
+                <form method="POST">
+                  <input type="hidden" id="referrerTo" name="referrerTo" value="<%- referrerTo %>">
+                  <button type="submit" class="btn btn-danger w-100 py-2">
+                    <i>&#10148;</i> Conferma Logout
+                  </button>
+                </form>
+              </div>
+              <div class="card-footer text-center text-muted">
+                <small>Tema personalizzato - ital8cms</small>
+              </div>
+            </div>
+          </div>
+    </div>
+
+</body>
+</html>

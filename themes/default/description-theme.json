@@ -1,0 +1,25 @@
+{
+  "name": "default",
+  "version": "1.0.0",
+  "description": "Tema predefinito di ital8cms con supporto completo a tutti gli hook e personalizzazione endpoint plugin",
+  "author": "Italo Paesano",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC",
+  "screenshot": "screenshot.png",
+  "tags": ["default", "minimal", "responsive", "bootstrap"],
+  "supportedHooks": [
+    "head",
+    "header",
+    "nav",
+    "main",
+    "body",
+    "aside",
+    "footer",
+    "script"
+  ],
+  "features": {
+    "assets": true,
+    "pluginCustomization": true,
+    "responsive": true
+  }
+}

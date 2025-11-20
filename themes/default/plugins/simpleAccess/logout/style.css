@@ -1,0 +1,58 @@
+/*
+  CSS personalizzato per la pagina di logout
+  Tema: default
+  Plugin: simpleAccess
+  Endpoint: logout
+*/
+
+.logout-page {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  min-height: 100vh;
+}
+
+.logout-container {
+  padding: 20px;
+}
+
+.logout-card {
+  border: none;
+  border-radius: 15px;
+  overflow: hidden;
+}
+
+.logout-card .card-header {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  padding: 1.5rem;
+  border-bottom: none;
+}
+
+.logout-card .card-header h3 {
+  font-weight: 600;
+}
+
+.logout-card .card-body {
+  background: white;
+}
+
+.logout-card .card-footer {
+  background: #f8f9fa;
+  border-top: 1px solid #e9ecef;
+}
+
+.logout-card .btn-danger {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.logout-card .btn-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
+}
+
+.logout-card .btn-danger:active {
+  transform: translateY(0);
+}
