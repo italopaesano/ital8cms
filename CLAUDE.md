@@ -14,6 +14,22 @@
 
 **Zero Database Dependency:** ital8cms does not require any DBMS by default. The core system and plugins use **JSON files** for structured data storage (user accounts, roles, configurations) and **file-based storage** for web pages. Database systems like SQLite are **optional** and can be added through plugins when needed for specific use cases.
 
+**Developer-First Approach:** ital8cms rejects the "zero-knowledge" approach of many modern CMS platforms. This is a tool **for developers, by developers**:
+
+- **Themes require:** HTML, CSS, JavaScript, and EJS templating knowledge
+- **Plugins require:** Node.js/JavaScript programming skills, understanding of Koa.js middleware
+- **Configuration requires:** Manual creation and editing of JSON/JSON5 files
+- **No drag-and-drop:** All customization is done through code and file manipulation
+
+**Why this approach?**
+- ✅ **Full control:** No abstractions hiding the underlying technology
+- ✅ **Flexibility:** Create exactly what you need without platform limitations
+- ✅ **Performance:** No overhead from visual builders or abstraction layers
+- ✅ **Learning:** Understand exactly how your CMS works
+- ✅ **Debugging:** Easier to trace issues in plain code vs. generated configurations
+
+**Target audience:** Web developers comfortable with Node.js, HTML/CSS, and server-side templating. Not suitable for non-technical users looking for a WYSIWYG editor.
+
 ## Codebase Structure
 
 ```

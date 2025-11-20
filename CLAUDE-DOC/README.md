@@ -4,23 +4,7 @@ Questa cartella contiene tutta la documentazione generata da Claude AI per facil
 
 ## 📚 Contenuto
 
-### [CLAUDE.md](./CLAUDE.md)
-**Guida completa per AI assistants** che lavorano sul progetto ital8cms.
-
-**Contenuti:**
-- Panoramica progetto e filosofia file-based
-- Struttura codebase dettagliata
-- Technology stack (Koa v3, EJS, JSON5, etc.)
-- Sistema plugin: architettura, lifecycle, comunicazione inter-plugin
-- Sistema temi: struttura, partials, template
-- Strategia storage dati (JSON files vs database opzionale)
-- Autenticazione e autorizzazione (RBAC)
-- Convenzioni codice e best practices
-- Workflow sviluppo (creare plugin, temi, API routes)
-- Riferimento completo oggetto `passData`
-- Task comuni con esempi pratici
-
-**Target:** AI assistants (Claude, GPT, etc.) che contribuiscono al progetto
+> **Nota:** Il file principale [CLAUDE.md](../CLAUDE.md) si trova nella root del progetto per maggiore visibilità.
 
 ---
 
