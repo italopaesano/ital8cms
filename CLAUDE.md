@@ -891,7 +891,9 @@ const item = db.prepare('SELECT * FROM items WHERE id = ?').get(1)
 
 1. **Never use placeholder names** like `temp`, `data`, `obj`, `thing`, etc. unless they truly represent temporary or generic concepts
 2. **Always propose alternatives** before implementing:
-   - When you need to introduce a new name, **ALWAYS propose at least 2-3 meaningful alternatives** to the project maintainer
+   - When you need to introduce a new name, **ALWAYS propose at least 2-3 meaningful alternatives** (or more when appropriate) to the project maintainer
+   - For simple cases: 2-3 alternatives are usually sufficient
+   - For complex or critical naming: propose 4-5+ alternatives to provide more choice
    - Provide a brief explanation of what each alternative represents
    - Wait for the maintainer's choice before proceeding with implementation
 3. **Only after approval** should you continue writing the code with the chosen name
@@ -935,6 +937,7 @@ I need to create [what you're naming]. Here are my suggestions:
 Option 1: [name1] - [brief explanation]
 Option 2: [name2] - [brief explanation]
 Option 3: [name3] - [brief explanation]
+[Option 4, 5, etc. - add more alternatives when appropriate for complex cases]
 
 Which would you prefer, or would you like to suggest a different name?
 ```
@@ -1484,14 +1487,15 @@ When working on this codebase as an AI assistant:
 
 10. **Theme Changes:** If modifying themes, ensure both public and admin themes are considered.
 
-11. **Naming Convention - MANDATORY:** **ALWAYS propose 2-3 meaningful name alternatives** before introducing any new name (variables, functions, files, directories, plugins, classes, constants, etc.). Provide a brief explanation for each option and wait for the maintainer's approval before proceeding with implementation. This is a **CRITICAL REQUIREMENT** and must never be skipped.
+11. **Naming Convention - MANDATORY:** **ALWAYS propose at least 2-3 meaningful name alternatives** (or more when appropriate) before introducing any new name (variables, functions, files, directories, plugins, classes, constants, etc.). For complex or critical naming decisions, propose 4-5+ alternatives to provide more choice. Provide a brief explanation for each option and wait for the maintainer's approval before proceeding with implementation. This is a **CRITICAL REQUIREMENT** and must never be skipped.
 
 ---
 
 **Last Updated:** 2025-11-25
-**Version:** 1.1.0
+**Version:** 1.1.1
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v1.1.1 (2025-11-25): Clarified that at least 2-3 alternatives should be proposed, but more (4-5+) when appropriate for complex cases
 - v1.1.0 (2025-11-25): Added mandatory naming conventions requiring proposal of meaningful alternatives before implementation
 - v1.0.0 (2025-11-19): Initial comprehensive documentation
