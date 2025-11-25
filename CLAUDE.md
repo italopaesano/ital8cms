@@ -883,6 +883,62 @@ const item = db.prepare('SELECT * FROM items WHERE id = ?').get(1)
 - **Files/Directories:** kebab-case (`my-plugin`, `user-management`)
 - **Constants:** UPPER_SNAKE_CASE (`MAX_ITEMS`, `API_PREFIX`)
 
+#### Meaningful and Intuitive Names
+
+**CRITICAL REQUIREMENT:** Every name in the codebase (variables, functions, files, directories, classes, constants, etc.) MUST be chosen with care and have a symbolic meaning that is as intuitive as possible.
+
+**Process for Adding New Names:**
+
+1. **Never use placeholder names** like `temp`, `data`, `obj`, `thing`, etc. unless they truly represent temporary or generic concepts
+2. **Always propose alternatives** before implementing:
+   - When you need to introduce a new name, **ALWAYS propose at least 2-3 meaningful alternatives** to the project maintainer
+   - Provide a brief explanation of what each alternative represents
+   - Wait for the maintainer's choice before proceeding with implementation
+3. **Only after approval** should you continue writing the code with the chosen name
+
+**Examples:**
+
+```javascript
+// ❌ BAD - Generic, unclear names
+let data = getUserInfo()
+function processData(obj) { ... }
+const temp = calculateValue()
+
+// ✅ GOOD - Descriptive, meaningful names
+let userProfile = getUserInfo()
+function validateUserCredentials(credentials) { ... }
+const monthlyRevenue = calculateValue()
+```
+
+**Why this matters:**
+- ✅ **Readability:** Code becomes self-documenting
+- ✅ **Maintainability:** Easier to understand intent months later
+- ✅ **Collaboration:** Other developers immediately understand purpose
+- ✅ **Debugging:** Clear names make tracing issues much easier
+- ✅ **Searchability:** Meaningful names are easier to find in the codebase
+
+**When proposing alternatives:**
+
+Before creating:
+- A new plugin: propose plugin names (e.g., `userAuth`, `simpleLogin`, `accessControl`)
+- A new variable: propose variable names (e.g., `userSession`, `activeUser`, `currentAccount`)
+- A new file: propose file names (e.g., `session-manager.js`, `auth-handler.js`, `user-validator.js`)
+- A new function: propose function names (e.g., `validateUserEmail()`, `checkEmailFormat()`, `verifyEmailAddress()`)
+
+**Format for proposals:**
+
+When proposing names to the maintainer, use this format:
+
+```
+I need to create [what you're naming]. Here are my suggestions:
+
+Option 1: [name1] - [brief explanation]
+Option 2: [name2] - [brief explanation]
+Option 3: [name3] - [brief explanation]
+
+Which would you prefer, or would you like to suggest a different name?
+```
+
 ### JavaScript Patterns
 
 - **Module System:** CommonJS (`require`, `module.exports`)
@@ -1428,8 +1484,14 @@ When working on this codebase as an AI assistant:
 
 10. **Theme Changes:** If modifying themes, ensure both public and admin themes are considered.
 
+11. **Naming Convention - MANDATORY:** **ALWAYS propose 2-3 meaningful name alternatives** before introducing any new name (variables, functions, files, directories, plugins, classes, constants, etc.). Provide a brief explanation for each option and wait for the maintainer's approval before proceeding with implementation. This is a **CRITICAL REQUIREMENT** and must never be skipped.
+
 ---
 
-**Last Updated:** 2025-11-19
-**Version:** 1.0.0
+**Last Updated:** 2025-11-25
+**Version:** 1.1.0
 **Maintained By:** AI Assistant (based on codebase analysis)
+
+**Changelog:**
+- v1.1.0 (2025-11-25): Added mandatory naming conventions requiring proposal of meaningful alternatives before implementation
+- v1.0.0 (2025-11-19): Initial comprehensive documentation
