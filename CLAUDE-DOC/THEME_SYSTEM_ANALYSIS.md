@@ -200,12 +200,10 @@ const templatePath = themeSys.resolvePluginTemplatePath(
   "version": "1.0.0",
   "description": "Tema predefinito",
   "author": "Italo Paesano",
-  "screenshot": "screenshot.png",
-  "icon": "theme-icon.svg",
   "tags": ["default", "minimal"],
   "supportedHooks": ["head", "header", "footer", "script"],
   "features": {
-    "assets": true,
+    "theme-resources": true,
     "pluginCustomization": true
   },
   "templates": [...]
@@ -611,7 +609,7 @@ core/admin/webPages/pageManagement/
   "parentTheme": "default",
   "overrides": {
     "views": ["header.ejs", "footer.ejs"],
-    "assets": ["css/custom.css"]
+    "theme-resources": ["css/custom.css"]
   }
 }
 ```

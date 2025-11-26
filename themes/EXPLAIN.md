@@ -193,8 +193,6 @@ Metadati del tema visualizzati nell'admin.
   "author": "Nome Autore",
   "email": "email@example.com",
   "license": "ISC",
-  "screenshot": "screenshot.png",
-  "icon": "theme-icon.svg",
   "tags": ["responsive", "minimal", "bootstrap"],
 
   // Hook supportati dal tema
@@ -211,7 +209,7 @@ Metadati del tema visualizzati nell'admin.
 
   // Feature del tema
   "features": {
-    "assets": true,
+    "theme-resources": true,
     "pluginCustomization": true,
     "responsive": true
   },
@@ -754,8 +752,6 @@ nano description-theme.json
   "author": "Il Tuo Nome",
   "email": "tua@email.com",
   "license": "ISC",
-  "screenshot": "screenshot.png",
-  "icon": "theme-icon.svg",
   "tags": ["custom", "responsive"],
   "supportedHooks": [
     "head",
@@ -764,7 +760,7 @@ nano description-theme.json
     "script"
   ],
   "features": {
-    "assets": true,
+    "theme-resources": true,
     "pluginCustomization": false,
     "responsive": true
   },
