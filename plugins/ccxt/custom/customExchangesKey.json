@@ -1,4 +1,3 @@
-// This file follows the JSON5 standard - comments and trailing commas are supported
 {
     "_comment": "ATTENZIONE al momento non ci possono essere piu account con lo stesso exchange perchè con nomi uguali l'ultimo sovrappone il precedente exchangeName de corrispondere ad uno dei nomi di ccxt.exchanges altrimenti non funziona id è semplicemente prograssivo, accountName serve perchè ogni excange può anche avere più account ",
 
