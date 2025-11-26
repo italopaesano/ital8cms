@@ -350,11 +350,47 @@ Ogni template DEVE includere almeno:
 <%- include(getThemePartPath('footer', passData)) %>
 ```
 
-**2. Struttura HTML valida**
+**2. NON duplicare tag HTML nei template**
 
-- Tag apertura/chiusura corretti: `<html>`, `<head>`, `<body>`
-- HTML5 semantico raccomandato
-- Seguire l'esempio dei temi `default` e `baseExampleTheme`
+**IMPORTANTE:** I tag HTML (`<html>`, `<head>`, `<body>`) devono essere SOLO nei partials, MAI nei template!
+
+**✅ CORRETTO:**
+```ejs
+<!-- template: page.template.ejs -->
+<%- include(getThemePartPath('head', passData)) %>
+<%- include(getThemePartPath('header', passData)) %>
+
+<h1>Hello world</h1>
+
+<%- include(getThemePartPath('footer', passData)) %>
+```
+
+**❌ SBAGLIATO:**
+```ejs
+<!-- template: page.template.ejs -->
+<html>
+<head>
+  <%- include(getThemePartPath('head', passData)) %>
+</head>
+<body>
+  <header>
+    <%- include(getThemePartPath('header', passData)) %>
+  </header>
+
+  <h1>Hello world</h1>
+
+  <%- include(getThemePartPath('footer', passData)) %>
+</body>
+</html>
+```
+
+**Perché è sbagliato?**
+- `head.ejs` contiene già `<!DOCTYPE html><html><head>...`
+- `header.ejs` contiene già `<body>...`
+- `footer.ejs` contiene già `...</body></html>`
+- Aggiungere altri tag HTML crea duplicati e HTML invalido!
+
+**Regola:** I template devono SOLO includere i partials e aggiungere il contenuto specifico della pagina. La struttura HTML completa è già nei partials.
 
 **3. Questo è tutto!**
 
