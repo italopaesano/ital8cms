@@ -6,7 +6,7 @@ let mainDb;
 let webDb;
 let testDb;
 
-let pluginConfig = require(`${__dirname}/config-plugin.json`);// let perchè questa varibile può cambiare di valore 
+let pluginConfig = require(`${__dirname}/pluginConfig.json`);// let perchè questa varibile può cambiare di valore 
 const pluginName = path.basename(  __dirname );// restituisce il nome della directory che contiene il file corrente e che è anche il nome del plugin
 const sharedObject = {};// ogetto che avrà gliogetti condiviso con gli altri plugin ES {dbApi: newdbApi} 
 

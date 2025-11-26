@@ -41,7 +41,7 @@
 ```
 /home/user/ital8cms/
 ├── index.js                      # Main application entry point
-├── ital8-conf.json              # Central configuration file
+├── ital8Config.json              # Central configuration file
 ├── package.json                 # Node.js dependencies
 │
 ├── core/                        # Core CMS functionality
@@ -57,8 +57,8 @@
 ├── plugins/                     # Plugin modules (each self-contained)
 │   ├── dbApi/                  # Database API plugin
 │   │   ├── main.js             # Plugin logic
-│   │   ├── config-plugin.json  # Plugin configuration
-│   │   ├── description-plugin.json # Plugin metadata
+│   │   ├── pluginConfig.json   # Plugin configuration
+│   │   ├── pluginDescription.json # Plugin metadata
 │   │   └── dbFile/             # SQLite database files
 │   ├── simpleAccess/           # Authentication/authorization
 │   │   ├── userAccount.json    # User credentials (bcrypt hashed)
@@ -144,8 +144,8 @@ Every plugin must have this structure:
 ```
 plugins/myPlugin/
 ├── main.js                    # Plugin logic (required)
-├── config-plugin.json         # Configuration (required)
-└── description-plugin.json    # Metadata (required)
+├── pluginConfig.json          # Configuration (required)
+└── pluginDescription.json     # Metadata (required)
 ```
 
 ### Plugin main.js Exports
@@ -175,7 +175,7 @@ module.exports = {
 }
 ```
 
-### config-plugin.json
+### pluginConfig.json
 
 ```json
 {
@@ -194,7 +194,7 @@ module.exports = {
 }
 ```
 
-### description-plugin.json
+### pluginDescription.json
 
 ```json
 {
@@ -299,7 +299,7 @@ themes/myTheme/
 
 ### Theme Configuration
 
-In `ital8-conf.json`:
+In `ital8Config.json`:
 
 ```json
 {
@@ -353,8 +353,8 @@ Themes call `pluginSys.hookPage()` to allow plugins to inject content:
 **Structured Data Storage:**
 - **User accounts:** `/plugins/simpleAccess/userAccount.json`
 - **User roles:** `/plugins/simpleAccess/userRole.json`
-- **Plugin configurations:** Each plugin has `config-plugin.json`
-- **Application settings:** `ital8-conf.json`
+- **Plugin configurations:** Each plugin has `pluginConfig.json`
+- **Application settings:** `ital8Config.json`
 
 **Why JSON?**
 - ✅ Zero dependencies - no database installation required
@@ -390,7 +390,7 @@ Databases like SQLite can be added through plugins when you need:
 The `dbApi` plugin provides SQLite integration:
 
 ```javascript
-// Enable in plugins/dbApi/config-plugin.json
+// Enable in plugins/dbApi/pluginConfig.json
 {
   "active": 1,  // Set to 1 to enable
   "nodeModuleDependency": {
@@ -581,7 +581,7 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
 
 ## Configuration Management
 
-### Main Configuration: ital8-conf.json
+### Main Configuration: ital8Config.json
 
 ```json
 {
@@ -626,7 +626,7 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
 
 ### Plugin-Specific Configuration
 
-Each plugin's `config-plugin.json`:
+Each plugin's `pluginConfig.json`:
 
 ```json
 {
@@ -641,7 +641,7 @@ Each plugin's `config-plugin.json`:
 Access in code:
 
 ```javascript
-const config = require('./config-plugin.json')
+const config = require('./pluginConfig.json')
 const mySetting = config.custom.myPluginSetting
 ```
 
@@ -727,7 +727,7 @@ module.exports = {
 }
 ```
 
-3. **Create config-plugin.json:**
+3. **Create pluginConfig.json:**
 ```json
 {
   "active": 1,
@@ -739,7 +739,7 @@ module.exports = {
 }
 ```
 
-4. **Create description-plugin.json:**
+4. **Create pluginDescription.json:**
 ```json
 {
   "name": "myPlugin",
@@ -764,7 +764,7 @@ cp -r themes/default themes/myTheme
 
 2. **Modify theme files** in `themes/myTheme/views/`
 
-3. **Activate theme** in `ital8-conf.json`:
+3. **Activate theme** in `ital8Config.json`:
 ```json
 {
   "activeTheme": "myTheme"
@@ -880,7 +880,7 @@ const item = db.prepare('SELECT * FROM items WHERE id = ?').get(1)
 
 - **Variables/Functions:** camelCase (`myVariable`, `myFunction`)
 - **Classes:** PascalCase (`PluginSystem`, `ThemeSystem`)
-- **Files/Directories:** kebab-case (`my-plugin`, `user-management`)
+- **Files/Directories:** camelCase (`myPlugin`, `userManagement`)
 - **Constants:** UPPER_SNAKE_CASE (`MAX_ITEMS`, `API_PREFIX`)
 
 #### Meaningful and Intuitive Names
@@ -924,7 +924,7 @@ const monthlyRevenue = calculateValue()
 Before creating:
 - A new plugin: propose plugin names (e.g., `userAuth`, `simpleLogin`, `accessControl`)
 - A new variable: propose variable names (e.g., `userSession`, `activeUser`, `currentAccount`)
-- A new file: propose file names (e.g., `session-manager.js`, `auth-handler.js`, `user-validator.js`)
+- A new file: propose file names (e.g., `sessionManager.js`, `authHandler.js`, `userValidator.js`)
 - A new function: propose function names (e.g., `validateUserEmail()`, `checkEmailFormat()`, `verifyEmailAddress()`)
 
 **Format for proposals:**
@@ -1318,10 +1318,10 @@ const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
 
 ### Configuration Files
 
-- `/ital8-conf.json` - Main application configuration
+- `/ital8Config.json` - Main application configuration
 - `/core/priorityMiddlewares/koaSession.json` - Session configuration
-- `/plugins/*/config-plugin.json` - Per-plugin configuration
-- `/plugins/*/description-plugin.json` - Plugin metadata
+- `/plugins/*/pluginConfig.json` - Per-plugin configuration
+- `/plugins/*/pluginDescription.json` - Plugin metadata
 
 ### Entry Points
 
@@ -1350,7 +1350,7 @@ const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
 
 ### Enable Debug Mode
 
-In `ital8-conf.json`:
+In `ital8Config.json`:
 ```json
 {
   "debugMode": 1
@@ -1370,8 +1370,8 @@ Plugin loaded: simpleAccess
 ### Common Issues
 
 **Plugin not loading:**
-- Check `config-plugin.json` has `"active": 1`
-- Verify `description-plugin.json` exists
+- Check `pluginConfig.json` has `"active": 1`
+- Verify `pluginDescription.json` exists
 - Check dependencies are satisfied
 - Look for syntax errors in `main.js`
 
@@ -1395,7 +1395,7 @@ Plugin loaded: simpleAccess
 
 **Theme not rendering:**
 - Verify theme exists in `/themes` directory
-- Check `activeTheme` in `ital8-conf.json`
+- Check `activeTheme` in `ital8Config.json`
 - Ensure all required partials exist
 - Look for EJS syntax errors
 
@@ -1491,11 +1491,17 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2025-11-25
-**Version:** 1.1.1
+**Last Updated:** 2025-11-26
+**Version:** 1.2.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v1.2.0 (2025-11-26): **BREAKING CHANGE** - Updated naming convention from kebab-case to camelCase for all files and directories. Key changes:
+  - `ital8Config.json` → `ital8Config.json`
+  - `pluginConfig.json` → `pluginConfig.json`
+  - `pluginDescription.json` → `pluginDescription.json`
+  - All file/directory examples updated to use pure camelCase
+  - Maintained PascalCase for classes and UPPER_SNAKE_CASE for constants
 - v1.1.1 (2025-11-25): Clarified that at least 2-3 alternatives should be proposed, but more (4-5+) when appropriate for complex cases
 - v1.1.0 (2025-11-25): Added mandatory naming conventions requiring proposal of meaningful alternatives before implementation
 - v1.0.0 (2025-11-19): Initial comprehensive documentation

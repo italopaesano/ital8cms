@@ -78,8 +78,8 @@ ital8cms features a sophisticated plugin system:
 ```
 plugins/myPlugin/
 ├── main.js                    # Plugin logic
-├── config-plugin.json         # Configuration
-└── description-plugin.json    # Metadata
+├── pluginConfig.json         # Configuration
+└── pluginDescription.json    # Metadata
 ```
 
 ## Theme System
@@ -103,7 +103,7 @@ themes/myTheme/
 **Primary:** JSON files
 - User accounts: `plugins/simpleAccess/userAccount.json`
 - User roles: `plugins/simpleAccess/userRole.json`
-- Plugin configs: `*/config-plugin.json`
+- Plugin configs: `*/pluginConfig.json`
 
 **Optional:** SQLite database via dbApi plugin (currently disabled)
 
@@ -120,7 +120,7 @@ Session-based authentication with role-based access control (RBAC):
 ```
 ital8cms/
 ├── index.js              # Application entry point
-├── ital8-conf.json       # Main configuration
+├── ital8Config.json       # Main configuration
 ├── CLAUDE.md             # AI assistant guide
 ├── core/                 # Core CMS functionality
 ├── plugins/              # Plugin modules
@@ -139,7 +139,7 @@ npm start
 npm test
 
 # Enable optional SQLite database
-# 1. Edit plugins/dbApi/config-plugin.json: "active": 1
+# 1. Edit plugins/dbApi/pluginConfig.json: "active": 1
 # 2. npm install better-sqlite3
 # 3. Restart server
 ```

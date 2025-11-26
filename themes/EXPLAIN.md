@@ -917,7 +917,7 @@ cp path/to/theme-icon.svg .
 
 ### Step 8: Attiva il Tema
 
-Modifica `ital8-conf.json` nella root del progetto:
+Modifica `ital8Config.json` nella root del progetto:
 
 ```json
 {
@@ -1032,7 +1032,7 @@ themes/shop/
 - [ ] Decidere `followsGlobalStandard` (true o false)
 - [ ] Decidere `wwwCustomPath` (0 o 1)
 - [ ] Testare che i partials includano correttamente gli hook
-- [ ] Attivare tema in `ital8-conf.json`
+- [ ] Attivare tema in `ital8Config.json`
 - [ ] Riavviare server e verificare caricamento
 
 ### Opzionali

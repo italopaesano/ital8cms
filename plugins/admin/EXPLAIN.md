@@ -1,7 +1,7 @@
 # in questo file devi spiegare le funzionalita del plufin come usarlo ed i dettagli di funzionamento
 
 
-nel file config-plugin.json ci sarà una struttura di questo tipo 
+nel file pluginConfig.json ci sarà una struttura di questo tipo 
 ```js
 
 {

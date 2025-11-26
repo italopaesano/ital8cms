@@ -61,7 +61,7 @@ LOG_LEVEL=WARN npm start
 LOG_LEVEL=ERROR npm start
 ```
 
-### 2. File di Configurazione (ital8-conf.json)
+### 2. File di Configurazione (ital8Config.json)
 
 ```json
 {
@@ -75,8 +75,8 @@ LOG_LEVEL=ERROR npm start
 ### Priorità Configurazione
 
 1. `LOG_LEVEL` (variabile ambiente) - massima priorità
-2. `logLevel` in ital8-conf.json
-3. `debugMode` in ital8-conf.json (se = 1, usa DEBUG)
+2. `logLevel` in ital8Config.json
+3. `debugMode` in ital8Config.json (se = 1, usa DEBUG)
 4. Default: INFO
 
 ## Utilizzo nei Plugin
@@ -251,7 +251,7 @@ Possibili miglioramenti futuri:
 ### Log Non Visibili
 
 1. Verifica il livello: `echo $LOG_LEVEL`
-2. Controlla ital8-conf.json per `logLevel` o `debugMode`
+2. Controlla ital8Config.json per `logLevel` o `debugMode`
 3. Assicurati che il modulo usi il logger correttamente
 
 ### Colori Non Visualizzati

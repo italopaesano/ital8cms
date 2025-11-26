@@ -67,7 +67,7 @@ Il tema dichiara le sue dipendenze in `config-theme.json`:
 
 ## Come Attivare
 
-In `ital8-conf.json`:
+In `ital8Config.json`:
 ```json
 {
   "activeTheme": "exampleTheme"

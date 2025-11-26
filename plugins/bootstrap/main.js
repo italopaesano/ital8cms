@@ -1,9 +1,9 @@
 
 const fs = require('fs');
 const path = require('path');
-const ital8Conf = require('../../ital8-conf.json');
+const ital8Conf = require('../../ital8Config.json');
 
-let pluginConfig = require(`${__dirname}/config-plugin.json`);// let perchè questa varibile può cambiare di valore 
+let pluginConfig = require(`${__dirname}/pluginConfig.json`);// let perchè questa varibile può cambiare di valore 
 const pluginName = path.basename(  __dirname  );// restituisce il nome della directory che contiene il file corrente e che è anche il nome del plugin
 
 

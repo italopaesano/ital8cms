@@ -356,7 +356,7 @@ Chiamata **ogni volta** che il server si avvia. Inizializza il plugin.
 ```js
 async function loadPlugin(pluginSys, pathPluginFolder) {
   // Carica configurazione
-  this.config = require('./config-plugin.json');
+  this.config = require('./pluginConfig.json');
 
   // Inizializza variabili
   this.counter = 0;
@@ -391,14 +391,14 @@ async function installPlugin(pluginSys, pathPluginFolder) {
 
   console.log('MyPlugin installed!');
 
-  // IMPORTANTE: Aggiorna config-plugin.json
+  // IMPORTANTE: Aggiorna pluginConfig.json
   // isInstalled verrà impostato a 1 automaticamente
 }
 ```
 
 ### upgradePlugin()
 
-Chiamata quando la versione in `description-plugin.json` è maggiore di `installedVersion` in `config-plugin.json`.
+Chiamata quando la versione in `pluginDescription.json` è maggiore di `installedVersion` in `pluginConfig.json`.
 
 ```js
 async function upgradePlugin(pluginSys, pathPluginFolder, oldVersion, newVersion) {
@@ -447,7 +447,7 @@ async function uninstallPlugin(pluginSys, pathPluginFolder) {
 
 ### Dipendenze Plugin
 
-In `config-plugin.json`:
+In `pluginConfig.json`:
 
 ```json
 {
@@ -504,7 +504,7 @@ I plugin vengono caricati in base a:
 3. **Nome alfabetico** (se weight uguale)
 
 ```json
-// config-plugin.json
+// pluginConfig.json
 {
   "weight": 0    // Caricato prima (es. dbApi)
 }
@@ -536,7 +536,7 @@ logger.error('PluginSys', 'Errore critico', error);
 - `WARN` - Avvisi (dipendenze mancanti, etc.)
 - `ERROR` - Errori critici
 
-Configura il livello in `ital8-conf.json`:
+Configura il livello in `ital8Config.json`:
 
 ```json
 {
@@ -593,7 +593,7 @@ Vedi `/plugins/exampleComplete/` per un esempio completo che dimostra tutte le f
 - Object sharing
 
 Per attivarlo:
-1. Modifica `plugins/exampleComplete/config-plugin.json`: `"active": 1`
+1. Modifica `plugins/exampleComplete/pluginConfig.json`: `"active": 1`
 2. Riavvia il server
 3. Visita `http://localhost:3000/api/exampleComplete/demo`
 

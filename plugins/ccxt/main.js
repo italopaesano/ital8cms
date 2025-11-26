@@ -4,7 +4,7 @@ const path = require('path');
 const ccxt = require("ccxt");// qui serve solo per rispondere alle funzioni generiche tutte quelle che richiedono di pecificare un exchange verra usato la comunicazione intratred con workerCcxt.js
 const ccxtDataTables = require('./lib/ccxtDataStructureTables');// servirà a creare le tabbelle che immagazineranno i dati delle strutture di ccxt
 
-let pluginConfig = require(`${__dirname}/config-plugin.json`);// let perchè questa varibile può cambiare di valore 
+let pluginConfig = require(`${__dirname}/pluginConfig.json`);// let perchè questa varibile può cambiare di valore 
 const pluginName = path.basename(  __dirname );// restituisce il nome della directory che contiene il file corrente e che è anche il nome del plugin
 const sharedObject = {};// ogetto che avrà gliogetti condiviso con gli altri plugin ES {dbApi: newdbApi}
 
@@ -251,7 +251,7 @@ module.exports = {
 /* OLD_ const fs = require('fs');
 const path = require('path');
 
-let pluginConfig = require(`${__dirname}/config-plugin.json`);// let perchè questa varibile può cambiare di valore 
+let pluginConfig = require(`${__dirname}/pluginConfig.json`);// let perchè questa varibile può cambiare di valore 
 const pluginName = path.basename( __dirname );// restituisce il nome della directory che contiene il file corrente e che è anche il nome del plugin
 
 function loadPlugin(){

@@ -32,7 +32,7 @@
   /themes/EXPLAIN.md --> file che contiene una guida base per creare un tema
   
 
-  /ital8-conf.json file di configurazione ,li saranno indicati la configurazione dei percorsi base per le cartelle riservate rispetto a koa-classic-server
+  /ital8Config.json file di configurazione ,li saranno indicati la configurazione dei percorsi base per le cartelle riservate rispetto a koa-classic-server
   Es :
 
   ```json

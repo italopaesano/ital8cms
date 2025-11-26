@@ -7,8 +7,8 @@ Plugin di riferimento che dimostra **tutte** le funzionalità del sistema plugin
 ```
 exampleComplete/
 ├── main.js                 # Logica del plugin
-├── config-plugin.json      # Configurazione
-├── description-plugin.json # Metadati
+├── pluginConfig.json      # Configurazione
+├── pluginDescription.json # Metadati
 ├── README.md               # Questa documentazione
 └── webPages/
     ├── demo.ejs           # Pagina demo
@@ -55,7 +55,7 @@ exampleComplete/
 
 ## Attivazione
 
-1. In `config-plugin.json` imposta `"active": 1`
+1. In `pluginConfig.json` imposta `"active": 1`
 2. Riavvia il server
 3. Visita `/api/exampleComplete/demo`
 
