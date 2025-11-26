@@ -38,10 +38,10 @@ const COLORS = {
   RESET: '\x1b[0m'    // Reset
 };
 
-// Carica configurazione da ital8-conf.json se disponibile
+// Carica configurazione da ital8Config.json se disponibile
 let configLogLevel = 'INFO';
 try {
-  const configPath = path.join(__dirname, '..', 'ital8-conf.json');
+  const configPath = path.join(__dirname, '..', 'ital8Config.json');
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   if (config.logLevel) {
     configLogLevel = config.logLevel.toUpperCase();

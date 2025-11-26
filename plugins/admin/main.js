@@ -2,11 +2,11 @@
 const fs = require('fs');
 const path = require('path');
 
-let pluginConfig = require(`${__dirname}/config-plugin.json`);// let perchè questa varibile può cambiare di valore 
+let pluginConfig = require(`${__dirname}/pluginConfig.json`);// let perchè questa varibile può cambiare di valore
 const pluginName = path.basename(  __dirname );// restituisce il nome della directory che contiene il file corrente e che è anche il nome del plugin
-const sharedObject = {};// ogetto che avrà gliogetti condiviso con gli altri plugin ES {dbApi: newdbApi} 
+const sharedObject = {};// ogetto che avrà gliogetti condiviso con gli altri plugin ES {dbApi: newdbApi}
 
-const ital8Conf = require('../../ital8-conf.json');// questo serve a caricare le impostazioni generali del modulo ed in particolare lìapi Prefix
+const ital8Conf = require('../../ital8Config.json');// questo serve a caricare le impostazioni generali del modulo ed in particolare lìapi Prefix
 
 function loadPlugin(){
   //console.log( 'sharedObject: ', sharedObject );
@@ -127,7 +127,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
           }
 
           // Leggi configurazione attuale
-          const configPath = path.join(__dirname, '../../ital8-conf.json');
+          const configPath = path.join(__dirname, '../../ital8Config.json');
           const currentConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
           // Aggiorna il tema appropriato

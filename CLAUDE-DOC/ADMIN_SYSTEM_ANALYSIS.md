@@ -670,7 +670,7 @@ Plugin che possono estendere l'admin panel con:
 - Widget dashboard
 - Endpoint admin API
 
-**Esempio config-plugin.json:**
+**Esempio pluginConfig.json:**
 ```json
 {
   "admin": {
@@ -809,7 +809,7 @@ Il progetto ha già un plugin `media` - potrebbe essere integrato nell'admin.
 Menu dashboard: "Impostazioni Sistema"
 
 **Cosa Serve:**
-- Editor `ital8-conf.json` via UI
+- Editor `ital8Config.json` via UI
 - Configurazione SMTP email
 - Impostazioni sicurezza
 - Backup/restore
@@ -999,7 +999,7 @@ core/admin/
 plugins/
 ├── myPlugin/
 │   ├── main.js
-│   ├── config-plugin.json
+│   ├── pluginConfig.json
 │   └── admin/                  # NUOVO: sezione admin plugin
 │       ├── routes.js
 │       ├── menu.json
@@ -1132,8 +1132,8 @@ module.exports = {
 ```
 plugins/admin/
 ├── main.js
-├── config-plugin.json
-├── description-plugin.json
+├── pluginConfig.json
+├── pluginDescription.json
 ├── modules/
 ├── middleware/
 └── views/
@@ -1326,7 +1326,7 @@ plugins/admin/
 
 ```javascript
 // core/admin/middleware/auth.js
-const ital8Conf = require('../../../ital8-conf.json');
+const ital8Conf = require('../../../ital8Config.json');
 
 async function requireAuth(ctx, next) {
     // Controlla se utente è autenticato
@@ -1350,7 +1350,7 @@ module.exports = { requireAuth };
 
 ```javascript
 // core/admin/middleware/rbac.js
-const ital8Conf = require('../../../ital8-conf.json');
+const ital8Conf = require('../../../ital8Config.json');
 
 /**
  * Controlla se utente ha ruolo minimo richiesto
@@ -2045,7 +2045,7 @@ Il sistema admin, una volta completato secondo questo piano, sarà:
 - `/index.js:64-102` - Caricamento admin
 - `/core/admin/admin.js` - DA IMPLEMENTARE
 - `/core/admin/adminRoute.js` - DA IMPLEMENTARE
-- `/ital8-conf.json` - Configurazione admin
+- `/ital8Config.json` - Configurazione admin
 
 ### Plugin Rilevanti
 - `simpleAccess` - Autenticazione

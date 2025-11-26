@@ -17,7 +17,7 @@ Questo documento descrive il flusso completo del sistema plugin di ital8cms, dal
                       ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │              Carica Configurazione                               │
-│         (ital8-conf.json, koaSession.json)                       │
+│         (ital8Config.json, koaSession.json)                       │
 └─────────────────────┬───────────────────────────────────────────┘
                       │
                       ▼
@@ -61,8 +61,8 @@ Questo documento descrive il flusso completo del sistema plugin di ital8cms, dal
 │  ─────────────────                                               │
 │  • Leggi cartella /plugins                                       │
 │  • Per ogni sottocartella:                                       │
-│    - Leggi config-plugin.json                                    │
-│    - Leggi description-plugin.json                               │
+│    - Leggi pluginConfig.json                                    │
+│    - Leggi pluginDescription.json                               │
 │    - Verifica active === 1                                       │
 └─────────────────────┬───────────────────────────────────────────┘
                       │
@@ -398,7 +398,7 @@ Rendering pagina EJS (es. /www/index.ejs):
 │              VALIDAZIONE nodeModuleDependency                    │
 └─────────────────────────────────────────────────────────────────┘
 
-config-plugin.json:
+pluginConfig.json:
 {
   "nodeModuleDependency": {
     "bcryptjs": "^3.0.0",
@@ -708,7 +708,7 @@ Sistema continua senza Plugin X
 ### Aggiungere un Nuovo Plugin
 
 1. Crea cartella in `/plugins/`
-2. Aggiungi `main.js`, `config-plugin.json`, `description-plugin.json`
+2. Aggiungi `main.js`, `pluginConfig.json`, `pluginDescription.json`
 3. Imposta `"active": 1` in config
 4. Riavvia server
 
@@ -718,7 +718,7 @@ Sistema continua senza Plugin X
 # Abilita log debug
 LOG_LEVEL=DEBUG npm start
 
-# Oppure in ital8-conf.json
+# Oppure in ital8Config.json
 { "logLevel": "DEBUG" }
 ```
 

@@ -10,7 +10,7 @@ class themeSys{
   //#fnInPageMap;// variabile privata
 
   constructor( theItal8Conf, thePluginSys = null ){// OLD OpluginSys. incorpora un istanza della classe pluginSys quindi un oggetto pluginSys da questo la O grande iniziale
-    this.ital8Conf = theItal8Conf ;//OLD require('../ital8-conf.json');
+    this.ital8Conf = theItal8Conf ;//OLD require('../ital8Config.json');
     this.pluginSys = thePluginSys; // Riferimento al sistema dei plugin per il check delle dipendenze
     //this.activeTheme = activeTheme;// nome del tema attivoQUESTA DEFINIZIONE SERVE A PERMETTERE DI IMPOSTARE UN TEMA ATTIVO DIVERSO DA QUELLO IMPOSTATO NEL FIEL DI CONFIGUAZIONE , AD ESEMPIO  PER I FILE DI ADMIN IL TEMA ATTIVO SARÀ SEMPRE QUELLO DI DEFULT
     //this.#fnInPageMap = OpluginSys.fnInPage;

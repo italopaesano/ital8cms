@@ -24,23 +24,23 @@ describe('Plugin Loading Integration', () => {
       });
     });
 
-    test('tutti i plugin hanno config-plugin.json', () => {
+    test('tutti i plugin hanno pluginConfig.json', () => {
       pluginDirs.forEach(pluginName => {
-        const configPath = path.join(pluginsDir, pluginName, 'config-plugin.json');
+        const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json');
         expect(fs.existsSync(configPath)).toBe(true);
       });
     });
 
-    test('tutti i plugin hanno description-plugin.json', () => {
+    test('tutti i plugin hanno pluginDescription.json', () => {
       pluginDirs.forEach(pluginName => {
-        const descPath = path.join(pluginsDir, pluginName, 'description-plugin.json');
+        const descPath = path.join(pluginsDir, pluginName, 'pluginDescription.json');
         expect(fs.existsSync(descPath)).toBe(true);
       });
     });
 
-    test('config-plugin.json ha campi obbligatori', () => {
+    test('pluginConfig.json ha campi obbligatori', () => {
       pluginDirs.forEach(pluginName => {
-        const configPath = path.join(pluginsDir, pluginName, 'config-plugin.json');
+        const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json');
         const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
         expect(config).toHaveProperty('active');
@@ -50,9 +50,9 @@ describe('Plugin Loading Integration', () => {
       });
     });
 
-    test('description-plugin.json ha campi obbligatori', () => {
+    test('pluginDescription.json ha campi obbligatori', () => {
       pluginDirs.forEach(pluginName => {
-        const descPath = path.join(pluginsDir, pluginName, 'description-plugin.json');
+        const descPath = path.join(pluginsDir, pluginName, 'pluginDescription.json');
         const desc = JSON.parse(fs.readFileSync(descPath, 'utf8'));
 
         expect(desc).toHaveProperty('name');
@@ -68,7 +68,7 @@ describe('Plugin Loading Integration', () => {
         .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory());
 
       pluginDirs.forEach(pluginName => {
-        const descPath = path.join(pluginsDir, pluginName, 'description-plugin.json');
+        const descPath = path.join(pluginsDir, pluginName, 'pluginDescription.json');
         const desc = JSON.parse(fs.readFileSync(descPath, 'utf8'));
 
         if (desc.version) {
@@ -83,7 +83,7 @@ describe('Plugin Loading Integration', () => {
         .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory());
 
       pluginDirs.forEach(pluginName => {
-        const configPath = path.join(pluginsDir, pluginName, 'config-plugin.json');
+        const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json');
         const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
         if (config.dependency) {
@@ -99,7 +99,7 @@ describe('Plugin Loading Integration', () => {
         .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory());
 
       pluginDirs.forEach(pluginName => {
-        const configPath = path.join(pluginsDir, pluginName, 'config-plugin.json');
+        const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json');
         const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
         expect(typeof config.weight).toBe('number');
@@ -127,7 +127,7 @@ describe('Plugin Loading Integration', () => {
         .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory());
 
       pluginDirs.forEach(pluginName => {
-        const configPath = path.join(pluginsDir, pluginName, 'config-plugin.json');
+        const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json');
         const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
         if (config.active === 1) {
@@ -147,7 +147,7 @@ describe('Plugin Loading Integration', () => {
         .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory());
 
       pluginDirs.forEach(pluginName => {
-        const configPath = path.join(pluginsDir, pluginName, 'config-plugin.json');
+        const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json');
         const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
         if (config.nodeModuleDependency && config.active === 1) {
@@ -170,7 +170,7 @@ describe('Plugin Loading Integration', () => {
       const depGraph = new Map();
 
       pluginDirs.forEach(pluginName => {
-        const configPath = path.join(pluginsDir, pluginName, 'config-plugin.json');
+        const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json');
         const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
         if (config.active === 1 && config.dependency) {
@@ -217,7 +217,7 @@ describe('Plugin Loading Integration', () => {
       const allPlugins = new Set(pluginDirs);
 
       pluginDirs.forEach(pluginName => {
-        const configPath = path.join(pluginsDir, pluginName, 'config-plugin.json');
+        const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json');
         const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
         if (config.active === 1 && config.dependency) {

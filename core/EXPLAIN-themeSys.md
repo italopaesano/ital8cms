@@ -97,7 +97,7 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
 ### 3.1 Sequenza di Avvio
 
 ```
-1. index.js carica ital8-conf.json
+1. index.js carica ital8Config.json
    ↓
 2. Inizializza pluginSys
    ↓
@@ -946,7 +946,7 @@ Per tornare alla cartella /www/ root, attivare un tema con wwwCustomPath: 0.
 
   // 5. Attiva tema
   ital8Conf.activeTheme = themeName;
-  fs.writeFileSync('./ital8-conf.json', JSON.stringify(ital8Conf, null, 2));
+  fs.writeFileSync('./ital8Config.json', JSON.stringify(ital8Conf, null, 2));
 
   return { success: true, message: 'Tema attivato. Riavviare il server.' };
 }

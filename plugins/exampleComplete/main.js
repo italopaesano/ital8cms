@@ -14,9 +14,9 @@ const path = require('path');
 const ejs = require('ejs');
 
 // Configurazione del plugin
-const pluginConfig = require('./config-plugin.json');
-const pluginDescription = require('./description-plugin.json');
-const ital8Conf = require('../../ital8-conf.json');
+const pluginConfig = require('./pluginConfig.json');
+const pluginDescription = require('./pluginDescription.json');
+const ital8Conf = require('../../ital8Config.json');
 
 // Nome del plugin (usato per costruire URL)
 const pluginName = pluginDescription.name;
@@ -99,8 +99,8 @@ function installPlugin(pluginSys, pathPluginFolder) {
 /**
  * Funzione chiamata quando il plugin viene aggiornato
  *
- * Viene eseguita quando la versione in description-plugin.json
- * è maggiore della versione in config-plugin.json.
+ * Viene eseguita quando la versione in pluginDescription.json
+ * è maggiore della versione in pluginConfig.json.
  *
  * @param {object} pluginSys - Istanza del sistema plugin
  * @param {string} pathPluginFolder - Percorso assoluto alla cartella del plugin

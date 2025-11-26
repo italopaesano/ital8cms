@@ -75,7 +75,7 @@ se l'utente insrisce correttamente i dati al primo colpo , allora l'url di redir
 ```
 
 # ecco inceve il file di configrazione nello specifico 
-## config-plugin.json
+## pluginConfig.json
 ```js
 
 {
