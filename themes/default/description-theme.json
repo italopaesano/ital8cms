@@ -6,7 +6,6 @@
   "author": "Italo Paesano",
   "email": "italopaesano@protonmail.com",
   "license": "ISC",
-  "screenshot": "screenshot.png",
   "tags": ["default", "minimal", "responsive", "bootstrap"],
   "supportedHooks": [
     "head",
@@ -19,7 +18,7 @@
     "script"
   ],
   "features": {
-    "assets": true,
+    "theme-resources": true,
     "pluginCustomization": true,
     "responsive": true
   }

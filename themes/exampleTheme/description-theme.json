@@ -6,7 +6,6 @@
   "author": "ital8cms Team",
   "email": "italopaesano@protonmail.com",
   "license": "ISC",
-  "screenshot": "screenshot.png",
   "tags": ["example", "educational", "demo", "bootstrap", "responsive"],
   "supportedHooks": [
     "head",
@@ -19,7 +18,7 @@
     "script"
   ],
   "features": {
-    "assets": true,
+    "theme-resources": true,
     "pluginCustomization": true,
     "responsive": true
   }
