@@ -883,6 +883,34 @@ const item = db.prepare('SELECT * FROM items WHERE id = ?').get(1)
 - **Files/Directories:** camelCase (`myPlugin`, `userManagement`)
 - **Constants:** UPPER_SNAKE_CASE (`MAX_ITEMS`, `API_PREFIX`)
 
+#### Compound File Names Convention
+
+For files with multiple semantic parts, follow the **natural English word order** (noun + descriptor):
+
+**Pattern:** `{primaryNoun}{descriptor}.{extension}`
+
+**Examples:**
+```
+✅ CORRECT:
+pluginConfig.json          // "plugin configuration" - natural order
+pluginDescription.json     // "plugin description" - natural order
+userAccount.json           // "user account" - natural order
+sessionManager.js          // "session manager" - natural order
+ital8Config.json           // "ital8 configuration" - natural order
+
+❌ INCORRECT:
+configPlugin.json          // "configuration plugin" - unnatural
+descriptionPlugin.json     // "description plugin" - unnatural
+accountUser.json           // "account user" - unnatural
+managerSession.js          // "manager session" - unnatural
+```
+
+**Why this convention:**
+- ✅ Follows natural English semantics ("plugin config" not "config plugin")
+- ✅ Groups related files alphabetically (all plugin files together)
+- ✅ Matches modern JavaScript naming patterns (`package.json`, `tsconfig.json`)
+- ✅ More readable and intuitive for developers
+
 #### Meaningful and Intuitive Names
 
 **CRITICAL REQUIREMENT:** Every name in the codebase (variables, functions, files, directories, classes, constants, etc.) MUST be chosen with care and have a symbolic meaning that is as intuitive as possible.
@@ -1497,10 +1525,11 @@ When working on this codebase as an AI assistant:
 
 **Changelog:**
 - v1.2.0 (2025-11-26): **BREAKING CHANGE** - Updated naming convention from kebab-case to camelCase for all files and directories. Key changes:
-  - `ital8Config.json` → `ital8Config.json`
-  - `pluginConfig.json` → `pluginConfig.json`
-  - `pluginDescription.json` → `pluginDescription.json`
+  - `ital8-conf.json` → `ital8Config.json`
+  - `config-plugin.json` → `pluginConfig.json`
+  - `description-plugin.json` → `pluginDescription.json`
   - All file/directory examples updated to use pure camelCase
+  - Added compound file names convention (noun + descriptor pattern)
   - Maintained PascalCase for classes and UPPER_SNAKE_CASE for constants
 - v1.1.1 (2025-11-25): Clarified that at least 2-3 alternatives should be proposed, but more (4-5+) when appropriate for complex cases
 - v1.1.0 (2025-11-25): Added mandatory naming conventions requiring proposal of meaningful alternatives before implementation
