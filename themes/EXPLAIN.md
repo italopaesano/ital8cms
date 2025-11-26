@@ -152,6 +152,31 @@ File di configurazione del tema.
 - Pagine isolate nella cartella del tema
 - Utile per temi custom con strutture specifiche
 - Cambiare tema richiede migrazione manuale
+- **Importante:** All'attivazione, viene creato `/www/README.txt` nella root che avvisa che le pagine sono ora in `themes/nomeTema/www/`
+
+#### README.txt Automatico
+
+Quando si attiva un tema con `wwwCustomPath: 1`, il sistema crea automaticamente un file `/www/README.txt` nella root del progetto con questo contenuto:
+
+```
+ATTENZIONE: Cartella www/ root non più utilizzata
+=================================================
+
+Il tema attualmente attivo utilizza una cartella www/ personalizzata.
+
+Tema attivo: [nomeDelTema]
+Cartella pagine: themes/[nomeDelTema]/www/
+
+Tutte le pagine web create dall'admin si trovano in:
+/themes/[nomeDelTema]/www/
+
+Questa cartella (/www/ nella root del progetto) NON è più utilizzata
+finché rimane attivo un tema con wwwCustomPath: 1.
+
+Per tornare alla cartella /www/ root, attivare un tema con wwwCustomPath: 0.
+```
+
+Questo evita confusione su dove cercare le pagine del sito.
 
 ---
 

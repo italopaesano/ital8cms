@@ -424,12 +424,33 @@ getHooksPage(section, passData) {
 - Leggere `wwwCustomPath` da `config-theme.json`
 - Creare directory `themes/tema/www/` se necessario
 - Helper function per path corretto
+- **NUOVO:** Creare `/www/README.txt` automaticamente quando si attiva tema con `wwwCustomPath: 1`
+
+**Contenuto README.txt:**
+```
+ATTENZIONE: Cartella www/ root non più utilizzata
+=================================================
+
+Il tema attualmente attivo utilizza una cartella www/ personalizzata.
+
+Tema attivo: [nomeDelTema]
+Cartella pagine: themes/[nomeDelTema]/www/
+
+Tutte le pagine web create dall'admin si trovano in:
+/themes/[nomeDelTema]/www/
+
+Questa cartella (/www/ nella root del progetto) NON è più utilizzata
+finché rimane attivo un tema con wwwCustomPath: 1.
+
+Per tornare alla cartella /www/ root, attivare un tema con wwwCustomPath: 0.
+```
 
 **File da creare/modificare:**
 - Nuovo modulo/funzione per gestione pagine
 - Integrazione con sistema admin
+- Hook all'attivazione tema per creare README.txt
 
-**Effort:** 4-6 ore
+**Effort:** 5-7 ore (aumentato per README.txt)
 
 ---
 
@@ -609,6 +630,7 @@ core/admin/webPages/pageManagement/
 - 📋 Definizione sistema templates
 - 📋 Definizione naming cartelle (`theme-resources`, `plugins-endpoints-markup`)
 - 📋 Definizione auto-detection icone tema
+- 📋 Definizione README.txt automatico quando `wwwCustomPath: 1`
 
 **Changed:**
 - 📋 `description-theme.json` ora OBBLIGATORIO (era opzionale)

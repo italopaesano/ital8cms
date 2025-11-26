@@ -890,6 +890,9 @@ if (validation.valid) {
 // In un'interfaccia admin per cambio tema
 
 async function activateTheme(themeName) {
+  const fs = require('fs');
+  const path = require('path');
+
   // 1. Valida tema
   const validation = themeSys.validateTheme(themeName);
   if (!validation.valid) {
@@ -906,7 +909,42 @@ async function activateTheme(themeName) {
     };
   }
 
-  // 3. Attiva tema
+  // 3. Leggi configurazione tema
+  const themeConfigPath = path.join(__dirname, 'themes', themeName, 'config-theme.json');
+  const themeConfig = JSON.parse(fs.readFileSync(themeConfigPath, 'utf8'));
+
+  // 4. Gestisci wwwCustomPath
+  if (themeConfig.wwwCustomPath === 1) {
+    // Crea README.txt in /www/ root per avvisare del cambio location
+    const readmePath = path.join(__dirname, 'www', 'README.txt');
+    const readmeContent = `ATTENZIONE: Cartella www/ root non più utilizzata
+=================================================
+
+Il tema attualmente attivo utilizza una cartella www/ personalizzata.
+
+Tema attivo: ${themeName}
+Cartella pagine: themes/${themeName}/www/
+
+Tutte le pagine web create dall'admin si trovano in:
+/themes/${themeName}/www/
+
+Questa cartella (/www/ nella root del progetto) NON è più utilizzata
+finché rimane attivo un tema con wwwCustomPath: 1.
+
+Per tornare alla cartella /www/ root, attivare un tema con wwwCustomPath: 0.
+`;
+    fs.writeFileSync(readmePath, readmeContent, 'utf8');
+    console.log('[themeSys] Creato /www/README.txt - Pagine ora in themes/' + themeName + '/www/');
+  } else {
+    // Rimuovi README.txt se esiste (tema usa /www/ root)
+    const readmePath = path.join(__dirname, 'www', 'README.txt');
+    if (fs.existsSync(readmePath)) {
+      fs.unlinkSync(readmePath);
+      console.log('[themeSys] Rimosso /www/README.txt - Pagine tornano in /www/ root');
+    }
+  }
+
+  // 5. Attiva tema
   ital8Conf.activeTheme = themeName;
   fs.writeFileSync('./ital8-conf.json', JSON.stringify(ital8Conf, null, 2));
 
