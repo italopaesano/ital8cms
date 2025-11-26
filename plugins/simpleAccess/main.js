@@ -3,14 +3,15 @@
 
 const fs = require('fs');
 const path = require('path');
+const loadJson = require('../../core/jsonLoader');
 
 const ejs = require("ejs"); // serve per aggiungere il supporto ejs , che fral'altro serve a caricare bootstrap
 
-const ital8Conf = require('../../ital8Config.json');// questo serve a caricare le impostazioni generali del modulo ed in particolare lìapi Prefix
+const ital8Conf = loadJson(path.join(__dirname, '../../ital8Config.json'));// questo serve a caricare le impostazioni generali del modulo ed in particolare lìapi Prefix
 
 const libAccess = require('./lib/libAccess');
 
-let pluginConfig = require(`${__dirname}/pluginConfig.json`);// let perchè questa varibile può cambiare di valore 
+let pluginConfig = loadJson(path.join(__dirname, 'pluginConfig.json'));// let perchè questa varibile può cambiare di valore 
 const pluginName = path.basename(  __dirname );// restituisce il nome della directory che contiene il file corrente e che è anche il nome del plugin
 const sharedObject = {};// ogetto che avrà gliogetti condiviso con gli altri plugin ES {dbApi: newdbApi} 
 

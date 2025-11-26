@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const semver = require('semver');
 const logger = require('./logger');
+const loadJson = require('./jsonLoader');
 
 class pluginSys{
 
@@ -29,7 +30,7 @@ class pluginSys{
 
       try {
         //console.log(pluginConfig);
-        const pluginConfig = require(`../plugins/${pluginName}/pluginConfig.json`);
+        const pluginConfig = loadJson(path.join(__dirname, '..', 'plugins', pluginName, 'pluginConfig.json'));
         const plugin = require(`../plugins/${pluginName}/main.js`);//
 
         // setto i plugin attivi prima del loading e dell'onstall i modo che ,, una volta caricati gliogeti condivisi questi potranno essere utilizati nel loading e nell'install
@@ -68,7 +69,7 @@ class pluginSys{
         }// if( pluginConfig.isInstalled == 0 ){
 
         // SISTEMA DI UPGRADE: controlla se la versione del plugin è cambiata
-        const pluginDescription = require(`../plugins/${pluginName}/pluginDescription.json`);
+        const pluginDescription = loadJson(path.join(__dirname, '..', 'plugins', pluginName, 'pluginDescription.json'));
         const newVersion = pluginDescription.version;
         const oldVersion = pluginConfig.version || '0.0.0'; // Se non esiste, assume 0.0.0
 
@@ -163,7 +164,7 @@ class pluginSys{
 
     for( const nameFile of Afiles ){
 
-      const pluginConfig = require(`../plugins/${nameFile}/pluginConfig.json`);
+      const pluginConfig = loadJson(path.join(__dirname, '..', 'plugins', nameFile, 'pluginConfig.json'));
 
       if( pluginConfig.active == 1 ){// il plugin è attivo quindi lo carico e dopo ( nell funzione caricate plugin controllo anche se è installato )
 
@@ -229,7 +230,7 @@ class pluginSys{
           }
         }
 
-        const pluginVersion = require(`../plugins/${nameFile}/pluginDescription.json`).version;
+        const pluginVersion = loadJson(path.join(__dirname, '..', 'plugins', nameFile, 'pluginDescription.json')).version;
         pluginsVersionMap.set( nameFile, pluginVersion);// nameFile = nome plugin , creo la mappa : nomeplugin --> versione
 
         //const plugin = require(`../plugins/${nameFile}/main.js`);// carico il plugin

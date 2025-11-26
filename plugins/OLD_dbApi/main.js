@@ -1,4 +1,4 @@
-let pluginConfig = require(`${__dirname}/pluginConfig.json`);// let perchè questa varibile può cambiare di valore 
+let pluginConfig = loadJson(path.join(__dirname, 'pluginConfig.json'));// let perchè questa varibile può cambiare di valore 
 
 function loadPlugin(){
 

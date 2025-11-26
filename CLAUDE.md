@@ -36,6 +36,15 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 ```
 
+**Loading JSON Files:** All JSON files must be loaded using the centralized `core/jsonLoader.js` module:
+
+```javascript
+const loadJson = require('./core/jsonLoader');
+const config = loadJson('./ital8Config.json');
+```
+
+**DO NOT** use `require()` directly for `.json` files as it doesn't support JSON5 comments.
+
 ## Codebase Structure
 
 ```
