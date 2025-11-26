@@ -1,498 +1,1078 @@
-# Sistema dei Temi - ital8cms
+# Sistema dei Temi - Documentazione Tecnica
 
-Documentazione completa sul funzionamento del sistema dei temi e guida alla creazione di nuovi temi.
+**Versione:** 2.0.0
+**Data:** 2025-11-26
+**File Sorgente:** `core/themeSys.js`
+
+---
 
 ## Indice
 
-1. [Panoramica](#1-panoramica)
-2. [Struttura di un Tema](#2-struttura-di-un-tema)
-3. [File di Configurazione](#3-file-di-configurazione)
-4. [Partials e Hook](#4-partials-e-hook)
-5. [Creazione di un Nuovo Tema](#5-creazione-di-un-nuovo-tema)
-6. [Asset del Tema](#6-asset-del-tema)
-7. [Personalizzazione Endpoint Plugin](#7-personalizzazione-endpoint-plugin)
-8. [Sistema delle Dipendenze](#8-sistema-delle-dipendenze)
-9. [API di themeSys](#9-api-di-themesys)
+1. [Introduzione](#1-introduzione)
+2. [Architettura del Sistema](#2-architettura-del-sistema)
+3. [Flusso di Inizializzazione](#3-flusso-di-inizializzazione)
+4. [Validazione Temi](#4-validazione-temi)
+5. [Sistema Dipendenze](#5-sistema-dipendenze)
+6. [Gestione Partials](#6-gestione-partials)
+7. [Asset Management](#7-asset-management)
+8. [Plugin Endpoint Customization](#8-plugin-endpoint-customization)
+9. [API Reference](#9-api-reference)
+10. [Integrazione con pluginSys](#10-integrazione-con-pluginsys)
+11. [Esempi di Utilizzo](#11-esempi-di-utilizzo)
 
-## 1. Panoramica
+---
 
-Il sistema dei temi di ital8cms separa la presentazione dalla logica applicativa. Supporta:
+## 1. Introduzione
 
-- **Temi separati** per sito pubblico e pannello admin
-- **Validazione automatica** con fallback al tema "default"
-- **Sistema di hook** per l'integrazione con i plugin
-- **Asset management** per CSS, JS e immagini del tema
-- **Personalizzazione endpoint plugin** senza modificare il codice dei plugin
-- **Gestione dipendenze** da plugin e moduli NPM
+Questo documento descrive il funzionamento tecnico interno del sistema dei temi di ital8cms.
 
-### Configurazione Globale
+### Collegamenti alla Documentazione
 
-In `ital8-conf.json`:
+- **[themes/EXPLAIN.md](../themes/EXPLAIN.md):** Guida utente per creare temi
+- **Questo documento:** Funzionamento tecnico interno (per sviluppatori avanzati)
+- **[CLAUDE-DOC/THEME_SYSTEM_ANALYSIS.md](../CLAUDE-DOC/THEME_SYSTEM_ANALYSIS.md):** Stato implementazione e TODO
 
-```json
-{
-  "activeTheme": "default",
-  "adminActiveTheme": "default"
-}
-```
+### Scopo
 
-## 2. Struttura di un Tema
+Il sistema `themeSys` è responsabile di:
 
-```
-themes/nomeDelTema/
-  config-theme.json           # Configurazione (obbligatorio)
-  description-theme.json      # Metadati (consigliato)
-  README.md                   # Documentazione tema
-  views/                      # Partials (obbligatorio)
-    head.ejs                  # <head> HTML (obbligatorio)
-    header.ejs                # Apertura <body> (obbligatorio)
-    nav.ejs                   # Navigazione (opzionale)
-    main.ejs                  # Contenuto principale (opzionale)
-    aside.ejs                 # Sidebar (opzionale)
-    footer.ejs                # Footer + chiusura (obbligatorio)
-  templates/                  # Template completi (opzionale)
-    page.template.ejs
-  assets/                     # Asset statici (opzionale)
-    css/
-    js/
-    images/
-  plugins/                    # Override endpoint plugin (opzionale)
-    pluginName/
-      endpointName/
-        template.ejs
-        style.css
-```
+1. **Validare** i temi all'avvio
+2. **Gestire** il fallback automatico a "default"
+3. **Risolvere** i path dei partials
+4. **Servire** gli asset dei temi
+5. **Personalizzare** endpoint dei plugin
+6. **Verificare** le dipendenze dei temi
 
-### File Obbligatori
+---
 
-- `config-theme.json`
-- `views/head.ejs`
-- `views/header.ejs`
-- `views/footer.ejs`
+## 2. Architettura del Sistema
 
-## 3. File di Configurazione
+### 2.1 Classe `themeSys`
 
-### config-theme.json
+Il sistema è implementato come classe singleton in `core/themeSys.js`.
 
-```json
-{
-  "active": 1,
-  "isInstalled": 1,
-  "weight": 0,
-  "wwwCustomPath": 1,
-  "pluginDependency": {
-    "bootstrap": "^1.0.0"
-  },
-  "nodeModuleDependency": {
-    "ejs": "^3.0.0"
+```javascript
+class themeSys {
+  constructor(theItal8Conf, thePluginSys = null) {
+    this.ital8Conf = theItal8Conf;      // Configurazione globale
+    this.pluginSys = thePluginSys;       // Riferimento al sistema plugin
+
+    // Validazione tema pubblico
+    // Validazione tema admin
+    // Check dipendenze
   }
 }
 ```
 
-| Campo | Tipo | Descrizione |
-|-------|------|-------------|
-| `active` | number | 1 = attivo, 0 = disattivo |
-| `isInstalled` | number | Stato installazione |
-| `pluginDependency` | object | Plugin richiesti con versione semver |
-| `nodeModuleDependency` | object | Moduli NPM richiesti con versione semver |
+### 2.2 Istanziazione
 
-### description-theme.json
+La classe viene istanziata in `index.js` dopo il caricamento dei plugin:
 
-```json
-{
-  "name": "mioTema",
-  "version": "1.0.0",
-  "description": "Descrizione del tema",
-  "author": "Nome Autore",
-  "email": "email@example.com",
-  "license": "ISC",
-  "screenshot": "screenshot.png",
-  "tags": ["responsive", "minimal", "bootstrap"],
-  "supportedHooks": [
-    "head", "header", "nav", "main",
-    "body", "aside", "footer", "script"
-  ],
-  "features": {
-    "assets": true,
-    "pluginCustomization": true,
-    "responsive": true
+```javascript
+// In index.js
+const themeSys = new themeSys(ital8Conf, pluginSys);
+```
+
+### 2.3 Disponibilità Globale
+
+L'istanza `themeSys` è disponibile:
+
+**Nelle pagine EJS** tramite `passData`:
+```ejs
+<%- passData.themeSys.getThemePartPath('head.ejs') %>
+```
+
+**Nei plugin:**
+```javascript
+// Passato come parametro
+getRouteArray(router, pluginSys, pathPluginFolder) {
+  // themeSys accessibile tramite ctx.state o passData
+}
+```
+
+---
+
+## 3. Flusso di Inizializzazione
+
+### 3.1 Sequenza di Avvio
+
+```
+1. index.js carica ital8-conf.json
+   ↓
+2. Inizializza pluginSys
+   ↓
+3. Carica tutti i plugin attivi
+   ↓
+4. Istanzia themeSys(ital8Conf, pluginSys)
+   ↓
+5. themeSys.constructor() esegue:
+   a. Valida tema pubblico (activeTheme)
+   b. Fallback a "default" se non valido
+   c. Check dipendenze tema pubblico
+   d. Valida tema admin (adminActiveTheme)
+   e. Fallback a "default" se non valido
+   f. Check dipendenze tema admin
+   ↓
+6. Setup static servers per asset
+   ↓
+7. Server HTTP avviato
+```
+
+### 3.2 Constructor - Codice Dettagliato
+
+```javascript
+constructor(theItal8Conf, thePluginSys = null) {
+  this.ital8Conf = theItal8Conf;
+  this.pluginSys = thePluginSys;
+
+  // ============================================
+  // TEMA PUBBLICO
+  // ============================================
+
+  // Valida tema pubblico
+  const publicValidation = this.validateTheme(this.ital8Conf.activeTheme);
+
+  if (!publicValidation.valid) {
+    console.warn(`[themeSys] Tema pubblico '${this.ital8Conf.activeTheme}' non valido: ${publicValidation.error}`);
+    console.warn('[themeSys] Fallback al tema "default"');
+    this.ital8Conf.activeTheme = 'default';
+  } else {
+    console.log(`[themeSys] Tema pubblico '${this.ital8Conf.activeTheme}' caricato correttamente`);
+  }
+
+  // Controlla dipendenze del tema pubblico
+  if (this.pluginSys) {
+    const publicDeps = this.checkDependencies(this.ital8Conf.activeTheme);
+    if (!publicDeps.satisfied) {
+      console.warn(`[themeSys] Dipendenze tema pubblico non soddisfatte: ${publicDeps.errors.join(', ')}`);
+      // Soft fail: tema caricato comunque, ma con warning
+    }
+  }
+
+  // ============================================
+  // TEMA ADMIN
+  // ============================================
+
+  // Valida tema admin
+  const adminValidation = this.validateTheme(this.ital8Conf.adminActiveTheme);
+
+  if (!adminValidation.valid) {
+    console.warn(`[themeSys] Tema admin '${this.ital8Conf.adminActiveTheme}' non valido: ${adminValidation.error}`);
+    console.warn('[themeSys] Fallback al tema "default"');
+    this.ital8Conf.adminActiveTheme = 'default';
+  } else {
+    console.log(`[themeSys] Tema admin '${this.ital8Conf.adminActiveTheme}' caricato correttamente`);
+  }
+
+  // Controlla dipendenze del tema admin (se diverso da pubblico)
+  if (this.pluginSys && this.ital8Conf.adminActiveTheme !== this.ital8Conf.activeTheme) {
+    const adminDeps = this.checkDependencies(this.ital8Conf.adminActiveTheme);
+    if (!adminDeps.satisfied) {
+      console.warn(`[themeSys] Dipendenze tema admin non soddisfatte: ${adminDeps.errors.join(', ')}`);
+    }
   }
 }
 ```
 
-## 4. Partials e Hook
+### 3.3 Output Console Tipico
 
-I partials sono componenti riutilizzabili. Ogni partial puo contenere hook che permettono ai plugin di iniettare contenuto.
-
-### head.ejs
-
-```ejs
-<!DOCTYPE html>
-<html lang="it">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Titolo Pagina</title>
-    <%- passData.pluginSys.hookPage("head", passData); %>
-</head>
+```
+[themeSys] Tema pubblico 'default' caricato correttamente
+[themeSys] Tema admin 'default' caricato correttamente
 ```
 
-### header.ejs
+O in caso di errore:
 
-```ejs
-<body>
-<%- passData.pluginSys.hookPage("header", passData); %>
-<%- include('nav.ejs') %>
-<%- include('main.ejs') %>
-<%- include('aside.ejs') %>
+```
+[themeSys] Tema pubblico 'myTheme' non valido: Partial 'head.ejs' mancante nel tema 'myTheme'
+[themeSys] Fallback al tema "default"
+[themeSys] Tema pubblico 'default' caricato correttamente
+[themeSys] Dipendenze tema pubblico non soddisfatte: Plugin 'bootstrap' richiesto ma non attivo
 ```
 
-### footer.ejs
+---
 
-```ejs
-<footer>
-    <%- passData.pluginSys.hookPage("footer", passData); %>
-</footer>
-<%- passData.pluginSys.hookPage("script", passData); %>
-</body>
-</html>
-```
+## 4. Validazione Temi
 
-### Tabella Hook Disponibili
+### 4.1 Metodo `validateTheme(themeName)`
 
-| Hook | Posizione | Uso Tipico |
-|------|-----------|------------|
-| `head` | Dentro `<head>` | CSS, meta tag, favicon |
-| `header` | Dopo `<body>` | Banner, notifiche |
-| `nav` | Dentro `<nav>` | Menu items |
-| `main` | Dentro `<main>` | Contenuto principale |
-| `body` | Dopo `<main>` | Widget, sezioni extra |
-| `aside` | Dentro `<aside>` | Sidebar widgets |
-| `footer` | Dentro `<footer>` | Copyright, link |
-| `script` | Prima di `</body>` | File JavaScript |
+Verifica che un tema sia valido prima del caricamento.
 
-## 5. Creazione di un Nuovo Tema
+```javascript
+validateTheme(themeName) {
+  const themePath = path.join(__dirname, '../themes', themeName);
 
-### Passo 1: Creare la Struttura
+  // 1. Controlla esistenza directory del tema
+  if (!fs.existsSync(themePath)) {
+    return { valid: false, error: `Directory del tema '${themeName}' non trovata` };
+  }
 
-```bash
-mkdir -p themes/mioTema/views
-mkdir -p themes/mioTema/assets/css
-mkdir -p themes/mioTema/assets/js
-```
+  // 2. Controlla se è effettivamente una directory
+  const stats = fs.statSync(themePath);
+  if (!stats.isDirectory()) {
+    return { valid: false, error: `'${themeName}' non è una directory` };
+  }
 
-### Passo 2: Creare config-theme.json
+  // 3. Controlla esistenza config-theme.json
+  const configPath = path.join(themePath, 'config-theme.json');
+  if (!fs.existsSync(configPath)) {
+    return { valid: false, error: `config-theme.json mancante nel tema '${themeName}'` };
+  }
 
-```json
-{
-  "active": 1,
-  "isInstalled": 1,
-  "weight": 0,
-  "wwwCustomPath": 1,
-  "pluginDependency": {
-    "bootstrap": "^1.0.0"
-  },
-  "nodeModuleDependency": {}
+  // 4. Controlla esistenza directory views
+  const viewsPath = path.join(themePath, 'views');
+  if (!fs.existsSync(viewsPath)) {
+    return { valid: false, error: `Directory 'views' mancante nel tema '${themeName}'` };
+  }
+
+  // 5. Controlla partials obbligatori
+  const requiredPartials = ['head.ejs', 'header.ejs', 'footer.ejs'];
+  for (const partial of requiredPartials) {
+    const partialPath = path.join(viewsPath, partial);
+    if (!fs.existsSync(partialPath)) {
+      return { valid: false, error: `Partial '${partial}' mancante nel tema '${themeName}'` };
+    }
+  }
+
+  // Tutte le validazioni passate
+  return { valid: true, error: null };
 }
 ```
 
-### Passo 3: Creare description-theme.json
+### 4.2 Controlli Effettuati
 
-```json
-{
-  "name": "mioTema",
-  "version": "1.0.0",
-  "description": "Il mio tema personalizzato",
-  "author": "Il Tuo Nome",
-  "email": "tua@email.com",
-  "license": "ISC",
-  "tags": ["custom"],
-  "supportedHooks": ["head", "header", "footer", "script"]
-}
-```
+| # | Check | Errore se Manca |
+|---|-------|-----------------|
+| 1 | Directory tema esiste | `Directory del tema 'X' non trovata` |
+| 2 | È una directory (non file) | `'X' non è una directory` |
+| 3 | `config-theme.json` presente | `config-theme.json mancante` |
+| 4 | Directory `views/` presente | `Directory 'views' mancante` |
+| 5 | `views/head.ejs` presente | `Partial 'head.ejs' mancante` |
+| 6 | `views/header.ejs` presente | `Partial 'header.ejs' mancante` |
+| 7 | `views/footer.ejs` presente | `Partial 'footer.ejs' mancante` |
 
-### Passo 4: Creare i Partials Obbligatori
+### 4.3 Fallback Automatico
 
-**views/head.ejs:**
-```ejs
-<!DOCTYPE html>
-<html lang="it">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Il Mio Sito</title>
-    <%- passData.pluginSys.hookPage("head", passData); %>
-</head>
-```
+Se un tema non passa la validazione:
 
-**views/header.ejs:**
-```ejs
-<body>
-<%- passData.pluginSys.hookPage("header", passData); %>
-```
+1. **Warning** in console con dettaglio errore
+2. **Fallback** automatico a tema "default"
+3. **Continua** l'esecuzione (no crash)
 
-**views/footer.ejs:**
-```ejs
-<footer>
-    <p>Copyright 2025 Il Mio Sito</p>
-    <%- passData.pluginSys.hookPage("footer", passData); %>
-</footer>
-<%- passData.pluginSys.hookPage("script", passData); %>
-</body>
-</html>
-```
+**Comportamento soft-fail:** Anche se il tema configurato è invalido, il sistema non si blocca ma usa il tema di default.
 
-### Passo 5: Attivare il Tema
+---
 
-In `ital8-conf.json`:
+## 5. Sistema Dipendenze
 
-```json
-{
-  "activeTheme": "mioTema"
-}
-```
+### 5.1 Tipi di Dipendenze
 
-### Passo 6: Riavviare il Server
+I temi possono dichiarare dipendenze di due tipi:
 
-```bash
-npm start
-```
-
-## 6. Asset del Tema
-
-Gli asset del tema sono serviti automaticamente dalla cartella `assets/` tramite l'URL `/theme-assets/`.
-
-### Struttura
-
-```
-themes/mioTema/assets/
-  css/
-    theme.css
-  js/
-    theme.js
-  images/
-    logo.png
-```
-
-### Utilizzo nei Template
-
-```ejs
-<!-- CSS -->
-<link rel="stylesheet" href="/theme-assets/css/theme.css">
-
-<!-- JavaScript -->
-<script src="/theme-assets/js/theme.js"></script>
-
-<!-- Immagini -->
-<img src="/theme-assets/images/logo.png" alt="Logo">
-```
-
-### Metodo Helper
-
-```ejs
-<link rel="stylesheet" href="<%= passData.themeSys.getAssetUrl('css/theme.css') %>">
-```
-
-## 7. Personalizzazione Endpoint Plugin
-
-Permette di sovrascrivere l'aspetto degli endpoint dei plugin senza modificare il codice del plugin.
-
-### Struttura
-
-```
-themes/mioTema/plugins/
-  simpleAccess/
-    login/
-      template.ejs
-      style.css
-```
-
-### Come Funziona
-
-1. Quando il plugin carica un template, il sistema controlla se esiste una versione nel tema
-2. Se esiste, usa il template del tema invece di quello di default
-3. Il CSS viene passato come variabile `customCss` al template
-
-### Esempio: Personalizzare la Pagina di Login
-
-**themes/mioTema/plugins/simpleAccess/login/template.ejs:**
-```ejs
-<!DOCTYPE html>
-<html lang="it">
-<head>
-    <title>Login Personalizzato</title>
-    <%- bootstrapCss %>
-    <style><%- customCss || '' %></style>
-</head>
-<body>
-    <%- apiPrefix %>
-
-    <div class="login-container">
-        <h1>Benvenuto</h1>
-        <form method="POST">
-            <input type="hidden" name="referrerTo" value="<%- referrerTo %>">
-            <input type="text" name="username" placeholder="Username" required>
-            <input type="password" name="password" placeholder="Password" required>
-            <button type="submit">Accedi</button>
-        </form>
-    </div>
-
-    <%- bootstrapJs %>
-</body>
-</html>
-```
-
-### Variabili Disponibili
-
-Per simpleAccess login/logout:
-- `bootstrapCss` - Link CSS Bootstrap
-- `bootstrapJs` - Script JS Bootstrap
-- `apiPrefix` - Script per variabile apiPrefix client-side
-- `referrerTo` - URL di ritorno
-- `customCss` - Contenuto del file style.css
-
-## 8. Sistema delle Dipendenze
-
-Il sistema verifica all'avvio che le dipendenze del tema siano soddisfatte.
-
-### Definire Dipendenze
-
-In `config-theme.json`:
+**1. Plugin Dependencies** - Plugin richiesti
 
 ```json
 {
   "pluginDependency": {
     "bootstrap": "^1.0.0",
     "simpleAccess": ">=1.0.0"
-  },
-  "nodeModuleDependency": {
-    "ejs": "^3.0.0"
   }
 }
 ```
 
-### Sintassi Versioni (Semver)
+**2. Node Module Dependencies** - Moduli NPM richiesti
 
-- `^1.0.0` - Compatibile con 1.x.x (minor e patch)
-- `~1.0.0` - Compatibile con 1.0.x (solo patch)
-- `>=1.0.0` - Versione 1.0.0 o superiore
-- `*` - Qualsiasi versione
-
-### Comportamento
-
-All'avvio, se le dipendenze non sono soddisfatte:
-- Il sistema mostra un warning nella console
-- Il tema viene comunque caricato (soft fail)
-
-## 9. API di themeSys
-
-### Metodi per Path dei Partials
-
-```javascript
-// Path partial per sito pubblico
-themeSys.getThemePartPath('head.ejs')
-
-// Path partial per admin
-themeSys.getAdminThemePartPath('footer.ejs')
+```json
+{
+  "nodeModuleDependency": {
+    "ejs": "^3.0.0",
+    "bootstrap": "^5.3.0"
+  }
+}
 ```
 
-### Metodi per Asset
+### 5.2 Metodo `checkDependencies(themeName)`
+
+Verifica che tutte le dipendenze siano soddisfatte.
 
 ```javascript
-// URL asset
-themeSys.getAssetUrl('css/theme.css')
+checkDependencies(themeName) {
+  const errors = [];
+  const themePath = path.join(__dirname, '../themes', themeName);
+  const configPath = path.join(themePath, 'config-theme.json');
 
-// Path assoluto cartella assets
-themeSys.getAssetsPath()
+  // Leggi configurazione tema
+  let config;
+  try {
+    config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch (error) {
+    return {
+      satisfied: false,
+      errors: [`Impossibile leggere config-theme.json: ${error.message}`]
+    };
+  }
 
-// Verifica esistenza assets
-themeSys.hasAssets()
+  // ======================================
+  // CONTROLLA DIPENDENZE PLUGIN
+  // ======================================
+  const pluginDeps = config.pluginDependency || {};
+
+  for (const [pluginName, versionRequired] of Object.entries(pluginDeps)) {
+    // Verifica che il plugin sia attivo
+    if (!this.pluginSys.isPluginActive(pluginName)) {
+      errors.push(`Plugin '${pluginName}' richiesto ma non attivo`);
+      continue;
+    }
+
+    // Verifica versione se specificata
+    if (versionRequired && versionRequired !== '*') {
+      const installedVersion = this.pluginSys.getPluginVersion(pluginName);
+
+      if (installedVersion && !semver.satisfies(installedVersion, versionRequired)) {
+        errors.push(
+          `Plugin '${pluginName}' versione ${installedVersion} ` +
+          `non soddisfa requisito ${versionRequired}`
+        );
+      }
+    }
+  }
+
+  // ======================================
+  // CONTROLLA DIPENDENZE MODULI NPM
+  // ======================================
+  const nodeDeps = config.nodeModuleDependency || {};
+
+  for (const [moduleName, versionRequired] of Object.entries(nodeDeps)) {
+    try {
+      // Verifica che il modulo sia installato
+      const modulePath = require.resolve(moduleName);
+
+      // Verifica versione se specificata
+      if (versionRequired && versionRequired !== '*') {
+        try {
+          const packageJsonPath = path.join(
+            path.dirname(modulePath),
+            '..',
+            'package.json'
+          );
+          const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+          const installedVersion = packageJson.version;
+
+          if (installedVersion && !semver.satisfies(installedVersion, versionRequired)) {
+            errors.push(
+              `Modulo NPM '${moduleName}' versione ${installedVersion} ` +
+              `non soddisfa requisito ${versionRequired}`
+            );
+          }
+        } catch {
+          // Se non riesce a leggere la versione, considera comunque il modulo installato
+          console.warn(`[themeSys] Impossibile verificare versione del modulo '${moduleName}'`);
+        }
+      }
+    } catch {
+      errors.push(`Modulo NPM '${moduleName}' richiesto ma non installato`);
+    }
+  }
+
+  return {
+    satisfied: errors.length === 0,
+    errors: errors
+  };
+}
 ```
 
-### Metodi per Metadati
+### 5.3 Semantic Versioning
 
-```javascript
-// Metadati di un tema
-themeSys.getThemeDescription('default')
+Le versioni seguono lo standard **semver**:
 
-// Versione tema
-themeSys.getThemeVersion('default')
+| Sintassi | Significato | Esempio |
+|----------|-------------|---------|
+| `^1.0.0` | Compatibile con 1.x.x (minor e patch) | `1.2.5` ✅ `2.0.0` ❌ |
+| `~1.0.0` | Compatibile con 1.0.x (solo patch) | `1.0.9` ✅ `1.1.0` ❌ |
+| `>=1.0.0` | Versione 1.0.0 o superiore | `1.5.0` ✅ `2.0.0` ✅ |
+| `*` | Qualsiasi versione | Qualsiasi ✅ |
 
-// Metadati tema attivo
-themeSys.getActiveThemeDescription()
-themeSys.getAdminThemeDescription()
+### 5.4 Comportamento
 
-// Verifica supporto hook
-themeSys.themeSupportsHook('default', 'aside')
+**Dipendenze non soddisfatte:**
+- **Warning** in console
+- **Tema caricato** comunque (soft fail)
+- **Possibili malfunzionamenti** se dipendenze critiche
 
-// Feature del tema
-themeSys.getThemeFeatures('default')
-```
-
-### Metodi per Dipendenze
-
-```javascript
-// Tutte le dipendenze
-themeSys.getThemeDependencies('default')
-
-// Verifica se tema richiede plugin
-themeSys.themeRequiresPlugin('default', 'bootstrap')
-
-// Dipendenze plugin del tema attivo
-themeSys.getActiveThemePluginDependencies()
-
-// Verifica dipendenze soddisfatte
-themeSys.checkActiveThemeDependencies()
-```
-
-### Metodi per Personalizzazione Plugin
-
-```javascript
-// Verifica esistenza template custom
-themeSys.hasCustomPluginTemplate('simpleAccess', 'login')
-
-// Path template custom (o null)
-themeSys.getCustomPluginTemplatePath('simpleAccess', 'login', 'template.ejs')
-
-// Risolvi path (custom o default)
-themeSys.resolvePluginTemplatePath('simpleAccess', 'login', defaultPath)
-
-// Leggi CSS custom
-themeSys.getPluginCustomCss('simpleAccess', 'login')
-
-// Lista plugin personalizzati nel tema
-themeSys.getCustomizedPlugins()
-```
-
-### Metodi per Validazione
-
-```javascript
-// Valida un tema
-themeSys.validateTheme('mioTema')
-
-// Lista temi disponibili con stato
-themeSys.getAvailableThemes()
-
-// Controlla dipendenze
-themeSys.checkDependencies('mioTema')
-```
-
-## Checklist Creazione Tema
-
-- [ ] Creare directory `themes/nomeTema/`
-- [ ] Creare `config-theme.json`
-- [ ] Creare `description-theme.json`
-- [ ] Creare `views/head.ejs` con hook "head"
-- [ ] Creare `views/header.ejs` con hook "header"
-- [ ] Creare `views/footer.ejs` con hook "footer" e "script"
-- [ ] (Opzionale) Creare `views/nav.ejs`, `views/main.ejs`, `views/aside.ejs`
-- [ ] (Opzionale) Creare cartella `assets/` con CSS/JS
-- [ ] (Opzionale) Creare cartella `plugins/` per override endpoint
-- [ ] Attivare in `ital8-conf.json`
-- [ ] Riavviare server e testare
+**Raccomandazione:** Installare sempre tutte le dipendenze prima di attivare un tema.
 
 ---
 
-**Versione Documento:** 1.0.0
-**Ultima Modifica:** 2025-11-19
-**Autore:** Claude AI Assistant
+## 6. Gestione Partials
+
+### 6.1 Metodo `getThemePartPath(partName)`
+
+Risolve il path assoluto di un partial del tema pubblico.
+
+```javascript
+getThemePartPath(partName) {
+  return `${__dirname}/../themes/${this.ital8Conf.activeTheme}/views/${partName}`;
+}
+```
+
+**Esempio:**
+```javascript
+themeSys.getThemePartPath('head.ejs')
+// Ritorna: /home/user/ital8cms/themes/default/views/head.ejs
+```
+
+### 6.2 Metodo `getAdminThemePartPath(partName)`
+
+Risolve il path assoluto di un partial del tema admin.
+
+```javascript
+getAdminThemePartPath(partName) {
+  return `${__dirname}/../themes/${this.ital8Conf.adminActiveTheme}/views/${partName}`;
+}
+```
+
+**Esempio:**
+```javascript
+themeSys.getAdminThemePartPath('footer.ejs')
+// Ritorna: /home/user/ital8cms/themes/default/views/footer.ejs
+```
+
+### 6.3 Utilizzo nei Template EJS
+
+**Nelle pagine pubbliche** (es: `/www/index.ejs`):
+
+```ejs
+<%- include(getThemePartPath('head', passData)) %>
+<%- include(getThemePartPath('header', passData)) %>
+<!-- contenuto -->
+<%- include(getThemePartPath('footer', passData)) %>
+```
+
+**Nelle pagine admin** (es: `/core/admin/webPages/index.ejs`):
+
+```ejs
+<%- include(getAdminThemePartPath('head', passData)) %>
+<%- include(getAdminThemePartPath('header', passData)) %>
+<!-- contenuto admin -->
+<%- include(getAdminThemePartPath('footer', passData)) %>
+```
+
+### 6.4 Helper Functions Globali
+
+Le funzioni `getThemePartPath` e `getAdminThemePartPath` sono rese disponibili globalmente tramite passData:
+
+```javascript
+// In index.js
+const passData = {
+  themeSys: themeSys,
+  // ...
+};
+
+// Funzioni helper globali per EJS
+global.getThemePartPath = (partName, passData) => {
+  return passData.themeSys.getThemePartPath(partName);
+};
+
+global.getAdminThemePartPath = (partName, passData) => {
+  return passData.themeSys.getAdminThemePartPath(partName);
+};
+```
+
+---
+
+## 7. Asset Management
+
+### 7.1 Cartella Asset del Tema
+
+Ogni tema può avere una cartella `theme-resources/` contenente:
+
+```
+theme-resources/
+├── css/
+│   ├── theme.css
+│   └── components.css
+├── js/
+│   └── theme.js
+└── images/
+    └── logo.png
+```
+
+### 7.2 Configurazione Static Server
+
+In `index.js`, gli asset vengono serviti tramite `koa-classic-server`:
+
+```javascript
+// Serve theme assets
+if (themeSys.hasAssets()) {
+  app.use(koaClassicServer(
+    themeSys.getAssetsPath(),
+    {
+      prefix: '/theme-assets',
+      index: false,
+      hidden: false
+    }
+  ));
+  console.log('[Server] Theme assets serviti su /theme-assets');
+}
+```
+
+### 7.3 Metodi Asset
+
+#### `getAssetsPath()`
+
+Restituisce il path assoluto della cartella asset del tema attivo.
+
+```javascript
+getAssetsPath() {
+  return path.join(__dirname, '../themes', this.ital8Conf.activeTheme, 'theme-resources');
+}
+```
+
+#### `hasAssets()`
+
+Verifica se la cartella asset esiste.
+
+```javascript
+hasAssets() {
+  const assetsPath = this.getAssetsPath();
+  return fs.existsSync(assetsPath) && fs.statSync(assetsPath).isDirectory();
+}
+```
+
+#### `getAssetUrl(assetPath)`
+
+Restituisce l'URL pubblico di un asset.
+
+```javascript
+getAssetUrl(assetPath) {
+  // Rimuove eventuali slash iniziali dal path
+  const cleanPath = assetPath.replace(/^\/+/, '');
+  return `/theme-assets/${cleanPath}`;
+}
+```
+
+**Esempio:**
+```javascript
+themeSys.getAssetUrl('css/theme.css')
+// Ritorna: /theme-assets/css/theme.css
+```
+
+### 7.4 Utilizzo nei Template
+
+```ejs
+<!-- Metodo 1: URL diretto -->
+<link rel="stylesheet" href="/theme-assets/css/theme.css">
+<script src="/theme-assets/js/theme.js"></script>
+<img src="/theme-assets/images/logo.png" alt="Logo">
+
+<!-- Metodo 2: Helper getAssetUrl() -->
+<link rel="stylesheet" href="<%= passData.themeSys.getAssetUrl('css/theme.css') %>">
+```
+
+---
+
+## 8. Plugin Endpoint Customization
+
+### 8.1 Concetto
+
+Permette ai temi di **sovrascrivere l'aspetto degli endpoint dei plugin** senza modificare il codice del plugin.
+
+**Struttura:**
+```
+themes/mioTema/
+└── plugins-endpoints-markup/
+    └── simpleAccess/           # Nome plugin
+        └── login/              # Nome endpoint
+            ├── template.ejs    # Template custom
+            └── style.css       # CSS custom
+```
+
+### 8.2 Metodi Principali
+
+#### `hasCustomPluginTemplate(pluginName, endpointName, templateFile, isAdmin)`
+
+Verifica se esiste un template personalizzato.
+
+```javascript
+hasCustomPluginTemplate(pluginName, endpointName, templateFile = 'template.ejs', isAdmin = false) {
+  const customPath = this.getCustomPluginTemplatePath(pluginName, endpointName, templateFile, isAdmin);
+  return customPath !== null;
+}
+```
+
+#### `getCustomPluginTemplatePath(pluginName, endpointName, templateFile, isAdmin)`
+
+Restituisce il path del template custom se esiste, altrimenti `null`.
+
+```javascript
+getCustomPluginTemplatePath(pluginName, endpointName, templateFile = 'template.ejs', isAdmin = false) {
+  const themeName = isAdmin ? this.ital8Conf.adminActiveTheme : this.ital8Conf.activeTheme;
+  const customPath = path.join(
+    __dirname,
+    '../themes',
+    themeName,
+    'plugins-endpoints-markup',
+    pluginName,
+    endpointName,
+    templateFile
+  );
+
+  if (fs.existsSync(customPath)) {
+    return customPath;
+  }
+  return null;
+}
+```
+
+#### `resolvePluginTemplatePath(pluginName, endpointName, defaultPath, templateFile, isAdmin)`
+
+Risolve quale template usare: custom o default.
+
+```javascript
+resolvePluginTemplatePath(pluginName, endpointName, defaultPath, templateFile = 'template.ejs', isAdmin = false) {
+  const customPath = this.getCustomPluginTemplatePath(pluginName, endpointName, templateFile, isAdmin);
+
+  if (customPath) {
+    console.log(`[themeSys] Usando template personalizzato per ${pluginName}/${endpointName}: ${customPath}`);
+    return customPath;
+  }
+
+  return defaultPath;
+}
+```
+
+### 8.3 Flusso di Risoluzione Template
+
+```
+Plugin carica endpoint (es: /api/simpleAccess/login)
+         ↓
+Plugin chiama themeSys.resolvePluginTemplatePath()
+         ↓
+         ┌─────────────────────────────────┐
+         │ Esiste template custom?         │
+         └─────────────────────────────────┘
+                ↓                ↓
+              Sì                No
+                ↓                ↓
+    themes/tema/plugins-     plugins/plugin/
+    endpoints-markup/...     defaultTemplate.ejs
+                ↓                ↓
+         Template renderizzato
+```
+
+### 8.4 Esempio di Integrazione nel Plugin
+
+```javascript
+// In plugins/simpleAccess/main.js
+
+getRouteArray(router, pluginSys, pathPluginFolder) {
+  const themeSys = pluginSys.themeSys; // Riferimento a themeSys
+
+  return [
+    {
+      method: 'get',
+      path: '/login',
+      func: async (ctx) => {
+        // Path di default del plugin
+        const defaultTemplatePath = path.join(pathPluginFolder, 'templates/login.ejs');
+
+        // Risolve: custom o default
+        const templatePath = themeSys.resolvePluginTemplatePath(
+          'simpleAccess',   // Nome plugin
+          'login',          // Nome endpoint
+          defaultTemplatePath,
+          'template.ejs',
+          false             // Non admin
+        );
+
+        // Carica CSS custom se esiste
+        const customCss = themeSys.getPluginCustomCss('simpleAccess', 'login');
+
+        // Render template
+        ctx.body = await ejs.renderFile(templatePath, {
+          customCss: customCss,
+          // altre variabili...
+        });
+      }
+    }
+  ];
+}
+```
+
+### 8.5 Metodi CSS Custom
+
+#### `getPluginCustomCss(pluginName, endpointName, cssFile, isAdmin)`
+
+Legge il contenuto di `style.css` del tema per un endpoint.
+
+```javascript
+getPluginCustomCss(pluginName, endpointName, cssFile = 'style.css', isAdmin = false) {
+  const cssPath = this.getCustomPluginAssetPath(pluginName, endpointName, cssFile, isAdmin);
+
+  if (cssPath) {
+    try {
+      return fs.readFileSync(cssPath, 'utf8');
+    } catch (error) {
+      console.warn(`[themeSys] Errore lettura CSS personalizzato: ${error.message}`);
+      return '';
+    }
+  }
+  return '';
+}
+```
+
+**Utilizzo:**
+```javascript
+const customCss = themeSys.getPluginCustomCss('simpleAccess', 'login');
+// Ritorna contenuto di themes/tema/plugins-endpoints-markup/simpleAccess/login/style.css
+```
+
+---
+
+## 9. API Reference
+
+### 9.1 Metodi Path Partials
+
+| Metodo | Parametri | Ritorno | Descrizione |
+|--------|-----------|---------|-------------|
+| `getThemePartPath(partName)` | `partName`: string | string | Path assoluto partial tema pubblico |
+| `getAdminThemePartPath(partName)` | `partName`: string | string | Path assoluto partial tema admin |
+
+### 9.2 Metodi Validazione
+
+| Metodo | Parametri | Ritorno | Descrizione |
+|--------|-----------|---------|-------------|
+| `validateTheme(themeName)` | `themeName`: string | `{valid: boolean, error: string\|null}` | Valida struttura tema |
+| `getAvailableThemes()` | - | Array | Lista temi disponibili con stato |
+
+### 9.3 Metodi Dipendenze
+
+| Metodo | Parametri | Ritorno | Descrizione |
+|--------|-----------|---------|-------------|
+| `checkDependencies(themeName)` | `themeName`: string | `{satisfied: boolean, errors: Array}` | Verifica dipendenze |
+| `getThemeDependencies(themeName)` | `themeName`: string | `{plugins: {}, nodeModules: {}}` | Tutte le dipendenze |
+| `themeRequiresPlugin(themeName, pluginName)` | `themeName`: string, `pluginName`: string | boolean\|string | Versione richiesta o false |
+| `getActiveThemePluginDependencies()` | - | object | Dipendenze plugin tema attivo |
+| `checkActiveThemeDependencies()` | - | `{satisfied: boolean, errors: Array}` | Verifica dipendenze tema attivo |
+
+### 9.4 Metodi Metadati
+
+| Metodo | Parametri | Ritorno | Descrizione |
+|--------|-----------|---------|-------------|
+| `getThemeDescription(themeName)` | `themeName`: string | object\|null | Metadati da description-theme.json |
+| `getThemeVersion(themeName)` | `themeName`: string | string\|null | Versione tema |
+| `getActiveThemeDescription()` | - | object\|null | Metadati tema pubblico attivo |
+| `getAdminThemeDescription()` | - | object\|null | Metadati tema admin attivo |
+| `themeSupportsHook(themeName, hookName)` | `themeName`: string, `hookName`: string | boolean | Verifica supporto hook |
+| `getThemeFeatures(themeName)` | `themeName`: string | object | Feature del tema |
+
+### 9.5 Metodi Asset
+
+| Metodo | Parametri | Ritorno | Descrizione |
+|--------|-----------|---------|-------------|
+| `getAssetUrl(assetPath)` | `assetPath`: string | string | URL pubblico asset |
+| `getAssetsPath()` | - | string | Path assoluto cartella asset |
+| `hasAssets()` | - | boolean | Verifica esistenza cartella asset |
+
+### 9.6 Metodi Plugin Customization
+
+| Metodo | Parametri | Ritorno | Descrizione |
+|--------|-----------|---------|-------------|
+| `hasCustomPluginTemplate(pluginName, endpointName, templateFile, isAdmin)` | 4 params | boolean | Verifica esistenza template custom |
+| `getCustomPluginTemplatePath(pluginName, endpointName, templateFile, isAdmin)` | 4 params | string\|null | Path template custom o null |
+| `resolvePluginTemplatePath(pluginName, endpointName, defaultPath, templateFile, isAdmin)` | 5 params | string | Risolve quale template usare |
+| `hasCustomPluginAsset(pluginName, endpointName, assetFile, isAdmin)` | 4 params | boolean | Verifica esistenza asset custom |
+| `getCustomPluginAssetPath(pluginName, endpointName, assetFile, isAdmin)` | 4 params | string\|null | Path asset custom o null |
+| `getPluginAssetUrl(pluginName, endpointName, assetFile)` | 3 params | string | URL asset custom |
+| `getPluginCustomCss(pluginName, endpointName, cssFile, isAdmin)` | 4 params | string | Contenuto CSS custom |
+| `getCustomizedPlugins(isAdmin)` | `isAdmin`: boolean | Array | Lista plugin customizzati nel tema |
+
+---
+
+## 10. Integrazione con pluginSys
+
+### 10.1 Dipendenza Circolare
+
+`themeSys` dipende da `pluginSys` per verificare dipendenze:
+
+```javascript
+constructor(theItal8Conf, thePluginSys = null) {
+  this.pluginSys = thePluginSys;
+
+  if (this.pluginSys) {
+    // Check dipendenze plugin
+    const deps = this.checkDependencies(themeName);
+  }
+}
+```
+
+**Nota:** `pluginSys` è opzionale nel constructor. Se `null`, il check dipendenze plugin viene saltato.
+
+### 10.2 Metodi pluginSys Utilizzati
+
+| Metodo | Scopo |
+|--------|-------|
+| `isPluginActive(pluginName)` | Verifica se plugin è attivo |
+| `getPluginVersion(pluginName)` | Ottiene versione plugin |
+
+### 10.3 Accesso a themeSys dai Plugin
+
+I plugin possono accedere a themeSys tramite `passData` o tramite riferimento diretto:
+
+```javascript
+// Nei plugin
+getRouteArray(router, pluginSys, pathPluginFolder) {
+  // Opzione 1: Tramite passData nelle route
+  return [{
+    method: 'get',
+    path: '/example',
+    func: async (ctx) => {
+      const themeSys = ctx.state.passData.themeSys;
+      // Usa themeSys...
+    }
+  }];
+
+  // Opzione 2: Referenza diretta (se esposta)
+  const themeSys = pluginSys.themeSys;
+}
+```
+
+---
+
+## 11. Esempi di Utilizzo
+
+### 11.1 Creare un Nuovo Tema con Validazione
+
+```javascript
+// 1. Crea struttura tema
+const themePath = './themes/myTheme';
+fs.mkdirSync(`${themePath}/views`, { recursive: true });
+fs.mkdirSync(`${themePath}/templates`);
+
+// 2. Crea file obbligatori
+fs.writeFileSync(`${themePath}/config-theme.json`, JSON.stringify({
+  active: 1,
+  isInstalled: 1,
+  weight: 0,
+  followsGlobalStandard: "1.0",
+  wwwCustomPath: 0,
+  pluginDependency: {},
+  nodeModuleDependency: {}
+}, null, 2));
+
+fs.writeFileSync(`${themePath}/description-theme.json`, JSON.stringify({
+  name: "myTheme",
+  version: "1.0.0",
+  description: "My custom theme"
+}, null, 2));
+
+// 3. Crea partials obbligatori
+fs.writeFileSync(`${themePath}/views/head.ejs`, '<!DOCTYPE html>...');
+fs.writeFileSync(`${themePath}/views/header.ejs`, '<body>...');
+fs.writeFileSync(`${themePath}/views/footer.ejs`, '</body></html>');
+
+// 4. Crea almeno un template
+fs.writeFileSync(`${themePath}/templates/page.template.ejs`,
+  '<%- include(getThemePartPath("head", passData)) %>...');
+
+// 5. Valida tema
+const validation = themeSys.validateTheme('myTheme');
+if (validation.valid) {
+  console.log('Tema valido!');
+} else {
+  console.error('Tema non valido:', validation.error);
+}
+```
+
+### 11.2 Verificare Dipendenze Prima di Attivare un Tema
+
+```javascript
+// In un'interfaccia admin per cambio tema
+
+async function activateTheme(themeName) {
+  const fs = require('fs');
+  const path = require('path');
+
+  // 1. Valida tema
+  const validation = themeSys.validateTheme(themeName);
+  if (!validation.valid) {
+    return { success: false, error: `Tema non valido: ${validation.error}` };
+  }
+
+  // 2. Verifica dipendenze
+  const deps = themeSys.checkDependencies(themeName);
+  if (!deps.satisfied) {
+    return {
+      success: false,
+      error: 'Dipendenze non soddisfatte',
+      details: deps.errors
+    };
+  }
+
+  // 3. Leggi configurazione tema
+  const themeConfigPath = path.join(__dirname, 'themes', themeName, 'config-theme.json');
+  const themeConfig = JSON.parse(fs.readFileSync(themeConfigPath, 'utf8'));
+
+  // 4. Gestisci wwwCustomPath
+  if (themeConfig.wwwCustomPath === 1) {
+    // Crea README.txt in /www/ root per avvisare del cambio location
+    const readmePath = path.join(__dirname, 'www', 'README.txt');
+    const readmeContent = `ATTENZIONE: Cartella www/ root non più utilizzata
+=================================================
+
+Il tema attualmente attivo utilizza una cartella www/ personalizzata.
+
+Tema attivo: ${themeName}
+Cartella pagine: themes/${themeName}/www/
+
+Tutte le pagine web create dall'admin si trovano in:
+/themes/${themeName}/www/
+
+Questa cartella (/www/ nella root del progetto) NON è più utilizzata
+finché rimane attivo un tema con wwwCustomPath: 1.
+
+Per tornare alla cartella /www/ root, attivare un tema con wwwCustomPath: 0.
+`;
+    fs.writeFileSync(readmePath, readmeContent, 'utf8');
+    console.log('[themeSys] Creato /www/README.txt - Pagine ora in themes/' + themeName + '/www/');
+  } else {
+    // Rimuovi README.txt se esiste (tema usa /www/ root)
+    const readmePath = path.join(__dirname, 'www', 'README.txt');
+    if (fs.existsSync(readmePath)) {
+      fs.unlinkSync(readmePath);
+      console.log('[themeSys] Rimosso /www/README.txt - Pagine tornano in /www/ root');
+    }
+  }
+
+  // 5. Attiva tema
+  ital8Conf.activeTheme = themeName;
+  fs.writeFileSync('./ital8-conf.json', JSON.stringify(ital8Conf, null, 2));
+
+  return { success: true, message: 'Tema attivato. Riavviare il server.' };
+}
+```
+
+### 11.3 Personalizzare Endpoint Plugin
+
+```javascript
+// Nel plugin simpleAccess
+
+getRouteArray(router, pluginSys, pathPluginFolder) {
+  const themeSys = pluginSys.themeSys;
+
+  return [{
+    method: 'get',
+    path: '/login',
+    func: async (ctx) => {
+      const defaultPath = path.join(pathPluginFolder, 'templates/login.ejs');
+
+      // Risolve template (custom o default)
+      const templatePath = themeSys.resolvePluginTemplatePath(
+        'simpleAccess',
+        'login',
+        defaultPath
+      );
+
+      // Carica CSS custom
+      const customCss = themeSys.getPluginCustomCss('simpleAccess', 'login');
+
+      // Render
+      ctx.body = await ejs.renderFile(templatePath, {
+        bootstrapCss: '<link...>',
+        bootstrapJs: '<script...>',
+        customCss: customCss,
+        referrerTo: ctx.query.referrerTo || '/'
+      });
+    }
+  }];
+}
+```
+
+### 11.4 Utilizzare Asset del Tema
+
+```ejs
+<!-- In views/head.ejs -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Il Mio Sito</title>
+
+    <!-- CSS del tema -->
+    <link rel="stylesheet" href="<%= passData.themeSys.getAssetUrl('css/theme.css') %>">
+    <link rel="stylesheet" href="<%= passData.themeSys.getAssetUrl('css/responsive.css') %>">
+
+    <!-- Hook plugin -->
+    <%- passData.pluginSys.hookPage("head", passData) %>
+</head>
+```
+
+```ejs
+<!-- In views/footer.ejs -->
+    <footer>
+        <img src="<%= passData.themeSys.getAssetUrl('images/logo.png') %>" alt="Logo">
+        <p>&copy; 2025 Il Mio Sito</p>
+    </footer>
+
+    <!-- JavaScript tema -->
+    <script src="<%= passData.themeSys.getAssetUrl('js/theme.js') %>"></script>
+
+    <!-- Hook plugin -->
+    <%- passData.pluginSys.hookPage("script", passData) %>
+</body>
+</html>
+```
+
+### 11.5 Ottenere Lista Temi Disponibili
+
+```javascript
+// In un endpoint admin
+
+{
+  method: 'get',
+  path: '/themes/list',
+  func: async (ctx) => {
+    const themes = themeSys.getAvailableThemes();
+
+    /* Ritorna:
+    [
+      {
+        name: "default",
+        valid: true,
+        error: null,
+        isActive: true,
+        isAdminActive: true,
+        description: { name: "default", version: "1.0.0", ... }
+      },
+      {
+        name: "myTheme",
+        valid: false,
+        error: "Partial 'head.ejs' mancante nel tema 'myTheme'",
+        isActive: false,
+        isAdminActive: false,
+        description: null
+      }
+    ]
+    */
+
+    ctx.body = themes;
+  }
+}
+```
+
+---
+
+## Link Utili
+
+- **Guida Utente:** [themes/EXPLAIN.md](../themes/EXPLAIN.md)
+- **Stato Implementazione:** [CLAUDE-DOC/THEME_SYSTEM_ANALYSIS.md](../CLAUDE-DOC/THEME_SYSTEM_ANALYSIS.md)
+- **File Sorgente:** `core/themeSys.js`
+- **Temi Esempio:** `themes/default/` e `themes/baseExampleTheme/`
+
+---
+
+**Fine documentazione tecnica**
+
+**Versione:** 2.0.0
+**Data:** 2025-11-26
+**Autore:** AI Assistant per ital8cms
