@@ -1,7 +1,9 @@
 // in questo file vi sarà il codice per gesire l'a sessione .
 
+const path = require('path');
+const loadJson5 = require('../../../core/loadJson5');
 const bcrypt = require('bcryptjs');// serve per calcolare l' hash della passord
-const usersAccounts = require('../userAccount.json');
+const usersAccounts = loadJson5(path.join(__dirname, '../userAccount.json'));
 
 async function autenticate( username ,password){
 

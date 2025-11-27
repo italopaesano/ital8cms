@@ -3,7 +3,8 @@ const koa = require('koa');
 const app = new koa();
 const koaClassicServer = require("koa-classic-server");
 const ejs = require("ejs");
-const ital8Conf = require('./ital8Config.json');
+const loadJson5 = require('./core/loadJson5');
+const ital8Conf = loadJson5('./ital8Config.json');
 const path = require('path');
 
 const priorityMiddlewares = require('./core/priorityMiddlewares/priorityMiddlewares.js')(app);
