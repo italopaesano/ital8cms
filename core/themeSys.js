@@ -60,14 +60,14 @@ class themeSys{
   checkDependencies(themeName) {
     const errors = [];
     const themePath = path.join(__dirname, '../themes', themeName);
-    const configPath = path.join(themePath, 'config-theme.json');
+    const configPath = path.join(themePath, 'themeConfig.json');
 
     // Leggi configurazione tema
     let config;
     try {
       config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     } catch (error) {
-      return { satisfied: false, errors: [`Impossibile leggere config-theme.json: ${error.message}`] };
+      return { satisfied: false, errors: [`Impossibile leggere themeConfig.json: ${error.message}`] };
     }
 
     // Controlla dipendenze plugin
@@ -127,7 +127,7 @@ class themeSys{
    */
   getThemeDependencies(themeName) {
     const themePath = path.join(__dirname, '../themes', themeName);
-    const configPath = path.join(themePath, 'config-theme.json');
+    const configPath = path.join(themePath, 'themeConfig.json');
 
     try {
       if (fs.existsSync(configPath)) {
@@ -191,10 +191,10 @@ class themeSys{
       return { valid: false, error: `'${themeName}' non è una directory` };
     }
 
-    // Controlla esistenza config-theme.json
-    const configPath = path.join(themePath, 'config-theme.json');
+    // Controlla esistenza themeConfig.json
+    const configPath = path.join(themePath, 'themeConfig.json');
     if (!fs.existsSync(configPath)) {
-      return { valid: false, error: `config-theme.json mancante nel tema '${themeName}'` };
+      return { valid: false, error: `themeConfig.json mancante nel tema '${themeName}'` };
     }
 
     // Controlla esistenza directory views
@@ -251,19 +251,19 @@ class themeSys{
   }
 
   /**
-   * Restituisce i metadati di un tema dal file description-theme.json
+   * Restituisce i metadati di un tema dal file themeDescription.json
    * @param {string} themeName - Nome del tema
    * @returns {object|null} - Oggetto con i metadati o null se non trovato
    */
   getThemeDescription(themeName) {
-    const descPath = path.join(__dirname, '../themes', themeName, 'description-theme.json');
+    const descPath = path.join(__dirname, '../themes', themeName, 'themeDescription.json');
 
     try {
       if (fs.existsSync(descPath)) {
         return JSON.parse(fs.readFileSync(descPath, 'utf8'));
       }
     } catch (error) {
-      console.warn(`[themeSys] Errore lettura description-theme.json per ${themeName}: ${error.message}`);
+      console.warn(`[themeSys] Errore lettura themeDescription.json per ${themeName}: ${error.message}`);
     }
 
     return null;
@@ -334,16 +334,16 @@ class themeSys{
   }
 
   /**
-   * Restituisce il path assoluto della cartella assets del tema attivo
-   * @returns {string} - Path assoluto della cartella assets
+   * Restituisce il path assoluto della cartella themeResources del tema attivo
+   * @returns {string} - Path assoluto della cartella themeResources
    */
   getAssetsPath() {
-    return path.join(__dirname, '../themes', this.ital8Conf.activeTheme, 'assets');
+    return path.join(__dirname, '../themes', this.ital8Conf.activeTheme, 'themeResources');
   }
 
   /**
-   * Verifica se la cartella assets esiste per il tema attivo
-   * @returns {boolean} - true se la cartella assets esiste
+   * Verifica se la cartella themeResources esiste per il tema attivo
+   * @returns {boolean} - true se la cartella themeResources esiste
    */
   hasAssets() {
     const assetsPath = this.getAssetsPath();
@@ -364,7 +364,7 @@ class themeSys{
   // ============================================================================
   // PLUGIN ENDPOINT CUSTOMIZATION
   // Permette ai temi di sovrascrivere i template e gli asset dei plugin
-  // Struttura: themes/{themeName}/plugins/{pluginName}/{endpointName}/
+  // Struttura: themes/{themeName}/pluginsEndpointsMarkup/{pluginName}/{endpointName}/
   // ============================================================================
 
   /**
@@ -394,7 +394,7 @@ class themeSys{
       __dirname,
       '../themes',
       themeName,
-      'plugins',
+      'pluginsEndpointsMarkup',
       pluginName,
       endpointName,
       templateFile
@@ -439,7 +439,7 @@ class themeSys{
       __dirname,
       '../themes',
       themeName,
-      'plugins',
+      'pluginsEndpointsMarkup',
       pluginName,
       endpointName,
       assetFile
@@ -461,7 +461,7 @@ class themeSys{
       __dirname,
       '../themes',
       themeName,
-      'plugins',
+      'pluginsEndpointsMarkup',
       pluginName,
       endpointName,
       assetFile
@@ -513,7 +513,7 @@ class themeSys{
    */
   getCustomizedPlugins(isAdmin = false) {
     const themeName = isAdmin ? this.ital8Conf.adminActiveTheme : this.ital8Conf.activeTheme;
-    const pluginsPath = path.join(__dirname, '../themes', themeName, 'plugins');
+    const pluginsPath = path.join(__dirname, '../themes', themeName, 'pluginsEndpointsMarkup');
     const result = [];
 
     if (!fs.existsSync(pluginsPath)) {

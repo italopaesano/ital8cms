@@ -1,12 +1,12 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "name": "exampleTheme",
+  "name": "default",
   "version": "1.0.0",
-  "description": "Tema di esempio educativo che dimostra tutte le funzionalità del sistema temi di ital8cms",
-  "author": "ital8cms Team",
+  "description": "Tema predefinito di ital8cms con supporto completo a tutti gli hook e personalizzazione endpoint plugin",
+  "author": "Italo Paesano",
   "email": "italopaesano@protonmail.com",
   "license": "ISC",
-  "tags": ["example", "educational", "demo", "bootstrap", "responsive"],
+  "tags": ["default", "minimal", "responsive", "bootstrap"],
   "supportedHooks": [
     "head",
     "header",
@@ -18,7 +18,7 @@
     "script"
   ],
   "features": {
-    "theme-resources": true,
+    "themeResources": true,
     "pluginCustomization": true,
     "responsive": true
   }

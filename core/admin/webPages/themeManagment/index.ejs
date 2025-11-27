@@ -31,8 +31,8 @@ try {
         const stat = fs.statSync(themeDir);
 
         if (stat.isDirectory()) {
-            // Leggo config-theme.json se esiste
-            const configPath = path.join(themeDir, 'config-theme.json');
+            // Leggo themeConfig.json se esiste
+            const configPath = path.join(themeDir, 'themeConfig.json');
             const readmePath = path.join(themeDir, 'README.md');
 
             let config = {};

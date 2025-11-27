@@ -35,7 +35,7 @@ if (!themeName) {
         error = `Il tema "${themeName}" non esiste.`;
     } else {
         // Leggo informazioni tema
-        const configPath = path.join(themeDir, 'config-theme.json');
+        const configPath = path.join(themeDir, 'themeConfig.json');
         const readmePath = path.join(themeDir, 'README.md');
         const viewsPath = path.join(themeDir, 'views');
         const templatesPath = path.join(themeDir, 'templates');
