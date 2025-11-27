@@ -484,10 +484,10 @@ global.getAdminThemePartPath = (partName, passData) => {
 
 ### 7.1 Cartella Asset del Tema
 
-Ogni tema può avere una cartella `theme-resources/` contenente:
+Ogni tema può avere una cartella `themeResources/` contenente:
 
 ```
-theme-resources/
+themeResources/
 ├── css/
 │   ├── theme.css
 │   └── components.css
@@ -524,7 +524,7 @@ Restituisce il path assoluto della cartella asset del tema attivo.
 
 ```javascript
 getAssetsPath() {
-  return path.join(__dirname, '../themes', this.ital8Conf.activeTheme, 'theme-resources');
+  return path.join(__dirname, '../themes', this.ital8Conf.activeTheme, 'themeResources');
 }
 ```
 
@@ -580,7 +580,7 @@ Permette ai temi di **sovrascrivere l'aspetto degli endpoint dei plugin** senza 
 **Struttura:**
 ```
 themes/mioTema/
-└── plugins-endpoints-markup/
+└── pluginsEndpointsMarkup/
     └── simpleAccess/           # Nome plugin
         └── login/              # Nome endpoint
             ├── template.ejs    # Template custom
@@ -611,7 +611,7 @@ getCustomPluginTemplatePath(pluginName, endpointName, templateFile = 'template.e
     __dirname,
     '../themes',
     themeName,
-    'plugins-endpoints-markup',
+    'pluginsEndpointsMarkup',
     pluginName,
     endpointName,
     templateFile
@@ -724,7 +724,7 @@ getPluginCustomCss(pluginName, endpointName, cssFile = 'style.css', isAdmin = fa
 **Utilizzo:**
 ```javascript
 const customCss = themeSys.getPluginCustomCss('simpleAccess', 'login');
-// Ritorna contenuto di themes/tema/plugins-endpoints-markup/simpleAccess/login/style.css
+// Ritorna contenuto di themes/tema/pluginsEndpointsMarkup/simpleAccess/login/style.css
 ```
 
 ---

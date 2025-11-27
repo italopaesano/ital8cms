@@ -66,7 +66,7 @@ themes/nomeDelTema/
 │   ├── article.template.ejs      # Template articolo blog
 │   └── article-icon.svg          # OPZIONALE - Icona template
 │
-├── theme-resources/               # OPZIONALE - Asset statici
+├── themeResources/               # OPZIONALE - Asset statici
 │   ├── css/
 │   │   └── theme.css
 │   ├── js/
@@ -74,7 +74,7 @@ themes/nomeDelTema/
 │   └── images/
 │       └── logo.png
 │
-├── plugins-endpoints-markup/      # OPZIONALE - Override endpoint plugin
+├── pluginsEndpointsMarkup/      # OPZIONALE - Override endpoint plugin
 │   └── nomePlugin/               # Es: simpleAccess
 │       └── nomeEndpoint/         # Es: login
 │           ├── template.ejs      # Template personalizzato
@@ -209,7 +209,7 @@ Metadati del tema visualizzati nell'admin.
 
   // Feature del tema
   "features": {
-    "theme-resources": true,
+    "themeResources": true,
     "pluginCustomization": true,
     "responsive": true
   },
@@ -539,13 +539,13 @@ Se mancano metadati, l'admin mostra solo il nome file.
 
 ---
 
-### 5.3 theme-resources/ - Asset Statici
+### 5.3 themeResources/ - Asset Statici
 
 **Scopo:** File CSS, JavaScript, immagini del tema.
 
 **Struttura consigliata:**
 ```
-theme-resources/
+themeResources/
 ├── css/
 │   ├── theme.css
 │   ├── components.css
@@ -579,13 +579,13 @@ Gli asset sono serviti automaticamente su `/theme-assets/`
 
 ---
 
-### 5.4 plugins-endpoints-markup/ - Personalizzazione Endpoint Plugin
+### 5.4 pluginsEndpointsMarkup/ - Personalizzazione Endpoint Plugin
 
 **Scopo:** Sovrascrivere template e CSS degli endpoint dei plugin senza modificare il codice del plugin.
 
 **Struttura:**
 ```
-plugins-endpoints-markup/
+pluginsEndpointsMarkup/
 └── nomePlugin/           # Nome del plugin (es: simpleAccess)
     └── nomeEndpoint/     # Nome dell'endpoint (es: login)
         ├── template.ejs  # Template personalizzato
@@ -595,7 +595,7 @@ plugins-endpoints-markup/
 **Esempio: Personalizzare login di simpleAccess**
 
 ```
-plugins-endpoints-markup/
+pluginsEndpointsMarkup/
 └── simpleAccess/
     └── login/
         ├── template.ejs
@@ -606,13 +606,13 @@ plugins-endpoints-markup/
 
 1. Plugin `simpleAccess` carica endpoint `/api/simpleAccess/login`
 2. Sistema controlla: "Esiste template custom nel tema?"
-3. **Se SÌ:** Usa `themes/tema/plugins-endpoints-markup/simpleAccess/login/template.ejs`
+3. **Se SÌ:** Usa `themes/tema/pluginsEndpointsMarkup/simpleAccess/login/template.ejs`
 4. **Se NO:** Usa template di default del plugin
 
 **Esempio template custom:**
 
 ```ejs
-<!-- plugins-endpoints-markup/simpleAccess/login/template.ejs -->
+<!-- pluginsEndpointsMarkup/simpleAccess/login/template.ejs -->
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -708,10 +708,10 @@ mkdir views
 mkdir templates
 
 # Crea cartelle opzionali
-mkdir theme-resources
-mkdir theme-resources/css
-mkdir theme-resources/js
-mkdir theme-resources/images
+mkdir themeResources
+mkdir themeResources/css
+mkdir themeResources/js
+mkdir themeResources/images
 ```
 
 ### Step 2: Crea themeConfig.json
@@ -760,7 +760,7 @@ nano themeDescription.json
     "script"
   ],
   "features": {
-    "theme-resources": true,
+    "themeResources": true,
     "pluginCustomization": false,
     "responsive": true
   },
@@ -862,7 +862,7 @@ nano templates/page.template.ejs
 
 ### Step 6: Crea Asset del Tema (Opzionale)
 
-**theme-resources/css/theme.css:**
+**themeResources/css/theme.css:**
 ```css
 /* Stili del tema */
 body {
@@ -897,7 +897,7 @@ footer {
 }
 ```
 
-**theme-resources/js/theme.js:**
+**themeResources/js/theme.js:**
 ```javascript
 // JavaScript del tema
 console.log('Tema caricato!');
@@ -976,7 +976,7 @@ themes/blog/
 │   ├── article-icon.svg
 │   ├── category.template.ejs
 │   └── author.template.ejs
-├── theme-resources/
+├── themeResources/
 │   ├── css/
 │   │   ├── theme.css
 │   │   └── blog.css
@@ -984,7 +984,7 @@ themes/blog/
 │   │   └── theme.js
 │   └── images/
 │       └── default-post.jpg
-└── plugins-endpoints-markup/
+└── pluginsEndpointsMarkup/
     └── simpleAccess/
         └── login/
             ├── template.ejs
@@ -1008,7 +1008,7 @@ themes/shop/
 │   ├── product.template.ejs
 │   ├── category.template.ejs
 │   └── cart.template.ejs
-└── theme-resources/
+└── themeResources/
     ├── css/
     │   ├── shop.css
     │   └── product.css
@@ -1043,8 +1043,8 @@ themes/shop/
 - [ ] Creare template aggiuntivi (article, product, ecc.)
 - [ ] Aggiungere icone per template (`nomeTemplate-icon.svg`)
 - [ ] Aggiungere metadati templates in `themeDescription.json`
-- [ ] Creare cartella `theme-resources/` con CSS/JS
-- [ ] Personalizzare endpoint plugin in `plugins-endpoints-markup/`
+- [ ] Creare cartella `themeResources/` con CSS/JS
+- [ ] Personalizzare endpoint plugin in `pluginsEndpointsMarkup/`
 - [ ] Creare `README.md` con documentazione tema
 
 ### Validazione

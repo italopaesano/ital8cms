@@ -18,7 +18,7 @@
     "script"
   ],
   "features": {
-    "theme-resources": true,
+    "themeResources": true,
     "pluginCustomization": true,
     "responsive": true
   }

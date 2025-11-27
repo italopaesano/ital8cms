@@ -334,16 +334,16 @@ class themeSys{
   }
 
   /**
-   * Restituisce il path assoluto della cartella assets del tema attivo
-   * @returns {string} - Path assoluto della cartella assets
+   * Restituisce il path assoluto della cartella themeResources del tema attivo
+   * @returns {string} - Path assoluto della cartella themeResources
    */
   getAssetsPath() {
-    return path.join(__dirname, '../themes', this.ital8Conf.activeTheme, 'assets');
+    return path.join(__dirname, '../themes', this.ital8Conf.activeTheme, 'themeResources');
   }
 
   /**
-   * Verifica se la cartella assets esiste per il tema attivo
-   * @returns {boolean} - true se la cartella assets esiste
+   * Verifica se la cartella themeResources esiste per il tema attivo
+   * @returns {boolean} - true se la cartella themeResources esiste
    */
   hasAssets() {
     const assetsPath = this.getAssetsPath();
@@ -364,7 +364,7 @@ class themeSys{
   // ============================================================================
   // PLUGIN ENDPOINT CUSTOMIZATION
   // Permette ai temi di sovrascrivere i template e gli asset dei plugin
-  // Struttura: themes/{themeName}/plugins/{pluginName}/{endpointName}/
+  // Struttura: themes/{themeName}/pluginsEndpointsMarkup/{pluginName}/{endpointName}/
   // ============================================================================
 
   /**
@@ -394,7 +394,7 @@ class themeSys{
       __dirname,
       '../themes',
       themeName,
-      'plugins',
+      'pluginsEndpointsMarkup',
       pluginName,
       endpointName,
       templateFile
@@ -439,7 +439,7 @@ class themeSys{
       __dirname,
       '../themes',
       themeName,
-      'plugins',
+      'pluginsEndpointsMarkup',
       pluginName,
       endpointName,
       assetFile
@@ -461,7 +461,7 @@ class themeSys{
       __dirname,
       '../themes',
       themeName,
-      'plugins',
+      'pluginsEndpointsMarkup',
       pluginName,
       endpointName,
       assetFile
@@ -513,7 +513,7 @@ class themeSys{
    */
   getCustomizedPlugins(isAdmin = false) {
     const themeName = isAdmin ? this.ital8Conf.adminActiveTheme : this.ital8Conf.activeTheme;
-    const pluginsPath = path.join(__dirname, '../themes', themeName, 'plugins');
+    const pluginsPath = path.join(__dirname, '../themes', themeName, 'pluginsEndpointsMarkup');
     const result = [];
 
     if (!fs.existsSync(pluginsPath)) {
