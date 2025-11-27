@@ -2,7 +2,7 @@
 const workerThreads = require('worker_threads');
 const ccxt = require("ccxt");
 const path = require('path');
-const loadJson = require('../../core/jsonLoader');
+const loadJson5 = require('../../core/loadJson5');
 //ccxt.exchanges --> lista degli exchanges supportati
 const Aexchanges = ccxt.exchanges;// arraydegli excabges supportati
 const MapExchanges = new Map();// mappa che conterrà i riferimenti a gli exchanges per cui è gia stata instanziata una comunicazione
@@ -22,7 +22,7 @@ if (workerThreads.isMainThread) {//controllo se questo file non viene eseguito n
 }else{
 
     // adesso carico i dati dei custo exchane per vedere se ci sono api di exchange custom
-    const customExchangesKey = loadJson(path.join(__dirname, './custom/customExchangesKey.json')).exchanges;// restituisce un array
+    const customExchangesKey = loadJson5(path.join(__dirname, './custom/customExchangesKey.json')).exchanges;// restituisce un array
     customExchangesKey.forEach( ( exchange ) => {
       MapExchanges.set( exchange.exchangeName, new ccxt[exchange.exchangeName]({ 'apiKey': exchange.apiKey, 'secret': exchange.secret }));
     });

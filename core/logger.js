@@ -20,7 +20,7 @@
 
 const path = require('path');
 const fs = require('fs');
-const loadJson = require('./jsonLoader');
+const loadJson5 = require('./loadJson5');
 
 // Livelli di log con priorità numerica
 const LOG_LEVELS = {
@@ -43,7 +43,7 @@ const COLORS = {
 let configLogLevel = 'INFO';
 try {
   const configPath = path.join(__dirname, '..', 'ital8Config.json');
-  const config = loadJson(configPath);
+  const config = loadJson5(configPath);
   if (config.logLevel) {
     configLogLevel = config.logLevel.toUpperCase();
   } else if (config.debugMode === 1) {
