@@ -46,8 +46,8 @@ Il sistema dei temi di **ital8cms** separa la presentazione dalla logica applica
 
 ```
 themes/nomeDelTema/
-├── config-theme.json              # OBBLIGATORIO - Configurazione
-├── description-theme.json         # OBBLIGATORIO - Metadati
+├── themeConfig.json               # OBBLIGATORIO - Configurazione
+├── themeDescription.json          # OBBLIGATORIO - Metadati
 ├── README.md                      # Documentazione del tema
 ├── theme-icon.svg                 # OPZIONALE - Icona tema (64x64)
 ├── screenshot.png                 # OPZIONALE - Anteprima tema (1200x900)
@@ -88,7 +88,7 @@ themes/nomeDelTema/
 
 ## 3. File Obbligatori
 
-### 3.1 config-theme.json
+### 3.1 themeConfig.json
 
 File di configurazione del tema.
 
@@ -180,7 +180,7 @@ Questo evita confusione su dove cercare le pagine del sito.
 
 ---
 
-### 3.2 description-theme.json
+### 3.2 themeDescription.json
 
 Metadati del tema visualizzati nell'admin.
 
@@ -235,6 +235,20 @@ Metadati del tema visualizzati nell'admin.
 #### Campo templates
 
 Definisce i template disponibili per creare pagine.
+
+Definiti in `themeDescription.json`:
+```json
+{
+  "templates": [
+    {
+      "file": "article.template.ejs",
+      "displayName": "Articolo Blog",
+      "description": "Template per articoli con data e autore",
+      "icon": "article-icon.svg"
+    }
+  ]
+}
+```
 
 **Se presente:** Admin mostra nome e descrizione user-friendly
 **Se assente:** Admin mostra solo il nome file del template
@@ -476,20 +490,6 @@ Continuare?
 
 **Metadati template:**
 
-Definiti in `description-theme.json`:
-```json
-{
-  "templates": [
-    {
-      "file": "article.template.ejs",
-      "displayName": "Articolo Blog",
-      "description": "Template per articoli con data e autore",
-      "icon": "article-icon.svg"
-    }
-  ]
-}
-```
-
 Se mancano metadati, l'admin mostra solo il nome file.
 
 **Esempi di template:**
@@ -714,10 +714,10 @@ mkdir theme-resources/js
 mkdir theme-resources/images
 ```
 
-### Step 2: Crea config-theme.json
+### Step 2: Crea themeConfig.json
 
 ```bash
-nano config-theme.json
+nano themeConfig.json
 ```
 
 ```json
@@ -737,10 +737,10 @@ nano config-theme.json
 }
 ```
 
-### Step 3: Crea description-theme.json
+### Step 3: Crea themeDescription.json
 
 ```bash
-nano description-theme.json
+nano themeDescription.json
 ```
 
 ```json
@@ -944,8 +944,8 @@ Tema con solo i file obbligatori.
 
 ```
 themes/minimal/
-├── config-theme.json
-├── description-theme.json
+├── themeConfig.json
+├── themeDescription.json
 ├── views/
 │   ├── head.ejs
 │   ├── header.ejs
@@ -960,8 +960,8 @@ Tema con tutti i componenti.
 
 ```
 themes/blog/
-├── config-theme.json
-├── description-theme.json
+├── themeConfig.json
+├── themeDescription.json
 ├── screenshot.png
 ├── theme-icon.svg
 ├── views/
@@ -997,8 +997,8 @@ Tema con template prodotti.
 
 ```
 themes/shop/
-├── config-theme.json
-├── description-theme.json
+├── themeConfig.json
+├── themeDescription.json
 ├── views/
 │   ├── head.ejs
 │   ├── header.ejs
@@ -1023,8 +1023,8 @@ themes/shop/
 ### Creazione Tema Base
 
 - [ ] Creare directory `themes/nomeDelTema/`
-- [ ] Creare `config-theme.json` con configurazione corretta
-- [ ] Creare `description-theme.json` con metadati
+- [ ] Creare `themeConfig.json` con configurazione corretta
+- [ ] Creare `themeDescription.json` con metadati
 - [ ] Creare `views/head.ejs` con hook "head"
 - [ ] Creare `views/header.ejs` con hook "header"
 - [ ] Creare `views/footer.ejs` con hook "footer" e "script"
@@ -1042,7 +1042,7 @@ themes/shop/
 - [ ] Creare partials opzionali (`nav.ejs`, `aside.ejs`, ecc.)
 - [ ] Creare template aggiuntivi (article, product, ecc.)
 - [ ] Aggiungere icone per template (`nomeTemplate-icon.svg`)
-- [ ] Aggiungere metadati templates in `description-theme.json`
+- [ ] Aggiungere metadati templates in `themeDescription.json`
 - [ ] Creare cartella `theme-resources/` con CSS/JS
 - [ ] Personalizzare endpoint plugin in `plugins-endpoints-markup/`
 - [ ] Creare `README.md` con documentazione tema

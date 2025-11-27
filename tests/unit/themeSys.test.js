@@ -35,10 +35,10 @@ describe('Theme System', () => {
         return { valid: false, error: `'${themeName}' non è una directory` };
       }
 
-      // Controlla esistenza config-theme.json
-      const configPath = path.join(themePath, 'config-theme.json');
+      // Controlla esistenza themeConfig.json
+      const configPath = path.join(themePath, 'themeConfig.json');
       if (!fs.existsSync(configPath)) {
-        return { valid: false, error: `config-theme.json mancante nel tema '${themeName}'` };
+        return { valid: false, error: `themeConfig.json mancante nel tema '${themeName}'` };
       }
 
       // Controlla esistenza directory views
@@ -93,9 +93,9 @@ describe('Theme System', () => {
   });
 
   describe('Theme Description', () => {
-    // Funzione per leggere description-theme.json
+    // Funzione per leggere themeDescription.json
     function getThemeDescription(themeName) {
-      const descPath = path.join(themesBasePath, themeName, 'description-theme.json');
+      const descPath = path.join(themesBasePath, themeName, 'themeDescription.json');
 
       try {
         if (fs.existsSync(descPath)) {
@@ -108,7 +108,7 @@ describe('Theme System', () => {
       return null;
     }
 
-    test('legge correttamente description-theme.json del tema default', () => {
+    test('legge correttamente themeDescription.json del tema default', () => {
       const desc = getThemeDescription('default');
       expect(desc).not.toBeNull();
       expect(desc.name).toBe('default');
@@ -116,7 +116,7 @@ describe('Theme System', () => {
       expect(desc.author).toBeDefined();
     });
 
-    test('legge correttamente description-theme.json del tema exampleTheme', () => {
+    test('legge correttamente themeDescription.json del tema exampleTheme', () => {
       const desc = getThemeDescription('exampleTheme');
       expect(desc).not.toBeNull();
       expect(desc.name).toBe('exampleTheme');
@@ -125,7 +125,7 @@ describe('Theme System', () => {
       expect(desc.supportedHooks).toContain('footer');
     });
 
-    test('ritorna null per tema senza description-theme.json', () => {
+    test('ritorna null per tema senza themeDescription.json', () => {
       const desc = getThemeDescription('nonExistentTheme');
       expect(desc).toBeNull();
     });
@@ -148,7 +148,7 @@ describe('Theme System', () => {
   describe('Theme Dependencies', () => {
     // Funzione per leggere le dipendenze
     function getThemeDependencies(themeName) {
-      const configPath = path.join(themesBasePath, themeName, 'config-theme.json');
+      const configPath = path.join(themesBasePath, themeName, 'themeConfig.json');
 
       try {
         if (fs.existsSync(configPath)) {
@@ -317,7 +317,7 @@ describe('Theme System', () => {
       expect(themes).toContain('exampleTheme');
     });
 
-    test('tutti i temi hanno config-theme.json', () => {
+    test('tutti i temi hanno themeConfig.json', () => {
       const entries = fs.readdirSync(themesBasePath);
       const themes = entries.filter(entry => {
         const entryPath = path.join(themesBasePath, entry);
@@ -325,7 +325,7 @@ describe('Theme System', () => {
       });
 
       for (const theme of themes) {
-        const configPath = path.join(themesBasePath, theme, 'config-theme.json');
+        const configPath = path.join(themesBasePath, theme, 'themeConfig.json');
         expect(fs.existsSync(configPath)).toBe(true);
       }
     });
@@ -334,7 +334,7 @@ describe('Theme System', () => {
   describe('Hook Support', () => {
     // Funzione per verificare supporto hook
     function themeSupportsHook(themeName, hookName) {
-      const descPath = path.join(themesBasePath, themeName, 'description-theme.json');
+      const descPath = path.join(themesBasePath, themeName, 'themeDescription.json');
 
       try {
         if (fs.existsSync(descPath)) {
@@ -375,7 +375,7 @@ describe('Theme System', () => {
 
   describe('Version Format Checking', () => {
     test('versione tema è in formato valido', () => {
-      const descPath = path.join(themesBasePath, 'default', 'description-theme.json');
+      const descPath = path.join(themesBasePath, 'default', 'themeDescription.json');
       const desc = JSON.parse(fs.readFileSync(descPath, 'utf8'));
 
       // Verifica formato x.y.z
@@ -386,7 +386,7 @@ describe('Theme System', () => {
       const themes = ['default', 'baseExampleTheme', 'exampleTheme'];
 
       for (const theme of themes) {
-        const descPath = path.join(themesBasePath, theme, 'description-theme.json');
+        const descPath = path.join(themesBasePath, theme, 'themeDescription.json');
         if (fs.existsSync(descPath)) {
           const desc = JSON.parse(fs.readFileSync(descPath, 'utf8'));
           expect(desc.version).toMatch(/^\d+\.\d+\.\d+$/);

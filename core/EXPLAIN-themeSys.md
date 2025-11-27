@@ -213,10 +213,10 @@ validateTheme(themeName) {
     return { valid: false, error: `'${themeName}' non è una directory` };
   }
 
-  // 3. Controlla esistenza config-theme.json
-  const configPath = path.join(themePath, 'config-theme.json');
+  // 3. Controlla esistenza themeConfig.json
+  const configPath = path.join(themePath, 'themeConfig.json');
   if (!fs.existsSync(configPath)) {
-    return { valid: false, error: `config-theme.json mancante nel tema '${themeName}'` };
+    return { valid: false, error: `themeConfig.json mancante nel tema '${themeName}'` };
   }
 
   // 4. Controlla esistenza directory views
@@ -245,7 +245,7 @@ validateTheme(themeName) {
 |---|-------|-----------------|
 | 1 | Directory tema esiste | `Directory del tema 'X' non trovata` |
 | 2 | È una directory (non file) | `'X' non è una directory` |
-| 3 | `config-theme.json` presente | `config-theme.json mancante` |
+| 3 | `themeConfig.json` presente | `themeConfig.json mancante` |
 | 4 | Directory `views/` presente | `Directory 'views' mancante` |
 | 5 | `views/head.ejs` presente | `Partial 'head.ejs' mancante` |
 | 6 | `views/header.ejs` presente | `Partial 'header.ejs' mancante` |
@@ -299,7 +299,7 @@ Verifica che tutte le dipendenze siano soddisfatte.
 checkDependencies(themeName) {
   const errors = [];
   const themePath = path.join(__dirname, '../themes', themeName);
-  const configPath = path.join(themePath, 'config-theme.json');
+  const configPath = path.join(themePath, 'themeConfig.json');
 
   // Leggi configurazione tema
   let config;
@@ -308,7 +308,7 @@ checkDependencies(themeName) {
   } catch (error) {
     return {
       satisfied: false,
-      errors: [`Impossibile leggere config-theme.json: ${error.message}`]
+      errors: [`Impossibile leggere themeConfig.json: ${error.message}`]
     };
   }
 
@@ -759,7 +759,7 @@ const customCss = themeSys.getPluginCustomCss('simpleAccess', 'login');
 
 | Metodo | Parametri | Ritorno | Descrizione |
 |--------|-----------|---------|-------------|
-| `getThemeDescription(themeName)` | `themeName`: string | object\|null | Metadati da description-theme.json |
+| `getThemeDescription(themeName)` | `themeName`: string | object\|null | Metadati da themeDescription.json |
 | `getThemeVersion(themeName)` | `themeName`: string | string\|null | Versione tema |
 | `getActiveThemeDescription()` | - | object\|null | Metadati tema pubblico attivo |
 | `getAdminThemeDescription()` | - | object\|null | Metadati tema admin attivo |
@@ -850,7 +850,7 @@ fs.mkdirSync(`${themePath}/views`, { recursive: true });
 fs.mkdirSync(`${themePath}/templates`);
 
 // 2. Crea file obbligatori
-fs.writeFileSync(`${themePath}/config-theme.json`, JSON.stringify({
+fs.writeFileSync(`${themePath}/themeConfig.json`, JSON.stringify({
   active: 1,
   isInstalled: 1,
   weight: 0,
@@ -860,7 +860,7 @@ fs.writeFileSync(`${themePath}/config-theme.json`, JSON.stringify({
   nodeModuleDependency: {}
 }, null, 2));
 
-fs.writeFileSync(`${themePath}/description-theme.json`, JSON.stringify({
+fs.writeFileSync(`${themePath}/themeDescription.json`, JSON.stringify({
   name: "myTheme",
   version: "1.0.0",
   description: "My custom theme"
@@ -910,7 +910,7 @@ async function activateTheme(themeName) {
   }
 
   // 3. Leggi configurazione tema
-  const themeConfigPath = path.join(__dirname, 'themes', themeName, 'config-theme.json');
+  const themeConfigPath = path.join(__dirname, 'themes', themeName, 'themeConfig.json');
   const themeConfig = JSON.parse(fs.readFileSync(themeConfigPath, 'utf8'));
 
   // 4. Gestisci wwwCustomPath
