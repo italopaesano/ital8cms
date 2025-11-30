@@ -6,8 +6,8 @@ Tema di esempio che dimostra tutte le funzionalità del sistema dei temi di ital
 
 ```
 exampleTheme/
-├── config-theme.json        # Configurazione e dipendenze
-├── description-theme.json   # Metadati del tema
+├── themeConfig.json         # Configurazione e dipendenze
+├── themeDescription.json    # Metadati del tema
 ├── README.md                # Questa documentazione
 ├── views/                   # Partials riutilizzabili
 │   ├── head.ejs            # Apertura HTML + hook "head"
@@ -18,10 +18,10 @@ exampleTheme/
 │   └── footer.ejs          # Footer + hook "footer" e "script"
 ├── templates/               # Template completi
 │   └── page.template.ejs   # Template base per nuove pagine
-├── assets/                  # Asset statici
+├── themeResources/          # Risorse statiche
 │   ├── css/theme.css       # Stili del tema
 │   └── js/theme.js         # Script del tema
-└── plugins/                 # Override endpoint plugin
+└── pluginsEndpointsMarkup/  # Override endpoint plugin
     └── simpleAccess/
         └── login/
             ├── template.ejs
@@ -42,14 +42,14 @@ Ogni partial include gli hook appropriati per permettere ai plugin di iniettare 
 - `script` - JavaScript
 
 ### 2. Asset Management
-Gli asset sono in `/assets/` e accessibili via `/theme-assets/`:
+Gli asset sono in `/themeResources/` e accessibili via `/theme-assets/`:
 ```html
 <link rel="stylesheet" href="/theme-assets/css/theme.css">
 <script src="/theme-assets/js/theme.js"></script>
 ```
 
 ### 3. Dipendenze
-Il tema dichiara le sue dipendenze in `config-theme.json`:
+Il tema dichiara le sue dipendenze in `themeConfig.json`:
 ```json
 {
   "pluginDependency": {
@@ -59,7 +59,7 @@ Il tema dichiara le sue dipendenze in `config-theme.json`:
 ```
 
 ### 4. Metadati
-`description-theme.json` contiene informazioni sul tema:
+`themeDescription.json` contiene informazioni sul tema:
 - Versione
 - Autore
 - Hook supportati
@@ -81,7 +81,7 @@ Poi riavvia il server.
 1. Copia questa cartella con un nuovo nome
 2. Modifica i file di configurazione
 3. Personalizza i partials
-4. Aggiungi i tuoi stili in `assets/css/theme.css`
+4. Aggiungi i tuoi stili in `themeResources/css/theme.css`
 5. Attiva il nuovo tema
 
 ## Commenti Educativi
