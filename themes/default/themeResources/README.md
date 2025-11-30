@@ -1,22 +1,22 @@
-# Theme Assets
+# Theme Resources
 
-Questa cartella contiene gli asset statici del tema (CSS, JavaScript, immagini, font).
+Questa cartella contiene le risorse statiche del tema (CSS, JavaScript, immagini, font).
 
 ## Struttura
 
 ```
-assets/
+themeResources/
 ├── css/           # Fogli di stile CSS
 │   └── theme.css  # Stili principali del tema
 ├── js/            # File JavaScript
 │   └── theme.js   # Script principali del tema
-├── images/        # Immagini del tema
-└── fonts/         # Font personalizzati
+├── images/        # Immagini del tema (creare se necessario)
+└── fonts/         # Font personalizzati (creare se necessario)
 ```
 
-## Come utilizzare gli asset
+## Come utilizzare le risorse
 
-Gli asset sono accessibili tramite il prefix URL `/theme-assets/`.
+Le risorse sono accessibili tramite il prefix URL `/theme-assets/`.
 
 ### Nel partial head.ejs (per CSS):
 

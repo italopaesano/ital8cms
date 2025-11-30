@@ -5,7 +5,7 @@ Questa directory permette ai temi di personalizzare l'aspetto degli endpoint dei
 ## Struttura
 
 ```
-themes/{nomeTema}/plugins/
+themes/{nomeTema}/pluginsEndpointsMarkup/
     {nomePlugin}/
         {nomeEndpoint}/
             template.ejs     # Template HTML/EJS personalizzato
@@ -23,7 +23,7 @@ themes/{nomeTema}/plugins/
 La pagina di login del plugin `simpleAccess` può essere personalizzata creando:
 
 ```
-themes/default/plugins/
+themes/default/pluginsEndpointsMarkup/
     simpleAccess/
         login/
             template.ejs     # Form di login personalizzato
@@ -119,4 +119,4 @@ handler: async (ctx) => {
 
 - I template personalizzati devono mantenere i campi del form necessari per il funzionamento del plugin
 - Il CSS viene incluso inline nel template per evitare richieste HTTP aggiuntive
-- Per asset esterni (immagini, JS), usare la directory `assets/` del tema
+- Per asset esterni (immagini, JS), usare la directory `themeResources/` del tema
