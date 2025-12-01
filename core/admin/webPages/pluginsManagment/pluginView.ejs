@@ -1,5 +1,5 @@
-<!-- TEMPLATE PER LA CREAZIONE DELLE PAGINE DI AMMINISTRAZIONE  -->
-<!-- ATTENZIONE  nelle pagine di admin sarà chiamata la funzione getAdminThemePartPath() e non la funzione getThemePartPath() -->
+<!-- DETTAGLIO PLUGIN - Visualizza informazioni complete di un plugin -->
+<!-- ATTENZIONE nelle pagine di admin sarà chiamata la funzione getAdminThemePartPath() e non la funzione getThemePartPath() -->
 <%- include( passData.themeSys.getAdminThemePartPath( 'head.ejs' ) ) %>
 <%- include( passData.themeSys.getAdminThemePartPath( 'header.ejs' ) ) %>
 
@@ -16,22 +16,516 @@
 </script>
 
 <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-info-circle"></i> Dettagli Plugin</h2>
-        <a href="/<%= passData.adminPrefix %>/pluginsManagment/index.ejs" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left"></i> Torna alla Lista Plugin
-        </a>
+    <!-- Loading Spinner -->
+    <div id="loading-spinner" class="text-center my-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Caricamento...</span>
+        </div>
+        <p class="mt-2 text-muted">Caricamento dettagli plugin in corso...</p>
     </div>
 
-    <div class="card">
-        <div class="card-header">
-            <h5 class="mb-0">Informazioni Plugin</h5>
+    <!-- Error Alert -->
+    <div id="error-container" style="display: none;">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-plugin"></i> Dettagli Plugin</h2>
+            <a href="/<%= passData.adminPrefix %>/pluginsManagment/index.ejs" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Torna alla Lista Plugin
+            </a>
         </div>
-        <div class="card-body">
-            <p class="text-muted">Qui verranno visualizzati i dettagli del plugin selezionato (nome, versione, descrizione, dipendenze, configurazione).</p>
-            <!-- TODO: Implementare visualizzazione dettagli plugin -->
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle"></i>
+            <span id="error-message"></span>
+        </div>
+    </div>
+
+    <!-- Plugin Details Container -->
+    <div id="plugin-container" style="display: none;">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>
+                <i class="bi bi-plugin"></i>
+                Plugin: <span id="plugin-name-title"></span>
+            </h2>
+            <a href="/<%= passData.adminPrefix %>/pluginsManagment/index.ejs" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Torna alla Lista Plugin
+            </a>
+        </div>
+
+        <!-- Stato Attivazione -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div id="plugin-status-alert" class="alert">
+                    <i class="bi" id="status-icon"></i>
+                    <span id="status-message"></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Colonna Sinistra - Informazioni Generali -->
+            <div class="col-md-6">
+                <!-- Descrizione Plugin -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-info-circle"></i> Descrizione</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm mb-0">
+                            <tbody>
+                                <tr>
+                                    <th style="width: 40%;">Nome</th>
+                                    <td id="desc-name"></td>
+                                </tr>
+                                <tr>
+                                    <th>Versione</th>
+                                    <td id="desc-version"></td>
+                                </tr>
+                                <tr>
+                                    <th>Autore</th>
+                                    <td id="desc-author"></td>
+                                </tr>
+                                <tr>
+                                    <th>Email</th>
+                                    <td id="desc-email"></td>
+                                </tr>
+                                <tr>
+                                    <th>Licenza</th>
+                                    <td id="desc-license"></td>
+                                </tr>
+                                <tr>
+                                    <th>Descrizione</th>
+                                    <td id="desc-description"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Configurazione Plugin -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-gear"></i> Configurazione</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm mb-0">
+                            <tbody>
+                                <tr>
+                                    <th style="width: 40%;">Attivo</th>
+                                    <td id="config-active"></td>
+                                </tr>
+                                <tr>
+                                    <th>Installato</th>
+                                    <td id="config-installed"></td>
+                                </tr>
+                                <tr>
+                                    <th>Weight</th>
+                                    <td id="config-weight"></td>
+                                </tr>
+                                <tr>
+                                    <th>Versione Config</th>
+                                    <td id="config-version"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Dipendenze Plugin -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-diagram-3"></i> Dipendenze Plugin</h5>
+                    </div>
+                    <div class="card-body" id="plugin-dependencies">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Dipendenze Node Modules -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-box"></i> Dipendenze Node Modules</h5>
+                    </div>
+                    <div class="card-body" id="node-dependencies">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Colonna Destra - File e Struttura -->
+            <div class="col-md-6">
+                <!-- Validazione Struttura -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-check-circle"></i> Validazione Struttura</h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item d-flex justify-content-between align-items-center" id="valid-mainjs">
+                                <span><i class="bi bi-file-earmark-code"></i> main.js</span>
+                                <span class="badge" id="badge-mainjs"></span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center" id="valid-config">
+                                <span><i class="bi bi-gear"></i> pluginConfig.json</span>
+                                <span class="badge" id="badge-config"></span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center" id="valid-description">
+                                <span><i class="bi bi-info-circle"></i> pluginDescription.json</span>
+                                <span class="badge" id="badge-description"></span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- File nel Plugin -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-folder"></i> File (<span id="file-count">0</span>)</h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush" id="files-list" style="max-height: 300px; overflow-y: auto;">
+                            <!-- Will be populated by JavaScript -->
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Percorso Plugin -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-folder2-open"></i> Percorso</h5>
+                    </div>
+                    <div class="card-body">
+                        <code id="plugin-path" class="d-block p-2 bg-light rounded"></code>
+                    </div>
+                </div>
+
+                <!-- Configurazione Custom (se presente) -->
+                <div class="card mb-4" id="custom-config-card" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-sliders"></i> Configurazione Personalizzata</h5>
+                    </div>
+                    <div class="card-body">
+                        <pre id="custom-config-json" class="bg-light p-3 rounded" style="max-height: 200px; overflow-y: auto;"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Azioni -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-lightning"></i> Azioni</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex gap-2 flex-wrap" id="actions-container">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
         </div>
     </div>
 </div>
+
+<!-- Modal Conferma Toggle -->
+<div class="modal fade" id="togglePluginModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Conferma Modifica Stato Plugin</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="togglePluginMessage"></p>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Attenzione:</strong> Per applicare le modifiche sarà necessario riavviare il server.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-primary" id="confirmToggleBtn">
+                    <i class="bi bi-check"></i> Conferma
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentPlugin = null;
+let pendingAction = null;
+
+// Carica dettagli plugin all'avvio
+document.addEventListener('DOMContentLoaded', loadPluginDetails);
+
+/**
+ * Carica i dettagli del plugin dal server
+ */
+async function loadPluginDetails() {
+    const spinner = document.getElementById('loading-spinner');
+    const errorContainer = document.getElementById('error-container');
+    const pluginContainer = document.getElementById('plugin-container');
+
+    // Ottieni nome plugin dalla query string
+    const urlParams = new URLSearchParams(window.location.search);
+    const pluginName = urlParams.get('plugin');
+
+    if (!pluginName) {
+        spinner.style.display = 'none';
+        errorContainer.style.display = 'block';
+        document.getElementById('error-message').innerText = 'Nessun plugin specificato. Usa ?plugin=nomePlugin';
+        return;
+    }
+
+    try {
+        const response = await fetch(`/${apiPrefix}/admin/plugins/${pluginName}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || 'Plugin non trovato');
+        }
+
+        currentPlugin = result.plugin;
+
+        // Nascondi spinner, mostra contenuto
+        spinner.style.display = 'none';
+        pluginContainer.style.display = 'block';
+
+        // Popola la pagina con i dati
+        populatePluginDetails(currentPlugin);
+
+    } catch (error) {
+        console.error('Errore nel caricamento dettagli plugin:', error);
+        spinner.style.display = 'none';
+        errorContainer.style.display = 'block';
+        document.getElementById('error-message').innerText = error.message;
+    }
+}
+
+/**
+ * Popola la pagina con i dettagli del plugin
+ */
+function populatePluginDetails(plugin) {
+    const config = plugin.config || {};
+    const description = plugin.description || {};
+
+    // Titolo
+    document.getElementById('plugin-name-title').innerText = plugin.name;
+
+    // Alert Stato
+    const statusAlert = document.getElementById('plugin-status-alert');
+    const statusIcon = document.getElementById('status-icon');
+    const statusMessage = document.getElementById('status-message');
+
+    const isActive = config.active === 1;
+    const isValid = plugin.hasMainJs && plugin.hasConfig && plugin.hasDescription;
+
+    if (isActive) {
+        statusAlert.className = 'alert alert-success';
+        statusIcon.className = 'bi bi-check-circle';
+        statusMessage.innerText = 'Questo plugin è attualmente ATTIVO.';
+    } else if (isValid) {
+        statusAlert.className = 'alert alert-secondary';
+        statusIcon.className = 'bi bi-x-circle';
+        statusMessage.innerText = 'Questo plugin è attualmente DISATTIVO ma può essere attivato.';
+    } else {
+        statusAlert.className = 'alert alert-danger';
+        statusIcon.className = 'bi bi-exclamation-triangle';
+        statusMessage.innerText = 'Questo plugin NON è valido (struttura incompleta) e non può essere attivato.';
+    }
+
+    // Descrizione
+    document.getElementById('desc-name').innerText = description.name || plugin.name;
+    document.getElementById('desc-version').innerText = description.version || 'N/A';
+    document.getElementById('desc-author').innerText = description.author || 'N/A';
+    document.getElementById('desc-email').innerText = description.email || 'N/A';
+    document.getElementById('desc-license').innerText = description.license || 'N/A';
+    document.getElementById('desc-description').innerText = description.description || 'Nessuna descrizione disponibile';
+
+    // Configurazione
+    document.getElementById('config-active').innerHTML = config.active === 1 ?
+        '<span class="badge bg-success">Sì</span>' :
+        '<span class="badge bg-secondary">No</span>';
+    document.getElementById('config-installed').innerHTML = config.isInstalled === 1 ?
+        '<span class="badge bg-success">Sì</span>' :
+        '<span class="badge bg-warning">No</span>';
+    document.getElementById('config-weight').innerHTML = `<span class="badge bg-info">${config.weight || 0}</span>`;
+    document.getElementById('config-version').innerText = config.version || 'N/A';
+
+    // Dipendenze Plugin
+    const pluginDeps = config.dependency || {};
+    const pluginDepsContainer = document.getElementById('plugin-dependencies');
+    if (Object.keys(pluginDeps).length > 0) {
+        const list = document.createElement('ul');
+        list.className = 'list-group list-group-flush';
+        Object.entries(pluginDeps).forEach(([name, version]) => {
+            const item = document.createElement('li');
+            item.className = 'list-group-item d-flex justify-content-between align-items-center';
+            item.innerHTML = `
+                <span>${name}</span>
+                <span class="badge bg-primary">${version}</span>
+            `;
+            list.appendChild(item);
+        });
+        pluginDepsContainer.appendChild(list);
+    } else {
+        pluginDepsContainer.innerHTML = '<p class="text-muted mb-0">Nessuna dipendenza plugin</p>';
+    }
+
+    // Dipendenze Node Modules
+    const nodeDeps = config.nodeModuleDependency || {};
+    const nodeDepsContainer = document.getElementById('node-dependencies');
+    if (Object.keys(nodeDeps).length > 0) {
+        const list = document.createElement('ul');
+        list.className = 'list-group list-group-flush';
+        Object.entries(nodeDeps).forEach(([name, version]) => {
+            const item = document.createElement('li');
+            item.className = 'list-group-item d-flex justify-content-between align-items-center';
+            item.innerHTML = `
+                <span>${name}</span>
+                <span class="badge bg-secondary">${version}</span>
+            `;
+            list.appendChild(item);
+        });
+        nodeDepsContainer.appendChild(list);
+    } else {
+        nodeDepsContainer.innerHTML = '<p class="text-muted mb-0">Nessuna dipendenza node modules</p>';
+    }
+
+    // Validazione Struttura
+    const setBadge = (id, isPresent) => {
+        const badge = document.getElementById(id);
+        if (isPresent) {
+            badge.className = 'badge bg-success';
+            badge.innerHTML = '<i class="bi bi-check"></i> Presente';
+        } else {
+            badge.className = 'badge bg-danger';
+            badge.innerHTML = '<i class="bi bi-x"></i> Mancante';
+        }
+    };
+    setBadge('badge-mainjs', plugin.hasMainJs);
+    setBadge('badge-config', plugin.hasConfig);
+    setBadge('badge-description', plugin.hasDescription);
+
+    // File
+    const filesList = document.getElementById('files-list');
+    const files = plugin.files || [];
+    document.getElementById('file-count').innerText = files.length;
+
+    files.forEach(file => {
+        const item = document.createElement('li');
+        item.className = 'list-group-item';
+
+        // Icona in base al tipo di file
+        let icon = 'file-earmark';
+        if (file.endsWith('.js')) icon = 'file-earmark-code';
+        else if (file.endsWith('.json')) icon = 'file-earmark-text';
+        else if (file.endsWith('.md')) icon = 'file-earmark-richtext';
+
+        item.innerHTML = `<i class="bi bi-${icon} text-primary"></i> ${file}`;
+        filesList.appendChild(item);
+    });
+
+    // Percorso
+    document.getElementById('plugin-path').innerText = plugin.path;
+
+    // Configurazione Custom
+    if (config.custom && Object.keys(config.custom).length > 0) {
+        document.getElementById('custom-config-card').style.display = 'block';
+        document.getElementById('custom-config-json').innerText = JSON.stringify(config.custom, null, 2);
+    }
+
+    // Azioni
+    const actionsContainer = document.getElementById('actions-container');
+
+    if (isValid) {
+        if (isActive) {
+            actionsContainer.innerHTML = `
+                <button type="button" class="btn btn-warning" onclick="togglePlugin(0)">
+                    <i class="bi bi-toggle-off"></i> Disattiva Plugin
+                </button>
+            `;
+        } else {
+            actionsContainer.innerHTML = `
+                <button type="button" class="btn btn-success" onclick="togglePlugin(1)">
+                    <i class="bi bi-toggle-on"></i> Attiva Plugin
+                </button>
+            `;
+        }
+        actionsContainer.innerHTML += `
+            <a href="/${adminPrefix}/pluginsManagment/pluginConfig.ejs?plugin=${plugin.name}" class="btn btn-primary">
+                <i class="bi bi-gear"></i> Modifica Configurazione
+            </a>
+        `;
+    } else {
+        actionsContainer.innerHTML = `
+            <button type="button" class="btn btn-secondary" disabled>
+                <i class="bi bi-exclamation-triangle"></i> Plugin non valido - Nessuna azione disponibile
+            </button>
+        `;
+    }
+}
+
+/**
+ * Prepara modal per toggle plugin
+ */
+function togglePlugin(newActive) {
+    pendingAction = newActive;
+
+    const actionLabel = newActive ? 'attivare' : 'disattivare';
+    const message = `Vuoi ${actionLabel} il plugin "<strong>${currentPlugin.name}</strong>"?`;
+
+    document.getElementById('togglePluginMessage').innerHTML = message;
+
+    const modal = new bootstrap.Modal(document.getElementById('togglePluginModal'));
+    modal.show();
+}
+
+/**
+ * Conferma ed esegue il toggle
+ */
+document.getElementById('confirmToggleBtn').addEventListener('click', async function() {
+    if (!currentPlugin || pendingAction === null) return;
+
+    const btn = this;
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Elaborazione...';
+
+    try {
+        const response = await fetch(`/${apiPrefix}/admin/plugins/${currentPlugin.name}/toggle`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ active: pendingAction })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert(result.message);
+            // Ricarica la pagina
+            window.location.reload();
+        } else {
+            throw new Error(result.error || 'Errore sconosciuto');
+        }
+    } catch (error) {
+        console.error('Errore nel toggle plugin:', error);
+        alert('Errore: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        bootstrap.Modal.getInstance(document.getElementById('togglePluginModal')).hide();
+    }
+});
+</script>
 
 <%- include( passData.themeSys.getAdminThemePartPath( 'footer.ejs' ) ) %>
