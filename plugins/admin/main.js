@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
 const pluginsManagment = require('./pluginsManagment');
+const themesManagment = require('./themesManagment');
 
 let pluginConfig = loadJson5(path.join(__dirname, 'pluginConfig.json'));// let perchè questa varibile può cambiare di valore
 const pluginName = path.basename(  __dirname );// restituisce il nome della directory che contiene il file corrente e che è anche il nome del plugin
@@ -73,93 +74,15 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     }
   );
 
-  // API per cambiare il tema attivo (pubblico o admin)
-  routeArray.push(
-    {
-      method: 'POST',
-      path: `/setTheme`,
-      handler: async (ctx) => {
-        try {
-          // Verifica autenticazione (opzionale ma consigliato)
-          if (!ctx.session || !ctx.session.authenticated) {
-            ctx.status = 401;
-            ctx.body = { error: 'Non autorizzato. Effettua il login.' };
-            return;
-          }
-
-          // Verifica ruolo (solo admin e root possono cambiare tema)
-          const userRole = ctx.session.user ? ctx.session.user.roleId : 999;
-          if (userRole > 1) { // 0 = root, 1 = admin
-            ctx.status = 403;
-            ctx.body = { error: 'Non hai i permessi per modificare i temi.' };
-            return;
-          }
-
-          const { themeName, themeType } = ctx.request.body;
-
-          // Validazione input
-          if (!themeName || !themeType) {
-            ctx.status = 400;
-            ctx.body = { error: 'Parametri mancanti: themeName e themeType sono obbligatori.' };
-            return;
-          }
-
-          if (themeType !== 'public' && themeType !== 'admin') {
-            ctx.status = 400;
-            ctx.body = { error: 'themeType deve essere "public" o "admin".' };
-            return;
-          }
-
-          // Verifica che il tema esista
-          const themesPath = path.join(__dirname, '../../themes');
-          const themePath = path.join(themesPath, themeName);
-
-          if (!fs.existsSync(themePath)) {
-            ctx.status = 404;
-            ctx.body = { error: `Il tema "${themeName}" non esiste.` };
-            return;
-          }
-
-          // Verifica che il tema abbia la cartella views
-          const viewsPath = path.join(themePath, 'views');
-          if (!fs.existsSync(viewsPath)) {
-            ctx.status = 400;
-            ctx.body = { error: `Il tema "${themeName}" non ha una cartella views/ valida.` };
-            return;
-          }
-
-          // Leggi configurazione attuale
-          const configPath = path.join(__dirname, '../../ital8Config.json');
-          const currentConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-
-          // Aggiorna il tema appropriato
-          if (themeType === 'public') {
-            currentConfig.activeTheme = themeName;
-          } else {
-            currentConfig.adminActiveTheme = themeName;
-          }
-
-          // Salva configurazione aggiornata
-          fs.writeFileSync(configPath, JSON.stringify(currentConfig, null, 2), 'utf8');
-
-          const typeLabel = themeType === 'public' ? 'sito pubblico' : 'pannello admin';
-          ctx.body = {
-            success: true,
-            message: `Tema "${themeName}" attivato per ${typeLabel}. Riavvia il server per applicare le modifiche.`
-          };
-
-        } catch (error) {
-          console.error('Errore nel cambio tema:', error);
-          ctx.status = 500;
-          ctx.body = { error: 'Errore interno del server: ' + error.message };
-        }
-      }
-    }
-  );
-
   // Aggiungi route per gestione plugin (da pluginsManagment.js)
   const pluginManagmentRoutes = pluginsManagment.getRoutes();
   pluginManagmentRoutes.forEach(route => {
+    routeArray.push(route);
+  });
+
+  // Aggiungi route per gestione temi (da themesManagment.js)
+  const themeManagmentRoutes = themesManagment.getRoutes();
+  themeManagmentRoutes.forEach(route => {
     routeArray.push(route);
   });
 
