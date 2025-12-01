@@ -87,8 +87,8 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
   });
 
   // Aggiungi route per gestione temi (da themesManagment.js)
-  // Passa myPluginSys per evitare dipendenza circolare
-  const themeManagmentRoutes = themesManagment.getRoutes(myPluginSys);
+  // Passa una funzione getter per accedere a myPluginSys a runtime (non a construction time)
+  const themeManagmentRoutes = themesManagment.getRoutes(() => myPluginSys);
   themeManagmentRoutes.forEach(route => {
     routeArray.push(route);
   });
