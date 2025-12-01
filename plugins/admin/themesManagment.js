@@ -36,7 +36,6 @@
 const fs = require('fs');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
-const adminMain = require('./main');
 
 /**
  * Ritorna la lista di tutti i temi disponibili
@@ -354,9 +353,10 @@ function setActiveTheme(themeName, themeType, themeSys) {
 
 /**
  * Genera le route API per la gestione dei temi
+ * @param {Object} pluginSys - Sistema plugin per accedere a themeSys
  * @returns {Array} Array di oggetti route per Koa
  */
-function getRoutes() {
+function getRoutes(pluginSys) {
     return [
         // GET /api/admin/themes - Lista tutti i temi
         {
@@ -364,8 +364,7 @@ function getRoutes() {
             path: '/themes',
             handler: async (ctx) => {
                 try {
-                    // Ottieni themeSys tramite pluginSys
-                    const pluginSys = adminMain.getPluginSys();
+                    // Ottieni themeSys tramite pluginSys passato come parametro
                     if (!pluginSys) {
                         throw new Error('pluginSys non disponibile');
                     }
@@ -400,8 +399,7 @@ function getRoutes() {
                 try {
                     const themeName = ctx.params.name;
 
-                    // Ottieni themeSys tramite pluginSys
-                    const pluginSys = adminMain.getPluginSys();
+                    // Ottieni themeSys tramite pluginSys passato come parametro
                     if (!pluginSys) {
                         throw new Error('pluginSys non disponibile');
                     }
@@ -437,8 +435,7 @@ function getRoutes() {
                 try {
                     const { themeName, themeType } = ctx.request.body;
 
-                    // Ottieni themeSys tramite pluginSys
-                    const pluginSys = adminMain.getPluginSys();
+                    // Ottieni themeSys tramite pluginSys passato come parametro
                     if (!pluginSys) {
                         throw new Error('pluginSys non disponibile');
                     }

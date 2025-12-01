@@ -61,8 +61,8 @@ function setSharedObject( pluginName, object ){// pluginName = nome dell'altro p
 }
 
 function getRouteArray(){// restituirà un array contenente tutte le rotte che poi saranno aggiunte al cms
-  
-  // per ragioni di sucurezza all'indirizzo di admin sarà aggiunto un ulteriore sottopercorso 
+
+  // per ragioni di sucurezza all'indirizzo di admin sarà aggiunto un ulteriore sottopercorso
   // oltre as /api/namePlugin ci sarà anche adminPrefix quindi --> /api/namePlugin/adminPrefix
   // quindi usare sepre :  path: `/${ital8Conf.adminPrefix}/oterpath`
 
@@ -87,7 +87,8 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
   });
 
   // Aggiungi route per gestione temi (da themesManagment.js)
-  const themeManagmentRoutes = themesManagment.getRoutes();
+  // Passa myPluginSys per evitare dipendenza circolare
+  const themeManagmentRoutes = themesManagment.getRoutes(myPluginSys);
   themeManagmentRoutes.forEach(route => {
     routeArray.push(route);
   });
