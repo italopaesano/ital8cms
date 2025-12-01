@@ -244,9 +244,9 @@ function getRoutes() {
     return [
         // GET /api/admin/systemSettings/config - Leggi configurazione
         {
-            method: 'get',
+            method: 'GET',
             path: '/systemSettings/config',
-            func: async (ctx) => {
+            handler: async (ctx) => {
                 try {
                     const result = getSystemConfig();
 
@@ -269,9 +269,9 @@ function getRoutes() {
 
         // POST /api/admin/systemSettings/config - Aggiorna configurazione
         {
-            method: 'post',
+            method: 'POST',
             path: '/systemSettings/config',
-            func: async (ctx) => {
+            handler: async (ctx) => {
                 try {
                     const { config } = ctx.request.body;
 
