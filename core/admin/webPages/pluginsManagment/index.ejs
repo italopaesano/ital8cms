@@ -1,5 +1,5 @@
-<!-- TEMPLATE PER LA CREAZIONE DELLE PAGINE DI AMMINISTRAZIONE  -->
-<!-- ATTENZIONE  nelle pagine di admin sarà chiamata la funzione getAdminThemePartPath() e non la funzione getThemePartPath() -->
+<!-- GESTIONE PLUGIN - Lista e gestione plugin installati -->
+<!-- ATTENZIONE nelle pagine di admin sarà chiamata la funzione getAdminThemePartPath() e non la funzione getThemePartPath() -->
 <%- include( passData.themeSys.getAdminThemePartPath( 'head.ejs' ) ) %>
 <%- include( passData.themeSys.getAdminThemePartPath( 'header.ejs' ) ) %>
 
@@ -23,15 +23,364 @@
         </a>
     </div>
 
-    <div class="card">
-        <div class="card-header">
-            <h5 class="mb-0">Lista Plugin Installati</h5>
+    <!-- Loading Spinner -->
+    <div id="loading-spinner" class="text-center my-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Caricamento...</span>
+        </div>
+        <p class="mt-2 text-muted">Caricamento plugin in corso...</p>
+    </div>
+
+    <!-- Error Alert -->
+    <div id="error-alert" class="alert alert-danger" style="display: none;">
+        <i class="bi bi-exclamation-triangle"></i>
+        <strong>Errore:</strong> <span id="error-message"></span>
+    </div>
+
+    <!-- Success Alert -->
+    <div id="success-alert" class="alert alert-success" style="display: none;">
+        <i class="bi bi-check-circle"></i>
+        <span id="success-message"></span>
+    </div>
+
+    <!-- Plugin Statistics -->
+    <div id="plugin-stats" class="row mb-4" style="display: none;">
+        <div class="col-md-3">
+            <div class="card border-primary">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-primary">Totali</h5>
+                    <h2 id="total-plugins">0</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-success">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-success">Attivi</h5>
+                    <h2 id="active-plugins">0</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-warning">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-warning">Disattivi</h5>
+                    <h2 id="inactive-plugins">0</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-danger">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-danger">Non Validi</h5>
+                    <h2 id="invalid-plugins">0</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Plugins List -->
+    <div id="plugins-container" class="card" style="display: none;">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-collection"></i> Plugin Installati (<span id="plugin-count">0</span>)</h5>
+            <button class="btn btn-sm btn-outline-secondary" onclick="loadPlugins()">
+                <i class="bi bi-arrow-clockwise"></i> Ricarica
+            </button>
         </div>
         <div class="card-body">
-            <p class="text-muted">Qui verrà visualizzata la lista di tutti i plugin con stato, dipendenze e azioni disponibili.</p>
-            <!-- TODO: Implementare lista plugin -->
+            <div id="plugins-list" class="row">
+                <!-- Plugins will be populated here by JavaScript -->
+            </div>
         </div>
     </div>
 </div>
+
+<!-- Modal Conferma Toggle Plugin -->
+<div class="modal fade" id="togglePluginModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Conferma Modifica Stato Plugin</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="togglePluginMessage"></p>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Attenzione:</strong> Per applicare le modifiche sarà necessario riavviare il server.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-primary" id="confirmToggleBtn">
+                    <i class="bi bi-check"></i> Conferma
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let pendingPluginName = null;
+let pendingPluginAction = null;
+
+// Carica lista plugin all'avvio
+document.addEventListener('DOMContentLoaded', loadPlugins);
+
+/**
+ * Carica la lista di tutti i plugin dal server
+ */
+async function loadPlugins() {
+    const spinner = document.getElementById('loading-spinner');
+    const errorAlert = document.getElementById('error-alert');
+    const pluginsContainer = document.getElementById('plugins-container');
+    const pluginStats = document.getElementById('plugin-stats');
+
+    // Mostra spinner, nascondi altri elementi
+    spinner.style.display = 'block';
+    errorAlert.style.display = 'none';
+    pluginsContainer.style.display = 'none';
+    pluginStats.style.display = 'none';
+
+    try {
+        const response = await fetch(`/${apiPrefix}/admin/plugins`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || 'Errore sconosciuto nel caricamento dei plugin');
+        }
+
+        // Nascondi spinner
+        spinner.style.display = 'none';
+
+        // Calcola statistiche
+        const plugins = result.plugins;
+        const totalPlugins = plugins.length;
+        const activePlugins = plugins.filter(p => p.active === 1).length;
+        const inactivePlugins = plugins.filter(p => p.active === 0).length;
+        const invalidPlugins = plugins.filter(p => !p.isValid).length;
+
+        // Aggiorna statistiche
+        document.getElementById('total-plugins').innerText = totalPlugins;
+        document.getElementById('active-plugins').innerText = activePlugins;
+        document.getElementById('inactive-plugins').innerText = inactivePlugins;
+        document.getElementById('invalid-plugins').innerText = invalidPlugins;
+        document.getElementById('plugin-count').innerText = totalPlugins;
+
+        // Mostra statistiche
+        pluginStats.style.display = 'flex';
+
+        // Popola lista plugin
+        const pluginsList = document.getElementById('plugins-list');
+        pluginsList.innerHTML = '';
+
+        if (plugins.length === 0) {
+            pluginsList.innerHTML = '<div class="col-12"><div class="alert alert-info">Nessun plugin trovato.</div></div>';
+        } else {
+            plugins.forEach(plugin => {
+                pluginsList.appendChild(createPluginCard(plugin));
+            });
+        }
+
+        // Mostra container plugin
+        pluginsContainer.style.display = 'block';
+
+    } catch (error) {
+        console.error('Errore nel caricamento dei plugin:', error);
+        spinner.style.display = 'none';
+        errorAlert.style.display = 'block';
+        document.getElementById('error-message').innerText = error.message;
+    }
+}
+
+/**
+ * Crea una card HTML per un singolo plugin
+ */
+function createPluginCard(plugin) {
+    const col = document.createElement('div');
+    col.className = 'col-md-6 col-lg-4 mb-4';
+
+    const isActive = plugin.active === 1;
+    const isValid = plugin.isValid;
+    const borderClass = isActive ? 'border-success' : (isValid ? 'border-secondary' : 'border-danger');
+
+    col.innerHTML = `
+        <div class="card h-100 ${borderClass}">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong class="text-truncate" style="max-width: 70%;" title="${plugin.name}">
+                    ${plugin.name}
+                </strong>
+                <div>
+                    ${isActive ?
+                        '<span class="badge bg-success" title="Plugin attivo"><i class="bi bi-check-circle"></i></span>' :
+                        '<span class="badge bg-secondary" title="Plugin disattivo"><i class="bi bi-x-circle"></i></span>'
+                    }
+                    ${!isValid ?
+                        '<span class="badge bg-danger ms-1" title="Struttura plugin non valida"><i class="bi bi-exclamation-triangle"></i></span>' :
+                        ''
+                    }
+                </div>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled small mb-3">
+                    <li><strong>Versione:</strong> ${plugin.version}</li>
+                    <li><strong>Autore:</strong> ${plugin.author}</li>
+                    ${plugin.email ? `<li><strong>Email:</strong> ${plugin.email}</li>` : ''}
+                    <li><strong>Licenza:</strong> ${plugin.license}</li>
+                    <li><strong>Weight:</strong> <span class="badge bg-info">${plugin.weight}</span></li>
+                </ul>
+
+                ${plugin.description ?
+                    `<p class="card-text small text-muted">${plugin.description.substring(0, 100)}${plugin.description.length > 100 ? '...' : ''}</p>` :
+                    '<p class="card-text small text-muted">Nessuna descrizione disponibile</p>'
+                }
+
+                <!-- Dipendenze Plugin -->
+                ${Object.keys(plugin.dependency || {}).length > 0 ? `
+                    <div class="mt-2">
+                        <small><strong>Dipendenze Plugin:</strong></small>
+                        <div class="d-flex flex-wrap gap-1 mt-1">
+                            ${Object.entries(plugin.dependency).map(([name, version]) =>
+                                `<span class="badge bg-primary" title="Richiede ${name} ${version}">${name}</span>`
+                            ).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+
+                <!-- Validazione Struttura -->
+                <div class="mt-2">
+                    <small><strong>Struttura:</strong></small>
+                    <div class="d-flex gap-2 mt-1">
+                        ${plugin.hasMainJs ?
+                            '<span class="badge bg-success" title="main.js presente"><i class="bi bi-check"></i> main.js</span>' :
+                            '<span class="badge bg-danger" title="main.js mancante"><i class="bi bi-x"></i> main.js</span>'
+                        }
+                        ${plugin.hasConfig ?
+                            '<span class="badge bg-success" title="Config presente"><i class="bi bi-check"></i> config</span>' :
+                            '<span class="badge bg-danger" title="Config mancante"><i class="bi bi-x"></i> config</span>'
+                        }
+                        ${plugin.hasDescription ?
+                            '<span class="badge bg-success" title="Description presente"><i class="bi bi-check"></i> desc</span>' :
+                            '<span class="badge bg-danger" title="Description mancante"><i class="bi bi-x"></i> desc</span>'
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <div class="btn-group btn-group-sm w-100" role="group">
+                    <a href="/${adminPrefix}/pluginsManagment/pluginView.ejs?plugin=${plugin.name}"
+                       class="btn btn-outline-info"
+                       title="Visualizza dettagli">
+                        <i class="bi bi-eye"></i> Dettagli
+                    </a>
+                    ${isValid ? `
+                        <button type="button"
+                                class="btn btn-outline-${isActive ? 'warning' : 'success'}"
+                                onclick="togglePlugin('${plugin.name}', ${isActive ? 0 : 1})"
+                                title="${isActive ? 'Disattiva plugin' : 'Attiva plugin'}">
+                            <i class="bi bi-${isActive ? 'toggle-on' : 'toggle-off'}"></i>
+                            ${isActive ? 'Disattiva' : 'Attiva'}
+                        </button>
+                    ` : `
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                disabled
+                                title="Plugin non valido, impossibile attivare">
+                            <i class="bi bi-exclamation-triangle"></i> Non Valido
+                        </button>
+                    `}
+                </div>
+            </div>
+        </div>
+    `;
+
+    return col;
+}
+
+/**
+ * Prepara il modal per confermare il toggle di un plugin
+ */
+function togglePlugin(pluginName, newActive) {
+    pendingPluginName = pluginName;
+    pendingPluginAction = newActive;
+
+    const actionLabel = newActive ? 'attivare' : 'disattivare';
+    const message = `Vuoi ${actionLabel} il plugin "<strong>${pluginName}</strong>"?`;
+
+    document.getElementById('togglePluginMessage').innerHTML = message;
+
+    const modal = new bootstrap.Modal(document.getElementById('togglePluginModal'));
+    modal.show();
+}
+
+/**
+ * Conferma e esegue il toggle del plugin
+ */
+document.getElementById('confirmToggleBtn').addEventListener('click', async function() {
+    if (!pendingPluginName || pendingPluginAction === null) return;
+
+    const btn = this;
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Elaborazione...';
+
+    try {
+        const response = await fetch(`/${apiPrefix}/admin/plugins/${pendingPluginName}/toggle`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ active: pendingPluginAction })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Mostra messaggio successo
+            const successAlert = document.getElementById('success-alert');
+            document.getElementById('success-message').innerText = result.message;
+            successAlert.style.display = 'block';
+
+            // Nascondi dopo 5 secondi
+            setTimeout(() => {
+                successAlert.style.display = 'none';
+            }, 5000);
+
+            // Ricarica lista plugin
+            loadPlugins();
+
+            // Chiudi modal
+            bootstrap.Modal.getInstance(document.getElementById('togglePluginModal')).hide();
+        } else {
+            throw new Error(result.error || 'Errore sconosciuto');
+        }
+    } catch (error) {
+        console.error('Errore nel toggle plugin:', error);
+
+        // Mostra messaggio errore
+        const errorAlert = document.getElementById('error-alert');
+        document.getElementById('error-message').innerText = 'Errore: ' + error.message;
+        errorAlert.style.display = 'block';
+
+        // Nascondi dopo 5 secondi
+        setTimeout(() => {
+            errorAlert.style.display = 'none';
+        }, 5000);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    }
+});
+</script>
 
 <%- include( passData.themeSys.getAdminThemePartPath( 'footer.ejs' ) ) %>
