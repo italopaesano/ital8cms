@@ -1,5 +1,5 @@
-<!-- TEMPLATE PER LA CREAZIONE DELLE PAGINE DI AMMINISTRAZIONE  -->
-<!-- ATTENZIONE  nelle pagine di admin sarà chiamata la funzione getAdminThemePartPath() e non la funzione getThemePartPath() -->
+<!-- IMPOSTAZIONI SISTEMA - Editor configurazione ital8Config.json -->
+<!-- ATTENZIONE nelle pagine di admin sarà chiamata la funzione getAdminThemePartPath() e non la funzione getThemePartPath() -->
 <%- include( passData.themeSys.getAdminThemePartPath( 'head.ejs' ) ) %>
 <%- include( passData.themeSys.getAdminThemePartPath( 'header.ejs' ) ) %>
 
@@ -15,7 +15,7 @@
     const adminPrefix = document.getElementById('adminPrefix').innerText;
 </script>
 
-<div class="container mt-4">
+<div class="container-fluid mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="bi bi-sliders"></i> Impostazioni Sistema</h2>
         <a href="/<%= passData.adminPrefix %>" class="btn btn-outline-secondary">
@@ -23,21 +23,320 @@
         </a>
     </div>
 
-    <div class="card mb-3">
-        <div class="card-header">
-            <h5 class="mb-0">Configurazione Generale</h5>
+    <!-- Alert messaggi -->
+    <div id="alert-container"></div>
+
+    <div class="row">
+        <!-- Colonna Sinistra - Editor -->
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-gear"></i> Editor Configurazione Sistema</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Informazione:</strong> Questo file supporta JSON5 - puoi usare commenti e trailing commas.
+                        Le modifiche richiedono il riavvio del server.
+                    </div>
+
+                    <!-- Editor Textarea -->
+                    <div class="mb-3">
+                        <label for="config-editor" class="form-label">Configurazione JSON5</label>
+                        <textarea
+                            id="config-editor"
+                            class="form-control font-monospace"
+                            rows="20"
+                            style="min-height: 500px; font-size: 14px;"
+                            spellcheck="false"></textarea>
+                        <small class="text-muted">
+                            Caratteri: <span id="char-count">0</span> |
+                            Righe: <span id="line-count">0</span>
+                        </small>
+                    </div>
+
+                    <!-- Pulsanti Azione -->
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary" onclick="formatJson()">
+                            <i class="bi bi-braces"></i> Formatta JSON
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="resetConfig()">
+                            <i class="bi bi-arrow-clockwise"></i> Ripristina
+                        </button>
+                        <button type="button" class="btn btn-success ms-auto" onclick="saveConfig()">
+                            <i class="bi bi-save"></i> Salva Configurazione
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Impostazioni Avanzate Link -->
+            <div class="card">
+                <div class="card-body">
+                    <h6><i class="bi bi-exclamation-triangle"></i> Impostazioni Avanzate</h6>
+                    <p class="text-muted mb-2">Gestisci configurazioni avanzate come chiavi di sessione.</p>
+                    <a href="/<%= passData.adminPrefix %>/systemSettings/advanced.ejs" class="btn btn-warning">
+                        <i class="bi bi-shield-lock"></i> Gestione Sessioni (Avanzato)
+                    </a>
+                </div>
+            </div>
         </div>
-        <div class="card-body">
-            <p class="text-muted">Qui sarà possibile modificare le impostazioni generali del sistema (ital8Config.json).</p>
-            <!-- TODO: Implementare form impostazioni sistema -->
+
+        <!-- Colonna Destra - Helper e Info -->
+        <div class="col-lg-4">
+            <!-- Campi Obbligatori -->
+            <div class="card mb-3">
+                <div class="card-header bg-danger text-white">
+                    <h6 class="mb-0"><i class="bi bi-exclamation-circle"></i> Campi Obbligatori</h6>
+                </div>
+                <div class="card-body">
+                    <p class="small mb-2"><strong>Tutti i campi attualmente presenti sono obbligatori:</strong></p>
+                    <ul class="list-unstyled mb-0 small">
+                        <li><code>apiPrefix</code> (string)</li>
+                        <li><code>adminPrefix</code> (string)</li>
+                        <li><code>enableAdmin</code> (boolean)</li>
+                        <li><code>viewsPrefix</code> (string)</li>
+                        <li><code>baseThemePath</code> (string)</li>
+                        <li><code>activeTheme</code> (string)</li>
+                        <li><code>adminActiveTheme</code> (string)</li>
+                        <li><code>wwwPath</code> (string)</li>
+                        <li><code>debugMode</code> (0 o 1)</li>
+                        <li><code>httpPort</code> (number, 1-65535)</li>
+                        <li><code>useHttps</code> (boolean)</li>
+                        <li><code>httpsPort</code> (number o "")</li>
+                        <li><code>AutoRedirectHttpPortToHttpsPort</code> (boolean)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Guida Campi -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-book"></i> Guida Campi</h6>
+                </div>
+                <div class="card-body small">
+                    <dl class="mb-0">
+                        <dt><code>apiPrefix</code></dt>
+                        <dd>Prefisso per le route API<br>
+                            Default: <code>"api"</code></dd>
+
+                        <dt><code>adminPrefix</code></dt>
+                        <dd>Prefisso per il pannello admin<br>
+                            Default: <code>"admin"</code></dd>
+
+                        <dt><code>httpPort</code></dt>
+                        <dd>Porta del server HTTP<br>
+                            Range: 1-65535<br>
+                            Default: <code>3000</code></dd>
+
+                        <dt><code>debugMode</code></dt>
+                        <dd>Modalità debug<br>
+                            <code>0</code> = Disattivo<br>
+                            <code>1</code> = Attivo</dd>
+
+                        <dt><code>useHttps</code></dt>
+                        <dd>Abilita server HTTPS<br>
+                            <code>true</code> o <code>false</code></dd>
+
+                        <dt><code>activeTheme</code></dt>
+                        <dd><span class="badge bg-warning">⚠️</span> Gestito in <strong>Gestione Temi</strong></dd>
+
+                        <dt><code>adminActiveTheme</code></dt>
+                        <dd><span class="badge bg-warning">⚠️</span> Gestito in <strong>Gestione Temi</strong></dd>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Esempio Struttura -->
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0"><i class="bi bi-check-circle"></i> Esempio Struttura</h6>
+                </div>
+                <div class="card-body">
+                    <pre class="mb-0 small"><code>{
+  "apiPrefix": "api",
+  "adminPrefix": "admin",
+  "enableAdmin": true,
+  "viewsPrefix": "views",
+  "baseThemePath": "../",
+  "activeTheme": "default",
+  "adminActiveTheme": "default",
+  "wwwPath": "/www",
+  "debugMode": 1,
+  "httpPort": 3000,
+  "useHttps": false,
+  "httpsPort": "",
+  "AutoRedirectHttpPortToHttpsPort": false
+}</code></pre>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div>
-        <a href="/<%= passData.adminPrefix %>/systemSettings/advanced.ejs" class="btn btn-warning">
-            <i class="bi bi-exclamation-triangle"></i> Impostazioni Avanzate
-        </a>
+    <!-- File Path -->
+    <div class="mt-3">
+        <small class="text-muted">
+            <i class="bi bi-file-earmark-code"></i>
+            File: <code id="config-path"></code>
+        </small>
     </div>
 </div>
+
+<script>
+let originalConfig = null;
+const editor = document.getElementById('config-editor');
+
+// Carica configurazione all'avvio
+window.addEventListener('DOMContentLoaded', loadConfig);
+
+// Update caratteri e righe in tempo reale
+editor.addEventListener('input', updateStats);
+
+async function loadConfig() {
+    try {
+        showLoading();
+
+        const response = await fetch(`/${apiPrefix}/admin/systemSettings/config`);
+        const result = await response.json();
+
+        if (result.success) {
+            originalConfig = JSON.parse(JSON.stringify(result.config));
+            editor.value = JSON.stringify(result.config, null, 2);
+            document.getElementById('config-path').textContent = result.path;
+            updateStats();
+            hideLoading();
+        } else {
+            showAlert('danger', 'Errore nel caricamento: ' + result.error);
+            hideLoading();
+        }
+    } catch (error) {
+        console.error('Errore:', error);
+        showAlert('danger', 'Errore nella richiesta: ' + error.message);
+        hideLoading();
+    }
+}
+
+function updateStats() {
+    const content = editor.value;
+    document.getElementById('char-count').textContent = content.length;
+    document.getElementById('line-count').textContent = content.split('\n').length;
+}
+
+function formatJson() {
+    try {
+        const config = JSON.parse(editor.value);
+        editor.value = JSON.stringify(config, null, 2);
+        updateStats();
+        showAlert('success', 'JSON formattato correttamente', true);
+    } catch (error) {
+        showAlert('danger', 'Errore nella formattazione: ' + error.message);
+    }
+}
+
+function resetConfig() {
+    if (confirm('Vuoi ripristinare la configurazione originale? Le modifiche non salvate verranno perse.')) {
+        editor.value = JSON.stringify(originalConfig, null, 2);
+        updateStats();
+        showAlert('info', 'Configurazione ripristinata', true);
+    }
+}
+
+async function saveConfig() {
+    try {
+        // Parse JSON
+        let config;
+        try {
+            config = JSON.parse(editor.value);
+        } catch (parseError) {
+            showAlert('danger', 'JSON non valido: ' + parseError.message);
+            return;
+        }
+
+        // Conferma salvataggio
+        if (!confirm('Sei sicuro di voler salvare la configurazione? Il server dovrà essere riavviato per applicare le modifiche.')) {
+            return;
+        }
+
+        showLoading();
+
+        const response = await fetch(`/${apiPrefix}/admin/systemSettings/config`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ config: config })
+        });
+
+        const result = await response.json();
+        hideLoading();
+
+        if (result.success) {
+            originalConfig = JSON.parse(JSON.stringify(config));
+
+            let message = result.message;
+            if (result.warnings && result.warnings.length > 0) {
+                message += '\n\n⚠️ Avvisi:\n' + result.warnings.join('\n');
+            }
+
+            showAlert('success', message);
+            window.scrollTo(0, 0);
+        } else {
+            let errorMsg = result.error;
+            if (result.validationErrors && result.validationErrors.length > 0) {
+                errorMsg += '\n\nErrori di validazione:\n• ' + result.validationErrors.join('\n• ');
+            }
+            showAlert('danger', errorMsg);
+            window.scrollTo(0, 0);
+        }
+    } catch (error) {
+        console.error('Errore:', error);
+        hideLoading();
+        showAlert('danger', 'Errore nella richiesta: ' + error.message);
+        window.scrollTo(0, 0);
+    }
+}
+
+function showAlert(type, message, autoDismiss = false) {
+    const alertHtml = `
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            <div style="white-space: pre-wrap;">${escapeHtml(message)}</div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    document.getElementById('alert-container').innerHTML = alertHtml;
+
+    if (autoDismiss) {
+        setTimeout(() => {
+            const alert = document.querySelector('#alert-container .alert');
+            if (alert) {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            }
+        }, 5000);
+    }
+}
+
+function showLoading() {
+    const btn = document.querySelector('button[onclick="saveConfig()"]');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Salvataggio...';
+    }
+}
+
+function hideLoading() {
+    const btn = document.querySelector('button[onclick="saveConfig()"]');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-save"></i> Salva Configurazione';
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
 
 <%- include( passData.themeSys.getAdminThemePartPath( 'footer.ejs' ) ) %>
