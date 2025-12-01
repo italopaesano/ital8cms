@@ -1,0 +1,37 @@
+<!-- TEMPLATE PER LA CREAZIONE DELLE PAGINE DI AMMINISTRAZIONE  -->
+<!-- ATTENZIONE  nelle pagine di admin sarà chiamata la funzione getAdminThemePartPath() e non la funzione getThemePartPath() -->
+<%- include( passData.themeSys.getAdminThemePartPath( 'head.ejs' ) ) %>
+<%- include( passData.themeSys.getAdminThemePartPath( 'header.ejs' ) ) %>
+
+<!-- api prefix -->
+<span id="apiPrefix" style="display: none;"><%- passData.apiPrefix %></span>
+<script>
+    const apiPrefix = document.getElementById('apiPrefix').innerText;
+</script>
+
+<!-- adminPrefix -->
+<span id="adminPrefix" style="display: none;"><%- passData.adminPrefix %></span>
+<script>
+    const adminPrefix = document.getElementById('adminPrefix').innerText;
+</script>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-trash"></i> Elimina Pagina</h2>
+        <a href="/<%= passData.adminPrefix %>/pagesManagment/index.ejs" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Torna alla Lista Pagine
+        </a>
+    </div>
+
+    <div class="card border-danger">
+        <div class="card-header bg-danger text-white">
+            <h5 class="mb-0">Conferma Eliminazione</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">Qui sarà richiesta la conferma per eliminare definitivamente la pagina selezionata.</p>
+            <!-- TODO: Implementare conferma eliminazione -->
+        </div>
+    </div>
+</div>
+
+<%- include( passData.themeSys.getAdminThemePartPath( 'footer.ejs' ) ) %>
