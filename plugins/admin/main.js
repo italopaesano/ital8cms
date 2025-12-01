@@ -12,7 +12,12 @@ const sharedObject = {};// ogetto che avrà gliogetti condiviso con gli altri pl
 
 const ital8Conf = loadJson5(path.join(__dirname, '../../ital8Config.json'));// questo serve a caricare le impostazioni generali del modulo ed in particolare lìapi Prefix
 
-function loadPlugin(){
+// Salva il riferimento a pluginSys per accedervi nei submoduli
+let myPluginSys = null;
+
+function loadPlugin(pluginSys, pathPluginFolder){
+  // Salva pluginSys per uso nei submoduli (themesManagment, pluginsManagment, systemSettings)
+  myPluginSys = pluginSys;
   //console.log( 'sharedObject: ', sharedObject );
 };
 
@@ -119,7 +124,7 @@ function getHooksPage(){
 
 module.exports = {
 
-  loadPlugin: loadPlugin,  //questa funzione verrà richiamata per caricare il plugin ogni volta che serve ad esempio ogni volta che si riavviam 
+  loadPlugin: loadPlugin,  //questa funzione verrà richiamata per caricare il plugin ogni volta che serve ad esempio ogni volta che si riavviam
   installPlugin: installPlugin, // questa funzione verrà richiamata per installare il plugin
   unistallPlugin: unistallPlugin, // questa funzione verrà richiamata per disinstallare il plugin
   upgradePlugin: upgradePlugin, // questa funzione verrà richiamata quando sarà necessario aggiornare il plugin
@@ -130,6 +135,8 @@ module.exports = {
   getRouteArray: getRouteArray,
   pluginConfig: pluginConfig,
   getHooksPage: getHooksPage,
-  getMiddlewareToAdd: getMiddlewareToAdd
+  getMiddlewareToAdd: getMiddlewareToAdd,
+  // Esporta il riferimento a pluginSys per i submoduli
+  getPluginSys: () => myPluginSys
 
 }

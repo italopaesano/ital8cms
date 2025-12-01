@@ -36,6 +36,7 @@
 const fs = require('fs');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
+const adminMain = require('./main');
 
 /**
  * Ritorna la lista di tutti i temi disponibili
@@ -363,7 +364,16 @@ function getRoutes() {
             path: '/themes',
             handler: async (ctx) => {
                 try {
-                    const themeSys = ctx.state.themeSys || global.themeSys;
+                    // Ottieni themeSys tramite pluginSys
+                    const pluginSys = adminMain.getPluginSys();
+                    if (!pluginSys) {
+                        throw new Error('pluginSys non disponibile');
+                    }
+                    const themeSys = pluginSys.getThemeSys();
+                    if (!themeSys) {
+                        throw new Error('themeSys non disponibile');
+                    }
+
                     const themes = getThemesList(themeSys);
 
                     ctx.body = {
@@ -389,7 +399,16 @@ function getRoutes() {
             handler: async (ctx) => {
                 try {
                     const themeName = ctx.params.name;
-                    const themeSys = ctx.state.themeSys || global.themeSys;
+
+                    // Ottieni themeSys tramite pluginSys
+                    const pluginSys = adminMain.getPluginSys();
+                    if (!pluginSys) {
+                        throw new Error('pluginSys non disponibile');
+                    }
+                    const themeSys = pluginSys.getThemeSys();
+                    if (!themeSys) {
+                        throw new Error('themeSys non disponibile');
+                    }
 
                     const result = getThemeDetails(themeName, themeSys);
 
@@ -417,7 +436,16 @@ function getRoutes() {
             handler: async (ctx) => {
                 try {
                     const { themeName, themeType } = ctx.request.body;
-                    const themeSys = ctx.state.themeSys || global.themeSys;
+
+                    // Ottieni themeSys tramite pluginSys
+                    const pluginSys = adminMain.getPluginSys();
+                    if (!pluginSys) {
+                        throw new Error('pluginSys non disponibile');
+                    }
+                    const themeSys = pluginSys.getThemeSys();
+                    if (!themeSys) {
+                        throw new Error('themeSys non disponibile');
+                    }
 
                     const result = setActiveTheme(themeName, themeType, themeSys);
 
