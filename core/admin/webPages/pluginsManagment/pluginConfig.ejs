@@ -1,5 +1,5 @@
-<!-- TEMPLATE PER LA CREAZIONE DELLE PAGINE DI AMMINISTRAZIONE  -->
-<!-- ATTENZIONE  nelle pagine di admin sarà chiamata la funzione getAdminThemePartPath() e non la funzione getThemePartPath() -->
+<!-- EDITOR CONFIGURAZIONE PLUGIN - Modifica pluginConfig.json -->
+<!-- ATTENZIONE nelle pagine di admin sarà chiamata la funzione getAdminThemePartPath() e non la funzione getThemePartPath() -->
 <%- include( passData.themeSys.getAdminThemePartPath( 'head.ejs' ) ) %>
 <%- include( passData.themeSys.getAdminThemePartPath( 'header.ejs' ) ) %>
 
@@ -16,22 +16,431 @@
 </script>
 
 <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-gear"></i> Configurazione Plugin</h2>
-        <a href="/<%= passData.adminPrefix %>/pluginsManagment/index.ejs" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left"></i> Torna alla Lista Plugin
-        </a>
+    <!-- Loading Spinner -->
+    <div id="loading-spinner" class="text-center my-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Caricamento...</span>
+        </div>
+        <p class="mt-2 text-muted">Caricamento configurazione plugin...</p>
     </div>
 
-    <div class="card">
-        <div class="card-header">
-            <h5 class="mb-0">Modifica Configurazione Plugin</h5>
+    <!-- Error Container -->
+    <div id="error-container" style="display: none;">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-gear"></i> Configurazione Plugin</h2>
+            <a href="/<%= passData.adminPrefix %>/pluginsManagment/index.ejs" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Torna alla Lista Plugin
+            </a>
         </div>
-        <div class="card-body">
-            <p class="text-muted">Qui sarà possibile modificare il file pluginConfig.json del plugin selezionato.</p>
-            <!-- TODO: Implementare editor configurazione plugin -->
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle"></i>
+            <span id="error-message"></span>
+        </div>
+    </div>
+
+    <!-- Editor Container -->
+    <div id="editor-container" style="display: none;">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>
+                <i class="bi bi-gear"></i>
+                Configurazione: <span id="plugin-name-title"></span>
+            </h2>
+            <div>
+                <a href="/<%= passData.adminPrefix %>/pluginsManagment/pluginView.ejs?plugin=" id="view-link" class="btn btn-outline-info me-2">
+                    <i class="bi bi-eye"></i> Visualizza Plugin
+                </a>
+                <a href="/<%= passData.adminPrefix %>/pluginsManagment/index.ejs" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Torna alla Lista
+                </a>
+            </div>
+        </div>
+
+        <!-- Success Alert -->
+        <div id="success-alert" class="alert alert-success alert-dismissible fade show" style="display: none;">
+            <i class="bi bi-check-circle"></i>
+            <span id="success-message"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+
+        <!-- Validation Error Alert -->
+        <div id="validation-alert" class="alert alert-danger alert-dismissible fade show" style="display: none;">
+            <i class="bi bi-exclamation-triangle"></i>
+            <strong>Errore di Validazione:</strong>
+            <span id="validation-message"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+
+        <!-- Warning Box -->
+        <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle"></i>
+            <strong>Attenzione:</strong>
+            <ul class="mb-0 mt-2">
+                <li>Modificare questa configurazione può rendere il plugin non funzionante</li>
+                <li>Assicurati che il JSON sia valido prima di salvare</li>
+                <li>Il server deve essere riavviato per applicare le modifiche</li>
+                <li>Si consiglia di fare un backup prima di procedere</li>
+            </ul>
+        </div>
+
+        <div class="row">
+            <!-- Editor Column -->
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-code-square"></i> Editor JSON</h5>
+                        <div>
+                            <button type="button" class="btn btn-sm btn-outline-warning" onclick="resetConfig()" title="Ripristina configurazione originale">
+                                <i class="bi bi-arrow-counterclockwise"></i> Ripristina
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="formatJson()" title="Formatta JSON">
+                                <i class="bi bi-code"></i> Formatta
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <textarea id="config-editor"
+                                  class="form-control font-monospace"
+                                  style="min-height: 500px; border: none; border-radius: 0; resize: vertical;"
+                                  spellcheck="false"></textarea>
+                    </div>
+                    <div class="card-footer">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle"></i>
+                                File: <code id="config-filename"></code>
+                            </small>
+                            <div id="char-count" class="text-muted small"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Info Column -->
+            <div class="col-lg-4">
+                <!-- Campi Obbligatori -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-exclamation-circle"></i> Campi Obbligatori</h6>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled small mb-0">
+                            <li class="mb-2">
+                                <code>active</code>
+                                <span class="text-muted">- 0 o 1 (disattivo/attivo)</span>
+                            </li>
+                            <li class="mb-2">
+                                <code>isInstalled</code>
+                                <span class="text-muted">- 0 o 1</span>
+                            </li>
+                            <li class="mb-2">
+                                <code>weight</code>
+                                <span class="text-muted">- Numero (ordine caricamento)</span>
+                            </li>
+                            <li class="mb-2">
+                                <code>dependency</code>
+                                <span class="text-muted">- Oggetto {}</span>
+                            </li>
+                            <li class="mb-2">
+                                <code>nodeModuleDependency</code>
+                                <span class="text-muted">- Oggetto {}</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Esempio Struttura -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-file-earmark-text"></i> Esempio Struttura</h6>
+                    </div>
+                    <div class="card-body">
+                        <pre class="small mb-0" style="font-size: 0.75rem;"><code>{
+  "active": 1,
+  "isInstalled": 1,
+  "weight": 0,
+  "dependency": {
+    "pluginName": "^1.0.0"
+  },
+  "nodeModuleDependency": {
+    "package": "^1.0.0"
+  },
+  "custom": {
+    "customField": "value"
+  }
+}</code></pre>
+                    </div>
+                </div>
+
+                <!-- Plugin Info -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-info-square"></i> Info Plugin</h6>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm mb-0">
+                            <tbody>
+                                <tr>
+                                    <th style="width: 50%;">Nome</th>
+                                    <td id="info-name"></td>
+                                </tr>
+                                <tr>
+                                    <th>Versione</th>
+                                    <td id="info-version"></td>
+                                </tr>
+                                <tr>
+                                    <th>Autore</th>
+                                    <td id="info-author"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="d-flex gap-2 justify-content-end mt-4">
+            <a href="/<%= passData.adminPrefix %>/pluginsManagment/index.ejs" class="btn btn-secondary">
+                <i class="bi bi-x-circle"></i> Annulla
+            </a>
+            <button type="button" class="btn btn-primary" onclick="saveConfig()">
+                <i class="bi bi-save"></i> Salva Configurazione
+            </button>
         </div>
     </div>
 </div>
+
+<script>
+let originalConfig = null;
+let currentPluginName = null;
+
+// Carica configurazione all'avvio
+document.addEventListener('DOMContentLoaded', loadPluginConfig);
+
+/**
+ * Carica la configurazione del plugin
+ */
+async function loadPluginConfig() {
+    const spinner = document.getElementById('loading-spinner');
+    const errorContainer = document.getElementById('error-container');
+    const editorContainer = document.getElementById('editor-container');
+
+    // Ottieni nome plugin dalla query string
+    const urlParams = new URLSearchParams(window.location.search);
+    const pluginName = urlParams.get('plugin');
+
+    if (!pluginName) {
+        spinner.style.display = 'none';
+        errorContainer.style.display = 'block';
+        document.getElementById('error-message').innerText = 'Nessun plugin specificato. Usa ?plugin=nomePlugin';
+        return;
+    }
+
+    currentPluginName = pluginName;
+
+    try {
+        const response = await fetch(`/${apiPrefix}/admin/plugins/${pluginName}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || 'Plugin non trovato');
+        }
+
+        const plugin = result.plugin;
+
+        // Salva configurazione originale
+        originalConfig = JSON.parse(JSON.stringify(plugin.config));
+
+        // Nascondi spinner, mostra editor
+        spinner.style.display = 'none';
+        editorContainer.style.display = 'block';
+
+        // Popola editor
+        document.getElementById('plugin-name-title').innerText = pluginName;
+        document.getElementById('view-link').href = `/${adminPrefix}/pluginsManagment/pluginView.ejs?plugin=${pluginName}`;
+        document.getElementById('config-filename').innerText = `plugins/${pluginName}/pluginConfig.json`;
+        document.getElementById('config-editor').value = JSON.stringify(plugin.config, null, 2);
+
+        // Info plugin
+        document.getElementById('info-name').innerText = plugin.description?.name || pluginName;
+        document.getElementById('info-version').innerText = plugin.description?.version || 'N/A';
+        document.getElementById('info-author').innerText = plugin.description?.author || 'N/A';
+
+        // Update char count
+        updateCharCount();
+
+        // Add input listener
+        document.getElementById('config-editor').addEventListener('input', updateCharCount);
+
+    } catch (error) {
+        console.error('Errore nel caricamento configurazione:', error);
+        spinner.style.display = 'none';
+        errorContainer.style.display = 'block';
+        document.getElementById('error-message').innerText = error.message;
+    }
+}
+
+/**
+ * Aggiorna il conteggio caratteri
+ */
+function updateCharCount() {
+    const editor = document.getElementById('config-editor');
+    const charCount = document.getElementById('char-count');
+    const lines = editor.value.split('\n').length;
+    const chars = editor.value.length;
+    charCount.innerText = `${lines} righe, ${chars} caratteri`;
+}
+
+/**
+ * Formatta il JSON nel textarea
+ */
+function formatJson() {
+    const editor = document.getElementById('config-editor');
+    try {
+        const parsed = JSON.parse(editor.value);
+        editor.value = JSON.stringify(parsed, null, 2);
+        updateCharCount();
+
+        // Nascondi eventuali alert di errore
+        document.getElementById('validation-alert').style.display = 'none';
+    } catch (error) {
+        showValidationError('JSON non valido: ' + error.message);
+    }
+}
+
+/**
+ * Ripristina la configurazione originale
+ */
+function resetConfig() {
+    if (!originalConfig) return;
+
+    if (confirm('Vuoi ripristinare la configurazione originale? Tutte le modifiche non salvate andranno perse.')) {
+        const editor = document.getElementById('config-editor');
+        editor.value = JSON.stringify(originalConfig, null, 2);
+        updateCharCount();
+        document.getElementById('validation-alert').style.display = 'none';
+    }
+}
+
+/**
+ * Valida e salva la configurazione
+ */
+async function saveConfig() {
+    const editor = document.getElementById('config-editor');
+    const validationAlert = document.getElementById('validation-alert');
+    const successAlert = document.getElementById('success-alert');
+
+    // Nascondi alert precedenti
+    validationAlert.style.display = 'none';
+    successAlert.style.display = 'none';
+
+    // Parse e valida JSON
+    let config;
+    try {
+        config = JSON.parse(editor.value);
+    } catch (error) {
+        showValidationError('JSON non valido: ' + error.message);
+        return;
+    }
+
+    // Valida campi obbligatori
+    const requiredFields = ['active', 'isInstalled', 'weight', 'dependency', 'nodeModuleDependency'];
+    const missingFields = requiredFields.filter(field => !(field in config));
+
+    if (missingFields.length > 0) {
+        showValidationError(`Campi obbligatori mancanti: ${missingFields.join(', ')}`);
+        return;
+    }
+
+    // Valida tipi
+    if (typeof config.active !== 'number' || (config.active !== 0 && config.active !== 1)) {
+        showValidationError('Il campo "active" deve essere 0 o 1');
+        return;
+    }
+
+    if (typeof config.isInstalled !== 'number' || (config.isInstalled !== 0 && config.isInstalled !== 1)) {
+        showValidationError('Il campo "isInstalled" deve essere 0 o 1');
+        return;
+    }
+
+    if (typeof config.weight !== 'number') {
+        showValidationError('Il campo "weight" deve essere un numero');
+        return;
+    }
+
+    if (typeof config.dependency !== 'object' || Array.isArray(config.dependency)) {
+        showValidationError('Il campo "dependency" deve essere un oggetto {}');
+        return;
+    }
+
+    if (typeof config.nodeModuleDependency !== 'object' || Array.isArray(config.nodeModuleDependency)) {
+        showValidationError('Il campo "nodeModuleDependency" deve essere un oggetto {}');
+        return;
+    }
+
+    // Conferma salvataggio
+    if (!confirm('Sei sicuro di voler salvare questa configurazione?\n\nIl server dovrà essere riavviato per applicare le modifiche.')) {
+        return;
+    }
+
+    // Mostra spinner nel pulsante
+    const saveBtn = event.target;
+    const originalHtml = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Salvataggio...';
+
+    try {
+        const response = await fetch(`/${apiPrefix}/admin/plugins/${currentPluginName}/config`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ config: config })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Aggiorna configurazione originale
+            originalConfig = JSON.parse(JSON.stringify(config));
+
+            // Mostra successo
+            document.getElementById('success-message').innerText = result.message;
+            successAlert.style.display = 'block';
+
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+            throw new Error(result.error || 'Errore nel salvataggio');
+        }
+    } catch (error) {
+        console.error('Errore nel salvataggio:', error);
+        showValidationError('Errore nel salvataggio: ' + error.message);
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalHtml;
+    }
+}
+
+/**
+ * Mostra errore di validazione
+ */
+function showValidationError(message) {
+    const alert = document.getElementById('validation-alert');
+    document.getElementById('validation-message').innerText = message;
+    alert.style.display = 'block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+</script>
 
 <%- include( passData.themeSys.getAdminThemePartPath( 'footer.ejs' ) ) %>
