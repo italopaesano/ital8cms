@@ -10,16 +10,16 @@
             "id": 0,
             "accountName": "main account",
             "refCoin": "USDT",
-            "apiKey": "u46d06xi5uGxT9Esy7FMN6N5NX4xRG5exwJv50n8wYh9xcKI4v1z0UEwrPLBjT8c",
-            "secret": "coifhhHuLSUBA5Yo6AH9OUQa9j4VhfFdTYWdfKpJskz1QRJukC3f2pYoYXoj8iJ6"
+            "apiKey": "",
+            "secret": ""
         },
         {
             "exchangeName": "cryptocom",
             "id": 1,
             "accountName": "main account",
             "refCoin": "USDT",
-            "apiKey": "hpUtfTTNMhcrbKR6ALsetx",
-            "secret": "JHD2guk7SwLrN8vevJVN8H"
+            "apiKey": "",
+            "secret": ""
         }
 
     ]
