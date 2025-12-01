@@ -359,9 +359,9 @@ function getRoutes() {
     return [
         // GET /api/admin/themes - Lista tutti i temi
         {
-            method: 'get',
+            method: 'GET',
             path: '/themes',
-            func: async (ctx) => {
+            handler: async (ctx) => {
                 try {
                     const themeSys = ctx.state.themeSys || global.themeSys;
                     const themes = getThemesList(themeSys);
@@ -384,9 +384,9 @@ function getRoutes() {
 
         // GET /api/admin/themes/:name - Dettagli di un tema
         {
-            method: 'get',
+            method: 'GET',
             path: '/themes/:name',
-            func: async (ctx) => {
+            handler: async (ctx) => {
                 try {
                     const themeName = ctx.params.name;
                     const themeSys = ctx.state.themeSys || global.themeSys;
@@ -412,9 +412,9 @@ function getRoutes() {
 
         // POST /api/admin/setTheme - Attiva un tema
         {
-            method: 'post',
+            method: 'POST',
             path: '/setTheme',
-            func: async (ctx) => {
+            handler: async (ctx) => {
                 try {
                     const { themeName, themeType } = ctx.request.body;
                     const themeSys = ctx.state.themeSys || global.themeSys;
