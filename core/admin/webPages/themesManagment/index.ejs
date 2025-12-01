@@ -15,60 +15,6 @@
     const adminPrefix = document.getElementById('adminPrefix').innerText;
 </script>
 
-<%
-// Leggo i temi disponibili dalla cartella themes
-const fs = require('fs');
-const path = require('path');
-
-const themesPath = path.join(__dirname, '../../../../themes');
-const themesList = [];
-
-try {
-    const themeDirs = fs.readdirSync(themesPath);
-
-    themeDirs.forEach(themeName => {
-        const themeDir = path.join(themesPath, themeName);
-        const stat = fs.statSync(themeDir);
-
-        if (stat.isDirectory()) {
-            // Leggo themeConfig.json se esiste
-            const configPath = path.join(themeDir, 'themeConfig.json');
-            const readmePath = path.join(themeDir, 'README.md');
-
-            let config = {};
-            let readme = '';
-
-            if (fs.existsSync(configPath)) {
-                config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-            }
-
-            if (fs.existsSync(readmePath)) {
-                readme = fs.readFileSync(readmePath, 'utf8');
-            }
-
-            // Verifico struttura tema (deve avere views/)
-            const viewsPath = path.join(themeDir, 'views');
-            const hasViews = fs.existsSync(viewsPath);
-
-            themesList.push({
-                name: themeName,
-                config: config,
-                readme: readme,
-                hasViews: hasViews,
-                path: themeDir
-            });
-        }
-    });
-} catch (error) {
-    console.error('Errore nel caricamento dei temi:', error);
-}
-
-// Leggo configurazione attuale
-const ital8Conf = require('../../../../ital8Config.json');
-const currentPublicTheme = ital8Conf.activeTheme;
-const currentAdminTheme = ital8Conf.adminActiveTheme; 
-%>
-
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="bi bi-palette"></i> Gestione Temi</h2>
@@ -77,122 +23,27 @@ const currentAdminTheme = ital8Conf.adminActiveTheme;
         </a>
     </div>
 
+    <!-- Alert messaggi -->
+    <div id="alert-container"></div>
+
     <!-- Configurazione Attuale -->
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="card border-primary">
-                <div class="card-header bg-primary text-white">
-                    <i class="bi bi-globe"></i> Tema Sito Pubblico
-                </div>
-                <div class="card-body">
-                    <h5 class="card-title"><%= currentPublicTheme %></h5>
-                    <p class="card-text text-muted">Tema attualmente attivo per le pagine pubbliche del sito.</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="card border-success">
-                <div class="card-header bg-success text-white">
-                    <i class="bi bi-gear"></i> Tema Admin Panel
-                </div>
-                <div class="card-body">
-                    <h5 class="card-title"><%= currentAdminTheme %></h5>
-                    <p class="card-text text-muted">Tema attualmente attivo per il pannello di amministrazione.</p>
-                </div>
-            </div>
-        </div>
+    <div class="row mb-4" id="current-themes">
+        <!-- Caricato dinamicamente via JavaScript -->
     </div>
 
     <!-- Lista Temi Disponibili -->
     <div class="card">
         <div class="card-header">
-            <h5 class="mb-0"><i class="bi bi-collection"></i> Temi Disponibili (<%= themesList.length %>)</h5>
+            <h5 class="mb-0"><i class="bi bi-collection"></i> Temi Disponibili (<span id="themes-count">-</span>)</h5>
         </div>
-        <div class="card-body">
-            <% if (themesList.length === 0) { %>
-                <div class="alert alert-warning">
-                    <i class="bi bi-exclamation-triangle"></i> Nessun tema trovato nella cartella themes/
+        <div class="card-body" id="themes-list">
+            <!-- Loading spinner -->
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Caricamento...</span>
                 </div>
-            <% } else { %>
-                <div class="row">
-                    <% themesList.forEach(theme => { %>
-                        <div class="col-md-6 col-lg-4 mb-4">
-                            <div class="card h-100 <%= theme.name === currentPublicTheme ? 'border-primary' : '' %> <%= theme.name === currentAdminTheme ? 'border-success' : '' %>">
-                                <div class="card-header d-flex justify-content-between align-items-center">
-                                    <strong><%= theme.name %></strong>
-                                    <span>
-                                        <% if (theme.name === currentPublicTheme) { %>
-                                            <span class="badge bg-primary" title="Tema pubblico attivo">
-                                                <i class="bi bi-globe"></i>
-                                            </span>
-                                        <% } %>
-                                        <% if (theme.name === currentAdminTheme) { %>
-                                            <span class="badge bg-success" title="Tema admin attivo">
-                                                <i class="bi bi-gear"></i>
-                                            </span>
-                                        <% } %>
-                                    </span>
-                                </div>
-                                <div class="card-body">
-                                    <!-- Info Tema -->
-                                    <ul class="list-unstyled small">
-                                        <li>
-                                            <% if (theme.hasViews) { %>
-                                                <i class="bi bi-check-circle text-success"></i>
-                                            <% } else { %>
-                                                <i class="bi bi-x-circle text-danger"></i>
-                                            <% } %>
-                                            Cartella views/
-                                        </li>
-                                        <li>
-                                            <% if (theme.config.isInstalled) { %>
-                                                <i class="bi bi-check-circle text-success"></i>
-                                            <% } else { %>
-                                                <i class="bi bi-x-circle text-danger"></i>
-                                            <% } %>
-                                            Installato
-                                        </li>
-                                        <li>
-                                            <i class="bi bi-sort-numeric-down"></i>
-                                            Weight: <%= theme.config.weight || 0 %>
-                                        </li>
-                                    </ul>
-
-                                    <% if (theme.readme) { %>
-                                        <p class="card-text small text-muted">
-                                            <%= theme.readme.substring(0, 100) %><%= theme.readme.length > 100 ? '...' : '' %>
-                                        </p>
-                                    <% } %>
-                                </div>
-                                <div class="card-footer">
-                                    <div class="btn-group btn-group-sm w-100" role="group">
-                                        <a href="/<%= passData.adminPrefix %>/themesManagment/themeView.ejs?theme=<%= theme.name %>"
-                                           class="btn btn-outline-info" title="Visualizza dettagli">
-                                            <i class="bi bi-eye"></i> Dettagli
-                                        </a>
-                                        <% if (theme.name !== currentPublicTheme) { %>
-                                            <button type="button"
-                                                    class="btn btn-outline-primary"
-                                                    onclick="activateTheme('<%= theme.name %>', 'public')"
-                                                    title="Imposta come tema pubblico">
-                                                <i class="bi bi-globe"></i>
-                                            </button>
-                                        <% } %>
-                                        <% if (theme.name !== currentAdminTheme) { %>
-                                            <button type="button"
-                                                    class="btn btn-outline-success"
-                                                    onclick="activateTheme('<%= theme.name %>', 'admin')"
-                                                    title="Imposta come tema admin">
-                                                <i class="bi bi-gear"></i>
-                                            </button>
-                                        <% } %>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    <% }); %>
-                </div>
-            <% } %>
+                <p class="mt-2 text-muted">Caricamento temi...</p>
+            </div>
         </div>
     </div>
 
@@ -233,13 +84,155 @@ const currentAdminTheme = ital8Conf.adminActiveTheme;
 <script>
 let pendingTheme = null;
 let pendingType = null;
+let currentPublicTheme = null;
+let currentAdminTheme = null;
+
+// Carica temi all'avvio
+window.addEventListener('DOMContentLoaded', loadThemes);
+
+async function loadThemes() {
+    try {
+        const response = await fetch(`/${apiPrefix}/admin/themes`);
+        const result = await response.json();
+
+        if (result.success) {
+            const themes = result.themes;
+
+            // Trova i temi attivi correnti
+            currentPublicTheme = themes.find(t => t.isActivePublic)?.name || 'default';
+            currentAdminTheme = themes.find(t => t.isActiveAdmin)?.name || 'default';
+
+            // Mostra configurazione attuale
+            displayCurrentThemes(currentPublicTheme, currentAdminTheme);
+
+            // Mostra lista temi
+            displayThemesList(themes);
+
+            document.getElementById('themes-count').textContent = themes.length;
+        } else {
+            showAlert('danger', 'Errore nel caricamento dei temi: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Errore:', error);
+        showAlert('danger', 'Errore nella richiesta: ' + error.message);
+    }
+}
+
+function displayCurrentThemes(publicTheme, adminTheme) {
+    const html = `
+        <div class="col-md-6">
+            <div class="card border-primary">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-globe"></i> Tema Sito Pubblico
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">${escapeHtml(publicTheme)}</h5>
+                    <p class="card-text text-muted">Tema attualmente attivo per le pagine pubbliche del sito.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-success">
+                <div class="card-header bg-success text-white">
+                    <i class="bi bi-gear"></i> Tema Admin Panel
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">${escapeHtml(adminTheme)}</h5>
+                    <p class="card-text text-muted">Tema attualmente attivo per il pannello di amministrazione.</p>
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('current-themes').innerHTML = html;
+}
+
+function displayThemesList(themes) {
+    if (themes.length === 0) {
+        document.getElementById('themes-list').innerHTML = `
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle"></i> Nessun tema trovato nella cartella themes/
+            </div>
+        `;
+        return;
+    }
+
+    let html = '<div class="row">';
+
+    themes.forEach(theme => {
+        html += createThemeCard(theme);
+    });
+
+    html += '</div>';
+    document.getElementById('themes-list').innerHTML = html;
+}
+
+function createThemeCard(theme) {
+    const isPublicActive = theme.isActivePublic;
+    const isAdminActive = theme.isActiveAdmin;
+    const borderClass = isPublicActive ? 'border-primary' : (isAdminActive ? 'border-success' : '');
+
+    return `
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100 ${borderClass}">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <strong>${escapeHtml(theme.name)}</strong>
+                    <span>
+                        ${isPublicActive ? '<span class="badge bg-primary" title="Tema pubblico attivo"><i class="bi bi-globe"></i></span>' : ''}
+                        ${isAdminActive ? '<span class="badge bg-success" title="Tema admin attivo"><i class="bi bi-gear"></i></span>' : ''}
+                    </span>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled small">
+                        <li>
+                            ${theme.valid ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-danger"></i>'}
+                            Struttura ${theme.valid ? 'valida' : 'non valida'}
+                        </li>
+                        <li>
+                            <i class="bi bi-file-earmark-code"></i>
+                            Views: ${theme.filesCount.views}, Templates: ${theme.filesCount.templates}
+                        </li>
+                        <li>
+                            ${theme.config.isInstalled ? '<i class="bi bi-check-circle text-success"></i> Installato' : '<i class="bi bi-x-circle text-danger"></i> Non installato'}
+                        </li>
+                        ${theme.dependencies.satisfied === false ? `<li class="text-warning"><i class="bi bi-exclamation-triangle"></i> Dipendenze non soddisfatte</li>` : ''}
+                    </ul>
+                    ${theme.description?.description ? `<p class="card-text small text-muted">${escapeHtml(theme.description.description.substring(0, 80))}${theme.description.description.length > 80 ? '...' : ''}</p>` : ''}
+                </div>
+                <div class="card-footer">
+                    <div class="btn-group btn-group-sm w-100" role="group">
+                        <a href="/${adminPrefix}/themesManagment/themeView.ejs?theme=${encodeURIComponent(theme.name)}"
+                           class="btn btn-outline-info" title="Visualizza dettagli">
+                            <i class="bi bi-eye"></i> Dettagli
+                        </a>
+                        ${!isPublicActive ? `
+                            <button type="button"
+                                    class="btn btn-outline-primary"
+                                    onclick="activateTheme('${escapeHtml(theme.name)}', 'public')"
+                                    title="Imposta come tema pubblico">
+                                <i class="bi bi-globe"></i>
+                            </button>
+                        ` : ''}
+                        ${!isAdminActive ? `
+                            <button type="button"
+                                    class="btn btn-outline-success"
+                                    onclick="activateTheme('${escapeHtml(theme.name)}', 'admin')"
+                                    title="Imposta come tema admin">
+                                <i class="bi bi-gear"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
 
 function activateTheme(themeName, themeType) {
     pendingTheme = themeName;
     pendingType = themeType;
 
     const typeLabel = themeType === 'public' ? 'sito pubblico' : 'pannello admin';
-    const message = `Vuoi attivare il tema "<strong>${themeName}</strong>" per il ${typeLabel}?`;
+    const message = `Vuoi attivare il tema "<strong>${escapeHtml(themeName)}</strong>" per il ${typeLabel}?`;
 
     document.getElementById('activateThemeMessage').innerHTML = message;
 
@@ -269,21 +262,41 @@ document.getElementById('confirmActivateBtn').addEventListener('click', async fu
         const result = await response.json();
 
         if (result.success) {
-            alert(result.message || 'Tema attivato con successo!');
-            // Ricarica la pagina per vedere le modifiche
-            window.location.reload();
+            showAlert('success', result.message || 'Tema attivato con successo!');
+
+            // Ricarica la lista dopo 2 secondi
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
         } else {
-            alert('Errore: ' + (result.error || 'Impossibile attivare il tema'));
+            showAlert('danger', 'Errore: ' + (result.error || 'Impossibile attivare il tema'));
         }
     } catch (error) {
         console.error('Errore:', error);
-        alert('Errore nella richiesta: ' + error.message);
+        showAlert('danger', 'Errore nella richiesta: ' + error.message);
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-check"></i> Conferma';
         bootstrap.Modal.getInstance(document.getElementById('activateThemeModal')).hide();
     }
 });
+
+function showAlert(type, message) {
+    const alertHtml = `
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            <div>${message}</div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    document.getElementById('alert-container').innerHTML = alertHtml;
+    window.scrollTo(0, 0);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
 </script>
 
 <%- include( passData.themeSys.getAdminThemePartPath( 'footer.ejs' ) ) %>
