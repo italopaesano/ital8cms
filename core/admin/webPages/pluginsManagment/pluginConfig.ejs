@@ -1,0 +1,37 @@
+<!-- TEMPLATE PER LA CREAZIONE DELLE PAGINE DI AMMINISTRAZIONE  -->
+<!-- ATTENZIONE  nelle pagine di admin sarà chiamata la funzione getAdminThemePartPath() e non la funzione getThemePartPath() -->
+<%- include( passData.themeSys.getAdminThemePartPath( 'head.ejs' ) ) %>
+<%- include( passData.themeSys.getAdminThemePartPath( 'header.ejs' ) ) %>
+
+<!-- api prefix -->
+<span id="apiPrefix" style="display: none;"><%- passData.apiPrefix %></span>
+<script>
+    const apiPrefix = document.getElementById('apiPrefix').innerText;
+</script>
+
+<!-- adminPrefix -->
+<span id="adminPrefix" style="display: none;"><%- passData.adminPrefix %></span>
+<script>
+    const adminPrefix = document.getElementById('adminPrefix').innerText;
+</script>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-gear"></i> Configurazione Plugin</h2>
+        <a href="/<%= passData.adminPrefix %>/pluginsManagment/index.ejs" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Torna alla Lista Plugin
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Modifica Configurazione Plugin</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">Qui sarà possibile modificare il file pluginConfig.json del plugin selezionato.</p>
+            <!-- TODO: Implementare editor configurazione plugin -->
+        </div>
+    </div>
+</div>
+
+<%- include( passData.themeSys.getAdminThemePartPath( 'footer.ejs' ) ) %>

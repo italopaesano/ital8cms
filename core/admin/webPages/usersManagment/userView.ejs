@@ -41,7 +41,7 @@
             </div>
         </div>
         <div class="card-footer text-center user-info-footer">
-            <a href="/<%- passData.adminPrefix %>/userManagment/index.ejs" class="btn btn-primary me-2 user-action-btn">Torna alla Index</a>
+            <a href="/<%- passData.adminPrefix %>/usersManagment/index.ejs" class="btn btn-primary me-2 user-action-btn">Torna alla Index</a>
             <a href="#" id="edit-user-btn" class="btn btn-warning me-2 user-action-btn" >Modifica Dati</a> <!-- l' href di questolink verrà aggiornato da uno script più in basso -->
             <a href="#" id="delete-user-btn" class="btn btn-danger user-action-btn" >Elimina Utente</a> <!-- l' href di questolink verrà aggiornato da uno script più in basso -->
         </div>
@@ -78,8 +78,8 @@
                             document.getElementById('role').innerText = 'Errore nel caricamento del ruolo';
                         });
 
-                    document.getElementById('edit-user-btn').href = `/${adminPrefix}/userManagment/userEdit.ejs?username=${username}`;
-                    document.getElementById('delete-user-btn').href = `/${adminPrefix}/userManagment/userDelete.ejs?username=${username}`;
+                    document.getElementById('edit-user-btn').href = `/${adminPrefix}/usersManagment/userEdit.ejs?username=${username}`;
+                    document.getElementById('delete-user-btn').href = `/${adminPrefix}/usersManagment/userDelete.ejs?username=${username}`;
                     document.getElementById('user-info-container').style.display = 'block';
                 } else {
                     document.getElementById('error-message').innerText = 'Utente non trovato.';
