@@ -1,10 +1,73 @@
 /**
  * MODULO GESTIONE PLUGIN
+ *
  * Gestisce tutte le operazioni relative ai plugin dell'admin panel:
  * - Lista plugin disponibili
  * - Dettagli plugin (config, description, dipendenze)
  * - Attivazione/disattivazione plugin
  * - Modifica configurazione plugin
+ *
+ * ========================================
+ * INDICE FUNZIONI
+ * ========================================
+ *
+ * FUNZIONI PRINCIPALI:
+ * -------------------
+ * getPluginsList()
+ *   - Scansiona la cartella /plugins e restituisce lista ordinata di tutti i plugin
+ *   - Include: nome, stato attivo, versione, autore, dipendenze
+ *   - Ordinamento: per weight (crescente), poi alfabetico
+ *   - Return: Array di oggetti plugin
+ *
+ * getPluginDetails(pluginName)
+ *   - Recupera informazioni complete di un plugin specifico
+ *   - Include: config completa, description, lista file, path
+ *   - Validazione: verifica esistenza main.js, pluginConfig.json, pluginDescription.json
+ *   - Return: Object con dettagli completi o null se non trovato
+ *
+ * togglePlugin(pluginName, active)
+ *   - Attiva (active=1) o disattiva (active=0) un plugin
+ *   - Modifica il campo "active" in pluginConfig.json
+ *   - Atomic write: usa file temporaneo .tmp per sicurezza
+ *   - Return: {success: boolean, message/error: string}
+ *
+ * updatePluginConfig(pluginName, newConfig)
+ *   - Aggiorna l'intera configurazione di un plugin
+ *   - Validazione: imposta valori default per campi essenziali
+ *   - Campi essenziali: active, isInstalled, weight, dependency, nodeModuleDependency
+ *   - Atomic write: usa file temporaneo .tmp per sicurezza
+ *   - Return: {success: boolean, message/error: string}
+ *
+ * ROUTE API:
+ * ----------
+ * getRoutes(router, pluginSys, pathPluginFolder)
+ *   - Genera array di route Koa per la gestione plugin
+ *   - Endpoint disponibili:
+ *     * GET  /api/admin/plugins           - Lista tutti i plugin
+ *     * GET  /api/admin/plugins/:name     - Dettagli plugin specifico
+ *     * POST /api/admin/plugins/:name/toggle - Attiva/disattiva plugin
+ *     * POST /api/admin/plugins/:name/config - Aggiorna configurazione
+ *   - Ogni route include gestione errori con try-catch
+ *   - Return: Array di oggetti route {method, path, handler}
+ *
+ * ========================================
+ * COSTANTI E DIPENDENZE
+ * ========================================
+ * PLUGINS_PATH: percorso assoluto alla cartella /plugins
+ *
+ * Dipendenze:
+ * - fs: operazioni file system
+ * - path: gestione percorsi
+ * - loadJson5: caricamento file JSON5 con supporto commenti
+ *
+ * ========================================
+ * NOTE IMPLEMENTATIVE
+ * ========================================
+ * - Tutti i write su file usano atomic write (tmp + rename)
+ * - Supporto completo JSON5 per file di configurazione
+ * - Error handling completo con try-catch
+ * - Validazione input su tutti i parametri
+ * - Response standardizzate: {success, data/error}
  */
 
 const fs = require('fs');
