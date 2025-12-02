@@ -15,313 +15,125 @@
     const adminPrefix = document.getElementById('adminPrefix').innerText;
 </script>
 
-<%
-const fs = require('fs');
-const path = require('path');
+<!-- Query parameter themeName -->
+<span id="themeNameParam" style="display: none;"><%- passData.query.theme || '' %></span>
 
-// Ottengo il nome del tema dalla query string
-const themeName = passData.query.theme;
+<!-- Loading Container -->
+<div class="container mt-4" id="loading-container">
+    <div class="text-center">
+        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Caricamento...</span>
+        </div>
+        <p class="mt-3 text-muted">Caricamento dettagli tema...</p>
+    </div>
+</div>
 
-let theme = null;
-let error = null;
+<!-- Error Container -->
+<div class="container mt-4 d-none" id="error-container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-palette"></i> Dettaglio Tema</h2>
+        <a href="/<%= passData.adminPrefix %>/themesManagment/index.ejs" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Torna alla Lista Temi
+        </a>
+    </div>
+    <div class="alert alert-danger">
+        <i class="bi bi-exclamation-triangle"></i> <span id="error-message"></span>
+    </div>
+</div>
 
-if (!themeName) {
-    error = 'Nessun tema specificato. Usa ?theme=nomeTema';
-} else {
-    const themesPath = path.join(__dirname, '../../../../themes');
-    const themeDir = path.join(themesPath, themeName);
-
-    if (!fs.existsSync(themeDir)) {
-        error = `Il tema "${themeName}" non esiste.`;
-    } else {
-        // Leggo informazioni tema
-        const configPath = path.join(themeDir, 'themeConfig.json');
-        const readmePath = path.join(themeDir, 'README.md');
-        const viewsPath = path.join(themeDir, 'views');
-        const templatesPath = path.join(themeDir, 'templates');
-
-        let config = {};
-        let readme = '';
-        let viewFiles = [];
-        let templateFiles = [];
-
-        if (fs.existsSync(configPath)) {
-            config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        }
-
-        if (fs.existsSync(readmePath)) {
-            readme = fs.readFileSync(readmePath, 'utf8');
-        }
-
-        if (fs.existsSync(viewsPath)) {
-            viewFiles = fs.readdirSync(viewsPath).filter(f => f.endsWith('.ejs'));
-        }
-
-        if (fs.existsSync(templatesPath)) {
-            templateFiles = fs.readdirSync(templatesPath).filter(f => f.endsWith('.ejs'));
-        }
-
-        // Leggo configurazione attuale
-        const ital8Conf = require('../../../../ital8Config.json');
-
-        theme = {
-            name: themeName,
-            config: config,
-            readme: readme,
-            viewFiles: viewFiles,
-            templateFiles: templateFiles,
-            path: themeDir,
-            isActivePublic: ital8Conf.activeTheme === themeName,
-            isActiveAdmin: ital8Conf.adminActiveTheme === themeName
-        };
-    }
-}
-%>
-
-<div class="container mt-4">
+<!-- Main Content Container -->
+<div class="container mt-4 d-none" id="content-container">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2>
             <i class="bi bi-palette"></i>
-            <% if (theme) { %>
-                Tema: <%= theme.name %>
-            <% } else { %>
-                Dettaglio Tema
-            <% } %>
+            Tema: <span id="theme-name"></span>
         </h2>
         <a href="/<%= passData.adminPrefix %>/themesManagment/index.ejs" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left"></i> Torna alla Lista Temi
         </a>
     </div>
 
-    <% if (error) { %>
-        <div class="alert alert-danger">
-            <i class="bi bi-exclamation-triangle"></i> <%= error %>
+    <!-- Stato Attivazione -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert" id="activation-status"></div>
         </div>
-    <% } else if (theme) { %>
+    </div>
 
-        <!-- Stato Attivazione -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <% if (theme.isActivePublic || theme.isActiveAdmin) { %>
-                    <div class="alert alert-success">
-                        <i class="bi bi-check-circle"></i>
-                        Questo tema è attualmente attivo per:
-                        <% if (theme.isActivePublic) { %>
-                            <span class="badge bg-primary">Sito Pubblico</span>
-                        <% } %>
-                        <% if (theme.isActiveAdmin) { %>
-                            <span class="badge bg-success">Pannello Admin</span>
-                        <% } %>
-                    </div>
-                <% } else { %>
-                    <div class="alert alert-secondary">
-                        <i class="bi bi-info-circle"></i>
-                        Questo tema non è attualmente attivo.
-                    </div>
-                <% } %>
-            </div>
-        </div>
-
-        <div class="row">
-            <!-- Colonna Sinistra - Informazioni -->
-            <div class="col-md-6">
-                <!-- Configurazione -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="mb-0"><i class="bi bi-gear"></i> Configurazione</h5>
-                    </div>
-                    <div class="card-body">
-                        <table class="table table-sm">
-                            <tbody>
-                                <tr>
-                                    <th>Nome</th>
-                                    <td><%= theme.name %></td>
-                                </tr>
-                                <tr>
-                                    <th>Installato</th>
-                                    <td>
-                                        <% if (theme.config.isInstalled) { %>
-                                            <span class="badge bg-success">Si</span>
-                                        <% } else { %>
-                                            <span class="badge bg-danger">No</span>
-                                        <% } %>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <th>Attivo</th>
-                                    <td>
-                                        <% if (theme.config.active) { %>
-                                            <span class="badge bg-success">Si</span>
-                                        <% } else { %>
-                                            <span class="badge bg-warning">No</span>
-                                        <% } %>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <th>Weight</th>
-                                    <td><%= theme.config.weight || 0 %></td>
-                                </tr>
-                                <tr>
-                                    <th>Custom WWW Path</th>
-                                    <td>
-                                        <% if (theme.config.wwwCustomPath) { %>
-                                            <span class="badge bg-info">Si</span>
-                                        <% } else { %>
-                                            <span class="badge bg-secondary">No</span>
-                                        <% } %>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <th>Percorso</th>
-                                    <td><small class="text-muted"><%= theme.path %></small></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+    <div class="row">
+        <!-- Colonna Sinistra - Informazioni -->
+        <div class="col-md-6">
+            <!-- Configurazione -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-gear"></i> Configurazione</h5>
                 </div>
-
-                <!-- Dipendenze Plugin -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="mb-0"><i class="bi bi-plug"></i> Dipendenze Plugin</h5>
-                    </div>
-                    <div class="card-body">
-                        <% if (theme.config.pluginDependency && Object.keys(theme.config.pluginDependency).length > 0) { %>
-                            <ul class="list-group list-group-flush">
-                                <% Object.entries(theme.config.pluginDependency).forEach(([name, version]) => { %>
-                                    <li class="list-group-item d-flex justify-content-between">
-                                        <span><%= name %></span>
-                                        <span class="badge bg-secondary"><%= version %></span>
-                                    </li>
-                                <% }); %>
-                            </ul>
-                        <% } else { %>
-                            <p class="text-muted mb-0">Nessuna dipendenza plugin</p>
-                        <% } %>
-                    </div>
-                </div>
-
-                <!-- Dipendenze Node Module -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="mb-0"><i class="bi bi-box"></i> Dipendenze Node Modules</h5>
-                    </div>
-                    <div class="card-body">
-                        <% if (theme.config.nodeModuleDependency && Object.keys(theme.config.nodeModuleDependency).length > 0) { %>
-                            <ul class="list-group list-group-flush">
-                                <% Object.entries(theme.config.nodeModuleDependency).forEach(([name, version]) => { %>
-                                    <li class="list-group-item d-flex justify-content-between">
-                                        <span><%= name %></span>
-                                        <span class="badge bg-secondary"><%= version %></span>
-                                    </li>
-                                <% }); %>
-                            </ul>
-                        <% } else { %>
-                            <p class="text-muted mb-0">Nessuna dipendenza node modules</p>
-                        <% } %>
-                    </div>
+                <div class="card-body">
+                    <table class="table table-sm" id="config-table">
+                        <tbody></tbody>
+                    </table>
                 </div>
             </div>
 
-            <!-- Colonna Destra - File e README -->
-            <div class="col-md-6">
-                <!-- File Views -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="mb-0"><i class="bi bi-file-earmark-code"></i> File Views (<%= theme.viewFiles.length %>)</h5>
-                    </div>
-                    <div class="card-body">
-                        <% if (theme.viewFiles.length > 0) { %>
-                            <ul class="list-group list-group-flush">
-                                <% theme.viewFiles.forEach(file => { %>
-                                    <li class="list-group-item">
-                                        <i class="bi bi-file-earmark-code text-primary"></i>
-                                        <%= file %>
-                                    </li>
-                                <% }); %>
-                            </ul>
-                        <% } else { %>
-                            <p class="text-warning mb-0">
-                                <i class="bi bi-exclamation-triangle"></i>
-                                Nessun file view trovato
-                            </p>
-                        <% } %>
-                    </div>
+            <!-- Dipendenze Plugin -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-plug"></i> Dipendenze Plugin</h5>
                 </div>
+                <div class="card-body" id="plugin-dependencies"></div>
+            </div>
 
-                <!-- File Templates -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="mb-0"><i class="bi bi-file-earmark"></i> File Templates (<%= theme.templateFiles.length %>)</h5>
-                    </div>
-                    <div class="card-body">
-                        <% if (theme.templateFiles.length > 0) { %>
-                            <ul class="list-group list-group-flush">
-                                <% theme.templateFiles.forEach(file => { %>
-                                    <li class="list-group-item">
-                                        <i class="bi bi-file-earmark text-info"></i>
-                                        <%= file %>
-                                    </li>
-                                <% }); %>
-                            </ul>
-                        <% } else { %>
-                            <p class="text-muted mb-0">Nessun file template</p>
-                        <% } %>
-                    </div>
+            <!-- Dipendenze Node Module -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-box"></i> Dipendenze Node Modules</h5>
                 </div>
-
-                <!-- README -->
-                <% if (theme.readme) { %>
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <h5 class="mb-0"><i class="bi bi-info-circle"></i> README</h5>
-                        </div>
-                        <div class="card-body">
-                            <pre class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto; white-space: pre-wrap;"><%= theme.readme %></pre>
-                        </div>
-                    </div>
-                <% } %>
+                <div class="card-body" id="node-dependencies"></div>
             </div>
         </div>
 
-        <!-- Azioni -->
-        <div class="card mt-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-lightning"></i> Azioni</h5>
+        <!-- Colonna Destra - File e README -->
+        <div class="col-md-6">
+            <!-- File Views -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-file-earmark-code"></i> File Views (<span id="views-count">0</span>)</h5>
+                </div>
+                <div class="card-body" id="view-files"></div>
             </div>
-            <div class="card-body">
-                <div class="d-flex gap-2 flex-wrap">
-                    <% if (!theme.isActivePublic) { %>
-                        <button type="button"
-                                class="btn btn-primary"
-                                onclick="activateTheme('<%= theme.name %>', 'public')">
-                            <i class="bi bi-globe"></i> Attiva per Sito Pubblico
-                        </button>
-                    <% } else { %>
-                        <button type="button" class="btn btn-primary" disabled>
-                            <i class="bi bi-check"></i> Attivo per Sito Pubblico
-                        </button>
-                    <% } %>
 
-                    <% if (!theme.isActiveAdmin) { %>
-                        <button type="button"
-                                class="btn btn-success"
-                                onclick="activateTheme('<%= theme.name %>', 'admin')">
-                            <i class="bi bi-gear"></i> Attiva per Admin
-                        </button>
-                    <% } else { %>
-                        <button type="button" class="btn btn-success" disabled>
-                            <i class="bi bi-check"></i> Attivo per Admin
-                        </button>
-                    <% } %>
+            <!-- File Templates -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-file-earmark"></i> File Templates (<span id="templates-count">0</span>)</h5>
+                </div>
+                <div class="card-body" id="template-files"></div>
+            </div>
+
+            <!-- README -->
+            <div class="card mb-4 d-none" id="readme-card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> README</h5>
+                </div>
+                <div class="card-body">
+                    <pre class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto; white-space: pre-wrap;" id="readme-content"></pre>
                 </div>
             </div>
         </div>
+    </div>
 
-    <% } %>
+    <!-- Azioni -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-lightning"></i> Azioni</h5>
+        </div>
+        <div class="card-body">
+            <div class="d-flex gap-2 flex-wrap" id="actions-buttons"></div>
+        </div>
+    </div>
 </div>
 
-<!-- Modal Conferma Attivazione (stesso di index.ejs) -->
+<!-- Modal Conferma Attivazione -->
 <div class="modal fade" id="activateThemeModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -347,15 +159,275 @@ if (!themeName) {
 </div>
 
 <script>
+let currentTheme = null;
 let pendingTheme = null;
 let pendingType = null;
+
+// Escape HTML per sicurezza
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Carica dettagli tema all'avvio
+window.addEventListener('DOMContentLoaded', async function() {
+    const themeName = document.getElementById('themeNameParam').innerText.trim();
+
+    if (!themeName) {
+        showError('Nessun tema specificato. Usa ?theme=nomeTema');
+        return;
+    }
+
+    await loadThemeDetails(themeName);
+});
+
+async function loadThemeDetails(themeName) {
+    try {
+        const response = await fetch(`/${apiPrefix}/admin/themes/${encodeURIComponent(themeName)}`);
+        const result = await response.json();
+
+        if (!result.success) {
+            showError(result.error || 'Errore nel caricamento del tema');
+            return;
+        }
+
+        currentTheme = result.theme;
+        renderThemeDetails(currentTheme);
+    } catch (error) {
+        console.error('Errore:', error);
+        showError('Errore nella richiesta: ' + error.message);
+    }
+}
+
+function showError(message) {
+    document.getElementById('loading-container').classList.add('d-none');
+    document.getElementById('error-container').classList.remove('d-none');
+    document.getElementById('error-message').textContent = message;
+}
+
+function renderThemeDetails(theme) {
+    // Nascondi loading, mostra contenuto
+    document.getElementById('loading-container').classList.add('d-none');
+    document.getElementById('content-container').classList.remove('d-none');
+
+    // Nome tema
+    document.getElementById('theme-name').textContent = theme.name;
+
+    // Stato attivazione
+    renderActivationStatus(theme);
+
+    // Configurazione
+    renderConfiguration(theme);
+
+    // Dipendenze plugin
+    renderPluginDependencies(theme);
+
+    // Dipendenze node modules
+    renderNodeDependencies(theme);
+
+    // File views
+    renderViewFiles(theme);
+
+    // File templates
+    renderTemplateFiles(theme);
+
+    // README
+    renderReadme(theme);
+
+    // Pulsanti azioni
+    renderActions(theme);
+}
+
+function renderActivationStatus(theme) {
+    const statusDiv = document.getElementById('activation-status');
+    const isActivePublic = theme.status.isActivePublic;
+    const isActiveAdmin = theme.status.isActiveAdmin;
+
+    if (isActivePublic || isActiveAdmin) {
+        statusDiv.className = 'alert alert-success';
+        let html = '<i class="bi bi-check-circle"></i> Questo tema è attualmente attivo per: ';
+        if (isActivePublic) {
+            html += '<span class="badge bg-primary">Sito Pubblico</span> ';
+        }
+        if (isActiveAdmin) {
+            html += '<span class="badge bg-success">Pannello Admin</span>';
+        }
+        statusDiv.innerHTML = html;
+    } else {
+        statusDiv.className = 'alert alert-secondary';
+        statusDiv.innerHTML = '<i class="bi bi-info-circle"></i> Questo tema non è attualmente attivo.';
+    }
+}
+
+function renderConfiguration(theme) {
+    const tbody = document.getElementById('config-table').querySelector('tbody');
+    const config = theme.config;
+    const validation = theme.validation;
+
+    const rows = [
+        { label: 'Nome', value: escapeHtml(theme.name) },
+        {
+            label: 'Installato',
+            value: config.isInstalled
+                ? '<span class="badge bg-success">Si</span>'
+                : '<span class="badge bg-danger">No</span>'
+        },
+        {
+            label: 'Attivo',
+            value: config.active
+                ? '<span class="badge bg-success">Si</span>'
+                : '<span class="badge bg-warning">No</span>'
+        },
+        { label: 'Weight', value: config.weight || 0 },
+        {
+            label: 'Custom WWW Path',
+            value: config.wwwCustomPath
+                ? '<span class="badge bg-info">Si</span>'
+                : '<span class="badge bg-secondary">No</span>'
+        },
+        { label: 'Percorso', value: `<small class="text-muted">${escapeHtml(theme.path)}</small>` }
+    ];
+
+    tbody.innerHTML = rows.map(row => `
+        <tr>
+            <th>${row.label}</th>
+            <td>${row.value}</td>
+        </tr>
+    `).join('');
+}
+
+function renderPluginDependencies(theme) {
+    const container = document.getElementById('plugin-dependencies');
+    const deps = theme.dependencies.plugins;
+
+    if (deps && Object.keys(deps).length > 0) {
+        const html = '<ul class="list-group list-group-flush">' +
+            Object.entries(deps).map(([name, version]) => `
+                <li class="list-group-item d-flex justify-content-between">
+                    <span>${escapeHtml(name)}</span>
+                    <span class="badge bg-secondary">${escapeHtml(version)}</span>
+                </li>
+            `).join('') +
+            '</ul>';
+        container.innerHTML = html;
+    } else {
+        container.innerHTML = '<p class="text-muted mb-0">Nessuna dipendenza plugin</p>';
+    }
+}
+
+function renderNodeDependencies(theme) {
+    const container = document.getElementById('node-dependencies');
+    const deps = theme.dependencies.nodeModules;
+
+    if (deps && Object.keys(deps).length > 0) {
+        const html = '<ul class="list-group list-group-flush">' +
+            Object.entries(deps).map(([name, version]) => `
+                <li class="list-group-item d-flex justify-content-between">
+                    <span>${escapeHtml(name)}</span>
+                    <span class="badge bg-secondary">${escapeHtml(version)}</span>
+                </li>
+            `).join('') +
+            '</ul>';
+        container.innerHTML = html;
+    } else {
+        container.innerHTML = '<p class="text-muted mb-0">Nessuna dipendenza node modules</p>';
+    }
+}
+
+function renderViewFiles(theme) {
+    const container = document.getElementById('view-files');
+    const countSpan = document.getElementById('views-count');
+    const files = theme.files.views;
+
+    countSpan.textContent = files.length;
+
+    if (files.length > 0) {
+        const html = '<ul class="list-group list-group-flush">' +
+            files.map(file => `
+                <li class="list-group-item">
+                    <i class="bi bi-file-earmark-code text-primary"></i>
+                    ${escapeHtml(file)}
+                </li>
+            `).join('') +
+            '</ul>';
+        container.innerHTML = html;
+    } else {
+        container.innerHTML = `
+            <p class="text-warning mb-0">
+                <i class="bi bi-exclamation-triangle"></i>
+                Nessun file view trovato
+            </p>
+        `;
+    }
+}
+
+function renderTemplateFiles(theme) {
+    const container = document.getElementById('template-files');
+    const countSpan = document.getElementById('templates-count');
+    const files = theme.files.templates;
+
+    countSpan.textContent = files.length;
+
+    if (files.length > 0) {
+        const html = '<ul class="list-group list-group-flush">' +
+            files.map(file => `
+                <li class="list-group-item">
+                    <i class="bi bi-file-earmark text-info"></i>
+                    ${escapeHtml(file)}
+                </li>
+            `).join('') +
+            '</ul>';
+        container.innerHTML = html;
+    } else {
+        container.innerHTML = '<p class="text-muted mb-0">Nessun file template</p>';
+    }
+}
+
+function renderReadme(theme) {
+    const readmeCard = document.getElementById('readme-card');
+    const readmeContent = document.getElementById('readme-content');
+
+    if (theme.readme) {
+        readmeCard.classList.remove('d-none');
+        readmeContent.textContent = theme.readme;
+    } else {
+        readmeCard.classList.add('d-none');
+    }
+}
+
+function renderActions(theme) {
+    const container = document.getElementById('actions-buttons');
+    const isActivePublic = theme.status.isActivePublic;
+    const isActiveAdmin = theme.status.isActiveAdmin;
+
+    const publicButton = isActivePublic
+        ? `<button type="button" class="btn btn-primary" disabled>
+               <i class="bi bi-check"></i> Attivo per Sito Pubblico
+           </button>`
+        : `<button type="button" class="btn btn-primary"
+               onclick="activateTheme('${escapeHtml(theme.name)}', 'public')">
+               <i class="bi bi-globe"></i> Attiva per Sito Pubblico
+           </button>`;
+
+    const adminButton = isActiveAdmin
+        ? `<button type="button" class="btn btn-success" disabled>
+               <i class="bi bi-check"></i> Attivo per Admin
+           </button>`
+        : `<button type="button" class="btn btn-success"
+               onclick="activateTheme('${escapeHtml(theme.name)}', 'admin')">
+               <i class="bi bi-gear"></i> Attiva per Admin
+           </button>`;
+
+    container.innerHTML = publicButton + ' ' + adminButton;
+}
 
 function activateTheme(themeName, themeType) {
     pendingTheme = themeName;
     pendingType = themeType;
 
     const typeLabel = themeType === 'public' ? 'sito pubblico' : 'pannello admin';
-    const message = `Vuoi attivare il tema "<strong>${themeName}</strong>" per il ${typeLabel}?`;
+    const message = `Vuoi attivare il tema "<strong>${escapeHtml(themeName)}</strong>" per il ${typeLabel}?`;
 
     document.getElementById('activateThemeMessage').innerHTML = message;
 
