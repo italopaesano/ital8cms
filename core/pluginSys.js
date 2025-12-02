@@ -469,7 +469,7 @@ class pluginSys{
 
     try {
       const descriptionPath = path.join(__dirname, '../plugins', pluginName, 'pluginDescription.json');
-      const description = JSON.parse(fs.readFileSync(descriptionPath, 'utf8'));
+      const description = loadJson5(descriptionPath);
       return description.version || null;
     } catch (error) {
       console.warn(`[pluginSys] Impossibile leggere versione del plugin '${pluginName}':`, error.message);
