@@ -27,6 +27,92 @@ function upgradePlugin(){
 function getRouteArray(){// restituirà un array contenente tutte le rotte che poi saranno aggiunte al cms
 
   const routeArray = Array(
+    // Test page for Bootstrap Icons
+    {
+      method: 'GET',
+      path: '/test-icons',
+      handler: async (ctx) => {
+        ctx.type = 'text/html';
+        ctx.body = `
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Bootstrap Icons</title>
+    <link rel="stylesheet" href="/${ital8Conf.apiPrefix}/${pluginName}/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/${ital8Conf.apiPrefix}/${pluginName}/css/bootstrap-icons.min.css">
+    <style>
+        body {
+            padding: 2rem;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        .test-section {
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            border: 2px solid #dee2e6;
+            border-radius: 0.5rem;
+        }
+        .icon-demo {
+            font-size: 2rem;
+            margin: 0.5rem;
+        }
+        .success {
+            border-color: #28a745;
+            background-color: #d4edda;
+        }
+        .info {
+            border-color: #17a2b8;
+            background-color: #d1ecf1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Test Bootstrap Icons</h1>
+
+        <div class="test-section success">
+            <h2>✅ Test 1: Icone Base</h2>
+            <p>Se vedi le icone sotto, Bootstrap Icons funziona correttamente:</p>
+            <div>
+                <i class="bi bi-gear icon-demo"></i>
+                <i class="bi bi-house icon-demo"></i>
+                <i class="bi bi-heart icon-demo"></i>
+                <i class="bi bi-star icon-demo"></i>
+                <i class="bi bi-check-circle icon-demo"></i>
+            </div>
+        </div>
+
+        <div class="test-section info">
+            <h2>📋 Test 2: Icone Comuni</h2>
+            <div>
+                <i class="bi bi-person icon-demo"></i>
+                <i class="bi bi-envelope icon-demo"></i>
+                <i class="bi bi-search icon-demo"></i>
+                <i class="bi bi-cart icon-demo"></i>
+                <i class="bi bi-menu-button icon-demo"></i>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔍 Test 3: Verifica Tecnica</h2>
+            <p><strong>Font CSS caricato da:</strong> /${ital8Conf.apiPrefix}/${pluginName}/css/bootstrap-icons.min.css</p>
+            <p><strong>Font files serviti da:</strong> /${ital8Conf.apiPrefix}/${pluginName}/css/fonts/bootstrap-icons.woff2</p>
+            <p>Apri gli strumenti sviluppatore (F12) → Network → filtra per "bootstrap-icons" per verificare il caricamento.</p>
+        </div>
+
+        <div class="test-section">
+            <h2>📖 Elenco Icone Disponibili</h2>
+            <p>Tutte le icone disponibili su: <a href="https://icons.getbootstrap.com/" target="_blank">https://icons.getbootstrap.com/</a></p>
+        </div>
+    </div>
+
+    <script src="/${ital8Conf.apiPrefix}/${pluginName}/js/bootstrap.min.js"></script>
+</body>
+</html>
+        `;
+       }
+    },
     // Bootstrap CSS
     {
       method: 'GET',
@@ -87,7 +173,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     // Bootstrap Icons Fonts (WOFF e WOFF2)
     {
       method: 'GET',
-      path: '/fonts/bootstrap-icons.woff',
+      path: '/css/fonts/bootstrap-icons.woff',
       handler: async (ctx) => {
         const fontPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap-icons','font','fonts','bootstrap-icons.woff');
         ctx.body = fs.createReadStream(fontPath);
@@ -96,7 +182,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     },
     {
       method: 'GET',
-      path: '/fonts/bootstrap-icons.woff2',
+      path: '/css/fonts/bootstrap-icons.woff2',
       handler: async (ctx) => {
         const fontPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap-icons','font','fonts','bootstrap-icons.woff2');
         ctx.body = fs.createReadStream(fontPath);
