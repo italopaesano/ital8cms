@@ -77,12 +77,10 @@ function getHooksPage(){
 
   const HookMap = new Map();
   HookMap.set( 'head', (passData) => `
-    <link rel='stylesheet' href='/${ital8Conf.apiPrefix}/${pluginName}/css/bootstrap.min.css' type='text/css'  media='all' />\n
-    <link rel='stylesheet' href='/${ital8Conf.apiPrefix}/${pluginName}/css/bootstrap.min.css.map' type='text/css'  media='all' />
+    <link rel='stylesheet' href='/${ital8Conf.apiPrefix}/${pluginName}/css/bootstrap.min.css' type='text/css'  media='all' />
     ` );
   HookMap.set('script', (passData) => `
-    <script src="/${ital8Conf.apiPrefix}/${pluginName}/js/bootstrap.min.js" type="text/javascript" ></script>\n
-    <script src="/${ital8Conf.apiPrefix}/${pluginName}/js/bootstrap.min.js.map" type="text/javascript" ></script>
+    <script src="/${ital8Conf.apiPrefix}/${pluginName}/js/bootstrap.min.js" type="text/javascript" ></script>
     ` );
 
   return HookMap;
