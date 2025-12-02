@@ -209,7 +209,7 @@ function createThemeCard(theme) {
                                     class="btn btn-outline-primary"
                                     onclick="activateTheme('${escapeHtml(theme.name)}', 'public')"
                                     title="Imposta come tema pubblico">
-                                <i class="bi bi-globe"></i>
+                                <i class="bi bi-globe"></i> Pubblico
                             </button>
                         ` : ''}
                         ${!isAdminActive ? `
@@ -217,7 +217,7 @@ function createThemeCard(theme) {
                                     class="btn btn-outline-success"
                                     onclick="activateTheme('${escapeHtml(theme.name)}', 'admin')"
                                     title="Imposta come tema admin">
-                                <i class="bi bi-gear"></i>
+                                <i class="bi bi-gear"></i> Admin
                             </button>
                         ` : ''}
                     </div>
