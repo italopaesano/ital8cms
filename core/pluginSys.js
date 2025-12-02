@@ -176,11 +176,16 @@ class pluginSys{
 
           for (const [moduleName, requiredVersion] of Object.entries(pluginConfig.nodeModuleDependency)) {
             try {
-              // Verifica se il modulo è installato
-              require.resolve(moduleName);
+              // Verifica se il modulo è installato controllando il package.json
+              // (funziona sia per moduli JS che per pacchetti di soli asset come bootstrap-icons)
+              const modulePackagePath = path.join(__dirname, '..', 'node_modules', moduleName, 'package.json');
+
+              // Verifica esistenza del file package.json
+              if (!fs.existsSync(modulePackagePath)) {
+                throw new Error('Modulo non trovato');
+              }
 
               // Ottieni la versione installata dal package.json del modulo
-              const modulePackagePath = path.join(__dirname, '..', 'node_modules', moduleName, 'package.json');
               const modulePackage = require(modulePackagePath);
               const installedVersion = modulePackage.version;
 
