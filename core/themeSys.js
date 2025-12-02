@@ -3,6 +3,7 @@ const ejs = require('ejs');
 const fs = require('fs');
 const path = require('path');
 const semver = require('semver');
+const loadJson5 = require('./loadJson5');
 //let ital8Conf;
 
 class themeSys{
@@ -65,7 +66,7 @@ class themeSys{
     // Leggi configurazione tema
     let config;
     try {
-      config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      config = loadJson5(configPath);
     } catch (error) {
       return { satisfied: false, errors: [`Impossibile leggere themeConfig.json: ${error.message}`] };
     }
@@ -131,7 +132,7 @@ class themeSys{
 
     try {
       if (fs.existsSync(configPath)) {
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        const config = loadJson5(configPath);
         return {
           plugins: config.pluginDependency || {},
           nodeModules: config.nodeModuleDependency || {}
@@ -260,7 +261,7 @@ class themeSys{
 
     try {
       if (fs.existsSync(descPath)) {
-        return JSON.parse(fs.readFileSync(descPath, 'utf8'));
+        return loadJson5(descPath);
       }
     } catch (error) {
       console.warn(`[themeSys] Errore lettura themeDescription.json per ${themeName}: ${error.message}`);
