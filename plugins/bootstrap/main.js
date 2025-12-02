@@ -25,12 +25,13 @@ function upgradePlugin(){
 };
 
 function getRouteArray(){// restituirà un array contenente tutte le rotte che poi saranno aggiunte al cms
-  
+
   const routeArray = Array(
+    // Bootstrap CSS
     {
       method: 'GET',
-      path: '/css/bootstrap.min.css', // l'url completo avra la forma /api/binance/css -> se vengono mantenute le impostazioni di default
-      handler: async (ctx) => { 
+      path: '/css/bootstrap.min.css',
+      handler: async (ctx) => {
         const bootstrapCssPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','css','bootstrap.min.css');
         ctx.body = fs.createReadStream(bootstrapCssPath);
         ctx.set('Content-Type', 'text/css');
@@ -38,17 +39,18 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     },
     {
       method: 'GET',
-      path: '/css/bootstrap.min.css.map', // l'url completo avra la forma /api/binance/css -> se vengono mantenute le impostazioni di default
-      handler: async (ctx) => { 
+      path: '/css/bootstrap.min.css.map',
+      handler: async (ctx) => {
         const bootstrapCssPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','css','bootstrap.min.css.map');
         ctx.body = fs.createReadStream(bootstrapCssPath);
-        ctx.set('Content-Type', 'text/css');
+        ctx.set('Content-Type', 'application/json');
        }
     },
+    // Bootstrap JS
     {
       method: 'GET',
-      path: '/js/bootstrap.min.js', // // l'url completo avra la forma /api/binance/js -> se vengono mantenute le impostazioni di default
-      handler: async (ctx) => { 
+      path: '/js/bootstrap.min.js',
+      handler: async (ctx) => {
         const bootstrapJsPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','js','bootstrap.min.js');
         ctx.body = fs.createReadStream(bootstrapJsPath);
         ctx.set('Content-Type', 'text/javascript');
@@ -56,15 +58,53 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     },
     {
       method: 'GET',
-      path: '/js/bootstrap.min.js.map', // // l'url completo avra la forma /api/binance/js -> se vengono mantenute le impostazioni di default
-      handler: async (ctx) => { 
+      path: '/js/bootstrap.min.js.map',
+      handler: async (ctx) => {
         const bootstrapJsPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','js','bootstrap.min.js.map');
         ctx.body = fs.createReadStream(bootstrapJsPath);
-        ctx.set('Content-Type', 'text/javascript');
+        ctx.set('Content-Type', 'application/json');
+       }
+    },
+    // Bootstrap Icons CSS
+    {
+      method: 'GET',
+      path: '/css/bootstrap-icons.min.css',
+      handler: async (ctx) => {
+        const bootstrapIconsCssPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap-icons','font','bootstrap-icons.min.css');
+        ctx.body = fs.createReadStream(bootstrapIconsCssPath);
+        ctx.set('Content-Type', 'text/css');
+       }
+    },
+    {
+      method: 'GET',
+      path: '/css/bootstrap-icons.css',
+      handler: async (ctx) => {
+        const bootstrapIconsCssPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap-icons','font','bootstrap-icons.css');
+        ctx.body = fs.createReadStream(bootstrapIconsCssPath);
+        ctx.set('Content-Type', 'text/css');
+       }
+    },
+    // Bootstrap Icons Fonts (WOFF e WOFF2)
+    {
+      method: 'GET',
+      path: '/fonts/bootstrap-icons.woff',
+      handler: async (ctx) => {
+        const fontPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap-icons','font','fonts','bootstrap-icons.woff');
+        ctx.body = fs.createReadStream(fontPath);
+        ctx.set('Content-Type', 'font/woff');
+       }
+    },
+    {
+      method: 'GET',
+      path: '/fonts/bootstrap-icons.woff2',
+      handler: async (ctx) => {
+        const fontPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap-icons','font','fonts','bootstrap-icons.woff2');
+        ctx.body = fs.createReadStream(fontPath);
+        ctx.set('Content-Type', 'font/woff2');
        }
     }
   );
-  
+
   return routeArray;
 }
 
@@ -77,12 +117,11 @@ function getHooksPage(){
 
   const HookMap = new Map();
   HookMap.set( 'head', (passData) => `
-    <link rel='stylesheet' href='/${ital8Conf.apiPrefix}/${pluginName}/css/bootstrap.min.css' type='text/css'  media='all' />\n
-    <link rel='stylesheet' href='/${ital8Conf.apiPrefix}/${pluginName}/css/bootstrap.min.css.map' type='text/css'  media='all' />
+    <link rel='stylesheet' href='/${ital8Conf.apiPrefix}/${pluginName}/css/bootstrap.min.css' type='text/css'  media='all' />
+    <link rel='stylesheet' href='/${ital8Conf.apiPrefix}/${pluginName}/css/bootstrap-icons.min.css' type='text/css'  media='all' />
     ` );
   HookMap.set('script', (passData) => `
-    <script src="/${ital8Conf.apiPrefix}/${pluginName}/js/bootstrap.min.js" type="text/javascript" ></script>\n
-    <script src="/${ital8Conf.apiPrefix}/${pluginName}/js/bootstrap.min.js.map" type="text/javascript" ></script>
+    <script src="/${ital8Conf.apiPrefix}/${pluginName}/js/bootstrap.min.js" type="text/javascript" ></script>
     ` );
 
   return HookMap;
