@@ -457,6 +457,430 @@ Validazione su **type:file** singolo:
 
 ---
 
+# Parte 3: Future Enhancements
+
+Questa sezione raccoglie le funzionalità **non implementate nella versione 1.0** ma che sono state identificate come utili per futuri sviluppi dello standard EDITABLE. Questi enhancement sono stati documentati per essere ripresi una volta completata l'implementazione delle funzionalità base.
+
+## 1. Nuovi Tipi di Contenuto
+
+### type:select - Dropdown / Select Box
+
+**Descrizione:** Permette di definire un campo con opzioni predefinite da selezionare.
+
+**Sintassi:**
+```ejs
+<%# EDITABLE name:category type:select
+    options:"news,blog,press,events"
+    label:"Categoria Articolo"
+    description:"Seleziona la categoria dell'articolo"
+    required:true %>
+news
+<%# /EDITABLE %>
+```
+
+**Attributi aggiuntivi:**
+- `options` (required): Lista di valori separati da virgola
+- `optionsLabels` (optional): Etichette personalizzate per ogni opzione (separati da virgola)
+
+**Caso d'uso:** Selezione categorie, stati, tipi di contenuto predefiniti.
+
+---
+
+### type:color - Color Picker
+
+**Descrizione:** Permette di selezionare un colore tramite color picker.
+
+**Sintassi:**
+```ejs
+<%# EDITABLE name:brandColor type:color
+    label:"Colore Brand"
+    description:"Colore principale del brand"
+    default:"#667eea" %>
+#667eea
+<%# /EDITABLE %>
+```
+
+**Attributi aggiuntivi:**
+- `default` (optional): Colore di default in formato esadecimale
+
+**Caso d'uso:** Personalizzazione colori tema, branding, elementi grafici.
+
+---
+
+### type:date - Date Picker
+
+**Descrizione:** Permette di selezionare una data tramite date picker.
+
+**Sintassi:**
+```ejs
+<%# EDITABLE name:publishDate type:date
+    label:"Data Pubblicazione"
+    description:"Data di pubblicazione dell'articolo"
+    format:"YYYY-MM-DD"
+    minDate:"2024-01-01"
+    required:true %>
+2024-12-03
+<%# /EDITABLE %>
+```
+
+**Attributi aggiuntivi:**
+- `format` (optional): Formato della data (default: "YYYY-MM-DD")
+- `minDate` (optional): Data minima selezionabile
+- `maxDate` (optional): Data massima selezionabile
+
+**Caso d'uso:** Date di pubblicazione, scadenze, eventi, date di validità.
+
+---
+
+### type:number - Campo Numerico
+
+**Descrizione:** Campo input numerico con validazione e controlli min/max.
+
+**Sintassi:**
+```ejs
+<%# EDITABLE name:price type:number
+    label:"Prezzo Prodotto"
+    min:0
+    max:10000
+    step:0.01
+    unit:"€"
+    required:true %>
+99.99
+<%# /EDITABLE %>
+```
+
+**Attributi aggiuntivi:**
+- `min` (optional): Valore minimo
+- `max` (optional): Valore massimo
+- `step` (optional): Incremento/decremento (default: 1)
+- `unit` (optional): Unità di misura da visualizzare (€, $, kg, ecc.)
+
+**Caso d'uso:** Prezzi, quantità, percentuali, punteggi.
+
+---
+
+### type:url - URL con Validazione
+
+**Descrizione:** Campo per URL con validazione automatica del formato.
+
+**Sintassi:**
+```ejs
+<%# EDITABLE name:externalLink type:url
+    label:"Link Esterno"
+    description:"URL completo (es: https://example.com)"
+    protocol:"https"
+    required:true %>
+https://example.com
+<%# /EDITABLE %>
+```
+
+**Attributi aggiuntivi:**
+- `protocol` (optional): Protocollo richiesto (http, https, mailto, tel)
+
+**Caso d'uso:** Link esterni, social media, siti web, contatti.
+
+---
+
+### type:email - Email con Validazione
+
+**Descrizione:** Campo per email con validazione automatica del formato.
+
+**Sintassi:**
+```ejs
+<%# EDITABLE name:contactEmail type:email
+    label:"Email di Contatto"
+    description:"Indirizzo email valido"
+    required:true %>
+info@example.com
+<%# /EDITABLE %>
+```
+
+**Caso d'uso:** Email di contatto, newsletter, form.
+
+---
+
+## 2. Organizzazione e UX
+
+### group - Raggruppamento Campi
+
+**Descrizione:** Permette di raggruppare campi correlati nell'interfaccia di editing.
+
+**Sintassi:**
+```ejs
+<%# EDITABLE name:metaTitle type:text
+    group:"SEO"
+    order:1
+    label:"Meta Title" %>
+Titolo SEO
+<%# /EDITABLE %>
+
+<%# EDITABLE name:metaDescription type:text
+    group:"SEO"
+    order:2
+    label:"Meta Description" %>
+Descrizione SEO
+<%# /EDITABLE %>
+
+<%# EDITABLE name:heroTitle type:text
+    group:"Hero Section"
+    order:1
+    label:"Titolo Hero" %>
+Benvenuto
+<%# /EDITABLE %>
+```
+
+**Attributi aggiuntivi:**
+- `group` (optional): Nome del gruppo (stringa)
+- `order` (optional): Ordine di visualizzazione nel gruppo (numero)
+
+**Benefici:**
+- Organizzazione logica dei campi
+- Interfaccia editor più pulita e intuitiva
+- Collapsible sections per gruppi
+
+---
+
+### placeholder - Placeholder Text
+
+**Descrizione:** Testo di esempio visualizzato nel campo vuoto.
+
+**Sintassi:**
+```ejs
+<%# EDITABLE name:email type:email
+    label:"Email"
+    placeholder:"esempio@dominio.com" %>
+<%# /EDITABLE %>
+```
+
+**Caso d'uso:** Fornire esempi di formato, guidare l'utente nella compilazione.
+
+---
+
+### helpUrl - Link a Documentazione
+
+**Descrizione:** Link a documentazione o guida per il campo specifico.
+
+**Sintassi:**
+```ejs
+<%# EDITABLE name:structuredData type:code
+    editor:code
+    label:"Structured Data (JSON-LD)"
+    helpUrl:"https://schema.org/docs/gs.html" %>
+<%# /EDITABLE %>
+```
+
+**Benefici:** Aiuto contestuale per campi complessi.
+
+---
+
+## 3. Internazionalizzazione (i18n)
+
+### Supporto Multilingua
+
+**Descrizione:** Permette di definire contenuti in multiple lingue.
+
+**Sintassi Proposta - Opzione A (Attributo lang):**
+```ejs
+<%# EDITABLE name:pageTitle type:text
+    lang:"it"
+    translatable:true
+    label:"Titolo Pagina (Italiano)" %>
+Benvenuto
+<%# /EDITABLE %>
+
+<%# EDITABLE name:pageTitle type:text
+    lang:"en"
+    translatable:true
+    label:"Page Title (English)" %>
+Welcome
+<%# /EDITABLE %>
+```
+
+**Sintassi Proposta - Opzione B (Blocco multilingua):**
+```ejs
+<%# EDITABLE name:pageTitle type:text
+    translatable:true
+    languages:"it,en,fr,de"
+    label:"Titolo Pagina" %>
+{
+  "it": "Benvenuto",
+  "en": "Welcome",
+  "fr": "Bienvenue",
+  "de": "Willkommen"
+}
+<%# /EDITABLE %>
+```
+
+**Attributi aggiuntivi:**
+- `lang` (optional): Codice lingua ISO 639-1 (it, en, fr, de, ecc.)
+- `translatable` (optional): Booleano, indica se il campo è traducibile
+- `languages` (optional): Lista lingue supportate
+- `defaultLanguage` (optional): Lingua di fallback
+
+**Considerazioni:**
+- Sistema di gestione traduzioni nel pannello admin
+- Selezione lingua attiva nell'editor
+- Fallback a lingua di default se traduzione mancante
+- URL structure per contenuti multilingua (/it/, /en/, ecc.)
+
+**Priorità:** Da implementare dopo il sistema base, richiede progettazione architetturale.
+
+---
+
+## 4. Condizioni e Dipendenze
+
+### showIf - Visualizzazione Condizionale
+
+**Descrizione:** Mostra/nasconde un campo in base al valore di un altro campo.
+
+**Sintassi:**
+```ejs
+<%# EDITABLE name:hasVideo type:select
+    options:"yes,no"
+    label:"Include Video?" %>
+no
+<%# /EDITABLE %>
+
+<%# EDITABLE name:videoUrl type:url
+    label:"URL Video YouTube"
+    showIf:"hasVideo:yes" %>
+<%# /EDITABLE %>
+```
+
+**Caso d'uso:** Form dinamici, campi opzionali basati su selezioni precedenti.
+
+---
+
+## 5. Validazione Avanzata
+
+### pattern - Regex Custom
+
+**Descrizione:** Validazione tramite espressione regolare personalizzata.
+
+**Sintassi:**
+```ejs
+<%# EDITABLE name:phoneNumber type:text
+    label:"Numero di Telefono"
+    pattern:"^\+?[0-9]{10,15}$"
+    patternError:"Formato telefono non valido" %>
+<%# /EDITABLE %>
+```
+
+**Attributi aggiuntivi:**
+- `pattern` (optional): Regex per validazione
+- `patternError` (optional): Messaggio di errore personalizzato
+
+---
+
+## 6. Componenti Riutilizzabili
+
+### type:component - Componenti Predefiniti
+
+**Descrizione:** Inserimento di componenti predefiniti riutilizzabili (es: form contatto, call-to-action, card prodotto).
+
+**Sintassi:**
+```ejs
+<%# EDITABLE name:ctaButton type:component
+    componentId:"callToAction"
+    label:"Pulsante Call-to-Action" %>
+{
+  "text": "Iscriviti Ora",
+  "url": "/signup",
+  "style": "primary"
+}
+<%# /EDITABLE %>
+```
+
+**Benefici:**
+- Riutilizzo di pattern comuni
+- Coerenza visiva
+- Configurazione semplificata
+
+---
+
+## 7. Gestione Versioni
+
+### Versionamento Contenuti
+
+**Descrizione:** Sistema per salvare e ripristinare versioni precedenti dei contenuti.
+
+**Funzionalità:**
+- Salvataggio automatico ad ogni modifica
+- Storico delle versioni con timestamp e utente
+- Preview delle versioni precedenti
+- Ripristino di versioni specifiche
+- Confronto tra versioni (diff)
+
+**Implementazione suggerita:**
+```json
+{
+  "pagePath": "/www/about.ejs",
+  "versions": [
+    {
+      "version": 3,
+      "timestamp": "2024-12-03T10:30:00Z",
+      "user": "admin",
+      "changes": {
+        "heroTitle": "Nuovo titolo",
+        "mainContent": "Contenuto aggiornato..."
+      }
+    },
+    {
+      "version": 2,
+      "timestamp": "2024-12-02T15:00:00Z",
+      "user": "editor",
+      "changes": { ... }
+    }
+  ],
+  "current": { ... }
+}
+```
+
+---
+
+## 8. Note di Implementazione
+
+### Priorità Suggerite
+
+**Fase 1 - Base (v1.0):**
+- ✅ Tipi base (text, html, richtext, markdown, image, images, file, files)
+- ✅ Validazione base
+- ✅ Attributi essenziali
+
+**Fase 2 - Enhancement UX (v1.1):**
+- 🔮 type:select, type:color, type:date, type:number
+- 🔮 group, placeholder, helpUrl
+- 🔮 Miglioramento interfaccia editor
+
+**Fase 3 - Advanced (v1.2):**
+- 🔮 type:url, type:email con validazione
+- 🔮 showIf (dipendenze tra campi)
+- 🔮 pattern (regex custom)
+- 🔮 Versionamento contenuti
+
+**Fase 4 - Enterprise (v2.0):**
+- 🔮 Internazionalizzazione completa
+- 🔮 type:component (componenti riutilizzabili)
+- 🔮 Workflow approval
+- 🔮 Permessi granulari per campo
+
+---
+
+## 9. Compatibilità con v1.0
+
+Tutti i future enhancement sono progettati per essere **retrocompatibili** con la versione 1.0 dello standard:
+
+- Template esistenti continueranno a funzionare
+- Nuovi attributi sono opzionali
+- Parser può ignorare attributi non supportati
+- Migrazioni graduali possibili
+
+---
+
+**Nota:** Questa sezione verrà aggiornata man mano che nuove esigenze emergono durante l'utilizzo pratico del sistema.
+
+---
+
 # Conclusioni
 
 Lo standard EDITABLE fornisce un sistema flessibile e potente per la gestione di template editabili in ital8cms. Le caratteristiche principali sono:
