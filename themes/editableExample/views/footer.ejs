@@ -1,15 +1,16 @@
-
-
-
-<footer role="contentinfo">
-
-<%# EDITABLE name:footerContent type:html editor:simple label:"Contenuto Footer" %>
-<p>© 2024 ital8cms - Contenuto footer personalizzabile</p>
-<%# /EDITABLE %>
-
-<%- passData.pluginSys.hookPage("footer", passData); %>
+<footer role="contentinfo" class="submarine-footer">
+    <div class="footer-container">
+        <div class="footer-section">
+            <%# EDITABLE name:footerDescription type:text maxlength:500 label:"Descrizione Footer" %>
+            <p class="footer-description">Sistema di gestione contenuti modulare e plugin-based per sviluppatori</p>
+            <%# /EDITABLE %>
+        </div>
+        <%# EDITABLE name:footerContent type:html editor:simple label:"Contenuto Footer" %>
+        <p>© 2024 ital8cms - Contenuto footer personalizzabile</p>
+        <%# /EDITABLE %>
+        <%- passData.pluginSys.hookPage("footer", passData); %>
+    </div>
 </footer>
-
 <%- passData.pluginSys.hookPage("script", passData); %>
 </body>
 </html>
