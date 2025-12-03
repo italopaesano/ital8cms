@@ -1,3 +1,40 @@
-<aside>
-  <%- passData.pluginSys.hookPage("aside", passData); %>
+<aside class="submarine-sidebar" role="complementary">
+    <div class="sidebar-container">
+        <%# EDITABLE name:sidebarWidget1 type:html editor:wysiwyg label:"Widget Sidebar 1 - Info Rapide" %>
+        <div class="sidebar-widget widget-info">
+            <h3 class="widget-title">🔍 Info Rapide</h3>
+            <div class="widget-content">
+                <p>Esplora le funzionalità del CMS più modulare del mare!</p>
+                <ul>
+                    <li>✅ Plugin System</li>
+                    <li>✅ Theme Engine</li>
+                    <li>✅ EDITABLE Standard</li>
+                </ul>
+            </div>
+        </div>
+        <%# /EDITABLE %>
+
+        <%# EDITABLE name:sidebarWidget2 type:html editor:wysiwyg label:"Widget Sidebar 2 - Contenuto Custom" %>
+        <div class="sidebar-widget widget-custom">
+            <h3 class="widget-title">🎨 Personalizzazione</h3>
+            <div class="widget-content">
+                <p>Questo widget è completamente personalizzabile attraverso il pannello di amministrazione.</p>
+            </div>
+        </div>
+        <%# /EDITABLE %>
+
+        <%# EDITABLE name:sidebarWidget3 type:html editor:simple label:"Widget Sidebar 3 - Link Utili" %>
+        <div class="sidebar-widget widget-links">
+            <h3 class="widget-title">🔗 Link Utili</h3>
+            <nav class="widget-content">
+                <a href="/guide">Guide</a>
+                <a href="/api">API Docs</a>
+                <a href="/community">Community</a>
+                <a href="/support">Supporto</a>
+            </nav>
+        </div>
+        <%# /EDITABLE %>
+    </div>
+
+    <%- passData.pluginSys.hookPage("aside", passData); %>
 </aside>

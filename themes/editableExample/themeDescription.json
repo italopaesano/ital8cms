@@ -1,23 +1,31 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
   "name": "editableExample",
-  "version": "1.0.0",
-  "description": "Tema di esempio completo per testare e validare lo standard EDITABLE v1.0 di ital8cms. Include 4 template diversi che testano tutti i tipi di contenuto e attributi di validazione.",
+  "version": "1.1.0",
+  "description": "Tema di esempio completo per testare e validare lo standard EDITABLE v1.0 di ital8cms. Include 4 template diversi e partials editabili con design 'Submarine' blu oceano giocoso. 🌊🐠",
   "author": "Italo Paesano",
   "email": "italopaesano@protonmail.com",
   "license": "ISC",
-  "tags": ["example", "editable", "testing", "bootstrap", "demo"],
+  "tags": ["example", "editable", "testing", "bootstrap", "demo", "submarine", "ocean-theme"],
+  "designTheme": "Submarine Blue - Tema sottomarino con colori blu oceano, animazioni giocose e decorazioni marine",
   "supportedHooks": [
     "head",
     "header",
     "footer",
-    "script"
+    "script",
+    "nav",
+    "main",
+    "aside"
   ],
   "features": {
     "editableStandard": true,
+    "editablePartials": true,
+    "submarineDesign": true,
     "responsive": true,
     "bootstrap5": true,
-    "testTemplates": true
+    "testTemplates": true,
+    "animations": true,
+    "customCSS": true
   },
   "templates": [
     {
@@ -41,10 +49,41 @@
       "editableBlocks": 6
     }
   ],
+  "partials": [
+    {
+      "name": "header.ejs",
+      "description": "Header con logo, tagline, announcement bar e CTA buttons - 3 blocchi EDITABLE",
+      "editableBlocks": 3
+    },
+    {
+      "name": "nav.ejs",
+      "description": "Navigazione principale editabile con emoji icons - 1 blocco EDITABLE",
+      "editableBlocks": 1
+    },
+    {
+      "name": "aside.ejs",
+      "description": "Sidebar con 3 widget personalizzabili - 3 blocchi EDITABLE",
+      "editableBlocks": 3
+    },
+    {
+      "name": "footer.ejs",
+      "description": "Footer con descrizione, link, social e copyright - 4 blocchi EDITABLE",
+      "editableBlocks": 4
+    }
+  ],
   "testCoverage": {
     "contentTypes": ["text", "html", "richtext", "markdown", "image", "images", "file", "files"],
     "attributes": ["name", "type", "label", "description", "required", "maxlength", "editor", "allowedTags", "minCount", "maxCount", "minWidth", "maxWidth", "minHeight", "maxHeight", "minSize", "maxSize", "allowedExtensions", "allowedMimeTypes"],
-    "totalBlocks": 28,
+    "totalBlocks": 39,
+    "templateBlocks": 28,
+    "partialBlocks": 11,
     "standardVersion": "1.0"
+  },
+  "designColors": {
+    "primary": "#0a1f44",
+    "secondary": "#2b5876",
+    "accent": "#43c6ac",
+    "coral": "#ff6b6b",
+    "sand": "#f39c12"
   }
 }
