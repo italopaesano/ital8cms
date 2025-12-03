@@ -24,6 +24,20 @@ class themeSys{
       this.ital8Conf.activeTheme = 'default';
     } else {
       console.log(`[themeSys] Tema pubblico '${this.ital8Conf.activeTheme}' caricato correttamente`);
+
+      // Valida il contenuto dei partials (hook e struttura)
+      const contentValidation = this.validateThemeContent(this.ital8Conf.activeTheme);
+      if (!contentValidation.valid) {
+        console.error(`[themeSys] ⚠️  ERRORI nel contenuto del tema '${this.ital8Conf.activeTheme}':`);
+        contentValidation.errors.forEach(err => console.error(`  ❌ ${err}`));
+      }
+      if (contentValidation.warnings.length > 0) {
+        console.warn(`[themeSys] ⚠️  WARNING nel tema '${this.ital8Conf.activeTheme}':`);
+        contentValidation.warnings.forEach(warn => console.warn(`  ⚠️  ${warn}`));
+      }
+      if (contentValidation.valid && contentValidation.warnings.length === 0) {
+        console.log(`[themeSys] ✅ Contenuto tema pubblico validato correttamente`);
+      }
     }
 
     // Controlla dipendenze del tema pubblico (se pluginSys è disponibile)
@@ -42,6 +56,22 @@ class themeSys{
       this.ital8Conf.adminActiveTheme = 'default';
     } else {
       console.log(`[themeSys] Tema admin '${this.ital8Conf.adminActiveTheme}' caricato correttamente`);
+
+      // Valida il contenuto dei partials solo se diverso dal tema pubblico (evita duplicati)
+      if (this.ital8Conf.adminActiveTheme !== this.ital8Conf.activeTheme) {
+        const contentValidation = this.validateThemeContent(this.ital8Conf.adminActiveTheme);
+        if (!contentValidation.valid) {
+          console.error(`[themeSys] ⚠️  ERRORI nel contenuto del tema admin '${this.ital8Conf.adminActiveTheme}':`);
+          contentValidation.errors.forEach(err => console.error(`  ❌ ${err}`));
+        }
+        if (contentValidation.warnings.length > 0) {
+          console.warn(`[themeSys] ⚠️  WARNING nel tema admin '${this.ital8Conf.adminActiveTheme}':`);
+          contentValidation.warnings.forEach(warn => console.warn(`  ⚠️  ${warn}`));
+        }
+        if (contentValidation.valid && contentValidation.warnings.length === 0) {
+          console.log(`[themeSys] ✅ Contenuto tema admin validato correttamente`);
+        }
+      }
     }
 
     // Controlla dipendenze del tema admin (se pluginSys è disponibile e tema diverso da pubblico)
@@ -215,6 +245,113 @@ class themeSys{
 
     // Tutte le validazioni passate
     return { valid: true, error: null };
+  }
+
+  /**
+   * Valida il CONTENUTO dei partials di un tema verificando la presenza degli hook richiesti
+   * @param {string} themeName - Nome del tema da validare
+   * @returns {object} - { valid: boolean, errors: Array<string>, warnings: Array<string> }
+   */
+  validateThemeContent(themeName) {
+    const themePath = path.join(__dirname, '../themes', themeName);
+    const viewsPath = path.join(themePath, 'views');
+    const errors = [];
+    const warnings = [];
+
+    // Definisci gli hook richiesti per ogni partial
+    const requiredHooks = {
+      'head.ejs': {
+        required: ['hookPage("head"', 'hookPage(\'head\'', 'hookPage(`head`'],
+        description: 'Hook "head" per injection CSS/meta tags'
+      },
+      'header.ejs': {
+        required: ['hookPage("header"', 'hookPage(\'header\'', 'hookPage(`header`'],
+        description: 'Hook "header" all\'inizio del body'
+      },
+      'footer.ejs': {
+        required: [
+          ['hookPage("footer"', 'hookPage(\'footer\'', 'hookPage(`footer`'],
+          ['hookPage("script"', 'hookPage(\'script\'', 'hookPage(`script`']
+        ],
+        description: 'Hook "footer" e "script" per injection scripts'
+      },
+      'nav.ejs': {
+        required: ['hookPage("nav"', 'hookPage(\'nav\'', 'hookPage(`nav`'],
+        description: 'Hook "nav" per navigation',
+        optional: true
+      },
+      'main.ejs': {
+        required: [
+          ['hookPage("main"', 'hookPage(\'main\'', 'hookPage(`main`'],
+          ['hookPage("body"', 'hookPage(\'body\'', 'hookPage(`body`']
+        ],
+        description: 'Hook "main" e "body" per contenuto principale',
+        optional: true
+      },
+      'aside.ejs': {
+        required: ['hookPage("aside"', 'hookPage(\'aside\'', 'hookPage(`aside`'],
+        description: 'Hook "aside" per sidebar',
+        optional: true
+      }
+    };
+
+    // Pattern per rilevare contenuto hardcoded sospetto
+    const suspiciousPatterns = [
+      { pattern: /<link[^>]+href=[^>]+bootstrap/i, message: 'Bootstrap CSS hardcoded (dovrebbe essere iniettato via hook)' },
+      { pattern: /<script[^>]+src=[^>]+bootstrap/i, message: 'Bootstrap JS hardcoded (dovrebbe essere iniettato via hook)' },
+      { pattern: /<style>/i, message: 'Tag <style> hardcoded (CSS dovrebbe essere iniettato via hook)' },
+      { pattern: /<nav[^>]+class=/i, message: 'Navbar HTML hardcoded in nav.ejs (dovrebbe essere iniettato via hook)', file: 'nav.ejs' }
+    ];
+
+    // Verifica ogni partial
+    for (const [partialName, hookConfig] of Object.entries(requiredHooks)) {
+      const partialPath = path.join(viewsPath, partialName);
+
+      // Salta partials opzionali se non esistono
+      if (hookConfig.optional && !fs.existsSync(partialPath)) {
+        continue;
+      }
+
+      if (!fs.existsSync(partialPath)) {
+        errors.push(`Partial '${partialName}' non trovato`);
+        continue;
+      }
+
+      try {
+        const content = fs.readFileSync(partialPath, 'utf8');
+
+        // Verifica presenza hook richiesti
+        const requiredArray = Array.isArray(hookConfig.required[0]) ? hookConfig.required : [hookConfig.required];
+
+        for (const hookVariants of requiredArray) {
+          const hookFound = hookVariants.some(variant => content.includes(variant));
+
+          if (!hookFound) {
+            const hookName = hookVariants[0].match(/hookPage\(["'`](\w+)["'`]/)[1];
+            errors.push(`${partialName}: Hook "${hookName}" mancante (${hookConfig.description})`);
+          }
+        }
+
+        // Verifica pattern sospetti (solo per partials non opzionali o esistenti)
+        for (const { pattern, message, file } of suspiciousPatterns) {
+          // Se il pattern specifica un file, controlla solo quello
+          if (file && file !== partialName) continue;
+
+          if (pattern.test(content)) {
+            warnings.push(`${partialName}: ${message}`);
+          }
+        }
+
+      } catch (error) {
+        errors.push(`Errore lettura ${partialName}: ${error.message}`);
+      }
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors: errors,
+      warnings: warnings
+    };
   }
 
   /**
