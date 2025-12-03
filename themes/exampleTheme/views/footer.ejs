@@ -54,6 +54,7 @@ IMPORTANTE: Questo partial DEVE chiudere tutti i tag aperti in head.ejs
     <%- passData.pluginSys.hookPage("script", passData); %>
 
     <!-- JavaScript del tema -->
+    <!-- Si può usare anche: <%= passData.themeSys.getThemeResourceUrl('js/theme.js') %> -->
     <script src="/theme-assets/js/theme.js"></script>
 
 </body>

@@ -502,58 +502,58 @@ themeResources/
 In `index.js`, gli asset vengono serviti tramite `koa-classic-server`:
 
 ```javascript
-// Serve theme assets
-if (themeSys.hasAssets()) {
+// Serve theme resources
+if (themeSys.hasThemeResources()) {
   app.use(koaClassicServer(
-    themeSys.getAssetsPath(),
+    themeSys.getThemeResourcesPath(),
     {
       prefix: '/theme-assets',
       index: false,
       hidden: false
     }
   ));
-  console.log('[Server] Theme assets serviti su /theme-assets');
+  console.log('[Server] Theme resources serviti su /theme-assets');
 }
 ```
 
-### 7.3 Metodi Asset
+### 7.3 Metodi Risorse Tema
 
-#### `getAssetsPath()`
+#### `getThemeResourcesPath()`
 
-Restituisce il path assoluto della cartella asset del tema attivo.
+Restituisce il path assoluto della cartella risorse del tema attivo.
 
 ```javascript
-getAssetsPath() {
+getThemeResourcesPath() {
   return path.join(__dirname, '../themes', this.ital8Conf.activeTheme, 'themeResources');
 }
 ```
 
-#### `hasAssets()`
+#### `hasThemeResources()`
 
-Verifica se la cartella asset esiste.
+Verifica se la cartella risorse esiste.
 
 ```javascript
-hasAssets() {
-  const assetsPath = this.getAssetsPath();
-  return fs.existsSync(assetsPath) && fs.statSync(assetsPath).isDirectory();
+hasThemeResources() {
+  const resourcesPath = this.getThemeResourcesPath();
+  return fs.existsSync(resourcesPath) && fs.statSync(resourcesPath).isDirectory();
 }
 ```
 
-#### `getAssetUrl(assetPath)`
+#### `getThemeResourceUrl(resourcePath)`
 
-Restituisce l'URL pubblico di un asset.
+Restituisce l'URL pubblico di una risorsa del tema.
 
 ```javascript
-getAssetUrl(assetPath) {
+getThemeResourceUrl(resourcePath) {
   // Rimuove eventuali slash iniziali dal path
-  const cleanPath = assetPath.replace(/^\/+/, '');
+  const cleanPath = resourcePath.replace(/^\/+/, '');
   return `/theme-assets/${cleanPath}`;
 }
 ```
 
 **Esempio:**
 ```javascript
-themeSys.getAssetUrl('css/theme.css')
+themeSys.getThemeResourceUrl('css/theme.css')
 // Ritorna: /theme-assets/css/theme.css
 ```
 
@@ -565,8 +565,8 @@ themeSys.getAssetUrl('css/theme.css')
 <script src="/theme-assets/js/theme.js"></script>
 <img src="/theme-assets/images/logo.png" alt="Logo">
 
-<!-- Metodo 2: Helper getAssetUrl() -->
-<link rel="stylesheet" href="<%= passData.themeSys.getAssetUrl('css/theme.css') %>">
+<!-- Metodo 2: Helper getThemeResourceUrl() -->
+<link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/theme.css') %>">
 ```
 
 ---
@@ -766,13 +766,13 @@ const customCss = themeSys.getPluginCustomCss('simpleAccess', 'login');
 | `themeSupportsHook(themeName, hookName)` | `themeName`: string, `hookName`: string | boolean | Verifica supporto hook |
 | `getThemeFeatures(themeName)` | `themeName`: string | object | Feature del tema |
 
-### 9.5 Metodi Asset
+### 9.5 Metodi Risorse Tema
 
 | Metodo | Parametri | Ritorno | Descrizione |
 |--------|-----------|---------|-------------|
-| `getAssetUrl(assetPath)` | `assetPath`: string | string | URL pubblico asset |
-| `getAssetsPath()` | - | string | Path assoluto cartella asset |
-| `hasAssets()` | - | boolean | Verifica esistenza cartella asset |
+| `getThemeResourceUrl(resourcePath)` | `resourcePath`: string | string | URL pubblico risorsa tema |
+| `getThemeResourcesPath()` | - | string | Path assoluto cartella risorse tema |
+| `hasThemeResources()` | - | boolean | Verifica esistenza cartella risorse tema |
 
 ### 9.6 Metodi Plugin Customization
 
@@ -999,8 +999,8 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
     <title>Il Mio Sito</title>
 
     <!-- CSS del tema -->
-    <link rel="stylesheet" href="<%= passData.themeSys.getAssetUrl('css/theme.css') %>">
-    <link rel="stylesheet" href="<%= passData.themeSys.getAssetUrl('css/responsive.css') %>">
+    <link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/theme.css') %>">
+    <link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/responsive.css') %>">
 
     <!-- Hook plugin -->
     <%- passData.pluginSys.hookPage("head", passData) %>
@@ -1010,12 +1010,12 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
 ```ejs
 <!-- In views/footer.ejs -->
     <footer>
-        <img src="<%= passData.themeSys.getAssetUrl('images/logo.png') %>" alt="Logo">
+        <img src="<%= passData.themeSys.getThemeResourceUrl('images/logo.png') %>" alt="Logo">
         <p>&copy; 2025 Il Mio Sito</p>
     </footer>
 
     <!-- JavaScript tema -->
-    <script src="<%= passData.themeSys.getAssetUrl('js/theme.js') %>"></script>
+    <script src="<%= passData.themeSys.getThemeResourceUrl('js/theme.js') %>"></script>
 
     <!-- Hook plugin -->
     <%- passData.pluginSys.hookPage("script", passData) %>

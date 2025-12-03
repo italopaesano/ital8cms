@@ -32,20 +32,20 @@ const themeSys = new ( require('./core/themeSys') ) ( ital8Conf, pluginSys );
 // Imposta il riferimento a themeSys in pluginSys per permettere ai plugin di accedervi
 pluginSys.setThemeSys(themeSys);
 
-// Static server per gli asset del tema attivo
-// Gli asset sono accessibili tramite /theme-assets/css/, /theme-assets/js/, ecc.
+// Static server per le risorse del tema attivo
+// Le risorse sono accessibili tramite /theme-assets/css/, /theme-assets/js/, ecc.
 app.use(
   koaClassicServer(
-    path.join(__dirname, 'themes', ital8Conf.activeTheme, 'assets'),
+    path.join(__dirname, 'themes', ital8Conf.activeTheme, 'themeResources'),
     {
       urlPrefix: '/theme-assets',
       showDirContents: false,
       enableCaching: true,
-      cacheMaxAge: 86400, // 24 ore di cache per asset del tema
+      cacheMaxAge: 86400, // 24 ore di cache per risorse del tema
     }
   )
 );
-console.log(`[themeSys] Asset del tema serviti da /theme-assets/ -> themes/${ital8Conf.activeTheme}/assets/`);
+console.log(`[themeSys] Risorse del tema servite da /theme-assets/ -> themes/${ital8Conf.activeTheme}/themeResources/`);
 
 // koa classic server
 app.use(
