@@ -6,6 +6,115 @@ const semver = require('semver');
 const loadJson5 = require('./loadJson5');
 //let ital8Conf;
 
+/**
+ * ============================================================================
+ * themeSys - Sistema di Gestione Temi per ital8cms
+ * ============================================================================
+ *
+ * Gestisce il caricamento, la validazione e l'utilizzo dei temi nell'applicazione.
+ * I temi sono composti da partials (views) e templates EJS, con supporto per
+ * personalizzazione dei template dei plugin e gestione delle dipendenze.
+ *
+ * STRUTTURA TEMI:
+ * themes/{themeName}/
+ *   ├── views/                           # Partials riutilizzabili (head.ejs, header.ejs, footer.ejs, ecc.)
+ *   ├── templates/                       # Template completi per pagine
+ *   ├── themeResources/                  # Asset statici (CSS, JS, immagini)
+ *   ├── pluginsEndpointsMarkup/          # Personalizzazioni template plugin
+ *   ├── themeConfig.json                 # Configurazione tema
+ *   └── themeDescription.json            # Metadati tema
+ *
+ * FUNZIONI PER CATEGORIA:
+ *
+ * 1. INIZIALIZZAZIONE
+ *    - constructor(theItal8Conf, thePluginSys)
+ *      Inizializza il sistema temi, valida temi pubblico e admin, controlla dipendenze
+ *
+ * 2. GESTIONE DIPENDENZE
+ *    - checkDependencies(themeName)
+ *      Verifica che tutte le dipendenze plugin e NPM siano soddisfatte
+ *    - getThemeDependencies(themeName)
+ *      Restituisce oggetto con dipendenze plugin e moduli NPM
+ *    - themeRequiresPlugin(themeName, pluginName)
+ *      Verifica se il tema richiede un plugin specifico
+ *    - getActiveThemePluginDependencies()
+ *      Restituisce dipendenze plugin del tema pubblico attivo
+ *    - checkActiveThemeDependencies()
+ *      Verifica dipendenze del tema pubblico attivo
+ *
+ * 3. VALIDAZIONE TEMI
+ *    - validateTheme(themeName)
+ *      Valida struttura tema (directory, file obbligatori, config)
+ *    - validateThemeContent(themeName)
+ *      Valida CONTENUTO partials (hook richiesti, pattern hardcoded sospetti)
+ *
+ * 4. INFORMAZIONI E METADATI
+ *    - getAvailableThemes()
+ *      Lista tutti i temi disponibili con stato di validazione
+ *    - getThemeDescription(themeName)
+ *      Legge metadati da themeDescription.json
+ *    - getThemeVersion(themeName)
+ *      Restituisce versione del tema
+ *    - getActiveThemeDescription()
+ *      Metadati del tema pubblico attivo
+ *    - getAdminThemeDescription()
+ *      Metadati del tema admin attivo
+ *    - themeSupportsHook(themeName, hookName)
+ *      Verifica se il tema supporta un hook specifico
+ *    - getThemeFeatures(themeName)
+ *      Restituisce oggetto con feature supportate dal tema
+ *
+ * 5. GESTIONE ASSET TEMA
+ *    - getAssetUrl(assetPath)
+ *      Genera URL pubblico per asset del tema (es. '/theme-assets/css/theme.css')
+ *    - getAssetsPath()
+ *      Path assoluto della cartella themeResources del tema attivo
+ *    - hasAssets()
+ *      Verifica se la cartella themeResources esiste
+ *
+ * 6. PATH PARTIALS
+ *    - getThemePartPath(partName)
+ *      Path assoluto del partial nel tema pubblico (es. 'head.ejs')
+ *    - getAdminThemePartPath(partName)
+ *      Path assoluto del partial nel tema admin
+ *
+ * 7. PERSONALIZZAZIONE PLUGIN (Plugin Endpoint Customization)
+ *    Permette ai temi di sovrascrivere i template e gli asset degli endpoint dei plugin
+ *    Struttura: themes/{themeName}/pluginsEndpointsMarkup/{pluginName}/{endpointName}/
+ *
+ *    - hasCustomPluginTemplate(pluginName, endpointName, templateFile, isAdmin)
+ *      Verifica esistenza template personalizzato per endpoint plugin
+ *    - getCustomPluginTemplatePath(pluginName, endpointName, templateFile, isAdmin)
+ *      Restituisce path del template personalizzato se esiste
+ *    - resolvePluginTemplatePath(pluginName, endpointName, defaultPath, templateFile, isAdmin)
+ *      Risolve path template con fallback (custom → default plugin)
+ *    - hasCustomPluginAsset(pluginName, endpointName, assetFile, isAdmin)
+ *      Verifica esistenza asset personalizzato
+ *    - getCustomPluginAssetPath(pluginName, endpointName, assetFile, isAdmin)
+ *      Path assoluto dell'asset personalizzato
+ *    - getPluginAssetUrl(pluginName, endpointName, assetFile)
+ *      URL pubblico per asset plugin personalizzato
+ *    - getPluginCustomCss(pluginName, endpointName, cssFile, isAdmin)
+ *      Legge contenuto CSS personalizzato (utile per inline CSS)
+ *    - getCustomizedPlugins(isAdmin)
+ *      Lista tutti i plugin con personalizzazioni nel tema attivo
+ *
+ * UTILIZZO NEI TEMPLATE EJS:
+ *
+ *   // Includere partial:
+ *   <%- include( passData.themeSys.getThemePartPath('head.ejs') ) %>
+ *
+ *   // Asset del tema:
+ *   <link rel="stylesheet" href="<%= passData.themeSys.getAssetUrl('css/theme.css') %>">
+ *
+ *   // Template personalizzato plugin:
+ *   const templatePath = passData.themeSys.resolvePluginTemplatePath(
+ *     'simpleAccess', 'login', defaultPath
+ *   );
+ *
+ * ============================================================================
+ */
+
 class themeSys{
 
   //#fnInPageMap;// variabile privata
