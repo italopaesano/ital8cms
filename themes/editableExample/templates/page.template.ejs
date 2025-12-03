@@ -1,0 +1,116 @@
+<%#
+  Template: Basic Page
+  Description: Template base per pagina generica con vari tipi di contenuto editabile
+  Tests: text, html, richtext, markdown, image
+%>
+
+<%# Include theme head partial %>
+<%- await include(getThemePartPath('head', passData)) %>
+
+<%# SEO Meta Tags - EDITABLE %>
+<%# EDITABLE name:metaTitle type:text maxlength:60 required:true label:"Meta Title (SEO)" description:"Titolo per SEO, max 60 caratteri" %>
+<title>Titolo Pagina Default</title>
+<%# /EDITABLE %>
+
+<%# EDITABLE name:metaDescription type:text maxlength:160 label:"Meta Description (SEO)" description:"Descrizione per SEO, max 160 caratteri" %>
+<meta name="description" content="Descrizione default della pagina per i motori di ricerca.">
+<%# /EDITABLE %>
+
+<%# Include theme header %>
+<%- await include(getThemePartPath('header', passData)) %>
+
+<%# Include theme navigation %>
+<%- await include(getThemePartPath('nav', passData)) %>
+
+<%# Hero Section - EDITABLE HTML %>
+<%# EDITABLE name:heroSection type:html editor:wysiwyg label:"Sezione Hero" description:"Sezione principale in evidenza all'inizio della pagina" %>
+<section class="hero">
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 mx-auto text-center">
+                <h1 class="display-4 fw-bold">Benvenuto nel Tema Editable</h1>
+                <p class="lead">Questo è un esempio di hero section completamente editabile</p>
+                <a href="#content" class="btn btn-light btn-lg">Scopri di più</a>
+            </div>
+        </div>
+    </div>
+</section>
+<%# /EDITABLE %>
+
+<%# Page Title - EDITABLE TEXT %>
+<div class="container content-section">
+    <%# EDITABLE name:pageTitle type:text maxlength:100 required:true label:"Titolo Pagina" description:"Titolo principale della pagina (H1)" %>
+    <h1 class="text-center mb-5">Titolo Principale della Pagina</h1>
+    <%# /EDITABLE %>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <%# Main Content - EDITABLE MARKDOWN %>
+            <%# EDITABLE name:mainContent type:markdown editor:markdown label:"Contenuto Principale" description:"Contenuto principale della pagina in formato Markdown" required:true %>
+## Introduzione
+
+Questo è un contenuto di esempio in **Markdown**. Puoi usare:
+
+- Liste puntate
+- **Grassetto** e *corsivo*
+- [Link](https://example.com)
+- Codice `inline`
+
+### Sottosezione
+
+Altro contenuto interessante...
+
+```javascript
+// Anche blocchi di codice
+console.log('Hello World');
+```
+            <%# /EDITABLE %>
+
+            <%# Secondary Content - EDITABLE RICHTEXT %>
+            <div class="mt-4">
+                <%# EDITABLE name:secondaryContent type:richtext allowedTags:"p,strong,em,a,ul,li,br" maxlength:1000 label:"Contenuto Secondario" description:"Testo formattato breve, max 1000 caratteri" %>
+                <p>Questo è un contenuto <strong>secondario</strong> con formattazione limitata.
+                Puoi usare <em>solo alcuni tag HTML</em> per questioni di sicurezza.</p>
+                <ul>
+                    <li>Item 1</li>
+                    <li>Item 2</li>
+                </ul>
+                <%# /EDITABLE %>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <%# Sidebar Image - EDITABLE IMAGE %>
+            <%# EDITABLE name:sidebarImage type:image minWidth:300 maxWidth:800 minHeight:200 maxHeight:600 maxSize:500 label:"Immagine Sidebar" description:"Immagine laterale (300-800px larghezza, max 500KB)" %>
+            <img src="https://via.placeholder.com/400x300" alt="Sidebar Image" class="img-fluid rounded shadow">
+            <%# /EDITABLE %>
+
+            <%# Sidebar Text - EDITABLE TEXT %>
+            <div class="mt-3 p-3 bg-light rounded">
+                <%# EDITABLE name:sidebarTitle type:text maxlength:50 label:"Titolo Sidebar" %>
+                <h4>Info Aggiuntive</h4>
+                <%# /EDITABLE %>
+
+                <%# EDITABLE name:sidebarText type:richtext allowedTags:"p,strong,em,br" maxlength:300 label:"Testo Sidebar" %>
+                <p>Testo aggiuntivo nella sidebar con <strong>formattazione base</strong>.</p>
+                <%# /EDITABLE %>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%# Call-to-Action Section - EDITABLE HTML %>
+<%# EDITABLE name:ctaSection type:html editor:wysiwyg label:"Call to Action" description:"Sezione invito all'azione" %>
+<div class="container content-section">
+    <div class="row">
+        <div class="col-lg-8 mx-auto text-center bg-primary text-white p-5 rounded">
+            <h2>Pronto per iniziare?</h2>
+            <p class="lead">Contattaci per maggiori informazioni</p>
+            <a href="/contact" class="btn btn-light btn-lg">Contattaci</a>
+        </div>
+    </div>
+</div>
+<%# /EDITABLE %>
+
+<%# Include theme footer %>
+<%- await include(getThemePartPath('footer', passData)) %>

@@ -1,0 +1,17 @@
+    <footer>
+        <div class="container">
+            <div class="row">
+                <div class="col-md-12 text-center">
+                    <p>&copy; 2024 ital8cms - EDITABLE Example Theme</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <%# Plugin hook: script - allows plugins to inject scripts before body close %>
+    <%- await passData.pluginSys.hookPage("script", passData) %>
+
+    <%# Bootstrap JS %>
+    <script src="/<%- passData.apiPrefix %>/bootstrap/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
