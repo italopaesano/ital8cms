@@ -1,6 +1,13 @@
 
 <body>
 
+<%# EDITABLE name:headerContent type:html editor:simple label:"Contenuto Header" %>
+<div class="site-header">
+    <h1>ital8cms</h1>
+    <p>Contenuto header personalizzabile</p>
+</div>
+<%# /EDITABLE %>
+
 <%- passData.pluginSys.hookPage("header", passData); %>
 
 <%- include('nav.ejs') %>

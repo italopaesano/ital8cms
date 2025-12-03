@@ -1,0 +1,19 @@
+/* ============================================================================
+   editableExample Theme - Minimal Submarine Style
+   ============================================================================ */
+
+/* Sfondo blu sottomarino */
+body {
+    background: linear-gradient(135deg, #0a1f44 0%, #2b5876 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+}
+
+/* Colori base */
+:root {
+    --submarine-deep: #0a1f44;
+    --submarine-ocean: #2b5876;
+    --submarine-light: #43c6ac;
+}
