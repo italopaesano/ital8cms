@@ -1,6 +1,3 @@
-
-
-
 <footer role="contentinfo" class="submarine-footer">
     <div class="footer-container">
         <div class="footer-section">
@@ -8,38 +5,12 @@
             <p class="footer-description">Sistema di gestione contenuti modulare e plugin-based per sviluppatori</p>
             <%# /EDITABLE %>
         </div>
-
-        <div class="footer-section">
-            <%# EDITABLE name:footerLinks type:html editor:simple label:"Link Footer" %>
-            <nav aria-label="Footer navigation" class="footer-links">
-                <a href="/privacy">Privacy Policy</a>
-                <a href="/terms">Termini di Servizio</a>
-                <a href="/contacts">Contatti</a>
-                <a href="/docs">Documentazione</a>
-            </nav>
-            <%# /EDITABLE %>
-        </div>
-
-        <div class="footer-section">
-            <%# EDITABLE name:socialLinks type:html editor:simple label:"Link Social Media" %>
-            <div class="social-links">
-                <a href="#" aria-label="GitHub" title="GitHub">🐙 GitHub</a>
-                <a href="#" aria-label="Twitter" title="Twitter">🐦 Twitter</a>
-                <a href="#" aria-label="Discord" title="Discord">💬 Discord</a>
-            </div>
-            <%# /EDITABLE %>
-        </div>
-
-        <div class="footer-bottom">
-            <%# EDITABLE name:copyrightText type:text maxlength:200 label:"Testo Copyright" %>
-            <p class="copyright">© 2024 ital8cms. Tutti i diritti riservati. 🐠</p>
-            <%# /EDITABLE %>
-        </div>
+        <%# EDITABLE name:footerContent type:html editor:simple label:"Contenuto Footer" %>
+        <p>© 2024 ital8cms - Contenuto footer personalizzabile</p>
+        <%# /EDITABLE %>
+        <%- passData.pluginSys.hookPage("footer", passData); %>
     </div>
-
-    <%- passData.pluginSys.hookPage("footer", passData); %>
 </footer>
-
 <%- passData.pluginSys.hookPage("script", passData); %>
 </body>
 </html>
