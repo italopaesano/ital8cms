@@ -1,26 +1,13 @@
 <%#
-  Template: Blog Post
-  Description: Template per articoli di blog con metadata, featured image e contenuto markdown
-  Tests: text, image, markdown, richtext
+================================================================================
+TEMPLATE: Blog Post - Test EDITABLE Standard v1.0
+================================================================================
+Tests: text, image, markdown, richtext
+================================================================================
 %>
 
-<%# Include theme head partial %>
-<%- await include(getThemePartPath('head', passData)) %>
-
-<%# SEO and Post Metadata %>
-<%# EDITABLE name:postTitle type:text maxlength:100 required:true label:"Titolo Post" description:"Titolo dell'articolo" %>
-<title>Titolo del Post</title>
-<%# /EDITABLE %>
-
-<%# EDITABLE name:metaDescription type:text maxlength:160 label:"Meta Description" %>
-<meta name="description" content="Descrizione del post per i motori di ricerca.">
-<%# /EDITABLE %>
-
-<%# Include theme header %>
-<%- await include(getThemePartPath('header', passData)) %>
-
-<%# Include theme navigation %>
-<%- await include(getThemePartPath('nav', passData)) %>
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs' ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs' ) ) %>
 
 <article class="container content-section">
     <div class="row">
@@ -71,19 +58,13 @@
             <%# EDITABLE name:postBody type:markdown editor:markdown required:true label:"Corpo dell'Articolo" description:"Contenuto principale dell'articolo in formato Markdown" %>
 ## Introduzione
 
-Questo è il corpo principale dell'articolo scritto in **Markdown**. Puoi usare tutti i formati standard:
+Questo è il corpo principale dell'articolo scritto in **Markdown**.
 
 ### Formattazione Testo
 
 - **Grassetto** per enfatizzare
 - *Corsivo* per citazioni
 - `Codice inline` per termini tecnici
-
-### Liste
-
-1. Primo punto
-2. Secondo punto
-3. Terzo punto
 
 ### Citazioni
 
@@ -97,16 +78,6 @@ function saluta(nome) {
     console.log(`Ciao ${nome}!`);
 }
 ```
-
-### Immagini Inline
-
-Puoi anche includere immagini nel testo:
-
-![Descrizione immagine](https://via.placeholder.com/800x400)
-
-### Collegamenti
-
-Visita il [nostro sito](https://example.com) per maggiori informazioni.
 
 ## Conclusione
 
@@ -135,5 +106,4 @@ Qui concludi l'articolo con un riassunto dei punti chiave.
     </div>
 </article>
 
-<%# Include theme footer %>
-<%- await include(getThemePartPath('footer', passData)) %>
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs' ) ) %>
