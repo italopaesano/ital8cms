@@ -1,11 +1,10 @@
-// This file follows the JSON5 standard - comments and trailing commas are supported
 {
   "apiPrefix": "api",
   "adminPrefix": "admin",
   "enableAdmin": true,
   "viewsPrefix": "views",
   "baseThemePath": "../",
-  "activeTheme": "default",
+  "activeTheme": "editableExample",
   "adminActiveTheme": "default",
   "wwwPath": "/www",
   "debugMode": 1,
