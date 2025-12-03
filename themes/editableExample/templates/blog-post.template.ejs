@@ -1,0 +1,139 @@
+<%#
+  Template: Blog Post
+  Description: Template per articoli di blog con metadata, featured image e contenuto markdown
+  Tests: text, image, markdown, richtext
+%>
+
+<%# Include theme head partial %>
+<%- await include(getThemePartPath('head', passData)) %>
+
+<%# SEO and Post Metadata %>
+<%# EDITABLE name:postTitle type:text maxlength:100 required:true label:"Titolo Post" description:"Titolo dell'articolo" %>
+<title>Titolo del Post</title>
+<%# /EDITABLE %>
+
+<%# EDITABLE name:metaDescription type:text maxlength:160 label:"Meta Description" %>
+<meta name="description" content="Descrizione del post per i motori di ricerca.">
+<%# /EDITABLE %>
+
+<%# Include theme header %>
+<%- await include(getThemePartPath('header', passData)) %>
+
+<%# Include theme navigation %>
+<%- await include(getThemePartPath('nav', passData)) %>
+
+<article class="container content-section">
+    <div class="row">
+        <div class="col-lg-10 mx-auto">
+            <%# Post Header %>
+            <header class="mb-5">
+                <%# EDITABLE name:postTitleH1 type:text maxlength:150 required:true label:"Titolo Articolo (H1)" description:"Titolo principale visualizzato nella pagina" %>
+                <h1 class="display-4 fw-bold">Titolo dell'Articolo di Blog</h1>
+                <%# /EDITABLE %>
+
+                <div class="d-flex align-items-center mt-3 text-muted">
+                    <%# EDITABLE name:postAuthor type:text maxlength:50 required:true label:"Autore" description:"Nome dell'autore" %>
+                    <span class="me-3">📝 Di: <strong>Nome Autore</strong></span>
+                    <%# /EDITABLE %>
+
+                    <%# EDITABLE name:postDate type:text maxlength:20 required:true label:"Data Pubblicazione" description:"Formato: GG/MM/AAAA o AAAA-MM-GG" %>
+                    <span class="me-3">📅 <time>01/12/2024</time></span>
+                    <%# /EDITABLE %>
+
+                    <%# EDITABLE name:postCategory type:text maxlength:30 label:"Categoria" description:"Categoria dell'articolo" %>
+                    <span>🏷️ <strong>News</strong></span>
+                    <%# /EDITABLE %>
+                </div>
+            </header>
+
+            <%# Featured Image %>
+            <%# EDITABLE name:featuredImage type:image minWidth:1200 maxWidth:1920 minHeight:630 maxHeight:1080 maxSize:1024 required:true label:"Immagine in Evidenza" description:"Immagine principale (1200x630 consigliato, max 1MB)" allowedMimeTypes:"image/jpeg,image/png,image/webp" %>
+            <figure class="mb-5">
+                <img src="https://via.placeholder.com/1200x630" alt="Featured Image" class="img-fluid rounded shadow-lg">
+                <figcaption class="text-muted text-center mt-2">
+                    <%# EDITABLE name:imageCaption type:text maxlength:150 label:"Didascalia Immagine" description:"Descrizione opzionale dell'immagine" %>
+                    Didascalia dell'immagine in evidenza
+                    <%# /EDITABLE %>
+                </figcaption>
+            </figure>
+            <%# /EDITABLE %>
+
+            <%# Post Excerpt %>
+            <%# EDITABLE name:postExcerpt type:richtext allowedTags:"p,strong,em" maxlength:500 required:true label:"Estratto" description:"Breve introduzione dell'articolo (max 500 caratteri)" %>
+            <div class="lead mb-4">
+                <p><strong>Estratto:</strong> Questa è una breve introduzione all'articolo che cattura l'attenzione del lettore e lo invoglia a continuare la lettura.</p>
+            </div>
+            <%# /EDITABLE %>
+
+            <hr class="my-5">
+
+            <%# Post Body - Main Content in Markdown %>
+            <%# EDITABLE name:postBody type:markdown editor:markdown required:true label:"Corpo dell'Articolo" description:"Contenuto principale dell'articolo in formato Markdown" %>
+## Introduzione
+
+Questo è il corpo principale dell'articolo scritto in **Markdown**. Puoi usare tutti i formati standard:
+
+### Formattazione Testo
+
+- **Grassetto** per enfatizzare
+- *Corsivo* per citazioni
+- `Codice inline` per termini tecnici
+
+### Liste
+
+1. Primo punto
+2. Secondo punto
+3. Terzo punto
+
+### Citazioni
+
+> Questa è una citazione importante che voglio evidenziare.
+
+### Codice
+
+```javascript
+// Esempio di codice
+function saluta(nome) {
+    console.log(`Ciao ${nome}!`);
+}
+```
+
+### Immagini Inline
+
+Puoi anche includere immagini nel testo:
+
+![Descrizione immagine](https://via.placeholder.com/800x400)
+
+### Collegamenti
+
+Visita il [nostro sito](https://example.com) per maggiori informazioni.
+
+## Conclusione
+
+Qui concludi l'articolo con un riassunto dei punti chiave.
+            <%# /EDITABLE %>
+
+            <hr class="my-5">
+
+            <%# Post Footer - Call to Action %>
+            <%# EDITABLE name:postFooterCTA type:html editor:wysiwyg label:"Call to Action Finale" description:"Invito all'azione alla fine dell'articolo" %>
+            <div class="bg-light p-4 rounded">
+                <h3>Ti è piaciuto questo articolo?</h3>
+                <p>Iscriviti alla nostra newsletter per ricevere altri contenuti come questo!</p>
+                <button class="btn btn-primary">Iscriviti</button>
+            </div>
+            <%# /EDITABLE %>
+
+            <%# Author Bio %>
+            <div class="mt-5 p-4 border rounded">
+                <h4>Sull'autore</h4>
+                <%# EDITABLE name:authorBio type:richtext allowedTags:"p,strong,em,a,br" maxlength:300 label:"Bio Autore" description:"Breve biografia dell'autore (max 300 caratteri)" %>
+                <p><strong>Nome Autore</strong> è un esperto di [settore]. Segui su <a href="#">Twitter</a> o visita il <a href="#">sito personale</a>.</p>
+                <%# /EDITABLE %>
+            </div>
+        </div>
+    </div>
+</article>
+
+<%# Include theme footer %>
+<%- await include(getThemePartPath('footer', passData)) %>

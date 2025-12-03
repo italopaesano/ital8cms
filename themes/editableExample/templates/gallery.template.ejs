@@ -1,0 +1,239 @@
+<%#
+  Template: Gallery & Downloads
+  Description: Template per gallerie fotografiche e download di file multipli
+  Tests: images (multiple images), files (multiple files), advanced validation
+%>
+
+<%# Include theme head partial %>
+<%- await include(getThemePartPath('head', passData)) %>
+
+<%# SEO Meta %>
+<%# EDITABLE name:galleryTitle type:text maxlength:60 required:true label:"Titolo Galleria" %>
+<title>Galleria Foto e Download</title>
+<%# /EDITABLE %>
+
+<%# EDITABLE name:metaDescription type:text maxlength:160 label:"Meta Description" %>
+<meta name="description" content="Galleria fotografica e area download.">
+<%# /EDITABLE %>
+
+<%# Custom gallery styles %>
+<style>
+    .gallery-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 4rem 0;
+        text-align: center;
+    }
+    .gallery-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin: 3rem 0;
+    }
+    .gallery-item {
+        position: relative;
+        overflow: hidden;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        transition: transform 0.3s;
+    }
+    .gallery-item:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    }
+    .gallery-item img {
+        width: 100%;
+        height: 300px;
+        object-fit: cover;
+    }
+    .download-item {
+        display: flex;
+        align-items: center;
+        padding: 1.5rem;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        transition: background 0.3s;
+    }
+    .download-item:hover {
+        background: #f8f9fa;
+    }
+    .download-icon {
+        font-size: 2rem;
+        margin-right: 1rem;
+    }
+</style>
+
+<%# Include theme header %>
+<%- await include(getThemePartPath('header', passData)) %>
+
+<%# Include theme navigation %>
+<%- await include(getThemePartPath('nav', passData)) %>
+
+<%# Gallery Header %>
+<%# EDITABLE name:galleryHeader type:html editor:wysiwyg label:"Header Galleria" description:"Intestazione della pagina galleria" %>
+<section class="gallery-header">
+    <div class="container">
+        <h1 class="display-4 fw-bold">Galleria Fotografica</h1>
+        <p class="lead">Esplora la nostra collezione di immagini</p>
+    </div>
+</section>
+<%# /EDITABLE %>
+
+<div class="container content-section">
+    <%# Gallery Description %>
+    <%# EDITABLE name:galleryDescription type:richtext allowedTags:"p,strong,em,br,ul,li" maxlength:500 label:"Descrizione Galleria" description:"Breve descrizione della galleria (max 500 caratteri)" %>
+    <div class="mb-5 text-center">
+        <p class="lead">
+            Scopri la nostra <strong>collezione curata</strong> di immagini professionali.
+            Ogni foto racconta una storia unica e cattura momenti speciali.
+        </p>
+    </div>
+    <%# /EDITABLE %>
+
+    <%# Main Photo Gallery - MULTIPLE IMAGES %>
+    <%# EDITABLE name:photoGallery type:images minCount:3 maxCount:12 minWidth:800 maxWidth:3000 minHeight:600 maxHeight:3000 minSize:100 maxSize:2048 allowedMimeTypes:"image/jpeg,image/png,image/webp" required:true label:"Galleria Foto Principale" description:"Da 3 a 12 foto, dimensioni 800-3000px, 100KB-2MB ciascuna, solo JPG/PNG/WebP" %>
+    <div class="gallery-grid">
+        <div class="gallery-item">
+            <img src="https://via.placeholder.com/800x600" alt="Gallery Image 1">
+        </div>
+        <div class="gallery-item">
+            <img src="https://via.placeholder.com/800x600" alt="Gallery Image 2">
+        </div>
+        <div class="gallery-item">
+            <img src="https://via.placeholder.com/800x600" alt="Gallery Image 3">
+        </div>
+        <div class="gallery-item">
+            <img src="https://via.placeholder.com/800x600" alt="Gallery Image 4">
+        </div>
+        <div class="gallery-item">
+            <img src="https://via.placeholder.com/800x600" alt="Gallery Image 5">
+        </div>
+        <div class="gallery-item">
+            <img src="https://via.placeholder.com/800x600" alt="Gallery Image 6">
+        </div>
+    </div>
+    <%# /EDITABLE %>
+
+    <hr class="my-5">
+
+    <%# Portfolio Section - Another Images Gallery %>
+    <section class="mb-5">
+        <%# EDITABLE name:portfolioTitle type:text maxlength:100 label:"Titolo Portfolio" %>
+        <h2 class="text-center mb-4">Portfolio Progetti</h2>
+        <%# /EDITABLE %>
+
+        <%# EDITABLE name:portfolioDescription type:richtext allowedTags:"p,strong,em,br" maxlength:300 label:"Descrizione Portfolio" %>
+        <p class="text-center mb-5">
+            Una selezione dei nostri <strong>migliori progetti</strong> realizzati per clienti internazionali.
+        </p>
+        <%# /EDITABLE %>
+
+        <%# Portfolio Images - Different validation rules %>
+        <%# EDITABLE name:portfolioImages type:images minCount:2 maxCount:8 minWidth:1200 maxWidth:1920 minHeight:800 maxHeight:1080 maxSize:1024 allowedMimeTypes:"image/jpeg,image/webp" label:"Immagini Portfolio" description:"2-8 immagini, 1200-1920px larghezza, max 1MB, solo JPG/WebP" %>
+        <div class="row g-4">
+            <div class="col-md-6">
+                <img src="https://via.placeholder.com/1200x800" alt="Portfolio 1" class="img-fluid rounded shadow">
+            </div>
+            <div class="col-md-6">
+                <img src="https://via.placeholder.com/1200x800" alt="Portfolio 2" class="img-fluid rounded shadow">
+            </div>
+        </div>
+        <%# /EDITABLE %>
+    </section>
+
+    <hr class="my-5">
+
+    <%# Downloads Section - MULTIPLE FILES %>
+    <section>
+        <%# EDITABLE name:downloadsTitle type:text maxlength:100 label:"Titolo Sezione Download" %>
+        <h2 class="text-center mb-4">📥 Area Download</h2>
+        <%# /EDITABLE %>
+
+        <%# EDITABLE name:downloadsDescription type:richtext allowedTags:"p,strong,em,br" maxlength:300 label:"Descrizione Download" %>
+        <p class="text-center mb-5">
+            Scarica <strong>gratuitamente</strong> i nostri documenti, guide e risorse.
+        </p>
+        <%# /EDITABLE %>
+
+        <%# Downloadable Files - MULTIPLE FILES with validation %>
+        <%# EDITABLE name:downloadFiles type:files minCount:1 maxCount:10 minSize:10 maxSize:10240 allowedExtensions:"pdf,doc,docx,txt,zip" allowedMimeTypes:"application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/zip" required:true label:"File Scaricabili" description:"1-10 file, 10KB-10MB ciascuno, formati: PDF, DOC, DOCX, TXT, ZIP" %>
+        <div class="row">
+            <div class="col-lg-8 mx-auto">
+                <div class="download-item">
+                    <div class="download-icon">📄</div>
+                    <div class="flex-grow-1">
+                        <h5 class="mb-1">Guida Introduttiva</h5>
+                        <p class="text-muted mb-0">PDF - 2.5 MB</p>
+                    </div>
+                    <a href="/downloads/guida.pdf" class="btn btn-primary" download>Download</a>
+                </div>
+
+                <div class="download-item">
+                    <div class="download-icon">📊</div>
+                    <div class="flex-grow-1">
+                        <h5 class="mb-1">Presentazione Prodotto</h5>
+                        <p class="text-muted mb-0">PDF - 5.8 MB</p>
+                    </div>
+                    <a href="/downloads/presentazione.pdf" class="btn btn-primary" download>Download</a>
+                </div>
+
+                <div class="download-item">
+                    <div class="download-icon">📝</div>
+                    <div class="flex-grow-1">
+                        <h5 class="mb-1">Template Documento</h5>
+                        <p class="text-muted mb-0">DOCX - 1.2 MB</p>
+                    </div>
+                    <a href="/downloads/template.docx" class="btn btn-primary" download>Download</a>
+                </div>
+            </div>
+        </div>
+        <%# /EDITABLE %>
+    </section>
+
+    <hr class="my-5">
+
+    <%# Technical Documentation - Another Files Section %>
+    <section>
+        <%# EDITABLE name:techDocsTitle type:text maxlength:100 label:"Titolo Documentazione Tecnica" %>
+        <h2 class="text-center mb-4">🔧 Documentazione Tecnica</h2>
+        <%# /EDITABLE %>
+
+        <%# Technical Files - Stricter validation %>
+        <%# EDITABLE name:technicalFiles type:files minCount:1 maxCount:5 maxSize:5120 allowedExtensions:"pdf,txt,md" allowedMimeTypes:"application/pdf,text/plain,text/markdown" label:"File Tecnici" description:"1-5 file tecnici, max 5MB, solo PDF/TXT/MD" %>
+        <div class="row">
+            <div class="col-lg-8 mx-auto">
+                <div class="download-item">
+                    <div class="download-icon">⚙️</div>
+                    <div class="flex-grow-1">
+                        <h5 class="mb-1">Documentazione API</h5>
+                        <p class="text-muted mb-0">PDF - 3.2 MB</p>
+                    </div>
+                    <a href="/docs/api-docs.pdf" class="btn btn-outline-primary" download>Download</a>
+                </div>
+
+                <div class="download-item">
+                    <div class="download-icon">📖</div>
+                    <div class="flex-grow-1">
+                        <h5 class="mb-1">Changelog</h5>
+                        <p class="text-muted mb-0">TXT - 45 KB</p>
+                    </div>
+                    <a href="/docs/changelog.txt" class="btn btn-outline-primary" download>Download</a>
+                </div>
+            </div>
+        </div>
+        <%# /EDITABLE %>
+    </section>
+
+    <%# Call to Action %>
+    <div class="text-center mt-5 p-5 bg-light rounded">
+        <%# EDITABLE name:galleryCTA type:html editor:wysiwyg label:"Call to Action" description:"Invito all'azione nella galleria" %>
+        <h3>Ti piace quello che vedi?</h3>
+        <p>Contattaci per saperne di più sui nostri servizi</p>
+        <a href="/contact" class="btn btn-primary btn-lg">Contattaci</a>
+        <%# /EDITABLE %>
+    </div>
+</div>
+
+<%# Include theme footer %>
+<%- await include(getThemePartPath('footer', passData)) %>
