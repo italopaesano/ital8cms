@@ -1,0 +1,50 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "name": "editableExample",
+  "version": "1.0.0",
+  "description": "Tema di esempio completo per testare e validare lo standard EDITABLE v1.0 di ital8cms. Include 4 template diversi che testano tutti i tipi di contenuto e attributi di validazione.",
+  "author": "Italo Paesano",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC",
+  "tags": ["example", "editable", "testing", "bootstrap", "demo"],
+  "supportedHooks": [
+    "head",
+    "header",
+    "footer",
+    "script"
+  ],
+  "features": {
+    "editableStandard": true,
+    "responsive": true,
+    "bootstrap5": true,
+    "testTemplates": true
+  },
+  "templates": [
+    {
+      "name": "page.template.ejs",
+      "description": "Template pagina base - testa text, html, richtext, markdown, image",
+      "editableBlocks": 8
+    },
+    {
+      "name": "blog-post.template.ejs",
+      "description": "Template articolo blog - testa metadata, featured image, markdown body",
+      "editableBlocks": 10
+    },
+    {
+      "name": "landing.template.ejs",
+      "description": "Template landing page - testa multiple sezioni HTML",
+      "editableBlocks": 4
+    },
+    {
+      "name": "gallery.template.ejs",
+      "description": "Template galleria - testa images/files multipli con validazione avanzata",
+      "editableBlocks": 6
+    }
+  ],
+  "testCoverage": {
+    "contentTypes": ["text", "html", "richtext", "markdown", "image", "images", "file", "files"],
+    "attributes": ["name", "type", "label", "description", "required", "maxlength", "editor", "allowedTags", "minCount", "maxCount", "minWidth", "maxWidth", "minHeight", "maxHeight", "minSize", "maxSize", "allowedExtensions", "allowedMimeTypes"],
+    "totalBlocks": 28,
+    "standardVersion": "1.0"
+  }
+}
