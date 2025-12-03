@@ -1,70 +1,22 @@
 <%#
-  Template: Landing Page
-  Description: Template per landing page con sezioni multiple completamente editabili
-  Tests: multiple html sections, text fields, richtext for short descriptions
+================================================================================
+TEMPLATE: Landing Page - Test EDITABLE Standard v1.0
+================================================================================
+Tests: multiple html sections
+================================================================================
 %>
 
-<%# Include theme head partial %>
-<%- await include(getThemePartPath('head', passData)) %>
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs' ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs' ) ) %>
 
-<%# SEO Meta %>
-<%# EDITABLE name:landingTitle type:text maxlength:60 required:true label:"Titolo Pagina" %>
-<title>Landing Page - Prodotto/Servizio</title>
-<%# /EDITABLE %>
-
-<%# EDITABLE name:metaDescription type:text maxlength:160 label:"Meta Description" %>
-<meta name="description" content="Descrizione della landing page per SEO.">
-<%# /EDITABLE %>
-
-<%# Custom landing page styles %>
-<style>
-    .hero-landing {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 6rem 0;
-        text-align: center;
-    }
-    .features-section {
-        padding: 5rem 0;
-        background: #f8f9fa;
-    }
-    .pricing-section {
-        padding: 5rem 0;
-    }
-    .testimonials-section {
-        padding: 5rem 0;
-        background: #f8f9fa;
-    }
-    .cta-section {
-        padding: 5rem 0;
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-        color: white;
-        text-align: center;
-    }
-    .feature-box {
-        padding: 2rem;
-        height: 100%;
-        transition: transform 0.3s;
-    }
-    .feature-box:hover {
-        transform: translateY(-10px);
-    }
-</style>
-
-<%# Include theme header %>
-<%- await include(getThemePartPath('header', passData)) %>
-
-<%# Include theme navigation %>
-<%- await include(getThemePartPath('nav', passData)) %>
-
-<%# Hero Section - Main Landing Hero %>
+<%# Hero Section %>
 <%# EDITABLE name:heroSection type:html editor:wysiwyg label:"Hero Section" description:"Sezione principale hero della landing page" required:true %>
-<section class="hero-landing">
+<section class="hero text-center py-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
     <div class="container">
         <div class="row">
             <div class="col-lg-8 mx-auto">
                 <h1 class="display-3 fw-bold mb-4">Il Tuo Prodotto Rivoluzionario</h1>
-                <p class="lead mb-5">Soluzioni innovative per trasformare il tuo business e raggiungere nuovi obiettivi</p>
+                <p class="lead mb-5">Soluzioni innovative per trasformare il tuo business</p>
                 <a href="#features" class="btn btn-light btn-lg me-3">Scopri di Più</a>
                 <a href="#pricing" class="btn btn-outline-light btn-lg">Prezzi</a>
             </div>
@@ -74,59 +26,38 @@
 <%# /EDITABLE %>
 
 <%# Features Section %>
-<%# EDITABLE name:featuresSection type:html editor:wysiwyg label:"Sezione Caratteristiche" description:"Sezione con le caratteristiche/funzionalità principali" required:true %>
-<section id="features" class="features-section">
+<%# EDITABLE name:featuresSection type:html editor:wysiwyg label:"Sezione Caratteristiche" description:"Caratteristiche/funzionalità principali" required:true %>
+<section id="features" class="py-5 bg-light">
     <div class="container">
         <div class="text-center mb-5">
             <h2 class="display-5 fw-bold">Caratteristiche Principali</h2>
-            <p class="lead text-muted">Tutto ciò di cui hai bisogno per avere successo</p>
+            <p class="lead text-muted">Tutto ciò di cui hai bisogno</p>
         </div>
 
         <div class="row g-4">
             <div class="col-md-4">
-                <div class="feature-box bg-white rounded shadow-sm">
+                <div class="p-4 bg-white rounded shadow-sm text-center">
                     <div class="display-4 mb-3">🚀</div>
                     <h3>Veloce</h3>
-                    <p>Performance ottimizzate per la massima velocità e reattività</p>
+                    <p>Performance ottimizzate per la massima velocità</p>
                 </div>
             </div>
 
             <div class="col-md-4">
-                <div class="feature-box bg-white rounded shadow-sm">
+                <div class="p-4 bg-white rounded shadow-sm text-center">
                     <div class="display-4 mb-3">🔒</div>
                     <h3>Sicuro</h3>
-                    <p>Sicurezza di livello enterprise per proteggere i tuoi dati</p>
+                    <p>Sicurezza di livello enterprise</p>
                 </div>
             </div>
 
             <div class="col-md-4">
-                <div class="feature-box bg-white rounded shadow-sm">
+                <div class="p-4 bg-white rounded shadow-sm text-center">
                     <div class="display-4 mb-3">⚡</div>
                     <h3>Potente</h3>
-                    <p>Funzionalità avanzate per utenti professionali</p>
+                    <p>Funzionalità avanzate per professionisti</p>
                 </div>
             </div>
-        </div>
-    </div>
-</section>
-<%# /EDITABLE %>
-
-<%# Benefits Section %>
-<%# EDITABLE name:benefitsSection type:html editor:wysiwyg label:"Sezione Benefici" description:"Sezione con i benefici del prodotto/servizio" %>
-<section class="container content-section">
-    <div class="row align-items-center">
-        <div class="col-lg-6">
-            <img src="https://via.placeholder.com/600x400" alt="Benefits" class="img-fluid rounded shadow">
-        </div>
-        <div class="col-lg-6">
-            <h2 class="display-5 fw-bold mb-4">Perché Sceglierci</h2>
-            <ul class="list-unstyled">
-                <li class="mb-3">✅ Aumento della produttività del 300%</li>
-                <li class="mb-3">✅ Risparmio di tempo e risorse</li>
-                <li class="mb-3">✅ Supporto clienti 24/7</li>
-                <li class="mb-3">✅ Aggiornamenti gratuiti a vita</li>
-            </ul>
-            <a href="#" class="btn btn-primary btn-lg">Inizia Ora</a>
         </div>
     </div>
 </section>
@@ -134,11 +65,11 @@
 
 <%# Pricing Section %>
 <%# EDITABLE name:pricingSection type:html editor:wysiwyg label:"Sezione Prezzi" description:"Tabella dei prezzi e piani" %>
-<section id="pricing" class="pricing-section">
+<section id="pricing" class="py-5">
     <div class="container">
         <div class="text-center mb-5">
             <h2 class="display-5 fw-bold">Piani e Prezzi</h2>
-            <p class="lead text-muted">Scegli il piano perfetto per le tue esigenze</p>
+            <p class="lead text-muted">Scegli il piano perfetto per te</p>
         </div>
 
         <div class="row g-4">
@@ -150,7 +81,6 @@
                         <ul class="list-unstyled mb-4">
                             <li class="mb-2">✓ Funzionalità Base</li>
                             <li class="mb-2">✓ 5 Progetti</li>
-                            <li class="mb-2">✓ 10 GB Storage</li>
                             <li class="mb-2">✓ Supporto Email</li>
                         </ul>
                         <a href="#" class="btn btn-outline-primary btn-lg w-100">Scegli Piano</a>
@@ -167,7 +97,6 @@
                         <ul class="list-unstyled mb-4">
                             <li class="mb-2">✓ Funzionalità Avanzate</li>
                             <li class="mb-2">✓ 50 Progetti</li>
-                            <li class="mb-2">✓ 100 GB Storage</li>
                             <li class="mb-2">✓ Supporto Prioritario</li>
                         </ul>
                         <a href="#" class="btn btn-primary btn-lg w-100">Scegli Piano</a>
@@ -183,8 +112,7 @@
                         <ul class="list-unstyled mb-4">
                             <li class="mb-2">✓ Tutte le Funzionalità</li>
                             <li class="mb-2">✓ Progetti Illimitati</li>
-                            <li class="mb-2">✓ Storage Illimitato</li>
-                            <li class="mb-2">✓ Supporto Dedicato 24/7</li>
+                            <li class="mb-2">✓ Supporto 24/7</li>
                         </ul>
                         <a href="#" class="btn btn-outline-primary btn-lg w-100">Contattaci</a>
                     </div>
@@ -195,58 +123,15 @@
 </section>
 <%# /EDITABLE %>
 
-<%# Testimonials Section %>
-<%# EDITABLE name:testimonialsSection type:html editor:wysiwyg label:"Sezione Testimonianze" description:"Testimonianze dei clienti" %>
-<section class="testimonials-section">
-    <div class="container">
-        <div class="text-center mb-5">
-            <h2 class="display-5 fw-bold">Cosa Dicono i Nostri Clienti</h2>
-        </div>
-
-        <div class="row g-4">
-            <div class="col-md-4">
-                <div class="card shadow-sm h-100">
-                    <div class="card-body">
-                        <div class="mb-3">⭐⭐⭐⭐⭐</div>
-                        <p class="card-text">"Prodotto fantastico! Ha rivoluzionato il nostro modo di lavorare."</p>
-                        <footer class="blockquote-footer mt-3">Mario Rossi, <cite>CEO TechCorp</cite></footer>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-4">
-                <div class="card shadow-sm h-100">
-                    <div class="card-body">
-                        <div class="mb-3">⭐⭐⭐⭐⭐</div>
-                        <p class="card-text">"Il miglior investimento che abbiamo fatto quest'anno."</p>
-                        <footer class="blockquote-footer mt-3">Laura Bianchi, <cite>Marketing Manager</cite></footer>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-4">
-                <div class="card shadow-sm h-100">
-                    <div class="card-body">
-                        <div class="mb-3">⭐⭐⭐⭐⭐</div>
-                        <p class="card-text">"Supporto eccezionale e prodotto di qualità superiore."</p>
-                        <footer class="blockquote-footer mt-3">Giuseppe Verdi, <cite>Developer</cite></footer>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-<%# /EDITABLE %>
-
 <%# Final CTA Section %>
 <%# EDITABLE name:finalCTA type:html editor:wysiwyg label:"Call to Action Finale" description:"Invito all'azione finale" required:true %>
-<section class="cta-section">
+<section class="py-5 text-center text-white" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
     <div class="container">
         <div class="row">
             <div class="col-lg-8 mx-auto">
                 <h2 class="display-4 fw-bold mb-4">Pronto per Iniziare?</h2>
-                <p class="lead mb-5">Unisciti a migliaia di clienti soddisfatti che stanno già trasformando il loro business</p>
-                <a href="#" class="btn btn-light btn-lg me-3">Inizia Gratis per 30 Giorni</a>
+                <p class="lead mb-5">Unisciti a migliaia di clienti soddisfatti</p>
+                <a href="#" class="btn btn-light btn-lg me-3">Inizia Gratis</a>
                 <a href="#" class="btn btn-outline-light btn-lg">Richiedi Demo</a>
             </div>
         </div>
@@ -254,5 +139,4 @@
 </section>
 <%# /EDITABLE %>
 
-<%# Include theme footer %>
-<%- await include(getThemePartPath('footer', passData)) %>
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs' ) ) %>

@@ -1,26 +1,13 @@
 <%#
-  Template: Basic Page
-  Description: Template base per pagina generica con vari tipi di contenuto editabile
-  Tests: text, html, richtext, markdown, image
+================================================================================
+TEMPLATE: Basic Page - Test EDITABLE Standard v1.0
+================================================================================
+Tests: text, html, richtext, markdown, image
+================================================================================
 %>
 
-<%# Include theme head partial %>
-<%- await include(getThemePartPath('head', passData)) %>
-
-<%# SEO Meta Tags - EDITABLE %>
-<%# EDITABLE name:metaTitle type:text maxlength:60 required:true label:"Meta Title (SEO)" description:"Titolo per SEO, max 60 caratteri" %>
-<title>Titolo Pagina Default</title>
-<%# /EDITABLE %>
-
-<%# EDITABLE name:metaDescription type:text maxlength:160 label:"Meta Description (SEO)" description:"Descrizione per SEO, max 160 caratteri" %>
-<meta name="description" content="Descrizione default della pagina per i motori di ricerca.">
-<%# /EDITABLE %>
-
-<%# Include theme header %>
-<%- await include(getThemePartPath('header', passData)) %>
-
-<%# Include theme navigation %>
-<%- await include(getThemePartPath('nav', passData)) %>
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs' ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs' ) ) %>
 
 <%# Hero Section - EDITABLE HTML %>
 <%# EDITABLE name:heroSection type:html editor:wysiwyg label:"Sezione Hero" description:"Sezione principale in evidenza all'inizio della pagina" %>
@@ -38,7 +25,7 @@
 <%# /EDITABLE %>
 
 <%# Page Title - EDITABLE TEXT %>
-<div class="container content-section">
+<div class="container content-section" id="content">
     <%# EDITABLE name:pageTitle type:text maxlength:100 required:true label:"Titolo Pagina" description:"Titolo principale della pagina (H1)" %>
     <h1 class="text-center mb-5">Titolo Principale della Pagina</h1>
     <%# /EDITABLE %>
@@ -112,5 +99,4 @@ console.log('Hello World');
 </div>
 <%# /EDITABLE %>
 
-<%# Include theme footer %>
-<%- await include(getThemePartPath('footer', passData)) %>
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs' ) ) %>

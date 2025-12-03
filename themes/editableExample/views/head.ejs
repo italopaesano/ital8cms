@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <%# Plugin hook: head - allows plugins to inject content in head %>
-    <%- await passData.pluginSys.hookPage("head", passData) %>
+    <%- passData.pluginSys.hookPage("head", passData); %>
 
     <%# Default Bootstrap CSS from plugin %>
     <link rel="stylesheet" href="/<%- passData.apiPrefix %>/bootstrap/css/bootstrap.min.css">
@@ -29,3 +28,4 @@
             margin-top: 3rem;
         }
     </style>
+</head>
