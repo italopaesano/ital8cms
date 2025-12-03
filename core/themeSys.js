@@ -64,12 +64,12 @@ const loadJson5 = require('./loadJson5');
  *    - getThemeFeatures(themeName)
  *      Restituisce oggetto con feature supportate dal tema
  *
- * 5. GESTIONE ASSET TEMA
- *    - getAssetUrl(assetPath)
- *      Genera URL pubblico per asset del tema (es. '/theme-assets/css/theme.css')
- *    - getAssetsPath()
+ * 5. GESTIONE RISORSE TEMA
+ *    - getThemeResourceUrl(resourcePath)
+ *      Genera URL pubblico per risorsa del tema (es. '/theme-assets/css/theme.css')
+ *    - getThemeResourcesPath()
  *      Path assoluto della cartella themeResources del tema attivo
- *    - hasAssets()
+ *    - hasThemeResources()
  *      Verifica se la cartella themeResources esiste
  *
  * 6. PATH PARTIALS
@@ -104,8 +104,8 @@ const loadJson5 = require('./loadJson5');
  *   // Includere partial:
  *   <%- include( passData.themeSys.getThemePartPath('head.ejs') ) %>
  *
- *   // Asset del tema:
- *   <link rel="stylesheet" href="<%= passData.themeSys.getAssetUrl('css/theme.css') %>">
+ *   // Risorse del tema:
+ *   <link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/theme.css') %>">
  *
  *   // Template personalizzato plugin:
  *   const templatePath = passData.themeSys.resolvePluginTemplatePath(
@@ -567,16 +567,16 @@ class themeSys{
   }
 
   /**
-   * Restituisce l'URL per un asset del tema
-   * @param {string} assetPath - Path relativo dell'asset (es. 'css/theme.css', 'js/theme.js')
-   * @returns {string} - URL completo dell'asset (es. '/theme-assets/css/theme.css')
+   * Restituisce l'URL per una risorsa del tema
+   * @param {string} resourcePath - Path relativo della risorsa (es. 'css/theme.css', 'js/theme.js')
+   * @returns {string} - URL completo della risorsa (es. '/theme-assets/css/theme.css')
    * @example
    * // Nel template EJS:
-   * // <link rel="stylesheet" href="<%= passData.themeSys.getAssetUrl('css/theme.css') %>">
+   * // <link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/theme.css') %>">
    */
-  getAssetUrl(assetPath) {
+  getThemeResourceUrl(resourcePath) {
     // Rimuove eventuali slash iniziali dal path
-    const cleanPath = assetPath.replace(/^\/+/, '');
+    const cleanPath = resourcePath.replace(/^\/+/, '');
     return `/theme-assets/${cleanPath}`;
   }
 
@@ -584,7 +584,7 @@ class themeSys{
    * Restituisce il path assoluto della cartella themeResources del tema attivo
    * @returns {string} - Path assoluto della cartella themeResources
    */
-  getAssetsPath() {
+  getThemeResourcesPath() {
     return path.join(__dirname, '../themes', this.ital8Conf.activeTheme, 'themeResources');
   }
 
@@ -592,9 +592,9 @@ class themeSys{
    * Verifica se la cartella themeResources esiste per il tema attivo
    * @returns {boolean} - true se la cartella themeResources esiste
    */
-  hasAssets() {
-    const assetsPath = this.getAssetsPath();
-    return fs.existsSync(assetsPath) && fs.statSync(assetsPath).isDirectory();
+  hasThemeResources() {
+    const resourcesPath = this.getThemeResourcesPath();
+    return fs.existsSync(resourcesPath) && fs.statSync(resourcesPath).isDirectory();
   }
 
   getThemePartPath( partName ){// partName Es footer.ejs header.ejs ecc

@@ -132,14 +132,14 @@ const validation = themeSys.validateTheme('myTheme');
 **File:** `core/themeSys.js` linee 329-351
 
 **Funzionalità:**
-- Cartella `theme-resources/` (ex `assets/`) per CSS, JS, immagini
+- Cartella `themeResources/` per CSS, JS, immagini
 - Static server automatico su `/theme-assets/`
-- Metodi helper: `getAssetUrl()`, `getAssetsPath()`, `hasAssets()`
+- Metodi helper: `getThemeResourceUrl()`, `getThemeResourcesPath()`, `hasThemeResources()`
 
 **Struttura:**
 ```
 themes/tema/
-└── theme-resources/
+└── themeResources/
     ├── css/
     ├── js/
     └── images/
@@ -147,7 +147,7 @@ themes/tema/
 
 **Utilizzo:**
 ```ejs
-<link rel="stylesheet" href="<%= passData.themeSys.getAssetUrl('css/theme.css') %>">
+<link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/theme.css') %>">
 ```
 
 **Test:** ✅ Testato e funzionante

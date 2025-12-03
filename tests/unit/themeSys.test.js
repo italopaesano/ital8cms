@@ -230,28 +230,28 @@ describe('Theme System', () => {
     });
   });
 
-  describe('Asset URL Generation', () => {
-    // Funzione per generare URL asset
-    function getAssetUrl(assetPath) {
-      const cleanPath = assetPath.replace(/^\/+/, '');
+  describe('Theme Resource URL Generation', () => {
+    // Funzione per generare URL risorse del tema
+    function getThemeResourceUrl(resourcePath) {
+      const cleanPath = resourcePath.replace(/^\/+/, '');
       return `/theme-assets/${cleanPath}`;
     }
 
     test('genera URL corretto per CSS', () => {
-      expect(getAssetUrl('css/theme.css')).toBe('/theme-assets/css/theme.css');
+      expect(getThemeResourceUrl('css/theme.css')).toBe('/theme-assets/css/theme.css');
     });
 
     test('genera URL corretto per JS', () => {
-      expect(getAssetUrl('js/theme.js')).toBe('/theme-assets/js/theme.js');
+      expect(getThemeResourceUrl('js/theme.js')).toBe('/theme-assets/js/theme.js');
     });
 
     test('rimuove slash iniziali', () => {
-      expect(getAssetUrl('/css/theme.css')).toBe('/theme-assets/css/theme.css');
-      expect(getAssetUrl('///images/logo.png')).toBe('/theme-assets/images/logo.png');
+      expect(getThemeResourceUrl('/css/theme.css')).toBe('/theme-assets/css/theme.css');
+      expect(getThemeResourceUrl('///images/logo.png')).toBe('/theme-assets/images/logo.png');
     });
 
     test('gestisce path senza slash', () => {
-      expect(getAssetUrl('style.css')).toBe('/theme-assets/style.css');
+      expect(getThemeResourceUrl('style.css')).toBe('/theme-assets/style.css');
     });
   });
 

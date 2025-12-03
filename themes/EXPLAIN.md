@@ -573,8 +573,8 @@ Gli asset sono serviti automaticamente su `/theme-assets/`
 **Metodo helper:**
 
 ```ejs
-<!-- Usando themeSys.getAssetUrl() -->
-<link rel="stylesheet" href="<%= passData.themeSys.getAssetUrl('css/theme.css') %>">
+<!-- Usando themeSys.getThemeResourceUrl() -->
+<link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/theme.css') %>">
 ```
 
 ---
