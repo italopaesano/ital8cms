@@ -1,3 +1,4 @@
-    <main>
-        <%# Main content will be injected here by templates %>
-    </main>
+<main>
+  <%- passData.pluginSys.hookPage("main", passData); %>
+</main>
+<%- passData.pluginSys.hookPage("body", passData); %>
