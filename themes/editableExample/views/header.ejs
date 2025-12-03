@@ -1,10 +1,45 @@
 
-<body>
+<body class="submarine-theme">
 
-<%- passData.pluginSys.hookPage("header", passData); %>
+    <%# EDITABLE name:topAnnouncementBar type:html editor:simple label:"Barra Annunci Superiore" %>
+    <div class="announcement-bar">
+        <span class="announcement-icon">📢</span>
+        <span class="announcement-text">Benvenuto nel tema Submarine! 🌊 Esplora le profondità di ital8cms</span>
+    </div>
+    <%# /EDITABLE %>
 
-<%- include('nav.ejs') %>
+    <header role="banner" class="submarine-header">
+        <div class="header-container">
+            <div class="header-brand">
+                <%# EDITABLE name:siteLogo type:image minWidth:100 maxWidth:500 minHeight:50 maxHeight:200 label:"Logo Sito" allowedMimeTypes:"image/png,image/svg+xml,image/webp" %>
+                <div class="site-logo">
+                    <span class="logo-icon">🐚</span>
+                    <span class="logo-text">ital8cms</span>
+                </div>
+                <%# /EDITABLE %>
 
-<%- include('main.ejs') %>
+                <%# EDITABLE name:siteTagline type:text maxlength:200 label:"Tagline Sito" %>
+                <p class="site-tagline">Il tuo CMS, a modo tuo 🌊</p>
+                <%# /EDITABLE %>
+            </div>
 
-<%- include('aside.ejs') %>
+            <%# EDITABLE name:headerCTA type:html editor:simple label:"Call-to-Action Header" %>
+            <div class="header-cta">
+                <a href="/get-started" class="btn-primary">Inizia Ora</a>
+                <a href="/docs" class="btn-secondary">Documentazione</a>
+            </div>
+            <%# /EDITABLE %>
+        </div>
+
+        <%- passData.pluginSys.hookPage("header", passData); %>
+    </header>
+
+    <div class="page-wrapper">
+        <%- include('nav.ejs') %>
+
+        <div class="content-wrapper">
+            <%- include('main.ejs') %>
+
+            <%- include('aside.ejs') %>
+        </div>
+    </div>
