@@ -6,6 +6,115 @@ const semver = require('semver');
 const loadJson5 = require('./loadJson5');
 //let ital8Conf;
 
+/**
+ * ============================================================================
+ * themeSys - Sistema di Gestione Temi per ital8cms
+ * ============================================================================
+ *
+ * Gestisce il caricamento, la validazione e l'utilizzo dei temi nell'applicazione.
+ * I temi sono composti da partials (views) e templates EJS, con supporto per
+ * personalizzazione dei template dei plugin e gestione delle dipendenze.
+ *
+ * STRUTTURA TEMI:
+ * themes/{themeName}/
+ *   ├── views/                           # Partials riutilizzabili (head.ejs, header.ejs, footer.ejs, ecc.)
+ *   ├── templates/                       # Template completi per pagine
+ *   ├── themeResources/                  # Asset statici (CSS, JS, immagini)
+ *   ├── pluginsEndpointsMarkup/          # Personalizzazioni template plugin
+ *   ├── themeConfig.json                 # Configurazione tema
+ *   └── themeDescription.json            # Metadati tema
+ *
+ * FUNZIONI PER CATEGORIA:
+ *
+ * 1. INIZIALIZZAZIONE
+ *    - constructor(theItal8Conf, thePluginSys)
+ *      Inizializza il sistema temi, valida temi pubblico e admin, controlla dipendenze
+ *
+ * 2. GESTIONE DIPENDENZE
+ *    - checkDependencies(themeName)
+ *      Verifica che tutte le dipendenze plugin e NPM siano soddisfatte
+ *    - getThemeDependencies(themeName)
+ *      Restituisce oggetto con dipendenze plugin e moduli NPM
+ *    - themeRequiresPlugin(themeName, pluginName)
+ *      Verifica se il tema richiede un plugin specifico
+ *    - getActiveThemePluginDependencies()
+ *      Restituisce dipendenze plugin del tema pubblico attivo
+ *    - checkActiveThemeDependencies()
+ *      Verifica dipendenze del tema pubblico attivo
+ *
+ * 3. VALIDAZIONE TEMI
+ *    - validateTheme(themeName)
+ *      Valida struttura tema (directory, file obbligatori, config)
+ *    - validateThemeContent(themeName)
+ *      Valida CONTENUTO partials (hook richiesti, pattern hardcoded sospetti)
+ *
+ * 4. INFORMAZIONI E METADATI
+ *    - getAvailableThemes()
+ *      Lista tutti i temi disponibili con stato di validazione
+ *    - getThemeDescription(themeName)
+ *      Legge metadati da themeDescription.json
+ *    - getThemeVersion(themeName)
+ *      Restituisce versione del tema
+ *    - getActiveThemeDescription()
+ *      Metadati del tema pubblico attivo
+ *    - getAdminThemeDescription()
+ *      Metadati del tema admin attivo
+ *    - themeSupportsHook(themeName, hookName)
+ *      Verifica se il tema supporta un hook specifico
+ *    - getThemeFeatures(themeName)
+ *      Restituisce oggetto con feature supportate dal tema
+ *
+ * 5. GESTIONE ASSET TEMA
+ *    - getAssetUrl(assetPath)
+ *      Genera URL pubblico per asset del tema (es. '/theme-assets/css/theme.css')
+ *    - getAssetsPath()
+ *      Path assoluto della cartella themeResources del tema attivo
+ *    - hasAssets()
+ *      Verifica se la cartella themeResources esiste
+ *
+ * 6. PATH PARTIALS
+ *    - getThemePartPath(partName)
+ *      Path assoluto del partial nel tema pubblico (es. 'head.ejs')
+ *    - getAdminThemePartPath(partName)
+ *      Path assoluto del partial nel tema admin
+ *
+ * 7. PERSONALIZZAZIONE PLUGIN (Plugin Endpoint Customization)
+ *    Permette ai temi di sovrascrivere i template e gli asset degli endpoint dei plugin
+ *    Struttura: themes/{themeName}/pluginsEndpointsMarkup/{pluginName}/{endpointName}/
+ *
+ *    - hasCustomPluginTemplate(pluginName, endpointName, templateFile, isAdmin)
+ *      Verifica esistenza template personalizzato per endpoint plugin
+ *    - getCustomPluginTemplatePath(pluginName, endpointName, templateFile, isAdmin)
+ *      Restituisce path del template personalizzato se esiste
+ *    - resolvePluginTemplatePath(pluginName, endpointName, defaultPath, templateFile, isAdmin)
+ *      Risolve path template con fallback (custom → default plugin)
+ *    - hasCustomPluginAsset(pluginName, endpointName, assetFile, isAdmin)
+ *      Verifica esistenza asset personalizzato
+ *    - getCustomPluginAssetPath(pluginName, endpointName, assetFile, isAdmin)
+ *      Path assoluto dell'asset personalizzato
+ *    - getPluginAssetUrl(pluginName, endpointName, assetFile)
+ *      URL pubblico per asset plugin personalizzato
+ *    - getPluginCustomCss(pluginName, endpointName, cssFile, isAdmin)
+ *      Legge contenuto CSS personalizzato (utile per inline CSS)
+ *    - getCustomizedPlugins(isAdmin)
+ *      Lista tutti i plugin con personalizzazioni nel tema attivo
+ *
+ * UTILIZZO NEI TEMPLATE EJS:
+ *
+ *   // Includere partial:
+ *   <%- include( passData.themeSys.getThemePartPath('head.ejs') ) %>
+ *
+ *   // Asset del tema:
+ *   <link rel="stylesheet" href="<%= passData.themeSys.getAssetUrl('css/theme.css') %>">
+ *
+ *   // Template personalizzato plugin:
+ *   const templatePath = passData.themeSys.resolvePluginTemplatePath(
+ *     'simpleAccess', 'login', defaultPath
+ *   );
+ *
+ * ============================================================================
+ */
+
 class themeSys{
 
   //#fnInPageMap;// variabile privata
@@ -24,6 +133,20 @@ class themeSys{
       this.ital8Conf.activeTheme = 'default';
     } else {
       console.log(`[themeSys] Tema pubblico '${this.ital8Conf.activeTheme}' caricato correttamente`);
+
+      // Valida il contenuto dei partials (hook e struttura)
+      const contentValidation = this.validateThemeContent(this.ital8Conf.activeTheme);
+      if (!contentValidation.valid) {
+        console.error(`[themeSys] ⚠️  ERRORI nel contenuto del tema '${this.ital8Conf.activeTheme}':`);
+        contentValidation.errors.forEach(err => console.error(`  ❌ ${err}`));
+      }
+      if (contentValidation.warnings.length > 0) {
+        console.warn(`[themeSys] ⚠️  WARNING nel tema '${this.ital8Conf.activeTheme}':`);
+        contentValidation.warnings.forEach(warn => console.warn(`  ⚠️  ${warn}`));
+      }
+      if (contentValidation.valid && contentValidation.warnings.length === 0) {
+        console.log(`[themeSys] ✅ Contenuto tema pubblico validato correttamente`);
+      }
     }
 
     // Controlla dipendenze del tema pubblico (se pluginSys è disponibile)
@@ -42,6 +165,22 @@ class themeSys{
       this.ital8Conf.adminActiveTheme = 'default';
     } else {
       console.log(`[themeSys] Tema admin '${this.ital8Conf.adminActiveTheme}' caricato correttamente`);
+
+      // Valida il contenuto dei partials solo se diverso dal tema pubblico (evita duplicati)
+      if (this.ital8Conf.adminActiveTheme !== this.ital8Conf.activeTheme) {
+        const contentValidation = this.validateThemeContent(this.ital8Conf.adminActiveTheme);
+        if (!contentValidation.valid) {
+          console.error(`[themeSys] ⚠️  ERRORI nel contenuto del tema admin '${this.ital8Conf.adminActiveTheme}':`);
+          contentValidation.errors.forEach(err => console.error(`  ❌ ${err}`));
+        }
+        if (contentValidation.warnings.length > 0) {
+          console.warn(`[themeSys] ⚠️  WARNING nel tema admin '${this.ital8Conf.adminActiveTheme}':`);
+          contentValidation.warnings.forEach(warn => console.warn(`  ⚠️  ${warn}`));
+        }
+        if (contentValidation.valid && contentValidation.warnings.length === 0) {
+          console.log(`[themeSys] ✅ Contenuto tema admin validato correttamente`);
+        }
+      }
     }
 
     // Controlla dipendenze del tema admin (se pluginSys è disponibile e tema diverso da pubblico)
@@ -215,6 +354,113 @@ class themeSys{
 
     // Tutte le validazioni passate
     return { valid: true, error: null };
+  }
+
+  /**
+   * Valida il CONTENUTO dei partials di un tema verificando la presenza degli hook richiesti
+   * @param {string} themeName - Nome del tema da validare
+   * @returns {object} - { valid: boolean, errors: Array<string>, warnings: Array<string> }
+   */
+  validateThemeContent(themeName) {
+    const themePath = path.join(__dirname, '../themes', themeName);
+    const viewsPath = path.join(themePath, 'views');
+    const errors = [];
+    const warnings = [];
+
+    // Definisci gli hook richiesti per ogni partial
+    const requiredHooks = {
+      'head.ejs': {
+        required: ['hookPage("head"', 'hookPage(\'head\'', 'hookPage(`head`'],
+        description: 'Hook "head" per injection CSS/meta tags'
+      },
+      'header.ejs': {
+        required: ['hookPage("header"', 'hookPage(\'header\'', 'hookPage(`header`'],
+        description: 'Hook "header" all\'inizio del body'
+      },
+      'footer.ejs': {
+        required: [
+          ['hookPage("footer"', 'hookPage(\'footer\'', 'hookPage(`footer`'],
+          ['hookPage("script"', 'hookPage(\'script\'', 'hookPage(`script`']
+        ],
+        description: 'Hook "footer" e "script" per injection scripts'
+      },
+      'nav.ejs': {
+        required: ['hookPage("nav"', 'hookPage(\'nav\'', 'hookPage(`nav`'],
+        description: 'Hook "nav" per navigation',
+        optional: true
+      },
+      'main.ejs': {
+        required: [
+          ['hookPage("main"', 'hookPage(\'main\'', 'hookPage(`main`'],
+          ['hookPage("body"', 'hookPage(\'body\'', 'hookPage(`body`']
+        ],
+        description: 'Hook "main" e "body" per contenuto principale',
+        optional: true
+      },
+      'aside.ejs': {
+        required: ['hookPage("aside"', 'hookPage(\'aside\'', 'hookPage(`aside`'],
+        description: 'Hook "aside" per sidebar',
+        optional: true
+      }
+    };
+
+    // Pattern per rilevare contenuto hardcoded sospetto
+    const suspiciousPatterns = [
+      { pattern: /<link[^>]+href=[^>]+bootstrap/i, message: 'Bootstrap CSS hardcoded (dovrebbe essere iniettato via hook)' },
+      { pattern: /<script[^>]+src=[^>]+bootstrap/i, message: 'Bootstrap JS hardcoded (dovrebbe essere iniettato via hook)' },
+      { pattern: /<style>/i, message: 'Tag <style> hardcoded (CSS dovrebbe essere iniettato via hook)' },
+      { pattern: /<nav[^>]+class=/i, message: 'Navbar HTML hardcoded in nav.ejs (dovrebbe essere iniettato via hook)', file: 'nav.ejs' }
+    ];
+
+    // Verifica ogni partial
+    for (const [partialName, hookConfig] of Object.entries(requiredHooks)) {
+      const partialPath = path.join(viewsPath, partialName);
+
+      // Salta partials opzionali se non esistono
+      if (hookConfig.optional && !fs.existsSync(partialPath)) {
+        continue;
+      }
+
+      if (!fs.existsSync(partialPath)) {
+        errors.push(`Partial '${partialName}' non trovato`);
+        continue;
+      }
+
+      try {
+        const content = fs.readFileSync(partialPath, 'utf8');
+
+        // Verifica presenza hook richiesti
+        const requiredArray = Array.isArray(hookConfig.required[0]) ? hookConfig.required : [hookConfig.required];
+
+        for (const hookVariants of requiredArray) {
+          const hookFound = hookVariants.some(variant => content.includes(variant));
+
+          if (!hookFound) {
+            const hookName = hookVariants[0].match(/hookPage\(["'`](\w+)["'`]/)[1];
+            errors.push(`${partialName}: Hook "${hookName}" mancante (${hookConfig.description})`);
+          }
+        }
+
+        // Verifica pattern sospetti (solo per partials non opzionali o esistenti)
+        for (const { pattern, message, file } of suspiciousPatterns) {
+          // Se il pattern specifica un file, controlla solo quello
+          if (file && file !== partialName) continue;
+
+          if (pattern.test(content)) {
+            warnings.push(`${partialName}: ${message}`);
+          }
+        }
+
+      } catch (error) {
+        errors.push(`Errore lettura ${partialName}: ${error.message}`);
+      }
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors: errors,
+      warnings: warnings
+    };
   }
 
   /**
