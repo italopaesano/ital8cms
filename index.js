@@ -40,6 +40,7 @@ app.use(
     path.join(__dirname, 'themes', ital8Conf.activeTheme, 'themeResources'),
     {
       urlPrefix: `/${ital8Conf.publicThemeResourcesPrefix}`,
+      urlsReserved: [`/${ital8Conf.adminPrefix}`, `/${ital8Conf.apiPrefix}`, `/${ital8Conf.viewsPrefix}`, `/${ital8Conf.adminThemeResourcesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
       showDirContents: false,
       enableCaching: ital8Conf.browserCacheEnabled,
       cacheMaxAge: ital8Conf.browserCacheMaxAge,
@@ -92,6 +93,7 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
       path.join(__dirname, 'themes', ital8Conf.adminActiveTheme, 'themeResources'),
       {
         urlPrefix: `/${ital8Conf.adminThemeResourcesPrefix}`,
+        urlsReserved: [`/${ital8Conf.adminPrefix}`, `/${ital8Conf.apiPrefix}`, `/${ital8Conf.viewsPrefix}`, `/${ital8Conf.publicThemeResourcesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
         showDirContents: false,
         enableCaching: ital8Conf.browserCacheEnabled,
         cacheMaxAge: ital8Conf.browserCacheMaxAge,
