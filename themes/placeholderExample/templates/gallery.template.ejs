@@ -1,6 +1,6 @@
 <%#
 ================================================================================
-TEMPLATE: Gallery & Downloads - Test EDITABLE Standard v1.0
+TEMPLATE: Gallery & Downloads - Test PLACEHOLDER Standard v1.0
 ================================================================================
 Tests: images (multiple), files (multiple), advanced validation
 ================================================================================
@@ -10,28 +10,28 @@ Tests: images (multiple), files (multiple), advanced validation
 <%- include( passData.themeSys.getThemePartPath( 'header.ejs' ) ) %>
 
 <%# Gallery Header %>
-<%# EDITABLE name:galleryHeader type:html editor:wysiwyg label:"Header Galleria" description:"Intestazione della pagina galleria" %>
+<%# PLACEHOLDER name:galleryHeader type:html editor:wysiwyg label:"Header Galleria" description:"Intestazione della pagina galleria" %>
 <section class="hero text-center py-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
     <div class="container">
         <h1 class="display-4 fw-bold">Galleria Fotografica</h1>
         <p class="lead">Esplora la nostra collezione di immagini</p>
     </div>
 </section>
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 
 <div class="container content-section">
     <%# Gallery Description %>
-    <%# EDITABLE name:galleryDescription type:richtext allowedTags:"p,strong,em,br,ul,li" maxlength:500 label:"Descrizione Galleria" description:"Breve descrizione (max 500 caratteri)" %>
+    <%# PLACEHOLDER name:galleryDescription type:richtext allowedTags:"p,strong,em,br,ul,li" maxlength:500 label:"Descrizione Galleria" description:"Breve descrizione (max 500 caratteri)" %>
     <div class="mb-5 text-center">
         <p class="lead">
             Scopri la nostra <strong>collezione curata</strong> di immagini professionali.
             Ogni foto racconta una storia unica.
         </p>
     </div>
-    <%# /EDITABLE %>
+    <%# /PLACEHOLDER %>
 
     <%# Main Photo Gallery - MULTIPLE IMAGES %>
-    <%# EDITABLE name:photoGallery type:images minCount:3 maxCount:12 minWidth:800 maxWidth:3000 minHeight:600 maxHeight:3000 minSize:100 maxSize:2048 allowedMimeTypes:"image/jpeg,image/png,image/webp" required:true label:"Galleria Foto Principale" description:"Da 3 a 12 foto, 800-3000px, 100KB-2MB ciascuna, JPG/PNG/WebP" %>
+    <%# PLACEHOLDER name:photoGallery type:images minCount:3 maxCount:12 minWidth:800 maxWidth:3000 minHeight:600 maxHeight:3000 minSize:100 maxSize:2048 allowedMimeTypes:"image/jpeg,image/png,image/webp" required:true label:"Galleria Foto Principale" description:"Da 3 a 12 foto, 800-3000px, 100KB-2MB ciascuna, JPG/PNG/WebP" %>
     <div class="row g-4">
         <div class="col-md-4">
             <img src="https://via.placeholder.com/800x600" alt="Gallery 1" class="img-fluid rounded shadow">
@@ -52,24 +52,24 @@ Tests: images (multiple), files (multiple), advanced validation
             <img src="https://via.placeholder.com/800x600" alt="Gallery 6" class="img-fluid rounded shadow">
         </div>
     </div>
-    <%# /EDITABLE %>
+    <%# /PLACEHOLDER %>
 
     <hr class="my-5">
 
     <%# Downloads Section - MULTIPLE FILES %>
     <section>
-        <%# EDITABLE name:downloadsTitle type:text maxlength:100 label:"Titolo Sezione Download" %>
+        <%# PLACEHOLDER name:downloadsTitle type:text maxlength:100 label:"Titolo Sezione Download" %>
         <h2 class="text-center mb-4">📥 Area Download</h2>
-        <%# /EDITABLE %>
+        <%# /PLACEHOLDER %>
 
-        <%# EDITABLE name:downloadsDescription type:richtext allowedTags:"p,strong,em,br" maxlength:300 label:"Descrizione Download" %>
+        <%# PLACEHOLDER name:downloadsDescription type:richtext allowedTags:"p,strong,em,br" maxlength:300 label:"Descrizione Download" %>
         <p class="text-center mb-5">
             Scarica <strong>gratuitamente</strong> i nostri documenti, guide e risorse.
         </p>
-        <%# /EDITABLE %>
+        <%# /PLACEHOLDER %>
 
         <%# Downloadable Files - MULTIPLE FILES with validation %>
-        <%# EDITABLE name:downloadFiles type:files minCount:1 maxCount:10 minSize:10 maxSize:10240 allowedExtensions:"pdf,doc,docx,txt,zip" allowedMimeTypes:"application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/zip" required:true label:"File Scaricabili" description:"1-10 file, 10KB-10MB ciascuno, PDF/DOC/DOCX/TXT/ZIP" %>
+        <%# PLACEHOLDER name:downloadFiles type:files minCount:1 maxCount:10 minSize:10 maxSize:10240 allowedExtensions:"pdf,doc,docx,txt,zip" allowedMimeTypes:"application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/zip" required:true label:"File Scaricabili" description:"1-10 file, 10KB-10MB ciascuno, PDF/DOC/DOCX/TXT/ZIP" %>
         <div class="row">
             <div class="col-lg-8 mx-auto">
                 <div class="d-flex align-items-center p-3 border rounded mb-3">
@@ -100,16 +100,16 @@ Tests: images (multiple), files (multiple), advanced validation
                 </div>
             </div>
         </div>
-        <%# /EDITABLE %>
+        <%# /PLACEHOLDER %>
     </section>
 
     <%# Call to Action %>
     <div class="text-center mt-5 p-5 bg-light rounded">
-        <%# EDITABLE name:galleryCTA type:html editor:wysiwyg label:"Call to Action" description:"Invito all'azione" %>
+        <%# PLACEHOLDER name:galleryCTA type:html editor:wysiwyg label:"Call to Action" description:"Invito all'azione" %>
         <h3>Ti piace quello che vedi?</h3>
         <p>Contattaci per saperne di più</p>
         <a href="/contact" class="btn btn-primary btn-lg">Contattaci</a>
-        <%# /EDITABLE %>
+        <%# /PLACEHOLDER %>
     </div>
 </div>
 

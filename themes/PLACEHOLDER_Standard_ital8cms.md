@@ -1,4 +1,4 @@
-# Standard EDITABLE
+# Standard PLACEHOLDER
 
 ## Sistema di Segnaposto per Template EJS
 
@@ -13,16 +13,16 @@
 
 ## 1. Introduzione
 
-Lo standard EDITABLE definisce un sistema di segnaposto per template EJS che permette di creare pagine statiche personalizzabili mantenendo la possibilità di modifiche future. I tag EDITABLE vengono mantenuti nel file finale per consentire re-editing illimitati.
+Lo standard PLACEHOLDER definisce un sistema di segnaposto per template EJS che permette di creare pagine statiche personalizzabili mantenendo la possibilità di modifiche future. I tag PLACEHOLDER vengono mantenuti nel file finale per consentire re-editing illimitati.
 
 ## 2. Sintassi Base
 
 La sintassi base utilizza commenti EJS per delimitare blocchi editabili:
 
 ```ejs
-<%# EDITABLE name:identificatore [attributi] %>
+<%# PLACEHOLDER name:identificatore [attributi] %>
 contenuto di default o contenuto custom
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 ## 3. Attributi Supportati
@@ -102,7 +102,7 @@ I tipi **image**, **images**, **file** e **files** supportano attributi avanzati
 - L'attributo **name** è obbligatorio e deve essere univoco
 - L'attributo **type** è obbligatorio
 - Il **name** deve seguire il formato camelCase: `/^[a-z][a-zA-Z0-9]*$/`
-- I blocchi EDITABLE non possono essere annidati
+- I blocchi PLACEHOLDER non possono essere annidati
 - Se **required:true**, il contenuto non può essere vuoto
 - Se specificato **maxlength**, il testo non può superare tale lunghezza
 - Se specificato **allowedTags**, solo quei tag HTML sono permessi
@@ -115,12 +115,12 @@ I tipi **image**, **images**, **file** e **files** supportano attributi avanzati
 
 ## 8. Workflow di Utilizzo
 
-1. **Step 1:** Creare un template .ejs con blocchi EDITABLE
+1. **Step 1:** Creare un template .ejs con blocchi PLACEHOLDER
 2. **Step 2:** Caricare il template nel sistema
-3. **Step 3:** Il sistema estrae i blocchi EDITABLE e genera un form
+3. **Step 3:** Il sistema estrae i blocchi PLACEHOLDER e genera un form
 4. **Step 4:** L'utente inserisce contenuti custom nei campi del form
-5. **Step 5:** Il sistema sostituisce il contenuto tra i tag EDITABLE
-6. **Step 6:** Salva il file .ejs finale mantenendo i tag EDITABLE
+5. **Step 5:** Il sistema sostituisce il contenuto tra i tag PLACEHOLDER
+6. **Step 6:** Salva il file .ejs finale mantenendo i tag PLACEHOLDER
 7. **Step 7:** La pagina può essere ri-editata ripetendo dal punto 2
 
 ## 9. Best Practices
@@ -145,26 +145,26 @@ Un template semplice con titolo, hero section e contenuto principale:
 <!DOCTYPE html>
 <html>
 <head>
-  <%# EDITABLE name:pageTitle type:text maxlength:60 
+  <%# PLACEHOLDER name:pageTitle type:text maxlength:60 
       required:true label:"Titolo della pagina" %>
   <title>Titolo Predefinito</title>
-  <%# /EDITABLE %>
+  <%# /PLACEHOLDER %>
 </head>
 <body>
-  <%# EDITABLE name:heroSection type:html 
+  <%# PLACEHOLDER name:heroSection type:html 
       editor:wysiwyg label:"Sezione Hero" %>
   <section class="hero">
     <h1>Benvenuto</h1>
     <p>Descrizione hero predefinita</p>
   </section>
-  <%# /EDITABLE %>
+  <%# /PLACEHOLDER %>
 
-  <%# EDITABLE name:mainContent type:markdown 
+  <%# PLACEHOLDER name:mainContent type:markdown 
       editor:markdown label:"Contenuto Principale" %>
   ## Chi Siamo
   
   Testo in markdown...
-  <%# /EDITABLE %>
+  <%# /PLACEHOLDER %>
 </body>
 </html>
 ```
@@ -174,35 +174,35 @@ Un template semplice con titolo, hero section e contenuto principale:
 Template completo per un articolo di blog con metadata:
 
 ```ejs
-<%# EDITABLE name:postTitle type:text maxlength:100 
+<%# PLACEHOLDER name:postTitle type:text maxlength:100 
     required:true label:"Titolo del post" %>
 <h1>Titolo del post</h1>
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 
-<%# EDITABLE name:postDate type:text 
+<%# PLACEHOLDER name:postDate type:text 
     label:"Data pubblicazione" 
     description:"Formato: GG/MM/AAAA" %>
 <time>01/01/2024</time>
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 
-<%# EDITABLE name:featuredImage type:image 
+<%# PLACEHOLDER name:featuredImage type:image 
     description:"Immagine in evidenza (1200x630)" %>
 <img src="/images/default.jpg" alt="Featured">
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 
-<%# EDITABLE name:postExcerpt type:richtext 
+<%# PLACEHOLDER name:postExcerpt type:richtext 
     maxlength:300 allowedTags:"strong,em" 
     label:"Estratto" %>
 <p class="excerpt">Breve descrizione...</p>
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 
-<%# EDITABLE name:postBody type:markdown 
+<%# PLACEHOLDER name:postBody type:markdown 
     editor:markdown required:true 
     label:"Corpo dell'articolo" %>
 ## Introduzione
 
 Contenuto dell'articolo...
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 ## Esempio 3: Pagina Salvata con Contenuto Custom
@@ -213,13 +213,13 @@ Esempio di come appare una pagina dopo essere stata editata e salvata:
 <!DOCTYPE html>
 <html>
 <head>
-  <%# EDITABLE name:pageTitle type:text maxlength:60 
+  <%# PLACEHOLDER name:pageTitle type:text maxlength:60 
       required:true label:"Titolo della pagina" %>
   <title>La Mia Azienda - Servizi</title>
-  <%# /EDITABLE %>
+  <%# /PLACEHOLDER %>
 </head>
 <body>
-  <%# EDITABLE name:heroSection type:html 
+  <%# PLACEHOLDER name:heroSection type:html 
       editor:wysiwyg label:"Sezione Hero" %>
   <section class="hero">
     <h1>I Nostri Servizi</h1>
@@ -227,9 +227,9 @@ Esempio di come appare una pagina dopo essere stata editata e salvata:
        la tua azienda</p>
     <a href="/contatti" class="btn">Contattaci</a>
   </section>
-  <%# /EDITABLE %>
+  <%# /PLACEHOLDER %>
 
-  <%# EDITABLE name:mainContent type:markdown 
+  <%# PLACEHOLDER name:mainContent type:markdown 
       editor:markdown label:"Contenuto Principale" %>
   ## Consulenza Strategica
   
@@ -239,19 +239,19 @@ Esempio di come appare una pagina dopo essere stata editata e salvata:
   ## Sviluppo Software
   
   Creiamo soluzioni custom per ogni esigenza...
-  <%# /EDITABLE %>
+  <%# /PLACEHOLDER %>
 </body>
 </html>
 ```
 
-> **Nota:** I tag EDITABLE sono mantenuti, permettendo di ri-editare la pagina in qualsiasi momento.
+> **Nota:** I tag PLACEHOLDER sono mantenuti, permettendo di ri-editare la pagina in qualsiasi momento.
 
 ## Esempio 4: Uso dell'attributo ID
 
 L'attributo **id** facoltativo per integrazioni future:
 
 ```ejs
-<%# EDITABLE name:navigationMenu type:html 
+<%# PLACEHOLDER name:navigationMenu type:html 
     id:main-nav editor:wysiwyg 
     label:"Menu di navigazione" %>
 <nav id="main-nav">
@@ -261,7 +261,7 @@ L'attributo **id** facoltativo per integrazioni future:
     <li><a href="/contatti">Contatti</a></li>
   </ul>
 </nav>
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 
 <script>
 // L'id può essere usato per riferimenti CSS/JS
@@ -275,14 +275,14 @@ document.getElementById('main-nav')
 Uso di **allowedTags** per limitare l'HTML consentito:
 
 ```ejs
-<%# EDITABLE name:userBio type:richtext 
+<%# PLACEHOLDER name:userBio type:richtext 
     allowedTags:"p,strong,em,a" 
     maxlength:500 
     label:"Biografia utente" 
     description:"Solo testo formattato, no immagini" %>
 <p>Biografia predefinita con <strong>grassetto</strong> 
    e <em>corsivo</em>.</p>
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 In questo esempio, l'utente potrà usare solo i tag p, strong, em e a. Qualsiasi altro tag HTML verrà rifiutato in fase di validazione.
@@ -292,20 +292,20 @@ In questo esempio, l'utente potrà usare solo i tag p, strong, em e a. Qualsiasi
 Gestione di contenuti multimediali:
 
 ```ejs
-<%# EDITABLE name:heroImage type:image 
+<%# PLACEHOLDER name:heroImage type:image 
     description:"Immagine hero (1920x1080 consigliato)" 
     label:"Immagine principale" %>
 <img src="/images/default-hero.jpg" 
      alt="Hero image" 
      class="hero-img">
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 
-<%# EDITABLE name:pdfDownload type:file 
+<%# PLACEHOLDER name:pdfDownload type:file 
     allowedExtensions:"pdf,doc,docx" 
     label:"Documento scaricabile" %>
 <a href="/files/brochure.pdf" 
    download>Scarica la brochure</a>
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 ## Esempio 7: Template Complesso Multi-Sezione
@@ -316,51 +316,51 @@ Esempio di una pagina completa con multiple sezioni editabili:
 <!DOCTYPE html>
 <html>
 <head>
-  <%# EDITABLE name:metaTitle type:text 
+  <%# PLACEHOLDER name:metaTitle type:text 
       maxlength:60 required:true %>
   <title>Titolo SEO</title>
-  <%# /EDITABLE %>
+  <%# /PLACEHOLDER %>
   
-  <%# EDITABLE name:metaDescription type:text 
+  <%# PLACEHOLDER name:metaDescription type:text 
       maxlength:160 %>
   <meta name="description" content="Descrizione SEO">
-  <%# /EDITABLE %>
+  <%# /PLACEHOLDER %>
 </head>
 <body>
   <header>
-    <%# EDITABLE name:logo type:image 
+    <%# PLACEHOLDER name:logo type:image 
         id:site-logo %>
     <img src="/logo.png" alt="Logo">
-    <%# /EDITABLE %>
+    <%# /PLACEHOLDER %>
     
-    <%# EDITABLE name:mainNav type:html 
+    <%# PLACEHOLDER name:mainNav type:html 
         id:main-navigation %>
     <nav>...</nav>
-    <%# /EDITABLE %>
+    <%# /PLACEHOLDER %>
   </header>
 
   <main>
-    <%# EDITABLE name:hero type:html 
+    <%# PLACEHOLDER name:hero type:html 
         editor:wysiwyg cssClass:"hero-editor" %>
     <section class="hero">...</section>
-    <%# /EDITABLE %>
+    <%# /PLACEHOLDER %>
     
-    <%# EDITABLE name:features type:html 
+    <%# PLACEHOLDER name:features type:html 
         editor:wysiwyg %>
     <section class="features">...</section>
-    <%# /EDITABLE %>
+    <%# /PLACEHOLDER %>
     
-    <%# EDITABLE name:testimonials type:html 
+    <%# PLACEHOLDER name:testimonials type:html 
         editor:wysiwyg %>
     <section class="testimonials">...</section>
-    <%# /EDITABLE %>
+    <%# /PLACEHOLDER %>
   </main>
 
   <footer>
-    <%# EDITABLE name:footerText type:richtext 
+    <%# PLACEHOLDER name:footerText type:richtext 
         allowedTags:"p,a,strong" %>
     <p>&copy; 2024 - Tutti i diritti riservati</p>
-    <%# /EDITABLE %>
+    <%# /PLACEHOLDER %>
   </footer>
 </body>
 </html>
@@ -371,7 +371,7 @@ Esempio di una pagina completa con multiple sezioni editabili:
 Uso di **type:images** per gestire multiple immagini con vincoli di dimensione e peso:
 
 ```ejs
-<%# EDITABLE name:productGallery type:images 
+<%# PLACEHOLDER name:productGallery type:images 
     minCount:3 maxCount:8 
     minWidth:800 maxWidth:2000 
     minHeight:600 maxHeight:1500 
@@ -385,7 +385,7 @@ Uso di **type:images** per gestire multiple immagini con vincoli di dimensione e
   <img src="/images/product-2.jpg" alt="Prodotto 2">
   <img src="/images/product-3.jpg" alt="Prodotto 3">
 </div>
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 > **Validazione:** Il sistema verificherà che ogni immagine rispetti larghezza (800-2000px), altezza (600-1500px), dimensione file (100KB-1MB) e formato (JPEG, PNG, WebP). Inoltre, devono essere caricate minimo 3 e massimo 8 immagini.
@@ -395,7 +395,7 @@ Uso di **type:images** per gestire multiple immagini con vincoli di dimensione e
 Validazione su **type:image** singola:
 
 ```ejs
-<%# EDITABLE name:heroImage type:image 
+<%# PLACEHOLDER name:heroImage type:image 
     minWidth:1920 maxWidth:1920 
     minHeight:1080 maxHeight:1080 
     maxSize:500 
@@ -408,7 +408,7 @@ Validazione su **type:image** singola:
      alt="Hero" 
      width="1920" 
      height="1080">
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 ## Esempio 10: File Multipli con Restrizioni
@@ -416,7 +416,7 @@ Validazione su **type:image** singola:
 Uso di **type:files** per allegati multipli:
 
 ```ejs
-<%# EDITABLE name:documentationFiles type:files 
+<%# PLACEHOLDER name:documentationFiles type:files 
     minCount:1 maxCount:5 
     maxSize:5120 
     allowedExtensions:"pdf,doc,docx,txt" 
@@ -432,7 +432,7 @@ Uso di **type:files** per allegati multipli:
   <a href="/docs/manuale.pdf">Manuale Utente (PDF)</a>
   <a href="/docs/guida.docx">Guida Rapida (DOCX)</a>
 </div>
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 ## Esempio 11: File Singolo con Validazione
@@ -440,7 +440,7 @@ Uso di **type:files** per allegati multipli:
 Validazione su **type:file** singolo:
 
 ```ejs
-<%# EDITABLE name:brochurePdf type:file 
+<%# PLACEHOLDER name:brochurePdf type:file 
     minSize:200 maxSize:3072 
     allowedExtensions:"pdf" 
     allowedMimeTypes:"application/pdf" 
@@ -452,14 +452,14 @@ Validazione su **type:file** singolo:
    class="download-btn">
   Scarica Brochure (PDF)
 </a>
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 ---
 
 # Parte 3: Future Enhancements
 
-Questa sezione raccoglie le funzionalità **non implementate nella versione 1.0** ma che sono state identificate come utili per futuri sviluppi dello standard EDITABLE. Questi enhancement sono stati documentati per essere ripresi una volta completata l'implementazione delle funzionalità base.
+Questa sezione raccoglie le funzionalità **non implementate nella versione 1.0** ma che sono state identificate come utili per futuri sviluppi dello standard PLACEHOLDER. Questi enhancement sono stati documentati per essere ripresi una volta completata l'implementazione delle funzionalità base.
 
 ## 1. Nuovi Tipi di Contenuto
 
@@ -469,13 +469,13 @@ Questa sezione raccoglie le funzionalità **non implementate nella versione 1.0*
 
 **Sintassi:**
 ```ejs
-<%# EDITABLE name:category type:select
+<%# PLACEHOLDER name:category type:select
     options:"news,blog,press,events"
     label:"Categoria Articolo"
     description:"Seleziona la categoria dell'articolo"
     required:true %>
 news
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 **Attributi aggiuntivi:**
@@ -492,12 +492,12 @@ news
 
 **Sintassi:**
 ```ejs
-<%# EDITABLE name:brandColor type:color
+<%# PLACEHOLDER name:brandColor type:color
     label:"Colore Brand"
     description:"Colore principale del brand"
     default:"#667eea" %>
 #667eea
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 **Attributi aggiuntivi:**
@@ -513,14 +513,14 @@ news
 
 **Sintassi:**
 ```ejs
-<%# EDITABLE name:publishDate type:date
+<%# PLACEHOLDER name:publishDate type:date
     label:"Data Pubblicazione"
     description:"Data di pubblicazione dell'articolo"
     format:"YYYY-MM-DD"
     minDate:"2024-01-01"
     required:true %>
 2024-12-03
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 **Attributi aggiuntivi:**
@@ -538,7 +538,7 @@ news
 
 **Sintassi:**
 ```ejs
-<%# EDITABLE name:price type:number
+<%# PLACEHOLDER name:price type:number
     label:"Prezzo Prodotto"
     min:0
     max:10000
@@ -546,7 +546,7 @@ news
     unit:"€"
     required:true %>
 99.99
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 **Attributi aggiuntivi:**
@@ -565,13 +565,13 @@ news
 
 **Sintassi:**
 ```ejs
-<%# EDITABLE name:externalLink type:url
+<%# PLACEHOLDER name:externalLink type:url
     label:"Link Esterno"
     description:"URL completo (es: https://example.com)"
     protocol:"https"
     required:true %>
 https://example.com
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 **Attributi aggiuntivi:**
@@ -587,12 +587,12 @@ https://example.com
 
 **Sintassi:**
 ```ejs
-<%# EDITABLE name:contactEmail type:email
+<%# PLACEHOLDER name:contactEmail type:email
     label:"Email di Contatto"
     description:"Indirizzo email valido"
     required:true %>
 info@example.com
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 **Caso d'uso:** Email di contatto, newsletter, form.
@@ -607,26 +607,26 @@ info@example.com
 
 **Sintassi:**
 ```ejs
-<%# EDITABLE name:metaTitle type:text
+<%# PLACEHOLDER name:metaTitle type:text
     group:"SEO"
     order:1
     label:"Meta Title" %>
 Titolo SEO
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 
-<%# EDITABLE name:metaDescription type:text
+<%# PLACEHOLDER name:metaDescription type:text
     group:"SEO"
     order:2
     label:"Meta Description" %>
 Descrizione SEO
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 
-<%# EDITABLE name:heroTitle type:text
+<%# PLACEHOLDER name:heroTitle type:text
     group:"Hero Section"
     order:1
     label:"Titolo Hero" %>
 Benvenuto
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 **Attributi aggiuntivi:**
@@ -646,10 +646,10 @@ Benvenuto
 
 **Sintassi:**
 ```ejs
-<%# EDITABLE name:email type:email
+<%# PLACEHOLDER name:email type:email
     label:"Email"
     placeholder:"esempio@dominio.com" %>
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 **Caso d'uso:** Fornire esempi di formato, guidare l'utente nella compilazione.
@@ -662,11 +662,11 @@ Benvenuto
 
 **Sintassi:**
 ```ejs
-<%# EDITABLE name:structuredData type:code
+<%# PLACEHOLDER name:structuredData type:code
     editor:code
     label:"Structured Data (JSON-LD)"
     helpUrl:"https://schema.org/docs/gs.html" %>
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 **Benefici:** Aiuto contestuale per campi complessi.
@@ -681,24 +681,24 @@ Benvenuto
 
 **Sintassi Proposta - Opzione A (Attributo lang):**
 ```ejs
-<%# EDITABLE name:pageTitle type:text
+<%# PLACEHOLDER name:pageTitle type:text
     lang:"it"
     translatable:true
     label:"Titolo Pagina (Italiano)" %>
 Benvenuto
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 
-<%# EDITABLE name:pageTitle type:text
+<%# PLACEHOLDER name:pageTitle type:text
     lang:"en"
     translatable:true
     label:"Page Title (English)" %>
 Welcome
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 **Sintassi Proposta - Opzione B (Blocco multilingua):**
 ```ejs
-<%# EDITABLE name:pageTitle type:text
+<%# PLACEHOLDER name:pageTitle type:text
     translatable:true
     languages:"it,en,fr,de"
     label:"Titolo Pagina" %>
@@ -708,7 +708,7 @@ Welcome
   "fr": "Bienvenue",
   "de": "Willkommen"
 }
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 **Attributi aggiuntivi:**
@@ -735,16 +735,16 @@ Welcome
 
 **Sintassi:**
 ```ejs
-<%# EDITABLE name:hasVideo type:select
+<%# PLACEHOLDER name:hasVideo type:select
     options:"yes,no"
     label:"Include Video?" %>
 no
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 
-<%# EDITABLE name:videoUrl type:url
+<%# PLACEHOLDER name:videoUrl type:url
     label:"URL Video YouTube"
     showIf:"hasVideo:yes" %>
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 **Caso d'uso:** Form dinamici, campi opzionali basati su selezioni precedenti.
@@ -759,11 +759,11 @@ no
 
 **Sintassi:**
 ```ejs
-<%# EDITABLE name:phoneNumber type:text
+<%# PLACEHOLDER name:phoneNumber type:text
     label:"Numero di Telefono"
     pattern:"^\+?[0-9]{10,15}$"
     patternError:"Formato telefono non valido" %>
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 **Attributi aggiuntivi:**
@@ -780,7 +780,7 @@ no
 
 **Sintassi:**
 ```ejs
-<%# EDITABLE name:ctaButton type:component
+<%# PLACEHOLDER name:ctaButton type:component
     componentId:"callToAction"
     label:"Pulsante Call-to-Action" %>
 {
@@ -788,7 +788,7 @@ no
   "url": "/signup",
   "style": "primary"
 }
-<%# /EDITABLE %>
+<%# /PLACEHOLDER %>
 ```
 
 **Benefici:**
@@ -883,9 +883,9 @@ Tutti i future enhancement sono progettati per essere **retrocompatibili** con l
 
 # Conclusioni
 
-Lo standard EDITABLE fornisce un sistema flessibile e potente per la gestione di template editabili in ital8cms. Le caratteristiche principali sono:
+Lo standard PLACEHOLDER fornisce un sistema flessibile e potente per la gestione di template editabili in ital8cms. Le caratteristiche principali sono:
 
-- **Persistenza:** I tag EDITABLE vengono mantenuti per permettere modifiche future
+- **Persistenza:** I tag PLACEHOLDER vengono mantenuti per permettere modifiche future
 - **Flessibilità:** Supporto per diversi tipi di contenuto (text, html, markdown, image, images, file, files)
 - **Validazione:** Sistema di validazione integrato per garantire integrità dei dati
 - **Sicurezza:** Controllo granulare sui tag HTML permessi e validazione media avanzata
@@ -896,4 +896,4 @@ Questo standard può essere implementato con parser personalizzati e integrato n
 
 ---
 
-**© 2024 ital8cms - Standard EDITABLE v1.0**
+**© 2024 ital8cms - Standard PLACEHOLDER v1.0**
