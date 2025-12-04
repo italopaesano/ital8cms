@@ -54,7 +54,7 @@ app.use(
     __dirname + `${ital8Conf.wwwPath}`,
     (opt = {
       showDirContents: true,
-      urlsReserved: [`/${ital8Conf.adminPrefix}`, `/${ital8Conf.apiPrefix}`, `/${ital8Conf.viewsPrefix}`, `/${ital8Conf.publicThemeResourcesPrefix}`], // '/admin','/api','/views','/public-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
+      urlsReserved: [`/${ital8Conf.adminPrefix}`, `/${ital8Conf.apiPrefix}`, `/${ital8Conf.viewsPrefix}`, `/${ital8Conf.publicThemeResourcesPrefix}`, `/${ital8Conf.adminThemeResourcesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
       enableCaching: ital8Conf.browserCacheEnabled,
       cacheMaxAge: ital8Conf.browserCacheMaxAge,
       template: {
@@ -108,7 +108,7 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
         index: ['index.ejs'], // Koa v3 + koa-classic-server v2.1.2: formato array raccomandato
         urlPrefix: `/${ital8Conf.adminPrefix}`,
         showDirContents: true,
-        urlsReserved: [`/${ital8Conf.apiPrefix}`, `/${ital8Conf.viewsPrefix}`, `/${ital8Conf.adminThemeResourcesPrefix}`], // '/api','/views','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
+        urlsReserved: [`/${ital8Conf.apiPrefix}`, `/${ital8Conf.viewsPrefix}`, `/${ital8Conf.publicThemeResourcesPrefix}`, `/${ital8Conf.adminThemeResourcesPrefix}`], // '/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
         enableCaching: ital8Conf.browserCacheEnabled,
         cacheMaxAge: ital8Conf.browserCacheMaxAge,
         template: {
