@@ -1,6 +1,6 @@
 <%#
 ================================================================================
-TEMPLATE: Blog Post - Test EDITABLE Standard v1.0
+TEMPLATE: Blog Post - Test PLACEHOLDER Standard v1.0
 ================================================================================
 Tests: text, image, markdown, richtext
 ================================================================================
@@ -14,48 +14,48 @@ Tests: text, image, markdown, richtext
         <div class="col-lg-10 mx-auto">
             <%# Post Header %>
             <header class="mb-5">
-                <%# EDITABLE name:postTitleH1 type:text maxlength:150 required:true label:"Titolo Articolo (H1)" description:"Titolo principale visualizzato nella pagina" %>
+                <%# PLACEHOLDER name:postTitleH1 type:text maxlength:150 required:true label:"Titolo Articolo (H1)" description:"Titolo principale visualizzato nella pagina" %>
                 <h1 class="display-4 fw-bold">Titolo dell'Articolo di Blog</h1>
-                <%# /EDITABLE %>
+                <%# /PLACEHOLDER %>
 
                 <div class="d-flex align-items-center mt-3 text-muted">
-                    <%# EDITABLE name:postAuthor type:text maxlength:50 required:true label:"Autore" description:"Nome dell'autore" %>
+                    <%# PLACEHOLDER name:postAuthor type:text maxlength:50 required:true label:"Autore" description:"Nome dell'autore" %>
                     <span class="me-3">📝 Di: <strong>Nome Autore</strong></span>
-                    <%# /EDITABLE %>
+                    <%# /PLACEHOLDER %>
 
-                    <%# EDITABLE name:postDate type:text maxlength:20 required:true label:"Data Pubblicazione" description:"Formato: GG/MM/AAAA o AAAA-MM-GG" %>
+                    <%# PLACEHOLDER name:postDate type:text maxlength:20 required:true label:"Data Pubblicazione" description:"Formato: GG/MM/AAAA o AAAA-MM-GG" %>
                     <span class="me-3">📅 <time>01/12/2024</time></span>
-                    <%# /EDITABLE %>
+                    <%# /PLACEHOLDER %>
 
-                    <%# EDITABLE name:postCategory type:text maxlength:30 label:"Categoria" description:"Categoria dell'articolo" %>
+                    <%# PLACEHOLDER name:postCategory type:text maxlength:30 label:"Categoria" description:"Categoria dell'articolo" %>
                     <span>🏷️ <strong>News</strong></span>
-                    <%# /EDITABLE %>
+                    <%# /PLACEHOLDER %>
                 </div>
             </header>
 
             <%# Featured Image %>
-            <%# EDITABLE name:featuredImage type:image minWidth:1200 maxWidth:1920 minHeight:630 maxHeight:1080 maxSize:1024 required:true label:"Immagine in Evidenza" description:"Immagine principale (1200x630 consigliato, max 1MB)" allowedMimeTypes:"image/jpeg,image/png,image/webp" %>
+            <%# PLACEHOLDER name:featuredImage type:image minWidth:1200 maxWidth:1920 minHeight:630 maxHeight:1080 maxSize:1024 required:true label:"Immagine in Evidenza" description:"Immagine principale (1200x630 consigliato, max 1MB)" allowedMimeTypes:"image/jpeg,image/png,image/webp" %>
             <figure class="mb-5">
                 <img src="https://via.placeholder.com/1200x630" alt="Featured Image" class="img-fluid rounded shadow-lg">
                 <figcaption class="text-muted text-center mt-2">
-                    <%# EDITABLE name:imageCaption type:text maxlength:150 label:"Didascalia Immagine" description:"Descrizione opzionale dell'immagine" %>
+                    <%# PLACEHOLDER name:imageCaption type:text maxlength:150 label:"Didascalia Immagine" description:"Descrizione opzionale dell'immagine" %>
                     Didascalia dell'immagine in evidenza
-                    <%# /EDITABLE %>
+                    <%# /PLACEHOLDER %>
                 </figcaption>
             </figure>
-            <%# /EDITABLE %>
+            <%# /PLACEHOLDER %>
 
             <%# Post Excerpt %>
-            <%# EDITABLE name:postExcerpt type:richtext allowedTags:"p,strong,em" maxlength:500 required:true label:"Estratto" description:"Breve introduzione dell'articolo (max 500 caratteri)" %>
+            <%# PLACEHOLDER name:postExcerpt type:richtext allowedTags:"p,strong,em" maxlength:500 required:true label:"Estratto" description:"Breve introduzione dell'articolo (max 500 caratteri)" %>
             <div class="lead mb-4">
                 <p><strong>Estratto:</strong> Questa è una breve introduzione all'articolo che cattura l'attenzione del lettore e lo invoglia a continuare la lettura.</p>
             </div>
-            <%# /EDITABLE %>
+            <%# /PLACEHOLDER %>
 
             <hr class="my-5">
 
             <%# Post Body - Main Content in Markdown %>
-            <%# EDITABLE name:postBody type:markdown editor:markdown required:true label:"Corpo dell'Articolo" description:"Contenuto principale dell'articolo in formato Markdown" %>
+            <%# PLACEHOLDER name:postBody type:markdown editor:markdown required:true label:"Corpo dell'Articolo" description:"Contenuto principale dell'articolo in formato Markdown" %>
 ## Introduzione
 
 Questo è il corpo principale dell'articolo scritto in **Markdown**.
@@ -82,25 +82,25 @@ function saluta(nome) {
 ## Conclusione
 
 Qui concludi l'articolo con un riassunto dei punti chiave.
-            <%# /EDITABLE %>
+            <%# /PLACEHOLDER %>
 
             <hr class="my-5">
 
             <%# Post Footer - Call to Action %>
-            <%# EDITABLE name:postFooterCTA type:html editor:wysiwyg label:"Call to Action Finale" description:"Invito all'azione alla fine dell'articolo" %>
+            <%# PLACEHOLDER name:postFooterCTA type:html editor:wysiwyg label:"Call to Action Finale" description:"Invito all'azione alla fine dell'articolo" %>
             <div class="bg-light p-4 rounded">
                 <h3>Ti è piaciuto questo articolo?</h3>
                 <p>Iscriviti alla nostra newsletter per ricevere altri contenuti come questo!</p>
                 <button class="btn btn-primary">Iscriviti</button>
             </div>
-            <%# /EDITABLE %>
+            <%# /PLACEHOLDER %>
 
             <%# Author Bio %>
             <div class="mt-5 p-4 border rounded">
                 <h4>Sull'autore</h4>
-                <%# EDITABLE name:authorBio type:richtext allowedTags:"p,strong,em,a,br" maxlength:300 label:"Bio Autore" description:"Breve biografia dell'autore (max 300 caratteri)" %>
+                <%# PLACEHOLDER name:authorBio type:richtext allowedTags:"p,strong,em,a,br" maxlength:300 label:"Bio Autore" description:"Breve biografia dell'autore (max 300 caratteri)" %>
                 <p><strong>Nome Autore</strong> è un esperto di [settore]. Segui su <a href="#">Twitter</a> o visita il <a href="#">sito personale</a>.</p>
-                <%# /EDITABLE %>
+                <%# /PLACEHOLDER %>
             </div>
         </div>
     </div>

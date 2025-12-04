@@ -4,7 +4,7 @@
   "enableAdmin": true,
   "viewsPrefix": "views",
   "baseThemePath": "../",
-  "activeTheme": "editableExample",
+  "activeTheme": "placeholderExample",
   "adminActiveTheme": "default",
   "wwwPath": "/www",
   "debugMode": 1,

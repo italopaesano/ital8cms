@@ -1,12 +1,12 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "name": "editableExample",
+  "name": "placeholderExample",
   "version": "1.1.0",
-  "description": "Tema di esempio completo per testare e validare lo standard EDITABLE v1.0 di ital8cms. Include 4 template diversi e partials editabili con design 'Submarine' blu oceano giocoso. 🌊🐠",
+  "description": "Tema di esempio completo per testare e validare lo standard PLACEHOLDER v1.0 di ital8cms. Include 4 template diversi e partials editabili con design 'Submarine' blu oceano giocoso. 🌊🐠",
   "author": "Italo Paesano",
   "email": "italopaesano@protonmail.com",
   "license": "ISC",
-  "tags": ["example", "editable", "testing", "bootstrap", "demo", "submarine", "ocean-theme"],
+  "tags": ["example", "placeholder", "testing", "bootstrap", "demo", "submarine", "ocean-theme"],
   "designTheme": "Submarine Blue - Tema sottomarino con colori blu oceano, animazioni giocose e decorazioni marine",
   "supportedHooks": [
     "head",
@@ -18,8 +18,8 @@
     "aside"
   ],
   "features": {
-    "editableStandard": true,
-    "editablePartials": true,
+    "placeholderStandard": true,
+    "placeholderPartials": true,
     "submarineDesign": true,
     "responsive": true,
     "bootstrap5": true,
@@ -31,44 +31,44 @@
     {
       "name": "page.template.ejs",
       "description": "Template pagina base - testa text, html, richtext, markdown, image",
-      "editableBlocks": 8
+      "placeholderBlocks": 8
     },
     {
       "name": "blog-post.template.ejs",
       "description": "Template articolo blog - testa metadata, featured image, markdown body",
-      "editableBlocks": 10
+      "placeholderBlocks": 10
     },
     {
       "name": "landing.template.ejs",
       "description": "Template landing page - testa multiple sezioni HTML",
-      "editableBlocks": 4
+      "placeholderBlocks": 4
     },
     {
       "name": "gallery.template.ejs",
       "description": "Template galleria - testa images/files multipli con validazione avanzata",
-      "editableBlocks": 6
+      "placeholderBlocks": 6
     }
   ],
   "partials": [
     {
       "name": "header.ejs",
-      "description": "Header con logo, tagline, announcement bar e CTA buttons - 3 blocchi EDITABLE",
-      "editableBlocks": 3
+      "description": "Header con logo, tagline, announcement bar e CTA buttons - 3 blocchi PLACEHOLDER",
+      "placeholderBlocks": 3
     },
     {
       "name": "nav.ejs",
-      "description": "Navigazione principale editabile con emoji icons - 1 blocco EDITABLE",
-      "editableBlocks": 1
+      "description": "Navigazione principale editabile con emoji icons - 1 blocco PLACEHOLDER",
+      "placeholderBlocks": 1
     },
     {
       "name": "aside.ejs",
-      "description": "Sidebar con 3 widget personalizzabili - 3 blocchi EDITABLE",
-      "editableBlocks": 3
+      "description": "Sidebar con 3 widget personalizzabili - 3 blocchi PLACEHOLDER",
+      "placeholderBlocks": 3
     },
     {
       "name": "footer.ejs",
-      "description": "Footer con descrizione, link, social e copyright - 4 blocchi EDITABLE",
-      "editableBlocks": 4
+      "description": "Footer con descrizione, link, social e copyright - 4 blocchi PLACEHOLDER",
+      "placeholderBlocks": 4
     }
   ],
   "testCoverage": {

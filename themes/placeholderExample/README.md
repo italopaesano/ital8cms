@@ -1,13 +1,13 @@
-# EDITABLE Example Theme
+# PLACEHOLDER Example Theme
 
-**Tema di esempio per testare lo Standard EDITABLE v1.0**
+**Tema di esempio per testare lo Standard PLACEHOLDER v1.0**
 
-Questo tema è stato creato specificamente per validare e testare tutte le funzionalità dello standard EDITABLE definito per ital8cms.
+Questo tema è stato creato specificamente per validare e testare tutte le funzionalità dello standard PLACEHOLDER definito per ital8cms.
 
 ## 📁 Struttura del Tema
 
 ```
-editableExample/
+placeholderExample/
 ├── views/                          # Partials del tema
 │   ├── head.ejs                   # HTML head + plugin hooks
 │   ├── header.ejs                 # Body start + plugin hooks
@@ -16,14 +16,14 @@ editableExample/
 │   ├── aside.ejs                  # Sidebar placeholder
 │   └── footer.ejs                 # Footer + scripts + plugin hooks
 │
-└── templates/                      # Template completi con EDITABLE
+└── templates/                      # Template completi con PLACEHOLDER
     ├── page.template.ejs          # Template pagina base
     ├── blog-post.template.ejs     # Template articolo blog
     ├── landing.template.ejs       # Template landing page
     └── gallery.template.ejs       # Template galleria/download
 ```
 
-## 🧪 Copertura Test dello Standard EDITABLE
+## 🧪 Copertura Test dello Standard PLACEHOLDER
 
 ### 1. **page.template.ejs** - Template Base
 
@@ -197,7 +197,7 @@ editableExample/
 In `ital8Config.json`:
 ```json
 {
-  "activeTheme": "editableExample"
+  "activeTheme": "placeholderExample"
 }
 ```
 
@@ -207,7 +207,7 @@ Quando implementerai il sistema di Page Management, questi template possono esse
 
 1. **Listati** nel pannello admin
 2. **Selezionati** dall'utente per creare una nuova pagina
-3. **Parsati** per estrarre i blocchi EDITABLE
+3. **Parsati** per estrarre i blocchi PLACEHOLDER
 4. **Trasformati** in form dinamici
 5. **Utilizzati** per generare pagine in `/www`
 
@@ -216,7 +216,7 @@ Quando implementerai il sistema di Page Management, questi template possono esse
 I template contengono commenti chiari che documentano cosa testano:
 
 ```ejs
-<%# EDITABLE name:heroSection type:html editor:wysiwyg
+<%# PLACEHOLDER name:heroSection type:html editor:wysiwyg
     label:"Sezione Hero"
     description:"Sezione principale in evidenza" %>
 ```
@@ -226,7 +226,7 @@ I template contengono commenti chiari che documentano cosa testano:
 ## 📊 Statistiche
 
 - **Template totali**: 4
-- **Blocchi EDITABLE totali**: ~40+
+- **Blocchi PLACEHOLDER totali**: ~40+
 - **Tipi testati**: 8/8 (100%)
 - **Attributi testati**: 21/22 (95%)
 - **Scenari coperti**: 15+
@@ -235,7 +235,7 @@ I template contengono commenti chiari che documentano cosa testano:
 
 ## ✨ Conclusioni
 
-Questo tema di esempio **copre completamente** lo standard EDITABLE v1.0 e dimostra:
+Questo tema di esempio **copre completamente** lo standard PLACEHOLDER v1.0 e dimostra:
 
 1. ✅ **Tutti i tipi** funzionano correttamente nella sintassi
 2. ✅ **Attributi combinati** si integrano bene
@@ -245,9 +245,9 @@ Questo tema di esempio **copre completamente** lo standard EDITABLE v1.0 e dimos
 
 ### Prossimi Passi
 
-1. ✅ Standard EDITABLE validato e pronto
+1. ✅ Standard PLACEHOLDER validato e pronto
 2. ⏭️ Integrare lo standard in `CLAUDE.md`
-3. ⏭️ Implementare parser EDITABLE nel plugin admin
+3. ⏭️ Implementare parser PLACEHOLDER nel plugin admin
 4. ⏭️ Creare interfaccia Page Management
 5. ⏭️ Testare creazione pagine da template
 
@@ -256,4 +256,4 @@ Questo tema di esempio **copre completamente** lo standard EDITABLE v1.0 e dimos
 **Creato**: Dicembre 2024
 **Versione Standard**: 1.0
 **Autore**: Italo Paesano
-**Scopo**: Testing e validazione standard EDITABLE
+**Scopo**: Testing e validazione standard PLACEHOLDER
