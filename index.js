@@ -32,20 +32,21 @@ const themeSys = new ( require('./core/themeSys') ) ( ital8Conf, pluginSys );
 // Imposta il riferimento a themeSys in pluginSys per permettere ai plugin di accedervi
 pluginSys.setThemeSys(themeSys);
 
-// Static server per le risorse del tema attivo
-// Le risorse sono accessibili tramite /theme-assets/css/, /theme-assets/js/, ecc.
+// Static server per le risorse del tema pubblico
+// Le risorse sono accessibili tramite /{publicThemeResourcesPrefix}/css/, /{publicThemeResourcesPrefix}/js/, ecc.
+// Configurazione cache controllata da browserCacheEnabled e browserCacheMaxAge in ital8Config.json
 app.use(
   koaClassicServer(
     path.join(__dirname, 'themes', ital8Conf.activeTheme, 'themeResources'),
     {
-      urlPrefix: '/theme-assets',
+      urlPrefix: `/${ital8Conf.publicThemeResourcesPrefix}`,
       showDirContents: false,
-      enableCaching: true,
-      cacheMaxAge: 86400, // 24 ore di cache per risorse del tema
+      enableCaching: ital8Conf.browserCacheEnabled,
+      cacheMaxAge: ital8Conf.browserCacheMaxAge,
     }
   )
 );
-console.log(`[themeSys] Risorse del tema servite da /theme-assets/ -> themes/${ital8Conf.activeTheme}/themeResources/`);
+console.log(`[themeSys] Risorse del tema pubblico servite da /${ital8Conf.publicThemeResourcesPrefix}/ -> themes/${ital8Conf.activeTheme}/themeResources/`);
 
 // koa classic server
 app.use(
@@ -54,8 +55,8 @@ app.use(
     (opt = {
       showDirContents: true,
       urlsReserved: [`/${ital8Conf.adminPrefix}`, `/${ital8Conf.apiPrefix}`, `/${ital8Conf.viewsPrefix}`], // '/admin','/api','/views' -> questi sarebbero i percorsi di default pero adesso sono configurabili
-      enableCaching: false, // Disabilitato per facilitare i test durante lo sviluppo
-      cacheMaxAge: 86400, // 24 ore di cache per file statici (usato solo se enableCaching: true)
+      enableCaching: ital8Conf.browserCacheEnabled,
+      cacheMaxAge: ital8Conf.browserCacheMaxAge,
       template: {
         render: async (ctx, next, filePath) => {
           ctx.body = await ejs.renderFile(filePath, {
@@ -83,6 +84,23 @@ app.use(
 //START ADESSO CARICO LA PARTE DI ADMIN SE RICHIESTA
 if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
 
+  // Static server per le risorse del tema admin
+  // Le risorse sono accessibili tramite /{adminThemeResourcesPrefix}/css/, /{adminThemeResourcesPrefix}/js/, ecc.
+  // Configurazione cache controllata da browserCacheEnabled e browserCacheMaxAge in ital8Config.json
+  app.use(
+    koaClassicServer(
+      path.join(__dirname, 'themes', ital8Conf.adminActiveTheme, 'themeResources'),
+      {
+        urlPrefix: `/${ital8Conf.adminThemeResourcesPrefix}`,
+        showDirContents: false,
+        enableCaching: ital8Conf.browserCacheEnabled,
+        cacheMaxAge: ital8Conf.browserCacheMaxAge,
+      }
+    )
+  );
+  console.log(`[themeSys] Risorse del tema admin servite da /${ital8Conf.adminThemeResourcesPrefix}/ -> themes/${ital8Conf.adminActiveTheme}/themeResources/`);
+
+  // Static server per le pagine admin complete
   app.use(
     koaClassicServer(
       path.join(__dirname, 'core', 'admin', 'webPages'),// punto alla cartella delle pagine di admin
@@ -91,8 +109,8 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
         urlPrefix: `/${ital8Conf.adminPrefix}`,
         showDirContents: true,
         urlsReserved: [`/${ital8Conf.apiPrefix}`, `/${ital8Conf.viewsPrefix}`], // '/api','/views' -> questi sarebbero i percorsi di default pero adesso sono configurabili
-        enableCaching: false, // Disabilitato per facilitare i test durante lo sviluppo
-        cacheMaxAge: 3600, // 1 ora di cache per pagine admin (usato solo se enableCaching: true)
+        enableCaching: ital8Conf.browserCacheEnabled,
+        cacheMaxAge: ital8Conf.browserCacheMaxAge,
         template: {
           render: async (ctx, next, filePath) => {
             ctx.body = await ejs.renderFile(filePath, {
