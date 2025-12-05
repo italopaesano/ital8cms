@@ -101,6 +101,10 @@
                         <li><code>activeTheme</code> (string)</li>
                         <li><code>adminActiveTheme</code> (string)</li>
                         <li><code>wwwPath</code> (string)</li>
+                        <li><code>browserCacheEnabled</code> (boolean)</li>
+                        <li><code>browserCacheMaxAge</code> (number)</li>
+                        <li><code>publicThemeResourcesPrefix</code> (string)</li>
+                        <li><code>adminThemeResourcesPrefix</code> (string)</li>
                         <li><code>debugMode</code> (0 o 1)</li>
                         <li><code>httpPort</code> (number, 1-65535)</li>
                         <li><code>useHttps</code> (boolean)</li>
@@ -125,6 +129,29 @@
                         <dd>Prefisso per il pannello admin<br>
                             Default: <code>"admin"</code></dd>
 
+                        <dt><code>activeTheme</code></dt>
+                        <dd><span class="badge bg-warning">⚠️</span> Gestito in <strong>Gestione Temi</strong></dd>
+
+                        <dt><code>adminActiveTheme</code></dt>
+                        <dd><span class="badge bg-warning">⚠️</span> Gestito in <strong>Gestione Temi</strong></dd>
+
+                        <dt><code>browserCacheEnabled</code></dt>
+                        <dd>Abilita cache HTTP per risorse statiche<br>
+                            <code>false</code> = Disattivo (sviluppo)<br>
+                            <code>true</code> = Attivo (produzione)</dd>
+
+                        <dt><code>browserCacheMaxAge</code></dt>
+                        <dd>Durata cache in secondi<br>
+                            Default: <code>86400</code> (24 ore)</dd>
+
+                        <dt><code>publicThemeResourcesPrefix</code></dt>
+                        <dd>Prefisso URL per risorse tema pubblico<br>
+                            Default: <code>"public-theme-resources"</code></dd>
+
+                        <dt><code>adminThemeResourcesPrefix</code></dt>
+                        <dd>Prefisso URL per risorse tema admin<br>
+                            Default: <code>"admin-theme-resources"</code></dd>
+
                         <dt><code>httpPort</code></dt>
                         <dd>Porta del server HTTP<br>
                             Range: 1-65535<br>
@@ -138,12 +165,6 @@
                         <dt><code>useHttps</code></dt>
                         <dd>Abilita server HTTPS<br>
                             <code>true</code> o <code>false</code></dd>
-
-                        <dt><code>activeTheme</code></dt>
-                        <dd><span class="badge bg-warning">⚠️</span> Gestito in <strong>Gestione Temi</strong></dd>
-
-                        <dt><code>adminActiveTheme</code></dt>
-                        <dd><span class="badge bg-warning">⚠️</span> Gestito in <strong>Gestione Temi</strong></dd>
                     </dl>
                 </div>
             </div>
@@ -160,9 +181,13 @@
   "enableAdmin": true,
   "viewsPrefix": "views",
   "baseThemePath": "../",
-  "activeTheme": "default",
-  "adminActiveTheme": "default",
+  "activeTheme": "placeholderExample",
+  "adminActiveTheme": "defaultAdminTheme",
   "wwwPath": "/www",
+  "browserCacheEnabled": false,
+  "browserCacheMaxAge": 86400,
+  "publicThemeResourcesPrefix": "public-theme-resources",
+  "adminThemeResourcesPrefix": "admin-theme-resources",
   "debugMode": 1,
   "httpPort": 3000,
   "useHttps": false,
