@@ -93,6 +93,7 @@ function getThemesList(themeSys) {
                 name: theme.name,
                 description: description,
                 config: config,
+                isAdminTheme: config.isAdminTheme || false, // Flag che indica se è un tema admin
                 valid: theme.valid,
                 validationError: theme.error,
                 isActivePublic: theme.isActive,
@@ -202,6 +203,7 @@ function getThemeDetails(themeName, themeSys) {
                 name: themeName,
                 description: description,
                 config: config,
+                isAdminTheme: config.isAdminTheme || false, // Flag che indica se è un tema admin
                 validation: {
                     valid: validation.valid,
                     error: validation.error,
@@ -301,6 +303,33 @@ function setActiveTheme(themeName, themeType, themeSys) {
             return {
                 success: false,
                 error: `Tema non valido: ${validation.error}`
+            };
+        }
+
+        // Verifica corrispondenza tipo tema (isAdminTheme)
+        const themeConfigPath = path.join(themePath, 'themeConfig.json');
+        let themeConfig = {};
+        try {
+            if (fs.existsSync(themeConfigPath)) {
+                themeConfig = loadJson5(themeConfigPath);
+            }
+        } catch (error) {
+            console.error(`[themesManagment] Errore lettura themeConfig per ${themeName}:`, error.message);
+        }
+
+        const isAdminTheme = themeConfig.isAdminTheme === true;
+
+        // Validazione tipo tema
+        if (themeType === 'admin' && !isAdminTheme) {
+            return {
+                success: false,
+                error: `Il tema "${themeName}" non è configurato come tema admin (isAdminTheme: false). Non può essere usato per il pannello di amministrazione.`
+            };
+        }
+        if (themeType === 'public' && isAdminTheme) {
+            return {
+                success: false,
+                error: `Il tema "${themeName}" è configurato come tema admin (isAdminTheme: true). Non può essere usato come tema pubblico.`
             };
         }
 

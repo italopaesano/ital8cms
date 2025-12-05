@@ -264,9 +264,16 @@ function renderConfiguration(theme) {
     const tbody = document.getElementById('config-table').querySelector('tbody');
     const config = theme.config;
     const validation = theme.validation;
+    const isAdminTheme = theme.isAdminTheme === true;
 
     const rows = [
         { label: 'Nome', value: escapeHtml(theme.name) },
+        {
+            label: 'Tipo Tema',
+            value: isAdminTheme
+                ? '<span class="badge bg-success"><i class="bi bi-shield-lock"></i> Admin Theme</span>'
+                : '<span class="badge bg-primary"><i class="bi bi-box"></i> Public Theme</span>'
+        },
         {
             label: 'Installato',
             value: config.isInstalled
@@ -400,24 +407,45 @@ function renderActions(theme) {
     const container = document.getElementById('actions-buttons');
     const isActivePublic = theme.status.isActivePublic;
     const isActiveAdmin = theme.status.isActiveAdmin;
+    const isAdminTheme = theme.isAdminTheme === true;
 
-    const publicButton = isActivePublic
-        ? `<button type="button" class="btn btn-primary" disabled>
+    // Determina se i pulsanti possono essere abilitati in base al tipo di tema
+    const canBePublic = !isAdminTheme;
+    const canBeAdmin = isAdminTheme;
+
+    let publicButton;
+    if (isActivePublic) {
+        publicButton = `<button type="button" class="btn btn-primary" disabled>
                <i class="bi bi-check"></i> Attivo per Sito Pubblico
-           </button>`
-        : `<button type="button" class="btn btn-primary"
+           </button>`;
+    } else if (canBePublic) {
+        publicButton = `<button type="button" class="btn btn-primary"
                onclick="activateTheme('${escapeHtml(theme.name)}', 'public')">
                <i class="bi bi-globe"></i> Attiva per Sito Pubblico
            </button>`;
+    } else {
+        publicButton = `<button type="button" class="btn btn-outline-secondary" disabled
+               title="Questo è un tema admin, non può essere usato come tema pubblico">
+               <i class="bi bi-globe"></i> Attiva per Sito Pubblico (Non Disponibile)
+           </button>`;
+    }
 
-    const adminButton = isActiveAdmin
-        ? `<button type="button" class="btn btn-success" disabled>
+    let adminButton;
+    if (isActiveAdmin) {
+        adminButton = `<button type="button" class="btn btn-success" disabled>
                <i class="bi bi-check"></i> Attivo per Admin
-           </button>`
-        : `<button type="button" class="btn btn-success"
+           </button>`;
+    } else if (canBeAdmin) {
+        adminButton = `<button type="button" class="btn btn-success"
                onclick="activateTheme('${escapeHtml(theme.name)}', 'admin')">
                <i class="bi bi-gear"></i> Attiva per Admin
            </button>`;
+    } else {
+        adminButton = `<button type="button" class="btn btn-outline-secondary" disabled
+               title="Questo è un tema pubblico, non può essere usato come tema admin">
+               <i class="bi bi-gear"></i> Attiva per Admin (Non Disponibile)
+           </button>`;
+    }
 
     container.innerHTML = publicButton + ' ' + adminButton;
 }
