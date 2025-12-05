@@ -12,7 +12,8 @@ Il sistema di amministrazione di ital8cms si trova in una fase embrionale di svi
 
 **Punti di Forza Attuali:**
 - Separazione chiara tra area pubblica e area admin
-- Integrazione con il sistema di temi (theme system) tramite `getAdminThemePartPath()`
+- Integrazione con il sistema di temi (theme system) tramite API unificata con `isAdminContext`
+- Tema admin dedicato (`defaultAdminTheme`) separato dai temi pubblici
 - Gestione utenti funzionante (CRUD operations)
 - Utilizzo di API REST per operazioni backend
 - Configurabilità del prefix admin (`adminPrefix`)
@@ -150,7 +151,7 @@ Il file contiene solo 1 riga e non ha funzionalità attive. Questo file dovrebbe
 
 **Valutazione:**
 - ✅ Buona separazione tra tema (header/footer) e contenuto
-- ✅ Uso corretto di `getAdminThemePartPath()`
+- ✅ Uso corretto dell'API unificata `getThemePartPath()` con `passData`
 - ⚠️ Maggior parte dei link sono placeholder
 - ⚠️ Nessun controllo di autenticazione a livello di template
 
@@ -292,33 +293,48 @@ Il file contiene solo il template base senza logica di eliminazione.
 
 ### 4.1 Sistema Temi (Theme System)
 
-**Funzione Speciale:** `getAdminThemePartPath()`
+**API Unificata:** `getThemePartPath(partName, passData)`
 
-Tutte le pagine admin utilizzano questa funzione invece di `getThemePartPath()`:
+Tutte le pagine admin utilizzano la stessa API dei temi pubblici, con selezione automatica del tema basata su `isAdminContext`:
 
 ```ejs
-<%- include( passData.themeSys.getAdminThemePartPath( 'head.ejs' ) ) %>
-<%- include( passData.themeSys.getAdminThemePartPath( 'header.ejs' ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
 <!-- contenuto pagina -->
-<%- include( passData.themeSys.getAdminThemePartPath( 'footer.ejs' ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>
 ```
 
-**Configurazione Tema Admin:**
+**Flag `isAdminContext` in passData:**
+- Nelle pagine admin: `passData.isAdminContext === true`
+- Nelle pagine pubbliche: `passData.isAdminContext === false`
+
+**Configurazione Temi:**
 ```json
 {
-  "adminActiveTheme": "default"
+  "activeTheme": "placeholderExample",    // Tema pubblico
+  "adminActiveTheme": "defaultAdminTheme" // Tema admin dedicato
 }
 ```
+
+**Temi e Validazione:**
+- Tema pubblico deve avere `isAdminTheme: false` nel `themeConfig.json`
+- Tema admin deve avere `isAdminTheme: true` nel `themeConfig.json`
+- Il sistema valida automaticamente al caricamento e fa fallback se mismatch
 
 **Partials Utilizzati:**
 - `head.ejs` - HTML head, meta tags, CSS
 - `header.ejs` - Header pagina, navbar
+- `nav.ejs` - Navigazione
+- `aside.ejs` - Sidebar
+- `main.ejs` - Contenuto principale
 - `footer.ejs` - Footer, chiusura HTML, script
 
 **Valutazione:**
-- ✅ Separazione corretta tra temi pubblici e admin
-- ✅ Permette personalizzazione indipendente dell'admin
-- ⚠️ Nessun tema admin specifico ancora sviluppato (usa "default")
+- ✅ API unificata semplifica sviluppo template
+- ✅ Separazione corretta tra temi pubblici e admin tramite `isAdminTheme`
+- ✅ Tema admin dedicato (`defaultAdminTheme`) con layout dashboard
+- ✅ Validazione automatica previene errori di configurazione
+- ✅ Selezione automatica del tema basata sul contesto
 
 ### 4.2 Sistema Plugin (Plugin System)
 
@@ -374,13 +390,13 @@ passData.ctx.session.user           // Oggetto utente
 
 ### 5.1 Pattern EJS
 
-**Template Base Standard:**
+**Template Base Standard (API Unificata):**
 ```ejs
-<!-- Commento avviso -->
-<!-- ATTENZIONE nelle pagine di admin sarà chiamata la funzone getAdminThemePartPath() -->
+<!-- Nota: Usa getThemePartPath() con passData.isAdminContext: true -->
+<!-- per caricare automaticamente i partial del tema admin -->
 
-<%- include( passData.themeSys.getAdminThemePartPath( 'head.ejs' ) ) %>
-<%- include( passData.themeSys.getAdminThemePartPath( 'header.ejs' ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
 
 <!-- Esposizione configurazione -->
 <span id="apiPrefix" style="display: none;"><%- passData.apiPrefix %></span>
@@ -395,11 +411,17 @@ passData.ctx.session.user           // Oggetto utente
 
 <!-- Contenuto pagina -->
 
-<%- include( passData.themeSys.getAdminThemePartPath( 'footer.ejs' ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>
 ```
+
+**Vantaggi API Unificata:**
+- ✅ Stesso codice funziona in pagine pubbliche e admin
+- ✅ Selezione automatica del tema tramite `passData.isAdminContext`
+- ✅ Nessuna necessità di ricordare quale funzione usare
 
 **Valutazione:**
 - ✅ Pattern chiaro e ripetibile
+- ✅ API unificata semplifica sviluppo
 - ⚠️ Ripetizione di codice per esposizione configurazione
 - 💡 **Suggerimento:** Creare partial per boilerplate comune
 

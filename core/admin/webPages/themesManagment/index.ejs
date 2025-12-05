@@ -169,7 +169,12 @@ function displayThemesList(themes) {
 function createThemeCard(theme) {
     const isPublicActive = theme.isActivePublic;
     const isAdminActive = theme.isActiveAdmin;
+    const isAdminTheme = theme.isAdminTheme === true;
     const borderClass = isPublicActive ? 'border-primary' : (isAdminActive ? 'border-success' : '');
+
+    // Determina se i pulsanti possono essere abilitati in base al tipo di tema
+    const canBePublic = !isAdminTheme;
+    const canBeAdmin = isAdminTheme;
 
     return `
         <div class="col-md-6 col-lg-4 mb-4">
@@ -188,6 +193,10 @@ function createThemeCard(theme) {
                             Struttura ${theme.valid ? 'valida' : 'non valida'}
                         </li>
                         <li>
+                            <i class="bi bi-${isAdminTheme ? 'shield-lock' : 'box'}"></i>
+                            Tipo: <strong>${isAdminTheme ? 'Admin Theme' : 'Public Theme'}</strong>
+                        </li>
+                        <li>
                             <i class="bi bi-file-earmark-code"></i>
                             Views: ${theme.filesCount.views}, Templates: ${theme.filesCount.templates}
                         </li>
@@ -204,22 +213,36 @@ function createThemeCard(theme) {
                            class="btn btn-outline-info" title="Visualizza dettagli">
                             <i class="bi bi-eye"></i> Dettagli
                         </a>
-                        ${!isPublicActive ? `
+                        ${!isPublicActive && canBePublic ? `
                             <button type="button"
                                     class="btn btn-outline-primary"
                                     onclick="activateTheme('${escapeHtml(theme.name)}', 'public')"
                                     title="Imposta come tema pubblico">
                                 <i class="bi bi-globe"></i> Pubblico
                             </button>
-                        ` : ''}
-                        ${!isAdminActive ? `
+                        ` : (!canBePublic && !isPublicActive ? `
+                            <button type="button"
+                                    class="btn btn-outline-secondary"
+                                    disabled
+                                    title="Questo è un tema admin, non può essere usato come tema pubblico">
+                                <i class="bi bi-globe"></i> Pubblico
+                            </button>
+                        ` : '')}
+                        ${!isAdminActive && canBeAdmin ? `
                             <button type="button"
                                     class="btn btn-outline-success"
                                     onclick="activateTheme('${escapeHtml(theme.name)}', 'admin')"
                                     title="Imposta come tema admin">
                                 <i class="bi bi-gear"></i> Admin
                             </button>
-                        ` : ''}
+                        ` : (!canBeAdmin && !isAdminActive ? `
+                            <button type="button"
+                                    class="btn btn-outline-secondary"
+                                    disabled
+                                    title="Questo è un tema pubblico, non può essere usato come tema admin">
+                                <i class="bi bi-gear"></i> Admin
+                            </button>
+                        ` : '')}
                     </div>
                 </div>
             </div>
