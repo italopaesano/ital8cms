@@ -75,8 +75,6 @@ const loadJson5 = require('./loadJson5');
  * 6. PATH PARTIALS
  *    - getThemePartPath(partName)
  *      Path assoluto del partial nel tema pubblico (es. 'head.ejs')
- *    - getAdminThemePartPath(partName)
- *      Path assoluto del partial nel tema admin
  *
  * 7. PERSONALIZZAZIONE PLUGIN (Plugin Endpoint Customization)
  *    Permette ai temi di sovrascrivere i template e gli asset degli endpoint dei plugin
@@ -665,16 +663,6 @@ class themeSys{
     return `${__dirname}/../themes/${themeName}/views/${partName}`;
   }
 
-  /**
-   * @deprecated Usa getThemePartPath(partName, passData) con passData.isAdminContext = true
-   * Questa funzione è mantenuta per backward compatibility ma verrà rimossa in future versioni
-   * @param {string} partName - Nome del partial (es. 'head.ejs', 'footer.ejs')
-   * @returns {string} - Path assoluto del partial del tema admin
-   */
-  getAdminThemePartPath(partName) {
-    console.warn('[themeSys] DEPRECATO: getAdminThemePartPath() è deprecato. Usa getThemePartPath(partName, passData) con passData.isAdminContext = true');
-    return `${__dirname}/../themes/${this.ital8Conf.adminActiveTheme}/views/${partName}`;
-  }
 
   // ============================================================================
   // PLUGIN ENDPOINT CUSTOMIZATION
