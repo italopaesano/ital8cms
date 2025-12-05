@@ -5,12 +5,13 @@
   "weight": 0,
   "wwwCustomPath": 1,
 
-  // Tema pubblico (false) o amministrativo (true)
+  // Tema amministrativo - DEVE essere true per temi admin
   // I temi admin sono usati solo nelle pagine di amministrazione
-  "isAdminTheme": false,
+  "isAdminTheme": true,
 
   "pluginDependency": {
-    "bootstrap": "^1.0.0"
+    "bootstrap": "^1.0.0",
+    "admin": "^1.0.0"
   },
   "nodeModuleDependency": {
     "ejs": "^3.0.0"

@@ -1,0 +1,19 @@
+
+</div><!-- Close admin-container -->
+
+<!-- Footer amministrazione -->
+<footer class="admin-footer">
+    <%- passData.pluginSys.hookPage("footer", passData); %>
+    <div class="admin-footer-content">
+        <p>&copy; <%= new Date().getFullYear() %> ital8cms - Pannello Amministrazione</p>
+    </div>
+</footer>
+
+<!-- Hook per JavaScript dei plugin -->
+<%- passData.pluginSys.hookPage("script", passData); %>
+
+<!-- JavaScript del tema admin -->
+<script src="<%= passData.themeSys.getThemeResourceUrl('js/theme.js', passData) %>"></script>
+
+</body>
+</html>
