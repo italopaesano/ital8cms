@@ -478,6 +478,20 @@ class themeSys{
           if (file && file !== partialName) continue;
 
           if (pattern.test(content)) {
+            // Caso speciale: navbar in nav.ejs
+            // Non emettere warning se c'è un wrapper <nav> ma il contenuto è iniettato via hook
+            if (partialName === 'nav.ejs' && pattern.source.includes('nav')) {
+              // Verifica se c'è l'hook che inietta il contenuto dinamicamente
+              const hasNavHook = content.includes('pluginSys.hookPage("nav"') ||
+                                 content.includes("pluginSys.hookPage('nav'") ||
+                                 content.includes('pluginSys.hookPage(`nav`');
+
+              if (hasNavHook) {
+                // Hook trovato - il contenuto è dinamico, solo il wrapper è hardcoded (OK)
+                continue;
+              }
+            }
+
             warnings.push(`${partialName}: ${message}`);
           }
         }
