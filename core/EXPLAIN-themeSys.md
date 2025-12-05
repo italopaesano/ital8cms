@@ -405,78 +405,98 @@ Le versioni seguono lo standard **semver**:
 
 ## 6. Gestione Partials
 
-### 6.1 Metodo `getThemePartPath(partName)`
+### 6.1 Metodo `getThemePartPath(partName, passData)` - API Unificata
 
-Risolve il path assoluto di un partial del tema pubblico.
+Risolve il path assoluto di un partial del tema. **Funziona sia per temi pubblici che admin** grazie alla selezione automatica basata sul contesto.
 
 ```javascript
-getThemePartPath(partName) {
-  return `${__dirname}/../themes/${this.ital8Conf.activeTheme}/views/${partName}`;
+/**
+ * Restituisce il path assoluto di un partial del tema
+ * @param {string} partName - Nome del partial (es. 'head.ejs', 'footer.ejs')
+ * @param {object} passData - Oggetto passData contenente isAdminContext (opzionale per backward compatibility)
+ * @returns {string} - Path assoluto del partial
+ */
+getThemePartPath(partName, passData = null) {
+  // Determina quale tema usare in base al contesto
+  // Se passData.isAdminContext === true, usa adminActiveTheme
+  // Altrimenti usa activeTheme (pubblico)
+  const themeName = (passData && passData.isAdminContext === true)
+    ? this.ital8Conf.adminActiveTheme
+    : this.ital8Conf.activeTheme;
+
+  return `${__dirname}/../themes/${themeName}/views/${partName}`;
 }
 ```
 
-**Esempio:**
+**Esempi:**
 ```javascript
-themeSys.getThemePartPath('head.ejs')
-// Ritorna: /home/user/ital8cms/themes/default/views/head.ejs
+// In contesto pubblico (passData.isAdminContext === false o undefined)
+themeSys.getThemePartPath('head.ejs', passData)
+// Ritorna: /home/user/ital8cms/themes/placeholderExample/views/head.ejs
+
+// In contesto admin (passData.isAdminContext === true)
+themeSys.getThemePartPath('head.ejs', passData)
+// Ritorna: /home/user/ital8cms/themes/defaultAdminTheme/views/head.ejs
 ```
 
-### 6.2 Metodo `getAdminThemePartPath(partName)`
+**Vantaggi:**
+- ✅ **API unificata:** Stesso codice funziona in entrambi i contesti
+- ✅ **Selezione automatica:** Il tema corretto viene scelto in base a `passData.isAdminContext`
+- ✅ **Backward compatible:** Se `passData` è null, usa tema pubblico
 
-Risolve il path assoluto di un partial del tema admin.
+### 6.2 Flag `isAdminContext` e `isAdminTheme`
 
-```javascript
-getAdminThemePartPath(partName) {
-  return `${__dirname}/../themes/${this.ital8Conf.adminActiveTheme}/views/${partName}`;
-}
-```
+Il sistema utilizza due flag per gestire i contesti admin e pubblici:
 
-**Esempio:**
-```javascript
-themeSys.getAdminThemePartPath('footer.ejs')
-// Ritorna: /home/user/ital8cms/themes/default/views/footer.ejs
-```
+**`isAdminContext` (in passData):**
+- Indica il contesto di rendering della pagina
+- `false` o `undefined`: Pagina pubblica
+- `true`: Pagina amministrazione
+
+**`isAdminTheme` (in themeConfig.json):**
+- Indica il tipo di tema
+- `false`: Tema pubblico (usabile solo come `activeTheme`)
+- `true`: Tema amministrazione (usabile solo come `adminActiveTheme`)
+
+**Validazione automatica:**
+Il constructor di themeSys valida che:
+- Il tema pubblico (`activeTheme`) NON abbia `isAdminTheme: true`
+- Il tema admin (`adminActiveTheme`) ABBIA `isAdminTheme: true`
+
+Se la validazione fallisce, viene eseguito un fallback automatico al tema appropriato.
 
 ### 6.3 Utilizzo nei Template EJS
 
-**Nelle pagine pubbliche** (es: `/www/index.ejs`):
+**API Unificata - Stesso codice per pagine pubbliche e admin:**
 
 ```ejs
-<%- include(getThemePartPath('head', passData)) %>
-<%- include(getThemePartPath('header', passData)) %>
-<!-- contenuto -->
-<%- include(getThemePartPath('footer', passData)) %>
+<!-- In QUALSIASI pagina (pubblica o admin) -->
+<%- include(passData.themeSys.getThemePartPath('head.ejs', passData)) %>
+<%- include(passData.themeSys.getThemePartPath('header.ejs', passData)) %>
+<%- include(passData.themeSys.getThemePartPath('nav.ejs', passData)) %>
+
+<div class="admin-container">
+    <%- include(passData.themeSys.getThemePartPath('aside.ejs', passData)) %>
+    <%- include(passData.themeSys.getThemePartPath('main.ejs', passData)) %>
+</div>
+
+<%- include(passData.themeSys.getThemePartPath('footer.ejs', passData)) %>
 ```
 
-**Nelle pagine admin** (es: `/core/admin/webPages/index.ejs`):
+**Il sistema seleziona automaticamente il tema corretto:**
 
-```ejs
-<%- include(getAdminThemePartPath('head', passData)) %>
-<%- include(getAdminThemePartPath('header', passData)) %>
-<!-- contenuto admin -->
-<%- include(getAdminThemePartPath('footer', passData)) %>
-```
+- **Pagine pubbliche** (`/www/index.ejs`): `passData.isAdminContext === false`
+  - Usa `ital8Conf.activeTheme` (es: "placeholderExample")
+  - Carica partials da `themes/placeholderExample/views/`
 
-### 6.4 Helper Functions Globali
+- **Pagine admin** (`/core/admin/webPages/index.ejs`): `passData.isAdminContext === true`
+  - Usa `ital8Conf.adminActiveTheme` (es: "defaultAdminTheme")
+  - Carica partials da `themes/defaultAdminTheme/views/`
 
-Le funzioni `getThemePartPath` e `getAdminThemePartPath` sono rese disponibili globalmente tramite passData:
-
-```javascript
-// In index.js
-const passData = {
-  themeSys: themeSys,
-  // ...
-};
-
-// Funzioni helper globali per EJS
-global.getThemePartPath = (partName, passData) => {
-  return passData.themeSys.getThemePartPath(partName);
-};
-
-global.getAdminThemePartPath = (partName, passData) => {
-  return passData.themeSys.getAdminThemePartPath(partName);
-};
-```
+**Vantaggi:**
+- ✅ **Nessun codice duplicato:** Stesso template funziona in entrambi i contesti
+- ✅ **Manutenzione semplificata:** Un solo pattern da ricordare
+- ✅ **Errori ridotti:** Non si rischia di chiamare la funzione sbagliata
 
 ---
 
@@ -539,35 +559,58 @@ hasThemeResources() {
 }
 ```
 
-#### `getThemeResourceUrl(resourcePath)`
+#### `getThemeResourceUrl(resourcePath, passData)`
 
-Restituisce l'URL pubblico di una risorsa del tema.
+Restituisce l'URL pubblico di una risorsa del tema. **Funziona sia per temi pubblici che admin** grazie alla selezione automatica del prefix.
 
 ```javascript
-getThemeResourceUrl(resourcePath) {
+/**
+ * Restituisce l'URL per una risorsa del tema
+ * @param {string} resourcePath - Path relativo della risorsa (es. 'css/theme.css', 'js/theme.js')
+ * @param {object} passData - Oggetto passData contenente isAdminContext (opzionale per backward compatibility)
+ * @returns {string} - URL completo della risorsa (es. '/public-theme-resources/css/theme.css')
+ */
+getThemeResourceUrl(resourcePath, passData = null) {
   // Rimuove eventuali slash iniziali dal path
   const cleanPath = resourcePath.replace(/^\/+/, '');
-  return `/theme-assets/${cleanPath}`;
+
+  // Determina il prefix corretto in base al contesto
+  const prefix = (passData && passData.isAdminContext === true)
+    ? this.ital8Conf.adminThemeResourcesPrefix
+    : this.ital8Conf.publicThemeResourcesPrefix;
+
+  return `/${prefix}/${cleanPath}`;
 }
 ```
 
-**Esempio:**
+**Esempi:**
 ```javascript
-themeSys.getThemeResourceUrl('css/theme.css')
-// Ritorna: /theme-assets/css/theme.css
+// In contesto pubblico
+themeSys.getThemeResourceUrl('css/theme.css', passData)
+// Ritorna: /public-theme-resources/css/theme.css
+
+// In contesto admin
+themeSys.getThemeResourceUrl('css/theme.css', passData)
+// Ritorna: /admin-theme-resources/css/theme.css
 ```
 
 ### 7.4 Utilizzo nei Template
 
 ```ejs
-<!-- Metodo 1: URL diretto -->
-<link rel="stylesheet" href="/theme-assets/css/theme.css">
-<script src="/theme-assets/js/theme.js"></script>
-<img src="/theme-assets/images/logo.png" alt="Logo">
+<!-- Metodo 1: URL tramite getThemeResourceUrl() (RACCOMANDATO) -->
+<link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/theme.css', passData) %>">
+<script src="<%= passData.themeSys.getThemeResourceUrl('js/theme.js', passData) %>"></script>
+<img src="<%= passData.themeSys.getThemeResourceUrl('images/logo.png', passData) %>" alt="Logo">
 
-<!-- Metodo 2: Helper getThemeResourceUrl() -->
-<link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/theme.css') %>">
+<!-- Metodo 2: URL diretto (NON raccomandato, usa prefix hardcoded) -->
+<!-- In pagine pubbliche -->
+<link rel="stylesheet" href="/public-theme-resources/css/theme.css">
+
+<!-- In pagine admin -->
+<link rel="stylesheet" href="/admin-theme-resources/css/theme.css">
 ```
+
+**Raccomandazione:** Usa sempre `getThemeResourceUrl()` con `passData` per garantire la selezione automatica del prefix corretto.
 
 ---
 
@@ -735,8 +778,7 @@ const customCss = themeSys.getPluginCustomCss('simpleAccess', 'login');
 
 | Metodo | Parametri | Ritorno | Descrizione |
 |--------|-----------|---------|-------------|
-| `getThemePartPath(partName)` | `partName`: string | string | Path assoluto partial tema pubblico |
-| `getAdminThemePartPath(partName)` | `partName`: string | string | Path assoluto partial tema admin |
+| `getThemePartPath(partName, passData)` | `partName`: string, `passData`: object (opzionale) | string | Path assoluto partial del tema (pubblico o admin in base a isAdminContext) |
 
 ### 9.2 Metodi Validazione
 
@@ -770,7 +812,7 @@ const customCss = themeSys.getPluginCustomCss('simpleAccess', 'login');
 
 | Metodo | Parametri | Ritorno | Descrizione |
 |--------|-----------|---------|-------------|
-| `getThemeResourceUrl(resourcePath)` | `resourcePath`: string | string | URL pubblico risorsa tema |
+| `getThemeResourceUrl(resourcePath, passData)` | `resourcePath`: string, `passData`: object (opzionale) | string | URL risorsa tema (prefix pubblico o admin in base a isAdminContext) |
 | `getThemeResourcesPath()` | - | string | Path assoluto cartella risorse tema |
 | `hasThemeResources()` | - | boolean | Verifica esistenza cartella risorse tema |
 
@@ -856,6 +898,7 @@ fs.writeFileSync(`${themePath}/themeConfig.json`, JSON.stringify({
   weight: 0,
   followsGlobalStandard: "1.0",
   wwwCustomPath: 0,
+  isAdminTheme: false,  // IMPORTANTE: false per tema pubblico, true per tema admin
   pluginDependency: {},
   nodeModuleDependency: {}
 }, null, 2));
@@ -871,9 +914,9 @@ fs.writeFileSync(`${themePath}/views/head.ejs`, '<!DOCTYPE html>...');
 fs.writeFileSync(`${themePath}/views/header.ejs`, '<body>...');
 fs.writeFileSync(`${themePath}/views/footer.ejs`, '</body></html>');
 
-// 4. Crea almeno un template
+// 4. Crea almeno un template con API unificata
 fs.writeFileSync(`${themePath}/templates/page.template.ejs`,
-  '<%- include(getThemePartPath("head", passData)) %>...');
+  '<%- include(passData.themeSys.getThemePartPath("head.ejs", passData)) %>...');
 
 // 5. Valida tema
 const validation = themeSys.validateTheme('myTheme');
@@ -998,9 +1041,9 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
     <meta charset="UTF-8">
     <title>Il Mio Sito</title>
 
-    <!-- CSS del tema -->
-    <link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/theme.css') %>">
-    <link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/responsive.css') %>">
+    <!-- CSS del tema - API unificata con passData -->
+    <link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/theme.css', passData) %>">
+    <link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/responsive.css', passData) %>">
 
     <!-- Hook plugin -->
     <%- passData.pluginSys.hookPage("head", passData) %>
@@ -1010,12 +1053,12 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
 ```ejs
 <!-- In views/footer.ejs -->
     <footer>
-        <img src="<%= passData.themeSys.getThemeResourceUrl('images/logo.png') %>" alt="Logo">
+        <img src="<%= passData.themeSys.getThemeResourceUrl('images/logo.png', passData) %>" alt="Logo">
         <p>&copy; 2025 Il Mio Sito</p>
     </footer>
 
-    <!-- JavaScript tema -->
-    <script src="<%= passData.themeSys.getThemeResourceUrl('js/theme.js') %>"></script>
+    <!-- JavaScript tema - API unificata con passData -->
+    <script src="<%= passData.themeSys.getThemeResourceUrl('js/theme.js', passData) %>"></script>
 
     <!-- Hook plugin -->
     <%- passData.pluginSys.hookPage("script", passData) %>

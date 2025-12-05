@@ -304,39 +304,80 @@ themes/myTheme/
 │   ├── main.ejs             # Main content
 │   ├── aside.ejs            # Sidebar
 │   └── footer.ejs           # Footer + closing tags
-└── templates/               # Complete page templates
-    └── page.ejs
+├── templates/               # Complete page templates
+│   └── page.ejs
+├── themeResources/          # Static assets (CSS, JS, images, fonts)
+│   ├── css/
+│   │   └── theme.css
+│   └── js/
+│       └── theme.js
+├── themeConfig.json         # Theme configuration (including isAdminTheme flag)
+└── themeDescription.json    # Theme metadata
 ```
 
 ### Theme Configuration
 
-In `ital8Config.json`:
+#### In `ital8Config.json`:
 
 ```json
 {
-  "activeTheme": "default",        // Public site theme
-  "adminActiveTheme": "default",   // Admin panel theme
-  "baseThemePath": "../"           // Relative path base
+  "activeTheme": "placeholderExample",        // Public site theme
+  "adminActiveTheme": "defaultAdminTheme",    // Admin panel theme (must have isAdminTheme: true)
+  "baseThemePath": "../",                     // Relative path base
+
+  // Theme resources URL prefixes
+  "publicThemeResourcesPrefix": "public-theme-resources",
+  "adminThemeResourcesPrefix": "admin-theme-resources"
+}
+```
+
+#### In `themes/myTheme/themeConfig.json`:
+
+```json
+{
+  "active": 1,
+  "isInstalled": 1,
+  "weight": 0,
+
+  // IMPORTANT: Specifies if this is an admin theme
+  // Public themes: isAdminTheme: false
+  // Admin themes: isAdminTheme: true
+  "isAdminTheme": false,  // or true for admin themes
+
+  "pluginDependency": {
+    "bootstrap": "^1.0.0"
+  }
 }
 ```
 
 ### Using Theme Partials in EJS
 
-```ejs
-<%- await include(getThemePartPath('head', passData)) %>
-<%- await include(getThemePartPath('header', passData)) %>
-<%- await include(getThemePartPath('nav', passData)) %>
-<%- await include(getThemePartPath('main', passData)) %>
-<%- await include(getThemePartPath('aside', passData)) %>
-<%- await include(getThemePartPath('footer', passData)) %>
-```
-
-### Admin Theme Partials
+**Unified API - works for both public and admin contexts:**
 
 ```ejs
-<%- await include(getAdminThemePartPath('head', passData)) %>
-<!-- etc. -->
+<%- await include(passData.themeSys.getThemePartPath('head.ejs', passData)) %>
+<%- await include(passData.themeSys.getThemePartPath('header.ejs', passData)) %>
+<%- await include(passData.themeSys.getThemePartPath('nav.ejs', passData)) %>
+<%- await include(passData.themeSys.getThemePartPath('main.ejs', passData)) %>
+<%- await include(passData.themeSys.getThemePartPath('aside.ejs', passData)) %>
+<%- await include(passData.themeSys.getThemePartPath('footer.ejs', passData)) %>
 ```
+
+**The same code works in both public and admin templates!** The system automatically:
+- Uses `activeTheme` (public) when `passData.isAdminContext === false`
+- Uses `adminActiveTheme` (admin) when `passData.isAdminContext === true`
+
+### Theme Resources (CSS, JS, Images)
+
+```ejs
+<!-- Unified API - works for both public and admin contexts -->
+<link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/theme.css', passData) %>">
+<script src="<%= passData.themeSys.getThemeResourceUrl('js/theme.js', passData) %>"></script>
+```
+
+**Automatic URL generation:**
+- Public context: `/public-theme-resources/css/theme.css`
+- Admin context: `/admin-theme-resources/css/theme.css`
 
 ### Plugin Hook Integration
 
@@ -793,16 +834,18 @@ mkdir -p core/admin/webPages/myFeature
 
 2. **Create page** at `core/admin/webPages/myFeature/index.ejs`:
 ```ejs
-<%- await include(getAdminThemePartPath('head', passData)) %>
-<%- await include(getAdminThemePartPath('header', passData)) %>
+<%- await include(passData.themeSys.getThemePartPath('head.ejs', passData)) %>
+<%- await include(passData.themeSys.getThemePartPath('header.ejs', passData)) %>
 
 <main>
   <h1>My Feature</h1>
   <!-- Your content -->
 </main>
 
-<%- await include(getAdminThemePartPath('footer', passData)) %>
+<%- await include(passData.themeSys.getThemePartPath('footer.ejs', passData)) %>
 ```
+
+**Note:** The same `getThemePartPath()` method works for admin pages because `passData.isAdminContext === true` automatically loads the admin theme partials.
 
 3. **Access:** `http://localhost:3000/admin/myFeature/`
 

@@ -104,26 +104,40 @@ const validation = themeSys.validateTheme('myTheme');
 
 ---
 
-### ✅ 3.3 Temi Separati (Pubblico/Admin)
+### ✅ 3.3 Temi Separati (Pubblico/Admin) - ARCHITETTURA UNIFICATA
 
 **File:** `core/themeSys.js` constructor
 
 **Funzionalità:**
-- Tema pubblico: `ital8Conf.activeTheme`
-- Tema admin: `ital8Conf.adminActiveTheme`
-- Validazione separata per entrambi
-- Metodi distinti: `getThemePartPath()` vs `getAdminThemePartPath()`
+- Tema pubblico: `ital8Conf.activeTheme` (deve avere `isAdminTheme: false`)
+- Tema admin: `ital8Conf.adminActiveTheme` (deve avere `isAdminTheme: true`)
+- Validazione separata e controllo tipo tema
+- **API Unificata:** `getThemePartPath(partName, passData)` per entrambi i contesti
+- Selezione automatica del tema basata su `passData.isAdminContext`
 
-**Utilizzo:**
+**Utilizzo (API Unificata):**
 ```ejs
-<!-- Pagine pubbliche -->
-<%- include(getThemePartPath('head', passData)) %>
+<!-- In QUALSIASI pagina (pubblica o admin) - stesso codice -->
+<%- include(passData.themeSys.getThemePartPath('head.ejs', passData)) %>
+<%- include(passData.themeSys.getThemePartPath('header.ejs', passData)) %>
+<%- include(passData.themeSys.getThemePartPath('footer.ejs', passData)) %>
 
-<!-- Pagine admin -->
-<%- include(getAdminThemePartPath('head', passData)) %>
+<!-- Il sistema seleziona automaticamente il tema corretto: -->
+<!-- - Se passData.isAdminContext === true → usa adminActiveTheme -->
+<!-- - Se passData.isAdminContext === false → usa activeTheme -->
 ```
 
-**Test:** ✅ Testato e funzionante
+**Validazione Automatica:**
+- Constructor verifica che tema pubblico NON abbia `isAdminTheme: true`
+- Constructor verifica che tema admin ABBIA `isAdminTheme: true`
+- Fallback automatico se mismatch
+
+**Tema Admin Dedicato:**
+- `defaultAdminTheme`: tema specifico per admin con layout dashboard
+- Layout: sidebar + main content area
+- Partials dedicati: head, header, nav, aside, main, footer
+
+**Test:** ✅ Testato e funzionante con nuova API unificata
 
 ---
 
