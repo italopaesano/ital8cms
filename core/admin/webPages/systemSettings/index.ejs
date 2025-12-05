@@ -1,5 +1,6 @@
 <!-- IMPOSTAZIONI SISTEMA - Editor configurazione ital8Config.json -->
-<!-- NOTA: Usa getThemePartPath() con passData per caricare automaticamente i partial del tema admin
+<!-- NOTA: Usa getThemePartPath() con passData (che contiene isAdminContext: true) -->
+<!--       per caricare automaticamente i partial del tema admin -->
 <%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
 <%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
 
