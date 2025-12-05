@@ -1,0 +1,26 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "name": "defaultAdminTheme",
+  "version": "1.0.0",
+  "description": "Tema predefinito per l'interfaccia di amministrazione di ital8cms",
+  "author": "Italo Paesano",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC",
+  "tags": ["admin", "dashboard", "bootstrap", "default"],
+  "supportedHooks": [
+    "head",
+    "header",
+    "nav",
+    "main",
+    "body",
+    "aside",
+    "footer",
+    "script"
+  ],
+  "features": {
+    "themeResources": true,
+    "pluginCustomization": true,
+    "responsive": true,
+    "darkMode": false
+  }
+}

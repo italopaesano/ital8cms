@@ -75,8 +75,6 @@ const loadJson5 = require('./loadJson5');
  * 6. PATH PARTIALS
  *    - getThemePartPath(partName)
  *      Path assoluto del partial nel tema pubblico (es. 'head.ejs')
- *    - getAdminThemePartPath(partName)
- *      Path assoluto del partial nel tema admin
  *
  * 7. PERSONALIZZAZIONE PLUGIN (Plugin Endpoint Customization)
  *    Permette ai temi di sovrascrivere i template e gli asset degli endpoint dei plugin
@@ -149,6 +147,19 @@ class themeSys{
       }
     }
 
+    // Valida che il tema pubblico NON sia marcato come admin theme
+    try {
+      const publicConfigPath = path.join(__dirname, '../themes', this.ital8Conf.activeTheme, 'themeConfig.json');
+      const publicConfig = loadJson5(publicConfigPath);
+      if (publicConfig.isAdminTheme === true) {
+        console.error(`[themeSys] ⚠️  ERRORE: Il tema pubblico '${this.ital8Conf.activeTheme}' è marcato come admin theme (isAdminTheme: true)!`);
+        console.warn('[themeSys] Un tema admin non può essere usato come tema pubblico. Fallback al tema "default"');
+        this.ital8Conf.activeTheme = 'default';
+      }
+    } catch (error) {
+      console.warn(`[themeSys] Impossibile verificare isAdminTheme per tema pubblico '${this.ital8Conf.activeTheme}': ${error.message}`);
+    }
+
     // Controlla dipendenze del tema pubblico (se pluginSys è disponibile)
     if (this.pluginSys) {
       const publicDeps = this.checkDependencies(this.ital8Conf.activeTheme);
@@ -181,6 +192,26 @@ class themeSys{
           console.log(`[themeSys] ✅ Contenuto tema admin validato correttamente`);
         }
       }
+    }
+
+    // Valida che il tema admin SIA marcato come admin theme
+    try {
+      const adminConfigPath = path.join(__dirname, '../themes', this.ital8Conf.adminActiveTheme, 'themeConfig.json');
+      const adminConfig = loadJson5(adminConfigPath);
+      if (adminConfig.isAdminTheme !== true) {
+        console.error(`[themeSys] ⚠️  ERRORE: Il tema admin '${this.ital8Conf.adminActiveTheme}' NON è marcato come admin theme (isAdminTheme mancante o false)!`);
+        console.warn('[themeSys] Un tema pubblico non può essere usato come tema admin. Fallback al tema "defaultAdminTheme"');
+        this.ital8Conf.adminActiveTheme = 'defaultAdminTheme';
+        // Rivalidazione dopo fallback
+        const fallbackValidation = this.validateTheme('defaultAdminTheme');
+        if (!fallbackValidation.valid) {
+          console.error('[themeSys] ERRORE CRITICO: Tema defaultAdminTheme non trovato o non valido!');
+          console.warn('[themeSys] Ultimo fallback al tema "default" (anche se non è un admin theme)');
+          this.ital8Conf.adminActiveTheme = 'default';
+        }
+      }
+    } catch (error) {
+      console.warn(`[themeSys] Impossibile verificare isAdminTheme per tema admin '${this.ital8Conf.adminActiveTheme}': ${error.message}`);
     }
 
     // Controlla dipendenze del tema admin (se pluginSys è disponibile e tema diverso da pubblico)
@@ -569,15 +600,27 @@ class themeSys{
   /**
    * Restituisce l'URL per una risorsa del tema
    * @param {string} resourcePath - Path relativo della risorsa (es. 'css/theme.css', 'js/theme.js')
-   * @returns {string} - URL completo della risorsa (es. '/theme-assets/css/theme.css')
+   * @param {object} passData - Oggetto passData contenente isAdminContext (opzionale per backward compatibility)
+   * @returns {string} - URL completo della risorsa (es. '/public-theme-resources/css/theme.css')
    * @example
-   * // Nel template EJS:
+   * // Nel template EJS (consigliato - con passData):
+   * // <link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/theme.css', passData) %>">
+   * //
+   * // Vecchio metodo (backward compatible ma deprecato):
    * // <link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/theme.css') %>">
    */
-  getThemeResourceUrl(resourcePath) {
+  getThemeResourceUrl(resourcePath, passData = null) {
     // Rimuove eventuali slash iniziali dal path
     const cleanPath = resourcePath.replace(/^\/+/, '');
-    return `/theme-assets/${cleanPath}`;
+
+    // Determina il prefix corretto in base al contesto
+    // Se passData.isAdminContext === true, usa adminThemeResourcesPrefix
+    // Altrimenti usa publicThemeResourcesPrefix
+    const prefix = (passData && passData.isAdminContext === true)
+      ? this.ital8Conf.adminThemeResourcesPrefix
+      : this.ital8Conf.publicThemeResourcesPrefix;
+
+    return `/${prefix}/${cleanPath}`;
   }
 
   /**
@@ -597,16 +640,29 @@ class themeSys{
     return fs.existsSync(resourcesPath) && fs.statSync(resourcesPath).isDirectory();
   }
 
-  getThemePartPath( partName ){// partName Es footer.ejs header.ejs ecc
-    //console.log(`${__dirname}/themes/${ital8Conf.activeTheme}/views/${partName}`);
-    return `${__dirname}/../themes/${this.ital8Conf.activeTheme}/views/${partName}`;
+  /**
+   * Restituisce il path assoluto di un partial del tema
+   * @param {string} partName - Nome del partial (es. 'head.ejs', 'footer.ejs')
+   * @param {object} passData - Oggetto passData contenente isAdminContext (opzionale per backward compatibility)
+   * @returns {string} - Path assoluto del partial
+   * @example
+   * // Nel template EJS (consigliato - con passData):
+   * // <%- include( passData.themeSys.getThemePartPath('head.ejs', passData) ) %>
+   * //
+   * // Vecchio metodo (backward compatible - senza passData):
+   * // <%- include( passData.themeSys.getThemePartPath('head.ejs') ) %>
+   */
+  getThemePartPath(partName, passData = null) {
+    // Determina quale tema usare in base al contesto
+    // Se passData.isAdminContext === true, usa adminActiveTheme
+    // Altrimenti usa activeTheme (pubblico)
+    const themeName = (passData && passData.isAdminContext === true)
+      ? this.ital8Conf.adminActiveTheme
+      : this.ital8Conf.activeTheme;
+
+    return `${__dirname}/../themes/${themeName}/views/${partName}`;
   }
 
-  // questa funzionesarà chiamata nela Pagine .ejs di amministrazione in core/admin/webPage
-  getAdminThemePartPath( partName ){// partName Es footer.ejs header.ejs ecc
-    //console.log(`${__dirname}/themes/${ital8Conf.activeTheme}/views/${partName}`);
-    return `${__dirname}/../themes/${this.ital8Conf.adminActiveTheme}/views/${partName}`;
-  }
 
   // ============================================================================
   // PLUGIN ENDPOINT CUSTOMIZATION

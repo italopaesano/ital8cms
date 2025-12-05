@@ -1,0 +1,19 @@
+
+<body class="admin-body">
+
+<!-- Header amministrazione -->
+<header class="admin-header">
+    <%- passData.pluginSys.hookPage("header", passData); %>
+</header>
+
+<!-- Navbar amministrazione -->
+<%- include('nav.ejs') %>
+
+<!-- Main content container -->
+<div class="admin-container">
+    <!-- Sidebar -->
+    <%- include('aside.ejs') %>
+
+    <!-- Main content area -->
+    <%- include('main.ejs') %>
+</div>

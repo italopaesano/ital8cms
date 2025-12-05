@@ -5,7 +5,7 @@
   "viewsPrefix": "views",
   "baseThemePath": "../",
   "activeTheme": "placeholderExample",
-  "adminActiveTheme": "default",
+  "adminActiveTheme": "defaultAdminTheme",
   "wwwPath": "/www",
 
   // Browser-side caching configuration for static resources (CSS, JS, images)

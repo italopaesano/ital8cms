@@ -1,7 +1,7 @@
 <!-- TEMPLTE PER LA CREAZIONE DELLEE PAGINE DI AMMINISTRAZIONE  -->
-<!-- ATTENZIONE  nelle pagine di admin sarà chiamata la funzone getAdminThemePartPath() e non la funzione getThemePartPath() -->
-<%- include( passData.themeSys.getAdminThemePartPath( 'head.ejs' ) ) %>
-<%- include( passData.themeSys.getAdminThemePartPath( 'header.ejs' ) ) %>
+<!-- NOTA: Usa getThemePartPath() con passData per caricare automaticamente i partial del tema admin
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
 
 <!-- api prefix -->
 <span id="apiPrefix" style="display: none;"><%- passData.apiPrefix %></span>
@@ -223,4 +223,4 @@
 </script>
 
 
-<%- include( passData.themeSys.getAdminThemePartPath( 'footer.ejs' ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>

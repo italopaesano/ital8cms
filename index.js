@@ -62,6 +62,7 @@ app.use(
         render: async (ctx, next, filePath) => {
           ctx.body = await ejs.renderFile(filePath, {
             passData :{
+              isAdminContext: false, // Flag per distinguere contesto pubblico da admin
               apiPrefix: ital8Conf.apiPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamare in modo corretto e flessibile le api ad esempio dei vari plugin
               //adminPrefix: ital8Conf.adminPrefix,//ATTENZIONE PER NESSUN MOTIVO DOVRÀ ESSERE PASSATO adminPrefix nelle pagine web non di amministrazione per non svelare ad utenti potenzialmente pericolosi la locazion della sezione di admin
               pluginSys: pluginSys, // sistema dei plugin
@@ -117,6 +118,7 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
           render: async (ctx, next, filePath) => {
             ctx.body = await ejs.renderFile(filePath, {
               passData :{
+                isAdminContext: true, // Flag per distinguere contesto admin da pubblico
                 apiPrefix: ital8Conf.apiPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamare in modo corretto e flessibile le api ad esempio dei vari plugin
                 adminPrefix: ital8Conf.adminPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamamare correttamente le pagine di admin con il corretto prefix
                 pluginSys: pluginSys, // sistema dei plugin
