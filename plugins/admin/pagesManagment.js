@@ -785,13 +785,11 @@ function getThemeInfo() {
  * @returns {Array} Array di oggetti route per Koa
  */
 function getRoutes() {
-    const ital8Conf = loadJson5(path.join(__dirname, '../../ital8Config.json'));
-
     return [
         // GET /api/admin/pages - Lista tutte le pagine
         {
             method: 'GET',
-            path: `/${ital8Conf.adminPrefix}/pages`,
+            path: `/pages`,
             handler: async (ctx) => {
                 try {
                     const pages = getPagesList();
@@ -820,7 +818,7 @@ function getRoutes() {
         // GET /api/admin/pages/detail - Dettagli di una pagina (query: path)
         {
             method: 'GET',
-            path: `/${ital8Conf.adminPrefix}/pages/detail`,
+            path: `/pages/detail`,
             handler: async (ctx) => {
                 try {
                     const pagePath = ctx.query.path;
@@ -856,7 +854,7 @@ function getRoutes() {
         // POST /api/admin/pages/create - Crea una nuova pagina
         {
             method: 'POST',
-            path: `/${ital8Conf.adminPrefix}/pages/create`,
+            path: `/pages/create`,
             handler: async (ctx) => {
                 try {
                     const { path: pagePath, content, createMissingFolders } = ctx.request.body;
@@ -892,7 +890,7 @@ function getRoutes() {
         // POST /api/admin/pages/update - Modifica una pagina
         {
             method: 'POST',
-            path: `/${ital8Conf.adminPrefix}/pages/update`,
+            path: `/pages/update`,
             handler: async (ctx) => {
                 try {
                     const { path: pagePath, content } = ctx.request.body;
@@ -937,7 +935,7 @@ function getRoutes() {
         // POST /api/admin/pages/delete - Elimina una pagina
         {
             method: 'POST',
-            path: `/${ital8Conf.adminPrefix}/pages/delete`,
+            path: `/pages/delete`,
             handler: async (ctx) => {
                 try {
                     const { path: pagePath } = ctx.request.body;
@@ -973,7 +971,7 @@ function getRoutes() {
         // POST /api/admin/pages/createFolder - Crea una nuova cartella
         {
             method: 'POST',
-            path: `/${ital8Conf.adminPrefix}/pages/createFolder`,
+            path: `/pages/createFolder`,
             handler: async (ctx) => {
                 try {
                     const { path: folderPath } = ctx.request.body;
@@ -1009,7 +1007,7 @@ function getRoutes() {
         // POST /api/admin/pages/deleteFolder - Elimina una cartella vuota
         {
             method: 'POST',
-            path: `/${ital8Conf.adminPrefix}/pages/deleteFolder`,
+            path: `/pages/deleteFolder`,
             handler: async (ctx) => {
                 try {
                     const { path: folderPath } = ctx.request.body;
@@ -1045,7 +1043,7 @@ function getRoutes() {
         // GET /api/admin/pages/info - Informazioni tema attivo e template disponibili
         {
             method: 'GET',
-            path: `/${ital8Conf.adminPrefix}/pages/info`,
+            path: `/pages/info`,
             handler: async (ctx) => {
                 try {
                     const result = getThemeInfo();
