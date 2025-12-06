@@ -4,10 +4,39 @@
  * Modulo per la gestione delle pagine web (.ejs) nel pannello di amministrazione
  * ============================================================================
  *
+ * RISOLUZIONE DINAMICA PATH WWW:
+ * ================================
+ * Il path della cartella www viene risolto dinamicamente in base al tema attivo.
+ *
+ * CONFIGURAZIONE (in themes/[nomeDelTema]/themeConfig.json):
+ * - wwwCustomPath: 0 = usa /www standard (root progetto)
+ *                  1 = usa themes/[nomeDelTema]/www (cartella www nella root del tema)
+ *
+ * ESEMPIO:
+ * {
+ *   "wwwCustomPath": 0,  // Usa /www standard
+ *   ...
+ * }
+ *
+ * SICUREZZA:
+ * - Solo DUE location ammesse:
+ *   A) /www (root progetto)
+ *   B) themes/[nomeDelTema]/www (www dentro il tema)
+ * - Il path è FISSO e NON configurabile (nessuna variabile stringa)
+ * - Questo previene path traversal e accessi non autorizzati
+ * - L'interfaccia gestisce SOLO file pubblici, MAI file di amministrazione o core
+ *
+ * ============================================================================
+ *
  * INDICE FUNZIONI:
  *
+ * 0. getWwwPath()
+ *    - Risolve dinamicamente il path www in base al tema attivo
+ *    - Legge wwwCustomPath dal themeConfig.json del tema
+ *    - Fallback sicuro a /www in caso di errore
+ *
  * 1. getPagesList()
- *    - Ritorna la lista di tutte le pagine .ejs nella cartella /www
+ *    - Ritorna la lista di tutte le pagine .ejs nella cartella www (dinamica)
  *    - Scansione ricorsiva delle sottocartelle
  *    - Include: path relativo, dimensione file, data modifica
  *
@@ -29,19 +58,23 @@
  * 5. deletePage(pagePath)
  *    - Elimina una pagina .ejs
  *    - Validazione: verifica esistenza prima di eliminare
- *    - Sicurezza: verifica che il path sia dentro /www
+ *    - Sicurezza: verifica che il path sia dentro www
  *
  * 6. createFolder(folderPath)
- *    - Crea una nuova cartella in /www
+ *    - Crea una nuova cartella nella www
  *    - Supporto creazione ricorsiva (mkdir -p)
- *    - Validazione: path deve essere dentro /www
+ *    - Validazione: path deve essere dentro www
  *
  * 7. deleteFolder(folderPath)
- *    - Elimina una cartella vuota in /www
+ *    - Elimina una cartella vuota nella www
  *    - Sicurezza: verifica che sia vuota prima di eliminare
- *    - Validazione: path deve essere dentro /www
+ *    - Validazione: path deve essere dentro www
  *
- * 8. getRoutes()
+ * 8. getFoldersList()
+ *    - Ritorna la lista di tutte le cartelle nella www
+ *    - Scansione ricorsiva
+ *
+ * 9. getRoutes()
  *    - Genera array di route Koa per l'API
  *    - Endpoint disponibili:
  *      GET  /api/admin/pages              -> Lista pagine
@@ -65,16 +98,18 @@ const loadJson5 = require('../../core/loadJson5');
  * LOGICA DI RISOLUZIONE:
  * 1. Legge ital8Config.json per ottenere il tema pubblico attivo (activeTheme)
  * 2. Legge themeConfig.json del tema attivo
- * 3. Se wwwCustomPath è abilitato (1) e wwwCustomPathValue è settato:
- *    - Usa il path custom relativo alla root del tema
- *    - VALIDAZIONE SICUREZZA: il path deve essere esattamente "www" (cartella www dentro il tema)
- * 4. Altrimenti usa il path standard /www dalla root del progetto
+ * 3. Se wwwCustomPath === 1:
+ *    - Usa themes/[nomeDelTema]/www (cartella www dentro la root del tema)
+ *    - Verifica che la directory esista
+ * 4. Se wwwCustomPath === 0 (o non settato):
+ *    - Usa /www standard dalla root del progetto
  *
  * SICUREZZA:
- * - Solo due possibilità ammesse:
- *   A) /www standard (root progetto)
- *   B) themes/[nomeDelTema]/www (www dentro il tema)
- * - Qualsiasi altro path viene rifiutato e si fa fallback al path standard
+ * - Solo DUE possibilità ammesse:
+ *   A) wwwCustomPath: 0 → /www standard (root progetto)
+ *   B) wwwCustomPath: 1 → themes/[nomeDelTema]/www (www dentro il tema)
+ * - Il path è fisso e non configurabile per evitare path traversal e accessi non autorizzati
+ * - Qualsiasi errore porta a fallback sicuro su /www standard
  *
  * @returns {string} Path assoluto alla cartella www da utilizzare
  */
@@ -97,33 +132,22 @@ function getWwwPath() {
         // Carica configurazione tema
         const themeConfig = loadJson5(themeConfigPath);
 
-        // Se wwwCustomPath è abilitato e wwwCustomPathValue è settato
-        if (themeConfig.wwwCustomPath === 1 && themeConfig.wwwCustomPathValue) {
-            // Il path custom deve essere relativo alla root del tema
-            const customPath = path.join(themePath, themeConfig.wwwCustomPathValue);
+        // Se wwwCustomPath è abilitato (1), usa la cartella www dentro il tema
+        if (themeConfig.wwwCustomPath === 1) {
+            // Path fisso: themes/[nomeDelTema]/www
+            const themeWwwPath = path.join(themePath, 'www');
 
-            // VALIDAZIONE SICUREZZA RIGOROSA:
-            // Il path risolto deve essere esattamente themes/[nomeDelTema]/www
-            const normalizedCustomPath = path.normalize(customPath);
-            const expectedThemeWwwPath = path.normalize(path.join(themePath, 'www'));
-
-            if (normalizedCustomPath === expectedThemeWwwPath) {
-                // Verifica che la directory esista
-                if (fs.existsSync(customPath)) {
-                    console.log(`[pagesManagment] Uso www custom del tema: ${customPath}`);
-                    return customPath;
-                } else {
-                    console.warn(`[pagesManagment] Directory www custom non esistente: ${customPath}. Uso path standard.`);
-                    return path.join(__dirname, '../../www');
-                }
+            // Verifica che la directory esista
+            if (fs.existsSync(themeWwwPath)) {
+                console.log(`[pagesManagment] Uso www del tema: ${themeWwwPath}`);
+                return themeWwwPath;
             } else {
-                // Path custom non valido - BLOCCO PER SICUREZZA
-                console.error(`[pagesManagment] SICUREZZA: Path custom non valido per tema ${activeTheme}: "${themeConfig.wwwCustomPathValue}". Solo "www" è ammesso. Uso path standard.`);
+                console.warn(`[pagesManagment] Directory www non trovata nel tema ${activeTheme}. Uso path standard /www`);
                 return path.join(__dirname, '../../www');
             }
         }
 
-        // Default: usa /www standard dalla root del progetto
+        // Default (wwwCustomPath === 0 o non settato): usa /www standard dalla root del progetto
         return path.join(__dirname, '../../www');
 
     } catch (error) {
