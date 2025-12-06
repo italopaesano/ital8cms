@@ -1,5 +1,6 @@
-<!-- GESTIONE PLUGIN - Lista e gestione plugin installati -->
-<!-- NOTA: Usa getThemePartPath() con passData per caricare automaticamente i partial del tema admin
+<!-- TEMPLATE PER LA CREAZIONE DELLE PAGINE DI AMMINISTRAZIONE  -->
+<!-- NOTA: Usa getThemePartPath() con passData (che contiene isAdminContext: true) -->
+<!--       per caricare automaticamente i partial del tema admin -->
 <%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
 <%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
 

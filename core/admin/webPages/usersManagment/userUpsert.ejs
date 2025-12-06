@@ -1,6 +1,6 @@
-<!-- UPSERT -> importato da sql per upsert si indemde una pagina che gestisca sia l'aggiornamentp diun utente che la creazione
- visto che il filo json si indiciza in base alnome utente allora se il nome utente esiste gia si aggiorna altrimenti si crea , il nome eventualmente da aggionare viene passato tramite una query  string-->
-<!-- NOTA: Usa getThemePartPath() con passData per caricare automaticamente i partial del tema admin
+<!-- TEMPLATE PER LA CREAZIONE DELLE PAGINE DI AMMINISTRAZIONE  -->
+<!-- NOTA: Usa getThemePartPath() con passData (che contiene isAdminContext: true) -->
+<!--       per caricare automaticamente i partial del tema admin -->
 <%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
 <%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
 
