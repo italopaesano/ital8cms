@@ -5,6 +5,7 @@ const loadJson5 = require('../../core/loadJson5');
 const pluginsManagment = require('./pluginsManagment');
 const themesManagment = require('./themesManagment');
 const systemSettings = require('./systemSettings');
+const pagesManagment = require('./pagesManagment');
 
 let pluginConfig = loadJson5(path.join(__dirname, 'pluginConfig.json'));// let perchè questa varibile può cambiare di valore
 const pluginName = path.basename(  __dirname );// restituisce il nome della directory che contiene il file corrente e che è anche il nome del plugin
@@ -96,6 +97,12 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
   // Aggiungi route per gestione impostazioni sistema (da systemSettings.js)
   const systemSettingsRoutes = systemSettings.getRoutes();
   systemSettingsRoutes.forEach(route => {
+    routeArray.push(route);
+  });
+
+  // Aggiungi route per gestione pagine web (da pagesManagment.js)
+  const pagesManagmentRoutes = pagesManagment.getRoutes();
+  pagesManagmentRoutes.forEach(route => {
     routeArray.push(route);
   });
 
