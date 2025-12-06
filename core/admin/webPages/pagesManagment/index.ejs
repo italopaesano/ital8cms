@@ -114,11 +114,44 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Crea Nuova Cartella</h5>
+                <h5 class="modal-title"><i class="bi bi-folder-plus"></i> Crea Nuova Cartella</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted">Funzionalità in sviluppo...</p>
+                <form id="createFolderForm">
+                    <div class="mb-3">
+                        <label for="folderPath" class="form-label">
+                            Nome/Percorso Cartella <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="folderPath"
+                               placeholder="es: blog  oppure  blog/images" required>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i>
+                            Puoi creare cartelle annidate usando lo slash (/).
+                            <br>
+                            <strong>Esempi:</strong>
+                            <code>blog</code>,
+                            <code>reserved/docs</code>,
+                            <code>assets/images/gallery</code>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-lightbulb"></i> <strong>Nota:</strong>
+                        Se le cartelle intermedie non esistono, verranno create automaticamente.
+                    </div>
+
+                    <!-- Area messaggi -->
+                    <div id="folderCreateMessage" class="mt-3" style="display: none;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Annulla
+                </button>
+                <button type="button" class="btn btn-primary" onclick="createFolder()" id="btnCreateFolder">
+                    <i class="bi bi-folder-plus"></i> Crea Cartella
+                </button>
             </div>
         </div>
     </div>
@@ -431,8 +464,103 @@ function showCreatePageModal() {
  * Mostra modal crea cartella
  */
 function showCreateFolderModal() {
+    // Reset form
+    document.getElementById('createFolderForm').reset();
+    document.getElementById('folderCreateMessage').style.display = 'none';
+    document.getElementById('btnCreateFolder').disabled = false;
+
+    // Mostra modal
     const modal = new bootstrap.Modal(document.getElementById('createFolderModal'));
     modal.show();
+}
+
+/**
+ * Crea una nuova cartella
+ */
+async function createFolder() {
+    const folderPath = document.getElementById('folderPath').value.trim();
+    const messageDiv = document.getElementById('folderCreateMessage');
+    const btnCreate = document.getElementById('btnCreateFolder');
+
+    // Validazione
+    if (!folderPath) {
+        messageDiv.innerHTML = `
+            <div class="alert alert-warning mb-0">
+                <i class="bi bi-exclamation-triangle"></i>
+                Inserisci il nome della cartella
+            </div>
+        `;
+        messageDiv.style.display = 'block';
+        return;
+    }
+
+    // Validazione caratteri speciali
+    if (/[<>:"|?*\\]/.test(folderPath)) {
+        messageDiv.innerHTML = `
+            <div class="alert alert-danger mb-0">
+                <i class="bi bi-exclamation-triangle"></i>
+                Il nome contiene caratteri non validi: &lt; &gt; : " | ? * \\
+            </div>
+        `;
+        messageDiv.style.display = 'block';
+        return;
+    }
+
+    // Disabilita pulsante durante l'operazione
+    btnCreate.disabled = true;
+    messageDiv.innerHTML = `
+        <div class="alert alert-info mb-0">
+            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+            Creazione in corso...
+        </div>
+    `;
+    messageDiv.style.display = 'block';
+
+    try {
+        const response = await fetch(`/${apiPrefix}/${adminPrefix}/pages/createFolder`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                path: folderPath
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            messageDiv.innerHTML = `
+                <div class="alert alert-success mb-0">
+                    <i class="bi bi-check-circle"></i>
+                    ${result.message}
+                </div>
+            `;
+
+            // Ricarica albero dopo 1 secondo
+            setTimeout(() => {
+                refreshTree();
+                bootstrap.Modal.getInstance(document.getElementById('createFolderModal')).hide();
+            }, 1000);
+        } else {
+            messageDiv.innerHTML = `
+                <div class="alert alert-danger mb-0">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Errore:</strong> ${result.error}
+                </div>
+            `;
+            btnCreate.disabled = false;
+        }
+    } catch (error) {
+        console.error('Errore creazione cartella:', error);
+        messageDiv.innerHTML = `
+            <div class="alert alert-danger mb-0">
+                <i class="bi bi-exclamation-triangle"></i>
+                <strong>Errore di rete:</strong> ${error.message}
+            </div>
+        `;
+        btnCreate.disabled = false;
+    }
 }
 
 /**
@@ -452,11 +580,35 @@ function deletePage(path) {
 }
 
 /**
- * Elimina cartella (placeholder)
+ * Elimina cartella
  */
-function deleteFolder(path) {
-    if (confirm('Eliminare la cartella: ' + path + '?\n\nATTENZIONE: La cartella deve essere vuota.')) {
-        alert('Funzionalità in sviluppo...');
+async function deleteFolder(folderPath) {
+    if (!confirm(`Eliminare la cartella: ${folderPath}?\n\nATTENZIONE: La cartella deve essere vuota.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/${apiPrefix}/${adminPrefix}/pages/deleteFolder`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                path: folderPath
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert(`✓ ${result.message}`);
+            refreshTree();
+        } else {
+            alert(`✗ Errore: ${result.error}`);
+        }
+    } catch (error) {
+        console.error('Errore eliminazione cartella:', error);
+        alert(`✗ Errore di rete: ${error.message}`);
     }
 }
 </script>
