@@ -682,6 +682,105 @@ function getFoldersList() {
 }
 
 /**
+ * Ottiene informazioni sul tema attivo e template disponibili
+ * @returns {object} Oggetto con informazioni tema e template
+ */
+function getThemeInfo() {
+    try {
+        // Leggi configurazione principale
+        const ital8Config = loadJson5(path.join(__dirname, '../../ital8Config.json'));
+        const activeTheme = ital8Config.activeTheme;
+
+        // Leggi configurazione tema
+        const themePath = path.join(__dirname, '../../themes', activeTheme);
+        const themeConfigPath = path.join(themePath, 'themeConfig.json');
+
+        if (!fs.existsSync(themeConfigPath)) {
+            return {
+                success: false,
+                error: `themeConfig.json non trovato per tema ${activeTheme}`
+            };
+        }
+
+        const themeConfig = loadJson5(themeConfigPath);
+
+        // Determina path www
+        const wwwCustomPath = themeConfig.wwwCustomPath || 0;
+        let wwwPath;
+        let wwwPathType;
+
+        if (wwwCustomPath === 1) {
+            wwwPath = path.join(themePath, 'www');
+            wwwPathType = 'custom';
+        } else {
+            wwwPath = path.join(__dirname, '../../www');
+            wwwPathType = 'standard';
+        }
+
+        // Cerca template disponibili nel tema
+        const templatesPath = path.join(themePath, 'templates');
+        let templates = [];
+
+        if (fs.existsSync(templatesPath)) {
+            const files = fs.readdirSync(templatesPath);
+            templates = files
+                .filter(file => file.endsWith('.template.ejs'))
+                .map(file => {
+                    const templatePath = path.join(templatesPath, file);
+                    const stat = fs.statSync(templatePath);
+
+                    // Nome template senza estensione .template.ejs
+                    const templateName = file.replace('.template.ejs', '');
+
+                    return {
+                        filename: file,
+                        name: templateName,
+                        displayName: templateName.charAt(0).toUpperCase() + templateName.slice(1),
+                        path: templatePath,
+                        size: stat.size,
+                        modified: stat.mtime
+                    };
+                });
+        }
+
+        // Leggi descrizione tema se esiste
+        const themeDescPath = path.join(themePath, 'themeDescription.json');
+        let themeDescription = null;
+
+        if (fs.existsSync(themeDescPath)) {
+            themeDescription = loadJson5(themeDescPath);
+        }
+
+        return {
+            success: true,
+            theme: {
+                name: activeTheme,
+                description: themeDescription,
+                config: {
+                    wwwCustomPath: wwwCustomPath,
+                    wwwPathType: wwwPathType,
+                    isAdminTheme: themeConfig.isAdminTheme || false
+                },
+                paths: {
+                    themePath: themePath,
+                    wwwPath: wwwPath,
+                    templatesPath: templatesPath
+                }
+            },
+            templates: templates,
+            templatesCount: templates.length
+        };
+
+    } catch (error) {
+        console.error('[pagesManagment] Errore in getThemeInfo:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
+/**
  * Genera le route API per la gestione delle pagine
  * @returns {Array} Array di oggetti route per Koa
  */
@@ -941,6 +1040,31 @@ function getRoutes() {
                     };
                 }
             }
+        },
+
+        // GET /api/admin/pages/info - Informazioni tema attivo e template disponibili
+        {
+            method: 'GET',
+            path: `/${ital8Conf.adminPrefix}/pages/info`,
+            handler: async (ctx) => {
+                try {
+                    const result = getThemeInfo();
+
+                    if (result.success) {
+                        ctx.body = result;
+                    } else {
+                        ctx.status = 500;
+                        ctx.body = result;
+                    }
+                } catch (error) {
+                    console.error('[pagesManagment] Errore GET /pages/info:', error);
+                    ctx.status = 500;
+                    ctx.body = {
+                        success: false,
+                        error: error.message
+                    };
+                }
+            }
         }
     ];
 }
@@ -954,5 +1078,6 @@ module.exports = {
     createFolder,
     deleteFolder,
     getFoldersList,
+    getThemeInfo,
     getRoutes
 };
