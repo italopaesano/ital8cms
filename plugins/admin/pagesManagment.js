@@ -59,8 +59,83 @@ const fs = require('fs');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
 
-// Percorso alla cartella www (web root)
-const WWW_PATH = path.join(__dirname, '../../www');
+/**
+ * Risolve dinamicamente il percorso della cartella www in base alla configurazione del tema attivo
+ *
+ * LOGICA DI RISOLUZIONE:
+ * 1. Legge ital8Config.json per ottenere il tema pubblico attivo (activeTheme)
+ * 2. Legge themeConfig.json del tema attivo
+ * 3. Se wwwCustomPath è abilitato (1) e wwwCustomPathValue è settato:
+ *    - Usa il path custom relativo alla root del tema
+ *    - VALIDAZIONE SICUREZZA: il path deve essere esattamente "www" (cartella www dentro il tema)
+ * 4. Altrimenti usa il path standard /www dalla root del progetto
+ *
+ * SICUREZZA:
+ * - Solo due possibilità ammesse:
+ *   A) /www standard (root progetto)
+ *   B) themes/[nomeDelTema]/www (www dentro il tema)
+ * - Qualsiasi altro path viene rifiutato e si fa fallback al path standard
+ *
+ * @returns {string} Path assoluto alla cartella www da utilizzare
+ */
+function getWwwPath() {
+    try {
+        // Carica configurazione globale
+        const ital8Config = loadJson5(path.join(__dirname, '../../ital8Config.json'));
+        const activeTheme = ital8Config.activeTheme;
+
+        // Path del tema attivo
+        const themePath = path.join(__dirname, '../../themes', activeTheme);
+        const themeConfigPath = path.join(themePath, 'themeConfig.json');
+
+        // Verifica esistenza themeConfig.json
+        if (!fs.existsSync(themeConfigPath)) {
+            console.warn(`[pagesManagment] themeConfig.json non trovato per tema ${activeTheme}. Uso path standard /www`);
+            return path.join(__dirname, '../../www');
+        }
+
+        // Carica configurazione tema
+        const themeConfig = loadJson5(themeConfigPath);
+
+        // Se wwwCustomPath è abilitato e wwwCustomPathValue è settato
+        if (themeConfig.wwwCustomPath === 1 && themeConfig.wwwCustomPathValue) {
+            // Il path custom deve essere relativo alla root del tema
+            const customPath = path.join(themePath, themeConfig.wwwCustomPathValue);
+
+            // VALIDAZIONE SICUREZZA RIGOROSA:
+            // Il path risolto deve essere esattamente themes/[nomeDelTema]/www
+            const normalizedCustomPath = path.normalize(customPath);
+            const expectedThemeWwwPath = path.normalize(path.join(themePath, 'www'));
+
+            if (normalizedCustomPath === expectedThemeWwwPath) {
+                // Verifica che la directory esista
+                if (fs.existsSync(customPath)) {
+                    console.log(`[pagesManagment] Uso www custom del tema: ${customPath}`);
+                    return customPath;
+                } else {
+                    console.warn(`[pagesManagment] Directory www custom non esistente: ${customPath}. Uso path standard.`);
+                    return path.join(__dirname, '../../www');
+                }
+            } else {
+                // Path custom non valido - BLOCCO PER SICUREZZA
+                console.error(`[pagesManagment] SICUREZZA: Path custom non valido per tema ${activeTheme}: "${themeConfig.wwwCustomPathValue}". Solo "www" è ammesso. Uso path standard.`);
+                return path.join(__dirname, '../../www');
+            }
+        }
+
+        // Default: usa /www standard dalla root del progetto
+        return path.join(__dirname, '../../www');
+
+    } catch (error) {
+        console.error(`[pagesManagment] Errore nella risoluzione del path www:`, error);
+        // Fallback sicuro al path standard in caso di errore
+        return path.join(__dirname, '../../www');
+    }
+}
+
+// Percorso alla cartella www (web root) - risolto dinamicamente
+// NOTA: Questo viene chiamato ad ogni accesso per rispettare eventuali cambi di tema
+// Se servono performance, si può cachare e invalidare al cambio tema
 
 /**
  * Funzione helper: scansione ricorsiva di una directory per trovare file .ejs
@@ -107,12 +182,15 @@ function scanDirectory(dirPath, basePath) {
  * @returns {boolean} true se valido, false altrimenti
  */
 function isPathSafe(filePath) {
+    // Ottieni il path www corrente (dinamico in base al tema)
+    const wwwPath = getWwwPath();
+
     // Risolvi path assoluto
-    const absolutePath = path.join(WWW_PATH, filePath);
+    const absolutePath = path.join(wwwPath, filePath);
     const normalizedPath = path.normalize(absolutePath);
 
-    // Verifica che il path normalizzato sia dentro WWW_PATH
-    return normalizedPath.startsWith(WWW_PATH);
+    // Verifica che il path normalizzato sia dentro wwwPath
+    return normalizedPath.startsWith(wwwPath);
 }
 
 /**
@@ -121,7 +199,8 @@ function isPathSafe(filePath) {
  */
 function getPagesList() {
     try {
-        const pages = scanDirectory(WWW_PATH, WWW_PATH);
+        const wwwPath = getWwwPath();
+        const pages = scanDirectory(wwwPath, wwwPath);
 
         // Ordina per path alfabetico
         pages.sort((a, b) => a.path.localeCompare(b.path));
@@ -148,7 +227,8 @@ function getPageDetails(pagePath) {
             };
         }
 
-        const absolutePath = path.join(WWW_PATH, pagePath);
+        const wwwPath = getWwwPath();
+        const absolutePath = path.join(wwwPath, pagePath);
 
         // Verifica esistenza
         if (!fs.existsSync(absolutePath)) {
@@ -227,7 +307,8 @@ function createPage(pagePath, content = '', createMissingFolders = true) {
             };
         }
 
-        const absolutePath = path.join(WWW_PATH, pagePath);
+        const wwwPath = getWwwPath();
+        const absolutePath = path.join(wwwPath, pagePath);
 
         // Verifica che NON esista già
         if (fs.existsSync(absolutePath)) {
@@ -302,7 +383,8 @@ function updatePage(pagePath, content) {
             };
         }
 
-        const absolutePath = path.join(WWW_PATH, pagePath);
+        const wwwPath = getWwwPath();
+        const absolutePath = path.join(wwwPath, pagePath);
 
         // Verifica esistenza
         if (!fs.existsSync(absolutePath)) {
@@ -358,7 +440,8 @@ function deletePage(pagePath) {
             };
         }
 
-        const absolutePath = path.join(WWW_PATH, pagePath);
+        const wwwPath = getWwwPath();
+        const absolutePath = path.join(wwwPath, pagePath);
 
         // Verifica esistenza
         if (!fs.existsSync(absolutePath)) {
@@ -417,7 +500,8 @@ function createFolder(folderPath) {
             };
         }
 
-        const absolutePath = path.join(WWW_PATH, folderPath);
+        const wwwPath = getWwwPath();
+        const absolutePath = path.join(wwwPath, folderPath);
 
         // Verifica che NON esista già
         if (fs.existsSync(absolutePath)) {
@@ -479,7 +563,8 @@ function deleteFolder(folderPath) {
             };
         }
 
-        const absolutePath = path.join(WWW_PATH, folderPath);
+        const wwwPath = getWwwPath();
+        const absolutePath = path.join(wwwPath, folderPath);
 
         // Verifica esistenza
         if (!fs.existsSync(absolutePath)) {
@@ -558,7 +643,8 @@ function getFoldersList() {
             }
         }
 
-        scanFolders(WWW_PATH, WWW_PATH);
+        const wwwPath = getWwwPath();
+        scanFolders(wwwPath, wwwPath);
 
         // Ordina alfabeticamente
         folders.sort((a, b) => a.path.localeCompare(b.path));
@@ -587,6 +673,7 @@ function getRoutes() {
                 try {
                     const pages = getPagesList();
                     const folders = getFoldersList();
+                    const wwwPath = getWwwPath();
 
                     ctx.body = {
                         success: true,
@@ -594,7 +681,7 @@ function getRoutes() {
                         folders: folders,
                         pagesCount: pages.length,
                         foldersCount: folders.length,
-                        wwwPath: WWW_PATH
+                        wwwPath: wwwPath
                     };
                 } catch (error) {
                     console.error('[pagesManagment] Errore GET /pages:', error);
