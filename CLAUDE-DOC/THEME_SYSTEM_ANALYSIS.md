@@ -1,8 +1,8 @@
 # Analisi Sistema dei Temi - ital8cms
 
-**Data Ultimo Aggiornamento:** 2025-11-26
+**Data Ultimo Aggiornamento:** 2025-12-06
 **Versione CMS:** 0.0.1-alpha.0
-**Versione Documento:** 2.0.0
+**Versione Documento:** 2.1.0
 
 ---
 
@@ -314,7 +314,12 @@ getHooksPage(section, passData) {
 ```json
 {
   "followsGlobalStandard": "1.0",  // o false
-  "wwwCustomPath": 0  // 0 = /www/ root | 1 = themes/tema/www/
+
+  // Custom www path configuration
+  // - wwwCustomPath: 0 = usa /www standard (root progetto)
+  //                  1 = usa themes/[nomeDelTema]/www (cartella www nella root del tema)
+  // IMPORTANTE: Solo queste due location sono ammesse per motivi di sicurezza
+  "wwwCustomPath": 0
 }
 ```
 
@@ -323,11 +328,11 @@ getHooksPage(section, passData) {
 2. Struttura HTML valida
 3. Seguire esempio temi default/baseExampleTheme
 
-**Stato:** 📋 Definito, non ancora implementato
+**Stato:** 🚧 In sviluppo (logica `wwwCustomPath` implementata in `plugins/admin/pagesManagment.js`)
 
 **TODO:**
 - Aggiungere validazione `followsGlobalStandard` in `validateTheme()`
-- Implementare logica `wwwCustomPath` per salvaggio pagine
+- ✅ Implementare logica `wwwCustomPath` per salvaggio pagine (completato in pagesManagment.js)
 - Aggiungere warning in admin per temi non-standard
 
 ---
@@ -432,11 +437,13 @@ getHooksPage(section, passData) {
 
 **Descrizione:** Implementare logica per salvare pagine in `/www/` o `themes/tema/www/`
 
+**Stato:** ✅ Implementato in `plugins/admin/pagesManagment.js` (funzione `getWwwPath()`)
+
 **Requisiti:**
-- Leggere `wwwCustomPath` da `config-theme.json`
-- Creare directory `themes/tema/www/` se necessario
-- Helper function per path corretto
-- **NUOVO:** Creare `/www/README.txt` automaticamente quando si attiva tema con `wwwCustomPath: 1`
+- ✅ Leggere `wwwCustomPath` da `themeConfig.json` (implementato)
+- ✅ Risoluzione dinamica del path www basata sul tema attivo (implementato)
+- ✅ Helper function per path corretto (`getWwwPath()` implementato)
+- 📋 **TODO:** Creare `/www/README.txt` automaticamente quando si attiva tema con `wwwCustomPath: 1`
 
 **Contenuto README.txt:**
 ```
@@ -457,12 +464,12 @@ finché rimane attivo un tema con wwwCustomPath: 1.
 Per tornare alla cartella /www/ root, attivare un tema con wwwCustomPath: 0.
 ```
 
-**File da creare/modificare:**
-- Nuovo modulo/funzione per gestione pagine
-- Integrazione con sistema admin
-- Hook all'attivazione tema per creare README.txt
+**File creati/modificati:**
+- ✅ `plugins/admin/pagesManagment.js` - Modulo gestione pagine con supporto wwwCustomPath
+- ✅ `plugins/admin/main.js` - Integrazione routes
+- 📋 TODO: Hook all'attivazione tema per creare README.txt
 
-**Effort:** 5-7 ore (aumentato per README.txt)
+**Effort:** 5-7 ore → 3-4 ore completate, 1-2 ore rimanenti per README.txt automatico
 
 ---
 
@@ -634,6 +641,23 @@ core/admin/webPages/pageManagement/
 
 ## 7. Changelog
 
+### [2.1.0] - 2025-12-06
+
+**Changed:**
+- ✅ Semplificato sistema `wwwCustomPath`: rimossa variabile `wwwCustomPathValue` (era ridondante)
+- ✅ Aggiornati tutti i file `themeConfig.json` (5 temi) con configurazione semplificata
+- ✅ `wwwCustomPath` ora è solo un flag booleano: 0 = /www standard, 1 = themes/[tema]/www
+- ✅ Aggiornata documentazione con commenti dettagliati sulla sicurezza
+
+**Implemented:**
+- ✅ Implementata gestione dinamica www path in `plugins/admin/pagesManagment.js`
+- ✅ Creata funzione `getWwwPath()` che legge configurazione tema attivo
+- ✅ Implementata sicurezza path (validazione contro path traversal)
+
+**Fixed:**
+- ✅ Risolto problema hardcoded path in pagesManagment.js
+- ✅ Sistema ora rispetta configurazione tema per location www
+
 ### [2.0.0] - 2025-11-26
 
 **Added:**
@@ -708,8 +732,8 @@ core/admin/webPages/pageManagement/
 
 **Fine documento**
 
-**Prossimo aggiornamento previsto:** Dopo implementazione feature 5.1, 5.2, 5.3 e 6.3
+**Prossimo aggiornamento previsto:** Dopo implementazione feature 5.1, 5.3, 6.1 e 6.2
 
-**Versione:** 2.0.0
-**Data:** 2025-11-26
+**Versione:** 2.1.0
+**Data:** 2025-12-06
 **Autore:** AI Assistant per ital8cms
