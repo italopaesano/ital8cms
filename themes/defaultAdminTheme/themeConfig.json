@@ -3,7 +3,12 @@
   "active": 1,
   "isInstalled": 1,
   "weight": 0,
-  "wwwCustomPath": 1,
+
+  // Custom www path configuration
+  // - wwwCustomPath: 0 = usa /www standard (root progetto)
+  //                  1 = usa themes/[nomeDelTema]/www (cartella www nella root del tema)
+  // IMPORTANTE: Solo queste due location sono ammesse per motivi di sicurezza
+  "wwwCustomPath": 0,
 
   // Tema amministrativo - DEVE essere true per temi admin
   // I temi admin sono usati solo nelle pagine di amministrazione

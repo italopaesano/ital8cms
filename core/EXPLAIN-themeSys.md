@@ -1,7 +1,7 @@
 # Sistema dei Temi - Documentazione Tecnica
 
-**Versione:** 2.0.0
-**Data:** 2025-11-26
+**Versione:** 2.1.0
+**Data:** 2025-12-06
 **File Sorgente:** `core/themeSys.js`
 
 ---
@@ -897,7 +897,13 @@ fs.writeFileSync(`${themePath}/themeConfig.json`, JSON.stringify({
   isInstalled: 1,
   weight: 0,
   followsGlobalStandard: "1.0",
+
+  // Custom www path configuration
+  // - wwwCustomPath: 0 = usa /www standard (root progetto)
+  //                  1 = usa themes/[nomeDelTema]/www (cartella www nella root del tema)
+  // IMPORTANTE: Solo queste due location sono ammesse per motivi di sicurezza
   wwwCustomPath: 0,
+
   isAdminTheme: false,  // IMPORTANTE: false per tema pubblico, true per tema admin
   pluginDependency: {},
   nodeModuleDependency: {}
@@ -957,6 +963,8 @@ async function activateTheme(themeName) {
   const themeConfig = JSON.parse(fs.readFileSync(themeConfigPath, 'utf8'));
 
   // 4. Gestisci wwwCustomPath
+  // wwwCustomPath: 0 = usa /www standard (root progetto)
+  // wwwCustomPath: 1 = usa themes/[nomeDelTema]/www (cartella www nella root del tema)
   if (themeConfig.wwwCustomPath === 1) {
     // Crea README.txt in /www/ root per avvisare del cambio location
     const readmePath = path.join(__dirname, 'www', 'README.txt');
@@ -1116,6 +1124,12 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
 
 **Fine documentazione tecnica**
 
-**Versione:** 2.0.0
-**Data:** 2025-11-26
+**Versione:** 2.1.0
+**Data:** 2025-12-06
 **Autore:** AI Assistant per ital8cms
+
+**Changelog v2.1.0 (2025-12-06):**
+- Semplificato sistema wwwCustomPath: rimossa variabile wwwCustomPathValue (era ridondante)
+- wwwCustomPath ora è solo un flag booleano: 0 = /www standard, 1 = themes/[tema]/www
+- Aggiornata documentazione con commenti dettagliati sulla sicurezza
+- Implementata gestione dinamica www path in plugins/admin/pagesManagment.js
