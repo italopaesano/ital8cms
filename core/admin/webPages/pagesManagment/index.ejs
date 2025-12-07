@@ -94,16 +94,79 @@
     </div>
 </div>
 
-<!-- Modal Crea Pagina -->
-<div class="modal fade" id="createPageModal" tabindex="-1">
-    <div class="modal-dialog">
+<!-- Modal Page Editor (Creazione/Modifica Pagina) -->
+<div class="modal fade" id="pageEditorModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Crea Nuova Pagina</h5>
+                <h5 class="modal-title">
+                    <i class="bi bi-file-earmark-code"></i>
+                    <span id="pageEditorTitle">Editor Pagina</span>
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted">Funzionalità in sviluppo...</p>
+                <form id="pageEditorForm">
+
+                    <!-- Sezione 1: Template (solo in modalità create) -->
+                    <div id="templateSection">
+                        <div class="mb-3">
+                            <label for="templateSelect" class="form-label">
+                                Template <span class="text-danger">*</span>
+                            </label>
+                            <select class="form-select" id="templateSelect" required>
+                                <option value="">-- Seleziona un template --</option>
+                                <!-- Popolato dinamicamente -->
+                            </select>
+                            <div class="form-text" id="templateInfo"></div>
+                        </div>
+                    </div>
+
+                    <!-- Sezione 2: Path (solo in modalità create) -->
+                    <div id="pathSection">
+                        <div class="mb-3">
+                            <label for="pagePath" class="form-label">
+                                Percorso/Nome File <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" id="pagePath"
+                                   placeholder="es: about.ejs  oppure  blog/post-1.ejs" required>
+                            <div class="form-text">
+                                Path relativo alla directory www. Deve terminare con .ejs
+                            </div>
+                            <div class="form-text text-primary" id="fullPathPreview"></div>
+                        </div>
+                    </div>
+
+                    <!-- Info pagina in modifica -->
+                    <div id="editInfo" style="display: none;">
+                        <div class="alert alert-info">
+                            <strong>Pagina:</strong> <span id="editPagePath"></span><br>
+                            <strong>Tema:</strong> <span id="editTheme"></span><br>
+                            <strong>Template:</strong> <span id="editTemplate"></span>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Sezione 3: Campi Placeholder (dinamici) -->
+                    <div id="placeholderFieldsSection">
+                        <h6 class="mb-3">Compila i campi:</h6>
+                        <div id="placeholderFieldsContainer">
+                            <!-- Campi generati dinamicamente -->
+                        </div>
+                    </div>
+
+                    <div id="pageEditorMessage" class="mt-3" style="display: none;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Annulla
+                </button>
+                <button type="button" class="btn btn-primary" id="btnSavePageEditor">
+                    <i class="bi bi-save"></i>
+                    <span id="btnSaveText">Salva</span>
+                </button>
             </div>
         </div>
     </div>
@@ -162,6 +225,10 @@
 let themeData = null;
 let pagesData = null;
 
+// Variabili globali per Page Editor
+let pageEditorMode = 'create'; // 'create' o 'edit'
+let currentEditPath = null;
+
 // Carica informazioni tema all'avvio
 document.addEventListener('DOMContentLoaded', function() {
     loadThemeInfo();
@@ -176,6 +243,25 @@ document.addEventListener('DOMContentLoaded', function() {
             return false;
         });
     }
+
+    // Event listener per il pulsante salva page editor
+    const btnSavePageEditor = document.getElementById('btnSavePageEditor');
+    if (btnSavePageEditor) {
+        btnSavePageEditor.addEventListener('click', savePageEditor);
+    }
+
+    // Preview path completo durante digitazione
+    const pagePathInput = document.getElementById('pagePath');
+    if (pagePathInput) {
+        pagePathInput.addEventListener('input', function() {
+            const preview = document.getElementById('fullPathPreview');
+            if (this.value && window.themeInfoData) {
+                preview.textContent = `Path completo: ${window.themeInfoData.theme.paths.wwwPath}/${this.value}`;
+            } else {
+                preview.textContent = '';
+            }
+        });
+    }
 });
 
 /**
@@ -188,6 +274,7 @@ async function loadThemeInfo() {
 
         if (data.success) {
             themeData = data;
+            window.themeInfoData = data; // Salva globalmente per page editor
             renderThemeInfo(data);
             renderTemplates(data);
         } else {
@@ -469,8 +556,7 @@ function refreshTree() {
  * Mostra modal crea pagina
  */
 function showCreatePageModal() {
-    const modal = new bootstrap.Modal(document.getElementById('createPageModal'));
-    modal.show();
+    showPageEditor('create');
 }
 
 /**
@@ -601,10 +687,10 @@ async function createFolder() {
 }
 
 /**
- * Modifica pagina (placeholder)
+ * Modifica pagina
  */
 function editPage(path) {
-    alert('Modifica pagina: ' + path + '\n\nFunzionalità in sviluppo...');
+    showPageEditor('edit', path);
 }
 
 /**
@@ -646,6 +732,381 @@ async function deleteFolder(folderPath) {
     } catch (error) {
         console.error('Errore eliminazione cartella:', error);
         alert(`✗ Errore di rete: ${error.message}`);
+    }
+}
+
+// ============================================================================
+// PAGE EDITOR FUNCTIONS
+// ============================================================================
+
+/**
+ * Mostra il modal pageEditor in modalità create o edit
+ * @param {string} mode - 'create' o 'edit'
+ * @param {string} pagePath - Path della pagina (solo per mode='edit')
+ */
+async function showPageEditor(mode = 'create', pagePath = null) {
+    pageEditorMode = mode;
+    currentEditPath = pagePath;
+
+    // Reset form e messaggi
+    document.getElementById('pageEditorForm').reset();
+    document.getElementById('pageEditorMessage').style.display = 'none';
+    document.getElementById('placeholderFieldsContainer').innerHTML = '';
+    document.getElementById('btnSavePageEditor').disabled = false;
+
+    if (mode === 'create') {
+        // Modalità creazione
+        document.getElementById('pageEditorTitle').textContent = 'Crea Nuova Pagina';
+        document.getElementById('btnSaveText').textContent = 'Crea Pagina';
+
+        // Mostra sezioni template e path
+        document.getElementById('templateSection').style.display = 'block';
+        document.getElementById('pathSection').style.display = 'block';
+        document.getElementById('editInfo').style.display = 'none';
+
+        // Popola la lista dei template
+        populateTemplateSelect();
+
+    } else if (mode === 'edit') {
+        // Modalità modifica
+        document.getElementById('pageEditorTitle').textContent = 'Modifica Pagina';
+        document.getElementById('btnSaveText').textContent = 'Salva Modifiche';
+
+        // Nascondi sezioni template e path
+        document.getElementById('templateSection').style.display = 'none';
+        document.getElementById('pathSection').style.display = 'none';
+        document.getElementById('editInfo').style.display = 'block';
+
+        // Carica i dati della pagina esistente
+        await loadPageForEdit(pagePath);
+    }
+
+    // Mostra modal
+    const modal = new bootstrap.Modal(document.getElementById('pageEditorModal'));
+    modal.show();
+}
+
+/**
+ * Popola il select dei template
+ */
+function populateTemplateSelect() {
+    const templateSelect = document.getElementById('templateSelect');
+    templateSelect.innerHTML = '<option value="">-- Seleziona un template --</option>';
+
+    // Usa i dati già caricati da loadThemeInfo()
+    if (window.themeInfoData && window.themeInfoData.templates) {
+        window.themeInfoData.templates.forEach(template => {
+            const option = document.createElement('option');
+            option.value = template.filename;
+            option.textContent = template.displayName;
+            templateSelect.appendChild(option);
+        });
+    }
+
+    // Quando si seleziona un template, carica i suoi placeholder
+    templateSelect.addEventListener('change', async function() {
+        const selectedTemplate = this.value;
+        if (selectedTemplate) {
+            await loadTemplateFields(selectedTemplate, window.themeInfoData.theme.name);
+        } else {
+            document.getElementById('placeholderFieldsContainer').innerHTML = '';
+            document.getElementById('templateInfo').textContent = '';
+        }
+    }, { once: false });
+}
+
+/**
+ * Carica i campi placeholder di un template
+ * @param {string} template - Nome del template
+ * @param {string} theme - Nome del tema
+ */
+async function loadTemplateFields(template, theme) {
+    const container = document.getElementById('placeholderFieldsContainer');
+    const infoDiv = document.getElementById('templateInfo');
+
+    container.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm"></div> Caricamento campi...</div>';
+
+    try {
+        const response = await fetch(
+            `/${apiPrefix}/${adminPrefix}/pages/parseTemplate?template=${encodeURIComponent(template)}&theme=${encodeURIComponent(theme)}`
+        );
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Mostra info template
+            infoDiv.innerHTML = `<i class="bi bi-info-circle"></i> ${result.placeholdersCount} campi trovati nel template`;
+
+            // Renderizza i campi
+            renderPlaceholderFields(result.placeholders);
+
+        } else {
+            container.innerHTML = `<div class="alert alert-danger">${result.error}</div>`;
+            infoDiv.textContent = '';
+        }
+
+    } catch (error) {
+        console.error('Errore caricamento campi template:', error);
+        container.innerHTML = `<div class="alert alert-danger">Errore: ${error.message}</div>`;
+        infoDiv.textContent = '';
+    }
+}
+
+/**
+ * Carica una pagina esistente per la modifica
+ * @param {string} pagePath - Path della pagina
+ */
+async function loadPageForEdit(pagePath) {
+    const container = document.getElementById('placeholderFieldsContainer');
+
+    container.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm"></div> Caricamento pagina...</div>';
+
+    try {
+        const response = await fetch(
+            `/${apiPrefix}/${adminPrefix}/pages/parsePage?path=${encodeURIComponent(pagePath)}`
+        );
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Mostra info pagina
+            document.getElementById('editPagePath').textContent = result.pagePath;
+            document.getElementById('editTheme').textContent = result.theme || 'N/A';
+            document.getElementById('editTemplate').textContent = result.template || 'N/A';
+
+            // Renderizza i campi con i valori correnti
+            renderPlaceholderFields(result.placeholders, result.currentValues);
+
+        } else {
+            container.innerHTML = `<div class="alert alert-danger">${result.error}</div>`;
+        }
+
+    } catch (error) {
+        console.error('Errore caricamento pagina:', error);
+        container.innerHTML = `<div class="alert alert-danger">Errore: ${error.message}</div>`;
+    }
+}
+
+/**
+ * Renderizza i campi placeholder nel form
+ * @param {Array} placeholders - Array di oggetti placeholder
+ * @param {Object} values - Valori correnti (opzionale, per modalità edit)
+ */
+function renderPlaceholderFields(placeholders, values = {}) {
+    const container = document.getElementById('placeholderFieldsContainer');
+    container.innerHTML = '';
+
+    if (placeholders.length === 0) {
+        container.innerHTML = '<div class="alert alert-warning">Nessun campo placeholder trovato in questo template</div>';
+        return;
+    }
+
+    placeholders.forEach((ph, index) => {
+        const fieldHtml = createFieldHtml(ph, values[ph.name] || '');
+        container.insertAdjacentHTML('beforeend', fieldHtml);
+    });
+}
+
+/**
+ * Crea l'HTML per un singolo campo placeholder
+ * @param {Object} ph - Oggetto placeholder
+ * @param {string} currentValue - Valore corrente (per edit mode)
+ * @returns {string} HTML del campo
+ */
+function createFieldHtml(ph, currentValue = '') {
+    const required = ph.required ? '<span class="text-danger">*</span>' : '';
+    const description = ph.description ? `<div class="form-text">${escapeHtml(ph.description)}</div>` : '';
+
+    let inputHtml = '';
+
+    switch (ph.type) {
+        case 'text':
+            const maxlength = ph.maxlength ? `maxlength="${ph.maxlength}"` : '';
+            inputHtml = `
+                <input type="text"
+                       class="form-control"
+                       id="ph_${escapeHtml(ph.name)}"
+                       name="${escapeHtml(ph.name)}"
+                       value="${escapeHtml(currentValue)}"
+                       ${maxlength}
+                       ${ph.required ? 'required' : ''}>
+                ${ph.maxlength ? `<div class="form-text">Max ${ph.maxlength} caratteri</div>` : ''}
+            `;
+            break;
+
+        case 'html':
+        case 'richtext':
+            inputHtml = `
+                <textarea class="form-control"
+                          id="ph_${escapeHtml(ph.name)}"
+                          name="${escapeHtml(ph.name)}"
+                          rows="6"
+                          ${ph.required ? 'required' : ''}>${escapeHtml(currentValue)}</textarea>
+                <div class="form-text">Editor: ${ph.editor || 'plain'}</div>
+            `;
+            break;
+
+        case 'markdown':
+            inputHtml = `
+                <textarea class="form-control font-monospace"
+                          id="ph_${escapeHtml(ph.name)}"
+                          name="${escapeHtml(ph.name)}"
+                          rows="8"
+                          ${ph.required ? 'required' : ''}>${escapeHtml(currentValue)}</textarea>
+                <div class="form-text">Formato Markdown supportato</div>
+            `;
+            break;
+
+        case 'image':
+        case 'images':
+        case 'file':
+        case 'files':
+            // Per ora campi semplici, in futuro upload vero
+            inputHtml = `
+                <input type="text"
+                       class="form-control"
+                       id="ph_${escapeHtml(ph.name)}"
+                       name="${escapeHtml(ph.name)}"
+                       value="${escapeHtml(currentValue)}"
+                       placeholder="Path del file (es: /images/photo.jpg)"
+                       ${ph.required ? 'required' : ''}>
+                <div class="form-text text-warning">
+                    <i class="bi bi-info-circle"></i>
+                    Tipo: ${ph.type} - Upload file sarà implementato in futuro
+                </div>
+            `;
+            break;
+
+        default:
+            inputHtml = `
+                <input type="text"
+                       class="form-control"
+                       id="ph_${escapeHtml(ph.name)}"
+                       name="${escapeHtml(ph.name)}"
+                       value="${escapeHtml(currentValue)}"
+                       ${ph.required ? 'required' : ''}>
+            `;
+    }
+
+    return `
+        <div class="mb-4">
+            <label for="ph_${escapeHtml(ph.name)}" class="form-label fw-bold">
+                ${escapeHtml(ph.label)} ${required}
+            </label>
+            ${inputHtml}
+            ${description}
+        </div>
+    `;
+}
+
+/**
+ * Escape HTML per prevenire XSS
+ * @param {string} text - Testo da escape
+ * @returns {string} Testo escaped
+ */
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+/**
+ * Salva la pagina (crea o aggiorna)
+ */
+async function savePageEditor() {
+    const messageDiv = document.getElementById('pageEditorMessage');
+    const btnSave = document.getElementById('btnSavePageEditor');
+
+    // Validazione form
+    const form = document.getElementById('pageEditorForm');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+
+    btnSave.disabled = true;
+    messageDiv.innerHTML = `
+        <div class="alert alert-info mb-0">
+            <div class="spinner-border spinner-border-sm me-2"></div>
+            Salvataggio in corso...
+        </div>
+    `;
+    messageDiv.style.display = 'block';
+
+    try {
+        // Raccogli i valori dei placeholder
+        const placeholderValues = {};
+        const inputs = document.querySelectorAll('#placeholderFieldsContainer input, #placeholderFieldsContainer textarea');
+        inputs.forEach(input => {
+            placeholderValues[input.name] = input.value;
+        });
+
+        let endpoint, bodyData;
+
+        if (pageEditorMode === 'create') {
+            // Modalità creazione
+            const template = document.getElementById('templateSelect').value;
+            const pagePath = document.getElementById('pagePath').value;
+
+            endpoint = `/${apiPrefix}/${adminPrefix}/pages/createFromTemplate`;
+            bodyData = {
+                theme: window.themeInfoData.theme.name,
+                template: template,
+                pagePath: pagePath,
+                placeholderValues: placeholderValues
+            };
+
+        } else {
+            // Modalità modifica
+            endpoint = `/${apiPrefix}/${adminPrefix}/pages/updateWithPlaceholders`;
+            bodyData = {
+                pagePath: currentEditPath,
+                placeholderValues: placeholderValues
+            };
+        }
+
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(bodyData)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            messageDiv.innerHTML = `
+                <div class="alert alert-success mb-0">
+                    <i class="bi bi-check-circle"></i>
+                    ${result.message}
+                </div>
+            `;
+
+            // Chiudi modal dopo 1.5 secondi e refresh tree
+            setTimeout(() => {
+                bootstrap.Modal.getInstance(document.getElementById('pageEditorModal')).hide();
+                refreshTree();
+            }, 1500);
+
+        } else {
+            messageDiv.innerHTML = `
+                <div class="alert alert-danger mb-0">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Errore:</strong> ${result.error}
+                </div>
+            `;
+            btnSave.disabled = false;
+        }
+
+    } catch (error) {
+        console.error('Errore salvataggio:', error);
+        messageDiv.innerHTML = `
+            <div class="alert alert-danger mb-0">
+                <i class="bi bi-exclamation-triangle"></i>
+                <strong>Errore di rete:</strong> ${error.message}
+            </div>
+        `;
+        btnSave.disabled = false;
     }
 }
 </script>

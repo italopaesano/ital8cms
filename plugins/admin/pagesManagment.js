@@ -74,16 +74,46 @@
  *    - Ritorna la lista di tutte le cartelle nella www
  *    - Scansione ricorsiva
  *
- * 9. getRoutes()
+ * 9. extractPlaceholders(content)
+ *    - Estrae tutti i blocchi PLACEHOLDER da un contenuto EJS
+ *    - Ritorna array di oggetti con attributi e contenuto default
+ *
+ * 10. parsePlaceholderAttributes(attributesString)
+ *    - Parsa gli attributi di un tag PLACEHOLDER
+ *    - Supporta valori quoted, unquoted, booleani, numeri
+ *
+ * 11. replacePlaceholderContent(content, placeholderValues)
+ *    - Sostituisce il contenuto dei blocchi PLACEHOLDER mantenendo i tag
+ *    - Usato per creare/aggiornare pagine da template
+ *
+ * 12. generatePageMetadata(themeName, templatePath, createdDate)
+ *    - Genera il commento metadata per una pagina generata
+ *    - Include: tema, template, created, last modified
+ *
+ * 13. updatePageMetadata(content)
+ *    - Aggiorna il timestamp "Last modified" nel metadata
+ *
+ * 14. extractThemeFromMetadata(content)
+ *    - Estrae il nome del tema dal metadata della pagina
+ *
+ * 15. extractTemplateFromMetadata(content)
+ *    - Estrae il path del template dal metadata della pagina
+ *
+ * 16. getRoutes()
  *    - Genera array di route Koa per l'API
  *    - Endpoint disponibili:
- *      GET  /api/admin/pages              -> Lista pagine
- *      GET  /api/admin/pages/detail       -> Dettagli pagina (query: path)
- *      POST /api/admin/pages/create       -> Crea pagina
- *      POST /api/admin/pages/update       -> Modifica pagina
- *      POST /api/admin/pages/delete       -> Elimina pagina
- *      POST /api/admin/pages/createFolder -> Crea cartella
- *      POST /api/admin/pages/deleteFolder -> Elimina cartella
+ *      GET  /api/admin/pages                      -> Lista pagine
+ *      GET  /api/admin/pages/detail               -> Dettagli pagina (query: path)
+ *      POST /api/admin/pages/create               -> Crea pagina
+ *      POST /api/admin/pages/update               -> Modifica pagina
+ *      POST /api/admin/pages/delete               -> Elimina pagina
+ *      POST /api/admin/pages/createFolder         -> Crea cartella
+ *      POST /api/admin/pages/deleteFolder         -> Elimina cartella
+ *      GET  /api/admin/pages/info                 -> Info tema e template
+ *      GET  /api/admin/pages/parseTemplate        -> Parsing template per PLACEHOLDER
+ *      GET  /api/admin/pages/parsePage            -> Parsing pagina esistente
+ *      POST /api/admin/pages/createFromTemplate   -> Crea pagina da template
+ *      POST /api/admin/pages/updateWithPlaceholders -> Aggiorna pagina con PLACEHOLDER
  *
  * ============================================================================
  */
@@ -682,6 +712,169 @@ function getFoldersList() {
 }
 
 /**
+ * ============================================================================
+ * PLACEHOLDER PARSING UTILITIES
+ * Funzioni per gestire il sistema PLACEHOLDER per template editabili
+ * ============================================================================
+ */
+
+/**
+ * Estrae tutti i blocchi PLACEHOLDER da un contenuto EJS
+ * @param {string} content - Contenuto del file EJS
+ * @returns {Array} Array di oggetti placeholder con attributi e contenuto
+ */
+function extractPlaceholders(content) {
+    const placeholders = [];
+
+    // Regex per catturare blocchi PLACEHOLDER
+    // Formato: <%# PLACEHOLDER attributi %> contenuto <%# /PLACEHOLDER %>
+    const placeholderRegex = /<%#\s*PLACEHOLDER\s+([^%]+)%>([\s\S]*?)<%#\s*\/PLACEHOLDER\s*%>/g;
+
+    let match;
+    while ((match = placeholderRegex.exec(content)) !== null) {
+        const attributesString = match[1].trim();
+        const defaultContent = match[2];
+
+        // Parsa gli attributi
+        const attributes = parsePlaceholderAttributes(attributesString);
+
+        placeholders.push({
+            fullMatch: match[0],           // Intero blocco PLACEHOLDER
+            attributes: attributes,         // Attributi parsati
+            defaultContent: defaultContent, // Contenuto di default
+            name: attributes.name,          // Nome univoco
+            type: attributes.type,          // Tipo (text, html, etc)
+            label: attributes.label || attributes.name, // Label per UI
+            description: attributes.description || '',
+            required: attributes.required === 'true' || attributes.required === true,
+            // Altri attributi specifici per tipo
+            ...attributes
+        });
+    }
+
+    return placeholders;
+}
+
+/**
+ * Parsa gli attributi di un tag PLACEHOLDER
+ * Formato: name:value name2:"value with spaces" name3:123 name4:true
+ * @param {string} attributesString - Stringa attributi
+ * @returns {Object} Oggetto con attributi parsati
+ */
+function parsePlaceholderAttributes(attributesString) {
+    const attributes = {};
+
+    // Regex per catturare coppie chiave:valore
+    // Supporta: key:value, key:"value with spaces", key:123, key:true
+    const attrRegex = /(\w+):(?:"([^"]*)"|([^\s]+))/g;
+
+    let match;
+    while ((match = attrRegex.exec(attributesString)) !== null) {
+        const key = match[1];
+        const value = match[2] || match[3]; // Match[2] se quoted, match[3] se unquoted
+
+        // Converti booleani e numeri
+        if (value === 'true' || value === 'false') {
+            attributes[key] = value === 'true';
+        } else if (!isNaN(value) && value !== '') {
+            attributes[key] = Number(value);
+        } else {
+            attributes[key] = value;
+        }
+    }
+
+    return attributes;
+}
+
+/**
+ * Sostituisce il contenuto dei blocchi PLACEHOLDER mantenendo i tag
+ * @param {string} content - Contenuto originale del file
+ * @param {Object} placeholderValues - Oggetto con name:newContent
+ * @returns {string} Contenuto aggiornato
+ */
+function replacePlaceholderContent(content, placeholderValues) {
+    let updatedContent = content;
+
+    // Per ogni placeholder, sostituisci solo il contenuto tra i tag
+    for (const [name, newValue] of Object.entries(placeholderValues)) {
+        // Regex per trovare il blocco PLACEHOLDER specifico per name
+        // Usa escaped regex per il nome per evitare problemi con caratteri speciali
+        const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(
+            `(<%#\\s*PLACEHOLDER\\s+[^%]*name:${escapedName}[^%]*%>)[\\s\\S]*?(<%#\\s*\\/PLACEHOLDER\\s*%>)`,
+            'g'
+        );
+
+        // Sostituisci mantenendo i tag di apertura e chiusura
+        updatedContent = updatedContent.replace(regex, `$1\n${newValue}\n$2`);
+    }
+
+    return updatedContent;
+}
+
+/**
+ * Genera il commento metadata per una pagina generata
+ * @param {string} themeName - Nome del tema
+ * @param {string} templatePath - Path relativo del template
+ * @param {Date} createdDate - Data di creazione (opzionale)
+ * @returns {string} Commento EJS formattato
+ */
+function generatePageMetadata(themeName, templatePath, createdDate = new Date()) {
+    const created = createdDate.toISOString();
+    const modified = created; // Alla creazione coincidono
+
+    return `<%#
+  ital8cms Page Metadata
+  Theme: ${themeName}
+  Template: ${templatePath}
+  Created: ${created}
+  Last modified: ${modified}
+%>\n`;
+}
+
+/**
+ * Aggiorna il timestamp di modifica nel metadata di una pagina
+ * @param {string} content - Contenuto della pagina
+ * @returns {string} Contenuto con timestamp aggiornato
+ */
+function updatePageMetadata(content) {
+    const now = new Date().toISOString();
+
+    // Regex per trovare e aggiornare "Last modified"
+    const metadataRegex = /(Last modified:\s*)([^\n]+)/;
+
+    if (metadataRegex.test(content)) {
+        return content.replace(metadataRegex, `$1${now}`);
+    }
+
+    // Se non trova il metadata, ritorna il contenuto invariato
+    // (in questo caso la pagina non ha metadata, non lo aggiungiamo in modifica)
+    return content;
+}
+
+/**
+ * Estrae il nome del tema dal metadata della pagina
+ * @param {string} content - Contenuto della pagina
+ * @returns {string|null} Nome del tema o null
+ */
+function extractThemeFromMetadata(content) {
+    const themeRegex = /Theme:\s*([^\n]+)/;
+    const match = content.match(themeRegex);
+    return match ? match[1].trim() : null;
+}
+
+/**
+ * Estrae il path del template dal metadata della pagina
+ * @param {string} content - Contenuto della pagina
+ * @returns {string|null} Path del template o null
+ */
+function extractTemplateFromMetadata(content) {
+    const templateRegex = /Template:\s*([^\n]+)/;
+    const match = content.match(templateRegex);
+    return match ? match[1].trim() : null;
+}
+
+/**
  * Ottiene informazioni sul tema attivo e template disponibili
  * @returns {object} Oggetto con informazioni tema e template
  */
@@ -1060,6 +1253,311 @@ function getRoutes() {
                     ctx.body = {
                         success: false,
                         error: error.message
+                    };
+                }
+            }
+        },
+
+        // GET /api/admin/pages/parseTemplate - Analizza un template e ritorna i campi placeholder
+        {
+            method: 'GET',
+            path: `/pages/parseTemplate`,
+            handler: async (ctx) => {
+                try {
+                    const { template, theme } = ctx.query;
+
+                    if (!template || !theme) {
+                        ctx.status = 400;
+                        ctx.body = {
+                            success: false,
+                            error: 'Parametri template e theme richiesti'
+                        };
+                        return;
+                    }
+
+                    // Costruisci path completo del template
+                    const themesBasePath = path.join(__dirname, '../../themes');
+                    const templateFullPath = path.join(themesBasePath, theme, 'templates', template);
+
+                    // Verifica esistenza template
+                    if (!fs.existsSync(templateFullPath)) {
+                        ctx.status = 404;
+                        ctx.body = {
+                            success: false,
+                            error: `Template non trovato: ${theme}/templates/${template}`
+                        };
+                        return;
+                    }
+
+                    // Leggi il template
+                    const templateContent = fs.readFileSync(templateFullPath, 'utf8');
+
+                    // Estrai i placeholder
+                    const placeholders = extractPlaceholders(templateContent);
+
+                    ctx.body = {
+                        success: true,
+                        theme: theme,
+                        template: template,
+                        templatePath: `templates/${template}`,
+                        placeholders: placeholders,
+                        placeholdersCount: placeholders.length
+                    };
+
+                } catch (error) {
+                    console.error('[pagesManagment] Errore GET /pages/parseTemplate:', error);
+                    ctx.status = 500;
+                    ctx.body = {
+                        success: false,
+                        error: 'Errore durante il parsing del template',
+                        details: error.message
+                    };
+                }
+            }
+        },
+
+        // GET /api/admin/pages/parsePage - Analizza una pagina esistente ed estrae placeholder e valori correnti
+        {
+            method: 'GET',
+            path: `/pages/parsePage`,
+            handler: async (ctx) => {
+                try {
+                    const { path: pagePath } = ctx.query;
+
+                    if (!pagePath) {
+                        ctx.status = 400;
+                        ctx.body = {
+                            success: false,
+                            error: 'Parametro path richiesto'
+                        };
+                        return;
+                    }
+
+                    // Costruisci path completo
+                    const wwwPath = getWwwPath();
+                    const pageFullPath = path.join(wwwPath, pagePath);
+
+                    // Verifica esistenza pagina
+                    if (!fs.existsSync(pageFullPath)) {
+                        ctx.status = 404;
+                        ctx.body = {
+                            success: false,
+                            error: `Pagina non trovata: ${pagePath}`
+                        };
+                        return;
+                    }
+
+                    // Leggi il contenuto
+                    const pageContent = fs.readFileSync(pageFullPath, 'utf8');
+
+                    // Estrai metadata
+                    const themeName = extractThemeFromMetadata(pageContent);
+                    const templatePath = extractTemplateFromMetadata(pageContent);
+
+                    // Estrai i placeholder con i loro valori CORRENTI
+                    const placeholders = extractPlaceholders(pageContent);
+
+                    // Costruisci oggetto values con i contenuti attuali
+                    const currentValues = {};
+                    placeholders.forEach(ph => {
+                        currentValues[ph.name] = ph.defaultContent.trim();
+                    });
+
+                    ctx.body = {
+                        success: true,
+                        pagePath: pagePath,
+                        theme: themeName,
+                        template: templatePath,
+                        placeholders: placeholders,
+                        currentValues: currentValues,
+                        placeholdersCount: placeholders.length
+                    };
+
+                } catch (error) {
+                    console.error('[pagesManagment] Errore GET /pages/parsePage:', error);
+                    ctx.status = 500;
+                    ctx.body = {
+                        success: false,
+                        error: 'Errore durante il parsing della pagina',
+                        details: error.message
+                    };
+                }
+            }
+        },
+
+        // POST /api/admin/pages/createFromTemplate - Crea una nuova pagina da template con placeholder
+        {
+            method: 'POST',
+            path: `/pages/createFromTemplate`,
+            handler: async (ctx) => {
+                try {
+                    const { theme, template, pagePath, placeholderValues } = ctx.request.body;
+
+                    // Validazione parametri
+                    if (!theme || !template || !pagePath || !placeholderValues) {
+                        ctx.status = 400;
+                        ctx.body = {
+                            success: false,
+                            error: 'Parametri theme, template, pagePath e placeholderValues richiesti'
+                        };
+                        return;
+                    }
+
+                    // Valida formato path (deve finire con .ejs)
+                    if (!pagePath.endsWith('.ejs')) {
+                        ctx.status = 400;
+                        ctx.body = {
+                            success: false,
+                            error: 'Il path deve terminare con .ejs'
+                        };
+                        return;
+                    }
+
+                    // Validazione sicurezza
+                    if (!isPathSafe(pagePath)) {
+                        ctx.status = 400;
+                        ctx.body = {
+                            success: false,
+                            error: 'Path non valido o fuori dalla directory www'
+                        };
+                        return;
+                    }
+
+                    // Costruisci path completo destinazione
+                    const wwwPath = getWwwPath();
+                    const pageFullPath = path.join(wwwPath, pagePath);
+
+                    // Verifica che la pagina non esista già
+                    if (fs.existsSync(pageFullPath)) {
+                        ctx.status = 409;
+                        ctx.body = {
+                            success: false,
+                            error: `La pagina ${pagePath} esiste già`
+                        };
+                        return;
+                    }
+
+                    // Leggi il template
+                    const themesBasePath = path.join(__dirname, '../../themes');
+                    const templateFullPath = path.join(themesBasePath, theme, 'templates', template);
+
+                    if (!fs.existsSync(templateFullPath)) {
+                        ctx.status = 404;
+                        ctx.body = {
+                            success: false,
+                            error: `Template non trovato: ${theme}/templates/${template}`
+                        };
+                        return;
+                    }
+
+                    let templateContent = fs.readFileSync(templateFullPath, 'utf8');
+
+                    // Sostituisci i placeholder con i valori forniti
+                    const pageContent = replacePlaceholderContent(templateContent, placeholderValues);
+
+                    // Aggiungi metadata all'inizio
+                    const metadata = generatePageMetadata(theme, `templates/${template}`);
+                    const finalContent = metadata + pageContent;
+
+                    // Crea le directory intermedie se necessario
+                    const pageDir = path.dirname(pageFullPath);
+                    if (!fs.existsSync(pageDir)) {
+                        fs.mkdirSync(pageDir, { recursive: true });
+                    }
+
+                    // Scrivi il file (atomic write)
+                    const tempPath = pageFullPath + '.tmp';
+                    fs.writeFileSync(tempPath, finalContent, 'utf8');
+                    fs.renameSync(tempPath, pageFullPath);
+
+                    ctx.body = {
+                        success: true,
+                        message: `Pagina ${pagePath} creata con successo`,
+                        pagePath: pagePath,
+                        fullPath: pageFullPath
+                    };
+
+                } catch (error) {
+                    console.error('[pagesManagment] Errore POST /pages/createFromTemplate:', error);
+                    ctx.status = 500;
+                    ctx.body = {
+                        success: false,
+                        error: 'Errore durante la creazione della pagina',
+                        details: error.message
+                    };
+                }
+            }
+        },
+
+        // POST /api/admin/pages/updateWithPlaceholders - Aggiorna una pagina esistente mantenendo i tag PLACEHOLDER
+        {
+            method: 'POST',
+            path: `/pages/updateWithPlaceholders`,
+            handler: async (ctx) => {
+                try {
+                    const { pagePath, placeholderValues } = ctx.request.body;
+
+                    // Validazione parametri
+                    if (!pagePath || !placeholderValues) {
+                        ctx.status = 400;
+                        ctx.body = {
+                            success: false,
+                            error: 'Parametri pagePath e placeholderValues richiesti'
+                        };
+                        return;
+                    }
+
+                    // Validazione sicurezza
+                    if (!isPathSafe(pagePath)) {
+                        ctx.status = 400;
+                        ctx.body = {
+                            success: false,
+                            error: 'Path non valido o fuori dalla directory www'
+                        };
+                        return;
+                    }
+
+                    // Costruisci path completo
+                    const wwwPath = getWwwPath();
+                    const pageFullPath = path.join(wwwPath, pagePath);
+
+                    // Verifica esistenza pagina
+                    if (!fs.existsSync(pageFullPath)) {
+                        ctx.status = 404;
+                        ctx.body = {
+                            success: false,
+                            error: `Pagina non trovata: ${pagePath}`
+                        };
+                        return;
+                    }
+
+                    // Leggi il contenuto corrente
+                    let pageContent = fs.readFileSync(pageFullPath, 'utf8');
+
+                    // Sostituisci i placeholder con i nuovi valori
+                    pageContent = replacePlaceholderContent(pageContent, placeholderValues);
+
+                    // Aggiorna il timestamp di modifica nel metadata
+                    pageContent = updatePageMetadata(pageContent);
+
+                    // Scrivi il file aggiornato (atomic write)
+                    const tempPath = pageFullPath + '.tmp';
+                    fs.writeFileSync(tempPath, pageContent, 'utf8');
+                    fs.renameSync(tempPath, pageFullPath);
+
+                    ctx.body = {
+                        success: true,
+                        message: `Pagina ${pagePath} aggiornata con successo`,
+                        pagePath: pagePath
+                    };
+
+                } catch (error) {
+                    console.error('[pagesManagment] Errore POST /pages/updateWithPlaceholders:', error);
+                    ctx.status = 500;
+                    ctx.body = {
+                        success: false,
+                        error: 'Errore durante l\'aggiornamento della pagina',
+                        details: error.message
                     };
                 }
             }
