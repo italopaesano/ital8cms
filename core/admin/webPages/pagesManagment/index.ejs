@@ -418,7 +418,10 @@ function renderTreeNode(node, isRoot = false) {
                     ` : '<span class="me-3"></span>'}
                     <i class="bi bi-folder text-warning"></i>
                     <span>${node.name}/</span>
-                    <button class="btn btn-sm btn-outline-danger ms-2" onclick="deleteFolder('${node.path}')" title="Elimina cartella">
+                    <button class="btn btn-sm btn-outline-success ms-2" onclick="showCreateSubfolderModal('${node.path}')" title="Crea sottocartella">
+                        <i class="bi bi-folder-plus"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger ms-1" onclick="deleteFolder('${node.path}')" title="Elimina cartella">
                         <i class="bi bi-trash"></i>
                     </button>
                 </div>
@@ -482,6 +485,30 @@ function showCreateFolderModal() {
     // Mostra modal
     const modal = new bootstrap.Modal(document.getElementById('createFolderModal'));
     modal.show();
+}
+
+/**
+ * Mostra modal crea sottocartella con path padre pre-compilato
+ */
+function showCreateSubfolderModal(parentPath) {
+    // Reset form
+    document.getElementById('createFolderForm').reset();
+    document.getElementById('folderCreateMessage').style.display = 'none';
+    document.getElementById('btnCreateFolder').disabled = false;
+
+    // Pre-compila il campo con il path della cartella padre + /
+    const folderPathInput = document.getElementById('folderPath');
+    folderPathInput.value = parentPath + '/';
+
+    // Mostra modal
+    const modal = new bootstrap.Modal(document.getElementById('createFolderModal'));
+    modal.show();
+
+    // Focus e posiziona cursore alla fine dopo che il modal è visibile
+    setTimeout(() => {
+        folderPathInput.focus();
+        folderPathInput.setSelectionRange(folderPathInput.value.length, folderPathInput.value.length);
+    }, 300);
 }
 
 /**
