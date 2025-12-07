@@ -166,6 +166,16 @@ let pagesData = null;
 document.addEventListener('DOMContentLoaded', function() {
     loadThemeInfo();
     loadPagesTree();
+
+    // Gestisce submit del form creazione cartella con tasto Invio
+    const createFolderForm = document.getElementById('createFolderForm');
+    if (createFolderForm) {
+        createFolderForm.addEventListener('submit', function(e) {
+            e.preventDefault(); // Previene il comportamento di default
+            createFolder(); // Chiama la funzione di creazione
+            return false;
+        });
+    }
 });
 
 /**
