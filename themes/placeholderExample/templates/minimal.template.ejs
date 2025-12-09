@@ -1,0 +1,33 @@
+<%#
+================================================================================
+TEMPLATE: Minimal - Simple Template with Title and Body
+================================================================================
+Minimal template with only two placeholders: title and body
+================================================================================
+%>
+
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs' ) ) %>
+
+<%# Page Container %>
+<div class="container my-5">
+    <div class="row">
+        <div class="col-lg-10 mx-auto">
+
+            <%# Page Title - PLACEHOLDER TEXT %>
+            <%# PLACEHOLDER name:pageTitle type:text maxlength:200 required:true label:"Titolo Pagina" description:"Titolo principale della pagina" %>
+            <h1 class="mb-4">Titolo della Pagina</h1>
+            <%# /PLACEHOLDER %>
+
+            <%# Page Body - PLACEHOLDER HTML %>
+            <%# PLACEHOLDER name:pageBody type:html editor:wysiwyg label:"Contenuto Pagina" description:"Contenuto principale della pagina" required:true %>
+            <div class="content">
+                <p>Inserisci qui il contenuto della tua pagina.</p>
+                <p>Questo è un template minimale con solo titolo e corpo editabili.</p>
+            </div>
+            <%# /PLACEHOLDER %>
+
+        </div>
+    </div>
+</div>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs' ) ) %>
