@@ -505,7 +505,10 @@ function renderTreeNode(node, isRoot = false) {
                     ` : '<span class="me-3"></span>'}
                     <i class="bi bi-folder text-warning"></i>
                     <span>${node.name}/</span>
-                    <button class="btn btn-sm btn-outline-success ms-2" onclick="showCreateSubfolderModal('${node.path}')" title="Crea sottocartella">
+                    <button class="btn btn-sm btn-outline-primary ms-2" onclick="showCreatePageInFolderModal('${node.path}')" title="Crea file nella cartella">
+                        <i class="bi bi-file-earmark-plus"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-success ms-1" onclick="showCreateSubfolderModal('${node.path}')" title="Crea sottocartella">
                         <i class="bi bi-folder-plus"></i>
                     </button>
                     <button class="btn btn-sm btn-outline-danger ms-1" onclick="deleteFolder('${node.path}')" title="Elimina cartella">
@@ -594,6 +597,24 @@ function showCreateSubfolderModal(parentPath) {
     setTimeout(() => {
         folderPathInput.focus();
         folderPathInput.setSelectionRange(folderPathInput.value.length, folderPathInput.value.length);
+    }, 300);
+}
+
+/**
+ * Mostra modal crea pagina nella cartella specificata
+ */
+function showCreatePageInFolderModal(folderPath) {
+    // Apri il modal di creazione pagina
+    showPageEditor('create');
+
+    // Pre-compila il campo pagePath con il percorso della cartella + /
+    setTimeout(() => {
+        const pagePathInput = document.getElementById('pagePath');
+        if (pagePathInput) {
+            pagePathInput.value = folderPath + '/';
+            pagePathInput.focus();
+            pagePathInput.setSelectionRange(pagePathInput.value.length, pagePathInput.value.length);
+        }
     }, 300);
 }
 
