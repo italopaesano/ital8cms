@@ -1,0 +1,135 @@
+<%#
+  ital8cms Page Metadata
+  Theme: placeholderExample
+  Template: templates/minimal.template.ejs
+  Created: 2025-12-10T20:54:51.285Z
+  Last modified: 2025-12-10T20:54:51.285Z
+%>
+<%#
+================================================================================
+TEMPLATE: Minimal - Simple Template with Title and Body
+================================================================================
+Minimal template with only two placeholders: title and body
+================================================================================
+%>
+
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs' ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs' ) ) %>
+
+<%# Page Container %>
+<div class="container my-5">
+    <div class="row">
+        <div class="col-lg-10 mx-auto">
+
+            <%# Page Title - PLACEHOLDER TEXT %>
+            <%# PLACEHOLDER name:pageTitle type:text maxlength:200 required:true label:"Titolo Pagina" description:"Titolo principale della pagina" %>
+una pagina di prova 
+<%# /PLACEHOLDER %>
+
+            <%# Page Body - PLACEHOLDER HTML %>
+            <%# PLACEHOLDER name:pageBody type:html editor:wysiwyg label:"Contenuto Pagina" description:"Contenuto principale della pagina" required:true %>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Il Mio Sito</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">Servizi</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">Contatti</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <div class="bg-light py-5">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-6">
+                    <h1 class="display-4 fw-bold">Benvenuto!</h1>
+                    <p class="lead">Questa è una pagina demo con Bootstrap 5</p>
+                    <button class="btn btn-primary btn-lg">Inizia ora</button>
+                </div>
+                <div class="col-lg-6">
+                    <img src="https://via.placeholder.com/500x300" class="img-fluid rounded" alt="Demo">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cards Section -->
+    <div class="container my-5">
+        <h2 class="text-center mb-4">Le nostre funzionalità</h2>
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Veloce</h5>
+                        <p class="card-text">Prestazioni ottimizzate per un'esperienza utente fluida.</p>
+                        <a href="#" class="btn btn-outline-primary">Scopri di più</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Responsive</h5>
+                        <p class="card-text">Design adattivo per tutti i dispositivi e dimensioni dello schermo.</p>
+                        <a href="#" class="btn btn-outline-primary">Scopri di più</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Moderno</h5>
+                        <p class="card-text">Interfaccia pulita e componenti all'avanguardia.</p>
+                        <a href="#" class="btn btn-outline-primary">Scopri di più</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Form Section -->
+    <div class="bg-light py-5">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-lg-6">
+                    <h2 class="text-center mb-4">Contattaci</h2>
+                    <form>
+                        <div class="mb-3">
+                            <label for="nome" class="form-label">Nome</label>
+                            <input type="text" class="form-control" id="nome" placeholder="Il tuo nome">
+                        </div>
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" placeholder="nome@esempio.it">
+                        </div>
+                        <div class="mb-3">
+                            <label for="messaggio" class="form-label">Messaggio</label>
+                            <textarea class="form-control" id="messaggio" rows="4"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Invia</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+<%# /PLACEHOLDER %>
+
+        </div>
+    </div>
+</div>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs' ) ) %>

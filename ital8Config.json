@@ -7,21 +7,10 @@
   "activeTheme": "placeholderExample",
   "adminActiveTheme": "defaultAdminTheme",
   "wwwPath": "/www",
-
-  // Browser-side caching configuration for static resources (CSS, JS, images)
-  // Applied to all koa-classic-server instances serving theme resources and static files
-  // - browserCacheEnabled: Enable HTTP Cache-Control headers (set to false during development to see changes immediately)
-  // - browserCacheMaxAge: Cache duration in seconds (86400 = 24 hours, recommended for production)
   "browserCacheEnabled": false,
   "browserCacheMaxAge": 86400,
-
-  // URL prefixes for theme resource files (CSS, JS, fonts, images)
-  // Theme resources are served from themes/{themeName}/themeResources/
-  // - publicThemeResourcesPrefix: URL prefix for public theme resources
-  // - adminThemeResourcesPrefix: URL prefix for admin theme resources
   "publicThemeResourcesPrefix": "public-theme-resources",
   "adminThemeResourcesPrefix": "admin-theme-resources",
-
   "debugMode": 1,
   "httpPort": 3000,
   "useHttps": false,
