@@ -52,8 +52,8 @@ function getThemesList(themeSys) {
             const themePath = path.join(__dirname, '../../themes', theme.name);
 
             // Leggi file di configurazione
-            const configPath = path.join(themePath, 'themeConfig.json');
-            const descriptionPath = path.join(themePath, 'themeDescription.json');
+            const configPath = path.join(themePath, 'themeConfig.json5');
+            const descriptionPath = path.join(themePath, 'themeDescription.json5');
 
             let config = {};
             let description = {};
@@ -142,8 +142,8 @@ function getThemeDetails(themeName, themeSys) {
         const validation = themeSys.validateTheme(themeName);
 
         // Leggi file di configurazione
-        const configPath = path.join(themePath, 'themeConfig.json');
-        const descriptionPath = path.join(themePath, 'themeDescription.json');
+        const configPath = path.join(themePath, 'themeConfig.json5');
+        const descriptionPath = path.join(themePath, 'themeDescription.json5');
         const readmePath = path.join(themePath, 'README.md');
 
         let config = {};
@@ -307,7 +307,7 @@ function setActiveTheme(themeName, themeType, themeSys) {
         }
 
         // Verifica corrispondenza tipo tema (isAdminTheme)
-        const themeConfigPath = path.join(themePath, 'themeConfig.json');
+        const themeConfigPath = path.join(themePath, 'themeConfig.json5');
         let themeConfig = {};
         try {
             if (fs.existsSync(themeConfigPath)) {

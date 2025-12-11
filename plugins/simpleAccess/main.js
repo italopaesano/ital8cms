@@ -7,11 +7,11 @@ const loadJson5 = require('../../core/loadJson5');
 
 const ejs = require("ejs"); // serve per aggiungere il supporto ejs , che fral'altro serve a caricare bootstrap
 
-const ital8Conf = loadJson5(path.join(__dirname, '../../ital8Config.json'));// questo serve a caricare le impostazioni generali del modulo ed in particolare lìapi Prefix
+const ital8Conf = loadJson5(path.join(__dirname, '../../ital8Config.json5'));// questo serve a caricare le impostazioni generali del modulo ed in particolare lìapi Prefix
 
 const libAccess = require('./lib/libAccess');
 
-let pluginConfig = loadJson5(path.join(__dirname, 'pluginConfig.json'));// let perchè questa varibile può cambiare di valore 
+let pluginConfig = loadJson5(path.join(__dirname, 'pluginConfig.json5'));// let perchè questa varibile può cambiare di valore 
 const pluginName = path.basename(  __dirname );// restituisce il nome della directory che contiene il file corrente e che è anche il nome del plugin
 const sharedObject = {};// ogetto che avrà gliogetti condiviso con gli altri plugin ES {dbApi: newdbApi} 
 
@@ -265,7 +265,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       method: 'GET', 
       path: '/roleList', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       handler: async (ctx) => {//
-        const roleFilePath = path.join(__dirname, 'userRole.json');
+        const roleFilePath = path.join(__dirname, 'userRole.json5');
         try {
           const roleData = fs.readFileSync(roleFilePath, 'utf8');
           ctx.body = JSON.parse(roleData);

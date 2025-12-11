@@ -18,7 +18,7 @@ function priorityMiddleware(app){
 
 
     const koaSession = require('koa-session').default || require('koa-session');//dovuto al fatto che originariamente è un modulo sviluppato per ES module
-    const koaSessionConfig = loadJson5(__dirname + '/koaSession.json');// configurazione di koa session
+    const koaSessionConfig = loadJson5(__dirname + '/koaSession.json5');// configurazione di koa session
     app.keys = koaSessionConfig.keys;// importo le chiavi per la sicurezza  (necessaria per la firma delle sessioni)
     app.use(koaSession(koaSessionConfig.CONFIG, app));
 

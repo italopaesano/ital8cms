@@ -15,8 +15,8 @@ const ejs = require('ejs');
 const loadJson5 = require('../../core/loadJson5');
 
 // Configurazione del plugin
-const pluginConfig = loadJson5(path.join(__dirname, 'pluginConfig.json'));
-const pluginDescription = loadJson5(path.join(__dirname, 'pluginDescription.json'));
+const pluginConfig = loadJson5(path.join(__dirname, 'pluginConfig.json5'));
+const pluginDescription = loadJson5(path.join(__dirname, 'pluginDescription.json5'));
 const ital8Conf = loadJson5(path.join(__dirname, '../../ital8Config.json'));
 
 // Nome del plugin (usato per costruire URL)

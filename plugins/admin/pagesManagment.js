@@ -151,7 +151,7 @@ function getWwwPath() {
 
         // Path del tema attivo
         const themePath = path.join(__dirname, '../../themes', activeTheme);
-        const themeConfigPath = path.join(themePath, 'themeConfig.json');
+        const themeConfigPath = path.join(themePath, 'themeConfig.json5');
 
         // Verifica esistenza themeConfig.json
         if (!fs.existsSync(themeConfigPath)) {
@@ -886,7 +886,7 @@ function getThemeInfo() {
 
         // Leggi configurazione tema
         const themePath = path.join(__dirname, '../../themes', activeTheme);
-        const themeConfigPath = path.join(themePath, 'themeConfig.json');
+        const themeConfigPath = path.join(themePath, 'themeConfig.json5');
 
         if (!fs.existsSync(themeConfigPath)) {
             return {
@@ -937,7 +937,7 @@ function getThemeInfo() {
         }
 
         // Leggi descrizione tema se esiste
-        const themeDescPath = path.join(themePath, 'themeDescription.json');
+        const themeDescPath = path.join(themePath, 'themeDescription.json5');
         let themeDescription = null;
 
         if (fs.existsSync(themeDescPath)) {
