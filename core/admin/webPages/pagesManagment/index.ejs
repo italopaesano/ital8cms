@@ -565,7 +565,7 @@ function renderTree(data) {
     // SALVA stato corrente delle cartelle (quali sono aperte/chiuse)
     const closedFolders = new Set();
     document.querySelectorAll('.tree-children').forEach(el => {
-        if (el.style.display === 'none') {
+        if (el.classList.contains('collapsed')) {
             closedFolders.add(el.id);
         }
     });
@@ -592,7 +592,7 @@ function renderTree(data) {
     closedFolders.forEach(folderId => {
         const el = document.getElementById(folderId);
         if (el) {
-            el.style.display = 'none';
+            el.classList.add('collapsed');
 
             // Aggiorna anche l'icona del pulsante toggle
             const button = document.querySelector(`[data-target="${folderId}"]`);
@@ -632,18 +632,17 @@ function initializeFolderToggles() {
                 return;
             }
 
-            // Toggle visibilità
-            if (targetElement.style.display === 'none') {
-                targetElement.style.display = 'block';
-                if (icon) {
-                    icon.classList.remove('bi-caret-right-fill');
-                    icon.classList.add('bi-caret-down-fill');
-                }
-            } else {
-                targetElement.style.display = 'none';
-                if (icon) {
+            // Toggle visibilità con animazione fluida tramite classe CSS
+            targetElement.classList.toggle('collapsed');
+
+            // Aggiorna icona
+            if (icon) {
+                if (targetElement.classList.contains('collapsed')) {
                     icon.classList.remove('bi-caret-down-fill');
                     icon.classList.add('bi-caret-right-fill');
+                } else {
+                    icon.classList.remove('bi-caret-right-fill');
+                    icon.classList.add('bi-caret-down-fill');
                 }
             }
         });
@@ -749,7 +748,7 @@ function renderTreeNode(node, isRoot = false) {
                     </button>
                 </div>
                 ${hasChildren ? `
-                    <div class="tree-children ms-4" id="${folderId}" style="display: block;">
+                    <div class="tree-children ms-4" id="${folderId}">
                         ${node.children.map(child => renderTreeNode(child)).join('')}
                     </div>
                 ` : ''}
@@ -1407,15 +1406,30 @@ async function savePageEditor() {
     border-left: 2px solid #dee2e6;
     margin-left: 10px;
     padding-left: 10px;
+    overflow: hidden;
+    max-height: 5000px;
+    opacity: 1;
+    transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out;
+}
+
+.tree-children.collapsed {
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out;
 }
 
 .btn-link {
     text-decoration: none;
     color: #6c757d;
+    transition: color 0.2s;
 }
 
 .btn-link:hover {
     color: #000;
+}
+
+.btn-link i {
+    transition: transform 0.3s ease-in-out;
 }
 </style>
 
