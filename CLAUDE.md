@@ -43,7 +43,7 @@ const loadJson5 = require('./core/loadJson5');
 const config = loadJson5('./ital8Config.json5');
 ```
 
-**DO NOT** use `require()` directly for `.json` files as it doesn't support JSON5 comments.
+**DO NOT** use `require()` directly for `.json5` configuration files as it doesn't support JSON5 comments. **ALWAYS** use the `loadJson5()` function for loading all configuration files.
 
 **Why loadJson5 naming:** The file is named `loadJson5.js` and the function is `loadJson5()` to maintain **perfect symmetry** between the module name and the exported function, making imports clear and intuitive.
 
@@ -478,20 +478,24 @@ async loadPlugin(pluginSys, pathPluginFolder) {
 }
 ```
 
-### JSON File Operations
+### JSON5 File Operations
 
-**Reading JSON data:**
+**IMPORTANT:** All configuration files use the `.json5` extension and **MUST** be loaded using the `loadJson5()` function, not `require()` or `JSON.parse()`.
+
+**Reading JSON5 data:**
 ```javascript
-const fs = require('fs')
 const path = require('path')
+const loadJson5 = require('../../core/loadJson5')
 
-// Read user accounts
+// Read user accounts using loadJson5
 const userAccountPath = path.join(pathPluginFolder, 'userAccount.json5')
-const users = JSON.parse(fs.readFileSync(userAccountPath, 'utf8'))
+const users = loadJson5(userAccountPath)
 ```
 
-**Writing JSON data:**
+**Writing JSON5 data:**
 ```javascript
+const fs = require('fs')
+
 // Update user accounts
 fs.writeFileSync(
   userAccountPath,
@@ -693,7 +697,9 @@ Each plugin's `pluginConfig.json5`:
 Access in code:
 
 ```javascript
-const config = require('./pluginConfig.json5')
+const loadJson5 = require('../../core/loadJson5')
+const path = require('path')
+const config = loadJson5(path.join(__dirname, 'pluginConfig.json5'))
 const mySetting = config.custom.myPluginSetting
 ```
 
@@ -872,20 +878,21 @@ mkdir -p core/admin/webPages/myFeature
 
 ### Data Operations
 
-**Primary Method: JSON Files**
+**Primary Method: JSON5 Files**
 
 ```javascript
 const fs = require('fs')
 const path = require('path')
+const loadJson5 = require('../../core/loadJson5')
 
-// Read JSON data
-const dataPath = path.join(pathPluginFolder, 'data.json')
-const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'))
+// Read JSON5 data
+const dataPath = path.join(pathPluginFolder, 'data.json5')
+const data = loadJson5(dataPath)
 
 // Modify data
 data.items.push({ name: 'New Item', created_at: new Date().toISOString() })
 
-// Save JSON data (atomic write)
+// Save JSON5 data (atomic write)
 const tempPath = dataPath + '.tmp'
 fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf8')
 fs.renameSync(tempPath, dataPath)
@@ -1164,16 +1171,17 @@ getHooksPage(section, passData, pluginSys, pathPluginFolder) {
 
 ### Task: Initialize Plugin Data Storage
 
-**Option 1: JSON File (Recommended for most plugins)**
+**Option 1: JSON5 File (Recommended for most plugins)**
 
 ```javascript
 // In your plugin's loadPlugin() or installPlugin()
 async loadPlugin(pluginSys, pathPluginFolder) {
   const fs = require('fs')
   const path = require('path')
+  const loadJson5 = require('../../core/loadJson5')
 
   // Define data file path
-  this.dataPath = path.join(pathPluginFolder, 'data.json')
+  this.dataPath = path.join(pathPluginFolder, 'data.json5')
 
   // Initialize with default data if file doesn't exist
   if (!fs.existsSync(this.dataPath)) {
@@ -1190,8 +1198,8 @@ async loadPlugin(pluginSys, pathPluginFolder) {
     )
   }
 
-  // Load data
-  this.data = JSON.parse(fs.readFileSync(this.dataPath, 'utf8'))
+  // Load data using loadJson5
+  this.data = loadJson5(this.dataPath)
 }
 
 // Helper method to save data
@@ -1565,7 +1573,7 @@ When working on this codebase as an AI assistant:
 
 8. **Version Control:** This is an alpha project (v0.0.1-alpha.0). Breaking changes are acceptable but should be documented.
 
-9. **Configuration Changes:** When modifying configuration, update relevant JSON files and document changes.
+9. **Configuration Changes:** When modifying configuration, update relevant JSON5 files and document changes. **ALWAYS use `loadJson5()` to read configuration files, never use `require()` or `JSON.parse()`.**
 
 10. **Theme Changes:** If modifying themes, ensure both public and admin themes are considered.
 
@@ -1573,15 +1581,22 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2025-11-26
-**Version:** 1.2.0
+**Last Updated:** 2025-12-11
+**Version:** 1.3.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v1.3.0 (2025-12-11): **BREAKING CHANGE** - Converted all configuration files from `.json` to `.json5` extension. Key changes:
+  - All configuration files now use `.json5` extension to reflect JSON5 format support
+  - Updated all documentation examples to use `loadJson5()` function
+  - Added clear warnings about not using `require()` for `.json5` files
+  - Improved code examples to demonstrate proper JSON5 file loading
+  - Total of 38 configuration files converted
+  - Files excluded: `package.json`, `package-lock.json`, `.vscode/launch.json`
 - v1.2.0 (2025-11-26): **BREAKING CHANGE** - Updated naming convention from kebab-case to camelCase for all files and directories. Key changes:
-  - `ital8-conf.json` → `ital8Config.json5`
-  - `config-plugin.json` → `pluginConfig.json5`
-  - `description-plugin.json` → `pluginDescription.json5`
+  - `ital8-conf.json` → `ital8Config.json`
+  - `config-plugin.json` → `pluginConfig.json`
+  - `description-plugin.json` → `pluginDescription.json`
   - All file/directory examples updated to use pure camelCase
   - Added compound file names convention (noun + descriptor pattern)
   - Maintained PascalCase for classes and UPPER_SNAKE_CASE for constants
