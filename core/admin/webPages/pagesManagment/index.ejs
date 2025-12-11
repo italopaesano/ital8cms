@@ -1,3 +1,165 @@
+<!--
+═══════════════════════════════════════════════════════════════════════════════
+  GESTIONE PAGINE WEB - Pages Management
+═══════════════════════════════════════════════════════════════════════════════
+
+DESCRIZIONE:
+  Interfaccia completa per la gestione delle pagine web e della struttura
+  directory della cartella /www del CMS. Permette di creare, modificare ed
+  eliminare pagine EJS e cartelle.
+
+───────────────────────────────────────────────────────────────────────────────
+STRUTTURA DEL FILE:
+───────────────────────────────────────────────────────────────────────────────
+
+1. SEZIONE HTML (righe ~1-220)
+   ├── Header e Bootstrap Icons
+   ├── Colonna Sinistra (col-md-4)
+   │   ├── Card "Tema Attivo" (#themeInfoCard)
+   │   └── Card "Template Disponibili" (#templatesCard)
+   ├── Colonna Destra (col-md-8)
+   │   └── Card "Struttura Directory WWW" (#wwwTreeContainer)
+   └── MODAL:
+       ├── #pageEditorModal - Modal unificato creazione/modifica pagina
+       └── #createFolderModal - Modal creazione cartella
+
+2. SEZIONE JAVASCRIPT (righe ~223-1133)
+   Suddivisa in 5 sottosezioni:
+
+   A. INIZIALIZZAZIONE (righe 223-265)
+      - Event listener DOMContentLoaded
+      - Setup form handlers e button listeners
+      - Preview path in tempo reale
+
+   B. CARICAMENTO DATI TEMA E TEMPLATE (righe 267-366)
+      - loadThemeInfo() - Carica info tema attivo
+      - renderThemeInfo() - Renderizza card info tema
+      - renderTemplates() - Lista template disponibili
+
+   C. GESTIONE ALBERO DIRECTORY (righe 368-557)
+      - loadPagesTree() - Carica struttura cartelle/file da API
+      - buildTree() - Costruisce albero da array flat
+      - renderTreeNode() - Rendering ricorsivo albero HTML
+      - refreshTree() - Ricarica albero
+
+   D. OPERAZIONI SU CARTELLE E FILE (righe 558-757)
+      - showCreateFolderModal() - Apre modal creazione cartella
+      - showCreateSubfolderModal() - Pre-compila path per sottocartella
+      - showCreatePageInFolderModal() - Pre-compila path per file in cartella
+      - createFolder() - API call creazione cartella
+      - deleteFolder() - API call eliminazione cartella
+      - editPage() - Apre editor per pagina esistente
+      - deletePage() - Placeholder eliminazione pagina
+
+   E. PAGE EDITOR (righe 759-1132)
+      Sistema unificato per creazione e modifica pagine con placeholder
+
+      - showPageEditor(mode, pagePath) - Apre modal in modalità 'create' o 'edit'
+      - populateTemplateSelect() - Popola dropdown template
+      - loadTemplateFields(template, theme) - Carica placeholder da template
+      - loadPageForEdit(pagePath) - Carica dati pagina esistente
+      - renderPlaceholderFields(placeholders, values) - Genera form dinamico
+      - createFieldHtml(ph, currentValue) - Crea HTML per singolo campo
+          Supporta tipi: text, html, richtext, markdown, image, file
+      - savePageEditor() - Salva pagina (create o update)
+      - escapeHtml(text) - Utility anti-XSS
+
+3. SEZIONE CSS (righe 1135-1187)
+   Stili personalizzati per l'albero directory:
+   - .tree-root, .tree-item, .tree-node
+   - .folder-node, .file-node, .tree-children
+   - Hover effects e transizioni
+
+───────────────────────────────────────────────────────────────────────────────
+FLUSSO OPERATIVO PRINCIPALE:
+───────────────────────────────────────────────────────────────────────────────
+
+CREAZIONE PAGINA:
+  1. Click su "Crea Nuova Pagina" → showCreatePageModal()
+  2. showPageEditor('create') apre modal pageEditorModal
+  3. Selezione template → loadTemplateFields() carica placeholder
+  4. Compilazione form dinamico con campi placeholder
+  5. Click "Crea Pagina" → savePageEditor()
+  6. POST a /${apiPrefix}/${adminPrefix}/pages/createFromTemplate
+  7. Refresh albero → loadPagesTree()
+
+MODIFICA PAGINA:
+  1. Click icona matita su file → editPage(path)
+  2. showPageEditor('edit', path) apre modal
+  3. loadPageForEdit(path) carica contenuto corrente
+  4. Modifica valori nei campi placeholder
+  5. Click "Salva Modifiche" → savePageEditor()
+  6. POST a /${apiPrefix}/${adminPrefix}/pages/updateWithPlaceholders
+  7. Refresh albero
+
+CREAZIONE CARTELLA:
+  1. Click "Crea Nuova Cartella" → showCreateFolderModal()
+  2. Inserimento path (es: "blog" o "blog/posts")
+  3. Click "Crea Cartella" → createFolder()
+  4. POST a /${apiPrefix}/${adminPrefix}/pages/createFolder
+  5. Refresh albero
+
+───────────────────────────────────────────────────────────────────────────────
+API ENDPOINT UTILIZZATI:
+───────────────────────────────────────────────────────────────────────────────
+
+GET  /${apiPrefix}/${adminPrefix}/pages/info
+     → Informazioni tema attivo, template disponibili, path www
+
+GET  /${apiPrefix}/${adminPrefix}/pages
+     → Struttura completa directory www (pagine + cartelle)
+
+GET  /${apiPrefix}/${adminPrefix}/pages/parseTemplate
+     Query params: template, theme
+     → Analisi placeholder di un template
+
+GET  /${apiPrefix}/${adminPrefix}/pages/parsePage
+     Query params: path
+     → Analisi placeholder e valori correnti di una pagina esistente
+
+POST /${apiPrefix}/${adminPrefix}/pages/createFromTemplate
+     Body: { theme, template, pagePath, placeholderValues }
+     → Creazione nuova pagina da template
+
+POST /${apiPrefix}/${adminPrefix}/pages/updateWithPlaceholders
+     Body: { pagePath, placeholderValues }
+     → Aggiornamento valori placeholder pagina esistente
+
+POST /${apiPrefix}/${adminPrefix}/pages/createFolder
+     Body: { path }
+     → Creazione cartella (anche annidata)
+
+POST /${apiPrefix}/${adminPrefix}/pages/deleteFolder
+     Body: { path }
+     → Eliminazione cartella vuota
+
+───────────────────────────────────────────────────────────────────────────────
+VARIABILI GLOBALI:
+───────────────────────────────────────────────────────────────────────────────
+
+- themeData: Dati tema caricati da /pages/info
+- pagesData: Struttura directory caricata da /pages
+- window.themeInfoData: Riferimento globale ai dati tema (per Page Editor)
+- pageEditorMode: 'create' | 'edit' - Modalità corrente del Page Editor
+- currentEditPath: Path della pagina in modifica (solo per mode='edit')
+- apiPrefix: Valore da passData.apiPrefix (es: 'api')
+- adminPrefix: Valore da passData.adminPrefix (es: 'admin')
+
+───────────────────────────────────────────────────────────────────────────────
+NOTE TECNICHE:
+───────────────────────────────────────────────────────────────────────────────
+
+• Il Page Editor è un modal UNIFICATO che gestisce sia creazione che modifica
+• Template placeholder supportano tipi: text, html, richtext, markdown,
+  image, images, file, files
+• L'albero directory è costruito client-side da array flat ricevuti dal server
+• Tutti i path sono relativi alla cartella /www
+• Upload file veri (image/file types) è ancora da implementare
+• Eliminazione pagine (deletePage) è ancora placeholder
+
+═══════════════════════════════════════════════════════════════════════════════
+-->
+
 <!-- TEMPLATE PER LA GESTIONE DELLE PAGINE WEB -->
 <!-- NOTA: Usa getThemePartPath() con passData (che contiene isAdminContext: true) -->
 <!--       per caricare automaticamente i partial del tema admin -->
