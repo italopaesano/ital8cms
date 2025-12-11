@@ -2,7 +2,7 @@ il sistema di plugin funziona nel seguente modo:
 
 1) ogni plugin ha la sua directory nella cartella plugins
 
-2) il nome del plgin corrisponde col nome della directory che corrisponde anche al valore "name" all'interno di pluginDescription.json 
+2) il nome del plgin corrisponde col nome della directory che corrisponde anche al valore "name" all'interno di pluginDescription.json5 
         e tale nome e dovrà essere senza spazi o catteri speciali
 
 3) all'interno di ogni cartella del plugin ci sarà un file con nome main.js
@@ -59,7 +59,7 @@ const routeArray = [
 per gli oggetti di sopra per l'atributo " path: '/api/users' " bisoggan atenere presente che avrà due prefix
 il risultato finale del path sarà qualcosa di simile a : path: `${api_prefox}/${moduleName}/api/users`
 
-5) all'interno del cartella del plugin sarà contenuto anche il file pluginDescription.json che avrà la seguente struttura:
+5) all'interno del cartella del plugin sarà contenuto anche il file pluginDescription.json5 che avrà la seguente struttura:
 
 ```json
 {
@@ -73,7 +73,7 @@ il risultato finale del path sarà qualcosa di simile a : path: `${api_prefox}/$
 }
 ```
 
-6) all'interno del cartella del plugin sarà contenuto anche il file pluginConfig.json che avrà la seguente struttura:
+6) all'interno del cartella del plugin sarà contenuto anche il file pluginConfig.json5 che avrà la seguente struttura:
 ```json
 {
         "active": 0,

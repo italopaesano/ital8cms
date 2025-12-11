@@ -97,7 +97,7 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
 ### 3.1 Sequenza di Avvio
 
 ```
-1. index.js carica ital8Config.json
+1. index.js carica ital8Config.json5
    ↓
 2. Inizializza pluginSys
    ↓
@@ -213,10 +213,10 @@ validateTheme(themeName) {
     return { valid: false, error: `'${themeName}' non è una directory` };
   }
 
-  // 3. Controlla esistenza themeConfig.json
-  const configPath = path.join(themePath, 'themeConfig.json');
+  // 3. Controlla esistenza themeConfig.json5
+  const configPath = path.join(themePath, 'themeConfig.json5');
   if (!fs.existsSync(configPath)) {
-    return { valid: false, error: `themeConfig.json mancante nel tema '${themeName}'` };
+    return { valid: false, error: `themeConfig.json5 mancante nel tema '${themeName}'` };
   }
 
   // 4. Controlla esistenza directory views
@@ -245,7 +245,7 @@ validateTheme(themeName) {
 |---|-------|-----------------|
 | 1 | Directory tema esiste | `Directory del tema 'X' non trovata` |
 | 2 | È una directory (non file) | `'X' non è una directory` |
-| 3 | `themeConfig.json` presente | `themeConfig.json mancante` |
+| 3 | `themeConfig.json5` presente | `themeConfig.json5 mancante` |
 | 4 | Directory `views/` presente | `Directory 'views' mancante` |
 | 5 | `views/head.ejs` presente | `Partial 'head.ejs' mancante` |
 | 6 | `views/header.ejs` presente | `Partial 'header.ejs' mancante` |
@@ -299,7 +299,7 @@ Verifica che tutte le dipendenze siano soddisfatte.
 checkDependencies(themeName) {
   const errors = [];
   const themePath = path.join(__dirname, '../themes', themeName);
-  const configPath = path.join(themePath, 'themeConfig.json');
+  const configPath = path.join(themePath, 'themeConfig.json5');
 
   // Leggi configurazione tema
   let config;
@@ -308,7 +308,7 @@ checkDependencies(themeName) {
   } catch (error) {
     return {
       satisfied: false,
-      errors: [`Impossibile leggere themeConfig.json: ${error.message}`]
+      errors: [`Impossibile leggere themeConfig.json5: ${error.message}`]
     };
   }
 
@@ -453,7 +453,7 @@ Il sistema utilizza due flag per gestire i contesti admin e pubblici:
 - `false` o `undefined`: Pagina pubblica
 - `true`: Pagina amministrazione
 
-**`isAdminTheme` (in themeConfig.json):**
+**`isAdminTheme` (in themeConfig.json5):**
 - Indica il tipo di tema
 - `false`: Tema pubblico (usabile solo come `activeTheme`)
 - `true`: Tema amministrazione (usabile solo come `adminActiveTheme`)
@@ -801,7 +801,7 @@ const customCss = themeSys.getPluginCustomCss('simpleAccess', 'login');
 
 | Metodo | Parametri | Ritorno | Descrizione |
 |--------|-----------|---------|-------------|
-| `getThemeDescription(themeName)` | `themeName`: string | object\|null | Metadati da themeDescription.json |
+| `getThemeDescription(themeName)` | `themeName`: string | object\|null | Metadati da themeDescription.json5 |
 | `getThemeVersion(themeName)` | `themeName`: string | string\|null | Versione tema |
 | `getActiveThemeDescription()` | - | object\|null | Metadati tema pubblico attivo |
 | `getAdminThemeDescription()` | - | object\|null | Metadati tema admin attivo |
@@ -892,7 +892,7 @@ fs.mkdirSync(`${themePath}/views`, { recursive: true });
 fs.mkdirSync(`${themePath}/templates`);
 
 // 2. Crea file obbligatori
-fs.writeFileSync(`${themePath}/themeConfig.json`, JSON.stringify({
+fs.writeFileSync(`${themePath}/themeConfig.json5`, JSON.stringify({
   active: 1,
   isInstalled: 1,
   weight: 0,
@@ -909,7 +909,7 @@ fs.writeFileSync(`${themePath}/themeConfig.json`, JSON.stringify({
   nodeModuleDependency: {}
 }, null, 2));
 
-fs.writeFileSync(`${themePath}/themeDescription.json`, JSON.stringify({
+fs.writeFileSync(`${themePath}/themeDescription.json5`, JSON.stringify({
   name: "myTheme",
   version: "1.0.0",
   description: "My custom theme"
@@ -959,7 +959,7 @@ async function activateTheme(themeName) {
   }
 
   // 3. Leggi configurazione tema
-  const themeConfigPath = path.join(__dirname, 'themes', themeName, 'themeConfig.json');
+  const themeConfigPath = path.join(__dirname, 'themes', themeName, 'themeConfig.json5');
   const themeConfig = JSON.parse(fs.readFileSync(themeConfigPath, 'utf8'));
 
   // 4. Gestisci wwwCustomPath
@@ -997,7 +997,7 @@ Per tornare alla cartella /www/ root, attivare un tema con wwwCustomPath: 0.
 
   // 5. Attiva tema
   ital8Conf.activeTheme = themeName;
-  fs.writeFileSync('./ital8Config.json', JSON.stringify(ital8Conf, null, 2));
+  fs.writeFileSync('./ital8Config.json5', JSON.stringify(ital8Conf, null, 2));
 
   return { success: true, message: 'Tema attivato. Riavviare il server.' };
 }

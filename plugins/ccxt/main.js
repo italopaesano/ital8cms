@@ -92,7 +92,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         ctx.set('Content-Type', 'application/json');
        }
     }, */
-    { //Ritornerà un array di ogetti come contenuto in customExchangesKey.json tranne per le chiavi pubbliche e private che non saranno presenti
+    { //Ritornerà un array di ogetti come contenuto in customExchangesKey.json5 tranne per le chiavi pubbliche e private che non saranno presenti
       method: 'GET',
       path: '/listExchangesWithAccount', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       handler: async (ctx, next) => {

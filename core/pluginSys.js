@@ -57,7 +57,7 @@ class pluginSys{
             logger.error('pluginSys', `Errore durante installazione plugin ${pluginName}`, installError);
             throw installError; // Rilancia per gestione esterna
           }
-          pluginConfig.isInstalled = 1;//ora devo aggiornare pluginConfig.json settando isInstalled = 1
+          pluginConfig.isInstalled = 1;//ora devo aggiornare pluginConfig.json5 settando isInstalled = 1
           plugin.pluginConfig = pluginConfig ;// aggiorno anche l'ogetto interno al plugin
 
           // scrivo il nuovo file pluginConfig.json5 con la variabile isInstalled aggiornata correttamente

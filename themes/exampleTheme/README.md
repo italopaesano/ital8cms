@@ -6,8 +6,8 @@ Tema di esempio che dimostra tutte le funzionalità del sistema dei temi di ital
 
 ```
 exampleTheme/
-├── themeConfig.json         # Configurazione e dipendenze
-├── themeDescription.json    # Metadati del tema
+├── themeConfig.json5         # Configurazione e dipendenze
+├── themeDescription.json5    # Metadati del tema
 ├── README.md                # Questa documentazione
 ├── views/                   # Partials riutilizzabili
 │   ├── head.ejs            # Apertura HTML + hook "head"
@@ -49,7 +49,7 @@ Gli asset sono in `/themeResources/` e accessibili via `/theme-assets/`:
 ```
 
 ### 3. Dipendenze
-Il tema dichiara le sue dipendenze in `themeConfig.json`:
+Il tema dichiara le sue dipendenze in `themeConfig.json5`:
 ```json
 {
   "pluginDependency": {
@@ -59,7 +59,7 @@ Il tema dichiara le sue dipendenze in `themeConfig.json`:
 ```
 
 ### 4. Metadati
-`themeDescription.json` contiene informazioni sul tema:
+`themeDescription.json5` contiene informazioni sul tema:
 - Versione
 - Autore
 - Hook supportati
@@ -67,7 +67,7 @@ Il tema dichiara le sue dipendenze in `themeConfig.json`:
 
 ## Come Attivare
 
-In `ital8Config.json`:
+In `ital8Config.json5`:
 ```json
 {
   "activeTheme": "exampleTheme"

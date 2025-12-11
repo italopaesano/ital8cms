@@ -317,8 +317,8 @@ Tutte le pagine admin utilizzano la stessa API dei temi pubblici, con selezione 
 ```
 
 **Temi e Validazione:**
-- Tema pubblico deve avere `isAdminTheme: false` nel `themeConfig.json`
-- Tema admin deve avere `isAdminTheme: true` nel `themeConfig.json`
+- Tema pubblico deve avere `isAdminTheme: false` nel `themeConfig.json5`
+- Tema admin deve avere `isAdminTheme: true` nel `themeConfig.json5`
 - Il sistema valida automaticamente al caricamento e fa fallback se mismatch
 
 **Partials Utilizzati:**
@@ -692,7 +692,7 @@ Plugin che possono estendere l'admin panel con:
 - Widget dashboard
 - Endpoint admin API
 
-**Esempio pluginConfig.json:**
+**Esempio pluginConfig.json5:**
 ```json
 {
   "admin": {
@@ -831,7 +831,7 @@ Il progetto ha già un plugin `media` - potrebbe essere integrato nell'admin.
 Menu dashboard: "Impostazioni Sistema"
 
 **Cosa Serve:**
-- Editor `ital8Config.json` via UI
+- Editor `ital8Config.json5` via UI
 - Configurazione SMTP email
 - Impostazioni sicurezza
 - Backup/restore
@@ -918,7 +918,7 @@ CREATE TABLE admin_logs (
 #### 11. **Gestione Ruoli/Permessi Avanzata** ❌ NON IMPLEMENTATO
 
 **Attuale:**
-Ruoli hardcoded in `userRole.json`
+Ruoli hardcoded in `userRole.json5`
 
 **Cosa Serve:**
 - CRUD ruoli via UI
@@ -1021,7 +1021,7 @@ core/admin/
 plugins/
 ├── myPlugin/
 │   ├── main.js
-│   ├── pluginConfig.json
+│   ├── pluginConfig.json5
 │   └── admin/                  # NUOVO: sezione admin plugin
 │       ├── routes.js
 │       ├── menu.json
@@ -1154,8 +1154,8 @@ module.exports = {
 ```
 plugins/admin/
 ├── main.js
-├── pluginConfig.json
-├── pluginDescription.json
+├── pluginConfig.json5
+├── pluginDescription.json5
 ├── modules/
 ├── middleware/
 └── views/
@@ -1348,7 +1348,7 @@ plugins/admin/
 
 ```javascript
 // core/admin/middleware/auth.js
-const ital8Conf = require('../../../ital8Config.json');
+const ital8Conf = require('../../../ital8Config.json5');
 
 async function requireAuth(ctx, next) {
     // Controlla se utente è autenticato
@@ -1372,7 +1372,7 @@ module.exports = { requireAuth };
 
 ```javascript
 // core/admin/middleware/rbac.js
-const ital8Conf = require('../../../ital8Config.json');
+const ital8Conf = require('../../../ital8Config.json5');
 
 /**
  * Controlla se utente ha ruolo minimo richiesto
@@ -2067,7 +2067,7 @@ Il sistema admin, una volta completato secondo questo piano, sarà:
 - `/index.js:64-102` - Caricamento admin
 - `/core/admin/admin.js` - DA IMPLEMENTARE
 - `/core/admin/adminRoute.js` - DA IMPLEMENTARE
-- `/ital8Config.json` - Configurazione admin
+- `/ital8Config.json5` - Configurazione admin
 
 ### Plugin Rilevanti
 - `simpleAccess` - Autenticazione

@@ -2,7 +2,7 @@
 
 
 questo plugin cerca di realizare un semplice modulo di autenticazione 
-essendo la sua filosofia minimale non implemento neanche un database ma i dati dei clienti saranno immagzinati in un file .json
+essendo la sua filosofia minimale non implemento neanche un database ma i dati dei clienti saranno immagzinati in un file .json5
 
 # nota sul redirezione della pagina dopo il login 
 
@@ -24,7 +24,7 @@ referrerTo=http://localhost:3003/ --> è l'url dove rediriggere la pagina in cas
 se l'utente insrisce correttamente i dati al primo colpo , allora l'url di redirezione sara l'header refer che si trova in ctx.headers.referer.
 
 # i dati degli utenti vengono immagazinatinel file:
-## userAccount.json
+## userAccount.json5
 // struttura di esempio del file
 ```js
 //ATTENZIONE PIÙ È BASSO L'ID DEL RUOLO E PIÒ PERMESSI HA UN iD = 0 --> utente Root di defoult ha accesso a tutto
@@ -75,7 +75,7 @@ se l'utente insrisce correttamente i dati al primo colpo , allora l'url di redir
 ```
 
 # ecco inceve il file di configrazione nello specifico 
-## pluginConfig.json
+## pluginConfig.json5
 ```js
 
 {

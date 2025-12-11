@@ -36,7 +36,7 @@ ital8cms è un progetto **italiano** con:
 ```javascript
 // ✅ CORRETTO
 const pluginName = path.basename(__dirname);
-let pluginConfig = require('./pluginConfig.json'); // let perchè questa variabile può cambiare di valore
+let pluginConfig = require('./pluginConfig.json5'); // let perchè questa variabile può cambiare di valore
 const sharedObject = {};
 
 // ❌ EVITARE
@@ -94,7 +94,7 @@ function getRouteArray() {
 
 // ✅ Arrow functions per callback e funzioni interne
 const caricatePlugin = (pluginName) => {
-  const pluginConfig = require(`../plugins/${pluginName}/pluginConfig.json`);
+  const pluginConfig = require(`../plugins/${pluginName}/pluginConfig.json5`);
   // ...
 };
 
@@ -148,7 +148,7 @@ async (ctx, next) => {
 
 ```javascript
 // ✅ CORRETTO
-const pluginConfig = require(`${__dirname}/pluginConfig.json`);
+const pluginConfig = require(`${__dirname}/pluginConfig.json5`);
 const basePath = path.join(__dirname, '..', 'plugins');
 
 // ✅ CORRETTO - Multi-line
@@ -266,7 +266,7 @@ const themeSys = require('./core/themeSys');
 
 ```javascript
 // ✅ PREFERITO nel progetto
-const ital8Conf = require('./ital8Config.json');
+const ital8Conf = require('./ital8Config.json5');
 const apiPrefix = ital8Conf.apiPrefix;
 
 // ⚠️ Meno comune nel progetto
@@ -286,9 +286,9 @@ priorityMiddlewares/
 
 // ✅ CORRETTO - File
 main.js
-pluginConfig.json
-pluginDescription.json
-ital8Config.json
+pluginConfig.json5
+pluginDescription.json5
+ital8Config.json5
 pluginSys.js
 themeSys.js
 ```
@@ -406,7 +406,7 @@ if (ital8Conf.enableAdmin) {
 
 ```javascript
 // ✅ CORRETTO
-let pluginConfig = require('./pluginConfig.json'); // let perchè questa variabile può cambiare di valore
+let pluginConfig = require('./pluginConfig.json5'); // let perchè questa variabile può cambiare di valore
 const sharedObject = {}; // oggetto che avrà gli oggetti condiviso con gli altri plugin
 
 middlewareArray.push( // ritorna un array di middleware
@@ -427,8 +427,8 @@ middlewareArray.push( // ritorna un array di middleware
 ```
 plugins/myPlugin/
 ├── main.js                    # Logica del plugin (OBBLIGATORIO)
-├── pluginConfig.json         # Configurazione (OBBLIGATORIO)
-├── pluginDescription.json    # Metadata (OBBLIGATORIO)
+├── pluginConfig.json5         # Configurazione (OBBLIGATORIO)
+├── pluginDescription.json5    # Metadata (OBBLIGATORIO)
 ├── EXPLAIN.md                 # Documentazione (CONSIGLIATO)
 ├── lib/                       # Librerie interne (OPZIONALE)
 │   └── myLib.js
@@ -446,7 +446,7 @@ const fs = require('fs');
 const path = require('path');
 
 // 2. CONFIGURAZIONE E VARIABILI GLOBALI
-let pluginConfig = require(`${__dirname}/pluginConfig.json`);
+let pluginConfig = require(`${__dirname}/pluginConfig.json5`);
 const pluginName = path.basename(__dirname);
 const sharedObject = {};
 
@@ -703,8 +703,8 @@ handler: async (ctx) => {
 plugins/myPlugin/
 ├── EXPLAIN.md              # ← OBBLIGATORIO
 ├── main.js
-├── pluginConfig.json
-└── pluginDescription.json
+├── pluginConfig.json5
+└── pluginDescription.json5
 ```
 
 ### 2. Lingua della Documentazione
@@ -724,7 +724,7 @@ Questo plugin permette di gestire gli utenti del sistema.
 
 ## Configurazione
 
-Nel file `pluginConfig.json` è possibile configurare...
+Nel file `pluginConfig.json5` è possibile configurare...
 ```
 
 ### 3. Esempi di Codice
@@ -778,7 +778,7 @@ Breve descrizione di cosa fa.
 
 ## Configurazione
 
-### pluginConfig.json
+### pluginConfig.json5
 
 ```json
 {
@@ -825,7 +825,7 @@ il sistema di plugin funziona nel seguente modo:
 1) ogni plugin ha la sua directory nella cartella plugins
 
 2) il nome del plugin corrisponde col nome della directory che corrisponde
-   anche al valore "name" all'interno di pluginDescription.json e tale nome
+   anche al valore "name" all'interno di pluginDescription.json5 e tale nome
    dovrà essere senza spazi o caratteri speciali
 
 3) all'interno di ogni cartella del plugin ci sarà un file con nome main.js
@@ -843,7 +843,7 @@ il sistema di plugin funziona nel seguente modo:
 ```markdown
 funzionamento dei temi,
 
-il file config-theme.json contiene il file di configurazione del tema corrente
+il file config-theme.json5 contiene il file di configurazione del tema corrente
 
 Es:
 
@@ -871,7 +871,7 @@ Es:
 const fs = require('fs');
 const path = require('path');
 
-let pluginConfig = require(`${__dirname}/pluginConfig.json`); // let perchè può cambiare
+let pluginConfig = require(`${__dirname}/pluginConfig.json5`); // let perchè può cambiare
 const pluginName = path.basename(__dirname);
 const sharedObject = {}; // oggetti condivisi con altri plugin
 
@@ -1169,8 +1169,8 @@ Quando crei un nuovo plugin, assicurati di:
 
 - [ ] Creare directory con nome senza spazi o caratteri speciali
 - [ ] Creare `main.js` con tutte le funzioni richieste
-- [ ] Creare `pluginConfig.json` con configurazione corretta
-- [ ] Creare `pluginDescription.json` con metadata
+- [ ] Creare `pluginConfig.json5` con configurazione corretta
+- [ ] Creare `pluginDescription.json5` con metadata
 - [ ] Creare `EXPLAIN.md` con documentazione in italiano
 - [ ] Usare commenti in italiano nel codice
 - [ ] Usare `const` quando possibile, `let` con commento se necessario
@@ -1194,10 +1194,10 @@ Quando crei un nuovo tema, assicurati di:
   - [ ] `main.ejs`
   - [ ] `aside.ejs`
   - [ ] `footer.ejs`
-- [ ] Creare `config-theme.json`
+- [ ] Creare `config-theme.json5`
 - [ ] Creare `README.md` o `EXPLAIN.md`
 - [ ] Includere hooks di plugin nei partial
-- [ ] Testare il tema attivandolo in `ital8Config.json`
+- [ ] Testare il tema attivandolo in `ital8Config.json5`
 
 ---
 

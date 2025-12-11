@@ -84,8 +84,8 @@ Il sistema utilizza un pattern **Plugin-Based Architecture** con:
    │      └─> fs.readdirSync() filtra solo directory
    │
    ├─> 3. Per ogni plugin trovato:
-   │      ├─> Legge pluginConfig.json
-   │      ├─> Legge pluginDescription.json
+   │      ├─> Legge pluginConfig.json5
+   │      ├─> Legge pluginDescription.json5
    │      └─> Verifica active === 1
    │
    ├─> 4. Costruisce pluginsVersionMap
@@ -121,7 +121,7 @@ Il sistema utilizza un pattern **Plugin-Based Architecture** con:
 caricatePlugin(pluginName) {
 
   // 1. Caricamento Configurazione e Codice
-  const pluginConfig = require(`../plugins/${pluginName}/pluginConfig.json`)
+  const pluginConfig = require(`../plugins/${pluginName}/pluginConfig.json5`)
   const plugin = require(`../plugins/${pluginName}/main.js`)
 
   // 2. Registrazione Immediata
@@ -148,9 +148,9 @@ caricatePlugin(pluginName) {
   if (pluginConfig.isInstalled == 0) {
     plugin.installPlugin()
     pluginConfig.isInstalled = 1
-    // Aggiorna pluginConfig.json su filesystem
+    // Aggiorna pluginConfig.json5 su filesystem
     fs.promises.writeFile(
-      `${__dirname}/../plugins/${pluginName}/pluginConfig.json`,
+      `${__dirname}/../plugins/${pluginName}/pluginConfig.json5`,
       JSON.stringify(pluginConfig, null, 2)
     )
   }
@@ -193,8 +193,8 @@ Ogni plugin **DEVE** avere questa struttura:
 plugins/
 └── nomePlugin/
     ├── main.js                   # ⚠️ OBBLIGATORIO - Logica plugin
-    ├── pluginConfig.json        # ⚠️ OBBLIGATORIO - Configurazione
-    └── pluginDescription.json   # ⚠️ OBBLIGATORIO - Metadati
+    ├── pluginConfig.json5        # ⚠️ OBBLIGATORIO - Configurazione
+    └── pluginDescription.json5   # ⚠️ OBBLIGATORIO - Metadati
 ```
 
 ### main.js - Interfaccia Standard
@@ -290,7 +290,7 @@ module.exports = {
 }
 ```
 
-### pluginConfig.json
+### pluginConfig.json5
 
 ```json
 {
@@ -323,7 +323,7 @@ module.exports = {
 | `nodeModuleDependency` | object | ⚠️ NON VERIFICATO - Dipendenze npm |
 | `custom` | object | Configurazioni custom del plugin |
 
-### pluginDescription.json
+### pluginDescription.json5
 
 ```json
 {
@@ -518,7 +518,7 @@ Esempio:
  │    │             │
  │    │             └─> path definito nel plugin
  │    └──────────────> nome del plugin
- └───────────────────> apiPrefix da ital8Config.json
+ └───────────────────> apiPrefix da ital8Config.json5
 ```
 
 ### Definizione Route in un Plugin
@@ -890,7 +890,7 @@ function detectCircularDependencies(pluginsToActive) {
 Non ci sono try-catch durante:
 - Caricamento `require()` dei plugin
 - Chiamata `installPlugin()`, `loadPlugin()`
-- Scrittura file `pluginConfig.json`
+- Scrittura file `pluginConfig.json5`
 
 **Conseguenza:**
 Un errore in un plugin **blocca l'intero sistema**.
@@ -900,7 +900,7 @@ Un errore in un plugin **blocca l'intero sistema**.
 ```javascript
 const caricatePlugin = (pluginName) => {
   try {
-    const pluginConfig = require(`../plugins/${pluginName}/pluginConfig.json`)
+    const pluginConfig = require(`../plugins/${pluginName}/pluginConfig.json5`)
     const plugin = require(`../plugins/${pluginName}/main.js`)
 
     // ... resto del codice
@@ -945,7 +945,7 @@ Non c'è controllo della versione precedente vs nuova versione.
 // In caricatePlugin(), dopo aver caricato config e description
 
 const currentVersion = pluginConfig.version || '0.0.0'
-const newVersion = require(`../plugins/${pluginName}/pluginDescription.json`).version
+const newVersion = require(`../plugins/${pluginName}/pluginDescription.json5`).version
 
 if (semver.gt(newVersion, currentVersion)) {
   // Nuova versione installata!
@@ -956,7 +956,7 @@ if (semver.gt(newVersion, currentVersion)) {
       // Aggiorna versione in config
       pluginConfig.version = newVersion
       fs.promises.writeFile(
-        `${__dirname}/../plugins/${pluginName}/pluginConfig.json`,
+        `${__dirname}/../plugins/${pluginName}/pluginConfig.json5`,
         JSON.stringify(pluginConfig, null, 2)
       )
     } catch (error) {
@@ -972,7 +972,7 @@ if (semver.gt(newVersion, currentVersion)) {
 ### 🟡 BASSO - Validazione `nodeModuleDependency` Non Implementata
 
 **Problema:**
-Il campo `nodeModuleDependency` in `pluginConfig.json` **non viene controllato**.
+Il campo `nodeModuleDependency` in `pluginConfig.json5` **non viene controllato**.
 
 **Implementazione Proposta:**
 
@@ -1117,7 +1117,7 @@ async installPluginFromRepo(pluginUrl) {
 **Proposta:**
 
 ```javascript
-// pluginConfig.json
+// pluginConfig.json5
 {
   "permissions": {
     "filesystem": false,
@@ -1216,7 +1216,7 @@ getRouteArray() {
 
 **Proposta:**
 
-Admin panel con form per modificare `custom` object in `pluginConfig.json`.
+Admin panel con form per modificare `custom` object in `pluginConfig.json5`.
 
 ---
 
@@ -1415,7 +1415,7 @@ const fs = require('fs')
 const path = require('path')
 
 // Configurazione
-let pluginConfig = require(`${__dirname}/pluginConfig.json`)
+let pluginConfig = require(`${__dirname}/pluginConfig.json5`)
 const pluginName = path.basename(__dirname)
 
 // Variabili condivise
@@ -1496,7 +1496,7 @@ function setSharedObject(fromPlugin, object) {
 function getObjectToShareToWebPages(pluginSys, pathPluginFolder) {
   return {
     pluginName: pluginName,
-    version: require('./pluginDescription.json').version
+    version: require('./pluginDescription.json5').version
   }
 }
 
@@ -1598,7 +1598,7 @@ module.exports = {
 
 ## Appendice B: File di Configurazione Completi
 
-### pluginConfig.json (Esempio Completo)
+### pluginConfig.json5 (Esempio Completo)
 
 ```json
 {
@@ -1629,7 +1629,7 @@ module.exports = {
 }
 ```
 
-### pluginDescription.json (Esempio Completo)
+### pluginDescription.json5 (Esempio Completo)
 
 ```json
 {
