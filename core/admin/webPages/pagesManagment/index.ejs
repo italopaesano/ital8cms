@@ -562,6 +562,14 @@ function renderTree(data) {
     const pages = data.pages;
     const folders = data.folders;
 
+    // SALVA stato corrente delle cartelle (quali sono aperte/chiuse)
+    const closedFolders = new Set();
+    document.querySelectorAll('.tree-children').forEach(el => {
+        if (el.style.display === 'none') {
+            closedFolders.add(el.id);
+        }
+    });
+
     // Costruisce struttura ad albero
     const tree = buildTree(pages, folders);
 
@@ -579,6 +587,24 @@ function renderTree(data) {
     `;
 
     document.getElementById('wwwTreeContainer').innerHTML = statsHtml + html;
+
+    // RIPRISTINA stato delle cartelle che erano chiuse
+    closedFolders.forEach(folderId => {
+        const el = document.getElementById(folderId);
+        if (el) {
+            el.style.display = 'none';
+
+            // Aggiorna anche l'icona del pulsante toggle
+            const button = document.querySelector(`[data-target="${folderId}"]`);
+            if (button) {
+                const icon = button.querySelector('i');
+                if (icon) {
+                    icon.classList.remove('bi-caret-down-fill');
+                    icon.classList.add('bi-caret-right-fill');
+                }
+            }
+        }
+    });
 
     // Inizializza i toggle delle cartelle con JavaScript puro (senza Bootstrap Collapse)
     initializeFolderToggles();
@@ -697,8 +723,9 @@ function renderTreeNode(node, isRoot = false) {
 
     if (node.type === 'folder') {
         const hasChildren = node.children && node.children.length > 0;
-        // Usa un ID più robusto che funziona anche con path vuoti o caratteri speciali
-        const folderId = `folder-${node.path ? node.path.replace(/[\/\s]/g, '-') : 'root'}-${Math.random().toString(36).substr(2, 9)}`;
+        // ID deterministico basato sul path: stesso path = stesso ID sempre
+        // Garantisce zero collisioni e permette di preservare lo stato tra refresh
+        const folderId = `folder-${node.path ? node.path.replace(/[\/\s]/g, '-') : 'root'}`;
 
         return `
             <div class="tree-item">
