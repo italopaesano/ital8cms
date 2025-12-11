@@ -579,6 +579,57 @@ function renderTree(data) {
     `;
 
     document.getElementById('wwwTreeContainer').innerHTML = statsHtml + html;
+
+    // IMPORTANTE: Inizializza manualmente i collapse di Bootstrap
+    // Questo è necessario perché Bootstrap 5 non inizializza automaticamente
+    // i componenti inseriti dinamicamente con innerHTML
+    initializeCollapseButtons();
+}
+
+/**
+ * Inizializza i pulsanti collapse di Bootstrap per le cartelle
+ * Necessario perché l'HTML viene inserito dinamicamente e Bootstrap 5
+ * non inizializza automaticamente i componenti data-bs-toggle
+ */
+function initializeCollapseButtons() {
+    // Trova tutti i pulsanti con data-bs-toggle="collapse"
+    const collapseButtons = document.querySelectorAll('[data-bs-toggle="collapse"]');
+
+    collapseButtons.forEach(button => {
+        // Rimuovi eventuali listener precedenti per evitare duplicati
+        const newButton = button.cloneNode(true);
+        button.parentNode.replaceChild(newButton, button);
+
+        // Aggiungi evento click manualmente
+        newButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const targetId = this.getAttribute('data-bs-target');
+            if (!targetId) return;
+
+            const targetElement = document.querySelector(targetId);
+            if (!targetElement) {
+                console.error('Elemento collapse non trovato:', targetId);
+                return;
+            }
+
+            // Toggle della classe 'show' per mostrare/nascondere
+            targetElement.classList.toggle('show');
+
+            // Ruota l'icona del triangolo
+            const icon = this.querySelector('i');
+            if (icon) {
+                if (targetElement.classList.contains('show')) {
+                    icon.classList.remove('bi-caret-right-fill');
+                    icon.classList.add('bi-caret-down-fill');
+                } else {
+                    icon.classList.remove('bi-caret-down-fill');
+                    icon.classList.add('bi-caret-right-fill');
+                }
+            }
+        });
+    });
 }
 
 /**
