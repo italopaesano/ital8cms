@@ -221,14 +221,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
        }
     },
       // ATTENZIONE BISOGNA LIMITARE l'ACCESSO A QUESTO RL SOLO A UTENTI LOGGATI
-    { // url richiesto(dalla pagina di amministrazione) per ottenere la lista degli utenti attivi nel sito 
-      method: 'GET', 
+    { // url richiesto(dalla pagina di amministrazione) per ottenere la lista degli utenti attivi nel sito
+      method: 'GET',
       path: '/userList', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       handler: async (ctx) => {//
-        const userFilePath = path.join(__dirname, 'userAccount.json');
+        const userFilePath = path.join(__dirname, 'userAccount.json5');
         try {
-          const userAccountData = fs.readFileSync(userFilePath, 'utf8');
-          const userAccount = JSON.parse(userAccountData);
+          const userAccount = loadJson5(userFilePath);
           ctx.body = Object.entries(userAccount.users).map(([username, userData]) => ({//CON QUESTE ISTRUZIONI GENERO UN ARRAY CONTENETE OGETTI CON DUE CAMPI username , roleId
             username,
             roleId: userData.roleId
@@ -242,14 +241,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
        }
     },
     { // url richiesto(dalla pagina di amministrazione) per ottenere tutte le informazioni sull'utente
-      method: 'GET', 
+      method: 'GET',
       path: '/userInfo', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       handler: async (ctx) => {//
         const username = ctx.query.username; //username pasatocon la queystrng
-        const userFilePath = path.join(__dirname, 'userAccount.json');
+        const userFilePath = path.join(__dirname, 'userAccount.json5');
         try {
-          const userAccountData = fs.readFileSync(userFilePath, 'utf8');
-          const userAccount = JSON.parse(userAccountData);
+          const userAccount = loadJson5(userFilePath);
           userAccount.users[username].hashPassword = undefined;// non voglioesporre l'hashPassword per ragioni di sicurezza
           console.log('userAccount[username]', userAccount.users[username]);
           ctx.body = userAccount.users[username];//ATTENZIONE CONSIGLIATO NON USARE JSON.stringify() , come -->  ctx.body = JSON.stringify(userAccount.users[username]); vedi articolo --> https://chatgpt.com/share/67e8e119-aa58-8012-ba93-0a69499c9186
@@ -261,14 +259,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         ctx.type = 'application/json'; // oppure semplicemente 'json'
        }
     },
-    { // url richiesto(dalla pagina di amministrazione) per ottenere la lista degli utenti attivi nel sito 
-      method: 'GET', 
+    { // url richiesto(dalla pagina di amministrazione) per ottenere la lista degli utenti attivi nel sito
+      method: 'GET',
       path: '/roleList', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       handler: async (ctx) => {//
         const roleFilePath = path.join(__dirname, 'userRole.json5');
         try {
-          const roleData = fs.readFileSync(roleFilePath, 'utf8');
-          ctx.body = JSON.parse(roleData);
+          ctx.body = loadJson5(roleFilePath);
         } catch (error) {
           ctx.status = 500;
           ctx.body = { error: 'Unable to retrieve roles list' };
