@@ -146,7 +146,7 @@ const loadJson5 = require('../../core/loadJson5');
 function getWwwPath() {
     try {
         // Carica configurazione globale
-        const ital8Config = loadJson5(path.join(__dirname, '../../ital8Config.json'));
+        const ital8Config = loadJson5(path.join(__dirname, '../../ital8Config.json5'));
         const activeTheme = ital8Config.activeTheme;
 
         // Path del tema attivo
@@ -881,7 +881,7 @@ function extractTemplateFromMetadata(content) {
 function getThemeInfo() {
     try {
         // Leggi configurazione principale
-        const ital8Config = loadJson5(path.join(__dirname, '../../ital8Config.json'));
+        const ital8Config = loadJson5(path.join(__dirname, '../../ital8Config.json5'));
         const activeTheme = ital8Config.activeTheme;
 
         // Leggi configurazione tema

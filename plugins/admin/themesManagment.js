@@ -195,7 +195,7 @@ function getThemeDetails(themeName, themeSys) {
         }
 
         // Leggi configurazione corrente
-        const ital8Config = loadJson5(path.join(__dirname, '../../ital8Config.json'));
+        const ital8Config = loadJson5(path.join(__dirname, '../../ital8Config.json5'));
 
         return {
             success: true,

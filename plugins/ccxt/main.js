@@ -96,7 +96,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       method: 'GET',
       path: '/listExchangesWithAccount', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       handler: async (ctx, next) => {
-        ctx.body = loadJson5(path.join(__dirname, './custom/customExchangesKey.json')).exchanges.map( (item) => { return {exchangeName: item.exchangeName, refCoin: item.refCoin, id: item.id, accountName: item.accountName } }); // la funzione map è fatta in modo che l'array non contenga informazioni senzibili come l' apiKey o altro
+        ctx.body = loadJson5(path.join(__dirname, './custom/customExchangesKey.json5')).exchanges.map( (item) => { return {exchangeName: item.exchangeName, refCoin: item.refCoin, id: item.id, accountName: item.accountName } }); // la funzione map è fatta in modo che l'array non contenga informazioni senzibili come l' apiKey o altro
         ctx.set('Content-Type', 'application/json');
        }
     },
