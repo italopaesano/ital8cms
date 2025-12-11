@@ -5,7 +5,7 @@ const loadJson5 = require('../../core/loadJson5');
 const ccxt = require("ccxt");// qui serve solo per rispondere alle funzioni generiche tutte quelle che richiedono di pecificare un exchange verra usato la comunicazione intratred con workerCcxt.js
 const ccxtDataTables = require('./lib/ccxtDataStructureTables');// servirà a creare le tabbelle che immagazineranno i dati delle strutture di ccxt
 
-let pluginConfig = loadJson5(path.join(__dirname, 'pluginConfig.json'));// let perchè questa varibile può cambiare di valore 
+let pluginConfig = loadJson5(path.join(__dirname, 'pluginConfig.json5'));// let perchè questa varibile può cambiare di valore 
 const pluginName = path.basename(  __dirname );// restituisce il nome della directory che contiene il file corrente e che è anche il nome del plugin
 const sharedObject = {};// ogetto che avrà gliogetti condiviso con gli altri plugin ES {dbApi: newdbApi}
 
@@ -92,11 +92,11 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         ctx.set('Content-Type', 'application/json');
        }
     }, */
-    { //Ritornerà un array di ogetti come contenuto in customExchangesKey.json tranne per le chiavi pubbliche e private che non saranno presenti
+    { //Ritornerà un array di ogetti come contenuto in customExchangesKey.json5 tranne per le chiavi pubbliche e private che non saranno presenti
       method: 'GET',
       path: '/listExchangesWithAccount', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       handler: async (ctx, next) => {
-        ctx.body = loadJson5(path.join(__dirname, './custom/customExchangesKey.json')).exchanges.map( (item) => { return {exchangeName: item.exchangeName, refCoin: item.refCoin, id: item.id, accountName: item.accountName } }); // la funzione map è fatta in modo che l'array non contenga informazioni senzibili come l' apiKey o altro
+        ctx.body = loadJson5(path.join(__dirname, './custom/customExchangesKey.json5')).exchanges.map( (item) => { return {exchangeName: item.exchangeName, refCoin: item.refCoin, id: item.id, accountName: item.accountName } }); // la funzione map è fatta in modo che l'array non contenga informazioni senzibili come l' apiKey o altro
         ctx.set('Content-Type', 'application/json');
        }
     },
@@ -252,7 +252,7 @@ module.exports = {
 /* OLD_ const fs = require('fs');
 const path = require('path');
 
-let pluginConfig = loadJson5(path.join(__dirname, 'pluginConfig.json'));// let perchè questa varibile può cambiare di valore 
+let pluginConfig = loadJson5(path.join(__dirname, 'pluginConfig.json5'));// let perchè questa varibile può cambiare di valore 
 const pluginName = path.basename( __dirname );// restituisce il nome della directory che contiene il file corrente e che è anche il nome del plugin
 
 function loadPlugin(){

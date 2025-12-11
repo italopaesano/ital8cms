@@ -92,8 +92,8 @@ function getPluginsList() {
             const stat = fs.statSync(pluginDir);
 
             if (stat.isDirectory()) {
-                const configPath = path.join(pluginDir, 'pluginConfig.json');
-                const descriptionPath = path.join(pluginDir, 'pluginDescription.json');
+                const configPath = path.join(pluginDir, 'pluginConfig.json5');
+                const descriptionPath = path.join(pluginDir, 'pluginDescription.json5');
                 const mainPath = path.join(pluginDir, 'main.js');
 
                 let config = {};
@@ -162,8 +162,8 @@ function getPluginDetails(pluginName) {
             return null;
         }
 
-        const configPath = path.join(pluginDir, 'pluginConfig.json');
-        const descriptionPath = path.join(pluginDir, 'pluginDescription.json');
+        const configPath = path.join(pluginDir, 'pluginConfig.json5');
+        const descriptionPath = path.join(pluginDir, 'pluginDescription.json5');
         const mainPath = path.join(pluginDir, 'main.js');
 
         let config = {};
@@ -205,7 +205,7 @@ function getPluginDetails(pluginName) {
  */
 function togglePlugin(pluginName, active) {
     try {
-        const configPath = path.join(PLUGINS_PATH, pluginName, 'pluginConfig.json');
+        const configPath = path.join(PLUGINS_PATH, pluginName, 'pluginConfig.json5');
 
         if (!fs.existsSync(configPath)) {
             return {
@@ -247,7 +247,7 @@ function togglePlugin(pluginName, active) {
  */
 function updatePluginConfig(pluginName, newConfig) {
     try {
-        const configPath = path.join(PLUGINS_PATH, pluginName, 'pluginConfig.json');
+        const configPath = path.join(PLUGINS_PATH, pluginName, 'pluginConfig.json5');
 
         if (!fs.existsSync(configPath)) {
             return {

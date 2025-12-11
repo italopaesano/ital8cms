@@ -118,7 +118,7 @@ class themeSys{
   //#fnInPageMap;// variabile privata
 
   constructor( theItal8Conf, thePluginSys = null ){// OLD OpluginSys. incorpora un istanza della classe pluginSys quindi un oggetto pluginSys da questo la O grande iniziale
-    this.ital8Conf = theItal8Conf ;//OLD require('../ital8Config.json');
+    this.ital8Conf = theItal8Conf ;//OLD require('../ital8Config.json5');
     this.pluginSys = thePluginSys; // Riferimento al sistema dei plugin per il check delle dipendenze
     //this.activeTheme = activeTheme;// nome del tema attivoQUESTA DEFINIZIONE SERVE A PERMETTERE DI IMPOSTARE UN TEMA ATTIVO DIVERSO DA QUELLO IMPOSTATO NEL FIEL DI CONFIGUAZIONE , AD ESEMPIO  PER I FILE DI ADMIN IL TEMA ATTIVO SARÀ SEMPRE QUELLO DI DEFULT
     //this.#fnInPageMap = OpluginSys.fnInPage;
@@ -149,7 +149,7 @@ class themeSys{
 
     // Valida che il tema pubblico NON sia marcato come admin theme
     try {
-      const publicConfigPath = path.join(__dirname, '../themes', this.ital8Conf.activeTheme, 'themeConfig.json');
+      const publicConfigPath = path.join(__dirname, '../themes', this.ital8Conf.activeTheme, 'themeConfig.json5');
       const publicConfig = loadJson5(publicConfigPath);
       if (publicConfig.isAdminTheme === true) {
         console.error(`[themeSys] ⚠️  ERRORE: Il tema pubblico '${this.ital8Conf.activeTheme}' è marcato come admin theme (isAdminTheme: true)!`);
@@ -196,7 +196,7 @@ class themeSys{
 
     // Valida che il tema admin SIA marcato come admin theme
     try {
-      const adminConfigPath = path.join(__dirname, '../themes', this.ital8Conf.adminActiveTheme, 'themeConfig.json');
+      const adminConfigPath = path.join(__dirname, '../themes', this.ital8Conf.adminActiveTheme, 'themeConfig.json5');
       const adminConfig = loadJson5(adminConfigPath);
       if (adminConfig.isAdminTheme !== true) {
         console.error(`[themeSys] ⚠️  ERRORE: Il tema admin '${this.ital8Conf.adminActiveTheme}' NON è marcato come admin theme (isAdminTheme mancante o false)!`);
@@ -231,14 +231,14 @@ class themeSys{
   checkDependencies(themeName) {
     const errors = [];
     const themePath = path.join(__dirname, '../themes', themeName);
-    const configPath = path.join(themePath, 'themeConfig.json');
+    const configPath = path.join(themePath, 'themeConfig.json5');
 
     // Leggi configurazione tema
     let config;
     try {
       config = loadJson5(configPath);
     } catch (error) {
-      return { satisfied: false, errors: [`Impossibile leggere themeConfig.json: ${error.message}`] };
+      return { satisfied: false, errors: [`Impossibile leggere themeConfig.json5: ${error.message}`] };
     }
 
     // Controlla dipendenze plugin
@@ -298,7 +298,7 @@ class themeSys{
    */
   getThemeDependencies(themeName) {
     const themePath = path.join(__dirname, '../themes', themeName);
-    const configPath = path.join(themePath, 'themeConfig.json');
+    const configPath = path.join(themePath, 'themeConfig.json5');
 
     try {
       if (fs.existsSync(configPath)) {
@@ -362,10 +362,10 @@ class themeSys{
       return { valid: false, error: `'${themeName}' non è una directory` };
     }
 
-    // Controlla esistenza themeConfig.json
-    const configPath = path.join(themePath, 'themeConfig.json');
+    // Controlla esistenza themeConfig.json5
+    const configPath = path.join(themePath, 'themeConfig.json5');
     if (!fs.existsSync(configPath)) {
-      return { valid: false, error: `themeConfig.json mancante nel tema '${themeName}'` };
+      return { valid: false, error: `themeConfig.json5 mancante nel tema '${themeName}'` };
     }
 
     // Controlla esistenza directory views
@@ -548,14 +548,14 @@ class themeSys{
    * @returns {object|null} - Oggetto con i metadati o null se non trovato
    */
   getThemeDescription(themeName) {
-    const descPath = path.join(__dirname, '../themes', themeName, 'themeDescription.json');
+    const descPath = path.join(__dirname, '../themes', themeName, 'themeDescription.json5');
 
     try {
       if (fs.existsSync(descPath)) {
         return loadJson5(descPath);
       }
     } catch (error) {
-      console.warn(`[themeSys] Errore lettura themeDescription.json per ${themeName}: ${error.message}`);
+      console.warn(`[themeSys] Errore lettura themeDescription.json5 per ${themeName}: ${error.message}`);
     }
 
     return null;

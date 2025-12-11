@@ -368,7 +368,7 @@ const { data } = await axios.get('/api/simpleAccess/userInfo', {
 1. **Proteggere endpoint sensibili** - Aggiungere controlli di autenticazione
 2. **Validare input** - Verificare tutti i parametri
 3. **Usare HTTPS** - In produzione abilitare SSL
-4. **Cambiare chiavi sessione** - Modificare in `koaSession.json`
+4. **Cambiare chiavi sessione** - Modificare in `koaSession.json5`
 
 ### Middleware di Protezione
 

@@ -46,8 +46,8 @@ Il sistema dei temi di **ital8cms** separa la presentazione dalla logica applica
 
 ```
 themes/nomeDelTema/
-├── themeConfig.json               # OBBLIGATORIO - Configurazione
-├── themeDescription.json          # OBBLIGATORIO - Metadati
+├── themeConfig.json5               # OBBLIGATORIO - Configurazione
+├── themeDescription.json5          # OBBLIGATORIO - Metadati
 ├── README.md                      # Documentazione del tema
 ├── theme-icon.svg                 # OPZIONALE - Icona tema (64x64)
 ├── screenshot.png                 # OPZIONALE - Anteprima tema (1200x900)
@@ -88,7 +88,7 @@ themes/nomeDelTema/
 
 ## 3. File Obbligatori
 
-### 3.1 themeConfig.json
+### 3.1 themeConfig.json5
 
 File di configurazione del tema.
 
@@ -180,7 +180,7 @@ Questo evita confusione su dove cercare le pagine del sito.
 
 ---
 
-### 3.2 themeDescription.json
+### 3.2 themeDescription.json5
 
 Metadati del tema visualizzati nell'admin.
 
@@ -236,7 +236,7 @@ Metadati del tema visualizzati nell'admin.
 
 Definisce i template disponibili per creare pagine.
 
-Definiti in `themeDescription.json`:
+Definiti in `themeDescription.json5`:
 ```json
 {
   "templates": [
@@ -646,7 +646,7 @@ pluginsEndpointsMarkup/
 
 ### 5.5 www/ - Pagine Generate (Opzionale)
 
-**Presente solo se:** `wwwCustomPath: 1` in `config-theme.json`
+**Presente solo se:** `wwwCustomPath: 1` in `config-theme.json5`
 
 **Scopo:** Contenere le pagine web create dai template, isolate per questo tema.
 
@@ -714,10 +714,10 @@ mkdir themeResources/js
 mkdir themeResources/images
 ```
 
-### Step 2: Crea themeConfig.json
+### Step 2: Crea themeConfig.json5
 
 ```bash
-nano themeConfig.json
+nano themeConfig.json5
 ```
 
 ```json
@@ -737,10 +737,10 @@ nano themeConfig.json
 }
 ```
 
-### Step 3: Crea themeDescription.json
+### Step 3: Crea themeDescription.json5
 
 ```bash
-nano themeDescription.json
+nano themeDescription.json5
 ```
 
 ```json
@@ -917,7 +917,7 @@ cp path/to/theme-icon.svg .
 
 ### Step 8: Attiva il Tema
 
-Modifica `ital8Config.json` nella root del progetto:
+Modifica `ital8Config.json5` nella root del progetto:
 
 ```json
 {
@@ -944,8 +944,8 @@ Tema con solo i file obbligatori.
 
 ```
 themes/minimal/
-├── themeConfig.json
-├── themeDescription.json
+├── themeConfig.json5
+├── themeDescription.json5
 ├── views/
 │   ├── head.ejs
 │   ├── header.ejs
@@ -960,8 +960,8 @@ Tema con tutti i componenti.
 
 ```
 themes/blog/
-├── themeConfig.json
-├── themeDescription.json
+├── themeConfig.json5
+├── themeDescription.json5
 ├── screenshot.png
 ├── theme-icon.svg
 ├── views/
@@ -997,8 +997,8 @@ Tema con template prodotti.
 
 ```
 themes/shop/
-├── themeConfig.json
-├── themeDescription.json
+├── themeConfig.json5
+├── themeDescription.json5
 ├── views/
 │   ├── head.ejs
 │   ├── header.ejs
@@ -1023,8 +1023,8 @@ themes/shop/
 ### Creazione Tema Base
 
 - [ ] Creare directory `themes/nomeDelTema/`
-- [ ] Creare `themeConfig.json` con configurazione corretta
-- [ ] Creare `themeDescription.json` con metadati
+- [ ] Creare `themeConfig.json5` con configurazione corretta
+- [ ] Creare `themeDescription.json5` con metadati
 - [ ] Creare `views/head.ejs` con hook "head"
 - [ ] Creare `views/header.ejs` con hook "header"
 - [ ] Creare `views/footer.ejs` con hook "footer" e "script"
@@ -1032,7 +1032,7 @@ themes/shop/
 - [ ] Decidere `followsGlobalStandard` (true o false)
 - [ ] Decidere `wwwCustomPath` (0 o 1)
 - [ ] Testare che i partials includano correttamente gli hook
-- [ ] Attivare tema in `ital8Config.json`
+- [ ] Attivare tema in `ital8Config.json5`
 - [ ] Riavviare server e verificare caricamento
 
 ### Opzionali
@@ -1042,7 +1042,7 @@ themes/shop/
 - [ ] Creare partials opzionali (`nav.ejs`, `aside.ejs`, ecc.)
 - [ ] Creare template aggiuntivi (article, product, ecc.)
 - [ ] Aggiungere icone per template (`nomeTemplate-icon.svg`)
-- [ ] Aggiungere metadati templates in `themeDescription.json`
+- [ ] Aggiungere metadati templates in `themeDescription.json5`
 - [ ] Creare cartella `themeResources/` con CSS/JS
 - [ ] Personalizzare endpoint plugin in `pluginsEndpointsMarkup/`
 - [ ] Creare `README.md` con documentazione tema

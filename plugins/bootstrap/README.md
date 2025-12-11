@@ -9,7 +9,7 @@ Plugin per ital8cms che fornisce Bootstrap CSS/JS e Bootstrap Icons attraverso r
 
 ## Descrizione
 
-Questo plugin integra Bootstrap e Bootstrap Icons nel CMS, servendo i file statici attraverso route API ottimizzate. I file vengono caricati direttamente da `node_modules`, garantendo sempre l'allineamento con le versioni dichiarate in `pluginConfig.json`.
+Questo plugin integra Bootstrap e Bootstrap Icons nel CMS, servendo i file statici attraverso route API ottimizzate. I file vengono caricati direttamente da `node_modules`, garantendo sempre l'allineamento con le versioni dichiarate in `pluginConfig.json5`.
 
 ## Funzionalità
 
@@ -159,7 +159,7 @@ ctx.set('Content-Type', 'text/css');
 
 ## Configurazione
 
-### pluginConfig.json
+### pluginConfig.json5
 
 ```json
 {
@@ -190,7 +190,7 @@ I file Bootstrap vengono caricati da `node_modules`, che **non deve mai** essere
 
 ### Aggiornamento Versioni
 Per aggiornare Bootstrap o Bootstrap Icons:
-1. Modifica le versioni in `pluginConfig.json` → `nodeModuleDependency`
+1. Modifica le versioni in `pluginConfig.json5` → `nodeModuleDependency`
 2. Esegui `npm install`
 3. Riavvia il server
 
@@ -220,7 +220,7 @@ I path dei font devono corrispondere alla struttura delle route. Modifiche ai pa
 **Problema:** I file Bootstrap non vengono trovati.
 
 **Soluzioni:**
-1. Verifica che il plugin sia attivo in `pluginConfig.json`:
+1. Verifica che il plugin sia attivo in `pluginConfig.json5`:
    ```json
    { "active": 1 }
    ```

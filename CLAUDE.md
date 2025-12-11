@@ -30,20 +30,20 @@
 
 **Target audience:** Web developers comfortable with Node.js, HTML/CSS, and server-side templating. Not suitable for non-technical users looking for a WYSIWYG editor.
 
-**JSON5 Configuration Files:** All `.json` configuration files in the project (except `package.json` and `package-lock.json`) are processed with JSON5 and support comments, trailing commas, and other JSON5 features. Each file must have a comment on the first line:
+**JSON5 Configuration Files:** All configuration files (with .json5 extension) in the project (except `package.json` and `package-lock.json`) are processed with JSON5 and support comments, trailing commas, and other JSON5 features. Each file must have a comment on the first line:
 
 ```javascript
 // This file follows the JSON5 standard - comments and trailing commas are supported
 ```
 
-**Loading JSON Files:** All JSON files must be loaded using the centralized `core/loadJson5.js` module:
+**Loading JSON Files:** All JSON files must be loaded using the centralized `core/loadJson5.js` module (all config files now use .json5 extension):
 
 ```javascript
 const loadJson5 = require('./core/loadJson5');
-const config = loadJson5('./ital8Config.json');
+const config = loadJson5('./ital8Config.json5');
 ```
 
-**DO NOT** use `require()` directly for `.json` files as it doesn't support JSON5 comments.
+**DO NOT** use `require()` directly for `.json5` configuration files as it doesn't support JSON5 comments. **ALWAYS** use the `loadJson5()` function for loading all configuration files.
 
 **Why loadJson5 naming:** The file is named `loadJson5.js` and the function is `loadJson5()` to maintain **perfect symmetry** between the module name and the exported function, making imports clear and intuitive.
 
@@ -52,7 +52,7 @@ const config = loadJson5('./ital8Config.json');
 ```
 /home/user/ital8cms/
 ├── index.js                      # Main application entry point
-├── ital8Config.json              # Central configuration file
+├── ital8Config.json5              # Central configuration file
 ├── package.json                 # Node.js dependencies
 │
 ├── core/                        # Core CMS functionality
@@ -61,19 +61,19 @@ const config = loadJson5('./ital8Config.json');
 │   │       ├── index.ejs       # Admin dashboard
 │   │       └── userManagment/  # User CRUD interface
 │   ├── priorityMiddlewares/    # Critical middleware configs
-│   │   └── koaSession.json     # Session configuration
+│   │   └── koaSession.json5     # Session configuration
 │   ├── pluginSys.js            # Plugin system manager
 │   └── themeSys.js             # Theme system manager
 │
 ├── plugins/                     # Plugin modules (each self-contained)
 │   ├── dbApi/                  # Database API plugin
 │   │   ├── main.js             # Plugin logic
-│   │   ├── pluginConfig.json   # Plugin configuration
-│   │   ├── pluginDescription.json # Plugin metadata
+│   │   ├── pluginConfig.json5   # Plugin configuration
+│   │   ├── pluginDescription.json5 # Plugin metadata
 │   │   └── dbFile/             # SQLite database files
 │   ├── simpleAccess/           # Authentication/authorization
-│   │   ├── userAccount.json    # User credentials (bcrypt hashed)
-│   │   └── userRole.json       # Role definitions
+│   │   ├── userAccount.json5    # User credentials (bcrypt hashed)
+│   │   └── userRole.json5       # Role definitions
 │   ├── admin/                  # Admin functionality
 │   ├── bootstrap/              # Bootstrap CSS/JS integration
 │   ├── media/                  # Media management
@@ -155,8 +155,8 @@ Every plugin must have this structure:
 ```
 plugins/myPlugin/
 ├── main.js                    # Plugin logic (required)
-├── pluginConfig.json          # Configuration (required)
-└── pluginDescription.json     # Metadata (required)
+├── pluginConfig.json5          # Configuration (required)
+└── pluginDescription.json5     # Metadata (required)
 ```
 
 ### Plugin main.js Exports
@@ -186,7 +186,7 @@ module.exports = {
 }
 ```
 
-### pluginConfig.json
+### pluginConfig.json5
 
 ```json
 {
@@ -205,7 +205,7 @@ module.exports = {
 }
 ```
 
-### pluginDescription.json
+### pluginDescription.json5
 
 ```json
 {
@@ -311,13 +311,13 @@ themes/myTheme/
 │   │   └── theme.css
 │   └── js/
 │       └── theme.js
-├── themeConfig.json         # Theme configuration (including isAdminTheme flag)
-└── themeDescription.json    # Theme metadata
+├── themeConfig.json5         # Theme configuration (including isAdminTheme flag)
+└── themeDescription.json5    # Theme metadata
 ```
 
 ### Theme Configuration
 
-#### In `ital8Config.json`:
+#### In `ital8Config.json5`:
 
 ```json
 {
@@ -331,7 +331,7 @@ themes/myTheme/
 }
 ```
 
-#### In `themes/myTheme/themeConfig.json`:
+#### In `themes/myTheme/themeConfig.json5`:
 
 ```json
 {
@@ -403,10 +403,10 @@ Themes call `pluginSys.hookPage()` to allow plugins to inject content:
 ### Primary Storage: JSON Files
 
 **Structured Data Storage:**
-- **User accounts:** `/plugins/simpleAccess/userAccount.json`
-- **User roles:** `/plugins/simpleAccess/userRole.json`
-- **Plugin configurations:** Each plugin has `pluginConfig.json`
-- **Application settings:** `ital8Config.json`
+- **User accounts:** `/plugins/simpleAccess/userAccount.json5`
+- **User roles:** `/plugins/simpleAccess/userRole.json5`
+- **Plugin configurations:** Each plugin has `pluginConfig.json5`
+- **Application settings:** `ital8Config.json5`
 
 **Why JSON?**
 - ✅ Zero dependencies - no database installation required
@@ -442,7 +442,7 @@ Databases like SQLite can be added through plugins when you need:
 The `dbApi` plugin provides SQLite integration:
 
 ```javascript
-// Enable in plugins/dbApi/pluginConfig.json
+// Enable in plugins/dbApi/pluginConfig.json5
 {
   "active": 1,  // Set to 1 to enable
   "nodeModuleDependency": {
@@ -478,20 +478,24 @@ async loadPlugin(pluginSys, pathPluginFolder) {
 }
 ```
 
-### JSON File Operations
+### JSON5 File Operations
 
-**Reading JSON data:**
+**IMPORTANT:** All configuration files use the `.json5` extension and **MUST** be loaded using the `loadJson5()` function, not `require()` or `JSON.parse()`.
+
+**Reading JSON5 data:**
 ```javascript
-const fs = require('fs')
 const path = require('path')
+const loadJson5 = require('../../core/loadJson5')
 
-// Read user accounts
-const userAccountPath = path.join(pathPluginFolder, 'userAccount.json')
-const users = JSON.parse(fs.readFileSync(userAccountPath, 'utf8'))
+// Read user accounts using loadJson5
+const userAccountPath = path.join(pathPluginFolder, 'userAccount.json5')
+const users = loadJson5(userAccountPath)
 ```
 
-**Writing JSON data:**
+**Writing JSON5 data:**
 ```javascript
+const fs = require('fs')
+
 // Update user accounts
 fs.writeFileSync(
   userAccountPath,
@@ -514,7 +518,7 @@ fs.renameSync(tempPath, userAccountPath)
 
 **Login Flow:**
 1. User submits username/password to `/api/simpleAccess/login` (POST)
-2. Plugin validates credentials against `userAccount.json`
+2. Plugin validates credentials against `userAccount.json5`
 3. Password verified with bcryptjs
 4. Session created: `ctx.session.authenticated = true`, `ctx.session.user = userData`
 5. Session cookie sent to client
@@ -526,7 +530,7 @@ fs.renameSync(tempPath, userAccountPath)
 **Session Management:**
 - Signed cookies with secret keys
 - Max age: 24 hours (86400000ms)
-- Configuration: `/core/priorityMiddlewares/koaSession.json`
+- Configuration: `/core/priorityMiddlewares/koaSession.json5`
 
 ### Authorization System (RBAC)
 
@@ -537,7 +541,7 @@ fs.renameSync(tempPath, userAccountPath)
 - **3 (viewer):** Read-only access
 
 **Role Configuration:**
-Located in `/plugins/simpleAccess/userRole.json`
+Located in `/plugins/simpleAccess/userRole.json5`
 
 ### Access Control Middleware
 
@@ -633,7 +637,7 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
 
 ## Configuration Management
 
-### Main Configuration: ital8Config.json
+### Main Configuration: ital8Config.json5
 
 ```json
 {
@@ -653,7 +657,7 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
 }
 ```
 
-### Session Configuration: core/priorityMiddlewares/koaSession.json
+### Session Configuration: core/priorityMiddlewares/koaSession.json5
 
 **IMPORTANT:** Change session keys in production!
 
@@ -678,7 +682,7 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
 
 ### Plugin-Specific Configuration
 
-Each plugin's `pluginConfig.json`:
+Each plugin's `pluginConfig.json5`:
 
 ```json
 {
@@ -693,7 +697,9 @@ Each plugin's `pluginConfig.json`:
 Access in code:
 
 ```javascript
-const config = require('./pluginConfig.json')
+const loadJson5 = require('../../core/loadJson5')
+const path = require('path')
+const config = loadJson5(path.join(__dirname, 'pluginConfig.json5'))
 const mySetting = config.custom.myPluginSetting
 ```
 
@@ -779,7 +785,7 @@ module.exports = {
 }
 ```
 
-3. **Create pluginConfig.json:**
+3. **Create pluginConfig.json5:**
 ```json
 {
   "active": 1,
@@ -791,7 +797,7 @@ module.exports = {
 }
 ```
 
-4. **Create pluginDescription.json:**
+4. **Create pluginDescription.json5:**
 ```json
 {
   "name": "myPlugin",
@@ -816,7 +822,7 @@ cp -r themes/default themes/myTheme
 
 2. **Modify theme files** in `themes/myTheme/views/`
 
-3. **Activate theme** in `ital8Config.json`:
+3. **Activate theme** in `ital8Config.json5`:
 ```json
 {
   "activeTheme": "myTheme"
@@ -859,7 +865,7 @@ mkdir -p core/admin/webPages/myFeature
 - `http://localhost:3000/admin/userManagment/`
 - List users, add, edit, delete
 
-**Default users** (check `plugins/simpleAccess/userAccount.json`):
+**Default users** (check `plugins/simpleAccess/userAccount.json5`):
 ```json
 {
   "username": {
@@ -872,20 +878,21 @@ mkdir -p core/admin/webPages/myFeature
 
 ### Data Operations
 
-**Primary Method: JSON Files**
+**Primary Method: JSON5 Files**
 
 ```javascript
 const fs = require('fs')
 const path = require('path')
+const loadJson5 = require('../../core/loadJson5')
 
-// Read JSON data
-const dataPath = path.join(pathPluginFolder, 'data.json')
-const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'))
+// Read JSON5 data
+const dataPath = path.join(pathPluginFolder, 'data.json5')
+const data = loadJson5(dataPath)
 
 // Modify data
 data.items.push({ name: 'New Item', created_at: new Date().toISOString() })
 
-// Save JSON data (atomic write)
+// Save JSON5 data (atomic write)
 const tempPath = dataPath + '.tmp'
 fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf8')
 fs.renameSync(tempPath, dataPath)
@@ -946,11 +953,11 @@ For files with multiple semantic parts, follow the **natural English word order*
 **Examples:**
 ```
 ✅ CORRECT:
-pluginConfig.json          // "plugin configuration" - natural order
-pluginDescription.json     // "plugin description" - natural order
-userAccount.json           // "user account" - natural order
+pluginConfig.json5          // "plugin configuration" - natural order
+pluginDescription.json5     // "plugin description" - natural order
+userAccount.json5           // "user account" - natural order
 sessionManager.js          // "session manager" - natural order
-ital8Config.json           // "ital8 configuration" - natural order
+ital8Config.json5           // "ital8 configuration" - natural order
 
 ❌ INCORRECT:
 configPlugin.json          // "configuration plugin" - unnatural
@@ -1164,16 +1171,17 @@ getHooksPage(section, passData, pluginSys, pathPluginFolder) {
 
 ### Task: Initialize Plugin Data Storage
 
-**Option 1: JSON File (Recommended for most plugins)**
+**Option 1: JSON5 File (Recommended for most plugins)**
 
 ```javascript
 // In your plugin's loadPlugin() or installPlugin()
 async loadPlugin(pluginSys, pathPluginFolder) {
   const fs = require('fs')
   const path = require('path')
+  const loadJson5 = require('../../core/loadJson5')
 
   // Define data file path
-  this.dataPath = path.join(pathPluginFolder, 'data.json')
+  this.dataPath = path.join(pathPluginFolder, 'data.json5')
 
   // Initialize with default data if file doesn't exist
   if (!fs.existsSync(this.dataPath)) {
@@ -1190,8 +1198,8 @@ async loadPlugin(pluginSys, pathPluginFolder) {
     )
   }
 
-  // Load data
-  this.data = JSON.parse(fs.readFileSync(this.dataPath, 'utf8'))
+  // Load data using loadJson5
+  this.data = loadJson5(this.dataPath)
 }
 
 // Helper method to save data
@@ -1333,7 +1341,7 @@ tests/
 
 ### Pre-Production Checklist
 
-- [ ] Change session keys in `core/priorityMiddlewares/koaSession.json`
+- [ ] Change session keys in `core/priorityMiddlewares/koaSession.json5`
 - [ ] Set appropriate `httpPort` or enable HTTPS
 - [ ] Review and secure admin path (`adminPrefix`)
 - [ ] Enable authentication for admin routes
@@ -1400,10 +1408,10 @@ const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
 
 ### Configuration Files
 
-- `/ital8Config.json` - Main application configuration
-- `/core/priorityMiddlewares/koaSession.json` - Session configuration
-- `/plugins/*/pluginConfig.json` - Per-plugin configuration
-- `/plugins/*/pluginDescription.json` - Plugin metadata
+- `/ital8Config.json5` - Main application configuration
+- `/core/priorityMiddlewares/koaSession.json5` - Session configuration
+- `/plugins/*/pluginConfig.json5` - Per-plugin configuration
+- `/plugins/*/pluginDescription.json5` - Plugin metadata
 
 ### Entry Points
 
@@ -1413,8 +1421,8 @@ const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
 
 ### Authentication
 
-- `/plugins/simpleAccess/userAccount.json` - User credentials
-- `/plugins/simpleAccess/userRole.json` - Role definitions
+- `/plugins/simpleAccess/userAccount.json5` - User credentials
+- `/plugins/simpleAccess/userRole.json5` - Role definitions
 - `/plugins/simpleAccess/main.js` - Authentication logic
 
 ### Databases
@@ -1432,7 +1440,7 @@ const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
 
 ### Enable Debug Mode
 
-In `ital8Config.json`:
+In `ital8Config.json5`:
 ```json
 {
   "debugMode": 1
@@ -1452,8 +1460,8 @@ Plugin loaded: simpleAccess
 ### Common Issues
 
 **Plugin not loading:**
-- Check `pluginConfig.json` has `"active": 1`
-- Verify `pluginDescription.json` exists
+- Check `pluginConfig.json5` has `"active": 1`
+- Verify `pluginDescription.json5` exists
 - Check dependencies are satisfied
 - Look for syntax errors in `main.js`
 
@@ -1471,13 +1479,13 @@ Plugin loaded: simpleAccess
 
 **Authentication issues:**
 - Verify session keys are set
-- Check user exists in `userAccount.json`
+- Check user exists in `userAccount.json5`
 - Ensure password is bcrypt hashed
 - Check session cookie is being sent
 
 **Theme not rendering:**
 - Verify theme exists in `/themes` directory
-- Check `activeTheme` in `ital8Config.json`
+- Check `activeTheme` in `ital8Config.json5`
 - Ensure all required partials exist
 - Look for EJS syntax errors
 
@@ -1565,7 +1573,7 @@ When working on this codebase as an AI assistant:
 
 8. **Version Control:** This is an alpha project (v0.0.1-alpha.0). Breaking changes are acceptable but should be documented.
 
-9. **Configuration Changes:** When modifying configuration, update relevant JSON files and document changes.
+9. **Configuration Changes:** When modifying configuration, update relevant JSON5 files and document changes. **ALWAYS use `loadJson5()` to read configuration files, never use `require()` or `JSON.parse()`.**
 
 10. **Theme Changes:** If modifying themes, ensure both public and admin themes are considered.
 
@@ -1573,11 +1581,18 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2025-11-26
-**Version:** 1.2.0
+**Last Updated:** 2025-12-11
+**Version:** 1.3.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v1.3.0 (2025-12-11): **BREAKING CHANGE** - Converted all configuration files from `.json` to `.json5` extension. Key changes:
+  - All configuration files now use `.json5` extension to reflect JSON5 format support
+  - Updated all documentation examples to use `loadJson5()` function
+  - Added clear warnings about not using `require()` for `.json5` files
+  - Improved code examples to demonstrate proper JSON5 file loading
+  - Total of 38 configuration files converted
+  - Files excluded: `package.json`, `package-lock.json`, `.vscode/launch.json`
 - v1.2.0 (2025-11-26): **BREAKING CHANGE** - Updated naming convention from kebab-case to camelCase for all files and directories. Key changes:
   - `ital8-conf.json` → `ital8Config.json`
   - `config-plugin.json` → `pluginConfig.json`

@@ -7,11 +7,11 @@ const themesManagment = require('./themesManagment');
 const systemSettings = require('./systemSettings');
 const pagesManagment = require('./pagesManagment');
 
-let pluginConfig = loadJson5(path.join(__dirname, 'pluginConfig.json'));// let perchè questa varibile può cambiare di valore
+let pluginConfig = loadJson5(path.join(__dirname, 'pluginConfig.json5'));// let perchè questa varibile può cambiare di valore
 const pluginName = path.basename(  __dirname );// restituisce il nome della directory che contiene il file corrente e che è anche il nome del plugin
 const sharedObject = {};// ogetto che avrà gliogetti condiviso con gli altri plugin ES {dbApi: newdbApi}
 
-const ital8Conf = loadJson5(path.join(__dirname, '../../ital8Config.json'));// questo serve a caricare le impostazioni generali del modulo ed in particolare lìapi Prefix
+const ital8Conf = loadJson5(path.join(__dirname, '../../ital8Config.json5'));// questo serve a caricare le impostazioni generali del modulo ed in particolare lìapi Prefix
 
 // Salva il riferimento a pluginSys per accedervi nei submoduli
 let myPluginSys = null;

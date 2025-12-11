@@ -3,7 +3,7 @@
 const path = require('path');
 const loadJson5 = require('../../../core/loadJson5');
 const bcrypt = require('bcryptjs');// serve per calcolare l' hash della passord
-const usersAccounts = loadJson5(path.join(__dirname, '../userAccount.json'));
+const usersAccounts = loadJson5(path.join(__dirname, '../userAccount.json5'));
 
 async function autenticate( username ,password){
 

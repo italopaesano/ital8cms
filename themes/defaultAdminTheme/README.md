@@ -23,8 +23,8 @@ defaultAdminTheme/
 ├── themeResources/            # Asset statici
 │   ├── css/theme.css          # Stili admin
 │   └── js/theme.js            # JavaScript admin
-├── themeConfig.json           # Configurazione (isAdminTheme: true)
-└── themeDescription.json      # Metadati tema
+├── themeConfig.json5           # Configurazione (isAdminTheme: true)
+└── themeDescription.json5      # Metadati tema
 ```
 
 ## Configurazione
@@ -47,7 +47,7 @@ Questo garantisce che possa essere usato solo come tema admin e non come tema pu
 
 ## Utilizzo
 
-Imposta il tema in `ital8Config.json`:
+Imposta il tema in `ital8Config.json5`:
 
 ```json
 {

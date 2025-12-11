@@ -5,8 +5,8 @@ const { error } = require('console');
 
 
 
-// Percorso del file utenti 
-const usersFilePath = path.join(__dirname, 'userAccount.json');
+// Percorso del file utenti
+const usersFilePath = path.join(__dirname, 'userAccount.json5');
 
 // Funzione per validare l'email
 function isValidEmail(email) {

@@ -36,7 +36,7 @@ describe('Theme System', () => {
       }
 
       // Controlla esistenza themeConfig.json
-      const configPath = path.join(themePath, 'themeConfig.json');
+      const configPath = path.join(themePath, 'themeConfig.json5');
       if (!fs.existsSync(configPath)) {
         return { valid: false, error: `themeConfig.json mancante nel tema '${themeName}'` };
       }
@@ -95,7 +95,7 @@ describe('Theme System', () => {
   describe('Theme Description', () => {
     // Funzione per leggere themeDescription.json
     function getThemeDescription(themeName) {
-      const descPath = path.join(themesBasePath, themeName, 'themeDescription.json');
+      const descPath = path.join(themesBasePath, themeName, 'themeDescription.json5');
 
       try {
         if (fs.existsSync(descPath)) {
@@ -148,7 +148,7 @@ describe('Theme System', () => {
   describe('Theme Dependencies', () => {
     // Funzione per leggere le dipendenze
     function getThemeDependencies(themeName) {
-      const configPath = path.join(themesBasePath, themeName, 'themeConfig.json');
+      const configPath = path.join(themesBasePath, themeName, 'themeConfig.json5');
 
       try {
         if (fs.existsSync(configPath)) {
@@ -325,7 +325,7 @@ describe('Theme System', () => {
       });
 
       for (const theme of themes) {
-        const configPath = path.join(themesBasePath, theme, 'themeConfig.json');
+        const configPath = path.join(themesBasePath, theme, 'themeConfig.json5');
         expect(fs.existsSync(configPath)).toBe(true);
       }
     });
@@ -334,7 +334,7 @@ describe('Theme System', () => {
   describe('Hook Support', () => {
     // Funzione per verificare supporto hook
     function themeSupportsHook(themeName, hookName) {
-      const descPath = path.join(themesBasePath, themeName, 'themeDescription.json');
+      const descPath = path.join(themesBasePath, themeName, 'themeDescription.json5');
 
       try {
         if (fs.existsSync(descPath)) {
@@ -375,7 +375,7 @@ describe('Theme System', () => {
 
   describe('Version Format Checking', () => {
     test('versione tema è in formato valido', () => {
-      const descPath = path.join(themesBasePath, 'default', 'themeDescription.json');
+      const descPath = path.join(themesBasePath, 'default', 'themeDescription.json5');
       const desc = JSON.parse(fs.readFileSync(descPath, 'utf8'));
 
       // Verifica formato x.y.z
@@ -386,7 +386,7 @@ describe('Theme System', () => {
       const themes = ['default', 'baseExampleTheme', 'exampleTheme'];
 
       for (const theme of themes) {
-        const descPath = path.join(themesBasePath, theme, 'themeDescription.json');
+        const descPath = path.join(themesBasePath, theme, 'themeDescription.json5');
         if (fs.existsSync(descPath)) {
           const desc = JSON.parse(fs.readFileSync(descPath, 'utf8'));
           expect(desc.version).toMatch(/^\d+\.\d+\.\d+$/);

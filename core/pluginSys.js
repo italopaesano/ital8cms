@@ -30,7 +30,7 @@ class pluginSys{
 
       try {
         //console.log(pluginConfig);
-        const pluginConfig = loadJson5(path.join(__dirname, '..', 'plugins', pluginName, 'pluginConfig.json'));
+        const pluginConfig = loadJson5(path.join(__dirname, '..', 'plugins', pluginName, 'pluginConfig.json5'));
         const plugin = require(`../plugins/${pluginName}/main.js`);//
 
         // setto i plugin attivi prima del loading e dell'onstall i modo che ,, una volta caricati gliogeti condivisi questi potranno essere utilizati nel loading e nell'install
@@ -57,19 +57,19 @@ class pluginSys{
             logger.error('pluginSys', `Errore durante installazione plugin ${pluginName}`, installError);
             throw installError; // Rilancia per gestione esterna
           }
-          pluginConfig.isInstalled = 1;//ora devo aggiornare pluginConfig.json settando isInstalled = 1
+          pluginConfig.isInstalled = 1;//ora devo aggiornare pluginConfig.json5 settando isInstalled = 1
           plugin.pluginConfig = pluginConfig ;// aggiorno anche l'ogetto interno al plugin
 
-          // scrivo il nuovo file pluginConfig.json con la variabile isInstalled aggiornata correttamente
+          // scrivo il nuovo file pluginConfig.json5 con la variabile isInstalled aggiornata correttamente
           const textPluginConfig = JSON.stringify( pluginConfig, null, 2 );
-          fs.promises.writeFile( `${__dirname}/../plugins/${pluginName}/pluginConfig.json` , textPluginConfig )// aggiorno il file pluginConfig.json
+          fs.promises.writeFile( `${__dirname}/../plugins/${pluginName}/pluginConfig.json5` , textPluginConfig )// aggiorno il file pluginConfig.json5
           .catch( (error) => {
-            logger.error('pluginSys', `Errore scrittura pluginConfig.json per ${pluginName}`, error);
+            logger.error('pluginSys', `Errore scrittura pluginConfig.json5 per ${pluginName}`, error);
           });
         }// if( pluginConfig.isInstalled == 0 ){
 
         // SISTEMA DI UPGRADE: controlla se la versione del plugin è cambiata
-        const pluginDescription = loadJson5(path.join(__dirname, '..', 'plugins', pluginName, 'pluginDescription.json'));
+        const pluginDescription = loadJson5(path.join(__dirname, '..', 'plugins', pluginName, 'pluginDescription.json5'));
         const newVersion = pluginDescription.version;
         const oldVersion = pluginConfig.version || '0.0.0'; // Se non esiste, assume 0.0.0
 
@@ -92,7 +92,7 @@ class pluginSys{
           // Aggiorna la versione nel config
           pluginConfig.version = newVersion;
           const textPluginConfig = JSON.stringify(pluginConfig, null, 2);
-          fs.promises.writeFile(`${__dirname}/../plugins/${pluginName}/pluginConfig.json`, textPluginConfig)
+          fs.promises.writeFile(`${__dirname}/../plugins/${pluginName}/pluginConfig.json5`, textPluginConfig)
             .catch((error) => {
               logger.error('pluginSys', `Errore salvataggio versione per ${pluginName}`, error);
             });
@@ -100,7 +100,7 @@ class pluginSys{
           // Prima volta che registriamo la versione
           pluginConfig.version = newVersion;
           const textPluginConfig = JSON.stringify(pluginConfig, null, 2);
-          fs.promises.writeFile(`${__dirname}/../plugins/${pluginName}/pluginConfig.json`, textPluginConfig)
+          fs.promises.writeFile(`${__dirname}/../plugins/${pluginName}/pluginConfig.json5`, textPluginConfig)
             .catch((error) => {
               logger.error('pluginSys', `Errore salvataggio versione iniziale per ${pluginName}`, error);
             });
@@ -164,7 +164,7 @@ class pluginSys{
 
     for( const nameFile of Afiles ){
 
-      const pluginConfig = loadJson5(path.join(__dirname, '..', 'plugins', nameFile, 'pluginConfig.json'));
+      const pluginConfig = loadJson5(path.join(__dirname, '..', 'plugins', nameFile, 'pluginConfig.json5'));
 
       if( pluginConfig.active == 1 ){// il plugin è attivo quindi lo carico e dopo ( nell funzione caricate plugin controllo anche se è installato )
 
@@ -235,7 +235,7 @@ class pluginSys{
           }
         }
 
-        const pluginVersion = loadJson5(path.join(__dirname, '..', 'plugins', nameFile, 'pluginDescription.json')).version;
+        const pluginVersion = loadJson5(path.join(__dirname, '..', 'plugins', nameFile, 'pluginDescription.json5')).version;
         pluginsVersionMap.set( nameFile, pluginVersion);// nameFile = nome plugin , creo la mappa : nomeplugin --> versione
 
         //const plugin = require(`../plugins/${nameFile}/main.js`);// carico il plugin
@@ -468,7 +468,7 @@ class pluginSys{
     }
 
     try {
-      const descriptionPath = path.join(__dirname, '../plugins', pluginName, 'pluginDescription.json');
+      const descriptionPath = path.join(__dirname, '../plugins', pluginName, 'pluginDescription.json5');
       const description = loadJson5(descriptionPath);
       return description.version || null;
     } catch (error) {

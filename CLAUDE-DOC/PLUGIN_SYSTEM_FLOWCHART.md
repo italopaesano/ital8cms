@@ -17,7 +17,7 @@ Questo documento descrive il flusso completo del sistema plugin di ital8cms, dal
                       ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │              Carica Configurazione                               │
-│         (ital8Config.json, koaSession.json)                       │
+│         (ital8Config.json5, koaSession.json5)                       │
 └─────────────────────┬───────────────────────────────────────────┘
                       │
                       ▼
@@ -61,8 +61,8 @@ Questo documento descrive il flusso completo del sistema plugin di ital8cms, dal
 │  ─────────────────                                               │
 │  • Leggi cartella /plugins                                       │
 │  • Per ogni sottocartella:                                       │
-│    - Leggi pluginConfig.json                                    │
-│    - Leggi pluginDescription.json                               │
+│    - Leggi pluginConfig.json5                                    │
+│    - Leggi pluginDescription.json5                               │
 │    - Verifica active === 1                                       │
 └─────────────────────┬───────────────────────────────────────────┘
                       │
@@ -398,7 +398,7 @@ Rendering pagina EJS (es. /www/index.ejs):
 │              VALIDAZIONE nodeModuleDependency                    │
 └─────────────────────────────────────────────────────────────────┘
 
-pluginConfig.json:
+pluginConfig.json5:
 {
   "nodeModuleDependency": {
     "bcryptjs": "^3.0.0",
@@ -708,7 +708,7 @@ Sistema continua senza Plugin X
 ### Aggiungere un Nuovo Plugin
 
 1. Crea cartella in `/plugins/`
-2. Aggiungi `main.js`, `pluginConfig.json`, `pluginDescription.json`
+2. Aggiungi `main.js`, `pluginConfig.json5`, `pluginDescription.json5`
 3. Imposta `"active": 1` in config
 4. Riavvia server
 
@@ -718,7 +718,7 @@ Sistema continua senza Plugin X
 # Abilita log debug
 LOG_LEVEL=DEBUG npm start
 
-# Oppure in ital8Config.json
+# Oppure in ital8Config.json5
 { "logLevel": "DEBUG" }
 ```
 

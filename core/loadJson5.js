@@ -2,11 +2,11 @@
  * JSON5 Loader Module
  *
  * Centralized JSON5 file loading with support for comments and trailing commas.
- * All .json files in this project use JSON5 format.
+ * All configuration files in this project use JSON5 format (.json5 extension).
  *
  * Usage:
  *   const loadJson5 = require('./core/loadJson5');
- *   const config = loadJson5('./ital8Config.json');
+ *   const config = loadJson5('./ital8Config.json5');
  */
 
 const json5 = require('json5');

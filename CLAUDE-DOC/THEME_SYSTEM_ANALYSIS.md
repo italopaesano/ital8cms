@@ -63,7 +63,7 @@ Il sistema dei temi ha **3 file di documentazione principali**:
 
 **Funzionalità:**
 - Verifica esistenza directory tema
-- Controlla presenza `config-theme.json`
+- Controlla presenza `config-theme.json5`
 - Verifica directory `views/`
 - Controlla partials obbligatori: `head.ejs`, `header.ejs`, `footer.ejs`
 - Fallback automatico a tema "default" se validazione fallisce
@@ -203,7 +203,7 @@ const templatePath = themeSys.resolvePluginTemplatePath(
 **File:** `core/themeSys.js` linee 254-320
 
 **Funzionalità:**
-- File `description-theme.json` per metadati
+- File `description-theme.json5` per metadati
 - Campi: name, version, author, screenshot, tags, supportedHooks, features, templates
 - Metodi: `getThemeDescription()`, `getThemeVersion()`, `getThemeFeatures()`
 
@@ -310,7 +310,7 @@ getHooksPage(section, passData) {
 
 **Definito:** Sistema di compatibilità tra temi
 
-**Campi aggiunti a `config-theme.json`:**
+**Campi aggiunti a `config-theme.json5`:**
 ```json
 {
   "followsGlobalStandard": "1.0",  // o false
@@ -343,7 +343,7 @@ getHooksPage(section, passData) {
 
 **Convenzione:** `nomeTemplate.template.ejs`
 
-**Metadati in `description-theme.json`:**
+**Metadati in `description-theme.json5`:**
 ```json
 {
   "templates": [
@@ -420,7 +420,7 @@ getHooksPage(section, passData) {
 **Descrizione:** Implementare controllo `followsGlobalStandard` nella validazione tema
 
 **Requisiti:**
-- Leggere campo da `config-theme.json`
+- Leggere campo da `config-theme.json5`
 - Se `"1.0"`, verificare che template includano partials obbligatori
 - Se `false`, permettere struttura custom
 
@@ -440,7 +440,7 @@ getHooksPage(section, passData) {
 **Stato:** ✅ Implementato in `plugins/admin/pagesManagment.js` (funzione `getWwwPath()`)
 
 **Requisiti:**
-- ✅ Leggere `wwwCustomPath` da `themeConfig.json` (implementato)
+- ✅ Leggere `wwwCustomPath` da `themeConfig.json5` (implementato)
 - ✅ Risoluzione dinamica del path www basata sul tema attivo (implementato)
 - ✅ Helper function per path corretto (`getWwwPath()` implementato)
 - 📋 **TODO:** Creare `/www/README.txt` automaticamente quando si attiva tema con `wwwCustomPath: 1`
@@ -620,7 +620,7 @@ core/admin/webPages/pageManagement/
 **Descrizione:** Sistema di ereditarietà tra temi
 
 **Funzionalità:**
-- Dichiarare tema parent in `config-theme.json`
+- Dichiarare tema parent in `config-theme.json5`
 - Override selettivo di file specifici
 - Merge assets parent + child
 
@@ -645,7 +645,7 @@ core/admin/webPages/pageManagement/
 
 **Changed:**
 - ✅ Semplificato sistema `wwwCustomPath`: rimossa variabile `wwwCustomPathValue` (era ridondante)
-- ✅ Aggiornati tutti i file `themeConfig.json` (5 temi) con configurazione semplificata
+- ✅ Aggiornati tutti i file `themeConfig.json5` (5 temi) con configurazione semplificata
 - ✅ `wwwCustomPath` ora è solo un flag booleano: 0 = /www standard, 1 = themes/[tema]/www
 - ✅ Aggiornata documentazione con commenti dettagliati sulla sicurezza
 
@@ -669,11 +669,11 @@ core/admin/webPages/pageManagement/
 - 📋 Definizione README.txt automatico quando `wwwCustomPath: 1`
 
 **Changed:**
-- 📋 `description-theme.json` ora OBBLIGATORIO (era opzionale)
+- 📋 `description-theme.json5` ora OBBLIGATORIO (era opzionale)
 - 📋 Almeno 1 template OBBLIGATORIO per tema
-- 📋 Nuovo campo `followsGlobalStandard` in `config-theme.json`
-- 📋 Nuovo campo `wwwCustomPath` in `config-theme.json`
-- 📋 Nuovo campo `templates` in `description-theme.json`
+- 📋 Nuovo campo `followsGlobalStandard` in `config-theme.json5`
+- 📋 Nuovo campo `wwwCustomPath` in `config-theme.json5`
+- 📋 Nuovo campo `templates` in `description-theme.json5`
 
 **Status:**
 - ✅ Documentazione: 100% completa

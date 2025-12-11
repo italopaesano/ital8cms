@@ -39,10 +39,10 @@ const COLORS = {
   RESET: '\x1b[0m'    // Reset
 };
 
-// Carica configurazione da ital8Config.json se disponibile
+// Carica configurazione da ital8Config.json5 se disponibile
 let configLogLevel = 'INFO';
 try {
-  const configPath = path.join(__dirname, '..', 'ital8Config.json');
+  const configPath = path.join(__dirname, '..', 'ital8Config.json5');
   const config = loadJson5(configPath);
   if (config.logLevel) {
     configLogLevel = config.logLevel.toUpperCase();

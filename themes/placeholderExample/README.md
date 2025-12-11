@@ -194,7 +194,7 @@ placeholderExample/
 
 ### 1. Attivare il tema (opzionale per testing)
 
-In `ital8Config.json`:
+In `ital8Config.json5`:
 ```json
 {
   "activeTheme": "placeholderExample"
