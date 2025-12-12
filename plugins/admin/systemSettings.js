@@ -7,11 +7,11 @@
  * INDICE FUNZIONI:
  *
  * 1. getSystemConfig()
- *    - Ritorna il contenuto completo di ital8Config.json
+ *    - Ritorna il contenuto completo di ital8Config.json5
  *    - Supporta JSON5 (commenti e trailing commas)
  *
  * 2. updateSystemConfig(newConfig)
- *    - Aggiorna ital8Config.json con nuova configurazione
+ *    - Aggiorna ital8Config.json5 con nuova configurazione
  *    - Valida campi obbligatori e tipi
  *    - Salvataggio atomico (.tmp + rename)
  *    - Avvisa se activeTheme/adminActiveTheme vengono modificati
@@ -36,11 +36,11 @@ const loadJson5 = require('../../core/loadJson5');
 
 /**
  * Ritorna la configurazione di sistema completa
- * @returns {object} Configurazione da ital8Config.json
+ * @returns {object} Configurazione da ital8Config.json5
  */
 function getSystemConfig() {
     try {
-        const configPath = path.join(__dirname, '../../ital8Config.json');
+        const configPath = path.join(__dirname, '../../ital8Config.json5');
         const config = loadJson5(configPath);
 
         return {
@@ -196,7 +196,7 @@ function updateSystemConfig(newConfig) {
             };
         }
 
-        const configPath = path.join(__dirname, '../../ital8Config.json');
+        const configPath = path.join(__dirname, '../../ital8Config.json5');
 
         // Leggi configurazione corrente per confronto
         const currentConfig = loadJson5(configPath);
