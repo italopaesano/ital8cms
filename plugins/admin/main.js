@@ -69,15 +69,52 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
 
 
   const routeArray = Array();
-  //ES.
+
+  // API endpoint: Ottiene sezioni admin (UI + menu sections)
   routeArray.push(
     {
       method: 'GET',
-      path: `/${ital8Conf.adminPrefix}/hello`,
-        handler: async (ctx) => {
-          ctx.body = `hellò`
-          ctx.type = 'text/css';
-       }
+      path: `/${ital8Conf.adminPrefix}/sections`,
+      handler: async (ctx) => {
+        // Verifica autenticazione
+        if (!ctx.session || !ctx.session.authenticated) {
+          ctx.status = 401;
+          ctx.body = {
+            success: false,
+            error: 'Unauthorized - Authentication required'
+          };
+          return;
+        }
+
+        try {
+          // Ottiene adminSystem da pluginSys
+          const adminSystem = myPluginSys.getAdminSystem();
+
+          if (!adminSystem) {
+            ctx.status = 500;
+            ctx.body = {
+              success: false,
+              error: 'AdminSystem not available'
+            };
+            return;
+          }
+
+          // Ottiene dati admin (UI + sections)
+          const data = adminSystem.getAdminSections();
+
+          ctx.body = {
+            success: true,
+            data: data
+          };
+        } catch (error) {
+          console.error('Error in /admin/sections:', error);
+          ctx.status = 500;
+          ctx.body = {
+            success: false,
+            error: 'Internal server error'
+          };
+        }
+      }
     }
   );
 

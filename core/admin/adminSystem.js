@@ -182,6 +182,18 @@ class AdminSystem {
   }
 
   /**
+   * Ottiene tutte le informazioni admin (UI + sezioni menu)
+   * Metodo unificato per API endpoint
+   * @returns {object} - { ui, sections }
+   */
+  getAdminSections() {
+    return {
+      ui: this.configManager.getUI(),
+      sections: this.getMenuSections()
+    };
+  }
+
+  /**
    * Ottiene ConfigManager
    * @returns {ConfigManager}
    */
