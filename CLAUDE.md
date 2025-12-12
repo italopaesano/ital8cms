@@ -56,14 +56,22 @@ const config = loadJson5('./ital8Config.json5');
 ├── package.json                 # Node.js dependencies
 │
 ├── core/                        # Core CMS functionality
-│   ├── admin/                   # Admin interface
+│   ├── admin/                   # Admin System (modular architecture)
+│   │   ├── adminConfig.json5    # Central admin configuration
+│   │   ├── adminSystem.js       # Admin coordinator
+│   │   ├── lib/                 # Admin subsystems
+│   │   │   ├── configManager.js # Config loader & validator
+│   │   │   ├── adminServicesManager.js # Service discovery
+│   │   │   └── symlinkManager.js # Symlink manager for plugin sections
 │   │   └── webPages/           # Admin EJS templates
-│   │       ├── index.ejs       # Admin dashboard
-│   │       └── userManagment/  # User CRUD interface
+│   │       ├── index.ejs       # Admin dashboard (dynamic menu)
+│   │       ├── systemSettings/  # Hardcoded admin sections
+│   │       └── usersManagment/  # SYMLINK → plugins/adminUsers/usersManagment/
 │   ├── priorityMiddlewares/    # Critical middleware configs
 │   │   └── koaSession.json5     # Session configuration
 │   ├── pluginSys.js            # Plugin system manager
-│   └── themeSys.js             # Theme system manager
+│   ├── themeSys.js             # Theme system manager
+│   └── loadJson5.js            # JSON5 file loader utility
 │
 ├── plugins/                     # Plugin modules (each self-contained)
 │   ├── dbApi/                  # Database API plugin
@@ -71,10 +79,20 @@ const config = loadJson5('./ital8Config.json5');
 │   │   ├── pluginConfig.json5   # Plugin configuration
 │   │   ├── pluginDescription.json5 # Plugin metadata
 │   │   └── dbFile/             # SQLite database files
-│   ├── simpleAccess/           # Authentication/authorization
+│   ├── adminUsers/             # Admin plugin: User & Role management
+│   │   ├── main.js             # Plugin logic
+│   │   ├── pluginConfig.json5   # Plugin config (with isAdminPlugin flag)
+│   │   ├── pluginDescription.json5 # Plugin metadata
+│   │   ├── adminConfig.json5    # Admin section metadata
+│   │   ├── usersManagment/     # Admin section files (served via symlink)
+│   │   │   ├── index.ejs       # User list page
+│   │   │   ├── userView.ejs    # View user details
+│   │   │   ├── userUpsert.ejs  # Create/edit user
+│   │   │   └── userDelete.ejs  # Delete user
 │   │   ├── userAccount.json5    # User credentials (bcrypt hashed)
-│   │   └── userRole.json5       # Role definitions
-│   ├── admin/                  # Admin functionality
+│   │   ├── userRole.json5       # Role definitions
+│   │   └── userManagement.js   # User management logic
+│   ├── admin/                  # Admin core functionality plugin
 │   ├── bootstrap/              # Bootstrap CSS/JS integration
 │   ├── media/                  # Media management
 │   ├── ccxt/                   # Cryptocurrency exchange API
@@ -133,16 +151,26 @@ Understanding the initialization sequence is critical:
    - Resolve dependencies
    - Load in dependency order
    - Call `loadPlugin()` on each
+   - Add metadata to plugin objects (`pluginName`, `pathPluginFolder`)
    - Share objects between plugins
 5. **Register Plugin Routes:**
    - Prefix: `/${apiPrefix}/${pluginName}`
    - Default: `/api/{pluginName}/...`
 6. **Load Plugin Middlewares**
 7. **Initialize Theme System** (`themeSys`)
-8. **Setup Static Servers:**
+8. **Initialize Admin System** (if `enableAdmin: true`):
+   - **Phase 1:** Create AdminSystem instance
+   - **Phase 2:** Link dependencies (2-way injection to avoid circular refs)
+     - `adminSystem.setPluginSys(pluginSys)`
+     - `pluginSys.setAdminSystem(adminSystem)`
+   - **Phase 3:** Initialize AdminSystem
+     - Validate existing symlinks
+     - Process admin plugins (create symlinks for sections)
+     - Load services from configuration
+9. **Setup Static Servers:**
    - Public site: `/www` directory → `/`
    - Admin panel: `/core/admin/webPages` → `/admin`
-9. **Start HTTP Server** (port 3000 by default)
+10. **Start HTTP Server** (port 3000 by default)
 
 ## Plugin System Architecture
 
@@ -394,6 +422,438 @@ Themes call `pluginSys.hookPage()` to allow plugins to inject content:
 <%- await pluginSys.hookPage("script", passData) %>
 ```
 
+## Admin System Architecture
+
+### Overview
+
+The **Admin System** is a modular architecture that allows plugins to provide admin functionality through a unified, configuration-driven interface. It supports both **plugin-based sections** (dynamically served via symlinks) and **hardcoded sections** (static files in `core/admin/webPages`).
+
+**Key Features:**
+- ✅ **Plugin-agnostic design:** Admin UI decoupled from specific plugin implementations
+- ✅ **Zero file duplication:** Symlink-based serving (single source of truth)
+- ✅ **Service discovery:** Plugins provide backend services (auth, email, storage, etc.)
+- ✅ **Dynamic menu generation:** Menu sections built from configuration at runtime
+- ✅ **2-phase initialization:** Avoids circular dependencies between PluginSys and AdminSystem
+
+### Architecture Components
+
+**Directory:** `/core/admin/`
+
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| **AdminSystem** | `adminSystem.js` | Central coordinator, initialization, integration with pluginSys |
+| **ConfigManager** | `lib/configManager.js` | Loads and validates `adminConfig.json5` |
+| **AdminServicesManager** | `lib/adminServicesManager.js` | Service discovery, maps service names to plugin providers |
+| **SymlinkManager** | `lib/symlinkManager.js` | Creates/removes symlinks for plugin-based admin sections |
+
+### Admin Plugin Structure
+
+**CRITICAL NAMING CONVENTION:** Admin plugins **MUST** start with the prefix `admin`.
+
+✅ **Valid names:** `adminUsers`, `adminMailer`, `adminStorage`
+❌ **Invalid names:** `usersAdmin`, `simpleAccess`, `userManagement`
+
+**Complete admin plugin structure:**
+
+```
+plugins/adminUsers/
+├── main.js                    # Plugin logic (standard)
+├── pluginConfig.json5         # Plugin configuration (with isAdminPlugin flag)
+├── pluginDescription.json5    # Plugin metadata (standard)
+├── adminConfig.json5          # REQUIRED: Admin section metadata
+├── usersManagment/            # Admin section directory (name = sectionId)
+│   ├── index.ejs              # Main section page
+│   ├── userView.ejs           # Sub-pages
+│   ├── userUpsert.ejs
+│   └── userDelete.ejs
+├── userAccount.json5          # Plugin data files
+├── userRole.json5
+└── userManagement.js          # Plugin modules
+```
+
+### pluginConfig.json5 - Admin Plugin Flags
+
+```json5
+{
+  "active": 1,
+  "isInstalled": 1,
+  "weight": 0,
+
+  // REQUIRED for admin plugins
+  "pluginType": {
+    "isAdminPlugin": true,           // Identifies this as an admin plugin
+    "providesAuth": true,            // Optional: services provided
+    "providesUserManagement": true
+  },
+
+  "dependency": {},
+  "nodeModuleDependency": {},
+  "custom": {}
+}
+```
+
+**Required fields:**
+- `pluginType.isAdminPlugin: true` - Marks plugin as admin plugin
+
+### adminConfig.json5 - Admin Section Metadata
+
+**Location:** `plugins/{pluginName}/adminConfig.json5`
+
+```json5
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  // Admin section metadata
+  "adminSection": {
+    "sectionId": "usersManagment",     // MUST match directory name
+    "label": "Gestione Utenti",        // Menu label
+    "icon": "👥",                      // Icon (emoji, HTML, or CSS class)
+    "description": "Gestione utenti, ruoli e permessi del sistema"
+  },
+
+  // Services this plugin provides (optional)
+  "providesServices": ["auth"],
+
+  // API endpoints (optional, for documentation)
+  "apiEndpoints": {
+    "userList": "/api/adminUsers/userList",
+    "userInfo": "/api/adminUsers/userInfo",
+    "userCreate": "/api/adminUsers/usertUser",
+    "roleList": "/api/adminUsers/roleList"
+  }
+}
+```
+
+**Required fields:**
+- `adminSection.sectionId` - MUST match directory name in plugin root
+- `adminSection.label` - Text shown in menu
+- `adminSection.icon` - Icon for menu
+
+**Constraints:**
+- `sectionId` must be unique across all admin plugins
+- Directory `plugins/{pluginName}/{sectionId}/` MUST exist
+
+### Central Configuration: adminConfig.json5
+
+**Location:** `/core/admin/adminConfig.json5`
+
+```json5
+{
+  "version": "1.0.0",
+
+  // Admin sections configuration
+  "sections": {
+    // PLUGIN-BASED SECTION (dynamic, served via symlink)
+    "usersManagment": {
+      "type": "plugin",
+      "plugin": "adminUsers",     // Plugin that manages this section
+      "enabled": true,            // Show in menu
+      "required": true            // Error if plugin missing
+    },
+
+    // HARDCODED SECTION (static files in core/admin/webPages)
+    "systemSettings": {
+      "type": "hardcoded",
+      "enabled": true,
+      "label": "Impostazioni Sistema",
+      "url": "/admin/systemSettings/index.ejs",
+      "icon": "⚙️"
+    }
+  },
+
+  // Menu order (top to bottom)
+  "menuOrder": [
+    "usersManagment",
+    "systemSettings",
+    "pluginsManagment"
+  ],
+
+  // Backend services
+  "services": {
+    "auth": {
+      "plugin": "adminUsers",
+      "required": true
+    }
+  },
+
+  // UI configuration
+  "ui": {
+    "title": "Gestione Admin",
+    "welcomeMessage": "Benvenuto nella gestione di Italo8CMS",
+    "theme": "defaultAdminTheme"
+  }
+}
+```
+
+### Section Types
+
+**Type: `"plugin"`**
+- Managed by external plugin
+- Files located in `plugins/{pluginName}/{sectionId}/`
+- Served via symlink
+- Metadata from `plugins/{pluginName}/adminConfig.json5`
+
+**Fields:**
+- `type`: `"plugin"`
+- `plugin`: Plugin name
+- `enabled`: Show in menu (true/false)
+- `required`: Error if plugin missing (true/false)
+
+**Type: `"hardcoded"`**
+- Managed directly by core
+- Files in `core/admin/webPages/{sectionId}/`
+- No symlink needed
+- Metadata in central `adminConfig.json5`
+
+**Fields:**
+- `type`: `"hardcoded"`
+- `enabled`: Show in menu (true/false)
+- `label`: Menu text
+- `url`: Full URL to section
+- `icon`: Icon (emoji/HTML/CSS class)
+
+### Symlink System for Plugin Sections
+
+**Principle:** Zero file duplication, single source of truth.
+
+```
+Source (plugin):       plugins/adminUsers/usersManagment/
+                              ↓
+                        (symlink created)
+                              ↓
+Destination (served):  core/admin/webPages/usersManagment → (symlink)
+                              ↓
+                       Served by koa-classic-server
+                              ↓
+URL:                   /admin/usersManagment/index.ejs
+```
+
+**Symlink Creation Workflow:**
+
+1. Plugin admin loaded by `pluginSys`
+2. `AdminSystem.initialize()` → `onAdminPluginLoaded(plugin)`
+3. `SymlinkManager.installPluginSection(plugin)`:
+   - Verify `pluginType.isAdminPlugin === true`
+   - Load `adminConfig.json5`
+   - Verify directory `plugins/{pluginName}/{sectionId}/` exists
+   - Create symlink: `core/admin/webPages/{sectionId} → plugins/{pluginName}/{sectionId}/`
+
+**Symlink Removal:**
+- Plugin uninstalled: `SymlinkManager.uninstallPluginSection(plugin)`
+- Plugin disabled (`active: 0`): Symlink remains, but section hidden from menu
+
+**Conflict Handling:**
+- Symlink exists → Same target: OK, skip | Different target: ERROR
+- Non-symlink directory exists → ERROR (possible hardcoded section conflict)
+
+### Service Discovery System
+
+**What is a Service?**
+A service is a backend functionality provided by a plugin that can be used by other components.
+
+**Examples:**
+- `auth` - Authentication and authorization
+- `email` - Email sending
+- `storage` - File storage
+- `cache` - Caching layer
+- `analytics` - Analytics tracking
+
+**Service Configuration:**
+
+In `core/admin/adminConfig.json5`:
+```json5
+"services": {
+  "auth": {
+    "plugin": "adminUsers",
+    "required": true
+  },
+  "email": {
+    "plugin": "adminMailer",
+    "required": false
+  }
+}
+```
+
+**Using Services:**
+
+```javascript
+// Get service plugin
+const authPlugin = adminSystem.getService('auth');
+
+// Get endpoints for passData (in EJS templates)
+const endpoints = adminSystem.getEndpointsForPassData();
+```
+
+### 2-Phase Initialization (Avoiding Circular Dependencies)
+
+**Problem:**
+```
+PluginSys → needs AdminSystem → needs PluginSys → CIRCULAR!
+```
+
+**Solution:** Dependency Injection with 2-phase init
+
+**In `index.js`:**
+
+```javascript
+// Phase 1: Create PluginSys (loads all plugins)
+const pluginSys = new PluginSys();
+
+// Phase 2: Create ThemeSys
+const themeSys = new ThemeSys(ital8Conf, pluginSys);
+
+// Phase 3: Create AdminSystem (without pluginSys in constructor)
+let adminSystem = null;
+if (ital8Conf.enableAdmin) {
+  const AdminSystem = require('./core/admin/adminSystem');
+  adminSystem = new AdminSystem(themeSys);
+
+  // Phase 4: Link dependencies (dependency injection)
+  adminSystem.setPluginSys(pluginSys);
+  pluginSys.setAdminSystem(adminSystem);
+
+  // Phase 5: Initialize AdminSystem
+  adminSystem.initialize();
+}
+```
+
+**Detailed sequence:**
+
+1. `PluginSys` constructor → Loads all plugins (including admin plugins)
+2. `ThemeSys` constructor → Loads themes
+3. `AdminSystem` constructor → Creates ConfigManager, ServicesManager, SymlinkManager
+4. `adminSystem.setPluginSys()` → Links PluginSys
+5. `pluginSys.setAdminSystem()` → Links AdminSystem
+6. `adminSystem.initialize()`:
+   - Validates existing symlinks
+   - For each admin plugin:
+     - `symlinkManager.installPluginSection()` (creates symlink)
+     - `servicesManager.registerPlugin()` (registers services)
+   - `servicesManager.loadServices()` (loads services from config)
+
+### Dynamic Menu Generation
+
+**In `core/admin/webPages/index.ejs`:**
+
+```ejs
+<%
+  // Get admin UI config and menu sections
+  const adminUI = passData.adminSystem.getUI();
+  const menuSections = passData.adminSystem.getMenuSections();
+%>
+
+<!-- Header -->
+<a href="/<%= passData.adminPrefix %>/">
+    <%= adminUI.title %>
+</a>
+
+<!-- Dynamic sections -->
+<% menuSections.forEach(section => { %>
+    <a href="<%= section.url %>">
+        <%= section.icon %> <%= section.label %>
+        <% if (section.type === 'plugin') { %>
+            <span class="badge">Plugin: <%= section.plugin %></span>
+        <% } else { %>
+            <span class="badge">Integrato</span>
+        <% } %>
+    </a>
+<% }); %>
+```
+
+**`getMenuSections()` returns:**
+```javascript
+[
+  {
+    id: "usersManagment",
+    label: "Gestione Utenti",
+    icon: "👥",
+    url: "/admin/usersManagment/index.ejs",
+    type: "plugin",
+    plugin: "adminUsers"
+  },
+  {
+    id: "systemSettings",
+    label: "Impostazioni Sistema",
+    icon: "⚙️",
+    url: "/admin/systemSettings/index.ejs",
+    type: "hardcoded"
+  }
+]
+```
+
+**Filtering logic:**
+- Skip if `enabled: false`
+- Skip if plugin type and plugin not active
+- Return only sections that should appear in menu
+
+### AdminSystem API
+
+Available in `passData.adminSystem`:
+
+```javascript
+// UI configuration
+adminSystem.getUI()
+// Returns: { title, welcomeMessage, theme }
+
+// Menu sections (filtered by enabled and active status)
+adminSystem.getMenuSections()
+// Returns: [{ id, label, icon, url, type, plugin }]
+
+// Get service by name
+adminSystem.getService('auth')
+// Returns: plugin object providing the service
+
+// Get API endpoints for EJS templates
+adminSystem.getEndpointsForPassData()
+// Returns: { serviceName: { endpoint1, endpoint2, ... } }
+```
+
+### Creating an Admin Plugin - Checklist
+
+✅ **Step 1: Create plugin structure**
+```bash
+mkdir -p plugins/admin{Feature}/{sectionId}
+```
+
+✅ **Step 2: Create required files**
+- [ ] `main.js` with `loadPlugin()`, `getRouteArray()`, etc.
+- [ ] `pluginConfig.json5` with `pluginType.isAdminPlugin: true`
+- [ ] `pluginDescription.json5`
+- [ ] `adminConfig.json5` with `adminSection.sectionId`
+- [ ] `{sectionId}/index.ejs` (section directory with EJS files)
+
+✅ **Step 3: Configure `adminConfig.json5`**
+```json5
+{
+  "adminSection": {
+    "sectionId": "mySection",  // MUST match directory name
+    "label": "My Section",
+    "icon": "🎯",
+    "description": "Description of my section"
+  },
+  "providesServices": ["myService"]  // Optional
+}
+```
+
+✅ **Step 4: Register section in central config**
+
+Edit `/core/admin/adminConfig.json5`:
+```json5
+"sections": {
+  "mySection": {
+    "type": "plugin",
+    "plugin": "admin{Feature}",
+    "enabled": true,
+    "required": false
+  }
+},
+"menuOrder": [..., "mySection"]
+```
+
+✅ **Step 5: Restart server**
+- Symlink created automatically
+- Section appears in menu
+- Accessible at `/admin/mySection/index.ejs`
+
 ## Data Storage Strategy
 
 ### Core Philosophy: File-Based, Database-Free
@@ -403,10 +863,11 @@ Themes call `pluginSys.hookPage()` to allow plugins to inject content:
 ### Primary Storage: JSON Files
 
 **Structured Data Storage:**
-- **User accounts:** `/plugins/simpleAccess/userAccount.json5`
-- **User roles:** `/plugins/simpleAccess/userRole.json5`
+- **User accounts:** `/plugins/adminUsers/userAccount.json5`
+- **User roles:** `/plugins/adminUsers/userRole.json5`
 - **Plugin configurations:** Each plugin has `pluginConfig.json5`
 - **Application settings:** `ital8Config.json5`
+- **Admin configuration:** `/core/admin/adminConfig.json5`
 
 **Why JSON?**
 - ✅ Zero dependencies - no database installation required
@@ -514,17 +975,17 @@ fs.renameSync(tempPath, userAccountPath)
 
 ## Authentication & Authorization
 
-### Authentication System (simpleAccess plugin)
+### Authentication System (adminUsers plugin)
 
 **Login Flow:**
-1. User submits username/password to `/api/simpleAccess/login` (POST)
+1. User submits username/password to `/api/adminUsers/login` (POST)
 2. Plugin validates credentials against `userAccount.json5`
 3. Password verified with bcryptjs
 4. Session created: `ctx.session.authenticated = true`, `ctx.session.user = userData`
 5. Session cookie sent to client
 
 **Logout Flow:**
-1. User accesses `/api/simpleAccess/logout` (POST)
+1. User accesses `/api/adminUsers/logout` (POST)
 2. Session destroyed: `ctx.session = null`
 
 **Session Management:**
@@ -541,7 +1002,7 @@ fs.renameSync(tempPath, userAccountPath)
 - **3 (viewer):** Read-only access
 
 **Role Configuration:**
-Located in `/plugins/simpleAccess/userRole.json5`
+Located in `/plugins/adminUsers/userRole.json5`
 
 ### Access Control Middleware
 
@@ -573,7 +1034,7 @@ const role = ctx.session.user.role
 <% if (passData.ctx.session.authenticated) { %>
   <p>Welcome, <%= passData.ctx.session.user.username %>!</p>
 <% } else { %>
-  <p><a href="/api/simpleAccess/login">Login</a></p>
+  <p><a href="/api/adminUsers/login">Login</a></p>
 <% } %>
 ```
 
@@ -583,18 +1044,18 @@ const role = ctx.session.user.role
 
 All plugin routes are prefixed: `/api/{pluginName}/...`
 
-### SimpleAccess Plugin Routes
+### AdminUsers Plugin Routes
 
 ```
-GET  /api/simpleAccess/login         # Display login form
-POST /api/simpleAccess/login         # Authenticate user
-GET  /api/simpleAccess/logout        # Display logout confirmation
-POST /api/simpleAccess/logout        # End session
-GET  /api/simpleAccess/logged        # Check login status (JSON)
-GET  /api/simpleAccess/userList      # List all users (protected)
-GET  /api/simpleAccess/userInfo      # Get user details (protected)
-GET  /api/simpleAccess/roleList      # List all roles (protected)
-POST /api/simpleAccess/usertUser     # Create/update user (protected)
+GET  /api/adminUsers/login         # Display login form
+POST /api/adminUsers/login         # Authenticate user
+GET  /api/adminUsers/logout        # Display logout confirmation
+POST /api/adminUsers/logout        # End session
+GET  /api/adminUsers/logged        # Check login status (JSON)
+GET  /api/adminUsers/userList      # List all users (protected)
+GET  /api/adminUsers/userInfo      # Get user details (protected)
+GET  /api/adminUsers/roleList      # List all roles (protected)
+POST /api/adminUsers/usertUser     # Create/update user (protected)
 ```
 
 ### Bootstrap Plugin Routes
@@ -865,7 +1326,7 @@ mkdir -p core/admin/webPages/myFeature
 - `http://localhost:3000/admin/userManagment/`
 - List users, add, edit, delete
 
-**Default users** (check `plugins/simpleAccess/userAccount.json5`):
+**Default users** (check `plugins/adminUsers/userAccount.json5`):
 ```json
 {
   "username": {
@@ -1409,32 +1870,44 @@ const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
 ### Configuration Files
 
 - `/ital8Config.json5` - Main application configuration
+- `/core/admin/adminConfig.json5` - Admin system configuration
 - `/core/priorityMiddlewares/koaSession.json5` - Session configuration
 - `/plugins/*/pluginConfig.json5` - Per-plugin configuration
 - `/plugins/*/pluginDescription.json5` - Plugin metadata
+- `/plugins/*/adminConfig.json5` - Admin plugin section metadata (for admin plugins)
 
 ### Entry Points
 
 - `/index.js` - Application bootstrap
 - `/core/pluginSys.js` - Plugin system manager
 - `/core/themeSys.js` - Theme system manager
+- `/core/admin/adminSystem.js` - Admin system coordinator
+- `/core/loadJson5.js` - JSON5 file loader utility
 
-### Authentication
+### Admin System
 
-- `/plugins/simpleAccess/userAccount.json5` - User credentials
-- `/plugins/simpleAccess/userRole.json5` - Role definitions
-- `/plugins/simpleAccess/main.js` - Authentication logic
+- `/core/admin/adminConfig.json5` - Central admin configuration
+- `/core/admin/adminSystem.js` - Admin coordinator
+- `/core/admin/lib/configManager.js` - Config loader & validator
+- `/core/admin/lib/adminServicesManager.js` - Service discovery
+- `/core/admin/lib/symlinkManager.js` - Symlink manager
+- `/core/admin/webPages/index.ejs` - Admin dashboard (dynamic menu)
+- `/core/admin/webPages/systemSettings/` - System settings UI
+- `/core/admin/webPages/usersManagment/` - Symlink → plugins/adminUsers/usersManagment/
+
+### Authentication & User Management
+
+- `/plugins/adminUsers/userAccount.json5` - User credentials
+- `/plugins/adminUsers/userRole.json5` - Role definitions
+- `/plugins/adminUsers/main.js` - Authentication logic
+- `/plugins/adminUsers/adminConfig.json5` - Admin section metadata
+- `/plugins/adminUsers/usersManagment/` - User management UI files
 
 ### Databases
 
 - `/plugins/dbApi/dbFile/mainDb.db` - Main database
 - `/plugins/dbApi/dbFile/webDb.db` - Web-shared database
 - `/plugins/dbApi/dbFile/pluginsDb/*.db` - Per-plugin databases
-
-### Admin Interface
-
-- `/core/admin/webPages/index.ejs` - Admin dashboard
-- `/core/admin/webPages/userManagment/` - User management UI
 
 ## Debugging & Troubleshooting
 
@@ -1581,11 +2054,47 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2025-12-11
-**Version:** 1.3.0
+**Last Updated:** 2025-12-12
+**Version:** 1.4.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v1.4.0 (2025-12-12): **MAJOR FEATURE** - Implemented modular Admin System architecture. Key changes:
+  - **New Admin System Components:**
+    - Created `/core/admin/adminSystem.js` - Central coordinator
+    - Created `/core/admin/lib/configManager.js` - Config loader & validator
+    - Created `/core/admin/lib/adminServicesManager.js` - Service discovery system
+    - Created `/core/admin/lib/symlinkManager.js` - Symlink manager for plugin sections
+    - Created `/core/admin/adminConfig.json5` - Central admin configuration
+  - **Admin Plugin Architecture:**
+    - Admin plugins MUST start with `admin` prefix (e.g., `adminUsers`, `adminMailer`)
+    - Required `pluginType.isAdminPlugin: true` flag in `pluginConfig.json5`
+    - New required file: `adminConfig.json5` in plugin root (admin section metadata)
+    - Section files in plugin root directory (e.g., `plugins/adminUsers/usersManagment/`)
+  - **Symlink-Based Serving:**
+    - Plugin sections served via symlinks: `core/admin/webPages/{sectionId} → plugins/{plugin}/{sectionId}/`
+    - Zero file duplication, single source of truth
+    - Automatic symlink creation during plugin initialization
+  - **Plugin Renamed:**
+    - `simpleAccess` → `adminUsers` (admin plugin for user management)
+    - All API endpoints updated: `/api/simpleAccess/` → `/api/adminUsers/`
+    - Files moved: `core/admin/webPages/usersManagment/` → `plugins/adminUsers/usersManagment/`
+  - **2-Phase Initialization:**
+    - Dependency injection pattern to avoid circular dependencies
+    - Phase 1: Create instances | Phase 2: Link dependencies | Phase 3: Initialize
+  - **Service Discovery:**
+    - Backend services (auth, email, storage) mapped to plugin providers
+    - Configured in `adminConfig.json5` services section
+  - **Dynamic Menu Generation:**
+    - Menu sections generated from configuration at runtime
+    - Supports both plugin-based and hardcoded sections
+    - Filtered by enabled status and plugin active state
+  - **Plugin System Enhancements:**
+    - Added `pluginName` and `pathPluginFolder` metadata to plugin objects
+    - New methods: `getAllPlugins()`, `getPlugin(pluginName)`, `setAdminSystem()`
+  - **Updated Application Startup Flow:**
+    - Added Admin System initialization step (if `enableAdmin: true`)
+    - 2-phase dependency injection between PluginSys and AdminSystem
 - v1.3.0 (2025-12-11): **BREAKING CHANGE** - Converted all configuration files from `.json` to `.json5` extension. Key changes:
   - All configuration files now use `.json5` extension to reflect JSON5 format support
   - Updated all documentation examples to use `loadJson5()` function
