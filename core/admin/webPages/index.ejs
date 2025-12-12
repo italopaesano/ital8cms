@@ -60,12 +60,9 @@
 // Carica sezioni admin via API
 async function loadAdminSections() {
     try {
-        const response = await fetch(`/${apiPrefix}/admin/${adminPrefix}/sections`);
+        const response = await fetch(`/${apiPrefix}/admin/${adminPrefix}/adminSections`);
 
         if (!response.ok) {
-            if (response.status === 401) {
-                throw new Error('Non autenticato. Effettua il login.');
-            }
             throw new Error(`Errore HTTP: ${response.status}`);
         }
 
