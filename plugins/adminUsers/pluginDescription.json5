@@ -1,10 +1,9 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-        "name": "simpleAccess",
+        "name": "adminUsers",
         "version": "1.0.0",
-        "description": " plugin che implmenta le Accessi con koa-session",
+        "description": "Plugin di amministrazione utenti, ruoli e autenticazione con koa-session",
         "author": "Italo Paesano",
         "email": "italopaesano@protonmail.com",
-        "licenze": "MIT",
-        "note": "any note"
+        "license": "ISC"
 }

@@ -76,7 +76,7 @@
         try {
             const roleSelect = document.getElementById('role');
             // Fetch role list
-            const roleResponse = await fetch(`/${apiPrefix}/simpleAccess/roleList`, {
+            const roleResponse = await fetch(`/${apiPrefix}/adminUsers/roleList`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json'
@@ -124,7 +124,7 @@
         //console.log({ username, email, password, roleId, isNewUser })
 
         try {
-            const response = await fetch(`/${apiPrefix}/simpleAccess/usertUser`, {
+            const response = await fetch(`/${apiPrefix}/adminUsers/usertUser`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
