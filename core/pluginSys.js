@@ -498,6 +498,14 @@ class pluginSys{
   }
 
   /**
+   * Ottiene riferimento ad AdminSystem
+   * @returns {object|null} - Istanza di AdminSystem o null se non inizializzato
+   */
+  getAdminSystem() {
+    return this.adminSystem || null;
+  }
+
+  /**
    * Ottiene tutti i plugin attivi (per AdminSystem.initialize)
    * @returns {Array<object>} - Array di plugin objects
    */
