@@ -20,7 +20,7 @@ const loadJson5 = require('../../loadJson5');
 class SymlinkManager {
   constructor(configManager) {
     this.configManager = configManager;
-    this.adminWebPagesPath = path.join(__dirname, '../../webPages');
+    this.adminWebPagesPath = path.join(__dirname, '../webPages');
   }
 
   /**
