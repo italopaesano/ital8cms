@@ -15,5 +15,6 @@
     <%- include('aside.ejs') %>
 
     <!-- Main content area -->
-    <%- include('main.ejs') %>
-</div>
+    <main class="admin-main">
+        <%- passData.pluginSys.hookPage("main", passData); %>
+        <%- passData.pluginSys.hookPage("body", passData); %>
