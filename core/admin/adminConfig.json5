@@ -12,7 +12,7 @@
       "type": "plugin",
       "plugin": "adminUsers",           // Nome del plugin che gestisce questa sezione
       "enabled": true,                  // Abilitata
-      "required": true                  // Se plugin manca, errore all'avvio
+      "required": true,                  // Se plugin manca, errore all'avvio
     },
 
     // SEZIONI HARDCODED (statiche) - da implementare in futuro
@@ -64,8 +64,8 @@
   "services": {
     "auth": {
       "plugin": "adminUsers",           // Plugin che fornisce autenticazione
-      "required": true                  // Servizio obbligatorio
-    }
+      "required": true,                  // Servizio obbligatorio
+    },
     // Altri servizi possono essere aggiunti in futuro:
     // "email": { "plugin": "adminMailer", "required": false },
     // "storage": { "plugin": "adminStorage", "required": false }
@@ -75,6 +75,6 @@
   "ui": {
     "title": "Gestione Admin",
     "welcomeMessage": "Benvenuto nella gestione di Italo8CMS",
-    "theme": "defaultAdminTheme"        // Riferimento a adminActiveTheme in ital8Config.json5
+    "theme": "defaultAdminTheme",        // Riferimento a adminActiveTheme in ital8Config.json5
   }
 }
