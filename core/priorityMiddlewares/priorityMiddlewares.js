@@ -11,7 +11,7 @@
 
 const loadJson5 = require('../loadJson5');
 
-function priorityMiddleware(app){
+function priorityMiddleware(app, ital8Conf){
 
     const bodyParser = require('koa-bodyparser');
     app.use(bodyParser());
@@ -20,6 +20,11 @@ function priorityMiddleware(app){
     const koaSession = require('koa-session').default || require('koa-session');//dovuto al fatto che originariamente è un modulo sviluppato per ES module
     const koaSessionConfig = loadJson5(__dirname + '/koaSession.json5');// configurazione di koa session
     app.keys = koaSessionConfig.keys;// importo le chiavi per la sicurezza  (necessaria per la firma delle sessioni)
+
+    // Applica il globalPrefix al path dei cookie di sessione
+    // Se globalPrefix è vuoto, usa "/" come default (root)
+    koaSessionConfig.CONFIG.path = ital8Conf.globalPrefix || '/';
+
     app.use(koaSession(koaSessionConfig.CONFIG, app));
 
 
