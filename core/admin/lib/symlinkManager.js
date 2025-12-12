@@ -183,14 +183,25 @@ class SymlinkManager {
 
       const symlinkPath = path.join(this.adminWebPagesPath, sectionId);
 
-      if (!fs.existsSync(symlinkPath)) {
-        if (sectionConfig.enabled && sectionConfig.required) {
-          console.warn(`⚠️ Required symlink for section "${sectionId}" (plugin "${sectionConfig.plugin}") does not exist`);
+      // Controlla se il symlink esiste (anche se rotto)
+      let symlinkExists = false;
+      let stats = null;
+      try {
+        stats = fs.lstatSync(symlinkPath);
+        symlinkExists = true;
+      } catch (error) {
+        if (error.code === 'ENOENT') {
+          // Symlink non esiste
+          if (sectionConfig.enabled && sectionConfig.required) {
+            console.warn(`⚠️ Required symlink for section "${sectionId}" (plugin "${sectionConfig.plugin}") does not exist`);
+          }
+          continue;
         }
+        // Altri errori
+        console.error(`⚠️ Error checking symlink for section "${sectionId}":`, error.message);
         continue;
       }
 
-      const stats = fs.lstatSync(symlinkPath);
       if (!stats.isSymbolicLink()) {
         console.warn(`⚠️ Section "${sectionId}" is not a symlink`);
         continue;
@@ -200,6 +211,13 @@ class SymlinkManager {
       const target = fs.readlinkSync(symlinkPath);
       if (!fs.existsSync(target)) {
         console.warn(`⚠️ Symlink for section "${sectionId}" points to non-existent target: ${target}`);
+        console.warn(`⚠️ Removing broken symlink: ${symlinkPath}`);
+        try {
+          fs.unlinkSync(symlinkPath);
+          console.log(`✓ Broken symlink removed for section "${sectionId}"`);
+        } catch (unlinkError) {
+          console.error(`✗ Failed to remove broken symlink:`, unlinkError.message);
+        }
       }
     }
   }
