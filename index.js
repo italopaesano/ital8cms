@@ -32,6 +32,22 @@ const themeSys = new ( require('./core/themeSys') ) ( ital8Conf, pluginSys );
 // Imposta il riferimento a themeSys in pluginSys per permettere ai plugin di accedervi
 pluginSys.setThemeSys(themeSys);
 
+// Inizializza Admin System (se abilitato)
+let adminSystem = null;
+if (ital8Conf.enableAdmin) {
+  const AdminSystem = require('./core/admin/adminSystem');
+  adminSystem = new AdminSystem(themeSys);
+
+  // Collega PluginSys ad AdminSystem (evita dipendenza circolare)
+  adminSystem.setPluginSys(pluginSys);
+  pluginSys.setAdminSystem(adminSystem);
+
+  // Inizializza admin (processa plugin admin, crea symlink, carica servizi)
+  adminSystem.initialize();
+
+  console.log('✓ Admin System initialized');
+}
+
 // Static server per le risorse del tema pubblico
 // Le risorse sono accessibili tramite /{publicThemeResourcesPrefix}/css/, /{publicThemeResourcesPrefix}/js/, ecc.
 // Configurazione cache controllata da browserCacheEnabled e browserCacheMaxAge in ital8Config.json
@@ -68,6 +84,7 @@ app.use(
               pluginSys: pluginSys, // sistema dei plugin
               plugin: getObjectsToShareInWebPages,// quicondivo gli ogetti publidi dei plugin
               themeSys: themeSys, // sistema dei temi
+              adminSystem: adminSystem, // Admin System (disponibile anche in pagine pubbliche per servizi come auth)
               //baseThemePath: `${ital8Conf.baseThemePath}` ,OLD -> mi sa che non serve più// default -> "../themes/default" -->baseThemePath contiene il percorso di base del tema corrente
               filePath: filePath,
               href: ctx.href,
@@ -124,6 +141,7 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
                 pluginSys: pluginSys, // sistema dei plugin
                 plugin: getObjectsToShareInWebPages,// quicondivo gli ogetti publidi dei plugin
                 themeSys: themeSys,// thema dei temi con il tema in uso quello di --->default
+                adminSystem: adminSystem, // Admin System con menu dinamico e servizi
                 //baseThemePath: `${ital8Conf.baseThemePath}` ,OLD -> mi sa che non serve più// default -> "../themes/default" -->baseThemePath contiene il percorso di base del tema corrente
                 filePath: filePath,
                 href: ctx.href,

@@ -485,6 +485,26 @@ class pluginSys{
     return Array.from(this.#activePlugins.keys());
   }
 
+  /**
+   * Setta riferimento ad AdminSystem (chiamato da index.js dopo costruzione)
+   * @param {object} adminSystem - Istanza di AdminSystem
+   */
+  setAdminSystem(adminSystem) {
+    this.adminSystem = adminSystem;
+  }
+
+  /**
+   * Ottiene tutti i plugin attivi (per AdminSystem.initialize)
+   * @returns {Array<object>} - Array di plugin objects
+   */
+  getAllPlugins() {
+    const plugins = [];
+    for (const [pluginName, pluginObj] of this.#activePlugins.entries()) {
+      plugins.push(pluginObj);
+    }
+    return plugins;
+  }
+
 }
 
 module.exports = pluginSys ;
