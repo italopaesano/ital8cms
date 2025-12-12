@@ -74,18 +74,8 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
   routeArray.push(
     {
       method: 'GET',
-      path: `/${ital8Conf.adminPrefix}/sections`,
+      path: `/${ital8Conf.adminPrefix}/adminSections`,
       handler: async (ctx) => {
-        // Verifica autenticazione
-        if (!ctx.session || !ctx.session.authenticated) {
-          ctx.status = 401;
-          ctx.body = {
-            success: false,
-            error: 'Unauthorized - Authentication required'
-          };
-          return;
-        }
-
         try {
           // Ottiene adminSystem da pluginSys
           const adminSystem = myPluginSys.getAdminSystem();
@@ -107,7 +97,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
             data: data
           };
         } catch (error) {
-          console.error('Error in /admin/sections:', error);
+          console.error('Error in /admin/adminSections:', error);
           ctx.status = 500;
           ctx.body = {
             success: false,
