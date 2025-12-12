@@ -7,13 +7,13 @@ const loadJson5 = require('./core/loadJson5');
 const ital8Conf = loadJson5('./ital8Config.json5');
 const path = require('path');
 
-const priorityMiddlewares = require('./core/priorityMiddlewares/priorityMiddlewares.js')(app);
+const priorityMiddlewares = require('./core/priorityMiddlewares/priorityMiddlewares.js')(app, ital8Conf);
 router = priorityMiddlewares.router ;
 //const priorityMiddlewares(app); // carico i imidlware che vanno impostati in ordine preciso di caricamento
 
 const pluginSys = new ( require("./core/pluginSys") )(); // carico il sistema di plugin e ne istanzio pure un ogetto
 // carico le rotte di tutti i plugin
-pluginSys.loadRoutes( router , `/${ital8Conf.apiPrefix}`);// il secondo paramentro è il primo prefix
+pluginSys.loadRoutes( router , `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`);// il secondo paramentro è il primo prefix
 const getObjectsToShareInWebPages = pluginSys.getObjectsToShareInWebPages();
 // adesso faccio in modo di caricare tutti i vari midlware dei vari pugin
 const middlewaresToLoad = pluginSys.getMiddlewaresToLoad();// questi midlware andranno caricati nell'app koa.js const app = new koa();
@@ -55,23 +55,24 @@ app.use(
   koaClassicServer(
     path.join(__dirname, 'themes', ital8Conf.activeTheme, 'themeResources'),
     {
-      urlPrefix: `/${ital8Conf.publicThemeResourcesPrefix}`,
-      urlsReserved: [`/${ital8Conf.adminPrefix}`, `/${ital8Conf.apiPrefix}`, `/${ital8Conf.viewsPrefix}`, `/${ital8Conf.adminThemeResourcesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
+      urlPrefix: `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`,
+      urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
       showDirContents: false,
       enableCaching: ital8Conf.browserCacheEnabled,
       cacheMaxAge: ital8Conf.browserCacheMaxAge,
     }
   )
 );
-console.log(`[themeSys] Risorse del tema pubblico servite da /${ital8Conf.publicThemeResourcesPrefix}/ -> themes/${ital8Conf.activeTheme}/themeResources/`);
+console.log(`[themeSys] Risorse del tema pubblico servite da ${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}/ -> themes/${ital8Conf.activeTheme}/themeResources/`);
 
 // koa classic server
 app.use(
   koaClassicServer(
     __dirname + `${ital8Conf.wwwPath}`,
     (opt = {
+      urlPrefix: `${ital8Conf.globalPrefix}`,
       showDirContents: true,
-      urlsReserved: [`/${ital8Conf.adminPrefix}`, `/${ital8Conf.apiPrefix}`, `/${ital8Conf.viewsPrefix}`, `/${ital8Conf.publicThemeResourcesPrefix}`, `/${ital8Conf.adminThemeResourcesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
+      urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
       enableCaching: ital8Conf.browserCacheEnabled,
       cacheMaxAge: ital8Conf.browserCacheMaxAge,
       template: {
@@ -79,6 +80,7 @@ app.use(
           ctx.body = await ejs.renderFile(filePath, {
             passData :{
               isAdminContext: false, // Flag per distinguere contesto pubblico da admin
+              globalPrefix: ital8Conf.globalPrefix,// prefisso globale per costruire URL corretti
               apiPrefix: ital8Conf.apiPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamare in modo corretto e flessibile le api ad esempio dei vari plugin
               //adminPrefix: ital8Conf.adminPrefix,//ATTENZIONE PER NESSUN MOTIVO DOVRÀ ESSERE PASSATO adminPrefix nelle pagine web non di amministrazione per non svelare ad utenti potenzialmente pericolosi la locazion della sezione di admin
               pluginSys: pluginSys, // sistema dei plugin
@@ -110,15 +112,15 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
     koaClassicServer(
       path.join(__dirname, 'themes', ital8Conf.adminActiveTheme, 'themeResources'),
       {
-        urlPrefix: `/${ital8Conf.adminThemeResourcesPrefix}`,
-        urlsReserved: [`/${ital8Conf.adminPrefix}`, `/${ital8Conf.apiPrefix}`, `/${ital8Conf.viewsPrefix}`, `/${ital8Conf.publicThemeResourcesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
+        urlPrefix: `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`,
+        urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
         showDirContents: false,
         enableCaching: ital8Conf.browserCacheEnabled,
         cacheMaxAge: ital8Conf.browserCacheMaxAge,
       }
     )
   );
-  console.log(`[themeSys] Risorse del tema admin servite da /${ital8Conf.adminThemeResourcesPrefix}/ -> themes/${ital8Conf.adminActiveTheme}/themeResources/`);
+  console.log(`[themeSys] Risorse del tema admin servite da ${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}/ -> themes/${ital8Conf.adminActiveTheme}/themeResources/`);
 
   // Static server per le pagine admin complete
   app.use(
@@ -126,9 +128,9 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
       path.join(__dirname, 'core', 'admin', 'webPages'),// punto alla cartella delle pagine di admin
       (opt = {
         index: ['index.ejs'], // Koa v3 + koa-classic-server v2.1.2: formato array raccomandato
-        urlPrefix: `/${ital8Conf.adminPrefix}`,
+        urlPrefix: `${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`,
         showDirContents: true,
-        urlsReserved: [`/${ital8Conf.apiPrefix}`, `/${ital8Conf.viewsPrefix}`, `/${ital8Conf.publicThemeResourcesPrefix}`, `/${ital8Conf.adminThemeResourcesPrefix}`], // '/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
+        urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`], // '/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
         enableCaching: ital8Conf.browserCacheEnabled,
         cacheMaxAge: ital8Conf.browserCacheMaxAge,
         template: {
@@ -136,6 +138,7 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
             ctx.body = await ejs.renderFile(filePath, {
               passData :{
                 isAdminContext: true, // Flag per distinguere contesto admin da pubblico
+                globalPrefix: ital8Conf.globalPrefix,// prefisso globale per costruire URL corretti
                 apiPrefix: ital8Conf.apiPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamare in modo corretto e flessibile le api ad esempio dei vari plugin
                 adminPrefix: ital8Conf.adminPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamamare correttamente le pagine di admin con il corretto prefix
                 pluginSys: pluginSys, // sistema dei plugin
