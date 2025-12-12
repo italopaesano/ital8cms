@@ -1,0 +1,80 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "version": "1.0.0",
+
+  // Sezioni dell'interfaccia admin
+  // Ogni sezione può essere:
+  // - type: "plugin" → gestita da plugin (dinamica, con symlink)
+  // - type: "hardcoded" → gestita direttamente da core/admin (statica)
+  "sections": {
+    // SEZIONE PLUGIN-BASED (dinamica)
+    "usersManagment": {
+      "type": "plugin",
+      "plugin": "adminUsers",           // Nome del plugin che gestisce questa sezione
+      "enabled": true,                  // Abilitata
+      "required": true                  // Se plugin manca, errore all'avvio
+    },
+
+    // SEZIONI HARDCODED (statiche) - da implementare in futuro
+    "pagesManagment": {
+      "type": "hardcoded",
+      "enabled": false,                 // Disabilitata per ora
+      "label": "Creazione Pagine Web",
+      "url": "/admin/pagesManagment/index.ejs",
+      "icon": "📄"
+    },
+
+    "systemSettings": {
+      "type": "hardcoded",
+      "enabled": false,
+      "label": "Impostazioni Sistema",
+      "url": "/admin/systemSettings/index.ejs",
+      "icon": "⚙️"
+    },
+
+    "pluginsManagment": {
+      "type": "hardcoded",
+      "enabled": false,
+      "label": "Gestione Plugin",
+      "url": "/admin/pluginsManagment/index.ejs",
+      "icon": "🔌"
+    },
+
+    "themesManagment": {
+      "type": "hardcoded",
+      "enabled": false,
+      "label": "Gestione Temi",
+      "url": "/admin/themesManagment/index.ejs",
+      "icon": "🎨"
+    }
+  },
+
+  // Ordinamento sezioni nel menu (dall'alto verso il basso)
+  "menuOrder": [
+    "usersManagment",
+    "pagesManagment",
+    "systemSettings",
+    "pluginsManagment",
+    "themesManagment"
+  ],
+
+  // Servizi forniti da plugin (backend)
+  // Un servizio è una funzionalità fornita da un plugin che può essere usata
+  // da altri componenti del sistema (es. autenticazione, email, storage, etc.)
+  "services": {
+    "auth": {
+      "plugin": "adminUsers",           // Plugin che fornisce autenticazione
+      "required": true                  // Servizio obbligatorio
+    }
+    // Altri servizi possono essere aggiunti in futuro:
+    // "email": { "plugin": "adminMailer", "required": false },
+    // "storage": { "plugin": "adminStorage", "required": false }
+  },
+
+  // Configurazione UI admin
+  "ui": {
+    "title": "Gestione Admin",
+    "welcomeMessage": "Benvenuto nella gestione di Italo8CMS",
+    "theme": "defaultAdminTheme"        // Riferimento a adminActiveTheme in ital8Config.json5
+  }
+}

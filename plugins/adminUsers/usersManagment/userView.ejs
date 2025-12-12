@@ -59,14 +59,14 @@
     if (!username) {
         document.getElementById('error-message').style.display = 'block';
     } else {
-        fetch(`/${apiPrefix}/simpleAccess/userInfo?username=${username}`)
+        fetch(`/${apiPrefix}/adminUsers/userInfo?username=${username}`)
             .then(response => response.json())
             .then(userInfo => {
                 if (userInfo && userInfo.roleId) {
                     document.getElementById('username').innerText = username || 'N/A';
                     document.getElementById('email').innerText = userInfo.email || 'N/A';
 
-                    fetch(`/${apiPrefix}/simpleAccess/roleList`)
+                    fetch(`/${apiPrefix}/adminUsers/roleList`)
                         .then(response => response.json())
                         .then(roleList => {
                             const roles = roleList.roles;

@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const bcryptjs = require('bcryptjs');
 const { error } = require('console');
+const loadJson5 = require('../../core/loadJson5');
 
 
 
@@ -43,7 +44,7 @@ async function userUsert(username, password, email, roleId, isNewUser = true) {
     // Crea l'hash della password
     const hashedPassword = await bcryptjs.hash(password, 10);
 
-    const userAccount = JSON.parse(fs.readFileSync(usersFilePath, 'utf-8'));
+    const userAccount = loadJson5(usersFilePath);
     const users = Object.keys(userAccount.users); // converto le chiavi degli utenti (nomi utenti) in un array
     const userEmails = Object.values(userAccount.users).map(user => user.email); // converto gli utenti in un array di oggetti e prendo solo le email
 

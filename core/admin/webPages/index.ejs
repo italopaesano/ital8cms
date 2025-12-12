@@ -16,29 +16,62 @@
     const adminPrefix = document.getElementById('adminPrefix').innerText;
 </script>
 
+<%
+  // Ottiene sezioni admin dinamicamente da AdminSystem
+  const adminUI = passData.adminSystem ? passData.adminSystem.getUI() : { title: 'Gestione Admin', welcomeMessage: 'Benvenuto' };
+  const menuSections = passData.adminSystem ? passData.adminSystem.getMenuSections() : [];
+%>
+
 <div class="container mt-5">
     <div class="row">
         <div class="col-md-3">
             <div class="list-group">
-                <a href="#" class="list-group-item list-group-item-action active" aria-current="true">
-                    Gestione Admin
+                <!-- Header menu (statico) -->
+                <a href="/<%= passData.adminPrefix %>/" class="list-group-item list-group-item-action active" aria-current="true">
+                    <%= adminUI.title %>
                 </a>
-                <a href="/<%= passData.adminPrefix %>/usersManagment/index.ejs" class="list-group-item list-group-item-action">Gestione Utenti</a>
-                <a href="/<%= passData.adminPrefix %>/pagesManagment/index.ejs" class="list-group-item list-group-item-action">Creazione Pagine Web</a>
-                <!-- <a href="#" class="list-group-item list-group-item-action">Gestione File</a> -->
-                <a href="/<%= passData.adminPrefix %>/systemSettings/index.ejs" class="list-group-item list-group-item-action">Impostazioni Sistema</a>
-                <a href="/<%= passData.adminPrefix %>/pluginsManagment/index.ejs" class="list-group-item list-group-item-action">Gestione Plugin</a>
-                <a href="/<%= passData.adminPrefix %>/themesManagment/index.ejs" class="list-group-item list-group-item-action">Gestione Temi</a>
+
+                <!-- Sezioni dinamiche (fornite da plugin o hardcoded) -->
+                <% menuSections.forEach(section => { %>
+                    <a href="<%= section.url %>" class="list-group-item list-group-item-action" title="<%= section.type === 'plugin' ? 'Fornito da plugin: ' + section.plugin : 'Sezione integrata' %>">
+                        <% if (section.icon) { %><span class="me-2"><%= section.icon %></span><% } %>
+                        <%= section.label %>
+                    </a>
+                <% }); %>
+
+                <!-- Messaggio se nessuna sezione disponibile -->
+                <% if (menuSections.length === 0) { %>
+                    <div class="list-group-item text-muted">
+                        <small>Nessuna sezione admin disponibile</small>
+                    </div>
+                <% } %>
             </div>
         </div>
         <div class="col-md-9">
             <div class="card">
                 <div class="card-header">
-                    Benvenuto nella gestione di Italo8CMS
+                    <%= adminUI.welcomeMessage %>
                 </div>
                 <div class="card-body">
                     <h5 class="card-title">Seleziona un'opzione dal menu</h5>
                     <p class="card-text">Utilizza il menu a sinistra per navigare tra le opzioni di gestione.</p>
+
+                    <% if (menuSections.length > 0) { %>
+                        <hr>
+                        <h6>Sezioni disponibili:</h6>
+                        <ul class="list-unstyled">
+                            <% menuSections.forEach(section => { %>
+                                <li class="mb-2">
+                                    <strong><%= section.icon %> <%= section.label %></strong>
+                                    <% if (section.type === 'plugin') { %>
+                                        <span class="badge bg-primary ms-2">Plugin: <%= section.plugin %></span>
+                                    <% } else { %>
+                                        <span class="badge bg-secondary ms-2">Integrato</span>
+                                    <% } %>
+                                </li>
+                            <% }); %>
+                        </ul>
+                    <% } %>
                 </div>
             </div>
         </div>

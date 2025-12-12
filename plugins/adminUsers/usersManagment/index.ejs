@@ -34,7 +34,7 @@
 
         try {
             // Fetch user list
-            const userResponse = await fetch(`/${apiPrefix}/simpleAccess/userList`, {
+            const userResponse = await fetch(`/${apiPrefix}/adminUsers/userList`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json'
@@ -48,7 +48,7 @@
             const users = await userResponse.json();
 
             // Fetch role list
-            const roleResponse = await fetch(`/${apiPrefix}/simpleAccess/roleList`, {
+            const roleResponse = await fetch(`/${apiPrefix}/adminUsers/roleList`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json'
@@ -162,7 +162,7 @@
         //console.log('{ username, email, password, roleId }', { username, email, password, roleId });
 
         try {
-            const response = await fetch(`/${apiPrefix}/simpleAccess/createUser`, {
+            const response = await fetch(`/${apiPrefix}/adminUsers/createUser`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

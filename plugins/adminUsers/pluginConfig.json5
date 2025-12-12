@@ -3,6 +3,15 @@
   "active": 1,
   "isInstalled": 1,
   "weight": 0,
+
+  // NUOVO: Flag plugin admin
+  "pluginType": {
+    "isAdminPlugin": true,                // Questo è un plugin admin
+    "providesAuth": true,                 // Fornisce autenticazione
+    "providesUserManagement": true,       // Fornisce gestione utenti
+    "providesRoleManagement": true        // Fornisce gestione ruoli
+  },
+
   "dependency": {
     "bootstrap": "^1.0.0"
   },
@@ -20,7 +29,7 @@
       "/lib"
     ],
     "redirectToHttpReferer": true,
-    "defaultLoginRedirectURL": "/api/simpleAccess/logged",
+    "defaultLoginRedirectURL": "/api/adminUsers/logged",
     "useLoginStatusBox": true
   },
   "version": "1.0.0"
