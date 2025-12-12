@@ -16,8 +16,35 @@
 
     <!-- Main content area -->
     <main class="admin-main">
-        <!-- Page Header (automatico, nascosto nella dashboard) -->
-        <%- include('pageHeader.ejs') %>
+        <%
+          // Page Header automatico - nascosto nella dashboard
+          const isDashboard = passData.filePath && (
+            passData.filePath.endsWith('/webPages/index.ejs') ||
+            passData.filePath.includes('/webPages/index.ejs')
+          );
+
+          // Estrai titolo e icona se forniti (opzionali)
+          const pageTitle = passData.pageTitle || null;
+          const pageIcon = passData.pageIcon || null;
+        %>
+
+        <% if (!isDashboard) { %>
+        <div class="container-fluid mt-4">
+          <div class="d-flex justify-content-between align-items-center mb-4">
+            <% if (pageTitle) { %>
+              <h2>
+                <% if (pageIcon) { %><i class="<%= pageIcon %>"></i><% } %>
+                <%= pageTitle %>
+              </h2>
+            <% } else { %>
+              <h2>&nbsp;</h2>
+            <% } %>
+            <a href="/<%= passData.adminPrefix %>" class="btn btn-outline-secondary">
+              <i class="bi bi-arrow-left"></i> Torna alla Dashboard
+            </a>
+          </div>
+        </div>
+        <% } %>
 
         <%- passData.pluginSys.hookPage("main", passData); %>
         <%- passData.pluginSys.hookPage("body", passData); %>
