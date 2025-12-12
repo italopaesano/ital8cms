@@ -16,5 +16,8 @@
 
     <!-- Main content area -->
     <main class="admin-main">
+        <!-- Page Header (automatico, nascosto nella dashboard) -->
+        <%- include('pageHeader.ejs') %>
+
         <%- passData.pluginSys.hookPage("main", passData); %>
         <%- passData.pluginSys.hookPage("body", passData); %>
