@@ -33,6 +33,10 @@ class pluginSys{
         const pluginConfig = loadJson5(path.join(__dirname, '..', 'plugins', pluginName, 'pluginConfig.json5'));
         const plugin = require(`../plugins/${pluginName}/main.js`);//
 
+        // Aggiungi metadata al plugin object per uso futuro
+        plugin.pluginName = pluginName;
+        plugin.pathPluginFolder = pathPluginFolder;
+
         // setto i plugin attivi prima del loading e dell'onstall i modo che ,, una volta caricati gliogeti condivisi questi potranno essere utilizati nel loading e nell'install
         this.#activePlugins.set( pluginName, plugin);//pluginName è il nome del plugin oltre che aggiungo il plugin alla lista dei plugin attivi
 
@@ -503,6 +507,15 @@ class pluginSys{
       plugins.push(pluginObj);
     }
     return plugins;
+  }
+
+  /**
+   * Ottiene un plugin specifico per nome
+   * @param {string} pluginName - Nome del plugin
+   * @returns {object|null} - Plugin object o null se non trovato
+   */
+  getPlugin(pluginName) {
+    return this.#activePlugins.get(pluginName) || null;
   }
 
 }
