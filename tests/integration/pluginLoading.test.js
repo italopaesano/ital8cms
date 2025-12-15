@@ -15,7 +15,8 @@ describe('Plugin Loading Integration', () => {
     beforeAll(() => {
       pluginDirs = fs.readdirSync(pluginsDir)
         .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory())
-        .filter(dir => !dir.startsWith('.'));
+        .filter(dir => !dir.startsWith('.'))
+        .filter(dir => !dir.startsWith('OLD_')); // Esclude plugin deprecati OLD_*
     });
 
     test('tutti i plugin hanno main.js', () => {
@@ -66,7 +67,9 @@ describe('Plugin Loading Integration', () => {
     test('versioni sono semver valide', () => {
       const semver = require('semver');
       const pluginDirs = fs.readdirSync(pluginsDir)
-        .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory());
+        .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory())
+        .filter(dir => !dir.startsWith('.'))
+        .filter(dir => !dir.startsWith('OLD_'));
 
       pluginDirs.forEach(pluginName => {
         const descPath = path.join(pluginsDir, pluginName, 'pluginDescription.json5');
@@ -81,7 +84,9 @@ describe('Plugin Loading Integration', () => {
     test('dipendenze hanno formato semver valido', () => {
       const semver = require('semver');
       const pluginDirs = fs.readdirSync(pluginsDir)
-        .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory());
+        .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory())
+        .filter(dir => !dir.startsWith('.'))
+        .filter(dir => !dir.startsWith('OLD_'));
 
       pluginDirs.forEach(pluginName => {
         const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json5');
@@ -97,7 +102,9 @@ describe('Plugin Loading Integration', () => {
 
     test('weight è un numero valido', () => {
       const pluginDirs = fs.readdirSync(pluginsDir)
-        .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory());
+        .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory())
+        .filter(dir => !dir.startsWith('.'))
+        .filter(dir => !dir.startsWith('OLD_'));
 
       pluginDirs.forEach(pluginName => {
         const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json5');
@@ -112,9 +119,19 @@ describe('Plugin Loading Integration', () => {
   describe('Plugin Module Loading', () => {
     test('main.js è caricabile senza errori', () => {
       const pluginDirs = fs.readdirSync(pluginsDir)
-        .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory());
+        .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory())
+        .filter(dir => !dir.startsWith('.'))
+        .filter(dir => !dir.startsWith('OLD_'));
 
       pluginDirs.forEach(pluginName => {
+        const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json5');
+        const config = loadJson5(configPath);
+
+        // Salta plugin disattivati che potrebbero richiedere dipendenze non installate
+        if (config.active === 0) {
+          return;
+        }
+
         const mainPath = path.join(pluginsDir, pluginName, 'main.js');
 
         expect(() => {
@@ -125,7 +142,9 @@ describe('Plugin Loading Integration', () => {
 
     test('plugin attivi esportano loadPlugin', () => {
       const pluginDirs = fs.readdirSync(pluginsDir)
-        .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory());
+        .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory())
+        .filter(dir => !dir.startsWith('.'))
+        .filter(dir => !dir.startsWith('OLD_'));
 
       pluginDirs.forEach(pluginName => {
         const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json5');
@@ -145,7 +164,9 @@ describe('Plugin Loading Integration', () => {
   describe('Node Module Dependencies', () => {
     test('nodeModuleDependency moduli sono installati', () => {
       const pluginDirs = fs.readdirSync(pluginsDir)
-        .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory());
+        .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory())
+        .filter(dir => !dir.startsWith('.'))
+        .filter(dir => !dir.startsWith('OLD_'));
 
       pluginDirs.forEach(pluginName => {
         const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json5');
@@ -153,9 +174,11 @@ describe('Plugin Loading Integration', () => {
 
         if (config.nodeModuleDependency && config.active === 1) {
           Object.keys(config.nodeModuleDependency).forEach(moduleName => {
-            expect(() => {
-              require.resolve(moduleName);
-            }).not.toThrow();
+            // Verifica che il modulo esista in node_modules
+            // Nota: Alcuni moduli (es. bootstrap-icons) non hanno entry point JS
+            // quindi usiamo fs.existsSync invece di require.resolve()
+            const modulePath = path.join(__dirname, '../../node_modules', moduleName);
+            expect(fs.existsSync(modulePath)).toBe(true);
           });
         }
       });
@@ -165,7 +188,9 @@ describe('Plugin Loading Integration', () => {
   describe('Plugin Dependencies', () => {
     test('non ci sono dipendenze circolari', () => {
       const pluginDirs = fs.readdirSync(pluginsDir)
-        .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory());
+        .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory())
+        .filter(dir => !dir.startsWith('.'))
+        .filter(dir => !dir.startsWith('OLD_'));
 
       // Costruisci grafo dipendenze
       const depGraph = new Map();
@@ -213,7 +238,9 @@ describe('Plugin Loading Integration', () => {
 
     test('tutte le dipendenze esistono', () => {
       const pluginDirs = fs.readdirSync(pluginsDir)
-        .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory());
+        .filter(file => fs.statSync(path.join(pluginsDir, file)).isDirectory())
+        .filter(dir => !dir.startsWith('.'))
+        .filter(dir => !dir.startsWith('OLD_'));
 
       const allPlugins = new Set(pluginDirs);
 
