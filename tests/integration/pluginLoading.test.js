@@ -4,6 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const loadJson5 = require('../../core/loadJson5');
 
 describe('Plugin Loading Integration', () => {
   const pluginsDir = path.join(__dirname, '../../plugins');
@@ -41,7 +42,7 @@ describe('Plugin Loading Integration', () => {
     test('pluginConfig.json ha campi obbligatori', () => {
       pluginDirs.forEach(pluginName => {
         const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json5');
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        const config = loadJson5(configPath);
 
         expect(config).toHaveProperty('active');
         expect(config).toHaveProperty('isInstalled');
@@ -53,7 +54,7 @@ describe('Plugin Loading Integration', () => {
     test('pluginDescription.json ha campi obbligatori', () => {
       pluginDirs.forEach(pluginName => {
         const descPath = path.join(pluginsDir, pluginName, 'pluginDescription.json5');
-        const desc = JSON.parse(fs.readFileSync(descPath, 'utf8'));
+        const desc = loadJson5(descPath);
 
         expect(desc).toHaveProperty('name');
         expect(desc).toHaveProperty('version');
@@ -69,7 +70,7 @@ describe('Plugin Loading Integration', () => {
 
       pluginDirs.forEach(pluginName => {
         const descPath = path.join(pluginsDir, pluginName, 'pluginDescription.json5');
-        const desc = JSON.parse(fs.readFileSync(descPath, 'utf8'));
+        const desc = loadJson5(descPath);
 
         if (desc.version) {
           expect(semver.valid(desc.version)).not.toBeNull();
@@ -84,7 +85,7 @@ describe('Plugin Loading Integration', () => {
 
       pluginDirs.forEach(pluginName => {
         const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json5');
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        const config = loadJson5(configPath);
 
         if (config.dependency) {
           Object.entries(config.dependency).forEach(([dep, version]) => {
@@ -100,7 +101,7 @@ describe('Plugin Loading Integration', () => {
 
       pluginDirs.forEach(pluginName => {
         const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json5');
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        const config = loadJson5(configPath);
 
         expect(typeof config.weight).toBe('number');
         expect(config.weight).toBeGreaterThanOrEqual(0);
@@ -128,7 +129,7 @@ describe('Plugin Loading Integration', () => {
 
       pluginDirs.forEach(pluginName => {
         const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json5');
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        const config = loadJson5(configPath);
 
         if (config.active === 1) {
           const mainPath = path.join(pluginsDir, pluginName, 'main.js');
@@ -148,7 +149,7 @@ describe('Plugin Loading Integration', () => {
 
       pluginDirs.forEach(pluginName => {
         const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json5');
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        const config = loadJson5(configPath);
 
         if (config.nodeModuleDependency && config.active === 1) {
           Object.keys(config.nodeModuleDependency).forEach(moduleName => {
@@ -171,7 +172,7 @@ describe('Plugin Loading Integration', () => {
 
       pluginDirs.forEach(pluginName => {
         const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json5');
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        const config = loadJson5(configPath);
 
         if (config.active === 1 && config.dependency) {
           depGraph.set(pluginName, new Map(Object.entries(config.dependency)));
@@ -218,7 +219,7 @@ describe('Plugin Loading Integration', () => {
 
       pluginDirs.forEach(pluginName => {
         const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json5');
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        const config = loadJson5(configPath);
 
         if (config.active === 1 && config.dependency) {
           Object.keys(config.dependency).forEach(dep => {
