@@ -262,7 +262,7 @@ describe('Theme System', () => {
       const customPath = path.join(
         themesBasePath,
         themeName,
-        'plugins',
+        'pluginsEndpointsMarkup',
         pluginName,
         endpointName,
         templateFile
@@ -295,7 +295,7 @@ describe('Theme System', () => {
       const cssPath = path.join(
         themesBasePath,
         'default',
-        'plugins',
+        'pluginsEndpointsMarkup',
         'simpleAccess',
         'login',
         'style.css'
