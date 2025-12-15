@@ -6,6 +6,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const loadJson5 = require('../../core/loadJson5');
 
 // Mock di ital8Conf per i test
 const mockItal8Conf = {
@@ -99,7 +100,7 @@ describe('Theme System', () => {
 
       try {
         if (fs.existsSync(descPath)) {
-          return JSON.parse(fs.readFileSync(descPath, 'utf8'));
+          return loadJson5(descPath);
         }
       } catch (error) {
         return null;
@@ -152,7 +153,7 @@ describe('Theme System', () => {
 
       try {
         if (fs.existsSync(configPath)) {
-          const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+          const config = loadJson5(configPath);
           return {
             plugins: config.pluginDependency || {},
             nodeModules: config.nodeModuleDependency || {}
@@ -338,7 +339,7 @@ describe('Theme System', () => {
 
       try {
         if (fs.existsSync(descPath)) {
-          const desc = JSON.parse(fs.readFileSync(descPath, 'utf8'));
+          const desc = loadJson5(descPath);
           if (desc.supportedHooks) {
             return desc.supportedHooks.includes(hookName);
           }
@@ -376,7 +377,7 @@ describe('Theme System', () => {
   describe('Version Format Checking', () => {
     test('versione tema è in formato valido', () => {
       const descPath = path.join(themesBasePath, 'default', 'themeDescription.json5');
-      const desc = JSON.parse(fs.readFileSync(descPath, 'utf8'));
+      const desc = loadJson5(descPath);
 
       // Verifica formato x.y.z
       expect(desc.version).toMatch(/^\d+\.\d+\.\d+$/);
@@ -388,7 +389,7 @@ describe('Theme System', () => {
       for (const theme of themes) {
         const descPath = path.join(themesBasePath, theme, 'themeDescription.json5');
         if (fs.existsSync(descPath)) {
-          const desc = JSON.parse(fs.readFileSync(descPath, 'utf8'));
+          const desc = loadJson5(descPath);
           expect(desc.version).toMatch(/^\d+\.\d+\.\d+$/);
         }
       }
