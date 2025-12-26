@@ -17,19 +17,19 @@ function isValidEmail(email) {
 
 
 // sNewUser = true -> se stai cercando di creare un nuovo utente allora ti dovrai assicurare che questo utente non esista già
-// roleIds può essere un array [1,2] o un singolo numero 1 (retrocompatibilità)
+// roleIds DEVE essere un array di numeri [1,2] o [1]
 async function userUsert(username, password, email, roleIds, isNewUser = true) {
     if (!username || !password || !email || !roleIds) {
         return { error: 'Errore: Devi specificare username, password, email e roleIds.', errorType: 'all' };
     }
 
-    // Normalizza roleIds: se è un numero singolo, convertilo in array
+    // Verifica che roleIds sia un array
     if (!Array.isArray(roleIds)) {
-        roleIds = [parseInt(roleIds)];
-    } else {
-        // Converti tutti gli elementi in numeri
-        roleIds = roleIds.map(id => parseInt(id));
+        return { error: 'Errore: roleIds deve essere un array di numeri.', errorType: 'roleIds' };
     }
+
+    // Converti tutti gli elementi in numeri
+    roleIds = roleIds.map(id => parseInt(id));
 
     // Controlla che lo username non contenga spazi
     if (/\s/.test(username)) {
