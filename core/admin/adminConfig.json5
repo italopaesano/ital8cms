@@ -15,6 +15,15 @@
       "required": true,                  // Se plugin manca, errore all'avvio
     },
 
+    // SEZIONE HARDCODED per gestione ruoli custom
+    "rolesManagement": {
+      "type": "hardcoded",
+      "enabled": true,                  // Abilitata
+      "label": "Gestione Ruoli Custom",
+      "url": "/admin/usersManagment/rolesManagement.ejs",
+      "icon": "🏷️"
+    },
+
     // SEZIONI HARDCODED (statiche) - da implementare in futuro
     "pagesManagment": {
       "type": "hardcoded",
@@ -52,6 +61,7 @@
   // Ordinamento sezioni nel menu (dall'alto verso il basso)
   "menuOrder": [
     "usersManagment",
+    "rolesManagement",
     "pagesManagment",
     "systemSettings",
     "pluginsManagment",
