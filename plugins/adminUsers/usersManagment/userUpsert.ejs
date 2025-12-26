@@ -1,4 +1,4 @@
-<!-- TEMPLATE PER LA CREAZIONE DELLE PAGINE DI AMMINISTRAZIONE  -->
+<!-- TEMPLATE PER LA CREAZIONE/MODIFICA UTENTI -->
 <!-- NOTA: Usa getThemePartPath() con passData (che contiene isAdminContext: true) -->
 <!--       per caricare automaticamente i partial del tema admin -->
 <%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
@@ -15,33 +15,30 @@
 <script>
     const adminPrefix = document.getElementById('adminPrefix').innerText;
 </script>
-<!-- se la query string contiene un valore valido di username allora si tratta si un aggiornamento altrimenti di un nuovo utente ed in questo caso isNewUser sarà true -->
+
+<!-- se la query string contiene un valore valido di username allora si tratta di un aggiornamento altrimenti di un nuovo utente -->
 <script>
-    // Funzione per ottenere il valore della query string
     const urlParams = new URLSearchParams(window.location.search);
     const isNewUser = !urlParams.has('username') || !urlParams.get('username').trim();
 
     document.addEventListener('DOMContentLoaded', () => {
-       
         const usernameField = document.getElementById('username');
 
-        if (isNewUser) {//se l'utente è nuovo allora il campo username è editabile
+        if (isNewUser) {
             usernameField.disabled = false;
-        } else {// se l'utente è già esistente allora il campo username non è editabile
+        } else {
             usernameField.disabled = true;
             usernameField.value = urlParams.get('username') || '';
         }
     });
 </script>
 
-
-<div class="text-center mb-4">
-    <h1 class="text-center">Aggiungi un nuovo utente</h1>
-</div>
-
 <div class="container mt-4">
+    <div class="text-center mb-4">
+        <h1><%= isNewUser ? 'Crea Nuovo Utente' : 'Modifica Utente' %></h1>
+    </div>
 
-    <form id="createUserForm" class="mt-3"><!-- style="display: none;" -->
+    <form id="createUserForm" class="mt-3">
         <div class="mb-3">
             <label for="username" class="form-label">Username</label>
             <input type="text" class="form-control" id="username" placeholder="Inserisci username" required>
@@ -54,74 +51,205 @@
             <label for="password" class="form-label">Password</label>
             <input type="password" class="form-control" id="password" placeholder="Inserisci password" required>
         </div>
-        <div class="mb-3">
-            <label for="role" class="form-label">Ruolo</label>
-            <select class="form-select" id="role" required>
-                <option value="" disabled selected>Seleziona un ruolo</option>
-                <!-- Options will be dynamically populated -->
-            </select>
+
+        <!-- SEZIONE RUOLI CON CHECKBOX MULTIPLI -->
+        <div class="card mb-3">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">🔐 Assegnazione Ruoli</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">
+                    Seleziona uno o più ruoli per questo utente. I permessi saranno la combinazione di tutti i ruoli selezionati.
+                </p>
+
+                <!-- Ruoli Hardcoded -->
+                <h6 class="mb-2">Ruoli di Sistema:</h6>
+                <div id="hardcodedRoles" class="mb-3">
+                    <!-- Popolato dinamicamente -->
+                </div>
+
+                <hr>
+
+                <!-- Ruoli Custom -->
+                <h6 class="mb-2">Ruoli Personalizzati:</h6>
+                <div id="customRoles">
+                    <!-- Popolato dinamicamente -->
+                </div>
+                <div id="noCustomRoles" class="text-muted" style="display: none;">
+                    💡 Nessun ruolo custom disponibile.
+                    <a href="/<%= passData.adminPrefix %>/usersManagment/rolesManagement.ejs">Creane uno!</a>
+                </div>
+
+                <!-- Ruoli selezionati (summary) -->
+                <div class="mt-3">
+                    <small class="text-muted">Ruoli selezionati: <span id="selectedRolesSummary" class="fw-bold">Nessuno</span></small>
+                </div>
+            </div>
         </div>
-        <button type="submit" class="btn btn-success">Salva</button>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-success">💾 Salva Utente</button>
+            <a href="/<%= passData.adminPrefix %>/usersManagment/index.ejs" class="btn btn-secondary">❌ Annulla</a>
+        </div>
     </form>
 </div>
 
 <script>
-/*     document.getElementById('createUserBtn').addEventListener('click', function () {//questo evento rende visibile il form
-        const form = document.getElementById('createUserForm');
-        form.style.display = form.style.display === 'none' ? 'block' : 'none';
-        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-    }); */
+    let allRoles = {};  // Mappa ID → role object
 
-    async function populateRoleSelect() {
+    // Carica ruoli hardcoded
+    async function loadHardcodedRoles() {
         try {
-            const roleSelect = document.getElementById('role');
-            // Fetch role list
-            const roleResponse = await fetch(`/${apiPrefix}/adminUsers/roleList`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
+            const response = await fetch(`/${apiPrefix}/adminUsers/hardcodedRoleList`);
+            const roles = await response.json();
+
+            const container = document.getElementById('hardcodedRoles');
+            container.innerHTML = '';
+
+            roles.forEach(role => {
+                allRoles[role.id] = role;
+
+                const checkbox = document.createElement('div');
+                checkbox.className = 'form-check mb-2';
+
+                // ROOT (ID 0) sempre disabilitato - nessuno può assegnarlo/revocarlo
+                const isRoot = role.id === 0;
+                const disabled = isRoot ? 'disabled' : '';
+                const title = isRoot ? 'Il ruolo root può essere assegnato solo tramite script di inizializzazione' : '';
+
+                checkbox.innerHTML = `
+                    <input class="form-check-input role-checkbox"
+                           type="checkbox"
+                           value="${role.id}"
+                           id="role_${role.id}"
+                           ${disabled}
+                           onchange="updateSelectedSummary()">
+                    <label class="form-check-label" for="role_${role.id}" title="${title}">
+                        ${isRoot ? '🔴' : role.id === 1 ? '👑' : role.id === 2 ? '✏️' : '📝'}
+                        <strong>${role.name}</strong> (ID: ${role.id})
+                        <br>
+                        <small class="text-muted">${role.description}</small>
+                        ${isRoot ? '<br><small class="text-danger">⛔ Disabilitato - Solo via script init</small>' : ''}
+                    </label>
+                `;
+                container.appendChild(checkbox);
             });
-
-            if (!roleResponse.ok) {
-                throw new Error(`HTTP error! status: ${roleResponse.status}`);
-            }
-
-            const rolesData = await roleResponse.json();
-            const roles = rolesData.roles;
-
-            // Populate role select dropdown
-            if (roles && Object.keys(roles).length > 0) {
-                Object.keys(roles).forEach(roleId => {
-                    const roleOption = document.createElement('option');
-                    roleOption.value = roleId;
-                    roleOption.textContent = roles[roleId].name;
-                    roleSelect.appendChild(roleOption);
-                });
-            } else {
-                const noRoleOption = document.createElement('option');
-                noRoleOption.value = "";
-                noRoleOption.textContent = "Nessun ruolo disponibile";
-                noRoleOption.disabled = true;
-                roleSelect.appendChild(noRoleOption);
-            }
         } catch (error) {
-            console.error('Errore nel caricamento dei ruoli:', error);
-            alert('Errore nel caricamento dei ruoli. Riprova più tardi.');
+            console.error('Errore caricamento ruoli hardcoded:', error);
         }
     }
 
-    document.addEventListener('DOMContentLoaded', populateRoleSelect);
+    // Carica ruoli custom
+    async function loadCustomRoles() {
+        try {
+            const response = await fetch(`/${apiPrefix}/adminUsers/customRoleList`);
+            const roles = await response.json();
 
+            const container = document.getElementById('customRoles');
+            const noRolesDiv = document.getElementById('noCustomRoles');
+
+            if (roles.length === 0) {
+                container.style.display = 'none';
+                noRolesDiv.style.display = 'block';
+                return;
+            }
+
+            container.innerHTML = '';
+            noRolesDiv.style.display = 'none';
+
+            roles.forEach(role => {
+                allRoles[role.id] = role;
+
+                const checkbox = document.createElement('div');
+                checkbox.className = 'form-check mb-2';
+                checkbox.innerHTML = `
+                    <input class="form-check-input role-checkbox"
+                           type="checkbox"
+                           value="${role.id}"
+                           id="role_${role.id}"
+                           onchange="updateSelectedSummary()">
+                    <label class="form-check-label" for="role_${role.id}">
+                        🛡️ <strong>${role.name}</strong> (ID: ${role.id})
+                        <br>
+                        <small class="text-muted">${role.description}</small>
+                    </label>
+                `;
+                container.appendChild(checkbox);
+            });
+        } catch (error) {
+            console.error('Errore caricamento ruoli custom:', error);
+        }
+    }
+
+    // Aggiorna il summary dei ruoli selezionati
+    function updateSelectedSummary() {
+        const checkboxes = document.querySelectorAll('.role-checkbox:checked');
+        const selectedNames = Array.from(checkboxes).map(cb => allRoles[cb.value].name);
+
+        const summary = document.getElementById('selectedRolesSummary');
+        if (selectedNames.length === 0) {
+            summary.textContent = 'Nessuno';
+            summary.className = 'fw-bold text-danger';
+        } else {
+            summary.textContent = selectedNames.join(', ');
+            summary.className = 'fw-bold text-success';
+        }
+    }
+
+    // Carica ruoli al caricamento pagina
+    document.addEventListener('DOMContentLoaded', async () => {
+        await loadHardcodedRoles();
+        await loadCustomRoles();
+
+        // Se stiamo modificando un utente, carica i suoi ruoli
+        if (!isNewUser) {
+            const username = urlParams.get('username');
+            await loadUserData(username);
+        }
+    });
+
+    // Carica dati utente esistente (per modifica)
+    async function loadUserData(username) {
+        try {
+            const response = await fetch(`/${apiPrefix}/adminUsers/userInfo?username=${encodeURIComponent(username)}`);
+            const userInfo = await response.json();
+
+            // Popola i campi
+            document.getElementById('email').value = userInfo.email || '';
+            document.getElementById('password').value = '';  // Non mostrare password
+
+            // Seleziona i ruoli dell'utente
+            if (userInfo.roleIds && Array.isArray(userInfo.roleIds)) {
+                userInfo.roleIds.forEach(roleId => {
+                    const checkbox = document.getElementById(`role_${roleId}`);
+                    if (checkbox) {
+                        checkbox.checked = true;
+                    }
+                });
+                updateSelectedSummary();
+            }
+        } catch (error) {
+            console.error('Errore caricamento dati utente:', error);
+        }
+    }
+
+    // Gestione submit form
     document.getElementById('createUserForm').addEventListener('submit', async function (event) {
         event.preventDefault();
 
         const username = isNewUser ? document.getElementById('username').value : urlParams.get('username');
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
-        const roleId = document.getElementById('role').value;
 
-        //console.log({ username, email, password, roleId, isNewUser })
+        // Raccogli tutti i ruoli selezionati come array di numeri
+        const checkboxes = document.querySelectorAll('.role-checkbox:checked');
+        const roleIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+        // Validazione: almeno un ruolo deve essere selezionato
+        if (roleIds.length === 0) {
+            alert('Errore: Devi selezionare almeno un ruolo per l\'utente.');
+            return;
+        }
 
         try {
             const response = await fetch(`/${apiPrefix}/adminUsers/usertUser`, {
@@ -129,7 +257,7 @@
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ username, email, password, roleId, isNewUser })
+                body: JSON.stringify({ username, email, password, roleIds, isNewUser })
             });
 
             if (!response.ok) {
@@ -139,34 +267,36 @@
             const result = await response.json();
 
             if (result.success) {
-/*                 const successMessage = document.createElement('div');
-                successMessage.id = 'successMessage';
-                successMessage.className = 'alert alert-success mt-3';
-                successMessage.textContent = result.success; //qui conterrà il messaggio di successo
-                document.getElementById('createUserForm').style.display = 'none';
-                document.getElementById('createUserForm').after(successMessage); */
                 alert(result.success);
-                const existingErrorMessage = document.getElementById('errorMessage');// cancello eventuali messaggi di errore precedenti 
+                // Pulisci eventuali messaggi di errore precedenti
+                const existingErrorMessage = document.getElementById('errorMessage');
                 if (existingErrorMessage) {
-                    existingErrorMessage.textContent = '';
-                }               
+                    existingErrorMessage.remove();
+                }
+                // Reindirizza alla lista utenti
+                window.location.href = `/${adminPrefix}/usersManagment/index.ejs`;
             } else if (result.error) {
-                const errorMessage = document.createElement('div');
-                errorMessage.id = 'errorMessage';
-                errorMessage.className = 'alert alert-danger mt-3';
-                errorMessage.textContent = result.error; // Messaggio di errore
-                document.getElementById('createUserForm').after(errorMessage);
+                // Mostra messaggio di errore
+                let errorMessage = document.getElementById('errorMessage');
+                if (!errorMessage) {
+                    errorMessage = document.createElement('div');
+                    errorMessage.id = 'errorMessage';
+                    errorMessage.className = 'alert alert-danger mt-3';
+                    document.getElementById('createUserForm').after(errorMessage);
+                }
+                errorMessage.textContent = result.error;
+
+                // Evidenzia campi con errore
+                document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
 
                 if (result.errorType === 'all') {
-                    // Evidenzia tutti i campi
-                    ['username', 'email', 'password', 'role'].forEach(field => {
+                    ['username', 'email', 'password'].forEach(field => {
                         const inputField = document.getElementById(field);
                         if (inputField) {
                             inputField.classList.add('is-invalid');
                         }
                     });
-                } else {
-                    // Evidenzia solo il campo specifico
+                } else if (result.errorType) {
                     const inputField = document.getElementById(result.errorType);
                     if (inputField) {
                         inputField.classList.add('is-invalid');
@@ -175,12 +305,9 @@
             } else {
                 throw new Error('Errore sconosciuto.');
             }
-            //alert('Utente creato con successo!');
-            document.getElementById('createUserForm').reset();
-            //document.getElementById('createUserForm').style.display = 'none';// rende il form non più visibile
         } catch (error) {
             console.error('Errore:', error);
-            alert('Errore nella creazione dell\'utente. error: ' + error.message);
+            alert('Errore nella gestione dell\'utente: ' + error.message);
         }
     });
 </script>

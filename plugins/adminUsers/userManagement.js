@@ -17,10 +17,19 @@ function isValidEmail(email) {
 
 
 // sNewUser = true -> se stai cercando di creare un nuovo utente allora ti dovrai assicurare che questo utente non esista già
-async function userUsert(username, password, email, roleId, isNewUser = true) { 
-    if (!username || !password || !email || !roleId) {
-        return { error: 'Errore: Devi specificare username, password, email e roleId.', errorType: 'all' };
+// roleIds DEVE essere un array di numeri [1,2] o [1]
+async function userUsert(username, password, email, roleIds, isNewUser = true) {
+    if (!username || !password || !email || !roleIds) {
+        return { error: 'Errore: Devi specificare username, password, email e roleIds.', errorType: 'all' };
     }
+
+    // Verifica che roleIds sia un array
+    if (!Array.isArray(roleIds)) {
+        return { error: 'Errore: roleIds deve essere un array di numeri.', errorType: 'roleIds' };
+    }
+
+    // Converti tutti gli elementi in numeri
+    roleIds = roleIds.map(id => parseInt(id));
 
     // Controlla che lo username non contenga spazi
     if (/\s/.test(username)) {
@@ -71,8 +80,8 @@ async function userUsert(username, password, email, roleId, isNewUser = true) {
         }
     }
 
-    // Aggiungi il nuovo utente con il roleId
-    userAccount.users[username] = { hashPassword: hashedPassword, email, roleId };
+    // Aggiungi il nuovo utente con roleIds (array)
+    userAccount.users[username] = { hashPassword: hashedPassword, email, roleIds };
 
     // Salva il file aggiornato
     fs.writeFileSync(usersFilePath, JSON.stringify(userAccount, null, 2));

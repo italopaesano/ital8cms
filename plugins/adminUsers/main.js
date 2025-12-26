@@ -16,6 +16,7 @@ const pluginName = path.basename(  __dirname );// restituisce il nome della dire
 const sharedObject = {};// ogetto che avrà gliogetti condiviso con gli altri plugin ES {dbApi: newdbApi} 
 
 const userManagement = require('./userManagement');// necessario per gestire gli utenti
+const roleManagement = require('./roleManagement');// necessario per gestire i ruoli custom
 
 let myPluginSys = null;// riferimento al sistema dei plugin per accedere a themeSys
 
@@ -228,9 +229,9 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         const userFilePath = path.join(__dirname, 'userAccount.json5');
         try {
           const userAccount = loadJson5(userFilePath);
-          ctx.body = Object.entries(userAccount.users).map(([username, userData]) => ({//CON QUESTE ISTRUZIONI GENERO UN ARRAY CONTENETE OGETTI CON DUE CAMPI username , roleId
+          ctx.body = Object.entries(userAccount.users).map(([username, userData]) => ({//CON QUESTE ISTRUZIONI GENERO UN ARRAY CONTENETE OGETTI CON DUE CAMPI username , roleIds
             username,
-            roleId: userData.roleId
+            roleIds: userData.roleIds  // Array di ruoli
           }));
         } catch (error) {
           ctx.status = 500;
@@ -275,17 +276,77 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
        }
     },
     //START CURA USER create update delete user
-    { // url richiesto(dalla pagina di amministrazione) per ottenere la lista degli utenti attivi nel sito 
-      method: 'POST', 
-      path: '/usertUser', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
+    { // url richiesto(dalla pagina di amministrazione) per creare/modificare utenti
+      method: 'POST',
+      path: '/usertUser', // l'url completo avra la forma /api/namePlugin/usertUser
       handler: async (ctx) => {//
 
-        const { username, email, password, roleId, isNewUser } = ctx.request.body;
-        const result = await userManagement.userUsert(username, password, email, roleId, isNewUser);
-        ctx.body = result;// result contiene un oggettocon linformazioni dell'errore se c'è stato un errore altrimenti contiene semplicemente un messaggio di successo in caso affermativo
+        const { username, email, password, roleIds, isNewUser } = ctx.request.body;
+
+        const result = await userManagement.userUsert(username, password, email, roleIds, isNewUser);
+        ctx.body = result;// result contiene un oggetto con informazioni dell'errore se c'è stato un errore, altrimenti un messaggio di successo
         ctx.type = 'application/json'; // oppure semplicemente 'json'
 
        }
+    },
+    //START GESTIONE RUOLI CUSTOM
+    { // Ottiene lista ruoli custom (isHardcoded: false)
+      method: 'GET',
+      path: '/customRoleList',
+      handler: async (ctx) => {
+        try {
+          const customRoles = roleManagement.getCustomRoles();
+          ctx.body = customRoles;
+        } catch (error) {
+          ctx.status = 500;
+          ctx.body = { error: `Impossibile recuperare i ruoli custom: ${error}` };
+        }
+        ctx.type = 'application/json';
+      }
+    },
+    { // Ottiene lista ruoli hardcoded (isHardcoded: true)
+      method: 'GET',
+      path: '/hardcodedRoleList',
+      handler: async (ctx) => {
+        try {
+          const hardcodedRoles = roleManagement.getHardcodedRoles();
+          ctx.body = hardcodedRoles;
+        } catch (error) {
+          ctx.status = 500;
+          ctx.body = { error: `Impossibile recuperare i ruoli hardcoded: ${error}` };
+        }
+        ctx.type = 'application/json';
+      }
+    },
+    { // Crea un nuovo ruolo custom
+      method: 'POST',
+      path: '/createCustomRole',
+      handler: async (ctx) => {
+        const { name, description } = ctx.request.body;
+        const result = roleManagement.createCustomRole(name, description);
+        ctx.body = result;
+        ctx.type = 'application/json';
+      }
+    },
+    { // Aggiorna un ruolo custom esistente
+      method: 'POST',
+      path: '/updateCustomRole',
+      handler: async (ctx) => {
+        const { roleId, name, description } = ctx.request.body;
+        const result = roleManagement.updateCustomRole(roleId, name, description);
+        ctx.body = result;
+        ctx.type = 'application/json';
+      }
+    },
+    { // Elimina un ruolo custom
+      method: 'POST',
+      path: '/deleteCustomRole',
+      handler: async (ctx) => {
+        const { roleId } = ctx.request.body;
+        const result = roleManagement.deleteCustomRole(roleId);
+        ctx.body = result;
+        ctx.type = 'application/json';
+      }
     }
   );
 

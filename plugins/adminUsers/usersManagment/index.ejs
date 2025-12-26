@@ -16,10 +16,15 @@
     const adminPrefix = document.getElementById('adminPrefix').innerText;
 </script>
 
-<h3>Gestione utenti : </h3>
-
 <div class="container mt-4">
-    <h2>Lista Utenti</h2>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>👥 Gestione Utenti</h2>
+        <a href="/<%= passData.adminPrefix %>/usersManagment/rolesManagement.ejs" class="btn btn-info">
+            🏷️ Gestisci Ruoli Custom →
+        </a>
+    </div>
+
+    <h3>Lista Utenti</h3>
     <div id="userList" class="list-group">
         <!-- User list will be populated here -->
     </div>
