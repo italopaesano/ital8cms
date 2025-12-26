@@ -1,0 +1,365 @@
+<!-- TEMPLATE PER LA GESTIONE RUOLI CUSTOM -->
+<!-- NOTA: Usa getThemePartPath() con passData (che contiene isAdminContext: true) -->
+<!--       per caricare automaticamente i partial del tema admin -->
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
+
+<!-- api prefix -->
+<span id="apiPrefix" style="display: none;"><%- passData.apiPrefix %></span>
+<script>
+    const apiPrefix = document.getElementById('apiPrefix').innerText;
+</script>
+
+<!-- adminPrefix -->
+<span id="adminPrefix" style="display: none;"><%- passData.adminPrefix %></span>
+<script>
+    const adminPrefix = document.getElementById('adminPrefix').innerText;
+</script>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>🏷️ Gestione Ruoli Custom</h2>
+        <a href="/<%= passData.adminPrefix %>/usersManagment/index.ejs" class="btn btn-secondary">
+            ← Torna a Gestione Utenti
+        </a>
+    </div>
+
+    <!-- Pulsante crea nuovo ruolo -->
+    <div class="mb-4">
+        <button class="btn btn-primary" onclick="showCreateRoleForm()">
+            ➕ Crea Nuovo Ruolo Custom
+        </button>
+    </div>
+
+    <!-- Form creazione ruolo (nascosto inizialmente) -->
+    <div id="createRoleForm" class="card mb-4" style="display: none;">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">➕ Crea Nuovo Ruolo Custom</h5>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label for="roleName" class="form-label">Nome ruolo:</label>
+                <input type="text" class="form-control" id="roleName" placeholder="es. moderator, seo_specialist">
+                <small class="form-text text-muted">Solo lettere, numeri, underscore e trattini. Minimo 3 caratteri.</small>
+                <div id="roleNameError" class="text-danger mt-1" style="display: none;"></div>
+            </div>
+            <div class="mb-3">
+                <label for="roleDescription" class="form-label">Descrizione:</label>
+                <textarea class="form-control" id="roleDescription" rows="3" placeholder="Descrivi cosa può fare questo ruolo"></textarea>
+                <div id="roleDescriptionError" class="text-danger mt-1" style="display: none;"></div>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-success" onclick="createRole()">💾 Crea Ruolo</button>
+                <button class="btn btn-secondary" onclick="cancelCreateRole()">❌ Annulla</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ruoli Hardcoded (Solo visualizzazione) -->
+    <div class="card mb-4">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0">📋 Ruoli di Sistema (Hardcoded)</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">🔒 Questi ruoli sono parte del sistema e non possono essere modificati.</p>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Descrizione</th>
+                        </tr>
+                    </thead>
+                    <tbody id="hardcodedRoleList">
+                        <!-- Popolato via JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ruoli Custom -->
+    <div class="card">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">⚙️ Ruoli Custom</h5>
+        </div>
+        <div class="card-body">
+            <div id="noCustomRoles" class="alert alert-info" style="display: none;">
+                📝 Nessun ruolo custom ancora creato. Usa il pulsante sopra per crearne uno!
+            </div>
+            <div class="table-responsive" id="customRolesTable" style="display: none;">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Descrizione</th>
+                            <th>Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="customRoleList">
+                        <!-- Popolato via JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal per modifica ruolo -->
+<div class="modal fade" id="editRoleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">✏️ Modifica Ruolo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editRoleId">
+                <div class="mb-3">
+                    <label for="editRoleName" class="form-label">Nome ruolo:</label>
+                    <input type="text" class="form-control" id="editRoleName">
+                    <div id="editRoleNameError" class="text-danger mt-1" style="display: none;"></div>
+                </div>
+                <div class="mb-3">
+                    <label for="editRoleDescription" class="form-label">Descrizione:</label>
+                    <textarea class="form-control" id="editRoleDescription" rows="3"></textarea>
+                    <div id="editRoleDescriptionError" class="text-danger mt-1" style="display: none;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-primary" onclick="saveRoleEdit()">💾 Salva Modifiche</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Carica le liste al caricamento della pagina
+    document.addEventListener('DOMContentLoaded', function() {
+        loadHardcodedRoles();
+        loadCustomRoles();
+    });
+
+    // Mostra form creazione ruolo
+    function showCreateRoleForm() {
+        document.getElementById('createRoleForm').style.display = 'block';
+        document.getElementById('roleName').focus();
+    }
+
+    // Nascondi form creazione ruolo
+    function cancelCreateRole() {
+        document.getElementById('createRoleForm').style.display = 'none';
+        document.getElementById('roleName').value = '';
+        document.getElementById('roleDescription').value = '';
+        document.getElementById('roleNameError').style.display = 'none';
+        document.getElementById('roleDescriptionError').style.display = 'none';
+    }
+
+    // Carica lista ruoli hardcoded
+    async function loadHardcodedRoles() {
+        try {
+            const response = await fetch(`/${apiPrefix}/adminUsers/hardcodedRoleList`);
+            const roles = await response.json();
+
+            const tbody = document.getElementById('hardcodedRoleList');
+            tbody.innerHTML = '';
+
+            roles.forEach(role => {
+                const row = `
+                    <tr>
+                        <td><strong>${role.id}</strong></td>
+                        <td>${role.name}</td>
+                        <td>${role.description}</td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        } catch (error) {
+            console.error('Errore nel caricamento ruoli hardcoded:', error);
+        }
+    }
+
+    // Carica lista ruoli custom
+    async function loadCustomRoles() {
+        try {
+            const response = await fetch(`/${apiPrefix}/adminUsers/customRoleList`);
+            const roles = await response.json();
+
+            const noRolesDiv = document.getElementById('noCustomRoles');
+            const tableDiv = document.getElementById('customRolesTable');
+            const tbody = document.getElementById('customRoleList');
+
+            if (roles.length === 0) {
+                noRolesDiv.style.display = 'block';
+                tableDiv.style.display = 'none';
+            } else {
+                noRolesDiv.style.display = 'none';
+                tableDiv.style.display = 'block';
+
+                tbody.innerHTML = '';
+                roles.forEach(role => {
+                    const row = `
+                        <tr>
+                            <td><strong>${role.id}</strong></td>
+                            <td>${role.name}</td>
+                            <td>${role.description}</td>
+                            <td>
+                                <button class="btn btn-sm btn-warning" onclick="editRole(${role.id}, '${role.name}', '${role.description}')">
+                                    ✏️ Modifica
+                                </button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteRole(${role.id}, '${role.name}')">
+                                    🗑️ Elimina
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                });
+            }
+        } catch (error) {
+            console.error('Errore nel caricamento ruoli custom:', error);
+        }
+    }
+
+    // Crea nuovo ruolo
+    async function createRole() {
+        const name = document.getElementById('roleName').value.trim();
+        const description = document.getElementById('roleDescription').value.trim();
+
+        // Reset errori
+        document.getElementById('roleNameError').style.display = 'none';
+        document.getElementById('roleDescriptionError').style.display = 'none';
+
+        if (!name || !description) {
+            if (!name) {
+                document.getElementById('roleNameError').textContent = 'Il nome è obbligatorio';
+                document.getElementById('roleNameError').style.display = 'block';
+            }
+            if (!description) {
+                document.getElementById('roleDescriptionError').textContent = 'La descrizione è obbligatoria';
+                document.getElementById('roleDescriptionError').style.display = 'block';
+            }
+            return;
+        }
+
+        try {
+            const response = await fetch(`/${apiPrefix}/adminUsers/createCustomRole`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, description })
+            });
+
+            const result = await response.json();
+
+            if (result.error) {
+                if (result.errorType === 'name') {
+                    document.getElementById('roleNameError').textContent = result.error;
+                    document.getElementById('roleNameError').style.display = 'block';
+                } else {
+                    alert(result.error);
+                }
+            } else {
+                alert(result.success);
+                cancelCreateRole();
+                loadCustomRoles();  // Ricarica la lista
+            }
+        } catch (error) {
+            alert('Errore nella creazione del ruolo: ' + error);
+        }
+    }
+
+    // Apri modal modifica ruolo
+    function editRole(roleId, name, description) {
+        document.getElementById('editRoleId').value = roleId;
+        document.getElementById('editRoleName').value = name;
+        document.getElementById('editRoleDescription').value = description;
+        document.getElementById('editRoleNameError').style.display = 'none';
+        document.getElementById('editRoleDescriptionError').style.display = 'none';
+
+        const modal = new bootstrap.Modal(document.getElementById('editRoleModal'));
+        modal.show();
+    }
+
+    // Salva modifiche ruolo
+    async function saveRoleEdit() {
+        const roleId = document.getElementById('editRoleId').value;
+        const name = document.getElementById('editRoleName').value.trim();
+        const description = document.getElementById('editRoleDescription').value.trim();
+
+        // Reset errori
+        document.getElementById('editRoleNameError').style.display = 'none';
+        document.getElementById('editRoleDescriptionError').style.display = 'none';
+
+        if (!name || !description) {
+            if (!name) {
+                document.getElementById('editRoleNameError').textContent = 'Il nome è obbligatorio';
+                document.getElementById('editRoleNameError').style.display = 'block';
+            }
+            if (!description) {
+                document.getElementById('editRoleDescriptionError').textContent = 'La descrizione è obbligatoria';
+                document.getElementById('editRoleDescriptionError').style.display = 'block';
+            }
+            return;
+        }
+
+        try {
+            const response = await fetch(`/${apiPrefix}/adminUsers/updateCustomRole`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ roleId, name, description })
+            });
+
+            const result = await response.json();
+
+            if (result.error) {
+                if (result.errorType === 'name') {
+                    document.getElementById('editRoleNameError').textContent = result.error;
+                    document.getElementById('editRoleNameError').style.display = 'block';
+                } else {
+                    alert(result.error);
+                }
+            } else {
+                alert(result.success);
+                bootstrap.Modal.getInstance(document.getElementById('editRoleModal')).hide();
+                loadCustomRoles();  // Ricarica la lista
+            }
+        } catch (error) {
+            alert('Errore nella modifica del ruolo: ' + error);
+        }
+    }
+
+    // Elimina ruolo
+    async function deleteRole(roleId, roleName) {
+        if (!confirm(`Sei sicuro di voler eliminare il ruolo "${roleName}"?\n\nQuesto ruolo sarà rimosso anche da tutti gli utenti che lo hanno assegnato.`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/${apiPrefix}/adminUsers/deleteCustomRole`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ roleId })
+            });
+
+            const result = await response.json();
+
+            if (result.error) {
+                alert(result.error);
+            } else {
+                let message = result.success;
+                if (result.affectedCount > 0) {
+                    message += `\n\nIl ruolo è stato rimosso da ${result.affectedCount} utente/i: ${result.affectedUsers.join(', ')}`;
+                }
+                alert(message);
+                loadCustomRoles();  // Ricarica la lista
+            }
+        } catch (error) {
+            alert('Errore nell\'eliminazione del ruolo: ' + error);
+        }
+    }
+</script>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>
