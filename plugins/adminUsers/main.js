@@ -228,9 +228,9 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         const userFilePath = path.join(__dirname, 'userAccount.json5');
         try {
           const userAccount = loadJson5(userFilePath);
-          ctx.body = Object.entries(userAccount.users).map(([username, userData]) => ({//CON QUESTE ISTRUZIONI GENERO UN ARRAY CONTENETE OGETTI CON DUE CAMPI username , roleId
+          ctx.body = Object.entries(userAccount.users).map(([username, userData]) => ({//CON QUESTE ISTRUZIONI GENERO UN ARRAY CONTENETE OGETTI CON DUE CAMPI username , roleIds
             username,
-            roleId: userData.roleId
+            roleIds: userData.roleIds  // Array di ruoli
           }));
         } catch (error) {
           ctx.status = 500;
@@ -275,13 +275,16 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
        }
     },
     //START CURA USER create update delete user
-    { // url richiesto(dalla pagina di amministrazione) per ottenere la lista degli utenti attivi nel sito 
-      method: 'POST', 
+    { // url richiesto(dalla pagina di amministrazione) per ottenere la lista degli utenti attivi nel sito
+      method: 'POST',
       path: '/usertUser', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       handler: async (ctx) => {//
 
-        const { username, email, password, roleId, isNewUser } = ctx.request.body;
-        const result = await userManagement.userUsert(username, password, email, roleId, isNewUser);
+        // Supporta sia roleIds (nuovo) che roleId (retrocompatibilità)
+        const { username, email, password, roleIds, roleId, isNewUser } = ctx.request.body;
+        const finalRoleIds = roleIds || roleId;  // Usa roleIds se presente, altrimenti roleId
+
+        const result = await userManagement.userUsert(username, password, email, finalRoleIds, isNewUser);
         ctx.body = result;// result contiene un oggettocon linformazioni dell'errore se c'è stato un errore altrimenti contiene semplicemente un messaggio di successo in caso affermativo
         ctx.type = 'application/json'; // oppure semplicemente 'json'
 
