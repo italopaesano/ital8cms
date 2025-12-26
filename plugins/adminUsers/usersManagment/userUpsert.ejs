@@ -23,19 +23,22 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         const usernameField = document.getElementById('username');
+        const pageTitle = document.getElementById('pageTitle');
 
         if (isNewUser) {
             usernameField.disabled = false;
+            pageTitle.textContent = 'Crea Nuovo Utente';
         } else {
             usernameField.disabled = true;
             usernameField.value = urlParams.get('username') || '';
+            pageTitle.textContent = 'Modifica Utente';
         }
     });
 </script>
 
 <div class="container mt-4">
     <div class="text-center mb-4">
-        <h1><%= isNewUser ? 'Crea Nuovo Utente' : 'Modifica Utente' %></h1>
+        <h1 id="pageTitle">Gestione Utente</h1>
     </div>
 
     <form id="createUserForm" class="mt-3">
