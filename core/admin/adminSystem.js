@@ -51,10 +51,10 @@ class AdminSystem {
     // 1. Valida symlink esistenti (verifica integrità)
     this.symlinkManager.validateSymlinks();
 
-    // 2. Processa tutti i plugin admin caricati
+    // 2. Processa tutti i plugin admin caricati (CONVENZIONE: nome inizia con 'admin')
     const plugins = this.pluginSys.getAllPlugins();
     for (const plugin of plugins) {
-      if (plugin.pluginConfig?.pluginType?.isAdminPlugin) {
+      if (plugin.pluginName.startsWith('admin')) {
         this.onAdminPluginLoaded(plugin);
       }
     }
@@ -125,17 +125,17 @@ class AdminSystem {
           continue;
         }
 
-        // Ottiene info da adminConfig del plugin
-        const adminConfig = plugin.adminConfig;
-        if (!adminConfig || !adminConfig.adminSection) {
-          console.warn(`⚠️ Plugin "${sectionConfig.plugin}" has no valid adminConfig`);
+        // Ottiene metadata UI da adminConfig.json5 centrale (non più dal plugin)
+        if (!sectionConfig.label) {
+          console.warn(`⚠️ Section "${sectionId}" missing label in adminConfig.json5`);
           continue;
         }
 
         sections.push({
           id: sectionId,
-          label: adminConfig.adminSection.label,
-          icon: adminConfig.adminSection.icon || '',
+          label: sectionConfig.label,
+          icon: sectionConfig.icon || '',
+          description: sectionConfig.description || '',
           url: `/${config.adminPrefix || 'admin'}/${sectionId}/index.ejs`,
           type: 'plugin',
           plugin: sectionConfig.plugin
