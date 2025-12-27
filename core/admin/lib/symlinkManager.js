@@ -11,11 +11,16 @@ const loadJson5 = require('../../loadJson5');
  * - Valida che symlink puntino a destinazioni valide
  *
  * Workflow:
- * 1. Plugin admin ha directory con nome sezione (es. plugins/adminUsers/usersManagment/)
- * 2. Durante caricamento plugin, crea symlink:
+ * 1. Plugin admin (nome inizia con 'admin') ha directory con nome sezione (es. plugins/adminUsers/usersManagment/)
+ * 2. Durante caricamento plugin, crea symlink per ogni sezione in adminSections array:
  *    core/admin/webPages/usersManagment → plugins/adminUsers/usersManagment/
  * 3. koa-classic-server serve i file EJS attraverso il symlink
  * 4. Durante disinstallazione, rimuove symlink
+ *
+ * CONVENZIONE IMPORTANTE:
+ * - Plugin con nome che inizia per "admin" sono automaticamente considerati plugin admin
+ * - Le sezioni sono dichiarate in pluginConfig.json5 come array adminSections
+ * - Ogni sezione DEVE avere una directory corrispondente nella root del plugin
  */
 class SymlinkManager {
   constructor(configManager) {
@@ -24,148 +29,149 @@ class SymlinkManager {
   }
 
   /**
-   * Installa sezione di un plugin admin (crea symlink)
+   * Installa sezioni di un plugin admin (crea symlink)
    * @param {object} plugin - Plugin object con pluginName, pathPluginFolder, etc.
    */
   installPluginSection(plugin) {
     const pluginPath = plugin.pathPluginFolder;
     const pluginName = plugin.pluginName;
 
-    // 1. Verifica che sia un plugin admin
-    if (!plugin.pluginConfig?.pluginType?.isAdminPlugin) {
+    // 1. Verifica che sia un plugin admin (CONVENZIONE: nome inizia con 'admin')
+    if (!pluginName.startsWith('admin')) {
       return; // Non è un plugin admin, skip
     }
 
-    // 2. Verifica che abbia adminConfig.json5
-    const adminConfigPath = path.join(pluginPath, 'adminConfig.json5');
-    if (!fs.existsSync(adminConfigPath)) {
-      console.log(`ℹ️ Plugin "${pluginName}" is admin plugin but has no adminConfig.json5, skipping section install`);
+    // 2. Verifica che abbia adminSections array in pluginConfig
+    const adminSections = plugin.pluginConfig?.adminSections;
+    if (!adminSections || !Array.isArray(adminSections) || adminSections.length === 0) {
+      console.log(`ℹ️ Plugin "${pluginName}" is admin plugin but has no adminSections array, skipping section install`);
       return;
     }
 
-    // 3. Carica adminConfig del plugin
-    let adminConfig;
-    try {
-      adminConfig = loadJson5(adminConfigPath);
-    } catch (error) {
-      console.error(`✗ Failed to load adminConfig.json5 for plugin "${pluginName}":`, error.message);
-      return;
-    }
+    // Salva adminSections sul plugin per uso futuro (es. AdminSystem)
+    plugin.adminSections = adminSections;
 
-    // Salva adminConfig sul plugin per uso futuro
-    plugin.adminConfig = adminConfig;
+    // 3. Processa ogni sezione nell'array
+    for (const section of adminSections) {
+      const sectionId = section.sectionId;
 
-    // 4. Verifica che dichiari una sezione
-    if (!adminConfig.adminSection?.sectionId) {
-      console.log(`ℹ️ Plugin "${pluginName}" has no adminSection.sectionId, skipping section install`);
-      return;
-    }
+      if (!sectionId) {
+        console.warn(`⚠️ Plugin "${pluginName}" has section without sectionId, skipping`);
+        continue;
+      }
 
-    const sectionId = adminConfig.adminSection.sectionId;
+      // 4. Path della directory sezione nel plugin
+      const sectionSourcePath = path.join(pluginPath, sectionId);
 
-    // 5. Path della directory sezione nel plugin
-    const sectionSourcePath = path.join(pluginPath, sectionId);
-
-    // 6. Verifica che la directory sezione esista nel plugin
-    if (!fs.existsSync(sectionSourcePath)) {
-      throw new Error(
-        `Plugin "${pluginName}" declares section "${sectionId}" but directory ` +
-        `"${sectionSourcePath}" does not exist`
-      );
-    }
-
-    // 7. Path del symlink in admin/webPages
-    const symlinkPath = path.join(this.adminWebPagesPath, sectionId);
-
-    // 8. Verifica conflitti
-    if (fs.existsSync(symlinkPath)) {
-      const stats = fs.lstatSync(symlinkPath);
-
-      if (stats.isSymbolicLink()) {
-        // Esiste già un symlink
-        const currentTarget = fs.readlinkSync(symlinkPath);
-
-        if (currentTarget === sectionSourcePath) {
-          // Symlink già corretto
-          console.log(`✓ Symlink already exists for section "${sectionId}" (plugin "${pluginName}")`);
-          return;
-        } else {
-          // Symlink esiste ma punta altrove!
-          throw new Error(
-            `Section "${sectionId}" symlink already exists, pointing to:\n` +
-            `  Current: ${currentTarget}\n` +
-            `  New: ${sectionSourcePath}\n` +
-            `  Conflict! Another plugin may be using this section.`
-          );
-        }
-      } else {
-        // Esiste ma non è un symlink (directory hardcoded?)
+      // 5. Verifica che la directory sezione esista nel plugin
+      if (!fs.existsSync(sectionSourcePath)) {
         throw new Error(
-          `Section "${sectionId}" directory already exists at "${symlinkPath}" ` +
-          `but is not a symlink. Cannot install plugin "${pluginName}".`
+          `Plugin "${pluginName}" declares section "${sectionId}" but directory ` +
+          `"${sectionSourcePath}" does not exist`
         );
       }
-    }
 
-    // 9. Crea symlink
-    try {
-      fs.symlinkSync(sectionSourcePath, symlinkPath, 'dir');
-      console.log(`✓ Created symlink for section "${sectionId}": ${symlinkPath} → ${sectionSourcePath}`);
-    } catch (error) {
-      console.error(`✗ Failed to create symlink for section "${sectionId}":`, error.message);
-      throw error;
+      // 6. Path del symlink in admin/webPages
+      const symlinkPath = path.join(this.adminWebPagesPath, sectionId);
+
+      // 7. Verifica conflitti
+      if (fs.existsSync(symlinkPath)) {
+        const stats = fs.lstatSync(symlinkPath);
+
+        if (stats.isSymbolicLink()) {
+          // Esiste già un symlink
+          const currentTarget = fs.readlinkSync(symlinkPath);
+
+          if (currentTarget === sectionSourcePath) {
+            // Symlink già corretto
+            console.log(`✓ Symlink already exists for section "${sectionId}" (plugin "${pluginName}")`);
+            continue;
+          } else {
+            // Symlink esiste ma punta altrove!
+            throw new Error(
+              `Section "${sectionId}" symlink already exists, pointing to:\n` +
+              `  Current: ${currentTarget}\n` +
+              `  New: ${sectionSourcePath}\n` +
+              `  Conflict! Another plugin may be using this section.`
+            );
+          }
+        } else {
+          // Esiste ma non è un symlink (directory hardcoded?)
+          throw new Error(
+            `Section "${sectionId}" directory already exists at "${symlinkPath}" ` +
+            `but is not a symlink. Cannot install plugin "${pluginName}".`
+          );
+        }
+      }
+
+      // 8. Crea symlink
+      try {
+        fs.symlinkSync(sectionSourcePath, symlinkPath, 'dir');
+        console.log(`✓ Created symlink for section "${sectionId}": ${symlinkPath} → ${sectionSourcePath}`);
+      } catch (error) {
+        console.error(`✗ Failed to create symlink for section "${sectionId}":`, error.message);
+        throw error;
+      }
     }
   }
 
   /**
-   * Disinstalla sezione di un plugin admin (rimuove symlink)
+   * Disinstalla sezioni di un plugin admin (rimuove symlink)
    * @param {object} plugin - Plugin object
    */
   uninstallPluginSection(plugin) {
     const pluginName = plugin.pluginName;
 
-    // 1. Verifica che abbia adminConfig
-    if (!plugin.adminConfig?.adminSection?.sectionId) {
+    // 1. Verifica che abbia adminSections
+    if (!plugin.adminSections || !Array.isArray(plugin.adminSections) || plugin.adminSections.length === 0) {
       return; // Nessuna sezione da rimuovere
     }
 
-    const sectionId = plugin.adminConfig.adminSection.sectionId;
-    const symlinkPath = path.join(this.adminWebPagesPath, sectionId);
+    // 2. Rimuovi symlink per ogni sezione
+    for (const section of plugin.adminSections) {
+      const sectionId = section.sectionId;
 
-    // 2. Verifica che il symlink esista
-    if (!fs.existsSync(symlinkPath)) {
-      console.log(`ℹ️ Symlink for section "${sectionId}" not found, nothing to remove`);
-      return;
-    }
+      if (!sectionId) {
+        continue;
+      }
 
-    // 3. Verifica che sia un symlink
-    const stats = fs.lstatSync(symlinkPath);
-    if (!stats.isSymbolicLink()) {
-      console.warn(`⚠️ Section "${sectionId}" at "${symlinkPath}" is not a symlink, skipping removal`);
-      return;
-    }
+      const symlinkPath = path.join(this.adminWebPagesPath, sectionId);
 
-    // 4. Verifica che punti al plugin corretto (safety check)
-    const currentTarget = fs.readlinkSync(symlinkPath);
-    const expectedTarget = path.join(plugin.pathPluginFolder, sectionId);
+      // 3. Verifica che il symlink esista
+      if (!fs.existsSync(symlinkPath)) {
+        console.log(`ℹ️ Symlink for section "${sectionId}" not found, nothing to remove`);
+        continue;
+      }
 
-    if (currentTarget !== expectedTarget) {
-      console.warn(
-        `⚠️ Symlink for section "${sectionId}" points to different location:\n` +
-        `  Current: ${currentTarget}\n` +
-        `  Expected: ${expectedTarget}\n` +
-        `  Skipping removal for safety.`
-      );
-      return;
-    }
+      // 4. Verifica che sia un symlink
+      const stats = fs.lstatSync(symlinkPath);
+      if (!stats.isSymbolicLink()) {
+        console.warn(`⚠️ Section "${sectionId}" at "${symlinkPath}" is not a symlink, skipping removal`);
+        continue;
+      }
 
-    // 5. Rimuovi symlink
-    try {
-      fs.unlinkSync(symlinkPath);
-      console.log(`✓ Removed symlink for section "${sectionId}": ${symlinkPath}`);
-    } catch (error) {
-      console.error(`✗ Failed to remove symlink for section "${sectionId}":`, error.message);
-      throw error;
+      // 5. Verifica che punti al plugin corretto (safety check)
+      const currentTarget = fs.readlinkSync(symlinkPath);
+      const expectedTarget = path.join(plugin.pathPluginFolder, sectionId);
+
+      if (currentTarget !== expectedTarget) {
+        console.warn(
+          `⚠️ Symlink for section "${sectionId}" points to different location:\n` +
+          `  Current: ${currentTarget}\n` +
+          `  Expected: ${expectedTarget}\n` +
+          `  Skipping removal for safety.`
+        );
+        continue;
+      }
+
+      // 6. Rimuovi symlink
+      try {
+        fs.unlinkSync(symlinkPath);
+        console.log(`✓ Removed symlink for section "${sectionId}": ${symlinkPath}`);
+      } catch (error) {
+        console.error(`✗ Failed to remove symlink for section "${sectionId}":`, error.message);
+        throw error;
+      }
     }
   }
 
