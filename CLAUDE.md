@@ -261,7 +261,7 @@ Plugins share objects via:
 // In providing plugin (e.g., dbApi)
 getObjectToShareToOthersPlugin(forPlugin, pluginSys, pathPluginFolder) {
   // Can customize what to share per requesting plugin
-  if (forPlugin === 'simpleAccess') {
+  if (forPlugin === 'adminUsers') {
     return { db: this.userDb }
   }
   return { db: this.sharedDb }
@@ -458,18 +458,25 @@ The **Admin System** is a modular architecture that allows plugins to provide ad
 ```
 plugins/adminUsers/
 ├── main.js                    # Plugin logic (standard)
-├── pluginConfig.json5         # Plugin configuration (with isAdminPlugin flag)
+├── pluginConfig.json5         # Plugin configuration (with adminSections array)
 ├── pluginDescription.json5    # Plugin metadata (standard)
-├── adminConfig.json5          # REQUIRED: Admin section metadata
 ├── usersManagment/            # Admin section directory (name = sectionId)
 │   ├── index.ejs              # Main section page
 │   ├── userView.ejs           # Sub-pages
 │   ├── userUpsert.ejs
 │   └── userDelete.ejs
+├── rolesManagment/            # Second admin section directory
+│   └── index.ejs              # Role management page
 ├── userAccount.json5          # Plugin data files
 ├── userRole.json5
-└── userManagement.js          # Plugin modules
+├── userManagement.js          # Plugin modules
+└── roleManagement.js          # Role management module
 ```
+
+**Important Notes:**
+- ❌ **NO** `adminConfig.json5` file in plugin (deprecated)
+- ✅ Section IDs declared in `pluginConfig.json5` (`adminSections` array)
+- ✅ UI metadata (label, icon, description) in `/core/admin/adminConfig.json5`
 
 ### pluginConfig.json5 - Admin Plugin Configuration
 
@@ -638,10 +645,11 @@ URL:                   /admin/usersManagment/index.ejs
 1. Plugin admin loaded by `pluginSys`
 2. `AdminSystem.initialize()` → `onAdminPluginLoaded(plugin)`
 3. `SymlinkManager.installPluginSection(plugin)`:
-   - Verify `pluginType.isAdminPlugin === true`
-   - Load `adminConfig.json5`
-   - Verify directory `plugins/{pluginName}/{sectionId}/` exists
-   - Create symlink: `core/admin/webPages/{sectionId} → plugins/{pluginName}/{sectionId}/`
+   - Verify plugin name starts with `'admin'` (automatic detection)
+   - Read `adminSections` array from `pluginConfig.json5`
+   - For each section ID in the array:
+     - Verify directory `plugins/{pluginName}/{sectionId}/` exists
+     - Create symlink: `core/admin/webPages/{sectionId} → plugins/{pluginName}/{sectionId}/`
 
 **Symlink Removal:**
 - Plugin uninstalled: `SymlinkManager.uninstallPluginSection(plugin)`
@@ -1009,16 +1017,48 @@ fs.renameSync(tempPath, userAccountPath)
 - Max age: 24 hours (86400000ms)
 - Configuration: `/core/priorityMiddlewares/koaSession.json5`
 
-### Authorization System (RBAC)
+### Authorization System (Multi-Role RBAC)
 
-**Roles:**
-- **0 (root):** Full authorization, all operations
-- **1 (admin):** Full access to all resources
-- **2 (editor):** Create, read, update (no delete)
-- **3 (viewer):** Read-only access
+**Multi-Role Architecture:**
+- Users can have **multiple roles** simultaneously via `roleIds` array
+- Roles are checked using `roleIds.includes(roleId)` logic
+- Example: A user can be both `admin` (1) and have custom roles
 
-**Role Configuration:**
+**Hardcoded System Roles (0-99):**
+- **0 (root):** Full system access, including critical operations
+- **1 (admin):** Full access to all admin resources
+- **2 (editor):** Create, read, update, delete ALL content (including other users' content)
+- **3 (selfEditor):** Create, read, update, delete ONLY OWN content
+
+**Custom Roles (100+):**
+- User-defined roles created through admin panel
+- Managed via `/admin/rolesManagment/`
+- Auto-increment ID starting at 100
+- Can be assigned/removed from users dynamically
+
+**Role Data Structure:**
 Located in `/plugins/adminUsers/userRole.json5`
+```json5
+{
+  "roles": {
+    "0": { "name": "root", "description": "...", "isHardcoded": true },
+    "1": { "name": "admin", "description": "...", "isHardcoded": true },
+    "100": { "name": "contentModerator", "description": "...", "isHardcoded": false }
+  }
+}
+```
+
+**User Data Structure:**
+Located in `/plugins/adminUsers/userAccount.json5`
+```json5
+{
+  "username": {
+    "email": "user@example.com",
+    "hashPassword": "$2b$10$...",
+    "roleIds": [1, 100]  // Array of role IDs
+  }
+}
+```
 
 ### Access Control Middleware
 
@@ -1041,7 +1081,19 @@ if (!ctx.session.authenticated) {
 
 // Access user data
 const username = ctx.session.user.username
-const role = ctx.session.user.role
+const roleIds = ctx.session.user.roleIds  // Array of role IDs
+
+// Check if user has specific role
+if (roleIds.includes(0)) {
+  // User has root role
+}
+
+if (roleIds.includes(1)) {
+  // User has admin role
+}
+
+// Check if user has ANY of specified roles
+const hasAdminAccess = roleIds.some(id => [0, 1].includes(id))
 ```
 
 ### Checking Authentication in Templates
@@ -1062,16 +1114,30 @@ All plugin routes are prefixed: `/api/{pluginName}/...`
 
 ### AdminUsers Plugin Routes
 
+**Authentication:**
 ```
 GET  /api/adminUsers/login         # Display login form
 POST /api/adminUsers/login         # Authenticate user
 GET  /api/adminUsers/logout        # Display logout confirmation
 POST /api/adminUsers/logout        # End session
 GET  /api/adminUsers/logged        # Check login status (JSON)
+```
+
+**User Management:**
+```
 GET  /api/adminUsers/userList      # List all users (protected)
 GET  /api/adminUsers/userInfo      # Get user details (protected)
-GET  /api/adminUsers/roleList      # List all roles (protected)
 POST /api/adminUsers/usertUser     # Create/update user (protected)
+```
+
+**Role Management:**
+```
+GET  /api/adminUsers/roleList           # List all roles (hardcoded + custom)
+GET  /api/adminUsers/customRoleList     # List only custom roles
+GET  /api/adminUsers/hardcodedRoleList  # List only hardcoded roles
+POST /api/adminUsers/createCustomRole   # Create new custom role
+POST /api/adminUsers/updateCustomRole   # Update existing custom role
+POST /api/adminUsers/deleteCustomRole   # Delete custom role (removes from users)
 ```
 
 ### Bootstrap Plugin Routes
@@ -1191,7 +1257,7 @@ The `passData` object is available in all EJS templates and contains:
   pluginSys: pluginSys,          // Plugin system instance
   plugin: {                      // Plugin shared objects
     dbApi: { db: ... },
-    simpleAccess: { ... },
+    adminUsers: { ... },
     // ... other plugins
   },
   themeSys: themeSys,            // Theme system instance
@@ -1336,19 +1402,20 @@ mkdir -p core/admin/webPages/myFeature
 
 **Access admin panel:**
 - URL: `http://localhost:3000/admin`
-- Login required (use simpleAccess plugin)
+- Login required (use adminUsers plugin)
 
 **User management interface:**
-- `http://localhost:3000/admin/userManagment/`
+- `http://localhost:3000/admin/usersManagment/`
 - List users, add, edit, delete
+- Manage custom roles at `http://localhost:3000/admin/rolesManagment/`
 
 **Default users** (check `plugins/adminUsers/userAccount.json5`):
-```json
+```json5
 {
   "username": {
     "password": "$2a$10$hashedPassword",
     "email": "user@example.com",
-    "role": 0
+    "roleIds": [0]  // Array of role IDs (supports multiple roles)
   }
 }
 ```
@@ -1940,10 +2007,12 @@ In `ital8Config.json5`:
 
 Plugins log during load:
 ```
-Loading plugin: dbApi
-Loading plugin: simpleAccess
-Plugin loaded: dbApi
-Plugin loaded: simpleAccess
+Loading plugin: admin
+Loading plugin: adminUsers
+Loading plugin: bootstrap
+Plugin loaded: admin
+Plugin loaded: adminUsers
+Plugin loaded: bootstrap
 ```
 
 ### Common Issues
