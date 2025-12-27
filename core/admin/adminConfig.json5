@@ -31,7 +31,7 @@
     // SEZIONI HARDCODED (statiche) - da implementare in futuro
     "pagesManagment": {
       "type": "hardcoded",
-      "enabled": false,                 // Disabilitata per ora
+      "enabled": true,                  // Abilitata per test
       "label": "Creazione Pagine Web",
       "url": "/admin/pagesManagment/index.ejs",
       "icon": "📄"
@@ -39,7 +39,7 @@
 
     "systemSettings": {
       "type": "hardcoded",
-      "enabled": false,
+      "enabled": true,                  // Abilitata per test
       "label": "Impostazioni Sistema",
       "url": "/admin/systemSettings/index.ejs",
       "icon": "⚙️"
@@ -47,7 +47,7 @@
 
     "pluginsManagment": {
       "type": "hardcoded",
-      "enabled": false,
+      "enabled": true,                  // Abilitata per test
       "label": "Gestione Plugin",
       "url": "/admin/pluginsManagment/index.ejs",
       "icon": "🔌"
@@ -55,7 +55,7 @@
 
     "themesManagment": {
       "type": "hardcoded",
-      "enabled": false,
+      "enabled": true,                  // Abilitata per test
       "label": "Gestione Temi",
       "url": "/admin/themesManagment/index.ejs",
       "icon": "🎨"
