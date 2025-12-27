@@ -7,21 +7,25 @@
   // - type: "plugin" → gestita da plugin (dinamica, con symlink)
   // - type: "hardcoded" → gestita direttamente da core/admin (statica)
   "sections": {
-    // SEZIONE PLUGIN-BASED (dinamica)
+    // SEZIONI PLUGIN-BASED (dinamiche) - fornite da adminUsers plugin
     "usersManagment": {
       "type": "plugin",
       "plugin": "adminUsers",           // Nome del plugin che gestisce questa sezione
       "enabled": true,                  // Abilitata
-      "required": true,                  // Se plugin manca, errore all'avvio
+      "required": true,                 // Se plugin manca, errore all'avvio
+      "label": "Gestione Utenti",       // Testo mostrato nel menu
+      "icon": "👥",                     // Icona (emoji, HTML, o classe CSS)
+      "description": "Gestione utenti e permessi del sistema"
     },
 
-    // SEZIONE HARDCODED per gestione ruoli custom
-    "rolesManagement": {
-      "type": "hardcoded",
+    "rolesManagment": {
+      "type": "plugin",
+      "plugin": "adminUsers",           // Nome del plugin che gestisce questa sezione
       "enabled": true,                  // Abilitata
-      "label": "Gestione Ruoli Custom",
-      "url": "/admin/usersManagment/rolesManagement.ejs",
-      "icon": "🏷️"
+      "required": true,                 // Se plugin manca, errore all'avvio
+      "label": "Gestione Ruoli Custom", // Testo mostrato nel menu
+      "icon": "🏷️",                     // Icona (emoji, HTML, o classe CSS)
+      "description": "Creazione e gestione ruoli personalizzati"
     },
 
     // SEZIONI HARDCODED (statiche) - da implementare in futuro
@@ -61,7 +65,7 @@
   // Ordinamento sezioni nel menu (dall'alto verso il basso)
   "menuOrder": [
     "usersManagment",
-    "rolesManagement",
+    "rolesManagment",
     "pagesManagment",
     "systemSettings",
     "pluginsManagment",

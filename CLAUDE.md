@@ -471,66 +471,54 @@ plugins/adminUsers/
 └── userManagement.js          # Plugin modules
 ```
 
-### pluginConfig.json5 - Admin Plugin Flags
+### pluginConfig.json5 - Admin Plugin Configuration
+
+**CRITICAL NAMING CONVENTION:** Admin plugins **MUST** start with the prefix `admin`.
+
+✅ **Valid names:** `adminUsers`, `adminMailer`, `adminStorage`
+❌ **Invalid names:** `usersAdmin`, `simpleAccess`, `userManagement`
 
 ```json5
+// This file follows the JSON5 standard - comments and trailing commas are supported
 {
   "active": 1,
   "isInstalled": 1,
   "weight": 0,
 
-  // REQUIRED for admin plugins
-  "pluginType": {
-    "isAdminPlugin": true,           // Identifies this as an admin plugin
-    "providesAuth": true,            // Optional: services provided
-    "providesUserManagement": true
-  },
+  // ℹ️ CONVENZIONE: Plugin con nome che inizia per "admin" sono automaticamente plugin admin
+  // Non è necessario alcun flag esplicito (es. isAdminPlugin)
 
-  "dependency": {},
-  "nodeModuleDependency": {},
+  // Array di ID delle sezioni admin gestite da questo plugin
+  // Ogni sezione DEVE avere una directory corrispondente nella root del plugin
+  // I metadata UI (label, icon, description) sono centralizzati in /core/admin/adminConfig.json5
+  // Es. plugins/adminUsers/usersManagment/ e plugins/adminUsers/rolesManagment/
+  "adminSections": [
+    "usersManagment",
+    "rolesManagment"
+  ],
+
+  "dependency": {
+    "bootstrap": "^1.0.0"
+  },
+  "nodeModuleDependency": {
+    "bcryptjs": "^3.0.2",
+    "ejs": "^3.1.9"
+  },
   "custom": {}
 }
 ```
 
-**Required fields:**
-- `pluginType.isAdminPlugin: true` - Marks plugin as admin plugin
-
-### adminConfig.json5 - Admin Section Metadata
-
-**Location:** `plugins/{pluginName}/adminConfig.json5`
-
-```json5
-// This file follows the JSON5 standard - comments and trailing commas are supported
-{
-  // Admin section metadata
-  "adminSection": {
-    "sectionId": "usersManagment",     // MUST match directory name
-    "label": "Gestione Utenti",        // Menu label
-    "icon": "👥",                      // Icon (emoji, HTML, or CSS class)
-    "description": "Gestione utenti, ruoli e permessi del sistema"
-  },
-
-  // Services this plugin provides (optional)
-  "providesServices": ["auth"],
-
-  // API endpoints (optional, for documentation)
-  "apiEndpoints": {
-    "userList": "/api/adminUsers/userList",
-    "userInfo": "/api/adminUsers/userInfo",
-    "userCreate": "/api/adminUsers/usertUser",
-    "roleList": "/api/adminUsers/roleList"
-  }
-}
-```
-
-**Required fields:**
-- `adminSection.sectionId` - MUST match directory name in plugin root
-- `adminSection.label` - Text shown in menu
-- `adminSection.icon` - Icon for menu
+**Required fields for admin plugins:**
+- `adminSections` - Array of section IDs (strings) - can be empty if plugin provides no admin UI
+- Each section ID MUST:
+  - Match a directory name in plugin root
+  - Have corresponding metadata in `/core/admin/adminConfig.json5`
 
 **Constraints:**
 - `sectionId` must be unique across all admin plugins
-- Directory `plugins/{pluginName}/{sectionId}/` MUST exist
+- Directory `plugins/{pluginName}/{sectionId}/` MUST exist for each section
+- Plugin name MUST start with `admin` prefix
+- UI metadata (label, icon, description) MUST be defined in central `adminConfig.json5`
 
 ### Central Configuration: adminConfig.json5
 
@@ -542,12 +530,25 @@ plugins/adminUsers/
 
   // Admin sections configuration
   "sections": {
-    // PLUGIN-BASED SECTION (dynamic, served via symlink)
+    // PLUGIN-BASED SECTIONS (dynamic, served via symlink)
     "usersManagment": {
       "type": "plugin",
       "plugin": "adminUsers",     // Plugin that manages this section
       "enabled": true,            // Show in menu
-      "required": true            // Error if plugin missing
+      "required": true,           // Error if plugin missing
+      "label": "Gestione Utenti", // Text shown in menu
+      "icon": "👥",               // Icon (emoji, HTML, or CSS class)
+      "description": "Gestione utenti e permessi del sistema"
+    },
+
+    "rolesManagment": {
+      "type": "plugin",
+      "plugin": "adminUsers",
+      "enabled": true,
+      "required": true,
+      "label": "Gestione Ruoli Custom",
+      "icon": "🏷️",
+      "description": "Creazione e gestione ruoli personalizzati"
     },
 
     // HARDCODED SECTION (static files in core/admin/webPages)
@@ -563,6 +564,7 @@ plugins/adminUsers/
   // Menu order (top to bottom)
   "menuOrder": [
     "usersManagment",
+    "rolesManagment",
     "systemSettings",
     "pluginsManagment"
   ],
@@ -590,13 +592,17 @@ plugins/adminUsers/
 - Managed by external plugin
 - Files located in `plugins/{pluginName}/{sectionId}/`
 - Served via symlink
-- Metadata from `plugins/{pluginName}/adminConfig.json5`
+- Section IDs declared in plugin's `pluginConfig.json5` (`adminSections` array)
+- UI metadata centralized in `/core/admin/adminConfig.json5`
 
 **Fields:**
 - `type`: `"plugin"`
 - `plugin`: Plugin name
 - `enabled`: Show in menu (true/false)
 - `required`: Error if plugin missing (true/false)
+- `label`: Text shown in menu
+- `icon`: Icon (emoji, HTML, or CSS class)
+- `description`: Brief description of the section
 
 **Type: `"hardcoded"`**
 - Managed directly by core
@@ -809,32 +815,39 @@ adminSystem.getEndpointsForPassData()
 
 ### Creating an Admin Plugin - Checklist
 
-✅ **Step 1: Create plugin structure**
+✅ **Step 1: Create plugin structure with "admin" prefix**
 ```bash
+# IMPORTANT: Plugin name MUST start with "admin"
 mkdir -p plugins/admin{Feature}/{sectionId}
 ```
 
 ✅ **Step 2: Create required files**
 - [ ] `main.js` with `loadPlugin()`, `getRouteArray()`, etc.
-- [ ] `pluginConfig.json5` with `pluginType.isAdminPlugin: true`
+- [ ] `pluginConfig.json5` with `adminSections` array
 - [ ] `pluginDescription.json5`
-- [ ] `adminConfig.json5` with `adminSection.sectionId`
 - [ ] `{sectionId}/index.ejs` (section directory with EJS files)
 
-✅ **Step 3: Configure `adminConfig.json5`**
+✅ **Step 3: Configure `pluginConfig.json5`**
 ```json5
 {
-  "adminSection": {
-    "sectionId": "mySection",  // MUST match directory name
-    "label": "My Section",
-    "icon": "🎯",
-    "description": "Description of my section"
-  },
-  "providesServices": ["myService"]  // Optional
+  "active": 1,
+  "isInstalled": 1,
+  "weight": 0,
+
+  // ℹ️ CONVENZIONE: Plugin con nome che inizia per "admin" sono automaticamente plugin admin
+  // Array di ID delle sezioni admin gestite da questo plugin
+  "adminSections": [
+    "mySection"
+    // Add more section IDs if needed
+  ],
+
+  "dependency": {},
+  "nodeModuleDependency": {},
+  "custom": {}
 }
 ```
 
-✅ **Step 4: Register section in central config**
+✅ **Step 4: Register sections in central config**
 
 Edit `/core/admin/adminConfig.json5`:
 ```json5
@@ -843,16 +856,19 @@ Edit `/core/admin/adminConfig.json5`:
     "type": "plugin",
     "plugin": "admin{Feature}",
     "enabled": true,
-    "required": false
+    "required": false,
+    "label": "My Section",       // Text shown in menu
+    "icon": "🎯",                // Icon (emoji, HTML, or CSS class)
+    "description": "Description of my section"
   }
 },
 "menuOrder": [..., "mySection"]
 ```
 
 ✅ **Step 5: Restart server**
-- Symlink created automatically
-- Section appears in menu
-- Accessible at `/admin/mySection/index.ejs`
+- Symlinks created automatically for each section in adminSections array
+- Sections appear in menu
+- Accessible at `/admin/{sectionId}/index.ejs`
 
 ## Data Storage Strategy
 
@@ -2054,11 +2070,44 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2025-12-12
-**Version:** 1.4.0
+**Last Updated:** 2025-12-27
+**Version:** 1.5.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v1.5.0 (2025-12-27): **BREAKING CHANGE** - Simplified admin plugin standard with automatic detection, multi-section support, and centralized UI metadata. Key changes:
+  - **New Admin Plugin Convention:**
+    - Admin plugins are now **automatically detected** by naming convention (name starts with "admin")
+    - Removed `pluginType.isAdminPlugin` flag - no longer needed
+    - Removed separate `adminConfig.json5` file from plugins
+    - Plugin declares only section IDs in `pluginConfig.json5` via `adminSections` array (strings, not objects)
+  - **Centralized UI Metadata:**
+    - All UI metadata (label, icon, description) moved to `/core/admin/adminConfig.json5`
+    - Better separation of concerns: plugin declares "what sections", admin config declares "how to display them"
+    - Easier to update UI labels/icons without modifying plugin files
+  - **Multi-Section Support:**
+    - Plugins can provide multiple admin sections via `adminSections` array
+    - Example: `adminUsers` provides both `usersManagment` and `rolesManagment` sections
+  - **SymlinkManager Updates:**
+    - Updated to detect admin plugins by naming convention (`pluginName.startsWith('admin')`)
+    - Processes array of strings (section IDs) instead of array of objects
+    - Creates/removes symlinks for each section automatically
+  - **Multi-Role Permission System Implementation:**
+    - Restructured role data architecture with hardcoded roles (0-99) and custom roles (100+)
+    - Users can now have multiple roles via `roleIds` array (replaced single `roleId`)
+    - Created `roleManagement.js` module with CRUD operations for custom roles
+    - Added 5 new API endpoints for role management
+    - Implemented checkbox-based multi-role selection UI in `userUpsert.ejs`
+    - Created new `rolesManagment` admin section for managing custom roles
+  - **Files Modified:**
+    - Updated `/core/admin/lib/symlinkManager.js` - multi-section support
+    - Updated `/core/admin/adminConfig.json5` - registered both admin sections
+    - Updated `/plugins/adminUsers/pluginConfig.json5` - added `adminSections` array
+    - Removed `/plugins/adminUsers/adminConfig.json5` - deprecated
+  - **Documentation:**
+    - Updated all examples to reflect new standard
+    - Updated "Creating an Admin Plugin" checklist
+    - Added clear warnings about naming convention requirement
 - v1.4.0 (2025-12-12): **MAJOR FEATURE** - Implemented modular Admin System architecture. Key changes:
   - **New Admin System Components:**
     - Created `/core/admin/adminSystem.js` - Central coordinator
@@ -2068,8 +2117,7 @@ When working on this codebase as an AI assistant:
     - Created `/core/admin/adminConfig.json5` - Central admin configuration
   - **Admin Plugin Architecture:**
     - Admin plugins MUST start with `admin` prefix (e.g., `adminUsers`, `adminMailer`)
-    - Required `pluginType.isAdminPlugin: true` flag in `pluginConfig.json5`
-    - New required file: `adminConfig.json5` in plugin root (admin section metadata)
+    - Automatic detection by naming convention
     - Section files in plugin root directory (e.g., `plugins/adminUsers/usersManagment/`)
   - **Symlink-Based Serving:**
     - Plugin sections served via symlinks: `core/admin/webPages/{sectionId} → plugins/{plugin}/{sectionId}/`
