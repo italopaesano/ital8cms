@@ -19,7 +19,8 @@ const loadJson5 = require('../../loadJson5');
  *
  * CONVENZIONE IMPORTANTE:
  * - Plugin con nome che inizia per "admin" sono automaticamente considerati plugin admin
- * - Le sezioni sono dichiarate in pluginConfig.json5 come array adminSections
+ * - Le sezioni sono dichiarate in pluginConfig.json5 come array di stringhe (sectionId)
+ * - I metadata UI (label, icon, description) sono centralizzati in /core/admin/adminConfig.json5
  * - Ogni sezione DEVE avere una directory corrispondente nella root del plugin
  */
 class SymlinkManager {
@@ -51,12 +52,10 @@ class SymlinkManager {
     // Salva adminSections sul plugin per uso futuro (es. AdminSystem)
     plugin.adminSections = adminSections;
 
-    // 3. Processa ogni sezione nell'array
-    for (const section of adminSections) {
-      const sectionId = section.sectionId;
-
-      if (!sectionId) {
-        console.warn(`⚠️ Plugin "${pluginName}" has section without sectionId, skipping`);
+    // 3. Processa ogni sezione nell'array (ogni elemento è un sectionId stringa)
+    for (const sectionId of adminSections) {
+      if (!sectionId || typeof sectionId !== 'string') {
+        console.warn(`⚠️ Plugin "${pluginName}" has invalid sectionId (must be string), skipping`);
         continue;
       }
 
@@ -127,11 +126,9 @@ class SymlinkManager {
       return; // Nessuna sezione da rimuovere
     }
 
-    // 2. Rimuovi symlink per ogni sezione
-    for (const section of plugin.adminSections) {
-      const sectionId = section.sectionId;
-
-      if (!sectionId) {
+    // 2. Rimuovi symlink per ogni sezione (ogni elemento è un sectionId stringa)
+    for (const sectionId of plugin.adminSections) {
+      if (!sectionId || typeof sectionId !== 'string') {
         continue;
       }
 

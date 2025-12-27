@@ -12,14 +12,20 @@
       "type": "plugin",
       "plugin": "adminUsers",           // Nome del plugin che gestisce questa sezione
       "enabled": true,                  // Abilitata
-      "required": true,                  // Se plugin manca, errore all'avvio
+      "required": true,                 // Se plugin manca, errore all'avvio
+      "label": "Gestione Utenti",       // Testo mostrato nel menu
+      "icon": "👥",                     // Icona (emoji, HTML, o classe CSS)
+      "description": "Gestione utenti e permessi del sistema"
     },
 
     "rolesManagment": {
       "type": "plugin",
       "plugin": "adminUsers",           // Nome del plugin che gestisce questa sezione
       "enabled": true,                  // Abilitata
-      "required": true,                  // Se plugin manca, errore all'avvio
+      "required": true,                 // Se plugin manca, errore all'avvio
+      "label": "Gestione Ruoli Custom", // Testo mostrato nel menu
+      "icon": "🏷️",                     // Icona (emoji, HTML, o classe CSS)
+      "description": "Creazione e gestione ruoli personalizzati"
     },
 
     // SEZIONI HARDCODED (statiche) - da implementare in futuro

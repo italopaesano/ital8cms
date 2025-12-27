@@ -7,22 +7,13 @@
   // ℹ️ CONVENZIONE: Plugin con nome che inizia per "admin" sono automaticamente plugin admin
   // Non è necessario alcun flag esplicito (es. isAdminPlugin)
 
-  // Array di sezioni admin gestite da questo plugin
+  // Array di ID delle sezioni admin gestite da questo plugin
   // Ogni sezione DEVE avere una directory corrispondente nella root del plugin
+  // Le informazioni UI (label, icon, description) sono centralizzate in /core/admin/adminConfig.json5
   // Es. plugins/adminUsers/usersManagment/ e plugins/adminUsers/rolesManagment/
   "adminSections": [
-    {
-      "sectionId": "usersManagment",
-      "label": "Gestione Utenti",
-      "icon": "👥",
-      "description": "Gestione utenti e permessi del sistema"
-    },
-    {
-      "sectionId": "rolesManagment",
-      "label": "Gestione Ruoli Custom",
-      "icon": "🏷️",
-      "description": "Creazione e gestione ruoli personalizzati"
-    }
+    "usersManagment",
+    "rolesManagment"
   ],
 
   "dependency": {
