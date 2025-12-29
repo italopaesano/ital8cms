@@ -1,6 +1,12 @@
 node_modules/
 .env
 
+# Init system
+/scripts/initState.json5
+/plugins/*/scripts/initState.json5
+/logs/
+/backups/
+
 # Playwright
 /test-results/
 /playwright-report/
