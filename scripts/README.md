@@ -18,7 +18,7 @@ Dopo aver installato ital8cms:
 
 ```bash
 npm install
-npm run init
+npm run start-configure
 ```
 
 Il wizard ti guiderà attraverso:
@@ -34,7 +34,7 @@ Se hai già inizializzato il sistema, il wizard rileva lo stato esistente e ti p
 - Re-inizializzare tutto (backup automatico)
 
 ```bash
-npm run init
+npm run start-configure
 ```
 
 ## 📁 Struttura File
@@ -159,7 +159,7 @@ In `plugins/myPlugin/pluginConfig.json5`:
 ### 4. Testa inizializzazione
 
 ```bash
-npm run init
+npm run start-configure
 ```
 
 Il wizard rileverà automaticamente il plugin e lo includerà nel processo.
@@ -245,7 +245,7 @@ Livelli:
 ### Come faccio a ri-inizializzare solo un plugin?
 
 ```bash
-npm run init
+npm run start-configure
 # Seleziona: "Re-inizializza solo plugin specifici"
 # Scegli il plugin dalla lista
 ```
