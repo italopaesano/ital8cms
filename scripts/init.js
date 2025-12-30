@@ -7,7 +7,6 @@
  */
 
 const inquirer = require('inquirer')
-const chalk = require('chalk')
 const path = require('path')
 
 // Import moduli
@@ -22,14 +21,14 @@ const BackupManager = require('./lib/backupManager')
  * Banner di benvenuto
  */
 function showWelcomeBanner() {
-  console.log('\n' + chalk.cyan('┌─────────────────────────────────────────────────┐'))
-  console.log(chalk.cyan('│                                                 │'))
-  console.log(chalk.cyan('│   ') + chalk.bold.white('🚀 ital8cms - Setup Wizard') + chalk.cyan('                    │'))
-  console.log(chalk.cyan('│                                                 │'))
-  console.log(chalk.cyan('│   ') + 'Questo wizard ti guiderà nella configurazione' + chalk.cyan('   │'))
-  console.log(chalk.cyan('│   ') + 'iniziale del sistema.' + chalk.cyan('                          │'))
-  console.log(chalk.cyan('│                                                 │'))
-  console.log(chalk.cyan('└─────────────────────────────────────────────────┘\n'))
+  console.log('\n┌─────────────────────────────────────────────────┐')
+  console.log('│                                                 │')
+  console.log('│   🚀 ital8cms - Setup Wizard                    │')
+  console.log('│                                                 │')
+  console.log('│   Questo wizard ti guiderà nella configurazione │')
+  console.log('│   iniziale del sistema.                         │')
+  console.log('│                                                 │')
+  console.log('└─────────────────────────────────────────────────┘\n')
 }
 
 /**
@@ -43,13 +42,13 @@ async function handleReinit(stateManager, logger) {
   }
 
   logger.separator()
-  console.log('\n' + chalk.yellow.bold('⚠️  Inizializzazione Esistente Rilevata\n'))
+  console.log('\n⚠️  Inizializzazione Esistente Rilevata\n')
   console.log(`ital8cms risulta già inizializzato:`)
   console.log(`  Data: ${state.initDate}\n`)
 
   console.log('Stato:')
   if (state.global && state.global.completed) {
-    console.log(chalk.green('  • Configurazione globale: ✓ completata'))
+    console.log('  • Configurazione globale: ✓ completata')
   }
 
   if (state.plugins && Object.keys(state.plugins).length > 0) {
@@ -59,9 +58,9 @@ async function handleReinit(stateManager, logger) {
 
     for (const [name, pluginState] of Object.entries(state.plugins)) {
       if (pluginState.completed) {
-        console.log(chalk.green(`    - ${name}: ✓ (${pluginState.initDate})`))
+        console.log(`    - ${name}: ✓ (${pluginState.initDate})`)
       } else {
-        console.log(chalk.red(`    - ${name}: ✗ ${pluginState.error ? '(' + pluginState.error + ')' : ''}`))
+        console.log(`    - ${name}: ✗ ${pluginState.error ? '(' + pluginState.error + ')' : ''}`)
       }
     }
   }
@@ -79,7 +78,7 @@ async function handleReinit(stateManager, logger) {
         { name: 'Annulla (mantieni configurazione esistente)', value: 'cancel' },
         { name: 'Re-inizializza solo configurazione globale', value: 'global' },
         { name: 'Re-inizializza solo plugin specifici', value: 'plugins' },
-        { name: chalk.red('Re-inizializza tutto (⚠️  ATTENZIONE: sovrascrive dati!)'), value: 'all' }
+        { name: 'Re-inizializza tutto (⚠️  ATTENZIONE: sovrascrive dati!)', value: 'all' }
       ],
       default: 'cancel'
     }
@@ -92,7 +91,7 @@ async function handleReinit(stateManager, logger) {
 
   // Conferma per azioni distruttive
   if (action === 'all' || action === 'global' || action === 'plugins') {
-    console.log('\n' + chalk.yellow('⚠️  ATTENZIONE: La re-inizializzazione sovrascriverà i dati esistenti.'))
+    console.log('\n⚠️  ATTENZIONE: La re-inizializzazione sovrascriverà i dati esistenti.')
     console.log('Verrà creato un backup automatico.\n')
 
     const { confirm } = await inquirer.prompt([
@@ -273,13 +272,13 @@ async function main() {
         logger.separator()
         console.log('\n📊 Riepilogo Inizializzazione Plugin:\n')
         console.log(`  Plugin totali: ${stats.total}`)
-        console.log(chalk.green(`  Successi: ${stats.success}`))
-        console.log(chalk.red(`  Fallimenti: ${stats.failed}\n`))
+        console.log(`  Successi: ${stats.success}`)
+        console.log(`  Fallimenti: ${stats.failed}\n`)
 
         if (stats.failed > 0) {
-          console.log(chalk.red('Plugin falliti:'))
+          console.log('Plugin falliti:')
           for (const failed of stats.failedPlugins) {
-            console.log(chalk.red(`  • ${failed.name}: ${failed.error}`))
+            console.log(`  • ${failed.name}: ${failed.error}`)
           }
           console.log('')
         }
@@ -288,21 +287,21 @@ async function main() {
 
     // FASE 3: Riepilogo finale
     logger.separator()
-    console.log('\n' + chalk.green.bold('🎉 Inizializzazione Completata!\n'))
+    console.log('\n🎉 Inizializzazione Completata!\n')
 
     const state = stateManager.readGlobalState()
 
     console.log('Riepilogo:')
     if (state.global && state.global.completed) {
-      console.log(chalk.green('  ✓ Configurazione globale: completata'))
+      console.log('  ✓ Configurazione globale: completata')
     }
 
     if (state.plugins && Object.keys(state.plugins).length > 0) {
       const completedPlugins = Object.entries(state.plugins).filter(([_, p]) => p.completed)
-      console.log(chalk.green(`  ✓ Plugin inizializzati: ${completedPlugins.length}/${Object.keys(state.plugins).length}`))
+      console.log(`  ✓ Plugin inizializzati: ${completedPlugins.length}/${Object.keys(state.plugins).length}`)
 
       for (const [name, _] of completedPlugins) {
-        console.log(chalk.green(`    • ${name}: ✓`))
+        console.log(`    • ${name}: ✓`)
       }
     }
 
@@ -316,9 +315,9 @@ async function main() {
     logger.separator()
     console.log('\nProssimi passi:\n')
     console.log('  1. Avvia il server:')
-    console.log(chalk.cyan('     npm start\n'))
+    console.log('     npm start\n')
     console.log('  2. Accedi al pannello admin:')
-    console.log(chalk.cyan(`     http://localhost:${finalConfig?.httpPort || 3000}/admin\n`))
+    console.log(`     http://localhost:${finalConfig?.httpPort || 3000}/admin\n`)
 
     if (state.plugins && state.plugins.adminUsers && state.plugins.adminUsers.completed) {
       console.log('  3. Login con le credenziali create\n')

@@ -1,7 +1,5 @@
 // Questo file segue lo standard del progetto ital8cms
 const inquirer = require('inquirer')
-const chalk = require('chalk')
-const ora = require('ora')
 
 /**
  * Esecuzione script di inizializzazione plugin
@@ -23,7 +21,7 @@ class PluginInitRunner {
   async runPluginInit(plugin, index, total) {
     this.logger.separator()
     console.log(`\n📦 FASE 2: Inizializzazione Plugin (${index}/${total})\n`)
-    console.log(chalk.bold(`Plugin: ${plugin.name}`))
+    console.log(`Plugin: ${plugin.name}`)
     console.log(`Descrizione: ${plugin.description}\n`)
 
     // Chiedi se mostrare dettagli (se disponibili)
@@ -51,7 +49,7 @@ class PluginInitRunner {
       ])
 
       if (showDetails) {
-        console.log('\n' + chalk.cyan(initModule.getDescription()) + '\n')
+        console.log('\n' + initModule.getDescription() + '\n')
       }
     }
 
@@ -80,28 +78,28 @@ class PluginInitRunner {
     // Backup file se specificato
     let backupPath = null
     if (initModule.getFilesToBackup && typeof initModule.getFilesToBackup === 'function') {
-      const spinner = ora('Creazione backup file esistenti...').start()
+      console.log('⠋ Creazione backup file esistenti...')
 
       try {
         const filesToBackup = initModule.getFilesToBackup(plugin.path)
         if (filesToBackup && filesToBackup.length > 0) {
           backupPath = this.backupManager.backupPluginFiles(plugin.name, filesToBackup)
-          spinner.succeed(`Backup creato: ${backupPath}`)
+          this.logger.success(`Backup creato: ${backupPath}`)
         } else {
-          spinner.info('Nessun file da backuppare')
+          console.log('ℹ Nessun file da backuppare')
         }
       } catch (error) {
-        spinner.fail(`Errore backup: ${error.message}`)
+        this.logger.error(`Errore backup: ${error.message}`)
         this.logger.warning('Continuo senza backup...')
       }
     }
 
     // Esegui inizializzazione
-    const spinner = ora('Inizializzazione in corso...').start()
+    console.log('⠋ Inizializzazione in corso...')
 
     try {
       if (!initModule.run || typeof initModule.run !== 'function') {
-        spinner.fail('Script init non ha funzione run()')
+        this.logger.error('Script init non ha funzione run()')
         return { success: false, error: 'Funzione run() mancante' }
       }
 
@@ -113,7 +111,7 @@ class PluginInitRunner {
       const result = await initModule.run(answers, context)
 
       if (result.success) {
-        spinner.succeed(result.message || 'Inizializzazione completata')
+        this.logger.success(result.message || 'Inizializzazione completata')
 
         // Salva stato plugin
         this.stateManager.writePluginState(plugin.path, {
@@ -129,7 +127,7 @@ class PluginInitRunner {
 
         return { success: true }
       } else {
-        spinner.fail(result.message || 'Inizializzazione fallita')
+        this.logger.error(result.message || 'Inizializzazione fallita')
 
         // Ripristina backup se disponibile
         if (backupPath) {
@@ -149,7 +147,7 @@ class PluginInitRunner {
         return { success: false, error: result.message || result.error?.message }
       }
     } catch (error) {
-      spinner.fail(`Errore durante inizializzazione: ${error.message}`)
+      this.logger.error(`Errore durante inizializzazione: ${error.message}`)
       this.logger.error(error.stack)
 
       // Ripristina backup se disponibile
