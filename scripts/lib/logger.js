@@ -1,7 +1,6 @@
 // Questo file segue lo standard del progetto ital8cms
 const fs = require('fs')
 const path = require('path')
-const chalk = require('chalk')
 
 /**
  * Sistema di logging per script di inizializzazione
@@ -80,33 +79,33 @@ class InitLogger {
   }
 
   /**
-   * Log successo (verde)
+   * Log successo
    */
   success(message) {
     const timestamp = this.getLogTimestamp()
     const logLine = `[${timestamp}] [SUCCESS] ${message}\n`
     fs.appendFileSync(this.logFile, logLine, 'utf8')
-    console.log(chalk.green('✓ ' + message))
+    console.log('✓ ' + message)
   }
 
   /**
-   * Log errore (rosso)
+   * Log errore
    */
   error(message) {
     const timestamp = this.getLogTimestamp()
     const logLine = `[${timestamp}] [ERROR] ${message}\n`
     fs.appendFileSync(this.logFile, logLine, 'utf8')
-    console.log(chalk.red('✗ ' + message))
+    console.log('✗ ' + message)
   }
 
   /**
-   * Log warning (giallo)
+   * Log warning
    */
   warning(message) {
     const timestamp = this.getLogTimestamp()
     const logLine = `[${timestamp}] [WARNING] ${message}\n`
     fs.appendFileSync(this.logFile, logLine, 'utf8')
-    console.log(chalk.yellow('⚠ ' + message))
+    console.log('⚠ ' + message)
   }
 
   /**
@@ -114,7 +113,7 @@ class InitLogger {
    */
   separator() {
     const line = '━'.repeat(60)
-    console.log(chalk.gray(line))
+    console.log(line)
     fs.appendFileSync(this.logFile, line + '\n', 'utf8')
   }
 
