@@ -118,7 +118,8 @@ class pluginSys{
 
         //aggiungo i midlware di ogli plugin
         if(plugin.getMiddlewareToAdd){
-          this.#pluginsMiddlewares.push( plugin.getMiddlewareToAdd );// sarà un array di funzioni che generano un array
+          // IMPORTANTE: usa .bind(plugin) per preservare il contesto 'this' quando la funzione viene chiamata in index.js
+          this.#pluginsMiddlewares.push( plugin.getMiddlewareToAdd.bind(plugin) );// sarà un array di funzioni che generano un array
         }
 
         // loadPluginn(); // viene chiamato dopo perchè durante il caricamento potrebbe acadere che abbia bisogno di librerie di altri plugin
