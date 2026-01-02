@@ -103,6 +103,26 @@ module.exports = {
     };
   },
 
+  getObjectToShareToWebPages() {
+    // Condivide la funzione di traduzione con i template EJS
+    // Disponibile come passData.plugin.simpleI18n.__(...)
+    return {
+      __: this.translate.bind(this),
+
+      getCurrentLang: (ctx) => {
+        return ctx?.state?.lang || this.config.defaultLang;
+      },
+
+      getSupportedLangs: () => {
+        return [...this.config.supportedLangs];
+      },
+
+      getConfig: () => {
+        return { ...this.config };
+      }
+    };
+  },
+
   translate(translationObj, ctx = null) {
     const currentLang = ctx?.state?.lang || this.config.defaultLang;
 
