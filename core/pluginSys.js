@@ -4,6 +4,7 @@ const path = require('path');
 const semver = require('semver');
 const logger = require('./logger');
 const loadJson5 = require('./loadJson5');
+const saveJson5 = require('./saveJson5');
 
 class pluginSys{
 
@@ -65,8 +66,8 @@ class pluginSys{
           plugin.pluginConfig = pluginConfig ;// aggiorno anche l'ogetto interno al plugin
 
           // scrivo il nuovo file pluginConfig.json5 con la variabile isInstalled aggiornata correttamente
-          const textPluginConfig = JSON.stringify( pluginConfig, null, 2 );
-          fs.promises.writeFile( `${__dirname}/../plugins/${pluginName}/pluginConfig.json5` , textPluginConfig )// aggiorno il file pluginConfig.json5
+          // IMPORTANTE: Usa saveJson5() per preservare il formato JSON5 con commenti
+          saveJson5(path.join(__dirname, '..', 'plugins', pluginName, 'pluginConfig.json5'), pluginConfig)
           .catch( (error) => {
             logger.error('pluginSys', `Errore scrittura pluginConfig.json5 per ${pluginName}`, error);
           });
@@ -93,21 +94,9 @@ class pluginSys{
             logger.debug('pluginSys', `Nessuna funzione upgradePlugin() per ${pluginName}, skip migrazione`);
           }
 
-          // Aggiorna la versione nel config
-          pluginConfig.version = newVersion;
-          const textPluginConfig = JSON.stringify(pluginConfig, null, 2);
-          fs.promises.writeFile(`${__dirname}/../plugins/${pluginName}/pluginConfig.json5`, textPluginConfig)
-            .catch((error) => {
-              logger.error('pluginSys', `Errore salvataggio versione per ${pluginName}`, error);
-            });
-        } else if (!pluginConfig.version) {
-          // Prima volta che registriamo la versione
-          pluginConfig.version = newVersion;
-          const textPluginConfig = JSON.stringify(pluginConfig, null, 2);
-          fs.promises.writeFile(`${__dirname}/../plugins/${pluginName}/pluginConfig.json5`, textPluginConfig)
-            .catch((error) => {
-              logger.error('pluginSys', `Errore salvataggio versione iniziale per ${pluginName}`, error);
-            });
+          // NOTA: La versione NON viene mai salvata in pluginConfig.json5
+          // La versione è sempre letta SOLO da pluginDescription.json5 (read-only)
+          // Questo evita corruzioni del file pluginConfig.json5 durante aggiornamenti
         }
 
         // aggiungo le rotte del plugin all'elenco delle rotte da caricare

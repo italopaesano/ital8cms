@@ -18,10 +18,24 @@ module.exports = {
     console.log('[simpleI18n] Supported languages: ' + this.config.supportedLangs.join(', '));
   },
 
-  getMiddlewareToAdd(pluginSys, pathPluginFolder) {
-    return [
-      {
-        func: async (ctx, next) => {
+  async upgradePlugin(pluginSys, pathPluginFolder, oldVersion, newVersion) {
+    console.log('[simpleI18n] Upgrading from ' + oldVersion + ' to ' + newVersion);
+
+    // Future upgrade logic can be added here
+    // For example:
+    // - Migrate old configuration formats
+    // - Update translation files
+    // - Perform data migrations
+
+    console.log('[simpleI18n] Upgrade completed successfully');
+  },
+
+  getMiddlewareToAdd(app) {
+    const middlewareArray = [];
+
+    // Language detection middleware
+    middlewareArray.push(
+      async (ctx, next) => {
           let detectedLang = null;
           let originalPath = ctx.path;
 
@@ -62,9 +76,10 @@ module.exports = {
           }
 
           await next();
-        }
       }
-    ];
+    );
+
+    return middlewareArray;
   },
 
   getObjectToShareToOthersPlugin(forPlugin, pluginSys, pathPluginFolder) {
