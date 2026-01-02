@@ -1,0 +1,18 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "active": 1,
+  "isInstalled": 1,
+  "weight": -10,
+  "dependency": {},
+  "nodeModuleDependency": {
+    "handlebars": "^4.7.8"
+  },
+  "custom": {
+    "defaultLang": "en",
+    "supportedLangs": ["en", "it", "es", "fr", "de"],
+    "enableUrlPrefix": true,
+    "enableBrowserDetection": true,
+    "stripLangFromUrl": true,
+    "debugMode": false
+  }
+}
