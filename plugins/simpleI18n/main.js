@@ -51,10 +51,17 @@ module.exports = {
                 detectedLang = langCode;
 
                 if (config.stripLangFromUrl) {
-                  ctx.path = ctx.path.replace(/^\/[a-z]{2}(\/|$)/i, '/');
-                  if (ctx.path === '') {
-                    ctx.path = '/';
-                  }
+                  const newPath = ctx.path.replace(/^\/[a-z]{2}(\/|$)/i, '/');
+                  const finalPath = newPath === '' ? '/' : newPath;
+                  const newUrl = finalPath + (ctx.search || '');
+
+                  // Update all URL-related properties for maximum compatibility
+                  ctx.path = finalPath;
+                  ctx.url = newUrl;
+                  ctx.request.url = newUrl;
+                  ctx.request.path = finalPath;
+                  // Update Node.js HTTP request object (for koa-classic-server compatibility)
+                  ctx.req.url = newUrl;
                 }
               }
             }
@@ -76,6 +83,7 @@ module.exports = {
 
           if (config.debugMode) {
             console.log('[simpleI18n] ' + originalPath + ' → lang: ' + detectedLang + ', path: ' + ctx.path);
+            console.log('[simpleI18n]   ctx.url: ' + ctx.url + ', ctx.request.url: ' + ctx.request.url);
           }
 
           await next();

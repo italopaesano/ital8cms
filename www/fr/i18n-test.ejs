@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="<%= passData.ctx.state.lang %>">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%- passData.plugin.simpleI18n.__({
+    key: "page_title",
+    it: "Test Internazionalizzazione",
+    en: "Internationalization Test",
+    es: "Prueba de Internacionalización",
+    fr: "Test d'Internationalisation",
+    de: "Internationalisierungstest"
+  }, passData.ctx) %></title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      border-bottom: 3px solid #007bff;
+      padding-bottom: 10px;
+    }
+    .lang-switcher {
+      display: flex;
+      gap: 10px;
+      margin: 20px 0;
+      flex-wrap: wrap;
+    }
+    .lang-switcher a {
+      padding: 8px 16px;
+      background: #007bff;
+      color: white;
+      text-decoration: none;
+      border-radius: 4px;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    .lang-switcher a:hover {
+      background: #0056b3;
+    }
+    .lang-switcher a.active {
+      background: #28a745;
+    }
+    .example {
+      margin: 20px 0;
+      padding: 15px;
+      background: #f8f9fa;
+      border-left: 4px solid #007bff;
+    }
+    .info {
+      background: #e7f3ff;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 20px 0;
+    }
+    code {
+      background: #f4f4f4;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1><%- passData.plugin.simpleI18n.__({
+      key: "welcome",
+      it: "Benvenuto nel Test i18n",
+      en: "Welcome to i18n Test",
+      es: "Bienvenido a la Prueba i18n",
+      fr: "Bienvenue au Test i18n",
+      de: "Willkommen beim i18n-Test"
+    }, passData.ctx) %></h1>
+
+    <div class="info">
+      <strong><%- passData.plugin.simpleI18n.__({
+        key: "current_lang",
+        it: "Lingua corrente:",
+        en: "Current language:",
+        es: "Idioma actual:",
+        fr: "Langue actuelle:",
+        de: "Aktuelle Sprache:"
+      }, passData.ctx) %></strong>
+      <code><%= passData.ctx.state.lang.toUpperCase() %></code>
+    </div>
+
+    <h2><%- passData.plugin.simpleI18n.__({
+      key: "switch_lang",
+      it: "Cambia Lingua",
+      en: "Switch Language",
+      es: "Cambiar Idioma",
+      fr: "Changer de Langue",
+      de: "Sprache Wechseln"
+    }, passData.ctx) %></h2>
+
+    <div class="lang-switcher">
+      <a href="/en/i18n-test.ejs" class="<%= passData.ctx.state.lang === 'en' ? 'active' : '' %>">🇬🇧 English</a>
+      <a href="/it/i18n-test.ejs" class="<%= passData.ctx.state.lang === 'it' ? 'active' : '' %>">🇮🇹 Italiano</a>
+      <a href="/es/i18n-test.ejs" class="<%= passData.ctx.state.lang === 'es' ? 'active' : '' %>">🇪🇸 Español</a>
+      <a href="/fr/i18n-test.ejs" class="<%= passData.ctx.state.lang === 'fr' ? 'active' : '' %>">🇫🇷 Français</a>
+      <a href="/de/i18n-test.ejs" class="<%= passData.ctx.state.lang === 'de' ? 'active' : '' %>">🇩🇪 Deutsch</a>
+    </div>
+
+    <h2><%- passData.plugin.simpleI18n.__({
+      key: "examples_title",
+      it: "Esempi di Traduzione",
+      en: "Translation Examples",
+      es: "Ejemplos de Traducción",
+      fr: "Exemples de Traduction",
+      de: "Übersetzungsbeispiele"
+    }, passData.ctx) %></h2>
+
+    <div class="example">
+      <h3><%- passData.plugin.simpleI18n.__({
+        key: "example1_title",
+        it: "1. Traduzione Semplice",
+        en: "1. Simple Translation",
+        es: "1. Traducción Simple",
+        fr: "1. Traduction Simple",
+        de: "1. Einfache Übersetzung"
+      }, passData.ctx) %></h3>
+      <p><%- passData.plugin.simpleI18n.__({
+        key: "example1_text",
+        it: "Questa è una traduzione semplice senza variabili.",
+        en: "This is a simple translation without variables.",
+        es: "Esta es una traducción simple sin variables.",
+        fr: "Ceci est une traduction simple sans variables.",
+        de: "Dies ist eine einfache Übersetzung ohne Variablen."
+      }, passData.ctx) %></p>
+    </div>
+
+    <div class="example">
+      <h3><%- passData.plugin.simpleI18n.__({
+        key: "example2_title",
+        it: "2. Traduzione con Variabili (Handlebars)",
+        en: "2. Translation with Variables (Handlebars)",
+        es: "2. Traducción con Variables (Handlebars)",
+        fr: "2. Traduction avec Variables (Handlebars)",
+        de: "2. Übersetzung mit Variablen (Handlebars)"
+      }, passData.ctx) %></h3>
+      <p><%- passData.plugin.simpleI18n.__({
+        key: "example2_text",
+        var: {
+          name: "Mario Rossi",
+          count: 42,
+          city: "Roma"
+        },
+        it: "Ciao {{name}}! Hai {{count}} nuovi messaggi da {{city}}.",
+        en: "Hello {{name}}! You have {{count}} new messages from {{city}}.",
+        es: "¡Hola {{name}}! Tienes {{count}} mensajes nuevos de {{city}}.",
+        fr: "Bonjour {{name}}! Vous avez {{count}} nouveaux messages de {{city}}.",
+        de: "Hallo {{name}}! Sie haben {{count}} neue Nachrichten aus {{city}}."
+      }, passData.ctx) %></p>
+    </div>
+
+    <div class="example">
+      <h3><%- passData.plugin.simpleI18n.__({
+        key: "example3_title",
+        it: "3. Numeri e Pluralizzazione",
+        en: "3. Numbers and Pluralization",
+        es: "3. Números y Pluralización",
+        fr: "3. Nombres et Pluralisation",
+        de: "3. Zahlen und Pluralisierung"
+      }, passData.ctx) %></h3>
+      <p><%- passData.plugin.simpleI18n.__({
+        key: "example3_text",
+        var: {
+          items: 3,
+          price: 19.99
+        },
+        it: "Hai {{items}} articoli nel carrello per un totale di €{{price}}.",
+        en: "You have {{items}} items in your cart for a total of ${{price}}.",
+        es: "Tienes {{items}} artículos en tu carrito por un total de €{{price}}.",
+        fr: "Vous avez {{items}} articles dans votre panier pour un total de {{price}}€.",
+        de: "Sie haben {{items}} Artikel in Ihrem Warenkorb für insgesamt {{price}}€."
+      }, passData.ctx) %></p>
+    </div>
+
+    <div class="info">
+      <h3>ℹ️ <%- passData.plugin.simpleI18n.__({
+        key: "info_title",
+        it: "Come Funziona",
+        en: "How It Works",
+        es: "Cómo Funciona",
+        fr: "Comment Ça Marche",
+        de: "Wie Es Funktioniert"
+      }, passData.ctx) %></h3>
+      <ul>
+        <li><%- passData.plugin.simpleI18n.__({
+          key: "info1",
+          it: "Il plugin rileva la lingua dall'URL (es. /it/page.ejs)",
+          en: "The plugin detects language from URL (e.g. /en/page.ejs)",
+          es: "El plugin detecta el idioma desde la URL (ej. /es/page.ejs)",
+          fr: "Le plugin détecte la langue depuis l'URL (ex. /fr/page.ejs)",
+          de: "Das Plugin erkennt die Sprache aus der URL (z.B. /de/page.ejs)"
+        }, passData.ctx) %></li>
+        <li><%- passData.plugin.simpleI18n.__({
+          key: "info2",
+          it: "Se nessuna lingua nell'URL, usa le preferenze del browser",
+          en: "If no language in URL, uses browser preferences",
+          es: "Si no hay idioma en la URL, usa las preferencias del navegador",
+          fr: "Si aucune langue dans l'URL, utilise les préférences du navigateur",
+          de: "Wenn keine Sprache in der URL, verwendet Browser-Einstellungen"
+        }, passData.ctx) %></li>
+        <li><%- passData.plugin.simpleI18n.__({
+          key: "info3",
+          var: { lang: passData.plugin.simpleI18n.getConfig().defaultLang },
+          it: "Lingua predefinita di fallback: {{lang}}",
+          en: "Default fallback language: {{lang}}",
+          es: "Idioma predeterminado de respaldo: {{lang}}",
+          fr: "Langue de secours par défaut: {{lang}}",
+          de: "Standard-Fallback-Sprache: {{lang}}"
+        }, passData.ctx) %></li>
+      </ul>
+    </div>
+
+    <hr style="margin: 30px 0;">
+
+    <p style="text-align: center; color: #666;">
+      <%- passData.plugin.simpleI18n.__({
+        key: "footer",
+        it: "Plugin simpleI18n per ital8cms",
+        en: "simpleI18n plugin for ital8cms",
+        es: "Plugin simpleI18n para ital8cms",
+        fr: "Plugin simpleI18n pour ital8cms",
+        de: "simpleI18n-Plugin für ital8cms"
+      }, passData.ctx) %>
+    </p>
+  </div>
+</body>
+</html>
