@@ -1,0 +1,10 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+        "name": "simpleI18n",
+        "version": "1.0.0",
+        "description": "Simple internationalization plugin with URL-based language detection and inline translations",
+        "author": "Italo Paesano",
+        "email": "italopaesano@protonmail.com",
+        "licenze": "ISC",
+        "note": "Provides __() function for inline translations with Handlebars variable interpolation"
+}
