@@ -33,21 +33,24 @@ module.exports = {
   getMiddlewareToAdd(app) {
     const middlewareArray = [];
 
+    // IMPORTANTE: Salva this.config in closure per evitare problemi di binding
+    const config = this.config;
+
     // Language detection middleware
     middlewareArray.push(
       async (ctx, next) => {
           let detectedLang = null;
           let originalPath = ctx.path;
 
-          if (this.config.enableUrlPrefix) {
+          if (config.enableUrlPrefix) {
             const urlMatch = ctx.path.match(/^\/([a-z]{2})(\/|$)/i);
             if (urlMatch) {
               const langCode = urlMatch[1].toLowerCase();
 
-              if (this.config.supportedLangs.includes(langCode)) {
+              if (config.supportedLangs.includes(langCode)) {
                 detectedLang = langCode;
 
-                if (this.config.stripLangFromUrl) {
+                if (config.stripLangFromUrl) {
                   ctx.path = ctx.path.replace(/^\/[a-z]{2}(\/|$)/i, '/');
                   if (ctx.path === '') {
                     ctx.path = '/';
@@ -57,21 +60,21 @@ module.exports = {
             }
           }
 
-          if (!detectedLang && this.config.enableBrowserDetection) {
-            const browserLang = ctx.acceptsLanguages(...this.config.supportedLangs);
+          if (!detectedLang && config.enableBrowserDetection) {
+            const browserLang = ctx.acceptsLanguages(...config.supportedLangs);
             if (browserLang) {
               detectedLang = browserLang;
             }
           }
 
           if (!detectedLang) {
-            detectedLang = this.config.defaultLang;
+            detectedLang = config.defaultLang;
           }
 
           ctx.state.lang = detectedLang;
           ctx.state.originalPath = originalPath;
 
-          if (this.config.debugMode) {
+          if (config.debugMode) {
             console.log('[simpleI18n] ' + originalPath + ' → lang: ' + detectedLang + ', path: ' + ctx.path);
           }
 
