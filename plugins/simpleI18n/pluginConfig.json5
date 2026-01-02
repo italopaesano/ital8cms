@@ -12,7 +12,7 @@
     "supportedLangs": ["en", "it", "es", "fr", "de"],
     "enableUrlPrefix": true,
     "enableBrowserDetection": true,
-    "stripLangFromUrl": true,
+    "stripLangFromUrl": false,
     "debugMode": false
   }
 }
