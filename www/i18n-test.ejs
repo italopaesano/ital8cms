@@ -104,11 +104,11 @@
     }, passData.ctx) %></h2>
 
     <div class="lang-switcher">
-      <a href="/en/i18n-test.ejs" class="<%= passData.ctx.state.lang === 'en' ? 'active' : '' %>">🇬🇧 English</a>
-      <a href="/it/i18n-test.ejs" class="<%= passData.ctx.state.lang === 'it' ? 'active' : '' %>">🇮🇹 Italiano</a>
-      <a href="/es/i18n-test.ejs" class="<%= passData.ctx.state.lang === 'es' ? 'active' : '' %>">🇪🇸 Español</a>
-      <a href="/fr/i18n-test.ejs" class="<%= passData.ctx.state.lang === 'fr' ? 'active' : '' %>">🇫🇷 Français</a>
-      <a href="/de/i18n-test.ejs" class="<%= passData.ctx.state.lang === 'de' ? 'active' : '' %>">🇩🇪 Deutsch</a>
+      <a href="?lang=en" class="<%= passData.ctx.state.lang === 'en' ? 'active' : '' %>">🇬🇧 English</a>
+      <a href="?lang=it" class="<%= passData.ctx.state.lang === 'it' ? 'active' : '' %>">🇮🇹 Italiano</a>
+      <a href="?lang=es" class="<%= passData.ctx.state.lang === 'es' ? 'active' : '' %>">🇪🇸 Español</a>
+      <a href="?lang=fr" class="<%= passData.ctx.state.lang === 'fr' ? 'active' : '' %>">🇫🇷 Français</a>
+      <a href="?lang=de" class="<%= passData.ctx.state.lang === 'de' ? 'active' : '' %>">🇩🇪 Deutsch</a>
     </div>
 
     <h2><%- passData.plugin.simpleI18n.__({
@@ -198,19 +198,19 @@
       <ul>
         <li><%- passData.plugin.simpleI18n.__({
           key: "info1",
-          it: "Il plugin rileva la lingua dall'URL (es. /it/page.ejs)",
-          en: "The plugin detects language from URL (e.g. /en/page.ejs)",
-          es: "El plugin detecta el idioma desde la URL (ej. /es/page.ejs)",
-          fr: "Le plugin détecte la langue depuis l'URL (ex. /fr/page.ejs)",
-          de: "Das Plugin erkennt die Sprache aus der URL (z.B. /de/page.ejs)"
+          it: "Il plugin rileva la lingua dal parametro query string (es. ?lang=it)",
+          en: "The plugin detects language from query string parameter (e.g. ?lang=en)",
+          es: "El plugin detecta el idioma desde el parámetro de query string (ej. ?lang=es)",
+          fr: "Le plugin détecte la langue depuis le paramètre de query string (ex. ?lang=fr)",
+          de: "Das Plugin erkennt die Sprache aus dem Query-String-Parameter (z.B. ?lang=de)"
         }, passData.ctx) %></li>
         <li><%- passData.plugin.simpleI18n.__({
           key: "info2",
-          it: "Se nessuna lingua nell'URL, usa le preferenze del browser",
-          en: "If no language in URL, uses browser preferences",
-          es: "Si no hay idioma en la URL, usa las preferencias del navegador",
-          fr: "Si aucune langue dans l'URL, utilise les préférences du navigateur",
-          de: "Wenn keine Sprache in der URL, verwendet Browser-Einstellungen"
+          it: "Se manca il parametro lang, usa le preferenze del browser",
+          en: "If lang parameter is missing, uses browser preferences",
+          es: "Si falta el parámetro lang, usa las preferencias del navegador",
+          fr: "Si le paramètre lang est manquant, utilise les préférences du navigateur",
+          de: "Wenn der lang-Parameter fehlt, verwendet Browser-Einstellungen"
         }, passData.ctx) %></li>
         <li><%- passData.plugin.simpleI18n.__({
           key: "info3",
