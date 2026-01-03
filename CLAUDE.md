@@ -319,6 +319,82 @@ getHooksPage(section, passData, pluginSys, pathPluginFolder) {
 
 Available sections: `head`, `header`, `body`, `footer`, `script`
 
+### Global Functions in Templates
+
+**New Feature:** Plugins can now expose functions as global helpers in EJS templates, making them accessible directly without the `passData.plugin.{pluginName}` prefix.
+
+**How It Works:**
+
+The `pluginSys.getGlobalFunctions()` method collects functions from plugins that should be available globally in templates. These functions are passed to EJS using the spread operator.
+
+**Implementation in pluginSys.js:**
+
+```javascript
+/**
+ * Returns global functions to export in EJS templates
+ * @returns {Object} - Object with global functions { functionName: function }
+ */
+getGlobalFunctions() {
+  const globalFunctions = {};
+
+  // simpleI18n plugin: translation function __()
+  if (this.#activePlugins.has('simpleI18n')) {
+    const plugin = this.#activePlugins.get('simpleI18n');
+    const shared = plugin.getObjectToShareToWebPages?.();
+    if (shared?.__) {
+      globalFunctions.__ = shared.__;
+    }
+  }
+
+  // Extensible for other plugins in the future
+  return globalFunctions;
+}
+```
+
+**Implementation in index.js:**
+
+```javascript
+// Get global functions from pluginSys
+const globalFunctions = pluginSys.getGlobalFunctions();
+
+// In both public and admin rendering:
+ctx.body = await ejs.renderFile(filePath, {
+  passData: { /* ... */ },
+  ...globalFunctions  // Expands to: { __: function, ... }
+});
+```
+
+**Usage in Templates:**
+
+```ejs
+<%# NEW GLOBAL SYNTAX (RECOMMENDED) %>
+<%- __({
+  it: "Ciao Mondo",
+  en: "Hello World"
+}, passData.ctx) %>
+
+<%# OLD LOCAL SYNTAX (STILL WORKS) %>
+<%- passData.plugin.simpleI18n.__({
+  it: "Ciao Mondo",
+  en: "Hello World"
+}, passData.ctx) %>
+```
+
+**Important Notes:**
+
+- ✅ **Both syntaxes work:** The local version (`passData.plugin.{pluginName}.{function}`) will ALWAYS remain available for backward compatibility
+- ✅ **No breaking changes:** Existing code continues to work without modification
+- ✅ **Extensible:** New plugins can register global functions by being added to `getGlobalFunctions()`
+- ⚠️ **Potential conflict:** If multiple plugins export functions with the same name, the last one wins (this will be addressed with a conflict detection system in the future)
+
+**Currently Supported Global Functions:**
+
+- `__()` - Translation function from simpleI18n plugin
+
+**Example: i18n-test.ejs**
+
+See `/www/i18n-test.ejs` for a complete example showing both syntax options side-by-side.
+
 ## Theme System
 
 ### Theme Structure
@@ -2139,11 +2215,34 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2025-12-27
-**Version:** 1.5.0
+**Last Updated:** 2026-01-03
+**Version:** 1.6.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v1.6.0 (2026-01-03): **NEW FEATURE** - Implemented Global Functions system for EJS templates. Key changes:
+  - **Global Functions Architecture:**
+    - Added `getGlobalFunctions()` method to `pluginSys.js`
+    - Plugins can now expose functions as global helpers in templates
+    - Functions accessible directly without `passData.plugin.{pluginName}` prefix
+    - Fully backward compatible - local syntax (`passData.plugin.{pluginName}.{function}`) remains available
+  - **simpleI18n Global Function:**
+    - Translation function `__()` now available globally in all EJS templates
+    - New syntax: `<%- __({ it: "Ciao", en: "Hello" }, passData.ctx) %>`
+    - Old syntax still works: `<%- passData.plugin.simpleI18n.__({ it: "Ciao", en: "Hello" }, passData.ctx) %>`
+  - **Implementation:**
+    - Modified `index.js` to call `pluginSys.getGlobalFunctions()` and spread results into EJS locals
+    - Applied to both public and admin template rendering
+    - Updated `/www/i18n-test.ejs` with side-by-side comparison of both syntaxes
+  - **Documentation:**
+    - Added "Global Functions in Templates" section to CLAUDE.md
+    - Documented both syntaxes with examples
+    - Added notes about extensibility and potential naming conflicts
+  - **Files Modified:**
+    - `core/pluginSys.js` - Added `getGlobalFunctions()` method
+    - `index.js` - Integrated global functions into EJS rendering
+    - `www/i18n-test.ejs` - Added syntax comparison examples
+    - `CLAUDE.md` - Documented new feature
 - v1.5.0 (2025-12-27): **BREAKING CHANGE** - Simplified admin plugin standard with automatic detection, multi-section support, and centralized UI metadata. Key changes:
   - **New Admin Plugin Convention:**
     - Admin plugins are now **automatically detected** by naming convention (name starts with "admin")

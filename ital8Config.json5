@@ -16,5 +16,40 @@
   "httpPort": 3000,
   "useHttps": false,
   "httpsPort": "",
-  "AutoRedirectHttpPortToHttpsPort": false
+  "AutoRedirectHttpPortToHttpsPort": false,
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // GLOBAL FUNCTIONS WHITELIST
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Definisce quali plugin possono esportare funzioni globali nei template EJS
+  // SICUREZZA: Solo le funzioni in questa whitelist possono diventare globali
+  //
+  // Comportamento:
+  //   - Se "required": true  → Server NON parte se plugin mancante (CRASH STARTUP)
+  //   - Se "required": false → Crea funzione fallback che logga WARNING quando chiamata
+  //   - Plugin che provano a esportare funzioni NON in whitelist → WARNING + ignorata
+  //   - Versione locale (passData.plugin.{pluginName}.{function}) SEMPRE disponibile
+  //
+  // Formato:
+  //   "nomeFunzione": {
+  //     "plugin": "nomePlugin",        // Plugin autorizzato (UNICO)
+  //     "description": "...",           // Descrizione funzione
+  //     "required": true/false          // Default: false se omesso
+  //   }
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  "globalFunctionsWhitelist": {
+    "__": {
+      "plugin": "simpleI18n",
+      "description": "Translation function for internationalization",
+      "required": true
+    }
+    // Aggiungi altre funzioni globali qui quando necessario
+    // Esempio:
+    // "formatDate": {
+    //   "plugin": "dateFormatter",
+    //   "description": "Date formatting utility",
+    //   "required": false
+    // }
+  }
 }
