@@ -15,6 +15,12 @@ const pluginSys = new ( require("./core/pluginSys") )(); // carico il sistema di
 // carico le rotte di tutti i plugin
 pluginSys.loadRoutes( router , `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`);// il secondo paramentro è il primo prefix
 const getObjectsToShareInWebPages = pluginSys.getObjectsToShareInWebPages();
+
+// Ottieni le funzioni globali da esportare nei template EJS
+// Queste funzioni saranno disponibili direttamente nei template senza dover accedere a passData.plugin.{pluginName}
+// IMPORTANTE: Le versioni locali (passData.plugin.{pluginName}.{function}) rimangono SEMPRE disponibili
+const globalFunctions = pluginSys.getGlobalFunctions();
+
 // adesso faccio in modo di caricare tutti i vari midlware dei vari pugin
 const middlewaresToLoad = pluginSys.getMiddlewaresToLoad();// questi midlware andranno caricati nell'app koa.js const app = new koa();
 middlewaresToLoad.forEach( (midlwareFn) => {
@@ -93,7 +99,10 @@ app.use(
               query: ctx.query,
               ctx: ctx,// DA MIGLIORARE PER LA SICUREZZA
               //session: ctx.session || undefined, // DA MIGLIORARE qusta variabile serve al  Plugin simpleAccess per gestire la visualizazione dele sessioni nell'hook page
-            }
+            },
+            // Espandi le funzioni globali (es. __() per i18n)
+            // IMPORTANTE: Le versioni locali (passData.plugin.simpleI18n.__) rimangono disponibili
+            ...globalFunctions
           });
         },
         ext: ["ejs", "EJS"], // Koa v3: sintassi moderna array literals
@@ -151,7 +160,10 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
                 query: ctx.query,
                 ctx: ctx,// DA MIGLIORARE PER LA SICUREZZA
                 //session: ctx.session || undefined, // DA MIGLIORARE qusta variabile serve al  Plugin simpleAccess per gestire la visualizazione dele sessioni nell'hook page
-              }
+              },
+              // Espandi le funzioni globali (es. __() per i18n)
+              // IMPORTANTE: Le versioni locali (passData.plugin.simpleI18n.__) rimangono disponibili
+              ...globalFunctions
             });
           },
           ext: ["ejs", "EJS"], // Koa v3: sintassi moderna array literals

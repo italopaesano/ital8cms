@@ -378,6 +378,58 @@ class pluginSys{
   }
 
   /**
+   * Ritorna le funzioni globali da esportare nei template EJS
+   * Consente ai plugin di dichiarare funzioni che saranno disponibili direttamente
+   * nei template senza dover accedere a passData.plugin.{pluginName}.{function}
+   *
+   * IMPORTANTE: Le funzioni globali NON sostituiscono le versioni locali.
+   * La versione locale (passData.plugin.{pluginName}.{function}) deve SEMPRE rimanere disponibile.
+   *
+   * Attualmente supporta:
+   * - simpleI18n.__ → __() (funzione di traduzione i18n)
+   *
+   * Estensibile per altri plugin in futuro.
+   *
+   * @returns {Object} - Oggetto con funzioni globali { nomeFunzione: function }
+   * @example
+   * // In index.js:
+   * const globalFunctions = pluginSys.getGlobalFunctions();
+   * ctx.body = await ejs.renderFile(filePath, {
+   *   passData: { ... },
+   *   ...globalFunctions  // Espande: { __: function, ... }
+   * });
+   *
+   * // Nei template EJS:
+   * <%- __({ en: "Hello", it: "Ciao" }, passData.ctx) %>
+   * // Invece di:
+   * <%- passData.plugin.simpleI18n.__({ en: "Hello", it: "Ciao" }, passData.ctx) %>
+   */
+  getGlobalFunctions() {
+    const globalFunctions = {};
+
+    // simpleI18n plugin: funzione di traduzione __()
+    if (this.#activePlugins.has('simpleI18n')) {
+      const plugin = this.#activePlugins.get('simpleI18n');
+      const shared = plugin.getObjectToShareToWebPages?.();
+      if (shared?.__) {
+        globalFunctions.__ = shared.__;
+      }
+    }
+
+    // ESTENSIBILITÀ: Altri plugin possono essere aggiunti qui in futuro
+    // Esempio:
+    // if (this.#activePlugins.has('otherPlugin')) {
+    //   const plugin = this.#activePlugins.get('otherPlugin');
+    //   const shared = plugin.getObjectToShareToWebPages?.();
+    //   if (shared?.myGlobalFunction) {
+    //     globalFunctions.myGlobalFunction = shared.myGlobalFunction;
+    //   }
+    // }
+
+    return globalFunctions;
+  }
+
+  /**
    * Imposta il riferimento al sistema dei temi
    * Chiamato da index.js dopo la creazione di themeSys
    * @param {object} themeSys - Istanza di themeSys

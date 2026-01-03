@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%- passData.plugin.simpleI18n.__({
+  <%# NUOVA SINTASSI GLOBALE: usa __() direttamente (consigliata) %>
+  <title><%- __({
     key: "page_title",
     it: "Test Internazionalizzazione",
     en: "Internationalization Test",
@@ -69,11 +70,63 @@
       border-radius: 3px;
       font-family: 'Courier New', monospace;
     }
+    .syntax-comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin: 20px 0;
+    }
+    .syntax-box {
+      padding: 15px;
+      border-radius: 4px;
+      border: 2px solid #ddd;
+    }
+    .syntax-box.global {
+      border-color: #28a745;
+      background: #f0fff4;
+    }
+    .syntax-box.local {
+      border-color: #007bff;
+      background: #e7f3ff;
+    }
+    .syntax-box h4 {
+      margin-top: 0;
+      font-size: 16px;
+    }
+    .syntax-box pre {
+      background: #f8f9fa;
+      padding: 10px;
+      border-radius: 3px;
+      overflow-x: auto;
+      font-size: 12px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 3px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+    .badge.new {
+      background: #28a745;
+      color: white;
+    }
+    .badge.legacy {
+      background: #007bff;
+      color: white;
+    }
+    @media (max-width: 768px) {
+      .syntax-comparison {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1><%- passData.plugin.simpleI18n.__({
+    <%# NUOVA SINTASSI GLOBALE %>
+    <h1><%- __({
       key: "welcome",
       it: "Benvenuto nel Test i18n",
       en: "Welcome to i18n Test",
@@ -111,7 +164,139 @@
       <a href="?lang=de" class="<%= passData.ctx.state.lang === 'de' ? 'active' : '' %>">🇩🇪 Deutsch</a>
     </div>
 
-    <h2><%- passData.plugin.simpleI18n.__({
+    <%# SEZIONE COMPARAZIONE SINTASSI %>
+    <h2>📝 <%- __({
+      key: "syntax_comparison_title",
+      it: "Confronto Sintassi",
+      en: "Syntax Comparison",
+      es: "Comparación de Sintaxis",
+      fr: "Comparaison de Syntaxe",
+      de: "Syntaxvergleich"
+    }, passData.ctx) %></h2>
+
+    <div class="info">
+      <p><strong><%- __({
+        key: "syntax_info",
+        it: "A partire da questa versione, la funzione di traduzione __() è disponibile in DUE modalità:",
+        en: "Starting from this version, the translation function __() is available in TWO ways:",
+        es: "A partir de esta versión, la función de traducción __() está disponible en DOS formas:",
+        fr: "À partir de cette version, la fonction de traduction __() est disponible de DEUX manières:",
+        de: "Ab dieser Version ist die Übersetzungsfunktion __() in ZWEI Arten verfügbar:"
+      }, passData.ctx) %></strong></p>
+    </div>
+
+    <div class="syntax-comparison">
+      <div class="syntax-box global">
+        <h4>✨ <%- __({
+          key: "global_syntax",
+          it: "Sintassi Globale",
+          en: "Global Syntax",
+          es: "Sintaxis Global",
+          fr: "Syntaxe Globale",
+          de: "Globale Syntax"
+        }, passData.ctx) %> <span class="badge new"><%- __({
+          key: "recommended",
+          it: "CONSIGLIATA",
+          en: "RECOMMENDED",
+          es: "RECOMENDADA",
+          fr: "RECOMMANDÉE",
+          de: "EMPFOHLEN"
+        }, passData.ctx) %></span></h4>
+        <p><%- __({
+          key: "global_description",
+          it: "Usa direttamente __() senza prefisso",
+          en: "Use __() directly without prefix",
+          es: "Usa __() directamente sin prefijo",
+          fr: "Utilisez __() directement sans préfixe",
+          de: "Verwenden Sie __() direkt ohne Präfix"
+        }, passData.ctx) %></p>
+        <pre>&lt;%- __({
+  it: "Ciao Mondo",
+  en: "Hello World"
+}, passData.ctx) %&gt;</pre>
+        <p><strong><%- __({
+          key: "result",
+          it: "Risultato:",
+          en: "Result:",
+          es: "Resultado:",
+          fr: "Résultat:",
+          de: "Ergebnis:"
+        }, passData.ctx) %></strong> <%- __({
+          key: "global_example",
+          it: "Ciao Mondo",
+          en: "Hello World",
+          es: "Hola Mundo",
+          fr: "Bonjour le Monde",
+          de: "Hallo Welt"
+        }, passData.ctx) %></p>
+      </div>
+
+      <div class="syntax-box local">
+        <h4>🔧 <%- __({
+          key: "local_syntax",
+          it: "Sintassi Locale",
+          en: "Local Syntax",
+          es: "Sintaxis Local",
+          fr: "Syntaxe Locale",
+          de: "Lokale Syntax"
+        }, passData.ctx) %> <span class="badge legacy"><%- __({
+          key: "legacy",
+          it: "LEGACY",
+          en: "LEGACY",
+          es: "LEGACY",
+          fr: "LEGACY",
+          de: "LEGACY"
+        }, passData.ctx) %></span></h4>
+        <p><%- __({
+          key: "local_description",
+          it: "Usa il percorso completo del plugin",
+          en: "Use the full plugin path",
+          es: "Usa la ruta completa del plugin",
+          fr: "Utilisez le chemin complet du plugin",
+          de: "Verwenden Sie den vollständigen Plugin-Pfad"
+        }, passData.ctx) %></p>
+        <pre>&lt;%- passData.plugin.simpleI18n.__({
+  it: "Ciao Mondo",
+  en: "Hello World"
+}, passData.ctx) %&gt;</pre>
+        <p><strong><%- __({
+          key: "result",
+          it: "Risultato:",
+          en: "Result:",
+          es: "Resultado:",
+          fr: "Résultat:",
+          de: "Ergebnis:"
+        }, passData.ctx) %></strong> <%- passData.plugin.simpleI18n.__({
+          key: "local_example",
+          it: "Ciao Mondo",
+          en: "Hello World",
+          es: "Hola Mundo",
+          fr: "Bonjour le Monde",
+          de: "Hallo Welt"
+        }, passData.ctx) %></p>
+      </div>
+    </div>
+
+    <div class="info">
+      <p><strong>⚠️ <%- __({
+        key: "important_note",
+        it: "Nota Importante:",
+        en: "Important Note:",
+        es: "Nota Importante:",
+        fr: "Note Importante:",
+        de: "Wichtiger Hinweis:"
+      }, passData.ctx) %></strong></p>
+      <p><%- __({
+        key: "both_work",
+        it: "Entrambe le sintassi funzionano perfettamente! La versione locale (passData.plugin.simpleI18n.__) rimarrà SEMPRE disponibile per garantire la compatibilità con il codice esistente.",
+        en: "Both syntaxes work perfectly! The local version (passData.plugin.simpleI18n.__) will ALWAYS remain available to ensure compatibility with existing code.",
+        es: "¡Ambas sintaxis funcionan perfectamente! La versión local (passData.plugin.simpleI18n.__) permanecerá SIEMPRE disponible para garantizar la compatibilidad con el código existente.",
+        fr: "Les deux syntaxes fonctionnent parfaitement! La version locale (passData.plugin.simpleI18n.__) restera TOUJOURS disponible pour garantir la compatibilité avec le code existant.",
+        de: "Beide Syntaxen funktionieren perfekt! Die lokale Version (passData.plugin.simpleI18n.__) wird IMMER verfügbar bleiben, um die Kompatibilität mit vorhandenem Code sicherzustellen."
+      }, passData.ctx) %></p>
+    </div>
+
+    <h2><%- __({
       key: "examples_title",
       it: "Esempi di Traduzione",
       en: "Translation Examples",
@@ -121,15 +306,16 @@
     }, passData.ctx) %></h2>
 
     <div class="example">
-      <h3><%- passData.plugin.simpleI18n.__({
+      <%# ESEMPIO CON SINTASSI GLOBALE (NUOVA) %>
+      <h3>✨ <%- __({
         key: "example1_title",
-        it: "1. Traduzione Semplice",
-        en: "1. Simple Translation",
-        es: "1. Traducción Simple",
-        fr: "1. Traduction Simple",
-        de: "1. Einfache Übersetzung"
+        it: "1. Traduzione Semplice (sintassi globale)",
+        en: "1. Simple Translation (global syntax)",
+        es: "1. Traducción Simple (sintaxis global)",
+        fr: "1. Traduction Simple (syntaxe globale)",
+        de: "1. Einfache Übersetzung (globale Syntax)"
       }, passData.ctx) %></h3>
-      <p><%- passData.plugin.simpleI18n.__({
+      <p><%- __({
         key: "example1_text",
         it: "Questa è una traduzione semplice senza variabili.",
         en: "This is a simple translation without variables.",
@@ -140,13 +326,14 @@
     </div>
 
     <div class="example">
-      <h3><%- passData.plugin.simpleI18n.__({
+      <%# ESEMPIO CON SINTASSI LOCALE (LEGACY) - Dimostra che entrambe le sintassi funzionano %>
+      <h3>🔧 <%- passData.plugin.simpleI18n.__({
         key: "example2_title",
-        it: "2. Traduzione con Variabili (Handlebars)",
-        en: "2. Translation with Variables (Handlebars)",
-        es: "2. Traducción con Variables (Handlebars)",
-        fr: "2. Traduction avec Variables (Handlebars)",
-        de: "2. Übersetzung mit Variablen (Handlebars)"
+        it: "2. Traduzione con Variabili (sintassi locale)",
+        en: "2. Translation with Variables (local syntax)",
+        es: "2. Traducción con Variables (sintaxis local)",
+        fr: "2. Traduction avec Variables (syntaxe locale)",
+        de: "2. Übersetzung mit Variablen (lokale Syntax)"
       }, passData.ctx) %></h3>
       <p><%- passData.plugin.simpleI18n.__({
         key: "example2_text",
@@ -164,15 +351,16 @@
     </div>
 
     <div class="example">
-      <h3><%- passData.plugin.simpleI18n.__({
+      <%# ESEMPIO CON SINTASSI GLOBALE (NUOVA) - Mostra anche variabili con sintassi globale %>
+      <h3>✨ <%- __({
         key: "example3_title",
-        it: "3. Numeri e Pluralizzazione",
-        en: "3. Numbers and Pluralization",
-        es: "3. Números y Pluralización",
-        fr: "3. Nombres et Pluralisation",
-        de: "3. Zahlen und Pluralisierung"
+        it: "3. Numeri e Pluralizzazione (sintassi globale)",
+        en: "3. Numbers and Pluralization (global syntax)",
+        es: "3. Números y Pluralización (sintaxis global)",
+        fr: "3. Nombres et Pluralisation (syntaxe globale)",
+        de: "3. Zahlen und Pluralisierung (globale Syntax)"
       }, passData.ctx) %></h3>
-      <p><%- passData.plugin.simpleI18n.__({
+      <p><%- __({
         key: "example3_text",
         var: {
           items: 3,
