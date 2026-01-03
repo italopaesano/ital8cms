@@ -40,33 +40,16 @@ module.exports = {
     middlewareArray.push(
       async (ctx, next) => {
           let detectedLang = null;
-          let originalPath = ctx.path;
 
-          if (config.enableUrlPrefix) {
-            const urlMatch = ctx.path.match(/^\/([a-z]{2})(\/|$)/i);
-            if (urlMatch) {
-              const langCode = urlMatch[1].toLowerCase();
-
-              if (config.supportedLangs.includes(langCode)) {
-                detectedLang = langCode;
-
-                if (config.stripLangFromUrl) {
-                  const newPath = ctx.path.replace(/^\/[a-z]{2}(\/|$)/i, '/');
-                  const finalPath = newPath === '' ? '/' : newPath;
-                  const newUrl = finalPath + (ctx.search || '');
-
-                  // Update all URL-related properties for maximum compatibility
-                  ctx.path = finalPath;
-                  ctx.url = newUrl;
-                  ctx.request.url = newUrl;
-                  ctx.request.path = finalPath;
-                  // Update Node.js HTTP request object (for koa-classic-server compatibility)
-                  ctx.req.url = newUrl;
-                }
-              }
+          // Priority 1: Query string (?lang=en)
+          if (config.enableQueryString) {
+            const queryLang = ctx.query[config.queryStringParam];
+            if (queryLang && config.supportedLangs.includes(queryLang.toLowerCase())) {
+              detectedLang = queryLang.toLowerCase();
             }
           }
 
+          // Priority 2: Browser detection (Accept-Language header)
           if (!detectedLang && config.enableBrowserDetection) {
             const browserLang = ctx.acceptsLanguages(...config.supportedLangs);
             if (browserLang) {
@@ -74,16 +57,17 @@ module.exports = {
             }
           }
 
+          // Priority 3: Default language
           if (!detectedLang) {
             detectedLang = config.defaultLang;
           }
 
+          // Save detected language in context
           ctx.state.lang = detectedLang;
-          ctx.state.originalPath = originalPath;
 
           if (config.debugMode) {
-            console.log('[simpleI18n] ' + originalPath + ' → lang: ' + detectedLang + ', path: ' + ctx.path);
-            console.log('[simpleI18n]   ctx.url: ' + ctx.url + ', ctx.request.url: ' + ctx.request.url);
+            console.log('[simpleI18n] ' + ctx.path + ' → lang: ' + detectedLang + ' (from: ' +
+              (ctx.query[config.queryStringParam] ? 'query' : 'browser/default') + ')');
           }
 
           await next();

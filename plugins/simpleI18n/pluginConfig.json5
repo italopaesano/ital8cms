@@ -10,9 +10,9 @@
   "custom": {
     "defaultLang": "en",
     "supportedLangs": ["en", "it", "es", "fr", "de"],
-    "enableUrlPrefix": true,
+    "enableQueryString": true,
+    "queryStringParam": "lang",
     "enableBrowserDetection": true,
-    "stripLangFromUrl": false,
     "debugMode": false
   }
 }
