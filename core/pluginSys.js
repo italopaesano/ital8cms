@@ -15,8 +15,12 @@ class pluginSys{
   #activePlugins = new Map();// Mappa che conterrà i plugin attivi
   #pluginsToActive = new Map();// plugin da attivare non ancora attivati perchè bisogna controllare le dipendenze
   #themeSys = null;// riferimento al sistema dei temi (impostato dopo l'inizializzazione)
+  #ital8Conf = null;// configurazione principale del sistema (per whitelist funzioni globali)
 
-  constructor(){// qui bisognerà andare nella cartelle dai plugin e caricarli uno a uno 
+  constructor(ital8Conf){// qui bisognerà andare nella cartelle dai plugin e caricarli uno a uno
+
+    // Salva riferimento alla configurazione principale
+    this.#ital8Conf = ital8Conf; 
 
     this.#hooksPage = new Map();// new Map(['namelPlugin', new Map(['head', (passData) => {}],['body', ( passData ) => {} ])]);
     this.#routes = new Map();// mappa che conterrà come chiave il nome del plugin da caricare e come valore un array contenete tutti gli ogetti che rappresentano le rotte
@@ -379,54 +383,181 @@ class pluginSys{
 
   /**
    * Ritorna le funzioni globali da esportare nei template EJS
-   * Consente ai plugin di dichiarare funzioni che saranno disponibili direttamente
-   * nei template senza dover accedere a passData.plugin.{pluginName}.{function}
+   * SICUREZZA: Solo le funzioni nella whitelist (ital8Config.json5) possono diventare globali
    *
-   * IMPORTANTE: Le funzioni globali NON sostituiscono le versioni locali.
-   * La versione locale (passData.plugin.{pluginName}.{function}) deve SEMPRE rimanere disponibile.
-   *
-   * Attualmente supporta:
-   * - simpleI18n.__ → __() (funzione di traduzione i18n)
-   *
-   * Estensibile per altri plugin in futuro.
+   * Comportamento:
+   * - required: true  → CRASH STARTUP se plugin mancante (fail-fast)
+   * - required: false → Crea funzione fallback che logga WARNING quando chiamata
+   * - Plugin che provano a esportare funzioni NON in whitelist → WARNING + ignorate
+   * - Versione locale (passData.plugin.{pluginName}.{function}) SEMPRE disponibile
    *
    * @returns {Object} - Oggetto con funzioni globali { nomeFunzione: function }
    * @example
-   * // In index.js:
-   * const globalFunctions = pluginSys.getGlobalFunctions();
-   * ctx.body = await ejs.renderFile(filePath, {
-   *   passData: { ... },
-   *   ...globalFunctions  // Espande: { __: function, ... }
-   * });
+   * // In ital8Config.json5:
+   * "globalFunctionsWhitelist": {
+   *   "__": { "plugin": "simpleI18n", "required": true }
+   * }
    *
-   * // Nei template EJS:
+   * // Nei template EJS (sintassi globale):
    * <%- __({ en: "Hello", it: "Ciao" }, passData.ctx) %>
-   * // Invece di:
+   *
+   * // Sintassi locale (sempre disponibile):
    * <%- passData.plugin.simpleI18n.__({ en: "Hello", it: "Ciao" }, passData.ctx) %>
    */
   getGlobalFunctions() {
     const globalFunctions = {};
+    const whitelist = this.#ital8Conf?.globalFunctionsWhitelist || {};
 
-    // simpleI18n plugin: funzione di traduzione __()
-    if (this.#activePlugins.has('simpleI18n')) {
-      const plugin = this.#activePlugins.get('simpleI18n');
+    // Se whitelist vuota, log warning e ritorna oggetto vuoto
+    if (Object.keys(whitelist).length === 0) {
+      logger.warn('pluginSys', '⚠️  No globalFunctionsWhitelist configured in ital8Config.json5');
+      logger.warn('pluginSys', '   Global functions disabled - use local syntax: passData.plugin.{pluginName}.{function}');
+      return globalFunctions;
+    }
+
+    // Itera sulla whitelist e registra funzioni autorizzate
+    for (const [functionName, config] of Object.entries(whitelist)) {
+      const pluginName = config.plugin;
+      const isRequired = config.required !== undefined ? config.required : false; // Default: false
+
+      // Verifica se il plugin è attivo
+      if (!this.#activePlugins.has(pluginName)) {
+        if (isRequired) {
+          // REQUIRED: Plugin mancante → CRASH STARTUP (fail-fast)
+          const errorMsg =
+            `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `🚨 FATAL: REQUIRED GLOBAL FUNCTION NOT AVAILABLE\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+            `  Function: "${functionName}"\n` +
+            `  Required plugin: "${pluginName}"\n` +
+            `  Status: Plugin NOT active\n\n` +
+            `Description: ${config.description || 'N/A'}\n\n` +
+            `Fix options:\n` +
+            `  1. Activate plugin "${pluginName}" in plugins/${pluginName}/pluginConfig.json5\n` +
+            `  2. Set "required": false in ital8Config.json5 (uses fallback)\n` +
+            `  3. Remove "${functionName}" from globalFunctionsWhitelist\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+
+          logger.error('pluginSys', errorMsg);
+          throw new Error(`Required plugin "${pluginName}" for global function "${functionName}" is not active`);
+        }
+
+        // OPTIONAL: Plugin mancante → Crea funzione fallback
+        logger.warn('pluginSys', `⚠️  Plugin "${pluginName}" not active for function "${functionName}", using fallback`);
+        globalFunctions[functionName] = this.#createFallbackFunction(functionName, pluginName);
+        continue;
+      }
+
+      // Plugin attivo → Registra funzione normalmente
+      const plugin = this.#activePlugins.get(pluginName);
       const shared = plugin.getObjectToShareToWebPages?.();
-      if (shared?.__) {
-        globalFunctions.__ = shared.__;
+
+      if (shared?.[functionName] && typeof shared[functionName] === 'function') {
+        globalFunctions[functionName] = shared[functionName];
+        logger.debug('pluginSys', `✓ Global function "${functionName}" registered from plugin "${pluginName}"`);
+      } else {
+        logger.warn('pluginSys', `⚠️  Plugin "${pluginName}" doesn't export function "${functionName}"`);
       }
     }
 
-    // ESTENSIBILITÀ: Altri plugin possono essere aggiunti qui in futuro
-    // Esempio:
-    // if (this.#activePlugins.has('otherPlugin')) {
-    //   const plugin = this.#activePlugins.get('otherPlugin');
-    //   const shared = plugin.getObjectToShareToWebPages?.();
-    //   if (shared?.myGlobalFunction) {
-    //     globalFunctions.myGlobalFunction = shared.myGlobalFunction;
-    //   }
-    // }
+    // SICUREZZA: Valida che nessun plugin violi la whitelist
+    this.#validateWhitelistViolations(whitelist);
 
     return globalFunctions;
+  }
+
+  /**
+   * Crea una funzione fallback per funzioni globali opzionali non disponibili
+   * Quando chiamata, logga WARNING e ritorna valore di default
+   * @private
+   * @param {string} functionName - Nome della funzione
+   * @param {string} pluginName - Nome del plugin che dovrebbe fornire la funzione
+   * @returns {Function} - Funzione fallback
+   */
+  #createFallbackFunction(functionName, pluginName) {
+    if (functionName === '__') {
+      // Fallback speciale per i18n: ritorna prima traduzione disponibile
+      return (translations, ctx) => {
+        logger.warn('pluginSys', `⚠️  Translation function __() called but plugin "${pluginName}" not active`);
+
+        // Cerca la prima traduzione disponibile
+        const langs = ['en', 'it', 'es', 'fr', 'de'];
+        for (const lang of langs) {
+          if (translations?.[lang]) {
+            return translations[lang];
+          }
+        }
+
+        // Nessuna traduzione trovata
+        return '[NO TRANSLATION]';
+      };
+    }
+
+    // Fallback generico: ritorna stringa vuota
+    return (...args) => {
+      logger.warn('pluginSys', `⚠️  Function "${functionName}" called but plugin "${pluginName}" not active`);
+      return '';
+    };
+  }
+
+  /**
+   * Valida che nessun plugin provi a esportare funzioni globali non autorizzate
+   * SICUREZZA: Plugin che violano la whitelist vengono segnalati ma NON bloccano il sistema
+   * @private
+   * @param {Object} whitelist - Whitelist delle funzioni autorizzate
+   */
+  #validateWhitelistViolations(whitelist) {
+    const violations = [];
+
+    for (const [pluginName, plugin] of this.#activePlugins.entries()) {
+      const shared = plugin.getObjectToShareToWebPages?.();
+      if (!shared) continue;
+
+      // Trova tutte le funzioni esportate dal plugin
+      const exportedFunctions = Object.keys(shared).filter(
+        key => typeof shared[key] === 'function'
+      );
+
+      // Verifica ogni funzione contro la whitelist
+      for (const funcName of exportedFunctions) {
+        const whitelistEntry = whitelist[funcName];
+
+        if (!whitelistEntry) {
+          // Funzione NON in whitelist → VIOLAZIONE
+          violations.push({
+            plugin: pluginName,
+            function: funcName,
+            reason: 'not in whitelist',
+            suggestion: `Add to globalFunctionsWhitelist in ital8Config.json5 to enable`
+          });
+        } else if (whitelistEntry.plugin !== pluginName) {
+          // Funzione riservata ad ALTRO plugin → VIOLAZIONE
+          violations.push({
+            plugin: pluginName,
+            function: funcName,
+            reason: `reserved for plugin "${whitelistEntry.plugin}"`,
+            suggestion: `Only "${whitelistEntry.plugin}" can export this function`
+          });
+        }
+      }
+    }
+
+    // Se ci sono violazioni, logga WARNING dettagliato
+    if (violations.length > 0) {
+      logger.warn('pluginSys', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      logger.warn('pluginSys', '⚠️  GLOBAL FUNCTIONS WHITELIST VIOLATIONS DETECTED');
+      logger.warn('pluginSys', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+      violations.forEach(v => {
+        logger.warn('pluginSys', `   ❌ Plugin "${v.plugin}" exports "${v.function}" (${v.reason})`);
+        logger.warn('pluginSys', `      💡 ${v.suggestion}`);
+      });
+
+      logger.warn('pluginSys', '');
+      logger.warn('pluginSys', '   These functions will NOT be available globally');
+      logger.warn('pluginSys', '   Use local syntax: passData.plugin.{pluginName}.{function}');
+      logger.warn('pluginSys', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
   }
 
   /**

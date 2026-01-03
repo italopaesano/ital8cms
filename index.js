@@ -11,7 +11,7 @@ const priorityMiddlewares = require('./core/priorityMiddlewares/priorityMiddlewa
 router = priorityMiddlewares.router ;
 //const priorityMiddlewares(app); // carico i imidlware che vanno impostati in ordine preciso di caricamento
 
-const pluginSys = new ( require("./core/pluginSys") )(); // carico il sistema di plugin e ne istanzio pure un ogetto
+const pluginSys = new ( require("./core/pluginSys") )(ital8Conf); // carico il sistema di plugin e passo la configurazione per whitelist
 // carico le rotte di tutti i plugin
 pluginSys.loadRoutes( router , `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`);// il secondo paramentro è il primo prefix
 const getObjectsToShareInWebPages = pluginSys.getObjectsToShareInWebPages();
