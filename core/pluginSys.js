@@ -448,20 +448,29 @@ class pluginSys{
         continue;
       }
 
-      // Plugin attivo → Registra funzione normalmente
+      // Plugin attivo → Verifica implementazione getGlobalFunctionsForTemplates()
       const plugin = this.#activePlugins.get(pluginName);
-      const shared = plugin.getObjectToShareToWebPages?.();
 
-      if (shared?.[functionName] && typeof shared[functionName] === 'function') {
-        globalFunctions[functionName] = shared[functionName];
+      // Verifica se il plugin implementa getGlobalFunctionsForTemplates
+      if (!plugin.getGlobalFunctionsForTemplates || typeof plugin.getGlobalFunctionsForTemplates !== 'function') {
+        logger.warn('pluginSys',
+          `⚠️  Plugin "${pluginName}" in whitelist but doesn't implement getGlobalFunctionsForTemplates()\n` +
+          `   Expected: getGlobalFunctionsForTemplates() method returning { "${functionName}": function }\n` +
+          `   This is unusual - plugin should implement this method if it's in the whitelist`
+        );
+        continue;
+      }
+
+      // Chiama getGlobalFunctionsForTemplates() per ottenere funzioni globali
+      const globalFuncs = plugin.getGlobalFunctionsForTemplates();
+
+      if (globalFuncs?.[functionName] && typeof globalFuncs[functionName] === 'function') {
+        globalFunctions[functionName] = globalFuncs[functionName];
         logger.debug('pluginSys', `✓ Global function "${functionName}" registered from plugin "${pluginName}"`);
       } else {
-        logger.warn('pluginSys', `⚠️  Plugin "${pluginName}" doesn't export function "${functionName}"`);
+        logger.warn('pluginSys', `⚠️  Plugin "${pluginName}" doesn't export function "${functionName}" in getGlobalFunctionsForTemplates()`);
       }
     }
-
-    // SICUREZZA: Valida che nessun plugin violi la whitelist
-    this.#validateWhitelistViolations(whitelist);
 
     return globalFunctions;
   }
@@ -500,65 +509,6 @@ class pluginSys{
     };
   }
 
-  /**
-   * Valida che nessun plugin provi a esportare funzioni globali non autorizzate
-   * SICUREZZA: Plugin che violano la whitelist vengono segnalati ma NON bloccano il sistema
-   * @private
-   * @param {Object} whitelist - Whitelist delle funzioni autorizzate
-   */
-  #validateWhitelistViolations(whitelist) {
-    const violations = [];
-
-    for (const [pluginName, plugin] of this.#activePlugins.entries()) {
-      const shared = plugin.getObjectToShareToWebPages?.();
-      if (!shared) continue;
-
-      // Trova tutte le funzioni esportate dal plugin
-      const exportedFunctions = Object.keys(shared).filter(
-        key => typeof shared[key] === 'function'
-      );
-
-      // Verifica ogni funzione contro la whitelist
-      for (const funcName of exportedFunctions) {
-        const whitelistEntry = whitelist[funcName];
-
-        if (!whitelistEntry) {
-          // Funzione NON in whitelist → VIOLAZIONE
-          violations.push({
-            plugin: pluginName,
-            function: funcName,
-            reason: 'not in whitelist',
-            suggestion: `Add to globalFunctionsWhitelist in ital8Config.json5 to enable`
-          });
-        } else if (whitelistEntry.plugin !== pluginName) {
-          // Funzione riservata ad ALTRO plugin → VIOLAZIONE
-          violations.push({
-            plugin: pluginName,
-            function: funcName,
-            reason: `reserved for plugin "${whitelistEntry.plugin}"`,
-            suggestion: `Only "${whitelistEntry.plugin}" can export this function`
-          });
-        }
-      }
-    }
-
-    // Se ci sono violazioni, logga WARNING dettagliato
-    if (violations.length > 0) {
-      logger.warn('pluginSys', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      logger.warn('pluginSys', '⚠️  GLOBAL FUNCTIONS WHITELIST VIOLATIONS DETECTED');
-      logger.warn('pluginSys', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
-      violations.forEach(v => {
-        logger.warn('pluginSys', `   ❌ Plugin "${v.plugin}" exports "${v.function}" (${v.reason})`);
-        logger.warn('pluginSys', `      💡 ${v.suggestion}`);
-      });
-
-      logger.warn('pluginSys', '');
-      logger.warn('pluginSys', '   These functions will NOT be available globally');
-      logger.warn('pluginSys', '   Use local syntax: passData.plugin.{pluginName}.{function}');
-      logger.warn('pluginSys', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    }
-  }
 
   /**
    * Imposta il riferimento al sistema dei temi
