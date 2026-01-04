@@ -480,11 +480,15 @@ function setSharedObject(fromPlugin, sharedObject) {
 }
 
 /**
- * Oggetti da condividere con le pagine web (template EJS)
+ * Oggetti da condividere con le pagine web (template EJS) - SINTASSI LOCALE
  *
  * Questi oggetti saranno disponibili in passData.plugin.{pluginName}
  *
- * @returns {object} Oggetti per le pagine
+ * Esempio nei template:
+ * <%= passData.plugin.exampleComplete.counter %>
+ * <%= passData.plugin.exampleComplete.helpers.formatDate(new Date()) %>
+ *
+ * @returns {object} Oggetti per le pagine (sempre disponibili)
  */
 function getObjectToShareToWebPages() {
   return {
@@ -493,6 +497,40 @@ function getObjectToShareToWebPages() {
     helpers: {
       formatDate: (date) => new Date(date).toLocaleDateString('it-IT')
     }
+  };
+}
+
+/**
+ * Funzioni candidate per uso globale nei template - SINTASSI GLOBALE
+ *
+ * NUOVO STANDARD (2026-01-04): Funzioni che possono essere registrate globalmente.
+ *
+ * IMPORTANTE:
+ * - Solo funzioni destinate all'uso globale dovrebbero essere qui
+ * - Richiedono autorizzazione in ital8Config.json5 (globalFunctionsWhitelist)
+ * - Se non autorizzate, rimarranno disponibili solo localmente
+ *
+ * Esempio configurazione whitelist:
+ * {
+ *   "globalFunctionsWhitelist": {
+ *     "formatDate": {
+ *       "plugin": "exampleComplete",
+ *       "description": "Format dates for display",
+ *       "required": false
+ *     }
+ *   }
+ * }
+ *
+ * Esempio uso nei template (se autorizzata):
+ * <%= formatDate(new Date()) %>  // Sintassi globale
+ *
+ * @returns {object} Funzioni candidate per uso globale
+ */
+function getGlobalFunctionsForTemplates() {
+  // Esempio: esporta solo formatDate come candidata globale
+  // (in questo esempio non è effettivamente in whitelist, quindi rimarrà solo locale)
+  return {
+    formatDate: (date) => new Date(date).toLocaleDateString('it-IT')
   };
 }
 
@@ -516,6 +554,7 @@ module.exports = {
   getObjectToShareToOthersPlugin,
   setSharedObject,
   getObjectToShareToWebPages,
+  getGlobalFunctionsForTemplates,  // NUOVO: funzioni candidate per uso globale
 
   // Configurazione (opzionale)
   pluginConfig

@@ -209,6 +209,12 @@ module.exports = {
   getObjectToShareToOthersPlugin(forPlugin, pluginSys, pathPluginFolder) { return {} },
   setSharedObject(fromPlugin, sharedObject) {},
 
+  // Template functions (local - always available)
+  getObjectToShareToWebPages() { return {} },
+
+  // Template functions (global - requires whitelist authorization)
+  getGlobalFunctionsForTemplates() { return {} },
+
   // Page hooks
   getHooksPage(section, passData, pluginSys, pathPluginFolder) { return "" }
 }
@@ -321,79 +327,146 @@ Available sections: `head`, `header`, `body`, `footer`, `script`
 
 ### Global Functions in Templates
 
-**New Feature:** Plugins can now expose functions as global helpers in EJS templates, making them accessible directly without the `passData.plugin.{pluginName}` prefix.
+**Feature:** Plugins can expose functions as global helpers in EJS templates, making them accessible directly without the `passData.plugin.{pluginName}` prefix.
 
-**How It Works:**
+**Architecture Overview:**
 
-The `pluginSys.getGlobalFunctions()` method collects functions from plugins that should be available globally in templates. These functions are passed to EJS using the spread operator.
+The system uses a **whitelist-based security model** with three components:
+1. **Whitelist** (`ital8Config.json5`) - Authorizes which functions can be global
+2. **Plugin Export** (`getGlobalFunctionsForTemplates()`) - Plugin declares global function candidates
+3. **Registration** (`pluginSys.getGlobalFunctions()`) - Validates and registers functions
 
-**Implementation in pluginSys.js:**
+---
 
-```javascript
-/**
- * Returns global functions to export in EJS templates
- * @returns {Object} - Object with global functions { functionName: function }
- */
-getGlobalFunctions() {
-  const globalFunctions = {};
+#### 1. Whitelist Configuration (ital8Config.json5)
 
-  // simpleI18n plugin: translation function __()
-  if (this.#activePlugins.has('simpleI18n')) {
-    const plugin = this.#activePlugins.get('simpleI18n');
-    const shared = plugin.getObjectToShareToWebPages?.();
-    if (shared?.__) {
-      globalFunctions.__ = shared.__;
+Global functions MUST be explicitly authorized in the central configuration:
+
+```json5
+{
+  "globalFunctionsWhitelist": {
+    "__": {
+      "plugin": "simpleI18n",
+      "description": "Translation function for internationalization",
+      "required": true  // true = fail-fast, false = graceful degradation
     }
+    // Add more functions here as needed
   }
-
-  // Extensible for other plugins in the future
-  return globalFunctions;
 }
 ```
 
-**Implementation in index.js:**
+**Whitelist attributes:**
+- `plugin` (required) - Plugin that provides the function
+- `description` (optional) - Documentation for the function
+- `required` (required) - Behavior if plugin is missing:
+  - `true` → **CRASH STARTUP** (fail-fast) - System cannot run without this function
+  - `false` → **CREATE FALLBACK** (graceful degradation) - Fallback function logs WARNING when called
+
+---
+
+#### 2. Plugin Standard: getGlobalFunctionsForTemplates()
+
+Plugins export global function candidates via a dedicated method:
 
 ```javascript
-// Get global functions from pluginSys
-const globalFunctions = pluginSys.getGlobalFunctions();
+module.exports = {
+  // Existing standard methods...
+  getObjectToShareToWebPages() {
+    // LOCAL functions (available as passData.plugin.{pluginName}.{function})
+    return {
+      __: this.translate.bind(this),
+      getCurrentLang: (ctx) => ctx?.state?.lang,
+      getSupportedLangs: () => [...this.config.supportedLangs],
+      getConfig: () => ({ ...this.config })
+    };
+  },
 
-// In both public and admin rendering:
-ctx.body = await ejs.renderFile(filePath, {
-  passData: { /* ... */ },
-  ...globalFunctions  // Expands to: { __: function, ... }
-});
+  // NEW: Global function candidates (must be in whitelist)
+  getGlobalFunctionsForTemplates() {
+    // GLOBAL functions (available directly in templates)
+    // Only functions listed here can be considered for global registration
+    // Final registration depends on whitelist authorization
+    return {
+      __: this.translate.bind(this)
+    };
+  }
+}
 ```
 
-**Usage in Templates:**
+**Key points:**
+- ✅ **Explicit declaration:** Only functions returned here are candidates for global registration
+- ✅ **Clear separation:** `getObjectToShareToWebPages()` = local, `getGlobalFunctionsForTemplates()` = global
+- ✅ **Security:** Plugin CANNOT force global registration - must be authorized in whitelist
+- ⚠️ **WARNING:** If plugin is in whitelist but doesn't implement this method, a warning is logged
+
+---
+
+#### 3. Registration System (pluginSys.js)
+
+The `pluginSys.getGlobalFunctions()` method validates and registers functions:
+
+**Flow:**
+1. Read whitelist from `ital8Config.json5`
+2. For each function in whitelist:
+   - Check if plugin is active
+   - Check if plugin implements `getGlobalFunctionsForTemplates()`
+   - Check if function exists in returned object
+   - Register function if all checks pass
+3. Return registered functions for EJS
+
+**Security features:**
+- ✅ **Whitelist enforcement:** Only authorized functions are registered
+- ✅ **Fail-fast mode:** Required functions missing = startup crash
+- ✅ **Fallback mode:** Optional functions missing = fallback created
+- ✅ **Clear warnings:** Missing implementations or misconfigurations are logged
+
+---
+
+#### 4. Usage in Templates
+
+**Global syntax (recommended for whitelisted functions):**
 
 ```ejs
-<%# NEW GLOBAL SYNTAX (RECOMMENDED) %>
 <%- __({
   it: "Ciao Mondo",
   en: "Hello World"
 }, passData.ctx) %>
+```
 
-<%# OLD LOCAL SYNTAX (STILL WORKS) %>
+**Local syntax (always available, backward compatible):**
+
+```ejs
 <%- passData.plugin.simpleI18n.__({
   it: "Ciao Mondo",
   en: "Hello World"
 }, passData.ctx) %>
 ```
 
-**Important Notes:**
+---
 
-- ✅ **Both syntaxes work:** The local version (`passData.plugin.{pluginName}.{function}`) will ALWAYS remain available for backward compatibility
+#### Important Notes
+
+- ✅ **Both syntaxes always work:** Global is convenient, local is always available
 - ✅ **No breaking changes:** Existing code continues to work without modification
-- ✅ **Extensible:** New plugins can register global functions by being added to `getGlobalFunctions()`
-- ⚠️ **Potential conflict:** If multiple plugins export functions with the same name, the last one wins (this will be addressed with a conflict detection system in the future)
+- ✅ **Backward compatibility guaranteed:** `getObjectToShareToWebPages()` remains the standard for local functions
+- ✅ **Security first:** Whitelist prevents unauthorized global function injection
+- ✅ **Extensible:** Add new global functions by:
+  1. Implementing `getGlobalFunctionsForTemplates()` in plugin
+  2. Adding function to whitelist in `ital8Config.json5`
 
-**Currently Supported Global Functions:**
+---
 
-- `__()` - Translation function from simpleI18n plugin
+#### Currently Supported Global Functions
 
-**Example: i18n-test.ejs**
+- `__()` - Translation function from `simpleI18n` plugin
 
-See `/www/i18n-test.ejs` for a complete example showing both syntax options side-by-side.
+---
+
+#### Example Files
+
+- **Configuration:** `/ital8Config.json5` (globalFunctionsWhitelist section)
+- **Plugin implementation:** `/plugins/simpleI18n/main.js` (getGlobalFunctionsForTemplates method)
+- **Template example:** `/www/i18n-test.ejs` (side-by-side syntax comparison)
 
 ## Theme System
 
@@ -2221,7 +2294,22 @@ When working on this codebase as an AI assistant:
 
 **Changelog:**
 - v1.6.0 (2026-01-03): **NEW FEATURE** - Implemented Global Functions system for EJS templates. Key changes:
-  - **Global Functions Architecture:**
+  - **REFACTORING (2026-01-04):** Separated local and global function exports with new plugin standard
+    - Added `getGlobalFunctionsForTemplates()` method to plugin standard
+    - Plugins now explicitly declare global function candidates via dedicated method
+    - `getObjectToShareToWebPages()` remains for local functions (backward compatible)
+    - Clear separation: local vs global function exports
+    - Implemented whitelist-based security system in `ital8Config.json5`
+    - Whitelist attributes: `plugin`, `description`, `required` (fail-fast or graceful degradation)
+    - `pluginSys.getGlobalFunctions()` now uses new method and validates against whitelist
+    - Removed `#validateWhitelistViolations()` (no longer needed)
+    - Updated `simpleI18n` plugin to implement new method
+    - Eliminated spurious warnings for functions meant only for local use
+    - **Files modified:**
+      - `core/pluginSys.js` - Refactored to use `getGlobalFunctionsForTemplates()`
+      - `plugins/simpleI18n/main.js` - Added new method
+      - `CLAUDE.md` - Complete documentation update with whitelist system
+  - **Global Functions Architecture (Initial Implementation 2026-01-03):**
     - Added `getGlobalFunctions()` method to `pluginSys.js`
     - Plugins can now expose functions as global helpers in templates
     - Functions accessible directly without `passData.plugin.{pluginName}` prefix
@@ -2237,12 +2325,8 @@ When working on this codebase as an AI assistant:
   - **Documentation:**
     - Added "Global Functions in Templates" section to CLAUDE.md
     - Documented both syntaxes with examples
-    - Added notes about extensibility and potential naming conflicts
-  - **Files Modified:**
-    - `core/pluginSys.js` - Added `getGlobalFunctions()` method
-    - `index.js` - Integrated global functions into EJS rendering
-    - `www/i18n-test.ejs` - Added syntax comparison examples
-    - `CLAUDE.md` - Documented new feature
+    - Added notes about whitelist security system, fail-fast vs graceful degradation
+    - Complete architectural documentation with 4 subsections
 - v1.5.0 (2025-12-27): **BREAKING CHANGE** - Simplified admin plugin standard with automatic detection, multi-section support, and centralized UI metadata. Key changes:
   - **New Admin Plugin Convention:**
     - Admin plugins are now **automatically detected** by naming convention (name starts with "admin")
