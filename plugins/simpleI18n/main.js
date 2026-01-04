@@ -96,8 +96,8 @@ module.exports = {
   },
 
   getObjectToShareToWebPages() {
-    // Condivide la funzione di traduzione con i template EJS
-    // Disponibile come passData.plugin.simpleI18n.__(...)
+    // Condivide funzioni con i template EJS (sintassi locale)
+    // Disponibile come passData.plugin.simpleI18n.{function}(...)
     return {
       __: this.translate.bind(this),
 
@@ -112,6 +112,15 @@ module.exports = {
       getConfig: () => {
         return { ...this.config };
       }
+    };
+  },
+
+  getGlobalFunctionsForTemplates() {
+    // Esporta SOLO le funzioni destinate all'uso globale nei template
+    // Queste funzioni devono essere autorizzate in ital8Config.json5 (globalFunctionsWhitelist)
+    // Disponibile come __(...) (sintassi globale) nei template EJS
+    return {
+      __: this.translate.bind(this)
     };
   },
 
