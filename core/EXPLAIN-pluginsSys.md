@@ -26,7 +26,8 @@ Ogni plugin può esportare le seguenti funzioni in `main.js`:
 ### Funzioni di Condivisione
 - `getObjectToShareToOthersPlugin(forPlugin, pluginSys, pathPluginFolder)` - Espone oggetti ad altri plugin
 - `setSharedObject(fromPlugin, sharedObject)` - Riceve oggetti da altri plugin
-- `getObjectToShareToWebPages(pluginSys, pathPluginFolder)` - Espone oggetti ai template EJS
+- `getObjectToShareToWebPages(pluginSys, pathPluginFolder)` - Espone oggetti ai template EJS (sintassi locale)
+- `getGlobalFunctionsForTemplates()` - Espone funzioni ai template EJS (sintassi globale - richiede whitelist)
 
 ---
 
@@ -347,7 +348,143 @@ function getObjectToShareToWebPages(pluginSys, pathPluginFolder) {
 
 ---
 
-## 6. Ciclo di Vita Plugin
+## 6. getGlobalFunctionsForTemplates()
+
+**NUOVO STANDARD (2026-01-04)**: Espone funzioni candidate per l'uso globale nei template EJS.
+
+### Differenza tra Local e Global
+
+#### LOCAL (getObjectToShareToWebPages)
+```js
+// Disponibile sempre come passData.plugin.{pluginName}.{function}
+getObjectToShareToWebPages() {
+  return {
+    __: this.translate.bind(this),
+    getCurrentLang: (ctx) => ctx?.state?.lang,
+    getSupportedLangs: () => [...this.supportedLangs],
+    getConfig: () => ({ ...this.config })
+  };
+}
+```
+
+```ejs
+<!-- Sintassi locale (sempre disponibile) -->
+<%- passData.plugin.simpleI18n.__(translations, passData.ctx) %>
+<%- passData.plugin.simpleI18n.getCurrentLang(passData.ctx) %>
+```
+
+#### GLOBAL (getGlobalFunctionsForTemplates)
+```js
+// Candidati per uso globale (richiedono autorizzazione whitelist)
+getGlobalFunctionsForTemplates() {
+  return {
+    __: this.translate.bind(this)  // SOLO funzioni destinate all'uso globale
+  };
+}
+```
+
+```ejs
+<!-- Sintassi globale (se autorizzata in whitelist) -->
+<%- __(translations, passData.ctx) %>
+```
+
+### Sistema di Whitelist
+
+Le funzioni globali DEVONO essere autorizzate in `ital8Config.json5`:
+
+```json5
+{
+  "globalFunctionsWhitelist": {
+    "__": {
+      "plugin": "simpleI18n",
+      "description": "Translation function for internationalization",
+      "required": true  // true = crash startup, false = fallback
+    }
+  }
+}
+```
+
+**Attributi whitelist:**
+- `plugin` (obbligatorio) - Plugin che fornisce la funzione
+- `description` (opzionale) - Documentazione
+- `required` (obbligatorio) - Comportamento se plugin mancante:
+  - `true` → **CRASH STARTUP** (fail-fast)
+  - `false` → **CREA FALLBACK** (graceful degradation)
+
+### Flusso di Registrazione
+
+```
+1. pluginSys.getGlobalFunctions() legge whitelist da ital8Config.json5
+                    ↓
+2. Per ogni funzione in whitelist:
+   - Verifica se plugin è attivo
+   - Chiama plugin.getGlobalFunctionsForTemplates()
+   - Verifica se funzione esiste nell'oggetto ritornato
+                    ↓
+3. Registra funzione se tutti i controlli passano
+                    ↓
+4. Ritorna oggetto con funzioni globali per EJS
+```
+
+### Sicurezza
+
+- ✅ **Whitelist enforcement**: Solo funzioni autorizzate vengono registrate
+- ✅ **Fail-fast mode**: Funzioni required mancanti = crash startup
+- ✅ **Fallback mode**: Funzioni optional mancanti = funzione fallback creata
+- ✅ **Warning chiari**: Implementazioni mancanti o errori di configurazione vengono loggati
+
+### Esempio Completo: simpleI18n
+
+```js
+// plugins/simpleI18n/main.js
+module.exports = {
+  // ... altre funzioni ...
+
+  // Funzioni LOCALI (sempre disponibili)
+  getObjectToShareToWebPages() {
+    return {
+      __: this.translate.bind(this),
+      getCurrentLang: (ctx) => ctx?.state?.lang || this.config.defaultLang,
+      getSupportedLangs: () => [...this.config.supportedLangs],
+      getConfig: () => ({ ...this.config })
+    };
+  },
+
+  // Funzioni GLOBALI (richiedono whitelist)
+  getGlobalFunctionsForTemplates() {
+    return {
+      __: this.translate.bind(this)  // Solo __ è destinata all'uso globale
+    };
+  },
+
+  translate(translationObj, ctx = null) {
+    const currentLang = ctx?.state?.lang || this.config.defaultLang;
+    return translationObj[currentLang] || translationObj[this.config.defaultLang];
+  }
+};
+```
+
+### Uso nei Template
+
+```ejs
+<!-- SINTASSI GLOBALE (comoda per funzioni comuni) -->
+<h1><%- __({ it: "Benvenuto", en: "Welcome" }, passData.ctx) %></h1>
+
+<!-- SINTASSI LOCALE (sempre disponibile, più verbosa) -->
+<p><%- passData.plugin.simpleI18n.__({ it: "Ciao", en: "Hello" }, passData.ctx) %></p>
+<p>Lingua: <%= passData.plugin.simpleI18n.getCurrentLang(passData.ctx) %></p>
+```
+
+### Note Importanti
+
+- ✅ **Entrambe le sintassi funzionano sempre**: Globale è comoda, locale è sempre disponibile
+- ✅ **Backward compatibility garantita**: Codice esistente continua a funzionare
+- ✅ **Separazione chiara**: getObjectToShareToWebPages = locale, getGlobalFunctionsForTemplates = globale
+- ✅ **Security first**: Whitelist previene iniezioni non autorizzate di funzioni globali
+
+---
+
+## 7. Ciclo di Vita Plugin
 
 ### loadPlugin()
 

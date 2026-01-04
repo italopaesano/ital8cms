@@ -35,7 +35,15 @@ function getMiddlewareToAdd( app ){// qui saranno elencati i Middleware che poi 
 }
 
 function getObjectToShareToWebPages(){// restituisce un ogetto che sarà condiviso con i modori di template come sotto ogetto fi PassData.plugin.['nomePlugin']
+  // Esempio: passData.plugin.exaplePlugin.myFunction()
+  return {};
+}
 
+function getGlobalFunctionsForTemplates(){
+  // NUOVO STANDARD (2026-01-04): funzioni candidate per uso globale nei template EJS
+  // Richiedono autorizzazione in ital8Config.json5 (globalFunctionsWhitelist)
+  // Se autorizzate, saranno disponibili direttamente senza passData.plugin.exaplePlugin
+  // Esempio: myFunction() invece di passData.plugin.exaplePlugin.myFunction()
   return {};
 }
 
@@ -92,11 +100,12 @@ function getHooksPage(){
 
 module.exports = {
 
-  loadPlugin: loadPlugin,  //questa funzione verrà richiamata per caricare il plugin ogni volta che serve ad esempio ogni volta che si riavviam 
+  loadPlugin: loadPlugin,  //questa funzione verrà richiamata per caricare il plugin ogni volta che serve ad esempio ogni volta che si riavviam
   installPlugin: installPlugin, // questa funzione verrà richiamata per installare il plugin
   unistallPlugin: unistallPlugin, // questa funzione verrà richiamata per disinstallare il plugin
   upgradePlugin: upgradePlugin, // questa funzione verrà richiamata quando sarà necessario aggiornare il plugin
   getObjectToShareToWebPages: getObjectToShareToWebPages,
+  getGlobalFunctionsForTemplates: getGlobalFunctionsForTemplates, // NUOVO: funzioni candidate per uso globale
   getObjectToShareToOthersPlugin: getObjectToShareToOthersPlugin,
   setSharedObject: setSharedObject,//setterà l'ogetto che sarà condiviso con tutti i plugin
   pluginName: pluginName,
