@@ -64,8 +64,8 @@ app.use(
       urlPrefix: `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`,
       urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
       showDirContents: false,
-      enableCaching: ital8Conf.browserCacheEnabled,
-      cacheMaxAge: ital8Conf.browserCacheMaxAge,
+      browserCacheEnabled: ital8Conf.browserCacheEnabled,
+      browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
     }
   )
 );
@@ -79,8 +79,8 @@ app.use(
       urlPrefix: `${ital8Conf.globalPrefix}`,
       showDirContents: true,
       urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
-      enableCaching: ital8Conf.browserCacheEnabled,
-      cacheMaxAge: ital8Conf.browserCacheMaxAge,
+      browserCacheEnabled: ital8Conf.browserCacheEnabled,
+      browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
       template: {
         render: async (ctx, next, filePath) => {
           ctx.body = await ejs.renderFile(filePath, {
@@ -124,8 +124,8 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
         urlPrefix: `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`,
         urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
         showDirContents: false,
-        enableCaching: ital8Conf.browserCacheEnabled,
-        cacheMaxAge: ital8Conf.browserCacheMaxAge,
+        browserCacheEnabled: ital8Conf.browserCacheEnabled,
+        browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
       }
     )
   );
@@ -140,8 +140,8 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
         urlPrefix: `${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`,
         showDirContents: true,
         urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`], // '/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
-        enableCaching: ital8Conf.browserCacheEnabled,
-        cacheMaxAge: ital8Conf.browserCacheMaxAge,
+        browserCacheEnabled: ital8Conf.browserCacheEnabled,
+        browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
         template: {
           render: async (ctx, next, filePath) => {
             ctx.body = await ejs.renderFile(filePath, {
