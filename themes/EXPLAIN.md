@@ -75,7 +75,7 @@ themes/nomeDelTema/
 │       └── logo.png
 │
 ├── pluginsEndpointsMarkup/      # OPZIONALE - Override endpoint plugin
-│   └── nomePlugin/               # Es: simpleAccess
+│   └── nomePlugin/               # Es: adminUsers
 │       └── nomeEndpoint/         # Es: login
 │           ├── template.ejs      # Template personalizzato
 │           └── style.css         # CSS personalizzato
@@ -586,17 +586,17 @@ Gli asset sono serviti automaticamente su `/theme-assets/`
 **Struttura:**
 ```
 pluginsEndpointsMarkup/
-└── nomePlugin/           # Nome del plugin (es: simpleAccess)
+└── nomePlugin/           # Nome del plugin (es: adminUsers)
     └── nomeEndpoint/     # Nome dell'endpoint (es: login)
         ├── template.ejs  # Template personalizzato
         └── style.css     # CSS personalizzato
 ```
 
-**Esempio: Personalizzare login di simpleAccess**
+**Esempio: Personalizzare login di adminUsers**
 
 ```
 pluginsEndpointsMarkup/
-└── simpleAccess/
+└── adminUsers/
     └── login/
         ├── template.ejs
         └── style.css
@@ -604,15 +604,15 @@ pluginsEndpointsMarkup/
 
 **Funzionamento:**
 
-1. Plugin `simpleAccess` carica endpoint `/api/simpleAccess/login`
+1. Plugin `adminUsers` carica endpoint `/api/adminUsers/login`
 2. Sistema controlla: "Esiste template custom nel tema?"
-3. **Se SÌ:** Usa `themes/tema/pluginsEndpointsMarkup/simpleAccess/login/template.ejs`
+3. **Se SÌ:** Usa `themes/tema/pluginsEndpointsMarkup/adminUsers/login/template.ejs`
 4. **Se NO:** Usa template di default del plugin
 
 **Esempio template custom:**
 
 ```ejs
-<!-- pluginsEndpointsMarkup/simpleAccess/login/template.ejs -->
+<!-- pluginsEndpointsMarkup/adminUsers/login/template.ejs -->
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -623,7 +623,7 @@ pluginsEndpointsMarkup/
 <body class="login-page">
     <div class="login-container">
         <h1>Benvenuto</h1>
-        <form method="POST" action="/api/simpleAccess/login">
+        <form method="POST" action="/api/adminUsers/login">
             <input type="hidden" name="referrerTo" value="<%- referrerTo %>">
             <input type="text" name="username" placeholder="Username" required>
             <input type="password" name="password" placeholder="Password" required>
@@ -635,7 +635,7 @@ pluginsEndpointsMarkup/
 </html>
 ```
 
-**Variabili disponibili (esempio simpleAccess):**
+**Variabili disponibili (esempio adminUsers):**
 - `bootstrapCss` - Link CSS Bootstrap
 - `bootstrapJs` - Script JS Bootstrap
 - `apiPrefix` - Variabile apiPrefix client-side
@@ -985,7 +985,7 @@ themes/blog/
 │   └── images/
 │       └── default-post.jpg
 └── pluginsEndpointsMarkup/
-    └── simpleAccess/
+    └── adminUsers/
         └── login/
             ├── template.ejs
             └── style.css

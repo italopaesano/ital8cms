@@ -20,11 +20,11 @@ themes/{nomeTema}/pluginsEndpointsMarkup/
 
 ## Esempio: Personalizzazione Login
 
-La pagina di login del plugin `simpleAccess` può essere personalizzata creando:
+La pagina di login del plugin `adminUsers` può essere personalizzata creando:
 
 ```
 themes/default/pluginsEndpointsMarkup/
-    simpleAccess/
+    adminUsers/
         login/
             template.ejs     # Form di login personalizzato
             style.css        # Stili CSS personalizzati
@@ -36,7 +36,7 @@ I template personalizzati hanno accesso alle stesse variabili del template origi
 
 - `customCss` - Contenuto del file style.css del tema (per inclusione inline)
 
-### Variabili comuni per simpleAccess:
+### Variabili comuni per adminUsers:
 
 - `apiPrefix` - Script per impostare la variabile apiPrefix
 - `bootstrapCss` - Link CSS di Bootstrap
@@ -111,7 +111,7 @@ handler: async (ctx) => {
 
 ## Plugin con Supporto alla Personalizzazione
 
-- **simpleAccess**
+- **adminUsers**
   - `login` - Pagina di login
   - `logout` - Pagina di logout
 

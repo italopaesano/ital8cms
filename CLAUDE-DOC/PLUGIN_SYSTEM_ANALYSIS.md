@@ -382,7 +382,7 @@ if (semver.satisfies(installedVersion, versionRequest)) {
   "dependency": {}
 }
 
-// Plugin: simpleAccess
+// Plugin: adminUsers
 {
   "weight": 10,
   "dependency": {
@@ -395,7 +395,7 @@ if (semver.satisfies(installedVersion, versionRequest)) {
 {
   "weight": 20,
   "dependency": {
-    "simpleAccess": "^1.0.0"
+    "adminUsers": "^1.0.0"
   }
 }
 ```
@@ -403,8 +403,8 @@ if (semver.satisfies(installedVersion, versionRequest)) {
 **Ordine di caricamento:**
 1. `dbApi` (weight: 0, no dependencies)
 2. `bootstrap` (weight: 0, no dependencies)
-3. `simpleAccess` (weight: 10, dipende da dbApi e bootstrap)
-4. `admin` (weight: 20, dipende da simpleAccess)
+3. `adminUsers` (weight: 10, dipende da dbApi e bootstrap)
+4. `admin` (weight: 20, dipende da adminUsers)
 
 ---
 
@@ -441,7 +441,7 @@ function getObjectToShareToOthersPlugin(pluginName) {
 ```
 
 ```javascript
-// simpleAccess/main.js
+// adminUsers/main.js
 
 let db  // Variabile locale per il database
 
@@ -463,16 +463,16 @@ function loadPlugin() {
 1. dbApi viene caricato per primo (weight: 0)
    └─> Apre mainDb, webDb, testDb
 
-2. simpleAccess viene caricato (dipende da dbApi)
+2. adminUsers viene caricato (dipende da dbApi)
    │
-   ├─> Sistema chiama: dbApi.getObjectToShareToOthersPlugin('simpleAccess')
-   │   └─> dbApi crea database: pluginsDb/simpleAccess.db
+   ├─> Sistema chiama: dbApi.getObjectToShareToOthersPlugin('adminUsers')
+   │   └─> dbApi crea database: pluginsDb/adminUsers.db
    │   └─> Ritorna: { db: SQLiteInstance }
    │
-   └─> Sistema chiama: simpleAccess.setSharedObject('dbApi', { db: ... })
-       └─> simpleAccess salva riferimento al database
+   └─> Sistema chiama: adminUsers.setSharedObject('dbApi', { db: ... })
+       └─> adminUsers salva riferimento al database
 
-3. simpleAccess.loadPlugin() viene chiamato
+3. adminUsers.loadPlugin() viene chiamato
    └─> Può ora usare this.db per query
 ```
 
@@ -514,7 +514,7 @@ Pattern Completo:
 /${apiPrefix}/${pluginName}/${pluginPath}
 
 Esempio:
-/api/simpleAccess/login
+/api/adminUsers/login
  │    │             │
  │    │             └─> path definito nel plugin
  │    └──────────────> nome del plugin
@@ -760,9 +760,9 @@ middlewares.forEach(middlewareGetter => {
 })
 ```
 
-### Esempio Reale: simpleAccess
+### Esempio Reale: adminUsers
 
-Il plugin `simpleAccess` usa middleware per proteggere le route:
+Il plugin `adminUsers` usa middleware per proteggere le route:
 
 ```javascript
 function getMiddlewareToAdd() {

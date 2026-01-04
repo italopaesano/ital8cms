@@ -91,8 +91,8 @@ se l'utente insrisce correttamente i dati al primo colpo , allora l'url di redir
     "ejs": "^3.1.9"
   },
   "custom": {
-    "loggedReservedPrefix": ["/reserved", "/private", "/lib"],// prfix nei quali sarà automaticamente richiesta di essere logati 
-    "defaultLoginRedirectURL": "/api/simpleAccess/logged",// url di default per il redirect dopo che illogi ha avuto successo
+    "loggedReservedPrefix": ["/reserved", "/private", "/lib"],// prfix nei quali sarà automaticamente richiesta di essere logati
+    "defaultLoginRedirectURL": "/api/adminUsers/logged",// url di default per il redirect dopo che illogi ha avuto successo
     }
   }
 }

@@ -63,7 +63,7 @@ core/admin/
 
 ❌ **Nomi NON validi:**
 - `usersAdmin` (prefisso sbagliato)
-- `simpleAccess` (nessun prefisso admin)
+- `adminUsers` (nessun prefisso admin)
 - `userManagement` (nessun prefisso admin)
 
 ### Struttura Plugin Admin

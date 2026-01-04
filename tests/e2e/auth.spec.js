@@ -3,7 +3,7 @@ const { test, expect } = require('@playwright/test');
 
 test.describe('Authentication', () => {
   test('should display login page', async ({ page }) => {
-    await page.goto('/api/simpleAccess/login');
+    await page.goto('/api/adminUsers/login');
 
     // Check for login form elements
     await expect(page.locator('form')).toBeVisible();
@@ -12,7 +12,7 @@ test.describe('Authentication', () => {
   });
 
   test('should reject invalid credentials', async ({ page }) => {
-    await page.goto('/api/simpleAccess/login');
+    await page.goto('/api/adminUsers/login');
 
     // Try to login with invalid credentials
     await page.fill('input[name="username"], input[type="text"]', 'invaliduser');
@@ -25,7 +25,7 @@ test.describe('Authentication', () => {
 
   test('should check login status API', async ({ page }) => {
     // Check logged status when not authenticated
-    const response = await page.request.get('/api/simpleAccess/logged');
+    const response = await page.request.get('/api/adminUsers/logged');
     expect(response.status()).toBe(200);
 
     const data = await response.json();
@@ -33,7 +33,7 @@ test.describe('Authentication', () => {
   });
 
   test('should display logout page', async ({ page }) => {
-    await page.goto('/api/simpleAccess/logout');
+    await page.goto('/api/adminUsers/logout');
 
     // Page should load without error
     await expect(page.locator('body')).toBeVisible();

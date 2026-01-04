@@ -101,8 +101,8 @@ themes/myTheme/
 ## Data Storage
 
 **Primary:** JSON5 files
-- User accounts: `plugins/simpleAccess/userAccount.json5`
-- User roles: `plugins/simpleAccess/userRole.json5`
+- User accounts: `plugins/adminUsers/userAccount.json5`
+- User roles: `plugins/adminUsers/userRole.json5`
 - Plugin configs: `*/pluginConfig.json5`
 
 **Optional:** SQLite database via dbApi plugin (currently disabled)

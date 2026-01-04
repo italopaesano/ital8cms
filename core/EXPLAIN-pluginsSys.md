@@ -264,7 +264,7 @@ function getObjectToShareToOthersPlugin(forPlugin, pluginSys, pathPluginFolder) 
 Riceve oggetti condivisi da altri plugin.
 
 ```js
-// In simpleAccess plugin
+// In adminUsers plugin
 let dbApi = null;
 
 function setSharedObject(fromPlugin, sharedObject) {
@@ -590,7 +590,7 @@ In `pluginConfig.json5`:
 {
   "dependency": {
     "dbApi": "^1.0.0",
-    "simpleAccess": "^1.0.0"
+    "adminUsers": "^1.0.0"
   }
 }
 ```

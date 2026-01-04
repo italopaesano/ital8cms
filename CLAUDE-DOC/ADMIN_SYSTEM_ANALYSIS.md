@@ -160,8 +160,8 @@ Il file contiene solo 1 riga e non ha funzionalità attive. Questo file dovrebbe
 #### 3.2.1 Lista Utenti (index.ejs)
 
 **Funzionalità:**
-- Fetch asincrono della lista utenti da API `/api/simpleAccess/userList`
-- Fetch lista ruoli da API `/api/simpleAccess/roleList`
+- Fetch asincrono della lista utenti da API `/api/adminUsers/userList`
+- Fetch lista ruoli da API `/api/adminUsers/roleList`
 - Rendering dinamico di card per ogni utente con:
   - Username
   - Nome ruolo
@@ -170,8 +170,8 @@ Il file contiene solo 1 riga e non ha funzionalità attive. Questo file dovrebbe
 
 **API Utilizzate:**
 ```javascript
-GET /${apiPrefix}/simpleAccess/userList    // Ottiene array utenti
-GET /${apiPrefix}/simpleAccess/roleList    // Ottiene oggetto ruoli
+GET /${apiPrefix}/adminUsers/userList    // Ottiene array utenti
+GET /${apiPrefix}/adminUsers/roleList    // Ottiene oggetto ruoli
 ```
 
 **Azioni Disponibili:**
@@ -202,8 +202,8 @@ GET /${apiPrefix}/simpleAccess/roleList    // Ottiene oggetto ruoli
 
 **API Utilizzate:**
 ```javascript
-GET  /${apiPrefix}/simpleAccess/roleList    // Popola dropdown ruoli
-POST /${apiPrefix}/simpleAccess/usertUser   // Crea/aggiorna utente
+GET  /${apiPrefix}/adminUsers/roleList    // Popola dropdown ruoli
+POST /${apiPrefix}/adminUsers/usertUser   // Crea/aggiorna utente
 ```
 
 **Logica Modalità:**
@@ -253,8 +253,8 @@ if (isNewUser) {
 
 **API Utilizzate:**
 ```javascript
-GET /${apiPrefix}/simpleAccess/userInfo?username=${username}
-GET /${apiPrefix}/simpleAccess/roleList
+GET /${apiPrefix}/adminUsers/userInfo?username=${username}
+GET /${apiPrefix}/adminUsers/roleList
 ```
 
 **Informazioni Visualizzate:**
@@ -345,7 +345,7 @@ passData.plugin          // Oggetti condivisi dai plugin
 ```
 
 **API Plugin Utilizzate:**
-- `simpleAccess` - Autenticazione e gestione utenti
+- `adminUsers` - Autenticazione e gestione utenti
 - (Altri plugin non ancora integrati nell'admin)
 
 **Hooks Disponibili:**
@@ -510,7 +510,7 @@ Nessuna pagina admin verifica se l'utente è autenticato. Chiunque può accedere
 ```javascript
 // In ogni pagina admin o tramite middleware
 <% if (!passData.ctx.session.authenticated) { %>
-    <script>window.location.href = '/${apiPrefix}/simpleAccess/login';</script>
+    <script>window.location.href = '/${apiPrefix}/adminUsers/login';</script>
 <% return; } %>
 ```
 
@@ -519,7 +519,7 @@ Oppure (MEGLIO) middleware Koa dedicato:
 // In adminRoute.js o admin.js
 async function requireAuth(ctx, next) {
     if (!ctx.session.authenticated) {
-        ctx.redirect(`/${apiPrefix}/simpleAccess/login`);
+        ctx.redirect(`/${apiPrefix}/adminUsers/login`);
         return;
     }
     await next();
@@ -617,7 +617,7 @@ Validazione email/password solo lato server, nessuna indicazione preventiva all'
 ### 6.2 ✅ ASPETTI SICUREZZA CORRETTI
 
 - ✅ `adminPrefix` NON esposto in pagine pubbliche (index.js:45)
-- ✅ API simpleAccess usa bcrypt per password
+- ✅ API adminUsers usa bcrypt per password
 - ✅ Sessioni con signed cookies
 - ✅ Uso di fetch API (no eval/innerHTML pericolosi)
 
@@ -1357,7 +1357,7 @@ async function requireAuth(ctx, next) {
         ctx.session.returnTo = ctx.path;
 
         // Redirect a login
-        ctx.redirect(`/${ital8Conf.apiPrefix}/simpleAccess/login`);
+        ctx.redirect(`/${ital8Conf.apiPrefix}/adminUsers/login`);
         return;
     }
 
@@ -1383,7 +1383,7 @@ function requireRole(minRole) {
     return async (ctx, next) => {
         // Prima verifica autenticazione
         if (!ctx.session || !ctx.session.authenticated) {
-            ctx.redirect(`/${ital8Conf.apiPrefix}/simpleAccess/login`);
+            ctx.redirect(`/${ital8Conf.apiPrefix}/adminUsers/login`);
             return;
         }
 
@@ -1939,7 +1939,7 @@ window.AdminLib = AdminLib;
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li><a class="dropdown-item" href="/<%= passData.adminPrefix %>/profile">Profilo</a></li>
                             <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="/<%= passData.apiPrefix %>/simpleAccess/logout">Logout</a></li>
+                            <li><a class="dropdown-item" href="/<%= passData.apiPrefix %>/adminUsers/logout">Logout</a></li>
                         </ul>
                     </li>
                 </ul>
@@ -2070,7 +2070,7 @@ Il sistema admin, una volta completato secondo questo piano, sarà:
 - `/ital8Config.json5` - Configurazione admin
 
 ### Plugin Rilevanti
-- `simpleAccess` - Autenticazione
+- `adminUsers` - Autenticazione
 - `dbApi` - Database access
 - `bootstrap` - UI framework
 
