@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Il Mio Profilo</title>
+    <%- bootstrapCss %>
+</head>
+<body>
+    <%- apiPrefix %>
+    <%- bootstrapJs %>
+
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8 col-lg-6">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="mb-0">
+                            <i>👤</i> Il Mio Profilo
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <!-- Messaggi di successo/errore -->
+                        <div id="messageDiv" class="mb-3 d-none">
+                            <div class="alert alert-dismissible fade show" role="alert" id="alertBox">
+                                <span id="messageText"></span>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        </div>
+
+                        <!-- Script per gestire messaggi da query string -->
+                        <script>
+                            document.addEventListener("DOMContentLoaded", function() {
+                                const params = new URLSearchParams(window.location.search);
+                                const messageDiv = document.getElementById('messageDiv');
+                                const alertBox = document.getElementById('alertBox');
+                                const messageText = document.getElementById('messageText');
+
+                                if (params.has('success')) {
+                                    messageDiv.classList.remove('d-none');
+                                    alertBox.classList.add('alert-success');
+                                    messageText.textContent = params.get('success');
+                                }
+
+                                if (params.has('error')) {
+                                    messageDiv.classList.remove('d-none');
+                                    alertBox.classList.add('alert-danger');
+                                    messageText.textContent = params.get('error');
+                                }
+                            });
+                        </script>
+
+                        <!-- Informazioni Utente -->
+                        <div class="mb-4">
+                            <h5 class="border-bottom pb-2">Informazioni Account</h5>
+
+                            <div class="row mb-3">
+                                <div class="col-sm-4 fw-bold">Username:</div>
+                                <div class="col-sm-8">
+                                    <code><%= userData.username %></code>
+                                </div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-sm-4 fw-bold">Email:</div>
+                                <div class="col-sm-8">
+                                    <%= userData.email %>
+                                </div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-sm-4 fw-bold">Ruoli:</div>
+                                <div class="col-sm-8">
+                                    <% if (userData.roleIds && userData.roleIds.length > 0) { %>
+                                        <% userData.roleIds.forEach((roleId, index) => { %>
+                                            <span class="badge bg-info me-1">
+                                                <%= roleNames[roleId] || `Ruolo ${roleId}` %>
+                                            </span>
+                                        <% }); %>
+                                    <% } else { %>
+                                        <span class="text-muted">Nessun ruolo assegnato</span>
+                                    <% } %>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Azioni -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="/<%= apiPrefixValue %>/adminUsers/profileEdit" class="btn btn-primary">
+                                <i>✏️</i> Modifica Profilo
+                            </a>
+                            <a href="/<%= apiPrefixValue %>/adminUsers/logout" class="btn btn-outline-danger">
+                                <i>🚪</i> Logout
+                            </a>
+                            <a href="/" class="btn btn-outline-secondary">
+                                <i>🏠</i> Torna alla Home
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-footer text-muted text-center">
+                        <small>Ultimo accesso: <%= new Date().toLocaleString('it-IT') %></small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modifica Profilo</title>
+    <%- bootstrapCss %>
+</head>
+<body>
+    <%- apiPrefix %>
+    <%- bootstrapJs %>
+
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8 col-lg-6">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="mb-0">
+                            <i>✏️</i> Modifica Profilo
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <!-- Messaggi di errore/successo -->
+                        <div id="messageDiv" class="mb-3 d-none">
+                            <div class="alert alert-dismissible fade show" role="alert" id="alertBox">
+                                <span id="messageText"></span>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        </div>
+
+                        <!-- Script per gestire messaggi da query string -->
+                        <script>
+                            document.addEventListener("DOMContentLoaded", function() {
+                                const params = new URLSearchParams(window.location.search);
+                                const messageDiv = document.getElementById('messageDiv');
+                                const alertBox = document.getElementById('alertBox');
+                                const messageText = document.getElementById('messageText');
+
+                                if (params.has('success')) {
+                                    messageDiv.classList.remove('d-none');
+                                    alertBox.classList.add('alert-success');
+                                    messageText.textContent = params.get('success');
+                                }
+
+                                if (params.has('error')) {
+                                    messageDiv.classList.remove('d-none');
+                                    alertBox.classList.add('alert-danger');
+                                    messageText.textContent = params.get('error');
+                                }
+                            });
+                        </script>
+
+                        <form method="POST" action="/<%= apiPrefixValue %>/adminUsers/profileUpdate">
+                            <!-- Username (read-only) -->
+                            <div class="mb-3">
+                                <label for="username" class="form-label fw-bold">Username</label>
+                                <input type="text" class="form-control" id="username" name="username"
+                                       value="<%= userData.username %>" readonly disabled>
+                                <input type="hidden" name="username" value="<%= userData.username %>">
+                                <small class="form-text text-muted">Lo username non può essere modificato</small>
+                            </div>
+
+                            <!-- Email -->
+                            <div class="mb-3">
+                                <label for="email" class="form-label fw-bold">Email</label>
+                                <input type="email" class="form-control" id="email" name="email"
+                                       value="<%= userData.email %>" required>
+                                <div class="invalid-feedback">Inserisci un'email valida</div>
+                            </div>
+
+                            <!-- Password Attuale (obbligatoria per sicurezza) -->
+                            <div class="mb-3">
+                                <label for="currentPassword" class="form-label fw-bold">
+                                    Password Attuale <span class="text-danger">*</span>
+                                </label>
+                                <input type="password" class="form-control" id="currentPassword"
+                                       name="currentPassword" required>
+                                <small class="form-text text-muted">Richiesta per confermare le modifiche</small>
+                            </div>
+
+                            <hr class="my-4">
+
+                            <!-- Cambio Password (opzionale) -->
+                            <h5 class="mb-3">Cambia Password (opzionale)</h5>
+
+                            <div class="mb-3">
+                                <label for="newPassword" class="form-label fw-bold">Nuova Password</label>
+                                <input type="password" class="form-control" id="newPassword"
+                                       name="newPassword" minlength="6">
+                                <small class="form-text text-muted">Lascia vuoto per non modificare la password</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="confirmPassword" class="form-label fw-bold">Conferma Nuova Password</label>
+                                <input type="password" class="form-control" id="confirmPassword"
+                                       name="confirmPassword" minlength="6">
+                                <div class="invalid-feedback" id="passwordMismatch">
+                                    Le password non corrispondono
+                                </div>
+                            </div>
+
+                            <!-- Script validazione password -->
+                            <script>
+                                const newPassword = document.getElementById('newPassword');
+                                const confirmPassword = document.getElementById('confirmPassword');
+                                const form = document.querySelector('form');
+
+                                form.addEventListener('submit', function(e) {
+                                    if (newPassword.value !== confirmPassword.value) {
+                                        e.preventDefault();
+                                        confirmPassword.classList.add('is-invalid');
+                                        document.getElementById('passwordMismatch').style.display = 'block';
+                                    }
+                                });
+
+                                confirmPassword.addEventListener('input', function() {
+                                    if (newPassword.value === confirmPassword.value) {
+                                        confirmPassword.classList.remove('is-invalid');
+                                    }
+                                });
+                            </script>
+
+                            <!-- Azioni -->
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                                <button type="submit" class="btn btn-primary">
+                                    <i>💾</i> Salva Modifiche
+                                </button>
+                                <a href="/<%= apiPrefixValue %>/adminUsers/profile" class="btn btn-outline-secondary">
+                                    <i>❌</i> Annulla
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

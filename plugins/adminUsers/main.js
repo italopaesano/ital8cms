@@ -17,20 +17,22 @@ const sharedObject = {};// ogetto che avrà gliogetti condiviso con gli altri pl
 
 const userManagement = require('./userManagement');// necessario per gestire gli utenti
 const roleManagement = require('./roleManagement');// necessario per gestire i ruoli custom
+const profileManager = require('./profileManager');// necessario per gestire il profilo utente
 
 let myPluginSys = null;// riferimento al sistema dei plugin per accedere a themeSys
 
 const ejsData = {// i dati che verranno passati a èjs
-  apiPrefix: 
+  apiPrefix:
   `<span id="apiPrefix" style="display: none;">${ital8Conf.apiPrefix}</span><!-- questa parte di codice serve ad impostare la variabile apiPrefix -->
   <script>
       const apiPrefix = document.getElementById('apiPrefix').innerText;
   </script>`,
-  bootstrapCss: 
+  apiPrefixValue: ital8Conf.apiPrefix, // valore pulito per uso in URL e attributi
+  bootstrapCss:
   `<link rel='stylesheet' href='/${ital8Conf.apiPrefix}/bootstrap/css/bootstrap.min.css' type='text/css'  media='all' />\n
   <link rel='stylesheet' href='/${ital8Conf.apiPrefix}/bootstrap/css/bootstrap.min.css.map' type='text/css'  media='all' />`,
 
-  bootstrapJs: 
+  bootstrapJs:
   `<script src="/${ital8Conf.apiPrefix}/bootstrap/js/bootstrap.min.js" type="text/javascript" ></script>\n
   <script src="/${ital8Conf.apiPrefix}/bootstrap/js/bootstrap.min.js.map" type="text/javascript" ></script>
   `
@@ -347,6 +349,99 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         ctx.body = result;
         ctx.type = 'application/json';
       }
+    },
+    //START GESTIONE PROFILO UTENTE
+    { // Visualizza profilo utente corrente
+      method: 'GET',
+      path: '/profile',
+      handler: async (ctx) => {
+        // Verifica autenticazione
+        if (!ctx.session || !ctx.session.authenticated) {
+          ctx.redirect(`/${ital8Conf.apiPrefix}/adminUsers/login`);
+          return;
+        }
+
+        const username = ctx.session.user.name;
+        const profileResult = profileManager.getProfile(username);
+
+        if (profileResult.error) {
+          ctx.status = 500;
+          ctx.body = profileResult.error;
+          return;
+        }
+
+        // Carica nomi dei ruoli
+        const roleFilePath = path.join(__dirname, 'userRole.json5');
+        const roleData = loadJson5(roleFilePath);
+        const roleNames = {};
+        Object.entries(roleData.roles).forEach(([id, role]) => {
+          roleNames[id] = role.name;
+        });
+
+        // Prepara dati per template
+        ejsData.userData = profileResult.data;
+        ejsData.roleNames = roleNames;
+
+        const profilePage = path.join(__dirname, 'webPages', 'profile.ejs');
+        ctx.body = await ejs.renderFile(profilePage, ejsData);
+        ctx.set('Content-Type', 'text/html');
+      }
+    },
+    { // Form modifica profilo
+      method: 'GET',
+      path: '/profileEdit',
+      handler: async (ctx) => {
+        // Verifica autenticazione
+        if (!ctx.session || !ctx.session.authenticated) {
+          ctx.redirect(`/${ital8Conf.apiPrefix}/adminUsers/login`);
+          return;
+        }
+
+        const username = ctx.session.user.name;
+        const profileResult = profileManager.getProfile(username);
+
+        if (profileResult.error) {
+          ctx.status = 500;
+          ctx.body = profileResult.error;
+          return;
+        }
+
+        // Prepara dati per template
+        ejsData.userData = profileResult.data;
+
+        const profileEditPage = path.join(__dirname, 'webPages', 'profileEdit.ejs');
+        ctx.body = await ejs.renderFile(profileEditPage, ejsData);
+        ctx.set('Content-Type', 'text/html');
+      }
+    },
+    { // Aggiorna profilo utente
+      method: 'POST',
+      path: '/profileUpdate',
+      handler: async (ctx) => {
+        // Verifica autenticazione
+        if (!ctx.session || !ctx.session.authenticated) {
+          ctx.redirect(`/${ital8Conf.apiPrefix}/adminUsers/login`);
+          return;
+        }
+
+        const { username, email, currentPassword, newPassword } = ctx.request.body;
+
+        // Verifica che lo username corrisponda alla sessione (sicurezza)
+        if (username !== ctx.session.user.name) {
+          ctx.redirect(`/${ital8Conf.apiPrefix}/adminUsers/profileEdit?error=Operazione non autorizzata`);
+          return;
+        }
+
+        const result = await profileManager.updateProfile(username, email, currentPassword, newPassword);
+
+        if (result.error) {
+          ctx.redirect(`/${ital8Conf.apiPrefix}/adminUsers/profileEdit?error=${encodeURIComponent(result.error)}`);
+          return;
+        }
+
+        // Successo: redirect a pagina profilo con messaggio
+        ctx.redirect(`/${ital8Conf.apiPrefix}/adminUsers/profile?success=${encodeURIComponent(result.success)}`);
+      }
     }
   );
 
@@ -369,11 +464,28 @@ function getHooksPage(){
       let message;
 
       if(passData.ctx.session.user){
-        message = `ciao ${passData.ctx.session.user.name} <br> <a href="/${ital8Conf.apiPrefix}/adminUsers/logout">Logout</a>` ;
+        // Utente loggato: mostra nome + link profilo + logout
+        message = `
+          <div>👤 <strong>${passData.ctx.session.user.name}</strong></div>
+          <div class="mt-2">
+            <a href="/${ital8Conf.apiPrefix}/adminUsers/profile" class="btn btn-sm btn-outline-primary w-100 mb-1">
+              📋 Profilo
+            </a>
+            <a href="/${ital8Conf.apiPrefix}/adminUsers/logout" class="btn btn-sm btn-outline-danger w-100">
+              🚪 Logout
+            </a>
+          </div>
+        `;
       }else{
-        message = `non sei loggato <br> <a href="/${ital8Conf.apiPrefix}/adminUsers/login">Login</a>`;
+        // Utente non loggato: mostra solo link login
+        message = `
+          <div class="text-muted mb-2">Non sei loggato</div>
+          <a href="/${ital8Conf.apiPrefix}/adminUsers/login" class="btn btn-sm btn-primary w-100">
+            🔑 Login
+          </a>
+        `;
       }
-      
+
       return `
       <style>
       #loginStatusBox {
@@ -381,19 +493,19 @@ function getHooksPage(){
         top: 1rem;
         right: 1rem;
         z-index: 1050;
+        min-width: 180px;
       }
       </style>
 
       <!-- Riquadro stato login -->
     <div id="loginStatusBox" class="card shadow border-primary">
-      <div class="card-body p-2">
-        <div id="loginStatus" class="text-end">
-          <!-- Contenuto dinamico qui -->
-          <span class="text-muted">${ message }</span>
+      <div class="card-body p-3">
+        <div id="loginStatus" class="text-center">
+          ${message}
         </div>
       </div>
     </div>
-      
+
         `;
       });
 
