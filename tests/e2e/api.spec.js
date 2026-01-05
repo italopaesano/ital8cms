@@ -13,13 +13,13 @@ test.describe('API Endpoints', () => {
     expect(response.status()).toBe(200);
   });
 
-  test('should have simpleAccess login endpoint', async ({ request }) => {
-    const response = await request.get('/api/simpleAccess/login');
+  test('should have adminUsers login endpoint', async ({ request }) => {
+    const response = await request.get('/api/adminUsers/login');
     expect(response.status()).toBe(200);
   });
 
-  test('should have simpleAccess logged endpoint', async ({ request }) => {
-    const response = await request.get('/api/simpleAccess/logged');
+  test('should have adminUsers logged endpoint', async ({ request }) => {
+    const response = await request.get('/api/adminUsers/logged');
     expect(response.status()).toBe(200);
 
     const data = await response.json();

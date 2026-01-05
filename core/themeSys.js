@@ -107,7 +107,7 @@ const loadJson5 = require('./loadJson5');
  *
  *   // Template personalizzato plugin:
  *   const templatePath = passData.themeSys.resolvePluginTemplatePath(
- *     'simpleAccess', 'login', defaultPath
+ *     'adminUsers', 'login', defaultPath
  *   );
  *
  * ============================================================================
@@ -686,7 +686,7 @@ class themeSys{
 
   /**
    * Verifica se esiste un template personalizzato nel tema per un endpoint di un plugin
-   * @param {string} pluginName - Nome del plugin (es. 'simpleAccess')
+   * @param {string} pluginName - Nome del plugin (es. 'adminUsers')
    * @param {string} endpointName - Nome dell'endpoint (es. 'login')
    * @param {string} templateFile - Nome del file template (es. 'template.ejs')
    * @param {boolean} isAdmin - Se true, usa il tema admin invece del tema pubblico
@@ -699,7 +699,7 @@ class themeSys{
 
   /**
    * Restituisce il path del template personalizzato se esiste, altrimenti null
-   * @param {string} pluginName - Nome del plugin (es. 'simpleAccess')
+   * @param {string} pluginName - Nome del plugin (es. 'adminUsers')
    * @param {string} endpointName - Nome dell'endpoint (es. 'login')
    * @param {string} templateFile - Nome del file template (es. 'template.ejs')
    * @param {boolean} isAdmin - Se true, usa il tema admin invece del tema pubblico
@@ -795,7 +795,7 @@ class themeSys{
    * @param {string} pluginName - Nome del plugin
    * @param {string} endpointName - Nome dell'endpoint
    * @param {string} assetFile - Nome del file asset (es. 'style.css')
-   * @returns {string} - URL dell'asset (es. '/theme-plugin-assets/simpleAccess/login/style.css')
+   * @returns {string} - URL dell'asset (es. '/theme-plugin-assets/adminUsers/login/style.css')
    */
   getPluginAssetUrl(pluginName, endpointName, assetFile) {
     return `/theme-plugin-assets/${pluginName}/${endpointName}/${assetFile}`;

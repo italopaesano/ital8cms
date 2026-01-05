@@ -22,7 +22,7 @@ exampleTheme/
 │   ├── css/theme.css       # Stili del tema
 │   └── js/theme.js         # Script del tema
 └── pluginsEndpointsMarkup/  # Override endpoint plugin
-    └── simpleAccess/
+    └── adminUsers/
         └── login/
             ├── template.ejs
             └── style.css

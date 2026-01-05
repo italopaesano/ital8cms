@@ -272,17 +272,17 @@ describe('Theme System', () => {
     }
 
     test('tema default ha personalizzazione login', () => {
-      const hasCustom = hasCustomPluginTemplate('default', 'simpleAccess', 'login');
+      const hasCustom = hasCustomPluginTemplate('default', 'adminUsers', 'login');
       expect(hasCustom).toBe(true);
     });
 
     test('tema default ha personalizzazione logout', () => {
-      const hasCustom = hasCustomPluginTemplate('default', 'simpleAccess', 'logout');
+      const hasCustom = hasCustomPluginTemplate('default', 'adminUsers', 'logout');
       expect(hasCustom).toBe(true);
     });
 
     test('tema exampleTheme ha personalizzazione login', () => {
-      const hasCustom = hasCustomPluginTemplate('exampleTheme', 'simpleAccess', 'login');
+      const hasCustom = hasCustomPluginTemplate('exampleTheme', 'adminUsers', 'login');
       expect(hasCustom).toBe(true);
     });
 
@@ -296,7 +296,7 @@ describe('Theme System', () => {
         themesBasePath,
         'default',
         'pluginsEndpointsMarkup',
-        'simpleAccess',
+        'adminUsers',
         'login',
         'style.css'
       );

@@ -275,7 +275,7 @@ I temi possono dichiarare dipendenze di due tipi:
 {
   "pluginDependency": {
     "bootstrap": "^1.0.0",
-    "simpleAccess": ">=1.0.0"
+    "adminUsers": ">=1.0.0"
   }
 }
 ```
@@ -624,7 +624,7 @@ Permette ai temi di **sovrascrivere l'aspetto degli endpoint dei plugin** senza 
 ```
 themes/mioTema/
 └── pluginsEndpointsMarkup/
-    └── simpleAccess/           # Nome plugin
+    └── adminUsers/           # Nome plugin
         └── login/              # Nome endpoint
             ├── template.ejs    # Template custom
             └── style.css       # CSS custom
@@ -687,7 +687,7 @@ resolvePluginTemplatePath(pluginName, endpointName, defaultPath, templateFile = 
 ### 8.3 Flusso di Risoluzione Template
 
 ```
-Plugin carica endpoint (es: /api/simpleAccess/login)
+Plugin carica endpoint (es: /api/adminUsers/login)
          ↓
 Plugin chiama themeSys.resolvePluginTemplatePath()
          ↓
@@ -706,7 +706,7 @@ Plugin chiama themeSys.resolvePluginTemplatePath()
 ### 8.4 Esempio di Integrazione nel Plugin
 
 ```javascript
-// In plugins/simpleAccess/main.js
+// In plugins/adminUsers/main.js
 
 getRouteArray(router, pluginSys, pathPluginFolder) {
   const themeSys = pluginSys.themeSys; // Riferimento a themeSys
@@ -721,7 +721,7 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
 
         // Risolve: custom o default
         const templatePath = themeSys.resolvePluginTemplatePath(
-          'simpleAccess',   // Nome plugin
+          'adminUsers',   // Nome plugin
           'login',          // Nome endpoint
           defaultTemplatePath,
           'template.ejs',
@@ -729,7 +729,7 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
         );
 
         // Carica CSS custom se esiste
-        const customCss = themeSys.getPluginCustomCss('simpleAccess', 'login');
+        const customCss = themeSys.getPluginCustomCss('adminUsers', 'login');
 
         // Render template
         ctx.body = await ejs.renderFile(templatePath, {
@@ -766,8 +766,8 @@ getPluginCustomCss(pluginName, endpointName, cssFile = 'style.css', isAdmin = fa
 
 **Utilizzo:**
 ```javascript
-const customCss = themeSys.getPluginCustomCss('simpleAccess', 'login');
-// Ritorna contenuto di themes/tema/pluginsEndpointsMarkup/simpleAccess/login/style.css
+const customCss = themeSys.getPluginCustomCss('adminUsers', 'login');
+// Ritorna contenuto di themes/tema/pluginsEndpointsMarkup/adminUsers/login/style.css
 ```
 
 ---
@@ -1006,7 +1006,7 @@ Per tornare alla cartella /www/ root, attivare un tema con wwwCustomPath: 0.
 ### 11.3 Personalizzare Endpoint Plugin
 
 ```javascript
-// Nel plugin simpleAccess
+// Nel plugin adminUsers
 
 getRouteArray(router, pluginSys, pathPluginFolder) {
   const themeSys = pluginSys.themeSys;
@@ -1019,13 +1019,13 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
 
       // Risolve template (custom o default)
       const templatePath = themeSys.resolvePluginTemplatePath(
-        'simpleAccess',
+        'adminUsers',
         'login',
         defaultPath
       );
 
       // Carica CSS custom
-      const customCss = themeSys.getPluginCustomCss('simpleAccess', 'login');
+      const customCss = themeSys.getPluginCustomCss('adminUsers', 'login');
 
       // Render
       ctx.body = await ejs.renderFile(templatePath, {

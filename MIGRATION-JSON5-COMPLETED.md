@@ -1,13 +1,13 @@
 # ✅ Migrazione JSON5 Completata
 
 **Data:** 2025-12-11
-**Scope:** Plugin simpleAccess - User Management System
+**Scope:** Plugin adminUsers - User Management System
 
 ---
 
 ## 📝 Modifiche Effettuate
 
-### 1. **plugins/simpleAccess/main.js**
+### 1. **plugins/adminUsers/main.js**
 
 #### Linee 224-235 (endpoint `/userList`)
 **Prima:**
@@ -59,7 +59,7 @@ try {
 
 ---
 
-### 2. **plugins/simpleAccess/userManagement.js**
+### 2. **plugins/adminUsers/userManagement.js**
 
 #### Import aggiunto (linea 5)
 **Aggiunto:**
@@ -97,7 +97,7 @@ const userAccount = loadJson5(usersFilePath);
 - ✅ `libAccess.js`: **2 utilizzi** di `loadJson5()` (già conforme)
 
 ### Eliminazione Pattern Obsoleti
-- ✅ **0 occorrenze** di `JSON.parse(fs.readFileSync())` nel plugin simpleAccess
+- ✅ **0 occorrenze** di `JSON.parse(fs.readFileSync())` nel plugin adminUsers
 
 ---
 
@@ -129,7 +129,7 @@ const userAccount = loadJson5(usersFilePath);
 
 2. **Completare Funzionalità Delete:**
    - Implementare `core/admin/webPages/usersManagment/userDelete.ejs`
-   - Aggiungere endpoint API `DELETE /api/simpleAccess/deleteUser`
+   - Aggiungere endpoint API `DELETE /api/adminUsers/deleteUser`
 
 3. **Pulizia Dati Test:**
    - Rimuovere utenti di test da `userAccount.json5`
@@ -146,8 +146,8 @@ const userAccount = loadJson5(usersFilePath);
 
 | File | Linee Modificate | Tipo Modifica |
 |------|------------------|---------------|
-| `plugins/simpleAccess/main.js` | 228, 230, 248, 250, 268 | Path + loadJson5() |
-| `plugins/simpleAccess/userManagement.js` | 5, 47 | Import + loadJson5() |
+| `plugins/adminUsers/main.js` | 228, 230, 248, 250, 268 | Path + loadJson5() |
+| `plugins/adminUsers/userManagement.js` | 5, 47 | Import + loadJson5() |
 
 **Totale:** 2 file, 7 linee modificate
 
@@ -155,6 +155,6 @@ const userAccount = loadJson5(usersFilePath);
 
 ## ✅ Status: COMPLETATO
 
-La migrazione da `.json` a `.json5` è stata completata con successo. Tutti i file nel plugin `simpleAccess` ora utilizzano il formato JSON5 e la funzione centralizzata `loadJson5()`.
+La migrazione da `.json` a `.json5` è stata completata con successo. Tutti i file nel plugin `adminUsers` ora utilizzano il formato JSON5 e la funzione centralizzata `loadJson5()`.
 
 **Nessun file richiede ulteriori modifiche per questa migrazione.**

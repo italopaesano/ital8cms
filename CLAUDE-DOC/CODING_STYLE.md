@@ -300,7 +300,7 @@ themeSys.js
 ```javascript
 // ✅ CORRETTO
 plugins/dbApi/
-plugins/simpleAccess/
+plugins/adminUsers/
 plugins/exaplePlugin/
 plugins/ostrukUtility/
 
@@ -581,7 +581,7 @@ function getHooksPage() {
 // Plugin che condivide (es: dbApi)
 function getObjectToShareToOthersPlugin(pluginName) {
   // Posso personalizzare cosa condividere in base al plugin richiedente
-  if (pluginName === 'simpleAccess') {
+  if (pluginName === 'adminUsers') {
     return { db: this.userDb };
   }
   return { db: this.mainDb };
@@ -1121,7 +1121,7 @@ function getObjectToShareToOthersPlugin(pluginName) {
   const db = new Database(pluginDbPath);
 
   // Condivido oggetti diversi in base al plugin richiedente
-  if (pluginName === 'simpleAccess') {
+  if (pluginName === 'adminUsers') {
     return {
       db: db,
       userDb: this.userDb,
@@ -1141,8 +1141,8 @@ function setSharedObject(pluginName, object) {
     this.db = object.db; // Riferimento locale
   }
 
-  if (pluginName === 'simpleAccess') {
-    sharedObject.simpleAccess = object;
+  if (pluginName === 'adminUsers') {
+    sharedObject.adminUsers = object;
     this.auth = object;
   }
 }

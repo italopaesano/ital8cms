@@ -29,7 +29,7 @@ describe('Plugin System Utilities', () => {
     test('ritorna true se tutte le dipendenze sono soddisfatte', () => {
       const activePlugins = new Map([
         ['dbApi', {}],
-        ['simpleAccess', {}]
+        ['adminUsers', {}]
       ]);
       const dependencies = new Map([
         ['dbApi', '^1.0.0']

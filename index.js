@@ -98,7 +98,7 @@ app.use(
               href: ctx.href,
               query: ctx.query,
               ctx: ctx,// DA MIGLIORARE PER LA SICUREZZA
-              //session: ctx.session || undefined, // DA MIGLIORARE qusta variabile serve al  Plugin simpleAccess per gestire la visualizazione dele sessioni nell'hook page
+              //session: ctx.session || undefined, // DA MIGLIORARE qusta variabile serve al  Plugin adminUsers per gestire la visualizazione dele sessioni nell'hook page
             },
             // Espandi le funzioni globali (es. __() per i18n)
             // IMPORTANTE: Le versioni locali (passData.plugin.simpleI18n.__) rimangono disponibili
@@ -159,7 +159,7 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
                 href: ctx.href,
                 query: ctx.query,
                 ctx: ctx,// DA MIGLIORARE PER LA SICUREZZA
-                //session: ctx.session || undefined, // DA MIGLIORARE qusta variabile serve al  Plugin simpleAccess per gestire la visualizazione dele sessioni nell'hook page
+                //session: ctx.session || undefined, // DA MIGLIORARE qusta variabile serve al  Plugin adminUsers per gestire la visualizazione dele sessioni nell'hook page
               },
               // Espandi le funzioni globali (es. __() per i18n)
               // IMPORTANTE: Le versioni locali (passData.plugin.simpleI18n.__) rimangono disponibili
