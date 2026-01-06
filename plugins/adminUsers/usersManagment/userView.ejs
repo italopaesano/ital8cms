@@ -33,12 +33,8 @@
                 <p id="email" class="user-info-value">N/A</p>
             </div>
             <div class="mb-3 user-info-item">
-                <label for="role" class="form-label"><strong>Ruolo:</strong></label>
-                <p id="role" class="user-info-value">Ruolo non trovato</p>
-            </div>
-            <div class="mb-3 user-info-item">
-                <label for="role-description" class="form-label"><strong>Descrizione Ruolo:</strong></label>
-                <p id="role-description" class="user-info-value">Ruolo non trovato</p>
+                <label for="roles" class="form-label"><strong>Ruoli:</strong></label>
+                <div id="roles" class="user-info-value">Nessun ruolo assegnato</div>
             </div>
         </div>
         <div class="card-footer text-center user-info-footer">
@@ -62,28 +58,52 @@
         fetch(`/${apiPrefix}/adminUsers/userInfo?username=${username}`)
             .then(response => response.json())
             .then(userInfo => {
-                if (userInfo && userInfo.roleId) {
+                // Controllo aggiornato per sistema multi-role
+                if (userInfo && userInfo.roleIds && Array.isArray(userInfo.roleIds)) {
                     document.getElementById('username').innerText = username || 'N/A';
                     document.getElementById('email').innerText = userInfo.email || 'N/A';
 
+                    // Carica lista ruoli e mostra tutti i ruoli dell'utente
                     fetch(`/${apiPrefix}/adminUsers/roleList`)
                         .then(response => response.json())
                         .then(roleList => {
-                            const roles = roleList.roles;
-                            const role = roles && roles[userInfo.roleId];
-                            //const role = roleList.find(r => r.id === userInfo.roleId);
-                            document.getElementById('role').innerText = role ? role.name : 'Ruolo non trovato';
-                            document.getElementById('role-description').innerText = role ? role.description : 'nessuna descrizione del ruolo';
+                            const allRoles = roleList.roles;
+                            const rolesContainer = document.getElementById('roles');
+
+                            if (userInfo.roleIds.length === 0) {
+                                rolesContainer.innerHTML = '<span class="text-muted">Nessun ruolo assegnato</span>';
+                            } else {
+                                // Crea lista di badge per ogni ruolo
+                                const rolesBadges = userInfo.roleIds.map(roleId => {
+                                    const role = allRoles && allRoles[roleId];
+                                    if (role) {
+                                        // Icona diversa per ruoli hardcoded vs custom
+                                        const icon = role.isHardcoded ?
+                                            (roleId === 0 ? '🔴' : roleId === 1 ? '👑' : roleId === 2 ? '✏️' : '📝') :
+                                            '🛡️';
+                                        const badgeClass = role.isHardcoded ? 'bg-primary' : 'bg-success';
+                                        return `
+                                            <span class="badge ${badgeClass} me-2 mb-2" style="font-size: 0.9rem;" title="${role.description || 'Nessuna descrizione'}">
+                                                ${icon} ${role.name} (ID: ${roleId})
+                                            </span>
+                                        `;
+                                    } else {
+                                        return `<span class="badge bg-danger me-2 mb-2">⚠️ Ruolo ${roleId} non trovato</span>`;
+                                    }
+                                }).join('');
+
+                                rolesContainer.innerHTML = rolesBadges;
+                            }
                         })
                         .catch(() => {
-                            document.getElementById('role').innerText = 'Errore nel caricamento del ruolo';
+                            document.getElementById('roles').innerHTML = '<span class="text-danger">Errore nel caricamento dei ruoli</span>';
                         });
 
-                    document.getElementById('edit-user-btn').href = `/${adminPrefix}/usersManagment/userEdit.ejs?username=${username}`;
+                    document.getElementById('edit-user-btn').href = `/${adminPrefix}/usersManagment/userUpsert.ejs?username=${username}`;
                     document.getElementById('delete-user-btn').href = `/${adminPrefix}/usersManagment/userDelete.ejs?username=${username}`;
                     document.getElementById('user-info-container').style.display = 'block';
                 } else {
-                    document.getElementById('error-message').innerText = 'Utente non trovato.';
+                    document.getElementById('error-message').innerText = 'Utente non trovato o dati non validi.';
                     document.getElementById('error-message').style.display = 'block';
                 }
             })

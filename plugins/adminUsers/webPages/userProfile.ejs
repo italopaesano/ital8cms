@@ -1,0 +1,348 @@
+<!-- TEMPLATE PER LA MODIFICA DEL PROFILO UTENTE (username e password) -->
+<!-- Permette all'utente loggato di modificare i propri dati -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modifica Profilo - ital8cms</title>
+
+    <!-- Bootstrap CSS dal plugin bootstrap -->
+    <%- bootstrapCss %>
+
+    <!-- CSS personalizzato del tema (se presente) -->
+    <% if (customCss) { %>
+    <style>
+        <%- customCss %>
+    </style>
+    <% } %>
+</head>
+<body>
+
+<!-- api prefix -->
+<%- apiPrefix %>
+
+<!-- Dati sessione (JSON nascosto per JavaScript) -->
+<script id="sessionData" type="application/json">
+<%- JSON.stringify(session) %>
+</script>
+
+<div class="container mt-4">
+    <div class="text-center mb-4">
+        <h1>🔐 Modifica Profilo Utente</h1>
+        <p class="text-muted">Aggiorna il tuo username e la tua password</p>
+    </div>
+
+    <!-- Alert messaggi -->
+    <div id="alertContainer"></div>
+
+    <!-- Form modifica profilo -->
+    <form id="userProfileForm" class="mt-3">
+        <!-- Username da cercare (per testing senza autenticazione) - nascosto se loggato -->
+        <div class="card mb-3 border-warning" id="testingCard">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">⚙️ Testing (senza autenticazione)</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="testUsername" class="form-label">Username da modificare</label>
+                    <input type="text" class="form-control" id="testUsername" value="testuser" placeholder="Inserisci username">
+                    <small class="form-text text-muted">Inserisci lo username dell'utente da modificare (es: testuser)</small>
+                </div>
+                <button type="button" class="btn btn-warning" onclick="loadCurrentUserData()">🔄 Carica Dati Utente</button>
+            </div>
+        </div>
+
+        <!-- Informazioni utente corrente -->
+        <div class="card mb-3">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">👤 Informazioni Attuali</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Username attuale:</strong> <span id="currentUsername">-</span></p>
+                <p><strong>Email:</strong> <span id="currentEmail">-</span></p>
+                <p class="text-muted mb-0">
+                    <small>💡 Per motivi di sicurezza, dovrai inserire la tua password attuale per confermare le modifiche.</small>
+                </p>
+            </div>
+        </div>
+
+        <!-- Sezione modifica username -->
+        <div class="card mb-3">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">📝 Modifica Username</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="newUsername" class="form-label">Nuovo Username</label>
+                    <input type="text" class="form-control" id="newUsername" placeholder="Inserisci nuovo username (lascia vuoto per mantenere attuale)">
+                    <small class="form-text text-muted">Minimo 3 caratteri, solo lettere, numeri, underscore e trattini</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sezione modifica password -->
+        <div class="card mb-3">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">🔑 Modifica Password</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="newPassword" class="form-label">Nuova Password</label>
+                    <input type="password" class="form-control" id="newPassword" placeholder="Inserisci nuova password (lascia vuoto per mantenere attuale)">
+                    <small class="form-text text-muted">Minimo 8 caratteri raccomandati</small>
+                </div>
+                <div class="mb-3">
+                    <label for="confirmPassword" class="form-label">Conferma Nuova Password</label>
+                    <input type="password" class="form-control" id="confirmPassword" placeholder="Reinserisci la nuova password">
+                </div>
+            </div>
+        </div>
+
+        <!-- Password attuale (richiesta per confermare modifiche) -->
+        <div class="card mb-3">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">🔒 Conferma Identità</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="currentPassword" class="form-label">Password Attuale <span class="text-danger">*</span></label>
+                    <input type="password" class="form-control" id="currentPassword" placeholder="Inserisci la tua password attuale" required>
+                    <small class="form-text text-danger">Obbligatorio per confermare le modifiche</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pulsanti azione -->
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-success">💾 Salva Modifiche</button>
+            <button type="button" class="btn btn-secondary" onclick="window.history.back()">❌ Annulla</button>
+        </div>
+    </form>
+</div>
+
+<script>
+    let currentUserData = {};
+
+    // Leggi dati sessione dal JSON nascosto
+    const sessionData = JSON.parse(document.getElementById('sessionData').textContent);
+    const isAuthenticated = sessionData.isAuthenticated;
+    const sessionUsername = sessionData.username;
+
+    // Inizializza la pagina in base allo stato di autenticazione
+    window.addEventListener('DOMContentLoaded', () => {
+        if (isAuthenticated && sessionUsername) {
+            // Utente loggato: nascondi il card di testing e carica automaticamente
+            document.getElementById('testingCard').style.display = 'none';
+            document.getElementById('testUsername').value = sessionUsername;
+            loadCurrentUserData();
+            showAlert(`👋 Benvenuto ${sessionUsername}! Modifica il tuo profilo qui sotto.`, 'info');
+        } else {
+            // Utente non loggato: mostra il card di testing
+            document.getElementById('testingCard').style.display = 'block';
+            showAlert('⚠️ Non sei loggato. Puoi testare la funzionalità specificando manualmente uno username.', 'warning');
+        }
+    });
+
+    // Carica dati utente corrente
+    async function loadCurrentUserData() {
+        try {
+            let url;
+            if (isAuthenticated && sessionUsername) {
+                // Utente loggato: usa endpoint senza parametri (userà sessione)
+                url = `/${apiPrefix}/adminUsers/getCurrentUser`;
+            } else {
+                // Testing: usa username da input
+                const username = document.getElementById('testUsername').value;
+                if (!username) {
+                    showAlert('⚠️ Inserisci uno username valido', 'warning');
+                    return;
+                }
+                url = `/${apiPrefix}/adminUsers/getCurrentUser?username=${encodeURIComponent(username)}`;
+            }
+
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error('Errore caricamento dati utente');
+            }
+
+            currentUserData = await response.json();
+
+            // Popola i campi informativi
+            document.getElementById('currentUsername').textContent = currentUserData.username || 'N/A';
+            document.getElementById('currentEmail').textContent = currentUserData.email || 'N/A';
+
+            if (!isAuthenticated) {
+                showAlert('✅ Dati utente caricati con successo', 'success');
+            }
+
+        } catch (error) {
+            console.error('Errore caricamento dati utente:', error);
+            showAlert('❌ Errore nel caricamento dei dati utente: ' + error.message, 'danger');
+        }
+    }
+
+    // Mostra alert messaggi
+    function showAlert(message, type = 'info') {
+        const alertContainer = document.getElementById('alertContainer');
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        alertContainer.innerHTML = '';
+        alertContainer.appendChild(alertDiv);
+
+        // Scroll alla vista
+        alertContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        // Auto-dismiss dopo 5 secondi
+        if (type === 'success') {
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+    }
+
+    // Validazione form
+    function validateForm() {
+        const newUsername = document.getElementById('newUsername').value.trim();
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        const currentPassword = document.getElementById('currentPassword').value;
+
+        // Verifica che almeno un campo sia compilato
+        if (!newUsername && !newPassword) {
+            showAlert('⚠️ Devi modificare almeno il username o la password.', 'warning');
+            return false;
+        }
+
+        // Verifica password attuale obbligatoria
+        if (!currentPassword) {
+            showAlert('⚠️ La password attuale è obbligatoria per confermare le modifiche.', 'warning');
+            document.getElementById('currentPassword').focus();
+            return false;
+        }
+
+        // Validazione username (se modificato)
+        if (newUsername) {
+            if (newUsername.length < 3) {
+                showAlert('⚠️ Il nuovo username deve contenere almeno 3 caratteri.', 'warning');
+                document.getElementById('newUsername').focus();
+                return false;
+            }
+            if (!/^[a-zA-Z0-9_-]+$/.test(newUsername)) {
+                showAlert('⚠️ Il nuovo username può contenere solo lettere, numeri, underscore (_) e trattini (-).', 'warning');
+                document.getElementById('newUsername').focus();
+                return false;
+            }
+        }
+
+        // Validazione password (se modificata)
+        if (newPassword) {
+            if (newPassword.length < 6) {
+                showAlert('⚠️ La nuova password deve contenere almeno 6 caratteri (8 raccomandati).', 'warning');
+                document.getElementById('newPassword').focus();
+                return false;
+            }
+            if (newPassword !== confirmPassword) {
+                showAlert('⚠️ Le password non coincidono. Controlla e riprova.', 'warning');
+                document.getElementById('confirmPassword').focus();
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // Gestione submit form
+    document.getElementById('userProfileForm').addEventListener('submit', async function (event) {
+        event.preventDefault();
+
+        // Validazione
+        if (!validateForm()) {
+            return;
+        }
+
+        const newUsername = document.getElementById('newUsername').value.trim() || null;
+        const newPassword = document.getElementById('newPassword').value || null;
+        const currentPassword = document.getElementById('currentPassword').value;
+
+        // Prepara body della richiesta
+        const requestBody = {
+            newUsername,
+            newPassword,
+            currentPassword
+        };
+
+        // Se NON è autenticato, aggiungi currentUsername dal campo di testing
+        if (!isAuthenticated) {
+            const currentUsername = document.getElementById('testUsername').value;
+            if (!currentUsername) {
+                showAlert('⚠️ Devi prima caricare i dati di un utente', 'warning');
+                return;
+            }
+            requestBody.currentUsername = currentUsername;
+        }
+        // Se è autenticato, il backend userà ctx.session.user.name
+
+        try {
+            const response = await fetch(`/${apiPrefix}/adminUsers/updateUserProfile`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                showAlert(`✅ ${result.success}`, 'success');
+
+                // Se username è cambiato, aggiorna il campo testUsername
+                if (newUsername) {
+                    document.getElementById('testUsername').value = newUsername;
+                    showAlert('⚠️ Username modificato! Aggiorna il campo "Username da modificare" se necessario.', 'info');
+                }
+
+                // Reset solo i campi di modifica (non il testUsername)
+                document.getElementById('newUsername').value = '';
+                document.getElementById('newPassword').value = '';
+                document.getElementById('confirmPassword').value = '';
+                document.getElementById('currentPassword').value = '';
+
+                // Ricarica dati utente
+                setTimeout(() => {
+                    loadCurrentUserData();
+                }, 1000);
+            } else if (result.error) {
+                showAlert(`❌ ${result.error}`, 'danger');
+
+                // Evidenzia campo con errore se specificato
+                if (result.errorField) {
+                    const field = document.getElementById(result.errorField);
+                    if (field) {
+                        field.classList.add('is-invalid');
+                        field.focus();
+                        setTimeout(() => field.classList.remove('is-invalid'), 3000);
+                    }
+                }
+            } else {
+                throw new Error('Risposta del server non valida');
+            }
+        } catch (error) {
+            console.error('Errore:', error);
+            showAlert(`❌ Errore nella modifica del profilo: ${error.message}`, 'danger');
+        }
+    });
+
+    // Non caricare automaticamente - l'utente deve cliccare il pulsante "Carica Dati Utente"
+</script>
+
+<!-- Bootstrap JS dal plugin bootstrap -->
+<%- bootstrapJs %>
+
+</body>
+</html>

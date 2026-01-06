@@ -118,4 +118,69 @@ se l'utente insrisce correttamente i dati al primo colpo , allora l'url di redir
 
 ```
 
+---
+
+## Plugin Structure and webPages/ Convention
+
+This plugin follows the **strongly recommended** `webPages/` directory convention for organizing EJS templates:
+
+```
+plugins/adminUsers/
+├── main.js                    # Plugin logic
+├── pluginConfig.json5         # Configuration
+├── pluginDescription.json5    # Metadata
+├── webPages/                  # ⭐ Templates directory (RECOMMENDED)
+│   ├── login.ejs              # Login page template
+│   └── logout.ejs             # Logout page template
+├── usersManagment/            # Admin section (symlinked to /core/admin/webPages/)
+├── rolesManagment/            # Admin section (symlinked to /core/admin/webPages/)
+├── userAccount.json5          # User data storage
+├── userRole.json5             # Role definitions
+├── userManagement.js          # User management logic
+└── roleManagement.js          # Role management logic
+```
+
+### Why webPages/ Directory?
+
+The `webPages/` directory provides:
+
+- ✅ **Clear organization** - Separates template files from logic code
+- ✅ **Easy maintenance** - All templates in one predictable location
+- ✅ **Consistency** - Follows ital8cms best practices
+- ✅ **Scalability** - Better structure as plugin grows with more pages
+
+### Template Loading Pattern
+
+All templates are loaded using this pattern in `main.js`:
+
+```javascript
+// Define default template path (using webPages/ convention)
+const defaultLoginPage = path.join(__dirname, 'webPages', 'login.ejs');
+
+// Allow theme customization (optional but recommended)
+if (myPluginSys) {
+  const themeSys = myPluginSys.getThemeSys();
+  if (themeSys) {
+    loginPage = themeSys.resolvePluginTemplatePath(
+      'adminUsers',
+      'login',
+      defaultLoginPage,
+      'template.ejs'
+    );
+    customCss = themeSys.getPluginCustomCss('adminUsers', 'login');
+  }
+}
+
+// Render template
+ctx.body = await ejs.renderFile(loginPage, ejsData);
+```
+
+This pattern:
+1. Uses `webPages/` for default templates
+2. Allows theme override via `themeSys.resolvePluginTemplatePath()`
+3. Supports custom CSS injection from themes
+4. Provides fallback if theme customization doesn't exist
+
+**Note:** The `webPages/` directory is a **convention, not a requirement**. However, it is **strongly recommended** for all plugins that serve HTML pages to maintain consistency across the ital8cms ecosystem.
+
 

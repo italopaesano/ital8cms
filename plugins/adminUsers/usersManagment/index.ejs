@@ -82,11 +82,29 @@
                     const userContainer = document.createElement('div');
                     userContainer.className = "list-group-item";
 
-                    const roleName = roles[user.roleId] ? roles[user.roleId].name : 'Ruolo sconosciuto';
+                    // Sistema multi-role: mostra tutti i ruoli dell'utente
+                    let rolesHTML = '';
+                    if (user.roleIds && Array.isArray(user.roleIds) && user.roleIds.length > 0) {
+                        const rolesBadges = user.roleIds.map(roleId => {
+                            const role = roles[roleId];
+                            if (role) {
+                                const icon = role.isHardcoded ?
+                                    (roleId === 0 ? '🔴' : roleId === 1 ? '👑' : roleId === 2 ? '✏️' : '📝') :
+                                    '🛡️';
+                                const badgeClass = role.isHardcoded ? 'bg-primary' : 'bg-success';
+                                return `<span class="badge ${badgeClass} me-1" title="${role.description || ''}">${icon} ${role.name}</span>`;
+                            } else {
+                                return `<span class="badge bg-danger me-1">⚠️ ID:${roleId}</span>`;
+                            }
+                        }).join(' ');
+                        rolesHTML = rolesBadges;
+                    } else {
+                        rolesHTML = '<span class="text-muted">Nessun ruolo</span>';
+                    }
 
                     userContainer.innerHTML = `
                         <p><strong>Username:</strong> ${user.username}</p>
-                        <p><strong>Role:</strong> ${roleName}</p>
+                        <p><strong>Ruoli:</strong> ${rolesHTML}</p>
                         <div class="text-start">
                             <a href="/${adminPrefix}/usersManagment/userView.ejs?username=${user.username}" class="btn btn-info btn-sm me-2">Visualizza</a>
                             <a href="/${adminPrefix}/usersManagment/userUpsert.ejs?username=${user.username}" class="btn btn-warning btn-sm me-2">Modifica</a>

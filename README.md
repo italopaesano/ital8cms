@@ -75,12 +75,27 @@ ital8cms features a sophisticated plugin system:
 
 ### Plugin Structure
 
+**Minimum required:**
 ```
 plugins/myPlugin/
-├── main.js                    # Plugin logic
-├── pluginConfig.json5         # Configuration
-└── pluginDescription.json5    # Metadata
+├── main.js                    # Plugin logic (required)
+├── pluginConfig.json5         # Configuration (required)
+└── pluginDescription.json5    # Metadata (required)
 ```
+
+**Recommended for plugins serving web pages:**
+```
+plugins/myPlugin/
+├── main.js
+├── pluginConfig.json5
+├── pluginDescription.json5
+└── webPages/                  # ⭐ Strongly recommended for EJS templates
+    ├── login.ejs
+    ├── profile.ejs
+    └── settings.ejs
+```
+
+The `webPages/` directory is a **strongly recommended convention** for organizing EJS templates in plugins that serve HTML pages. It provides clear separation between logic and presentation, and follows the pattern used in the `adminUsers` reference plugin.
 
 ## Theme System
 
