@@ -6,14 +6,20 @@ Plugin di riferimento che dimostra **tutte** le funzionalità del sistema plugin
 
 ```
 exampleComplete/
-├── main.js                 # Logica del plugin
-├── pluginConfig.json5      # Configurazione
-├── pluginDescription.json5 # Metadati
+├── main.js                 # Logica del plugin (required)
+├── pluginConfig.json5      # Configurazione (required)
+├── pluginDescription.json5 # Metadati (required)
 ├── README.md               # Questa documentazione
-└── webPages/
+└── webPages/               # ⭐ STRONGLY RECOMMENDED per template EJS
     ├── demo.ejs           # Pagina demo
     └── style.css          # Stili
 ```
+
+**Nota:** La directory `webPages/` è una **convenzione fortemente raccomandata** per organizzare i template EJS nei plugin che servono pagine HTML. Fornisce:
+- ✅ **Organizzazione chiara** - Separazione tra logica e presentazione
+- ✅ **Consistenza** - Segue il pattern usato in `adminUsers`
+- ✅ **Manutenibilità** - Facile localizzare i template
+- ✅ **Scalabilità** - Struttura migliore man mano che il plugin cresce
 
 ## Funzionalità Dimostrate
 

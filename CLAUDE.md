@@ -178,7 +178,9 @@ The plugin system is the heart of ital8cms. Understanding it is essential.
 
 ### Plugin Structure
 
-Every plugin must have this structure:
+**Minimum Required Structure:**
+
+Every plugin must have these files:
 
 ```
 plugins/myPlugin/
@@ -186,6 +188,29 @@ plugins/myPlugin/
 ├── pluginConfig.json5          # Configuration (required)
 └── pluginDescription.json5     # Metadata (required)
 ```
+
+**Recommended Structure for Plugins Serving Web Pages:**
+
+If your plugin serves HTML pages via EJS templates, use this **strongly recommended** structure:
+
+```
+plugins/myPlugin/
+├── main.js                    # Plugin logic (required)
+├── pluginConfig.json5          # Configuration (required)
+├── pluginDescription.json5     # Metadata (required)
+└── webPages/                  # ⭐ STRONGLY RECOMMENDED for EJS templates
+    ├── login.ejs
+    ├── profile.ejs
+    └── settings.ejs
+```
+
+**Why `webPages/` is recommended:**
+- ✅ **Clear organization** - Separates template files from logic
+- ✅ **Consistency** - Follows pattern used in `adminUsers` (reference plugin)
+- ✅ **Maintainability** - Easy to locate and manage templates
+- ✅ **Scalability** - Better structure as plugin grows
+
+**Note:** The `webPages/` directory is a **convention, not a requirement**. Plugins serving only JSON APIs (like `bootstrap`, `simpleI18n`) don't need it. You can organize your plugin differently if needed, but this structure is recommended for consistency across the project.
 
 ### Plugin main.js Exports
 
@@ -1504,6 +1529,157 @@ module.exports = {
 5. **Restart server** - Plugin will auto-load
 
 6. **Access route:** `http://localhost:3000/api/myPlugin/hello`
+
+---
+
+### Creating a Plugin with Web Pages (Recommended Structure)
+
+If your plugin needs to serve HTML pages (not just JSON APIs), follow this **strongly recommended** structure using the `webPages/` directory convention.
+
+**1. Create plugin with webPages directory:**
+```bash
+mkdir -p plugins/myWebPlugin/webPages
+```
+
+**2. Create main.js with template rendering:**
+```javascript
+const path = require('path');
+const ejs = require('ejs');
+
+let myPluginSys = null;
+
+module.exports = {
+  async loadPlugin(pluginSys, pathPluginFolder) {
+    myPluginSys = pluginSys; // Store reference for themeSys access
+    console.log('MyWebPlugin loaded!');
+  },
+
+  getRouteArray(router, pluginSys, pathPluginFolder) {
+    return [
+      {
+        method: 'get',
+        path: '/mypage',
+        func: async (ctx) => {
+          // ⭐ Default template in webPages/ directory (RECOMMENDED)
+          const defaultTemplate = path.join(__dirname, 'webPages', 'mypage.ejs');
+
+          // Check for theme customization (optional but recommended)
+          let templatePath = defaultTemplate;
+          let customCss = '';
+
+          if (myPluginSys) {
+            const themeSys = myPluginSys.getThemeSys();
+            if (themeSys) {
+              // Allow theme to override template
+              templatePath = themeSys.resolvePluginTemplatePath(
+                'myWebPlugin',
+                'mypage',
+                defaultTemplate,
+                'template.ejs'
+              );
+              // Load custom CSS from theme
+              customCss = themeSys.getPluginCustomCss('myWebPlugin', 'mypage');
+            }
+          }
+
+          // Prepare data for template
+          const data = {
+            message: 'Hello from template!',
+            customCss, // Pass custom CSS for inline inclusion
+            timestamp: new Date().toISOString()
+          };
+
+          // Render and return HTML
+          ctx.body = await ejs.renderFile(templatePath, data);
+          ctx.set('Content-Type', 'text/html');
+        }
+      }
+    ];
+  }
+};
+```
+
+**3. Create EJS template in webPages/:**
+
+Create `plugins/myWebPlugin/webPages/mypage.ejs`:
+```ejs
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Page</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 2rem;
+    }
+    /* Include custom CSS from theme (if exists) */
+    <%- customCss || '' %>
+  </style>
+</head>
+<body>
+  <h1><%= message %></h1>
+  <p>Page rendered at: <%= timestamp %></p>
+</body>
+</html>
+```
+
+**4. Create pluginConfig.json5:**
+```json5
+{
+  "active": 1,
+  "isInstalled": 0,
+  "weight": 100,
+  "dependency": {},
+  "nodeModuleDependency": {
+    "ejs": "^3.1.9"  // Required for template rendering
+  },
+  "custom": {}
+}
+```
+
+**5. Create pluginDescription.json5:**
+```json5
+{
+  "name": "myWebPlugin",
+  "version": "1.0.0",
+  "description": "Plugin that serves web pages",
+  "author": "Your Name",
+  "email": "your@email.com",
+  "license": "MIT"
+}
+```
+
+**6. Final directory structure:**
+```
+plugins/myWebPlugin/
+├── main.js                    # Plugin logic (required)
+├── pluginConfig.json5          # Configuration (required)
+├── pluginDescription.json5     # Metadata (required)
+└── webPages/                  # ⭐ STRONGLY RECOMMENDED
+    ├── mypage.ejs             # Template 1
+    ├── profile.ejs            # Template 2
+    └── settings.ejs           # Template 3
+```
+
+**7. Restart server and access:**
+- URL: `http://localhost:3000/api/myWebPlugin/mypage`
+
+**Why this structure is strongly recommended:**
+
+| Benefit | Description |
+|---------|-------------|
+| **Organization** | Clear separation between logic (main.js) and presentation (webPages/) |
+| **Consistency** | Follows the pattern used in `adminUsers` plugin (official reference) |
+| **Maintainability** | Easy to locate and manage all templates in one directory |
+| **Scalability** | As your plugin grows, templates remain organized |
+| **Theme Support** | Easier integration with themeSys customization features |
+| **Best Practice** | Recognized convention across the ital8cms ecosystem |
+
+**Note:** This is a **convention, not a strict requirement**. You can organize your plugin differently, but using `webPages/` is strongly encouraged for plugins that serve HTML pages. Plugins serving only JSON APIs (like `simpleI18n`, `bootstrap`) don't need this directory.
+
+---
 
 ### Creating a New Theme
 
