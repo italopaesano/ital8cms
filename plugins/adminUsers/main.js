@@ -347,6 +347,195 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         ctx.body = result;
         ctx.type = 'application/json';
       }
+    },
+    //START GESTIONE PROFILO UTENTE (modifica username e password)
+    { // Pagina per la modifica del profilo utente
+      method: 'GET',
+      path: '/userProfile',
+      handler: async (ctx) => {
+        // Path di default del template
+        const defaultProfilePage = path.join(__dirname, 'webPages', 'userProfile.ejs');
+
+        // Controllo se esiste un template personalizzato nel tema
+        let profilePage = defaultProfilePage;
+        let customCss = '';
+
+        if (myPluginSys) {
+          const themeSys = myPluginSys.getThemeSys();
+          if (themeSys) {
+            profilePage = themeSys.resolvePluginTemplatePath(
+              'adminUsers',
+              'userProfile',
+              defaultProfilePage,
+              'template.ejs'
+            );
+            customCss = themeSys.getPluginCustomCss('adminUsers', 'userProfile');
+          }
+        }
+
+        ejsData.customCss = customCss;
+
+        ctx.body = await ejs.renderFile(profilePage, ejsData);
+        ctx.set('Content-Type', 'text/html');
+      }
+    },
+    { // Ottiene i dati dell'utente correntemente loggato
+      method: 'GET',
+      path: '/getCurrentUser',
+      handler: async (ctx) => {
+        // TODO: Aggiungere autenticazione successivamente
+        // Per ora usa username da query string per testing
+        const username = ctx.query.username || 'testuser';
+        const userFilePath = path.join(__dirname, 'userAccount.json5');
+
+        try {
+          const userAccount = loadJson5(userFilePath);
+          const userData = userAccount.users[username];
+
+          if (!userData) {
+            ctx.status = 404;
+            ctx.body = { error: 'Utente non trovato' };
+            return;
+          }
+
+          // Non esporre la password hashata
+          ctx.body = {
+            username,
+            email: userData.email,
+            roleIds: userData.roleIds
+          };
+        } catch (error) {
+          ctx.status = 500;
+          ctx.body = { error: `Errore nel recupero dati utente: ${error}` };
+        }
+
+        ctx.type = 'application/json';
+      }
+    },
+    { // Aggiorna il profilo dell'utente corrente (username e/o password)
+      method: 'POST',
+      path: '/updateUserProfile',
+      handler: async (ctx) => {
+        // TODO: Aggiungere autenticazione successivamente
+        const { currentUsername, newUsername, newPassword, currentPassword } = ctx.request.body;
+
+        // Verifica che la password attuale sia stata fornita
+        if (!currentPassword) {
+          ctx.body = {
+            error: 'La password attuale è obbligatoria per confermare le modifiche.',
+            errorField: 'currentPassword'
+          };
+          return;
+        }
+
+        // Verifica che almeno un campo sia da modificare
+        if (!newUsername && !newPassword) {
+          ctx.body = {
+            error: 'Devi specificare almeno un campo da modificare (username o password).',
+            errorField: null
+          };
+          return;
+        }
+
+        // Verifica la password attuale
+        const isPasswordValid = await libAccess.autenticate(currentUsername, currentPassword);
+        if (!isPasswordValid) {
+          ctx.body = {
+            error: 'Password attuale non corretta.',
+            errorField: 'currentPassword'
+          };
+          return;
+        }
+
+        const userFilePath = path.join(__dirname, 'userAccount.json5');
+
+        try {
+          const userAccount = loadJson5(userFilePath);
+
+          // Verifica che l'utente esista
+          if (!userAccount.users[currentUsername]) {
+            ctx.status = 404;
+            ctx.body = { error: 'Utente non trovato' };
+            return;
+          }
+
+          let successMessages = [];
+
+          // Modifica username se fornito
+          if (newUsername && newUsername !== currentUsername) {
+            // Validazione username
+            if (newUsername.length < 3) {
+              ctx.body = {
+                error: 'Il nuovo username deve contenere almeno 3 caratteri.',
+                errorField: 'newUsername'
+              };
+              return;
+            }
+
+            if (!/^[a-zA-Z0-9_-]+$/.test(newUsername)) {
+              ctx.body = {
+                error: 'Il nuovo username può contenere solo lettere, numeri, underscore e trattini.',
+                errorField: 'newUsername'
+              };
+              return;
+            }
+
+            // Verifica che il nuovo username non esista già
+            if (userAccount.users[newUsername]) {
+              ctx.body = {
+                error: 'Il nuovo username è già in uso. Scegline un altro.',
+                errorField: 'newUsername'
+              };
+              return;
+            }
+
+            // Rinomina l'utente (copia i dati con nuova chiave, elimina vecchia chiave)
+            userAccount.users[newUsername] = { ...userAccount.users[currentUsername] };
+            delete userAccount.users[currentUsername];
+
+            successMessages.push('Username modificato con successo');
+          }
+
+          // Modifica password se fornita
+          if (newPassword) {
+            // Validazione password
+            if (newPassword.length < 6) {
+              ctx.body = {
+                error: 'La nuova password deve contenere almeno 6 caratteri.',
+                errorField: 'newPassword'
+              };
+              return;
+            }
+
+            const bcrypt = require('bcryptjs');
+            const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+            const targetUsername = newUsername || currentUsername;
+            userAccount.users[targetUsername].hashPassword = hashedPassword;
+
+            successMessages.push('Password modificata con successo');
+          }
+
+          // Salva le modifiche
+          fs.writeFileSync(userFilePath, JSON.stringify(userAccount, null, 2), 'utf8');
+
+          // TODO: Aggiungere aggiornamento sessione quando l'autenticazione sarà implementata
+          // if (newUsername && newUsername !== currentUsername) {
+          //   ctx.session.user.name = newUsername;
+          // }
+
+          ctx.body = {
+            success: successMessages.join('. ') + '.'
+          };
+
+        } catch (error) {
+          console.error('Errore aggiornamento profilo:', error);
+          ctx.status = 500;
+          ctx.body = { error: `Errore interno del server: ${error.message}` };
+        }
+
+        ctx.type = 'application/json';
+      }
     }
   );
 
@@ -364,12 +553,12 @@ function getHooksPage(){
 
   const HookMap = new Map();
 
-  if(pluginConfig.custom.useLoginStatusBox){ // visualizzo lo LoginStatusBox solo se la corrispettiva variabile è settata nelle impostazioni 
+  if(pluginConfig.custom.useLoginStatusBox){ // visualizzo lo LoginStatusBox solo se la corrispettiva variabile è settata nelle impostazioni
     HookMap.set( 'header', (passData) => {
-      let message; 
+      let message;
 
       if(passData.ctx.session.user){
-        message = `ciao ${passData.ctx.session.user.name} <br> <a href="/${ital8Conf.apiPrefix}/adminUsers/logout">Logout</a>` ;
+        message = `ciao ${passData.ctx.session.user.name} <br> <a href="/${ital8Conf.apiPrefix}/adminUsers/userProfile">🔐 Profilo</a> | <a href="/${ital8Conf.apiPrefix}/adminUsers/logout">Logout</a>` ;
       }else{
         message = `non sei loggato <br> <a href="/${ital8Conf.apiPrefix}/adminUsers/login">Login</a>`;
       }
