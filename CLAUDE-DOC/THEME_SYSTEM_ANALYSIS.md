@@ -181,7 +181,7 @@ themes/tema/
 ```
 themes/tema/
 └── plugins-endpoints-markup/
-    └── simpleAccess/
+    └── adminUsers/
         └── login/
             ├── template.ejs
             └── style.css
@@ -190,7 +190,7 @@ themes/tema/
 **Utilizzo nei plugin:**
 ```javascript
 const templatePath = themeSys.resolvePluginTemplatePath(
-  'simpleAccess', 'login', defaultPath
+  'adminUsers', 'login', defaultPath
 );
 ```
 

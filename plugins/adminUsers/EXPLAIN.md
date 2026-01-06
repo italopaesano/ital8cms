@@ -92,7 +92,7 @@ se l'utente insrisce correttamente i dati al primo colpo , allora l'url di redir
   },
   "custom": {
     "loggedReservedPrefix": ["/reserved", "/private", "/lib"],// prfix nei quali sarà automaticamente richiesta di essere logati 
-    "defaultLoginRedirectURL": "/api/simpleAccess/logged",// url di default per il redirect dopo che illogi ha avuto successo
+    "defaultLoginRedirectURL": "/api/adminUsers/logged",// url di default per il redirect dopo che illogi ha avuto successo
     }
   }
 }

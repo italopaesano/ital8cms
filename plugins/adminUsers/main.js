@@ -115,14 +115,14 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
             if (themeSys) {
               // Risolvi il path del template (usa quello custom se esiste)
               loginPage = themeSys.resolvePluginTemplatePath(
-                'simpleAccess',
+                'adminUsers',
                 'login',
                 defaultLoginPage,
                 'template.ejs'
               );
 
               // Carica CSS personalizzato se esiste
-              customCss = themeSys.getPluginCustomCss('simpleAccess', 'login');
+              customCss = themeSys.getPluginCustomCss('adminUsers', 'login');
             }
           }
 
@@ -194,12 +194,12 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
           const themeSys = myPluginSys.getThemeSys();
           if (themeSys) {
             logoutPage = themeSys.resolvePluginTemplatePath(
-              'simpleAccess',
+              'adminUsers',
               'logout',
               defaultLogoutPage,
               'template.ejs'
             );
-            customCss = themeSys.getPluginCustomCss('simpleAccess', 'logout');
+            customCss = themeSys.getPluginCustomCss('adminUsers', 'logout');
           }
         }
 
@@ -369,9 +369,9 @@ function getHooksPage(){
       let message; 
 
       if(passData.ctx.session.user){
-        message = `ciao ${passData.ctx.session.user.name} <br> <a href="/${ital8Conf.apiPrefix}/simpleAccess/logout">Logout</a>` ;
+        message = `ciao ${passData.ctx.session.user.name} <br> <a href="/${ital8Conf.apiPrefix}/adminUsers/logout">Logout</a>` ;
       }else{
-        message = `non sei loggato <br> <a href="/${ital8Conf.apiPrefix}/simpleAccess/login">Login</a>`;
+        message = `non sei loggato <br> <a href="/${ital8Conf.apiPrefix}/adminUsers/login">Login</a>`;
       }
       
       return `

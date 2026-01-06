@@ -240,13 +240,13 @@ DISINSTALLAZIONE:
 └─────────────────────────────────────────────────────────────────┘
 
 ┌──────────────┐                              ┌──────────────┐
-│    dbApi     │                              │ simpleAccess │
+│    dbApi     │                              │ adminUsers │
 │              │                              │              │
 │  PROVIDER    │                              │  CONSUMER    │
 └──────┬───────┘                              └──────┬───────┘
        │                                             │
        │  getObjectToShareToOthersPlugin             │
-       │  ('simpleAccess')                           │
+       │  ('adminUsers')                           │
        │                                             │
        ▼                                             │
 ┌──────────────┐                                     │
@@ -609,7 +609,7 @@ t=100ms  ├── PLUGIN SYSTEM START
          │   ├── Ordinamento (5ms)
          │   ├── Caricamento plugin (100ms)
          │   │   ├── dbApi.loadPlugin()
-         │   │   ├── simpleAccess.loadPlugin()
+         │   │   ├── adminUsers.loadPlugin()
          │   │   ├── admin.loadPlugin()
          │   │   └── ...
          │   ├── Object sharing (30ms)

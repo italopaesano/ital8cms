@@ -600,7 +600,7 @@ The **Admin System** is a modular architecture that allows plugins to provide ad
 **CRITICAL NAMING CONVENTION:** Admin plugins **MUST** start with the prefix `admin`.
 
 ✅ **Valid names:** `adminUsers`, `adminMailer`, `adminStorage`
-❌ **Invalid names:** `usersAdmin`, `simpleAccess`, `userManagement`
+❌ **Invalid names:** `usersAdmin`, `adminUsers`, `userManagement`
 
 **Complete admin plugin structure:**
 
@@ -632,7 +632,7 @@ plugins/adminUsers/
 **CRITICAL NAMING CONVENTION:** Admin plugins **MUST** start with the prefix `admin`.
 
 ✅ **Valid names:** `adminUsers`, `adminMailer`, `adminStorage`
-❌ **Invalid names:** `usersAdmin`, `simpleAccess`, `userManagement`
+❌ **Invalid names:** `usersAdmin`, `adminUsers`, `userManagement`
 
 ```json5
 // This file follows the JSON5 standard - comments and trailing commas are supported
@@ -2376,8 +2376,8 @@ When working on this codebase as an AI assistant:
     - Zero file duplication, single source of truth
     - Automatic symlink creation during plugin initialization
   - **Plugin Renamed:**
-    - `simpleAccess` → `adminUsers` (admin plugin for user management)
-    - All API endpoints updated: `/api/simpleAccess/` → `/api/adminUsers/`
+    - `adminUsers` → `adminUsers` (admin plugin for user management)
+    - All API endpoints updated: `/api/adminUsers/` → `/api/adminUsers/`
     - Files moved: `core/admin/webPages/usersManagment/` → `plugins/adminUsers/usersManagment/`
   - **2-Phase Initialization:**
     - Dependency injection pattern to avoid circular dependencies

@@ -14,7 +14,7 @@ Con la configurazione di default:
 
 ## Autenticazione
 
-Le API protette richiedono una sessione autenticata. Il cookie di sessione viene impostato dopo il login tramite `/api/simpleAccess/login`.
+Le API protette richiedono una sessione autenticata. Il cookie di sessione viene impostato dopo il login tramite `/api/adminUsers/login`.
 
 ### Header Cookie
 ```
@@ -23,13 +23,13 @@ Cookie: koa:sess=xxx; koa:sess.sig=xxx
 
 ---
 
-## Plugin: simpleAccess
+## Plugin: adminUsers
 
 Plugin per autenticazione e gestione utenti.
 
 ### Autenticazione
 
-#### GET /api/simpleAccess/login
+#### GET /api/adminUsers/login
 
 Mostra la pagina di login.
 
@@ -41,7 +41,7 @@ Mostra la pagina di login.
 
 ---
 
-#### POST /api/simpleAccess/login
+#### POST /api/adminUsers/login
 
 Effettua il login dell'utente.
 
@@ -62,7 +62,7 @@ referrerTo=string (URL per redirect)
 
 ---
 
-#### GET /api/simpleAccess/logout
+#### GET /api/adminUsers/logout
 
 Mostra la pagina di logout.
 
@@ -70,7 +70,7 @@ Mostra la pagina di logout.
 
 ---
 
-#### POST /api/simpleAccess/logout
+#### POST /api/adminUsers/logout
 
 Effettua il logout dell'utente.
 
@@ -86,7 +86,7 @@ referrerTo=string (URL per redirect)
 
 ---
 
-#### GET /api/simpleAccess/logged
+#### GET /api/adminUsers/logged
 
 Verifica se l'utente è loggato.
 
@@ -101,7 +101,7 @@ complimenti sei loggato { user } sessione: { sessione }
 
 ### Gestione Utenti
 
-#### GET /api/simpleAccess/userList
+#### GET /api/adminUsers/userList
 
 Ottiene la lista di tutti gli utenti.
 
@@ -126,7 +126,7 @@ Ottiene la lista di tutti gli utenti.
 
 ---
 
-#### GET /api/simpleAccess/userInfo
+#### GET /api/adminUsers/userInfo
 
 Ottiene informazioni dettagliate su un utente.
 
@@ -150,7 +150,7 @@ Ottiene informazioni dettagliate su un utente.
 
 ---
 
-#### GET /api/simpleAccess/roleList
+#### GET /api/adminUsers/roleList
 
 Ottiene la lista di tutti i ruoli disponibili.
 
@@ -179,7 +179,7 @@ Ottiene la lista di tutti i ruoli disponibili.
 
 ---
 
-#### POST /api/simpleAccess/usertUser
+#### POST /api/adminUsers/usertUser
 
 Crea o aggiorna un utente (upsert).
 
@@ -306,12 +306,12 @@ Questo plugin non espone route API dirette, ma condivide oggetti con altri plugi
 
 ```bash
 # Login
-curl -X POST http://localhost:3000/api/simpleAccess/login \
+curl -X POST http://localhost:3000/api/adminUsers/login \
   -d "username=admin&password=secret&referrerTo=/" \
   -c cookies.txt
 
 # Richiesta autenticata
-curl http://localhost:3000/api/simpleAccess/userList \
+curl http://localhost:3000/api/adminUsers/userList \
   -b cookies.txt
 ```
 
@@ -319,7 +319,7 @@ curl http://localhost:3000/api/simpleAccess/userList \
 
 ```javascript
 // Login
-const response = await fetch('/api/simpleAccess/login', {
+const response = await fetch('/api/adminUsers/login', {
   method: 'POST',
   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   body: 'username=admin&password=secret&referrerTo=/',
@@ -327,7 +327,7 @@ const response = await fetch('/api/simpleAccess/login', {
 });
 
 // Ottieni lista utenti
-const users = await fetch('/api/simpleAccess/userList', {
+const users = await fetch('/api/adminUsers/userList', {
   credentials: 'include'
 }).then(r => r.json());
 ```
@@ -336,14 +336,14 @@ const users = await fetch('/api/simpleAccess/userList', {
 
 ```javascript
 // Login
-await axios.post('/api/simpleAccess/login', {
+await axios.post('/api/adminUsers/login', {
   username: 'admin',
   password: 'secret',
   referrerTo: '/'
 });
 
 // Ottieni info utente
-const { data } = await axios.get('/api/simpleAccess/userInfo', {
+const { data } = await axios.get('/api/adminUsers/userInfo', {
   params: { username: 'admin' }
 });
 ```
@@ -430,8 +430,8 @@ L'endpoint sarà disponibile a:
 Attualmente ital8cms non implementa versioning delle API. Per future versioni considerare:
 
 ```
-/api/v1/simpleAccess/login
-/api/v2/simpleAccess/login
+/api/v1/adminUsers/login
+/api/v2/adminUsers/login
 ```
 
 ---
