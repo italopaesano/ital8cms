@@ -1,13 +1,30 @@
 <!-- TEMPLATE PER LA MODIFICA DEL PROFILO UTENTE (username e password) -->
 <!-- Permette all'utente loggato di modificare i propri dati -->
-<!-- NOTA: Usa getThemePartPath() con passData per caricare i partial del tema corretto -->
-<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
-<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modifica Profilo - ital8cms</title>
+
+    <!-- Bootstrap CSS dal plugin bootstrap -->
+    <%- bootstrapCss %>
+
+    <!-- CSS personalizzato del tema (se presente) -->
+    <% if (customCss) { %>
+    <style>
+        <%- customCss %>
+    </style>
+    <% } %>
+</head>
+<body>
 
 <!-- api prefix -->
-<span id="apiPrefix" style="display: none;"><%- passData.apiPrefix %></span>
-<script>
-    const apiPrefix = document.getElementById('apiPrefix').innerText;
+<%- apiPrefix %>
+
+<!-- Dati sessione (JSON nascosto per JavaScript) -->
+<script id="sessionData" type="application/json">
+<%- JSON.stringify(session) %>
 </script>
 
 <div class="container mt-4">
@@ -21,8 +38,8 @@
 
     <!-- Form modifica profilo -->
     <form id="userProfileForm" class="mt-3">
-        <!-- Username da cercare (per testing senza autenticazione) -->
-        <div class="card mb-3 border-warning">
+        <!-- Username da cercare (per testing senza autenticazione) - nascosto se loggato -->
+        <div class="card mb-3 border-warning" id="testingCard">
             <div class="card-header bg-warning text-dark">
                 <h5 class="mb-0">⚙️ Testing (senza autenticazione)</h5>
             </div>
@@ -107,16 +124,44 @@
 <script>
     let currentUserData = {};
 
+    // Leggi dati sessione dal JSON nascosto
+    const sessionData = JSON.parse(document.getElementById('sessionData').textContent);
+    const isAuthenticated = sessionData.isAuthenticated;
+    const sessionUsername = sessionData.username;
+
+    // Inizializza la pagina in base allo stato di autenticazione
+    window.addEventListener('DOMContentLoaded', () => {
+        if (isAuthenticated && sessionUsername) {
+            // Utente loggato: nascondi il card di testing e carica automaticamente
+            document.getElementById('testingCard').style.display = 'none';
+            document.getElementById('testUsername').value = sessionUsername;
+            loadCurrentUserData();
+            showAlert(`👋 Benvenuto ${sessionUsername}! Modifica il tuo profilo qui sotto.`, 'info');
+        } else {
+            // Utente non loggato: mostra il card di testing
+            document.getElementById('testingCard').style.display = 'block';
+            showAlert('⚠️ Non sei loggato. Puoi testare la funzionalità specificando manualmente uno username.', 'warning');
+        }
+    });
+
     // Carica dati utente corrente
     async function loadCurrentUserData() {
         try {
-            const username = document.getElementById('testUsername').value;
-            if (!username) {
-                showAlert('⚠️ Inserisci uno username valido', 'warning');
-                return;
+            let url;
+            if (isAuthenticated && sessionUsername) {
+                // Utente loggato: usa endpoint senza parametri (userà sessione)
+                url = `/${apiPrefix}/adminUsers/getCurrentUser`;
+            } else {
+                // Testing: usa username da input
+                const username = document.getElementById('testUsername').value;
+                if (!username) {
+                    showAlert('⚠️ Inserisci uno username valido', 'warning');
+                    return;
+                }
+                url = `/${apiPrefix}/adminUsers/getCurrentUser?username=${encodeURIComponent(username)}`;
             }
 
-            const response = await fetch(`/${apiPrefix}/adminUsers/getCurrentUser?username=${encodeURIComponent(username)}`);
+            const response = await fetch(url);
             if (!response.ok) {
                 throw new Error('Errore caricamento dati utente');
             }
@@ -127,7 +172,9 @@
             document.getElementById('currentUsername').textContent = currentUserData.username || 'N/A';
             document.getElementById('currentEmail').textContent = currentUserData.email || 'N/A';
 
-            showAlert('✅ Dati utente caricati con successo', 'success');
+            if (!isAuthenticated) {
+                showAlert('✅ Dati utente caricati con successo', 'success');
+            }
 
         } catch (error) {
             console.error('Errore caricamento dati utente:', error);
@@ -218,15 +265,27 @@
             return;
         }
 
-        const currentUsername = document.getElementById('testUsername').value;
-        if (!currentUsername) {
-            showAlert('⚠️ Devi prima caricare i dati di un utente', 'warning');
-            return;
-        }
-
         const newUsername = document.getElementById('newUsername').value.trim() || null;
         const newPassword = document.getElementById('newPassword').value || null;
         const currentPassword = document.getElementById('currentPassword').value;
+
+        // Prepara body della richiesta
+        const requestBody = {
+            newUsername,
+            newPassword,
+            currentPassword
+        };
+
+        // Se NON è autenticato, aggiungi currentUsername dal campo di testing
+        if (!isAuthenticated) {
+            const currentUsername = document.getElementById('testUsername').value;
+            if (!currentUsername) {
+                showAlert('⚠️ Devi prima caricare i dati di un utente', 'warning');
+                return;
+            }
+            requestBody.currentUsername = currentUsername;
+        }
+        // Se è autenticato, il backend userà ctx.session.user.name
 
         try {
             const response = await fetch(`/${apiPrefix}/adminUsers/updateUserProfile`, {
@@ -234,12 +293,7 @@
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    currentUsername,
-                    newUsername,
-                    newPassword,
-                    currentPassword
-                })
+                body: JSON.stringify(requestBody)
             });
 
             const result = await response.json();
@@ -287,4 +341,8 @@
     // Non caricare automaticamente - l'utente deve cliccare il pulsante "Carica Dati Utente"
 </script>
 
-<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>
+<!-- Bootstrap JS dal plugin bootstrap -->
+<%- bootstrapJs %>
+
+</body>
+</html>

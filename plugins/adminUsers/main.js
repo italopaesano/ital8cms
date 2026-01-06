@@ -373,7 +373,14 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
           }
         }
 
+        // Passa i dati della sessione al template (se esiste)
+        const sessionData = {
+          isAuthenticated: ctx.session && ctx.session.authenticated ? true : false,
+          username: ctx.session && ctx.session.user ? ctx.session.user.name : null
+        };
+
         ejsData.customCss = customCss;
+        ejsData.session = sessionData; // Aggiungi dati sessione
 
         ctx.body = await ejs.renderFile(profilePage, ejsData);
         ctx.set('Content-Type', 'text/html');
@@ -383,9 +390,14 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       method: 'GET',
       path: '/getCurrentUser',
       handler: async (ctx) => {
-        // TODO: Aggiungere autenticazione successivamente
-        // Per ora usa username da query string per testing
-        const username = ctx.query.username || 'testuser';
+        // Usa username dalla sessione se loggato, altrimenti da query string per testing
+        let username;
+        if (ctx.session && ctx.session.authenticated && ctx.session.user) {
+          username = ctx.session.user.name; // Utente loggato
+        } else {
+          username = ctx.query.username || 'testuser'; // Testing senza login
+        }
+
         const userFilePath = path.join(__dirname, 'userAccount.json5');
 
         try {
@@ -416,8 +428,15 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       method: 'POST',
       path: '/updateUserProfile',
       handler: async (ctx) => {
-        // TODO: Aggiungere autenticazione successivamente
-        const { currentUsername, newUsername, newPassword, currentPassword } = ctx.request.body;
+        // Usa username dalla sessione se loggato, altrimenti da body per testing
+        let currentUsername;
+        if (ctx.session && ctx.session.authenticated && ctx.session.user) {
+          currentUsername = ctx.session.user.name; // Utente loggato
+        } else {
+          currentUsername = ctx.request.body.currentUsername; // Testing senza login
+        }
+
+        const { newUsername, newPassword, currentPassword } = ctx.request.body;
 
         // Verifica che la password attuale sia stata fornita
         if (!currentPassword) {
@@ -519,10 +538,10 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
           // Salva le modifiche
           fs.writeFileSync(userFilePath, JSON.stringify(userAccount, null, 2), 'utf8');
 
-          // TODO: Aggiungere aggiornamento sessione quando l'autenticazione sarà implementata
-          // if (newUsername && newUsername !== currentUsername) {
-          //   ctx.session.user.name = newUsername;
-          // }
+          // Se l'utente è loggato e ha cambiato username, aggiorna la sessione
+          if (ctx.session && ctx.session.authenticated && newUsername && newUsername !== currentUsername) {
+            ctx.session.user.name = newUsername;
+          }
 
           ctx.body = {
             success: successMessages.join('. ') + '.'
