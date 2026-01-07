@@ -88,7 +88,7 @@ app.use(
     path.join(__dirname, 'themes', ital8Conf.activeTheme, 'themeResources'),
     {
       urlPrefix: `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`,
-      urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
+      urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.pluginPagesPrefix}`], // '/admin','/api','/views','/admin-theme-resources','/pluginPages' -> questi sarebbero i percorsi di default pero adesso sono configurabili
       showDirContents: false,
       browserCacheEnabled: ital8Conf.browserCacheEnabled,
       browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
@@ -104,7 +104,7 @@ app.use(
     (opt = {
       urlPrefix: `${ital8Conf.globalPrefix}`,
       showDirContents: true,
-      urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
+      urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.pluginPagesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources','/pluginPages' -> questi sarebbero i percorsi di default pero adesso sono configurabili
       browserCacheEnabled: ital8Conf.browserCacheEnabled,
       browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
       template: {
