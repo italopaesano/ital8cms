@@ -49,7 +49,9 @@ class PluginPagesSystem {
     let processedCount = 0;
     let symlinkCount = 0;
 
-    for (const [pluginName, plugin] of Object.entries(allPlugins)) {
+    // getAllPlugins() restituisce un array, non un oggetto
+    // Ogni plugin ha già pluginName e pathPluginFolder come proprietà
+    for (const plugin of allPlugins) {
       processedCount++;
 
       // Verifica se il plugin ha la directory webPages/
@@ -58,10 +60,10 @@ class PluginPagesSystem {
       if (fs.existsSync(webPagesDir)) {
         const stats = fs.statSync(webPagesDir);
         if (stats.isDirectory()) {
-          this.createSymlinkForPlugin(pluginName, webPagesDir);
+          this.createSymlinkForPlugin(plugin.pluginName, webPagesDir);
           symlinkCount++;
         } else {
-          console.warn(`[PluginPagesSystem] ${pluginName}: webPages exists but is not a directory`);
+          console.warn(`[PluginPagesSystem] ${plugin.pluginName}: webPages exists but is not a directory`);
         }
       }
     }
@@ -173,10 +175,11 @@ class PluginPagesSystem {
     const allPlugins = this.pluginSys.getAllPlugins();
     const pluginsWithPages = [];
 
-    for (const [pluginName, plugin] of Object.entries(allPlugins)) {
+    // getAllPlugins() restituisce un array, non un oggetto
+    for (const plugin of allPlugins) {
       const webPagesDir = path.join(plugin.pathPluginFolder, 'webPages');
       if (fs.existsSync(webPagesDir) && fs.statSync(webPagesDir).isDirectory()) {
-        pluginsWithPages.push(pluginName);
+        pluginsWithPages.push(plugin.pluginName);
       }
     }
 
