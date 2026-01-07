@@ -20,20 +20,78 @@ const roleManagement = require('./roleManagement');// necessario per gestire i r
 
 let myPluginSys = null;// riferimento al sistema dei plugin per accedere a themeSys
 
+// DEPRECATO: Vecchio oggetto ejsData mantenuto per compatibilità
+// Ora si usa createPassData() che costruisce l'oggetto passData standard
 const ejsData = {// i dati che verranno passati a èjs
-  apiPrefix: 
+  apiPrefix:
   `<span id="apiPrefix" style="display: none;">${ital8Conf.apiPrefix}</span><!-- questa parte di codice serve ad impostare la variabile apiPrefix -->
   <script>
       const apiPrefix = document.getElementById('apiPrefix').innerText;
   </script>`,
-  bootstrapCss: 
+  bootstrapCss:
   `<link rel='stylesheet' href='/${ital8Conf.apiPrefix}/bootstrap/css/bootstrap.min.css' type='text/css'  media='all' />\n
   <link rel='stylesheet' href='/${ital8Conf.apiPrefix}/bootstrap/css/bootstrap.min.css.map' type='text/css'  media='all' />`,
 
-  bootstrapJs: 
+  bootstrapJs:
   `<script src="/${ital8Conf.apiPrefix}/bootstrap/js/bootstrap.min.js" type="text/javascript" ></script>\n
   <script src="/${ital8Conf.apiPrefix}/bootstrap/js/bootstrap.min.js.map" type="text/javascript" ></script>
   `
+}
+
+// Funzione helper per creare wrapper themeSys con metodi bound a passData
+// Replica la funzione createThemeSysWrapper() di index.js
+function createThemeSysWrapper(themeSys, passData) {
+  return {
+    // Metodi esistenti
+    getThemePartPath: (partName) => themeSys.getThemePartPath(partName, passData),
+    getThemeResourceUrl: (resourcePath) => themeSys.getThemeResourceUrl(resourcePath, passData),
+    resolvePluginTemplatePath: (pluginName, endpointName, defaultPath, templateFile) =>
+      themeSys.resolvePluginTemplatePath(pluginName, endpointName, defaultPath, templateFile, passData.isAdminContext),
+
+    // Metodi injection (NO parametri - già bound a passData)
+    injectPluginCss: () => themeSys.injectPluginCss(passData),
+    injectPluginJs: () => themeSys.injectPluginJs(passData),
+    injectPluginHtmlBefore: () => themeSys.injectPluginHtmlBefore(passData),
+    injectPluginHtmlAfter: () => themeSys.injectPluginHtmlAfter(passData),
+
+    // Accesso all'istanza originale per casi avanzati
+    _instance: themeSys
+  };
+}
+
+// Funzione helper per creare oggetto passData standard per i template
+// Replica la struttura usata in index.js per il Plugin Pages System
+function createPassData(ctx, filePath) {
+  if (!myPluginSys) {
+    console.error('[adminUsers] myPluginSys non disponibile');
+    return null;
+  }
+
+  const themeSys = myPluginSys.getThemeSys();
+  const adminSystem = myPluginSys.getAdminSystem();
+  const getObjectsToShareInWebPages = myPluginSys.getObjectsToShareInWebPages();
+
+  // Crea passData base
+  const passData = {
+    isAdminContext: false, // Queste sono pagine pubbliche (login, logout, userProfile)
+    globalPrefix: ital8Conf.globalPrefix || '',
+    apiPrefix: ital8Conf.apiPrefix,
+    pluginPagesPrefix: ital8Conf.pluginPagesPrefix || 'pluginPages',
+    pluginSys: myPluginSys,
+    plugin: getObjectsToShareInWebPages,
+    adminSystem: adminSystem,
+    filePath: filePath,
+    href: ctx.href,
+    query: ctx.query,
+    ctx: ctx,
+  };
+
+  // Aggiungi wrapper themeSys con metodi bound
+  if (themeSys) {
+    passData.themeSys = createThemeSysWrapper(themeSys, passData);
+  }
+
+  return passData;
 }
 
 function loadPlugin(pluginSys, pathPluginFolder){
@@ -108,7 +166,6 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
 
           // Controllo se esiste un template personalizzato nel tema
           let loginPage = defaultLoginPage;
-          let customCss = '';
 
           if (myPluginSys) {
             const themeSys = myPluginSys.getThemeSys();
@@ -120,16 +177,23 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
                 defaultLoginPage,
                 'template.ejs'
               );
-
-              // Carica CSS personalizzato se esiste
-              customCss = themeSys.getPluginCustomCss('adminUsers', 'login');
             }
           }
 
-          ejsData.referrerTo = ctx.headers.referer || '/'; //aggiungo hai dati passati referrerTo che serve a sapere dove poter reindirizzare la pagina dopo il login
-          ejsData.customCss = customCss; // CSS personalizzato del tema
+          // Crea oggetto passData standard per il nuovo sistema Plugin Pages
+          const passData = createPassData(ctx, loginPage);
 
-          ctx.body = await ejs.renderFile( loginPage, ejsData);
+          // Aggiungi referrerTo a passData (campo specifico per login)
+          passData.referrerTo = ctx.headers.referer || '/';
+
+          // Ottieni global functions da pluginSys
+          const globalFunctions = myPluginSys ? myPluginSys.getGlobalFunctions() : {};
+
+          // Renderizza template con passData e global functions (come in index.js)
+          ctx.body = await ejs.renderFile(loginPage, {
+            passData: passData,
+            ...globalFunctions
+          });
           ctx.set('Content-Type', 'text/html');
           return;
 
@@ -188,7 +252,6 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
 
         // Controllo se esiste un template personalizzato nel tema
         let logoutPage = defaultLogoutPage;
-        let customCss = '';
 
         if (myPluginSys) {
           const themeSys = myPluginSys.getThemeSys();
@@ -199,14 +262,23 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
               defaultLogoutPage,
               'template.ejs'
             );
-            customCss = themeSys.getPluginCustomCss('adminUsers', 'logout');
           }
         }
 
-        ejsData.referrerTo = ctx.headers.referer || '/'; //aggiungo hai dati passati referrerTo che serve a sapere dove poter reindirizzare la pagina dopo il logout
-        ejsData.customCss = customCss;
+        // Crea oggetto passData standard per il nuovo sistema Plugin Pages
+        const passData = createPassData(ctx, logoutPage);
 
-        ctx.body = await ejs.renderFile( logoutPage, ejsData);
+        // Aggiungi referrerTo a passData (campo specifico per logout)
+        passData.referrerTo = ctx.headers.referer || '/';
+
+        // Ottieni global functions da pluginSys
+        const globalFunctions = myPluginSys ? myPluginSys.getGlobalFunctions() : {};
+
+        // Renderizza template con passData e global functions (come in index.js)
+        ctx.body = await ejs.renderFile(logoutPage, {
+          passData: passData,
+          ...globalFunctions
+        });
         ctx.set('Content-Type', 'text/html');
        }
     },
@@ -358,7 +430,6 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
 
         // Controllo se esiste un template personalizzato nel tema
         let profilePage = defaultProfilePage;
-        let customCss = '';
 
         if (myPluginSys) {
           const themeSys = myPluginSys.getThemeSys();
@@ -369,20 +440,26 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
               defaultProfilePage,
               'template.ejs'
             );
-            customCss = themeSys.getPluginCustomCss('adminUsers', 'userProfile');
           }
         }
 
-        // Passa i dati della sessione al template (se esiste)
-        const sessionData = {
+        // Crea oggetto passData standard per il nuovo sistema Plugin Pages
+        const passData = createPassData(ctx, profilePage);
+
+        // Passa i dati della sessione al template (se esiste) - campo specifico per userProfile
+        passData.session = {
           isAuthenticated: ctx.session && ctx.session.authenticated ? true : false,
           username: ctx.session && ctx.session.user ? ctx.session.user.name : null
         };
 
-        ejsData.customCss = customCss;
-        ejsData.session = sessionData; // Aggiungi dati sessione
+        // Ottieni global functions da pluginSys
+        const globalFunctions = myPluginSys ? myPluginSys.getGlobalFunctions() : {};
 
-        ctx.body = await ejs.renderFile(profilePage, ejsData);
+        // Renderizza template con passData e global functions (come in index.js)
+        ctx.body = await ejs.renderFile(profilePage, {
+          passData: passData,
+          ...globalFunctions
+        });
         ctx.set('Content-Type', 'text/html');
       }
     },
