@@ -54,6 +54,32 @@ if (ital8Conf.enableAdmin) {
   console.log('✓ Admin System initialized');
 }
 
+// Inizializza Plugin Pages System (gestione pagine pubbliche plugin)
+const PluginPagesSystem = require('./core/pluginPagesSystem');
+const pluginPagesSystem = new PluginPagesSystem(pluginSys);
+pluginPagesSystem.initialize();
+console.log('✓ Plugin Pages System initialized');
+
+// Funzione per creare wrapper themeSys con metodi già bound a passData
+function createThemeSysWrapper(themeSys, passData) {
+  return {
+    // Metodi esistenti (manteniamo compatibilità)
+    getThemePartPath: (partName) => themeSys.getThemePartPath(partName, passData),
+    getThemeResourceUrl: (resourcePath) => themeSys.getThemeResourceUrl(resourcePath, passData),
+    resolvePluginTemplatePath: (pluginName, endpointName, defaultPath, templateFile) =>
+      themeSys.resolvePluginTemplatePath(pluginName, endpointName, defaultPath, templateFile, passData.isAdminContext),
+
+    // NUOVI metodi injection (NO parametri - già bound a passData)
+    injectPluginCss: () => themeSys.injectPluginCss(passData),
+    injectPluginJs: () => themeSys.injectPluginJs(passData),
+    injectPluginHtmlBefore: () => themeSys.injectPluginHtmlBefore(passData),
+    injectPluginHtmlAfter: () => themeSys.injectPluginHtmlAfter(passData),
+
+    // Accesso all'istanza originale per casi avanzati
+    _instance: themeSys
+  };
+}
+
 // Static server per le risorse del tema pubblico
 // Le risorse sono accessibili tramite /{publicThemeResourcesPrefix}/css/, /{publicThemeResourcesPrefix}/js/, ecc.
 // Configurazione cache controllata da browserCacheEnabled e browserCacheMaxAge in ital8Config.json
@@ -83,23 +109,28 @@ app.use(
       browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
       template: {
         render: async (ctx, next, filePath) => {
+          // Crea passData base
+          const passData = {
+            isAdminContext: false, // Flag per distinguere contesto pubblico da admin
+            globalPrefix: ital8Conf.globalPrefix,// prefisso globale per costruire URL corretti
+            apiPrefix: ital8Conf.apiPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamare in modo corretto e flessibile le api ad esempio dei vari plugin
+            //adminPrefix: ital8Conf.adminPrefix,//ATTENZIONE PER NESSUN MOTIVO DOVRÀ ESSERE PASSATO adminPrefix nelle pagine web non di amministrazione per non svelare ad utenti potenzialmente pericolosi la locazion della sezione di admin
+            pluginSys: pluginSys, // sistema dei plugin
+            plugin: getObjectsToShareInWebPages,// quicondivo gli ogetti publidi dei plugin
+            adminSystem: adminSystem, // Admin System (disponibile anche in pagine pubbliche per servizi come auth)
+            //baseThemePath: `${ital8Conf.baseThemePath}` ,OLD -> mi sa che non serve più// default -> "../themes/default" -->baseThemePath contiene il percorso di base del tema corrente
+            filePath: filePath,
+            href: ctx.href,
+            query: ctx.query,
+            ctx: ctx,// DA MIGLIORARE PER LA SICUREZZA
+            //session: ctx.session || undefined, // DA MIGLIORARE qusta variabile serve al  Plugin adminUsers per gestire la visualizazione dele sessioni nell'hook page
+          };
+
+          // Aggiungi wrapper themeSys con metodi bound
+          passData.themeSys = createThemeSysWrapper(themeSys, passData);
+
           ctx.body = await ejs.renderFile(filePath, {
-            passData :{
-              isAdminContext: false, // Flag per distinguere contesto pubblico da admin
-              globalPrefix: ital8Conf.globalPrefix,// prefisso globale per costruire URL corretti
-              apiPrefix: ital8Conf.apiPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamare in modo corretto e flessibile le api ad esempio dei vari plugin
-              //adminPrefix: ital8Conf.adminPrefix,//ATTENZIONE PER NESSUN MOTIVO DOVRÀ ESSERE PASSATO adminPrefix nelle pagine web non di amministrazione per non svelare ad utenti potenzialmente pericolosi la locazion della sezione di admin
-              pluginSys: pluginSys, // sistema dei plugin
-              plugin: getObjectsToShareInWebPages,// quicondivo gli ogetti publidi dei plugin
-              themeSys: themeSys, // sistema dei temi
-              adminSystem: adminSystem, // Admin System (disponibile anche in pagine pubbliche per servizi come auth)
-              //baseThemePath: `${ital8Conf.baseThemePath}` ,OLD -> mi sa che non serve più// default -> "../themes/default" -->baseThemePath contiene il percorso di base del tema corrente
-              filePath: filePath,
-              href: ctx.href,
-              query: ctx.query,
-              ctx: ctx,// DA MIGLIORARE PER LA SICUREZZA
-              //session: ctx.session || undefined, // DA MIGLIORARE qusta variabile serve al  Plugin adminUsers per gestire la visualizazione dele sessioni nell'hook page
-            },
+            passData: passData,
             // Espandi le funzioni globali (es. __() per i18n)
             // IMPORTANTE: Le versioni locali (passData.plugin.simpleI18n.__) rimangono disponibili
             ...globalFunctions
@@ -110,6 +141,48 @@ app.use(
     })
   )
 );
+
+// Static server per le pagine pubbliche dei plugin (/pluginPages/)
+const pluginPagesPrefix = ital8Conf.pluginPagesPrefix || 'pluginPages';
+app.use(
+  koaClassicServer(
+    pluginPagesSystem.getPluginPagesDirectory(),
+    {
+      urlPrefix: `${ital8Conf.globalPrefix}/${pluginPagesPrefix}`,
+      urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`],
+      showDirContents: false,
+      browserCacheEnabled: ital8Conf.browserCacheEnabled,
+      browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
+      template: {
+        render: async (ctx, next, filePath) => {
+          // Crea passData base per plugin pages
+          const passData = {
+            isAdminContext: false,
+            globalPrefix: ital8Conf.globalPrefix,
+            apiPrefix: ital8Conf.apiPrefix,
+            pluginSys: pluginSys,
+            plugin: getObjectsToShareInWebPages,
+            adminSystem: adminSystem,
+            filePath: filePath,
+            href: ctx.href,
+            query: ctx.query,
+            ctx: ctx,
+          };
+
+          // Aggiungi wrapper themeSys con metodi bound
+          passData.themeSys = createThemeSysWrapper(themeSys, passData);
+
+          ctx.body = await ejs.renderFile(filePath, {
+            passData: passData,
+            ...globalFunctions
+          });
+        },
+        ext: ["ejs", "EJS"],
+      },
+    }
+  )
+);
+console.log(`[PluginPagesSystem] Plugin pages servite da ${ital8Conf.globalPrefix}/${pluginPagesPrefix}/ -> ${pluginPagesSystem.getPluginPagesDirectory()}`);
 
 //START ADESSO CARICO LA PARTE DI ADMIN SE RICHIESTA
 if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
@@ -144,23 +217,28 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
         browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
         template: {
           render: async (ctx, next, filePath) => {
+            // Crea passData base per admin
+            const passData = {
+              isAdminContext: true, // Flag per distinguere contesto admin da pubblico
+              globalPrefix: ital8Conf.globalPrefix,// prefisso globale per costruire URL corretti
+              apiPrefix: ital8Conf.apiPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamare in modo corretto e flessibile le api ad esempio dei vari plugin
+              adminPrefix: ital8Conf.adminPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamamare correttamente le pagine di admin con il corretto prefix
+              pluginSys: pluginSys, // sistema dei plugin
+              plugin: getObjectsToShareInWebPages,// quicondivo gli ogetti publidi dei plugin
+              adminSystem: adminSystem, // Admin System con menu dinamico e servizi
+              //baseThemePath: `${ital8Conf.baseThemePath}` ,OLD -> mi sa che non serve più// default -> "../themes/default" -->baseThemePath contiene il percorso di base del tema corrente
+              filePath: filePath,
+              href: ctx.href,
+              query: ctx.query,
+              ctx: ctx,// DA MIGLIORARE PER LA SICUREZZA
+              //session: ctx.session || undefined, // DA MIGLIORARE qusta variabile serve al  Plugin adminUsers per gestire la visualizazione dele sessioni nell'hook page
+            };
+
+            // Aggiungi wrapper themeSys con metodi bound
+            passData.themeSys = createThemeSysWrapper(themeSys, passData);
+
             ctx.body = await ejs.renderFile(filePath, {
-              passData :{
-                isAdminContext: true, // Flag per distinguere contesto admin da pubblico
-                globalPrefix: ital8Conf.globalPrefix,// prefisso globale per costruire URL corretti
-                apiPrefix: ital8Conf.apiPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamare in modo corretto e flessibile le api ad esempio dei vari plugin
-                adminPrefix: ital8Conf.adminPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamamare correttamente le pagine di admin con il corretto prefix
-                pluginSys: pluginSys, // sistema dei plugin
-                plugin: getObjectsToShareInWebPages,// quicondivo gli ogetti publidi dei plugin
-                themeSys: themeSys,// thema dei temi con il tema in uso quello di --->default
-                adminSystem: adminSystem, // Admin System con menu dinamico e servizi
-                //baseThemePath: `${ital8Conf.baseThemePath}` ,OLD -> mi sa che non serve più// default -> "../themes/default" -->baseThemePath contiene il percorso di base del tema corrente
-                filePath: filePath,
-                href: ctx.href,
-                query: ctx.query,
-                ctx: ctx,// DA MIGLIORARE PER LA SICUREZZA
-                //session: ctx.session || undefined, // DA MIGLIORARE qusta variabile serve al  Plugin adminUsers per gestire la visualizazione dele sessioni nell'hook page
-              },
+              passData: passData,
               // Espandi le funzioni globali (es. __() per i18n)
               // IMPORTANTE: Le versioni locali (passData.plugin.simpleI18n.__) rimangono disponibili
               ...globalFunctions

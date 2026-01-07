@@ -871,13 +871,205 @@ class themeSys{
     return result;
   }
 
+  /**
+   * ============================================================================
+   * PLUGIN PAGES SYSTEM - Auto-Injection Methods
+   * ============================================================================
+   *
+   * Metodi per iniettare automaticamente personalizzazioni tema nelle pagine
+   * pubbliche dei plugin. Il plugin e page name vengono rilevati automaticamente
+   * dal path del file template.
+   *
+   * Utilizzo nei template:
+   *   <%- passData.themeSys.injectPluginCss() %>
+   *   <%- passData.themeSys.injectPluginJs() %>
+   *   <%- passData.themeSys.injectPluginHtmlBefore() %>
+   *   <%- passData.themeSys.injectPluginHtmlAfter() %>
+   */
+
+  /**
+   * Estrae informazioni plugin dal path del file template
+   * @param {string} filePath - Path del file template
+   * @returns {object|null} - { pluginName, pageName } o null se non rilevabile
+   *
+   * Pattern supportati:
+   * - /plugins/{pluginName}/webPages/{pageName}.ejs
+   * - /pluginPages/{pluginName}/{pageName}.ejs (symlink)
+   */
+  extractPluginContext(filePath) {
+    if (!filePath) {
+      return null;
+    }
+
+    // Pattern 1: /plugins/{pluginName}/webPages/{pageName}.ejs
+    const pattern1 = /\/plugins\/([^\/]+)\/webPages\/([^\/]+)\.ejs$/;
+    const match1 = filePath.match(pattern1);
+    if (match1) {
+      return {
+        pluginName: match1[1],
+        pageName: match1[2]
+      };
+    }
+
+    // Pattern 2: /pluginPages/{pluginName}/{pageName}.ejs (dopo symlink resolution)
+    const pattern2 = /\/pluginPages\/([^\/]+)\/([^\/]+)\.ejs$/;
+    const match2 = filePath.match(pattern2);
+    if (match2) {
+      return {
+        pluginName: match2[1],
+        pageName: match2[2]
+      };
+    }
+
+    // Non rilevabile
+    return null;
+  }
+
+  /**
+   * Inietta CSS custom del tema per questa plugin page
+   * Auto-rileva plugin e page da passData.filePath
+   * @param {object} passData - passData standard con filePath
+   * @returns {string} - <style>...</style> o stringa vuota
+   */
+  injectPluginCss(passData) {
+    const context = this.extractPluginContext(passData.filePath);
+    if (!context) {
+      return '';
+    }
+
+    const { pluginName, pageName } = context;
+    const cssContent = this.getPluginCustomCss(
+      pluginName,
+      pageName,
+      'style.css',
+      passData.isAdminContext || false
+    );
+
+    if (cssContent) {
+      return `<style>\n${cssContent}\n</style>`;
+    }
+    return '';
+  }
+
+  /**
+   * Inietta JS custom del tema per questa plugin page
+   * Auto-rileva plugin e page da passData.filePath
+   * @param {object} passData - passData standard con filePath
+   * @returns {string} - <script>...</script> o stringa vuota
+   */
+  injectPluginJs(passData) {
+    const context = this.extractPluginContext(passData.filePath);
+    if (!context) {
+      return '';
+    }
+
+    const { pluginName, pageName } = context;
+    const jsContent = this.getPluginCustomJs(
+      pluginName,
+      pageName,
+      'script.js',
+      passData.isAdminContext || false
+    );
+
+    if (jsContent) {
+      return `<script>\n${jsContent}\n</script>`;
+    }
+    return '';
+  }
+
+  /**
+   * Inietta HTML custom del tema PRIMA del contenuto principale
+   * Auto-rileva plugin e page da passData.filePath
+   * @param {object} passData - passData standard con filePath
+   * @returns {string} - HTML o stringa vuota
+   */
+  injectPluginHtmlBefore(passData) {
+    const context = this.extractPluginContext(passData.filePath);
+    if (!context) {
+      return '';
+    }
+
+    const { pluginName, pageName } = context;
+    return this.getPluginCustomHtml(
+      pluginName,
+      pageName,
+      'before',
+      passData.isAdminContext || false
+    );
+  }
+
+  /**
+   * Inietta HTML custom del tema DOPO il contenuto principale
+   * Auto-rileva plugin e page da passData.filePath
+   * @param {object} passData - passData standard con filePath
+   * @returns {string} - HTML o stringa vuota
+   */
+  injectPluginHtmlAfter(passData) {
+    const context = this.extractPluginContext(passData.filePath);
+    if (!context) {
+      return '';
+    }
+
+    const { pluginName, pageName } = context;
+    return this.getPluginCustomHtml(
+      pluginName,
+      pageName,
+      'after',
+      passData.isAdminContext || false
+    );
+  }
+
+  /**
+   * Legge contenuto JS custom del tema per un endpoint plugin
+   * Simmetrico a getPluginCustomCss()
+   * @param {string} pluginName - Nome del plugin
+   * @param {string} endpointName - Nome dell'endpoint/pagina
+   * @param {string} jsFile - Nome del file JS (default: 'script.js')
+   * @param {boolean} isAdmin - Se true, usa tema admin
+   * @returns {string} - Contenuto del JS o stringa vuota
+   */
+  getPluginCustomJs(pluginName, endpointName, jsFile = 'script.js', isAdmin = false) {
+    const jsPath = this.getCustomPluginAssetPath(pluginName, endpointName, jsFile, isAdmin);
+    if (jsPath && fs.existsSync(jsPath)) {
+      try {
+        return fs.readFileSync(jsPath, 'utf8');
+      } catch (error) {
+        console.warn(`[themeSys] Errore lettura JS personalizzato: ${error.message}`);
+        return '';
+      }
+    }
+    return '';
+  }
+
+  /**
+   * Legge HTML custom del tema da iniettare prima/dopo il contenuto
+   * @param {string} pluginName - Nome del plugin
+   * @param {string} endpointName - Nome dell'endpoint/pagina
+   * @param {string} position - 'before' o 'after'
+   * @param {boolean} isAdmin - Se true, usa tema admin
+   * @returns {string} - Contenuto HTML o stringa vuota
+   */
+  getPluginCustomHtml(pluginName, endpointName, position = 'before', isAdmin = false) {
+    const htmlFile = `${position}-content.html`;
+    const htmlPath = this.getCustomPluginAssetPath(pluginName, endpointName, htmlFile, isAdmin);
+    if (htmlPath && fs.existsSync(htmlPath)) {
+      try {
+        return fs.readFileSync(htmlPath, 'utf8');
+      } catch (error) {
+        console.warn(`[themeSys] Errore lettura HTML personalizzato: ${error.message}`);
+        return '';
+      }
+    }
+    return '';
+  }
+
   /*
   questo metodo prenderà comeparamentro la parte della pagina chesu vuole generare
    Es: head, header, body, booter ecc
    e eseguirà le funzioni corrispondenti e le restituirà
   */
 
-   //OLD 
+   //OLD
  /*  getPagePart( pagePart, passData ){
 
     let stingToReturn = "";

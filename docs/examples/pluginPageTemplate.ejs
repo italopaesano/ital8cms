@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<%
+/**
+ * ============================================================================
+ * TEMPLATE STANDARD per Plugin Pages (Public)
+ * ============================================================================
+ *
+ * Questo template mostra come creare pagine pubbliche nei plugin utilizzando
+ * il sistema di personalizzazione tema e i partial del tema.
+ *
+ * STRUTTURA CONSIGLIATA:
+ * plugins/{pluginName}/webPages/{pageName}.ejs
+ *
+ * COME FUNZIONA:
+ * 1. Include partial del tema (head.ejs, header.ejs, footer.ejs)
+ *    - I partial contengono già CSS/JS globali (es. Bootstrap)
+ *    - Hook dei plugin vengono eseguiti automaticamente nei partial
+ *
+ * 2. Inietta personalizzazioni tema specifiche per questa pagina
+ *    - <%- passData.themeSys.injectPluginCss() %>    → CSS custom
+ *    - <%- passData.themeSys.injectPluginJs() %>     → JS custom
+ *    - <%- passData.themeSys.injectPluginHtmlBefore() %> → HTML prima
+ *    - <%- passData.themeSys.injectPluginHtmlAfter() %>  → HTML dopo
+ *
+ * PERSONALIZZAZIONE TEMA:
+ * themes/{themeName}/pluginsEndpointsMarkup/{pluginName}/{pageName}/
+ * ├── template.ejs         (sovrascrive completamente questo template)
+ * ├── style.css            (CSS custom - iniettato nell'<head>)
+ * ├── script.js            (JS custom - iniettato nell'<head>)
+ * ├── before-content.html  (HTML prima del <main>)
+ * └── after-content.html   (HTML dopo del <main>)
+ *
+ * AUTO-DETECTION:
+ * Plugin e page name vengono rilevati automaticamente dal path del file.
+ * Non serve passare parametri alle funzioni inject*().
+ *
+ * ESEMPIO D'USO:
+ * Copia questo file in plugins/myPlugin/webPages/mypage.ejs
+ * Personalizza le sezioni CONFIGURAZIONE e CONTENUTO PRINCIPALE
+ * La pagina sarà accessibile a: /pluginPages/myPlugin/mypage.ejs
+ */
+
+// ========== CONFIGURAZIONE PAGINA (PERSONALIZZA QUI) ==========
+const PAGE_TITLE = 'My Plugin Page';        // Titolo della pagina
+const PAGE_DESCRIPTION = 'Description';     // Descrizione meta tag
+
+// Estrai dati da passData (forniti automaticamente)
+const { ctx, pluginSys, themeSys, apiPrefix } = passData;
+%>
+
+<html lang="it">
+<%# ========== HEAD ========== %>
+<%# Il tema include già Bootstrap CSS, meta tags, ecc. %>
+<%- await include(passData.themeSys.getThemePartPath('head.ejs')) %>
+
+<%# ========== PERSONALIZZAZIONE TEMA SPECIFICA ========== %>
+<%# Auto-rileva plugin e page dal path del file %>
+<%# Cerca: themes/{theme}/pluginsEndpointsMarkup/{plugin}/{page}/style.css %>
+<%- passData.themeSys.injectPluginCss() %>
+
+<%# JS custom dal tema (se necessario nell'head) %>
+<%- passData.themeSys.injectPluginJs() %>
+
+<title><%= PAGE_TITLE %></title>
+<meta name="description" content="<%= PAGE_DESCRIPTION %>">
+</head>
+
+<body>
+<%# ========== HEADER/NAV TEMA ========== %>
+<%# Il tema include già Bootstrap JS, script globali, ecc. %>
+<%- await include(passData.themeSys.getThemePartPath('header.ejs')) %>
+<%- await include(passData.themeSys.getThemePartPath('nav.ejs')) %>
+
+<%# ========== HTML CUSTOM TEMA - BEFORE ========== %>
+<%# Cerca: themes/{theme}/pluginsEndpointsMarkup/{plugin}/{page}/before-content.html %>
+<%- passData.themeSys.injectPluginHtmlBefore() %>
+
+<%# ========== CONTENUTO PRINCIPALE (PERSONALIZZA QUI) ========== %>
+<main class="plugin-page container mt-5">
+  <div class="row">
+    <div class="col-md-8 offset-md-2">
+      <h1 class="mb-4"><%= PAGE_TITLE %></h1>
+
+      <%# Esempio: Verifica autenticazione %>
+      <% if (passData.ctx.session && passData.ctx.session.authenticated) { %>
+        <div class="alert alert-success">
+          Ciao <strong><%= passData.ctx.session.user.name %></strong>!
+        </div>
+      <% } else { %>
+        <div class="alert alert-info">
+          <a href="/<%= apiPrefix %>/adminUsers/login">Login</a> per accedere.
+        </div>
+      <% } %>
+
+      <%# Esempio: Form POST verso API endpoint %>
+      <div class="card">
+        <div class="card-header">
+          <h5>Esempio Form</h5>
+        </div>
+        <div class="card-body">
+          <form action="/<%= apiPrefix %>/myPlugin/submit" method="POST">
+            <div class="mb-3">
+              <label for="field1" class="form-label">Campo 1</label>
+              <input type="text" class="form-control" id="field1" name="field1" required>
+            </div>
+
+            <div class="mb-3">
+              <label for="field2" class="form-label">Campo 2</label>
+              <textarea class="form-control" id="field2" name="field2" rows="3"></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Invia</button>
+          </form>
+        </div>
+      </div>
+
+      <%# Esempio: Chiamata AJAX ad API endpoint %>
+      <div class="card mt-4">
+        <div class="card-header">
+          <h5>Esempio AJAX</h5>
+        </div>
+        <div class="card-body">
+          <button id="ajaxButton" class="btn btn-secondary">Carica Dati</button>
+          <div id="ajaxResult" class="mt-3"></div>
+        </div>
+      </div>
+
+      <script>
+      // Script inline della pagina
+      document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('ajaxButton')?.addEventListener('click', async function() {
+          try {
+            const response = await fetch('/<%= apiPrefix %>/myPlugin/data');
+            const data = await response.json();
+            document.getElementById('ajaxResult').innerHTML =
+              '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+          } catch (error) {
+            document.getElementById('ajaxResult').innerHTML =
+              '<div class="alert alert-danger">Errore: ' + error.message + '</div>';
+          }
+        });
+      });
+      </script>
+    </div>
+  </div>
+</main>
+<%# ========== FINE CONTENUTO PRINCIPALE ========== %>
+
+<%# ========== HTML CUSTOM TEMA - AFTER ========== %>
+<%# Cerca: themes/{theme}/pluginsEndpointsMarkup/{plugin}/{page}/after-content.html %>
+<%- passData.themeSys.injectPluginHtmlAfter() %>
+
+<%# ========== FOOTER TEMA ========== %>
+<%# Include già script globali, plugin hooks, ecc. %>
+<%- await include(passData.themeSys.getThemePartPath('footer.ejs')) %>
+
+</body>
+</html>
