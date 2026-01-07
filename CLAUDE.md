@@ -493,6 +493,526 @@ The `pluginSys.getGlobalFunctions()` method validates and registers functions:
 - **Plugin implementation:** `/plugins/simpleI18n/main.js` (getGlobalFunctionsForTemplates method)
 - **Template example:** `/www/i18n-test.ejs` (side-by-side syntax comparison)
 
+## Plugin Pages System
+
+### Overview
+
+The **Plugin Pages System** allows plugins to serve public web pages without manually creating route endpoints. It uses a symlink-based architecture for zero file duplication and integrates seamlessly with the theme system for customization.
+
+**Key Features:**
+- ✅ **Zero configuration:** Plugins with `webPages/` directory are auto-detected
+- ✅ **Symlink-based:** Single source of truth, no file duplication
+- ✅ **Theme integration:** Automatic injection of theme customizations
+- ✅ **Clean API:** No redundant parameters in template calls
+- ✅ **Auto-detection:** Plugin and page names extracted from file path
+
+**URL Pattern:** `/{pluginPagesPrefix}/{pluginName}/{file.ejs}`
+
+**Default:** `/pluginPages/{pluginName}/{file.ejs}`
+
+### Architecture
+
+```
+/plugins/
+├── myPlugin/
+│   ├── main.js
+│   ├── pluginConfig.json5
+│   └── webPages/              ← Plugin's web pages (source)
+│       ├── page1.ejs
+│       └── page2.ejs
+│
+/pluginPages/                  ← Symlinks directory (root of project)
+└── myPlugin/                  → SYMLINK to /plugins/myPlugin/webPages/
+
+/themes/
+└── default/
+    └── pluginsEndpointsMarkup/
+        └── myPlugin/
+            ├── page1/         ← Theme customizations for page1
+            │   ├── style.css
+            │   ├── script.js
+            │   ├── before-content.html
+            │   └── after-content.html
+            └── page2/
+                └── style.css
+```
+
+### Configuration
+
+**In `ital8Config.json5`:**
+
+```json5
+{
+  "pluginPagesPrefix": "pluginPages"  // URL prefix (hardcoded: /pluginPages/ directory)
+}
+```
+
+**No plugin configuration needed!** The system auto-detects plugins with `webPages/` directory.
+
+### How It Works
+
+**1. Automatic Detection**
+
+At startup, `PluginPagesSystem`:
+- Scans all active plugins
+- Detects plugins with `webPages/` directory
+- Creates symlinks: `/pluginPages/{pluginName}/` → `/plugins/{pluginName}/webPages/`
+
+**2. Request Flow**
+
+```
+User requests: /pluginPages/myPlugin/page1.ejs
+       ↓
+koa-classic-server matches /pluginPages/ prefix
+       ↓
+Resolves symlink: /pluginPages/myPlugin/ → /plugins/myPlugin/webPages/
+       ↓
+Loads: /plugins/myPlugin/webPages/page1.ejs
+       ↓
+Renders with passData (ctx, pluginSys, themeSys, etc.)
+       ↓
+Theme customizations auto-injected
+       ↓
+HTML returned to user
+```
+
+**3. Theme Customization Injection**
+
+The system auto-injects theme customizations:
+- **CSS:** `themes/{theme}/pluginsEndpointsMarkup/{plugin}/{page}/style.css` → `<style>` in `<head>`
+- **JS:** `themes/{theme}/pluginsEndpointsMarkup/{plugin}/{page}/script.js` → `<script>` in `<head>`
+- **HTML Before:** `themes/{theme}/pluginsEndpointsMarkup/{plugin}/{page}/before-content.html` → before `<main>`
+- **HTML After:** `themes/{theme}/pluginsEndpointsMarkup/{plugin}/{page}/after-content.html` → after `<main>`
+
+### Creating Plugin Pages
+
+**Plugin Structure (Recommended):**
+
+```
+plugins/myPlugin/
+├── main.js
+├── pluginConfig.json5
+├── pluginDescription.json5
+└── webPages/                  ← Create this directory
+    ├── login.ejs
+    ├── profile.ejs
+    └── settings.ejs
+```
+
+**No special configuration required!** Just create the `webPages/` directory.
+
+### Template Standard
+
+**File: `plugins/myPlugin/webPages/mypage.ejs`**
+
+```ejs
+<!DOCTYPE html>
+<html lang="it">
+<%# ========== INCLUDE TEMA HEAD ========== %>
+<%# Include già Bootstrap CSS, meta tags, plugin hooks, ecc. %>
+<%- await include(passData.themeSys.getThemePartPath('head.ejs')) %>
+
+<%# ========== PERSONALIZZAZIONI TEMA SPECIFICHE ========== %>
+<%# Auto-rileva plugin='myPlugin' e page='mypage' dal path %>
+<%- passData.themeSys.injectPluginCss() %>
+<%- passData.themeSys.injectPluginJs() %>
+
+<title>My Page</title>
+</head>
+
+<body>
+<%# ========== HEADER/NAV TEMA ========== %>
+<%- await include(passData.themeSys.getThemePartPath('header.ejs')) %>
+<%- await include(passData.themeSys.getThemePartPath('nav.ejs')) %>
+
+<%# ========== HTML CUSTOM PRIMA ========== %>
+<%- passData.themeSys.injectPluginHtmlBefore() %>
+
+<%# ========== CONTENUTO PLUGIN ========== %>
+<main class="plugin-page">
+  <h1>My Page Content</h1>
+
+  <%# Form POST verso API endpoint %>
+  <form action="/api/myPlugin/submit" method="POST">
+    <input type="text" name="field" required>
+    <button type="submit">Invia</button>
+  </form>
+</main>
+
+<%# ========== HTML CUSTOM DOPO ========== %>
+<%- passData.themeSys.injectPluginHtmlAfter() %>
+
+<%# ========== FOOTER TEMA ========== %>
+<%# Include già Bootstrap JS, script globali, plugin hooks, ecc. %>
+<%- await include(passData.themeSys.getThemePartPath('footer.ejs')) %>
+</body>
+</html>
+```
+
+**Key Points:**
+- ✅ Use theme partials (`head.ejs`, `header.ejs`, `footer.ejs`) for layout
+- ✅ Call `inject*()` methods **without parameters** (auto-detection)
+- ✅ POST endpoints remain in `getRouteArray()` as before
+- ✅ Theme customizations injected automatically
+
+### themeSys API for Plugin Pages
+
+**Auto-Injection Methods (NO parameters needed):**
+
+```javascript
+// In template: passData.themeSys is a wrapper with methods already bound
+
+// Inject CSS custom del tema
+passData.themeSys.injectPluginCss()
+// Returns: <style>...</style> or ''
+
+// Inject JS custom del tema
+passData.themeSys.injectPluginJs()
+// Returns: <script>...</script> or ''
+
+// Inject HTML prima del contenuto
+passData.themeSys.injectPluginHtmlBefore()
+// Returns: HTML string or ''
+
+// Inject HTML dopo il contenuto
+passData.themeSys.injectPluginHtmlAfter()
+// Returns: HTML string or ''
+```
+
+**How Auto-Detection Works:**
+
+```javascript
+// themeSys.extractPluginContext(filePath) extracts:
+// /plugins/myPlugin/webPages/mypage.ejs → { pluginName: 'myPlugin', pageName: 'mypage' }
+// /pluginPages/myPlugin/mypage.ejs → { pluginName: 'myPlugin', pageName: 'mypage' }
+
+// Then searches for customizations in:
+// themes/{activeTheme}/pluginsEndpointsMarkup/myPlugin/mypage/
+```
+
+### Theme Customization Structure
+
+**Directory Structure:**
+
+```
+themes/myTheme/
+└── pluginsEndpointsMarkup/
+    └── myPlugin/
+        └── mypage/
+            ├── template.ejs         ← OPTIONAL: Override complete template
+            ├── style.css            ← CSS custom (injected in <head>)
+            ├── script.js            ← JS custom (injected in <head>)
+            ├── before-content.html  ← HTML before <main>
+            └── after-content.html   ← HTML after <main>
+```
+
+**Example Customizations:**
+
+**File: `themes/default/pluginsEndpointsMarkup/myPlugin/mypage/style.css`**
+
+```css
+/* CSS custom per myPlugin/mypage */
+.plugin-page {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 2rem;
+}
+
+.plugin-page h1 {
+  color: white;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+```
+
+**File: `themes/default/pluginsEndpointsMarkup/myPlugin/mypage/script.js`**
+
+```javascript
+// JS custom per myPlugin/mypage
+console.log('myPlugin/mypage - theme customization loaded');
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Client-side validation example
+  const form = document.querySelector('form');
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      // Custom validation logic
+    });
+  }
+});
+```
+
+**File: `themes/default/pluginsEndpointsMarkup/myPlugin/mypage/before-content.html`**
+
+```html
+<!-- HTML iniettato prima del <main> -->
+<div class="theme-banner">
+  <p>🎨 Personalizzato dal tema default</p>
+</div>
+```
+
+### GET vs POST Separation
+
+**GET Requests:** Served automatically via Plugin Pages System
+
+```
+GET /pluginPages/myPlugin/login.ejs → Rendered by koa-classic-server
+```
+
+**POST Requests:** Remain in plugin's `getRouteArray()`
+
+```javascript
+// In plugins/myPlugin/main.js
+getRouteArray() {
+  return [
+    {
+      method: 'post',
+      path: '/login',
+      handler: async (ctx) => {
+        const { username, password } = ctx.request.body;
+        // Authentication logic
+        ctx.redirect('/dashboard');
+      }
+    }
+  ];
+}
+```
+
+**URL:** `POST /api/myPlugin/login`
+
+**Pattern:**
+- **GET pages:** `/pluginPages/myPlugin/page.ejs` (automatic)
+- **POST logic:** `/api/myPlugin/endpoint` (manual in getRouteArray)
+
+### Migration from Old System
+
+**Before (manual endpoint):**
+
+```javascript
+// plugins/myPlugin/main.js
+getRouteArray() {
+  return [
+    {
+      method: 'get',
+      path: '/mypage',
+      handler: async (ctx) => {
+        const templatePath = path.join(__dirname, 'webPages', 'mypage.ejs');
+
+        // Prepare data
+        const data = {
+          apiPrefix: ital8Conf.apiPrefix,
+          bootstrapCss: '...',
+          bootstrapJs: '...',
+          customCss: themeSys.getPluginCustomCss(...),
+          // ...
+        };
+
+        ctx.body = await ejs.renderFile(templatePath, data);
+      }
+    }
+  ];
+}
+```
+
+**After (automatic):**
+
+```javascript
+// NO CODE NEEDED in main.js for GET!
+
+// Template includes theme partials directly
+// plugins/myPlugin/webPages/mypage.ejs
+<%- await include(passData.themeSys.getThemePartPath('head.ejs')) %>
+<%- passData.themeSys.injectPluginCss() %>
+<!-- content -->
+<%- await include(passData.themeSys.getThemePartPath('footer.ejs')) %>
+```
+
+**Benefits:**
+- ✅ **Less code:** No manual route handling for GET
+- ✅ **Cleaner:** Separation of concerns (logic vs presentation)
+- ✅ **Consistent:** Same pattern for all plugin pages
+- ✅ **Maintainable:** Theme resources managed in one place
+
+### passData in Plugin Pages
+
+**Available in all plugin page templates:**
+
+```javascript
+{
+  isAdminContext: false,         // Flag per contesto pubblico
+  globalPrefix: '',              // Global prefix (es. '')
+  apiPrefix: 'api',              // API prefix
+  pluginPagesPrefix: 'pluginPages', // Plugin pages prefix
+  pluginSys: pluginSys,          // Plugin system instance
+  plugin: {                      // Shared plugin objects
+    bootstrap: { ... },
+    myPlugin: { ... }
+  },
+  themeSys: themeSysWrapper,     // Theme system wrapper (methods bound)
+  adminSystem: adminSystem,      // Admin system (anche in pagine pubbliche)
+  filePath: '/path/to/file.ejs', // Current template path
+  href: 'http://...',            // Full request URL
+  query: { ... },                // URL query parameters
+  ctx: ctx                       // Full Koa context
+}
+```
+
+**themeSys Wrapper:**
+
+The `themeSys` in passData is a wrapper with methods already bound to passData, eliminating the need to pass passData as a parameter:
+
+```ejs
+<%# OLD (if calling underlying methods directly): %>
+<%# <%- themeSys.injectPluginCss(passData) %> %>
+
+<%# NEW (wrapper with bound methods): %>
+<%- passData.themeSys.injectPluginCss() %>
+```
+
+### System Architecture
+
+**Components:**
+
+1. **PluginPagesSystem** (`/core/pluginPagesSystem.js`)
+   - Scans plugins for `webPages/` directory
+   - Creates/manages symlinks in `/pluginPages/`
+   - Provides API for plugin page operations
+
+2. **themeSys Extensions** (`/core/themeSys.js`)
+   - `extractPluginContext(filePath)` - Auto-detection
+   - `injectPluginCss(passData)` - CSS injection
+   - `injectPluginJs(passData)` - JS injection
+   - `injectPluginHtmlBefore(passData)` - HTML before
+   - `injectPluginHtmlAfter(passData)` - HTML after
+   - `getPluginCustomJs()` - Helper for reading JS
+   - `getPluginCustomHtml()` - Helper for reading HTML
+
+3. **Wrapper System** (`/index.js`)
+   - `createThemeSysWrapper()` - Binds methods to passData
+   - Eliminates redundant parameter passing
+   - Consistent API across public and admin contexts
+
+**Initialization Flow:**
+
+```
+index.js startup
+       ↓
+PluginSys loads all plugins
+       ↓
+ThemeSys loads themes
+       ↓
+PluginPagesSystem.initialize()
+  - Scan all active plugins
+  - Detect webPages/ directories
+  - Create symlinks
+       ↓
+koa-classic-server configured for /pluginPages/
+       ↓
+createThemeSysWrapper() creates bound methods
+       ↓
+Server ready
+```
+
+### Debugging
+
+**Check symlinks created:**
+
+```bash
+ls -la /path/to/project/pluginPages/
+```
+
+**Expected output:**
+```
+lrwxrwxrwx myPlugin -> /path/to/plugins/myPlugin/webPages/
+lrwxrwxrwx anotherPlugin -> /path/to/plugins/anotherPlugin/webPages/
+```
+
+**Test page access:**
+
+```bash
+curl http://localhost:3000/pluginPages/myPlugin/mypage.ejs
+```
+
+**Check logs:**
+
+```
+[PluginPagesSystem] Starting initialization...
+[PluginPagesSystem] Created symlink: myPlugin → /path/to/plugins/myPlugin/webPages
+[PluginPagesSystem] Initialization complete: 6 plugins scanned, 2 symlinks created/verified
+✓ Plugin Pages System initialized
+[PluginPagesSystem] Plugin pages servite da /pluginPages/ -> /path/to/pluginPages
+```
+
+### Best Practices
+
+1. **✅ Use theme partials:** Include `head.ejs`, `header.ejs`, `footer.ejs` from theme
+2. **✅ Call inject methods:** Always call `injectPlugin*()` methods for theme customization
+3. **✅ Keep GET simple:** Use Plugin Pages System for simple GET pages
+4. **✅ Use endpoints for POST:** Keep POST logic in `getRouteArray()`
+5. **✅ Semantic class names:** Use `class="plugin-page plugin-{pluginName} page-{pageName}"`
+6. **✅ Form actions:** Point to `/api/{pluginName}/{endpoint}` for POST
+7. **⚠️ Avoid inline styles:** Use theme CSS customization instead
+8. **⚠️ Don't duplicate:** Let theme partials handle global CSS/JS
+
+### Example: Complete Login Page
+
+**File: `plugins/adminUsers/webPages/login.ejs`**
+
+```ejs
+<!DOCTYPE html>
+<html lang="it">
+<%- await include(passData.themeSys.getThemePartPath('head.ejs')) %>
+<%- passData.themeSys.injectPluginCss() %>
+<%- passData.themeSys.injectPluginJs() %>
+<title>Login</title>
+</head>
+
+<body>
+<%- await include(passData.themeSys.getThemePartPath('header.ejs')) %>
+<%- passData.themeSys.injectPluginHtmlBefore() %>
+
+<main class="plugin-page plugin-adminUsers page-login">
+  <div class="container">
+    <h1>Login</h1>
+
+    <% if (passData.query.error) { %>
+      <div class="alert alert-danger">Credenziali non valide</div>
+    <% } %>
+
+    <form action="/<%= passData.apiPrefix %>/adminUsers/login" method="POST">
+      <input type="hidden" name="referrerTo" value="<%= passData.ctx.headers.referer || '/' %>">
+
+      <div class="mb-3">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" required>
+      </div>
+
+      <div class="mb-3">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+
+      <button type="submit" class="btn btn-primary">Accedi</button>
+    </form>
+  </div>
+</main>
+
+<%- passData.themeSys.injectPluginHtmlAfter() %>
+<%- await include(passData.themeSys.getThemePartPath('footer.ejs')) %>
+</body>
+</html>
+```
+
+**Accessed at:** `http://localhost:3000/pluginPages/adminUsers/login.ejs`
+
+**Form posts to:** `http://localhost:3000/api/adminUsers/login` (handled by getRouteArray)
+
+### Reference Files
+
+- **Core System:** `/core/pluginPagesSystem.js`
+- **Theme Extensions:** `/core/themeSys.js` (lines 874-1064)
+- **Integration:** `/index.js` (lines 57-81, 145-185)
+- **Configuration:** `/ital8Config.json5` (pluginPagesPrefix)
+- **Template Example:** `/docs/examples/pluginPageTemplate.ejs`
+
 ## Theme System
 
 ### Theme Structure

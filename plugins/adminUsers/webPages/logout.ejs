@@ -1,35 +1,52 @@
+<!--
+  Plugin: adminUsers
+  Page: logout
+  Template standard: Plugin Pages System
+  Customization: themes/{themeName}/pluginsEndpointsMarkup/adminUsers/logout/
+-->
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-    <%- bootstrapCss %>
-     <!-- CSS personalizzato del tema (se presente) -->
-    <% if (customCss) { %>
-    <style>
-        <%- customCss %>
-    </style>
-    <% } %>
+<html lang="it">
+
+<!-- Include theme head partial (contains Bootstrap, meta tags, etc.) -->
+<%- await include(passData.themeSys.getThemePartPath('head.ejs')) %>
+
+<!-- Inject theme custom CSS for this specific plugin page -->
+<%- passData.themeSys.injectPluginCss() %>
+
+<!-- Inject theme custom JS for this specific plugin page -->
+<%- passData.themeSys.injectPluginJs() %>
+
+<title>Logout - ital8cms</title>
 </head>
-<body>
 
-    <%- apiPrefix %>
+<body class="plugin-page plugin-adminUsers page-logout">
 
-    pagina di logout
+<!-- Include theme header partial (navigation, branding, etc.) -->
+<%- await include(passData.themeSys.getThemePartPath('header.ejs')) %>
 
-    <div class="container d-flex align-items-center justify-content-center" style="min-height: 100vh;">
-        <div class="card shadow p-4" style="width: 100%; max-width: 400px;">
-          <h3 class="card-title text-center mb-4">Logout</h3>
-          <p class="text-center">Sei sicuro di voler effettuare il logout?</p>
-          <!-- Il form invia una richiesta POST all'endpoint /logout -->
-          <form method="POST">
-            <input type="hidden" id="referrerTo" name="referrerTo" value="<%- referrerTo %>">
-            <button type="submit" class="btn btn-danger w-100">Logout</button>
-          </form>
-        </div>
-      </div>
+<!-- Inject custom HTML BEFORE main content (from theme) -->
+<%- passData.themeSys.injectPluginHtmlBefore() %>
 
-    <%- bootstrapJs %>
+<!-- Main plugin content -->
+<main class="container d-flex align-items-center justify-content-center" style="min-height: 100vh;">
+  <div class="card shadow p-4" style="width: 100%; max-width: 400px;">
+    <h1 class="card-title text-center mb-4">Logout</h1>
+    <p class="text-center">Sei sicuro di voler effettuare il logout?</p>
+
+    <!-- Il form invia una richiesta POST all'endpoint corrente -->
+    <form method="POST" action="">
+      <input type="hidden" id="referrerTo" name="referrerTo" value="<%- referrerTo %>">
+      <button type="submit" class="btn btn-danger w-100">Conferma Logout</button>
+      <a href="javascript:history.back()" class="btn btn-secondary w-100 mt-2">Annulla</a>
+    </form>
+  </div>
+</main>
+
+<!-- Inject custom HTML AFTER main content (from theme) -->
+<%- passData.themeSys.injectPluginHtmlAfter() %>
+
+<!-- Include theme footer partial (scripts, closing tags) -->
+<%- await include(passData.themeSys.getThemePartPath('footer.ejs')) %>
+
 </body>
 </html>

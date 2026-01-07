@@ -1,115 +1,93 @@
+<!--
+  Plugin: adminUsers
+  Page: login
+  Template standard: Plugin Pages System
+  Customization: themes/{themeName}/pluginsEndpointsMarkup/adminUsers/login/
+-->
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-    <%- bootstrapCss %>
-     <!-- CSS personalizzato del tema (se presente) -->
-    <% if (customCss) { %>
-    <style>
-        <%- customCss %>
-    </style>
-    <% } %>
+<html lang="it">
+
+<!-- Include theme head partial (contains Bootstrap, meta tags, etc.) -->
+<%- await include(passData.themeSys.getThemePartPath('head.ejs')) %>
+
+<!-- Inject theme custom CSS for this specific plugin page -->
+<%- passData.themeSys.injectPluginCss() %>
+
+<!-- Inject theme custom JS for this specific plugin page -->
+<%- passData.themeSys.injectPluginJs() %>
+
+<title>Login - ital8cms</title>
 </head>
-<body>
-    <%- apiPrefix %>
-    <%- bootstrapJs %>
 
-    <div class="container">
-        <div class="row justify-content-center align-items-center vh-100">
-          <div class="col-md-6 col-xl-4">
-            <div class="card">
-              <div class="card-body">
-                <h3 class="card-title text-center mb-6 xl-4">Login</h3>
+<body class="plugin-page plugin-adminUsers page-login">
 
-                <!-- Messaggio di errore nascosto inizialmente -->
-                <div id="errorDiv" class="mb-3 d-none">
-                  <label class="form-label text-danger">Credenziali non valide</label>
-                </div>
+<!-- Include theme header partial (navigation, branding, etc.) -->
+<%- await include(passData.themeSys.getThemePartPath('header.ejs')) %>
 
-                <!-- Script lato client per gestire il messaggio di errore -->
-                <script>
-                  document.addEventListener("DOMContentLoaded", function() {
-                    const params = new URLSearchParams(window.location.search);
+<!-- Inject custom HTML BEFORE main content (from theme) -->
+<%- passData.themeSys.injectPluginHtmlBefore() %>
 
-                    // Se esiste il parametro "referrerTo", aggiorna il campo hidden
-                    if (params.has("referrerTo")) {
-                      document.getElementById("referrerTo").value = params.get("referrerTo");
-                    }
+<!-- Main plugin content -->
+<main class="container">
+  <div class="row justify-content-center align-items-center vh-100">
+    <div class="col-md-6 col-xl-4">
+      <div class="card">
+        <div class="card-body">
+          <h1 class="card-title text-center mb-4">Login</h1>
 
-                    // Se esiste il parametro "error", mostra il messaggio d'errore
-                    if (params.has('error')) {
-                      document.getElementById('errorDiv').classList.remove('d-none');
-                    }
-                  });
-                </script>
-
-                <form id="loginForm" method="POST">
-                  <input type="hidden" id="referrerTo" name="referrerTo" value="<%- referrerTo %>">
-                  <div class="mb-3">
-                    <label for="username" class="form-label">Username</label>
-                    <input type="text" class="form-control" id="username" name="username" required>
-                  </div>
-                  <div class="mb-3">
-                    <label for="password" class="form-label">Password</label>
-                    <input type="password" class="form-control" id="password" name="password" required>
-                  </div>
-                  <button type="submit"  id="loginButton" class="btn btn-primary w-100">Accedi</button>
-                </form>
-              </div>
-            </div>
+          <!-- Messaggio di errore (mostrato via query param) -->
+          <div id="errorDiv" class="alert alert-danger mb-3 d-none">
+            <strong>Errore:</strong> Credenziali non valide
           </div>
+
+          <!-- Form login (POST to current URL) -->
+          <form id="loginForm" method="POST" action="">
+            <!-- Campo hidden per redirect dopo login -->
+            <input type="hidden" id="referrerTo" name="referrerTo" value="<%- referrerTo %>">
+
+            <!-- Username -->
+            <div class="mb-3">
+              <label for="username" class="form-label">Username</label>
+              <input type="text" class="form-control" id="username" name="username" required autofocus>
+            </div>
+
+            <!-- Password -->
+            <div class="mb-3">
+              <label for="password" class="form-label">Password</label>
+              <input type="password" class="form-control" id="password" name="password" required>
+            </div>
+
+            <!-- Submit button -->
+            <button type="submit" id="loginButton" class="btn btn-primary w-100">Accedi</button>
+          </form>
         </div>
       </div>
+    </div>
+  </div>
+</main>
 
-      <script>
-      /*  
-           // Funzione che esegue la chiamata POST
-        function loginUser() {
-          // Recupera i valori inseriti
-          const username = document.getElementById('username').value;
-          const password = document.getElementById('password').value;
-          
-          // Specifica l'endpoint a cui inviare la richiesta POST
-          const endpoint = `login`;
-          console.log("endpoint", endpoint);
-          
-          // Dati da inviare
-          const data = { username, password };
-          
-          // Esegue la chiamata POST utilizzando fetch
-          fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-          })
-          .then(response => response.json())
-          .then(result => {
-            console.log('Successo:', result);
-            //window.location.replace('/logged');// redirect non funziona 
-            // Qui puoi gestire la risposta, ad esempio reindirizzare l'utente o mostrare un messaggio
-          })
-          .catch(error => {
-            console.error('Errore:', error);
-            // Gestione errori
-          });
-        }
- */
-/*         // Attiva la funzione al click sul bottone
-      document.getElementById('loginButton').addEventListener('click', loginUser);
+<!-- Inject custom HTML AFTER main content (from theme) -->
+<%- passData.themeSys.injectPluginHtmlAfter() %>
 
-      // Attiva la funzione alla pressione del tasto Invio all'interno del form
-      document.getElementById('loginForm').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-          e.preventDefault();  // Previene il comportamento di default del form
-          loginUser();
-        }
-      }); */
+<!-- Include theme footer partial (scripts, closing tags) -->
+<%- await include(passData.themeSys.getThemePartPath('footer.ejs')) %>
 
-      </script>
+<!-- Page-specific JavaScript -->
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const params = new URLSearchParams(window.location.search);
+
+    // Se esiste il parametro "referrerTo", aggiorna il campo hidden
+    if (params.has("referrerTo")) {
+      document.getElementById("referrerTo").value = params.get("referrerTo");
+    }
+
+    // Se esiste il parametro "error", mostra il messaggio d'errore
+    if (params.has('error')) {
+      document.getElementById('errorDiv').classList.remove('d-none');
+    }
+  });
+</script>
 
 </body>
 </html>
