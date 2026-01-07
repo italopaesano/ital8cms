@@ -31,6 +31,13 @@
 <%- passData.themeSys.injectPluginHtmlBefore() %>
 
 <!-- Dati sessione (JSON nascosto per JavaScript) -->
+<%
+// Costruisci oggetto session da passData.ctx.session
+const session = {
+  isAuthenticated: passData.ctx.session && passData.ctx.session.authenticated ? true : false,
+  username: passData.ctx.session && passData.ctx.session.user ? passData.ctx.session.user.name : null
+};
+%>
 <script id="sessionData" type="application/json">
 <%- JSON.stringify(session) %>
 </script>
