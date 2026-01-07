@@ -51,7 +51,7 @@ const { ctx, pluginSys, themeSys, apiPrefix } = passData;
 <html lang="it">
 <%# ========== HEAD ========== %>
 <%# Il tema include già Bootstrap CSS, meta tags, ecc. %>
-<%- await include(passData.themeSys.getThemePartPath('head.ejs')) %>
+<%- include(passData.themeSys.getThemePartPath('head.ejs')) %>
 
 <%# ========== PERSONALIZZAZIONE TEMA SPECIFICA ========== %>
 <%# Auto-rileva plugin e page dal path del file %>
@@ -68,8 +68,8 @@ const { ctx, pluginSys, themeSys, apiPrefix } = passData;
 <body>
 <%# ========== HEADER/NAV TEMA ========== %>
 <%# Il tema include già Bootstrap JS, script globali, ecc. %>
-<%- await include(passData.themeSys.getThemePartPath('header.ejs')) %>
-<%- await include(passData.themeSys.getThemePartPath('nav.ejs')) %>
+<%- include(passData.themeSys.getThemePartPath('header.ejs')) %>
+<%- include(passData.themeSys.getThemePartPath('nav.ejs')) %>
 
 <%# ========== HTML CUSTOM TEMA - BEFORE ========== %>
 <%# Cerca: themes/{theme}/pluginsEndpointsMarkup/{plugin}/{page}/before-content.html %>
@@ -152,7 +152,7 @@ const { ctx, pluginSys, themeSys, apiPrefix } = passData;
 
 <%# ========== FOOTER TEMA ========== %>
 <%# Include già script globali, plugin hooks, ecc. %>
-<%- await include(passData.themeSys.getThemePartPath('footer.ejs')) %>
+<%- include(passData.themeSys.getThemePartPath('footer.ejs')) %>
 
 </body>
 </html>
