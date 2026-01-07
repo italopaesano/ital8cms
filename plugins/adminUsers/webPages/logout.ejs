@@ -27,6 +27,11 @@
 <!-- Inject custom HTML BEFORE main content (from theme) -->
 <%- passData.themeSys.injectPluginHtmlBefore() %>
 
+<%
+// Costruisci referrerTo da passData (per redirect dopo logout)
+const referrerTo = passData.ctx.headers.referer || '/';
+%>
+
 <!-- Main plugin content -->
 <main class="container d-flex align-items-center justify-content-center" style="min-height: 100vh;">
   <div class="card shadow p-4" style="width: 100%; max-width: 400px;">
