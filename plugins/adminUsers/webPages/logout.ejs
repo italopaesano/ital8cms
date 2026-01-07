@@ -38,8 +38,8 @@ const referrerTo = passData.ctx.headers.referer || '/';
     <h1 class="card-title text-center mb-4">Logout</h1>
     <p class="text-center">Sei sicuro di voler effettuare il logout?</p>
 
-    <!-- Il form invia una richiesta POST all'endpoint corrente -->
-    <form method="POST" action="">
+    <!-- Il form invia una richiesta POST all'endpoint API -->
+    <form method="POST" action="/<%= passData.apiPrefix %>/adminUsers/logout">
       <input type="hidden" id="referrerTo" name="referrerTo" value="<%- referrerTo %>">
       <button type="submit" class="btn btn-danger w-100">Conferma Logout</button>
       <a href="javascript:history.back()" class="btn btn-secondary w-100 mt-2">Annulla</a>

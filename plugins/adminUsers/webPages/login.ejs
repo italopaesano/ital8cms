@@ -45,8 +45,8 @@ const referrerTo = passData.ctx.headers.referer || '/';
             <strong>Errore:</strong> Credenziali non valide
           </div>
 
-          <!-- Form login (POST to current URL) -->
-          <form id="loginForm" method="POST" action="">
+          <!-- Form login (POST to API endpoint) -->
+          <form id="loginForm" method="POST" action="/<%= passData.apiPrefix %>/adminUsers/login">
             <!-- Campo hidden per redirect dopo login -->
             <input type="hidden" id="referrerTo" name="referrerTo" value="<%- referrerTo %>">
 
