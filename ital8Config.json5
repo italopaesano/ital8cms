@@ -3,6 +3,7 @@
   "apiPrefix": "api",
   "adminPrefix": "admin",
   "enableAdmin": true,
+  "pluginPagesPrefix": "pluginPages",
   "viewsPrefix": "views",
   "baseThemePath": "../",
   "activeTheme": "placeholderExample",

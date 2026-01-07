@@ -1,33 +1,43 @@
-<!-- TEMPLATE PER LA MODIFICA DEL PROFILO UTENTE (username e password) -->
-<!-- Permette all'utente loggato di modificare i propri dati -->
+<!--
+  Plugin: adminUsers
+  Page: userProfile
+  Template standard: Plugin Pages System
+  Customization: themes/{themeName}/pluginsEndpointsMarkup/adminUsers/userProfile/
+
+  TEMPLATE PER LA MODIFICA DEL PROFILO UTENTE (username e password)
+  Permette all'utente loggato di modificare i propri dati
+-->
 <!DOCTYPE html>
 <html lang="it">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modifica Profilo - ital8cms</title>
 
-    <!-- Bootstrap CSS dal plugin bootstrap -->
-    <%- bootstrapCss %>
+<!-- Include theme head partial (contains Bootstrap, meta tags, etc.) -->
+<%- await include(passData.themeSys.getThemePartPath('head.ejs')) %>
 
-    <!-- CSS personalizzato del tema (se presente) -->
-    <% if (customCss) { %>
-    <style>
-        <%- customCss %>
-    </style>
-    <% } %>
+<!-- Inject theme custom CSS for this specific plugin page -->
+<%- passData.themeSys.injectPluginCss() %>
+
+<!-- Inject theme custom JS for this specific plugin page -->
+<%- passData.themeSys.injectPluginJs() %>
+
+<title>Modifica Profilo - ital8cms</title>
 </head>
-<body>
 
-<!-- api prefix -->
-<%- apiPrefix %>
+<body class="plugin-page plugin-adminUsers page-userProfile">
+
+<!-- Include theme header partial (navigation, branding, etc.) -->
+<%- await include(passData.themeSys.getThemePartPath('header.ejs')) %>
+
+<!-- Inject custom HTML BEFORE main content (from theme) -->
+<%- passData.themeSys.injectPluginHtmlBefore() %>
 
 <!-- Dati sessione (JSON nascosto per JavaScript) -->
 <script id="sessionData" type="application/json">
 <%- JSON.stringify(session) %>
 </script>
 
-<div class="container mt-4">
+<!-- Main plugin content -->
+
+<main class="container mt-4">
     <div class="text-center mb-4">
         <h1>🔐 Modifica Profilo Utente</h1>
         <p class="text-muted">Aggiorna il tuo username e la tua password</p>
@@ -119,8 +129,15 @@
             <button type="button" class="btn btn-secondary" onclick="window.history.back()">❌ Annulla</button>
         </div>
     </form>
-</div>
+</main>
 
+<!-- Inject custom HTML AFTER main content (from theme) -->
+<%- passData.themeSys.injectPluginHtmlAfter() %>
+
+<!-- Include theme footer partial (scripts, closing tags) -->
+<%- await include(passData.themeSys.getThemePartPath('footer.ejs')) %>
+
+<!-- Page-specific JavaScript -->
 <script>
     let currentUserData = {};
 
@@ -340,9 +357,6 @@
 
     // Non caricare automaticamente - l'utente deve cliccare il pulsante "Carica Dati Utente"
 </script>
-
-<!-- Bootstrap JS dal plugin bootstrap -->
-<%- bootstrapJs %>
 
 </body>
 </html>
