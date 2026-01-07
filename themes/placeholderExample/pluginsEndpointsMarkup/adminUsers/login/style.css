@@ -1,0 +1,177 @@
+/* ============================================================================
+   PERSONALIZZAZIONE LOGIN - Tema placeholderExample
+   ============================================================================
+   Questo CSS viene automaticamente iniettato nella pagina di login
+   dal sistema di temi di ital8cms quando il tema "placeholderExample" è attivo.
+
+   Percorso: themes/placeholderExample/pluginsEndpointsMarkup/adminUsers/login/style.css
+   ============================================================================ */
+
+/* Sfondo sfumato viola-blu per la pagina di login */
+body {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Container principale con effetto glassmorphism */
+.container {
+    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* Card di login con ombra e bordo arrotondato */
+.card {
+    background: rgba(255, 255, 255, 0.95);
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+}
+
+/* Header della card con gradiente */
+.card-body {
+    padding: 2.5rem;
+}
+
+/* Titolo con animazione */
+.card-title {
+    color: #667eea;
+    font-weight: 700;
+    font-size: 2rem;
+    margin-bottom: 2rem;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+    animation: fadeInDown 0.6s ease-in-out;
+}
+
+/* Animazione fadeIn per il titolo */
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Stile input personalizzato */
+.form-control {
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    transition: all 0.3s ease;
+}
+
+.form-control:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+    transform: translateY(-2px);
+}
+
+/* Label con colore personalizzato */
+.form-label {
+    color: #333;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+/* Bottone login con gradiente e animazione hover */
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 10px;
+    padding: 0.75rem 2rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+}
+
+.btn-primary:active {
+    transform: translateY(-1px);
+}
+
+/* Messaggio di errore stilizzato */
+.text-danger {
+    color: #e74c3c !important;
+    font-weight: 600;
+    background: rgba(231, 76, 60, 0.1);
+    padding: 0.5rem;
+    border-radius: 8px;
+    border-left: 4px solid #e74c3c;
+}
+
+/* Animazione per il container */
+.card {
+    animation: zoomIn 0.5s ease-in-out;
+}
+
+@keyframes zoomIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Effetto focus sugli input */
+.form-control::placeholder {
+    color: #aaa;
+    font-style: italic;
+}
+
+/* Responsive: adatta dimensioni su mobile */
+@media (max-width: 768px) {
+    .card-body {
+        padding: 1.5rem;
+    }
+
+    .card-title {
+        font-size: 1.5rem;
+    }
+
+    .container {
+        padding: 1rem;
+    }
+}
+
+/* Badge "Theme Active" per dimostrare che il CSS personalizzato è attivo */
+.card::before {
+    content: "🎨 Tema Personalizzato Attivo";
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.5);
+    z-index: 10;
+}
+
+/* Aggiunge un'icona decorativa */
+.card-title::before {
+    content: "🔐 ";
+    font-size: 2rem;
+    margin-right: 0.5rem;
+}
