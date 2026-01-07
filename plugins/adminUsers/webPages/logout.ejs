@@ -8,7 +8,7 @@
 <html lang="it">
 
 <!-- Include theme head partial (contains Bootstrap, meta tags, etc.) -->
-<%- await include(passData.themeSys.getThemePartPath('head.ejs')) %>
+<%- include(passData.themeSys.getThemePartPath('head.ejs')) %>
 
 <!-- Inject theme custom CSS for this specific plugin page -->
 <%- passData.themeSys.injectPluginCss() %>
@@ -22,7 +22,7 @@
 <body class="plugin-page plugin-adminUsers page-logout">
 
 <!-- Include theme header partial (navigation, branding, etc.) -->
-<%- await include(passData.themeSys.getThemePartPath('header.ejs')) %>
+<%- include(passData.themeSys.getThemePartPath('header.ejs')) %>
 
 <!-- Inject custom HTML BEFORE main content (from theme) -->
 <%- passData.themeSys.injectPluginHtmlBefore() %>
@@ -46,7 +46,7 @@
 <%- passData.themeSys.injectPluginHtmlAfter() %>
 
 <!-- Include theme footer partial (scripts, closing tags) -->
-<%- await include(passData.themeSys.getThemePartPath('footer.ejs')) %>
+<%- include(passData.themeSys.getThemePartPath('footer.ejs')) %>
 
 </body>
 </html>

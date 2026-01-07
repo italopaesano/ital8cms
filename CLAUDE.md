@@ -610,7 +610,7 @@ plugins/myPlugin/
 <html lang="it">
 <%# ========== INCLUDE TEMA HEAD ========== %>
 <%# Include già Bootstrap CSS, meta tags, plugin hooks, ecc. %>
-<%- await include(passData.themeSys.getThemePartPath('head.ejs')) %>
+<%- include(passData.themeSys.getThemePartPath('head.ejs')) %>
 
 <%# ========== PERSONALIZZAZIONI TEMA SPECIFICHE ========== %>
 <%# Auto-rileva plugin='myPlugin' e page='mypage' dal path %>
@@ -622,8 +622,8 @@ plugins/myPlugin/
 
 <body>
 <%# ========== HEADER/NAV TEMA ========== %>
-<%- await include(passData.themeSys.getThemePartPath('header.ejs')) %>
-<%- await include(passData.themeSys.getThemePartPath('nav.ejs')) %>
+<%- include(passData.themeSys.getThemePartPath('header.ejs')) %>
+<%- include(passData.themeSys.getThemePartPath('nav.ejs')) %>
 
 <%# ========== HTML CUSTOM PRIMA ========== %>
 <%- passData.themeSys.injectPluginHtmlBefore() %>
@@ -644,7 +644,7 @@ plugins/myPlugin/
 
 <%# ========== FOOTER TEMA ========== %>
 <%# Include già Bootstrap JS, script globali, plugin hooks, ecc. %>
-<%- await include(passData.themeSys.getThemePartPath('footer.ejs')) %>
+<%- include(passData.themeSys.getThemePartPath('footer.ejs')) %>
 </body>
 </html>
 ```
@@ -819,10 +819,10 @@ getRouteArray() {
 
 // Template includes theme partials directly
 // plugins/myPlugin/webPages/mypage.ejs
-<%- await include(passData.themeSys.getThemePartPath('head.ejs')) %>
+<%- include(passData.themeSys.getThemePartPath('head.ejs')) %>
 <%- passData.themeSys.injectPluginCss() %>
 <!-- content -->
-<%- await include(passData.themeSys.getThemePartPath('footer.ejs')) %>
+<%- include(passData.themeSys.getThemePartPath('footer.ejs')) %>
 ```
 
 **Benefits:**
@@ -959,14 +959,14 @@ curl http://localhost:3000/pluginPages/myPlugin/mypage.ejs
 ```ejs
 <!DOCTYPE html>
 <html lang="it">
-<%- await include(passData.themeSys.getThemePartPath('head.ejs')) %>
+<%- include(passData.themeSys.getThemePartPath('head.ejs')) %>
 <%- passData.themeSys.injectPluginCss() %>
 <%- passData.themeSys.injectPluginJs() %>
 <title>Login</title>
 </head>
 
 <body>
-<%- await include(passData.themeSys.getThemePartPath('header.ejs')) %>
+<%- include(passData.themeSys.getThemePartPath('header.ejs')) %>
 <%- passData.themeSys.injectPluginHtmlBefore() %>
 
 <main class="plugin-page plugin-adminUsers page-login">
@@ -996,7 +996,7 @@ curl http://localhost:3000/pluginPages/myPlugin/mypage.ejs
 </main>
 
 <%- passData.themeSys.injectPluginHtmlAfter() %>
-<%- await include(passData.themeSys.getThemePartPath('footer.ejs')) %>
+<%- include(passData.themeSys.getThemePartPath('footer.ejs')) %>
 </body>
 </html>
 ```
@@ -1077,12 +1077,12 @@ themes/myTheme/
 **Unified API - works for both public and admin contexts:**
 
 ```ejs
-<%- await include(passData.themeSys.getThemePartPath('head.ejs', passData)) %>
-<%- await include(passData.themeSys.getThemePartPath('header.ejs', passData)) %>
-<%- await include(passData.themeSys.getThemePartPath('nav.ejs', passData)) %>
-<%- await include(passData.themeSys.getThemePartPath('main.ejs', passData)) %>
-<%- await include(passData.themeSys.getThemePartPath('aside.ejs', passData)) %>
-<%- await include(passData.themeSys.getThemePartPath('footer.ejs', passData)) %>
+<%- include(passData.themeSys.getThemePartPath('head.ejs', passData)) %>
+<%- include(passData.themeSys.getThemePartPath('header.ejs', passData)) %>
+<%- include(passData.themeSys.getThemePartPath('nav.ejs', passData)) %>
+<%- include(passData.themeSys.getThemePartPath('main.ejs', passData)) %>
+<%- include(passData.themeSys.getThemePartPath('aside.ejs', passData)) %>
+<%- include(passData.themeSys.getThemePartPath('footer.ejs', passData)) %>
 ```
 
 **The same code works in both public and admin templates!** The system automatically:
@@ -2228,15 +2228,15 @@ mkdir -p core/admin/webPages/myFeature
 
 2. **Create page** at `core/admin/webPages/myFeature/index.ejs`:
 ```ejs
-<%- await include(passData.themeSys.getThemePartPath('head.ejs', passData)) %>
-<%- await include(passData.themeSys.getThemePartPath('header.ejs', passData)) %>
+<%- include(passData.themeSys.getThemePartPath('head.ejs', passData)) %>
+<%- include(passData.themeSys.getThemePartPath('header.ejs', passData)) %>
 
 <main>
   <h1>My Feature</h1>
   <!-- Your content -->
 </main>
 
-<%- await include(passData.themeSys.getThemePartPath('footer.ejs', passData)) %>
+<%- include(passData.themeSys.getThemePartPath('footer.ejs', passData)) %>
 ```
 
 **Note:** The same `getThemePartPath()` method works for admin pages because `passData.isAdminContext === true` automatically loads the admin theme partials.
