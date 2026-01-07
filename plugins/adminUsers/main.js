@@ -102,7 +102,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
 
         }else{//login fallito
           //console.log('----------------login fallito --------------');
-          ctx.redirect(`/${ital8Conf.apiPrefix}/${pluginName}/login?error=invalid&referrerTo=${referrerTo}`);// se il login fallissce si viene reindirizzati nella pagina di login
+          ctx.redirect(`/${ital8Conf.pluginPagesPrefix}/${pluginName}/login.ejs?error=invalid&referrerTo=${referrerTo}`);// se il login fallissce si viene reindirizzati nella pagina di login
           return;
 
         }
