@@ -466,9 +466,9 @@ function getHooksPage(){
       let message;
 
       if(passData.ctx.session.user){
-        message = `ciao ${passData.ctx.session.user.name} <br> <a href="/${ital8Conf.apiPrefix}/adminUsers/userProfile">🔐 Profilo</a> | <a href="/${ital8Conf.apiPrefix}/adminUsers/logout">Logout</a>` ;
+        message = `ciao ${passData.ctx.session.user.name} <br> <a href="/${ital8Conf.pluginPagesPrefix}/adminUsers/userProfile.ejs">🔐 Profilo</a> | <a href="/${ital8Conf.pluginPagesPrefix}/adminUsers/logout.ejs">Logout</a>` ;
       }else{
-        message = `non sei loggato <br> <a href="/${ital8Conf.apiPrefix}/adminUsers/login">Login</a>`;
+        message = `non sei loggato <br> <a href="/${ital8Conf.pluginPagesPrefix}/adminUsers/login.ejs">Login</a>`;
       }
       
       return `
