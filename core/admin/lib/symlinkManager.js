@@ -11,9 +11,9 @@ const loadJson5 = require('../../loadJson5');
  * - Valida che symlink puntino a destinazioni valide
  *
  * Workflow:
- * 1. Plugin admin (nome inizia con 'admin') ha directory con nome sezione (es. plugins/adminUsers/usersManagment/)
+ * 1. Plugin admin (nome inizia con 'admin') ha sezioni organizzate in adminWebSections/ (es. plugins/adminUsers/adminWebSections/usersManagment/)
  * 2. Durante caricamento plugin, crea symlink per ogni sezione in adminSections array:
- *    core/admin/webPages/usersManagment → plugins/adminUsers/usersManagment/
+ *    core/admin/webPages/usersManagment → plugins/adminUsers/adminWebSections/usersManagment/
  * 3. koa-classic-server serve i file EJS attraverso il symlink
  * 4. Durante disinstallazione, rimuove symlink
  *
@@ -21,7 +21,7 @@ const loadJson5 = require('../../loadJson5');
  * - Plugin con nome che inizia per "admin" sono automaticamente considerati plugin admin
  * - Le sezioni sono dichiarate in pluginConfig.json5 come array di stringhe (sectionId)
  * - I metadata UI (label, icon, description) sono centralizzati in /core/admin/adminConfig.json5
- * - Ogni sezione DEVE avere una directory corrispondente nella root del plugin
+ * - Ogni sezione DEVE avere una directory corrispondente in adminWebSections/ del plugin
  */
 class SymlinkManager {
   constructor(configManager) {
@@ -59,8 +59,8 @@ class SymlinkManager {
         continue;
       }
 
-      // 4. Path della directory sezione nel plugin
-      const sectionSourcePath = path.join(pluginPath, sectionId);
+      // 4. Path della directory sezione nel plugin (dentro adminWebSections/)
+      const sectionSourcePath = path.join(pluginPath, 'adminWebSections', sectionId);
 
       // 5. Verifica che la directory sezione esista nel plugin
       if (!fs.existsSync(sectionSourcePath)) {
@@ -149,7 +149,7 @@ class SymlinkManager {
 
       // 5. Verifica che punti al plugin corretto (safety check)
       const currentTarget = fs.readlinkSync(symlinkPath);
-      const expectedTarget = path.join(plugin.pathPluginFolder, sectionId);
+      const expectedTarget = path.join(plugin.pathPluginFolder, 'adminWebSections', sectionId);
 
       if (currentTarget !== expectedTarget) {
         console.warn(
