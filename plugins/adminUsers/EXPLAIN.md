@@ -132,8 +132,14 @@ plugins/adminUsers/
 ├── webPages/                  # ⭐ Templates directory (RECOMMENDED)
 │   ├── login.ejs              # Login page template
 │   └── logout.ejs             # Logout page template
-├── usersManagment/            # Admin section (symlinked to /core/admin/webPages/)
-├── rolesManagment/            # Admin section (symlinked to /core/admin/webPages/)
+├── adminWebSections/          # Admin sections container directory
+│   ├── usersManagment/        # Admin section (symlinked to /core/admin/webPages/)
+│   │   ├── index.ejs
+│   │   ├── userView.ejs
+│   │   ├── userUpsert.ejs
+│   │   └── userDelete.ejs
+│   └── rolesManagment/        # Admin section (symlinked to /core/admin/webPages/)
+│       └── index.ejs
 ├── userAccount.json5          # User data storage
 ├── userRole.json5             # Role definitions
 ├── userManagement.js          # User management logic
