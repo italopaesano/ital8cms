@@ -301,7 +301,7 @@ Potential improvements for this feature:
 - **User Account Data:** `/plugins/adminUsers/userAccount.json5`
 - **Authentication Library:** `/plugins/adminUsers/lib/libAccess.js`
 - **Login/Logout Pages:** `/plugins/adminUsers/webPages/login.ejs`, `logout.ejs`
-- **Admin User Management:** `/plugins/adminUsers/usersManagment/userUpsert.ejs` (different from user profile - admin-only)
+- **Admin User Management:** `/plugins/adminUsers/adminWebSections/usersManagment/userUpsert.ejs` (different from user profile - admin-only)
 
 ## Differences: User Profile vs Admin User Management
 
@@ -313,7 +313,7 @@ Potential improvements for this feature:
 | **Username** | Can change own username | Can change any username |
 | **Roles** | Cannot modify roles | Can assign/remove roles |
 | **Email** | View only (future: edit) | Can modify any email |
-| **Location** | `/api/adminUsers/userProfile` | `/admin/usersManagment/userUpsert.ejs` |
+| **Location** | `/api/adminUsers/userProfile` | `/admin/usersManagment/userUpsert.ejs` (symlink → `/plugins/adminUsers/adminWebSections/usersManagment/userUpsert.ejs`) |
 
 ---
 

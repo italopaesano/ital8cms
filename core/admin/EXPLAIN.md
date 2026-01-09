@@ -35,7 +35,7 @@ core/admin/
 └── webPages/                 # Template EJS admin
     ├── index.ejs             # Dashboard admin (menu dinamico)
     ├── systemSettings/       # Sezioni hardcoded
-    └── usersManagment/       # SYMLINK → plugins/adminUsers/usersManagment/
+    └── usersManagment/       # SYMLINK → plugins/adminUsers/adminWebSections/usersManagment/
 ```
 
 ### Responsabilità Componenti
@@ -71,22 +71,25 @@ core/admin/
 ```
 plugins/adminUsers/
 ├── main.js                    # Logica plugin (standard)
-├── pluginConfig.json5         # Config plugin (CON flag isAdminPlugin)
+├── pluginConfig.json5         # Config plugin (with adminSections array)
 ├── pluginDescription.json5    # Metadata plugin (standard)
-├── adminConfig.json5          # OBBLIGATORIO: Metadata sezione admin
-├── usersManagment/            # Directory sezione (nome = sectionId)
-│   ├── index.ejs              # Pagina principale sezione
-│   ├── userView.ejs           # Sotto-pagine
-│   ├── userUpsert.ejs
-│   └── userDelete.ejs
+├── adminWebSections/          # Admin sections container directory
+│   ├── usersManagment/        # Directory sezione (nome = sectionId)
+│   │   ├── index.ejs          # Pagina principale sezione
+│   │   ├── userView.ejs       # Sotto-pagine
+│   │   ├── userUpsert.ejs
+│   │   └── userDelete.ejs
+│   └── rolesManagment/        # Seconda sezione
+│       └── index.ejs
 ├── userAccount.json5          # File dati plugin
 ├── userRole.json5
-└── userManagement.js          # Moduli plugin
+├── userManagement.js          # Moduli plugin
+└── roleManagement.js
 ```
 
 ### File Richiesti per Plugin Admin
 
-#### 1. `pluginConfig.json5` - Flag Admin Plugin
+#### 1. `pluginConfig.json5` - Dichiarazione Sezioni Admin
 
 ```json5
 {
@@ -94,12 +97,16 @@ plugins/adminUsers/
   "isInstalled": 1,
   "weight": 0,
 
-  // OBBLIGATORIO per plugin admin
-  "pluginType": {
-    "isAdminPlugin": true,           // Identifica come plugin admin
-    "providesAuth": true,            // Opzionale: servizi forniti
-    "providesUserManagement": true
-  },
+  // ℹ️ CONVENZIONE: Plugin con nome che inizia per "admin" sono automaticamente plugin admin
+  // Non è necessario alcun flag esplicito (es. isAdminPlugin)
+
+  // Array di ID delle sezioni admin gestite da questo plugin
+  // Ogni sezione DEVE avere una directory corrispondente in adminWebSections/ del plugin
+  // I metadata UI (label, icon, description) sono centralizzati in /core/admin/adminConfig.json5
+  "adminSections": [
+    "usersManagment",
+    "rolesManagment"
+  ],
 
   "dependency": {},
   "nodeModuleDependency": {},
@@ -107,43 +114,14 @@ plugins/adminUsers/
 }
 ```
 
-**Campo obbligatorio:**
-- `pluginType.isAdminPlugin: true` - Marca il plugin come admin plugin
-
-#### 2. `adminConfig.json5` - Metadata Sezione Admin
-
-```json5
-// This file follows the JSON5 standard - comments and trailing commas are supported
-{
-  // Metadata sezione admin
-  "adminSection": {
-    "sectionId": "usersManagment",     // DEVE corrispondere al nome directory
-    "label": "Gestione Utenti",        // Label menu
-    "icon": "👥",                      // Icona (emoji, HTML, classe CSS)
-    "description": "Gestione utenti, ruoli e permessi del sistema"
-  },
-
-  // Servizi forniti da questo plugin (opzionale)
-  "providesServices": ["auth"],
-
-  // Endpoint API esposti (opzionale, per documentazione)
-  "apiEndpoints": {
-    "userList": "/api/adminUsers/userList",
-    "userInfo": "/api/adminUsers/userInfo",
-    "userCreate": "/api/adminUsers/usertUser",
-    "roleList": "/api/adminUsers/roleList"
-  }
-}
-```
-
 **Campi obbligatori:**
-- `adminSection.sectionId` - DEVE corrispondere esattamente al nome directory nella root del plugin
-- `adminSection.label` - Testo visualizzato nel menu
-- `adminSection.icon` - Icona per il menu
+- `adminSections` - Array di stringhe (section IDs)
+- Plugin name MUST start with "admin" prefix
 
 **Vincoli:**
-- `sectionId` DEVE essere univoco tra tutti i plugin admin
-- La directory `plugins/{pluginName}/{sectionId}/` DEVE esistere
+- Ogni `sectionId` DEVE essere univoco tra tutti i plugin admin
+- Directory `plugins/{pluginName}/adminWebSections/{sectionId}/` DEVE esistere
+- Metadata UI (label, icon, description) configurati in `/core/admin/adminConfig.json5`
 
 ---
 
@@ -154,7 +132,7 @@ plugins/adminUsers/
 Il sistema usa symlink per servire i file delle sezioni plugin senza duplicarli.
 
 ```
-Source (plugin):       plugins/adminUsers/usersManagment/
+Source (plugin):       plugins/adminUsers/adminWebSections/usersManagment/
                               ↓
                         (symlink creato)
                               ↓
@@ -170,10 +148,11 @@ URL:                   /admin/usersManagment/index.ejs
 1. Plugin admin caricato da `pluginSys`
 2. `AdminSystem.initialize()` → chiama `onAdminPluginLoaded(plugin)`
 3. `SymlinkManager.installPluginSection(plugin)` esegue:
-   - Verifica `pluginType.isAdminPlugin === true`
-   - Carica `adminConfig.json5`
-   - Verifica esistenza directory `plugins/{pluginName}/{sectionId}/`
-   - Crea symlink: `core/admin/webPages/{sectionId} → plugins/{pluginName}/{sectionId}/`
+   - Verifica che plugin name inizi con `'admin'` (automatic detection)
+   - Legge array `adminSections` da `pluginConfig.json5`
+   - Per ogni sectionId nell'array:
+     - Verifica esistenza directory `plugins/{pluginName}/adminWebSections/{sectionId}/`
+     - Crea symlink: `core/admin/webPages/{sectionId} → plugins/{pluginName}/adminWebSections/{sectionId}/`
 
 ### Rimozione Symlink
 
@@ -247,15 +226,18 @@ URL:                   /admin/usersManagment/index.ejs
 
 #### Type: `"plugin"`
 - Gestita da plugin esterno
-- File in `plugins/{pluginName}/{sectionId}/`
+- File in `plugins/{pluginName}/adminWebSections/{sectionId}/`
 - Servita tramite symlink
-- Metadata da `plugins/{pluginName}/adminConfig.json5`
+- Metadata UI in `/core/admin/adminConfig.json5` (centrale)
 
 **Campi:**
 - `type`: `"plugin"`
 - `plugin`: Nome del plugin
 - `enabled`: Mostra nel menu (true/false)
 - `required`: Errore se plugin manca (true/false)
+- `label`: Testo menu
+- `icon`: Icona (emoji/HTML/CSS class)
+- `description`: Descrizione sezione
 
 #### Type: `"hardcoded"`
 - Gestita direttamente da core
@@ -430,7 +412,8 @@ if (ital8Conf.enableAdmin) {
 
 ✅ **Step 1: Crea struttura plugin**
 ```bash
-mkdir -p plugins/admin{Feature}/{sectionId}
+# IMPORTANTE: Il nome del plugin DEVE iniziare con "admin"
+mkdir -p plugins/admin{Feature}/adminWebSections/{sectionId}
 cd plugins/admin{Feature}
 ```
 
@@ -463,9 +446,14 @@ module.exports = {
   "active": 1,
   "isInstalled": 0,
   "weight": 100,
-  "pluginType": {
-    "isAdminPlugin": true
-  },
+
+  // ℹ️ CONVENZIONE: Nome plugin inizia con "admin" → automaticamente rilevato come admin plugin
+
+  // Array di ID sezioni admin gestite da questo plugin
+  "adminSections": [
+    "mySection"
+  ],
+
   "dependency": {},
   "nodeModuleDependency": {},
   "custom": {}
@@ -484,20 +472,7 @@ module.exports = {
 }
 ```
 
-**`adminConfig.json5`:**
-```json5
-{
-  "adminSection": {
-    "sectionId": "mySection",
-    "label": "La Mia Sezione",
-    "icon": "🎯",
-    "description": "Descrizione della mia sezione admin"
-  },
-  "providesServices": []
-}
-```
-
-**`{sectionId}/index.ejs`:**
+**`adminWebSections/{sectionId}/index.ejs`:**
 ```ejs
 <%- await include(passData.themeSys.getThemePartPath('head.ejs', passData)) %>
 <%- await include(passData.themeSys.getThemePartPath('header.ejs', passData)) %>
@@ -519,7 +494,10 @@ Modifica `/core/admin/adminConfig.json5`:
     "type": "plugin",
     "plugin": "admin{Feature}",
     "enabled": true,
-    "required": false
+    "required": false,
+    "label": "La Mia Sezione",       // Testo mostrato nel menu
+    "icon": "🎯",                    // Icona (emoji, HTML, CSS class)
+    "description": "Descrizione della mia sezione admin"
   }
 },
 "menuOrder": ["usersManagment", "mySection", "systemSettings"]
@@ -586,17 +564,17 @@ this.adminWebPagesPath = path.join(__dirname, '../webPages');
 ### Sezione non appare nel menu
 
 **Cause possibili:**
-1. `enabled: false` in `adminConfig.json5` → Imposta `enabled: true`
-2. Plugin non attivo (`active: 0`) → Attiva plugin
-3. Section ID non in `menuOrder` → Aggiungi a `menuOrder`
-4. Plugin non ha `isAdminPlugin: true` → Aggiungi flag
+1. `enabled: false` in `/core/admin/adminConfig.json5` → Imposta `enabled: true`
+2. Plugin non attivo (`active: 0`) → Attiva plugin in `pluginConfig.json5`
+3. Section ID non in `menuOrder` → Aggiungi a `menuOrder` in `/core/admin/adminConfig.json5`
+4. Plugin name non inizia con `admin` → Rinomina plugin
 
 ### Symlink non creato
 
 **Verifica:**
-1. Directory `plugins/{pluginName}/{sectionId}/` esiste
-2. `adminConfig.json5` ha `sectionId` corretto
-3. `pluginType.isAdminPlugin: true` in `pluginConfig.json5`
+1. Directory `plugins/{pluginName}/adminWebSections/{sectionId}/` esiste
+2. Plugin name inizia con prefisso `admin`
+3. Array `adminSections` in `pluginConfig.json5` contiene il `sectionId`
 4. Nessun errore durante `adminSystem.initialize()`
 
 ### Conflitto symlink
@@ -647,12 +625,12 @@ koaClassicServer(app, {
 
 ### File Chiave
 
-- `/core/admin/adminConfig.json5` - Config centrale
+- `/core/admin/adminConfig.json5` - Config centrale (metadata UI sezioni)
 - `/core/admin/adminSystem.js` - Coordinatore
 - `/core/admin/lib/configManager.js` - Loader config
 - `/core/admin/lib/adminServicesManager.js` - Service discovery
 - `/core/admin/lib/symlinkManager.js` - Gestore symlink
-- `/plugins/{pluginName}/adminConfig.json5` - Metadata sezione plugin
+- `/plugins/{pluginName}/pluginConfig.json5` - Dichiarazione sezioni admin (adminSections array)
 
 ### Convenzioni Naming
 

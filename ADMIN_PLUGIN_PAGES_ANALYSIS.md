@@ -8,7 +8,7 @@
 - ✅ Convenzione naming: plugin con nome che inizia con `admin` sono automaticamente plugin admin
 - ✅ Sezioni dichiarate in `pluginConfig.json5` tramite array `adminSections` (stringhe)
 - ✅ Metadata UI (label, icon, description) centralizzati in `/core/admin/adminConfig.json5`
-- ✅ Symlink automatici: `core/admin/webPages/{sectionId} → plugins/{pluginName}/{sectionId}/`
+- ✅ Symlink automatici: `core/admin/webPages/{sectionId} → plugins/{pluginName}/adminWebSections/{sectionId}/`
 - ✅ Supporto multi-sezione: un plugin può fornire più sezioni admin
 
 **Esempio Plugin Admin Corrente (adminUsers):**
@@ -18,13 +18,14 @@ plugins/adminUsers/
 ├── main.js
 ├── pluginConfig.json5          ← adminSections: ["usersManagment", "rolesManagment"]
 ├── pluginDescription.json5
-├── usersManagment/             ← Sezione 1 (servita via symlink)
-│   ├── index.ejs
-│   ├── userView.ejs
-│   ├── userUpsert.ejs
-│   └── userDelete.ejs
-├── rolesManagment/             ← Sezione 2 (servita via symlink)
-│   └── index.ejs
+├── adminWebSections/           ← Admin sections container directory
+│   ├── usersManagment/         ← Sezione 1 (servita via symlink)
+│   │   ├── index.ejs
+│   │   ├── userView.ejs
+│   │   ├── userUpsert.ejs
+│   │   └── userDelete.ejs
+│   └── rolesManagment/         ← Sezione 2 (servita via symlink)
+│       └── index.ejs
 ├── userAccount.json5
 ├── userRole.json5
 ├── userManagement.js
@@ -206,7 +207,7 @@ Esempio: adminUsers_usersManagment
 **Implementazione:**
 - SymlinkManager aggiunge prefisso automaticamente
 - URL: `/admin/adminUsers_usersManagment/index.ejs`
-- Symlink: `webPages/adminUsers_usersManagment → plugins/adminUsers/usersManagment/`
+- Symlink: `webPages/adminUsers_usersManagment → plugins/adminUsers/adminWebSections/usersManagment/`
 
 **✅ Pro:**
 - Zero conflitti tra plugin
