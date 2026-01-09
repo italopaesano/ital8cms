@@ -66,7 +66,7 @@ const config = loadJson5('./ital8Config.json5');
 │   │   └── webPages/           # Admin EJS templates
 │   │       ├── index.ejs       # Admin dashboard (dynamic menu)
 │   │       ├── systemSettings/  # Hardcoded admin sections
-│   │       └── usersManagment/  # SYMLINK → plugins/adminUsers/usersManagment/
+│   │       └── usersManagment/  # SYMLINK → plugins/adminUsers/adminWebSections/usersManagment/
 │   ├── priorityMiddlewares/    # Critical middleware configs
 │   │   └── koaSession.json5     # Session configuration
 │   ├── pluginSys.js            # Plugin system manager
@@ -81,17 +81,20 @@ const config = loadJson5('./ital8Config.json5');
 │   │   └── dbFile/             # SQLite database files
 │   ├── adminUsers/             # Admin plugin: User & Role management
 │   │   ├── main.js             # Plugin logic
-│   │   ├── pluginConfig.json5   # Plugin config (with isAdminPlugin flag)
+│   │   ├── pluginConfig.json5   # Plugin config (with adminSections array)
 │   │   ├── pluginDescription.json5 # Plugin metadata
-│   │   ├── adminConfig.json5    # Admin section metadata
-│   │   ├── usersManagment/     # Admin section files (served via symlink)
-│   │   │   ├── index.ejs       # User list page
-│   │   │   ├── userView.ejs    # View user details
-│   │   │   ├── userUpsert.ejs  # Create/edit user
-│   │   │   └── userDelete.ejs  # Delete user
+│   │   ├── adminWebSections/   # Admin sections container directory
+│   │   │   ├── usersManagment/ # Admin section files (served via symlink)
+│   │   │   │   ├── index.ejs   # User list page
+│   │   │   │   ├── userView.ejs # View user details
+│   │   │   │   ├── userUpsert.ejs # Create/edit user
+│   │   │   │   └── userDelete.ejs # Delete user
+│   │   │   └── rolesManagment/ # Role management section
+│   │   │       └── index.ejs   # Role management page
 │   │   ├── userAccount.json5    # User credentials (bcrypt hashed)
 │   │   ├── userRole.json5       # Role definitions
-│   │   └── userManagement.js   # User management logic
+│   │   ├── userManagement.js   # User management logic
+│   │   └── roleManagement.js   # Role management logic
 │   ├── admin/                  # Admin core functionality plugin
 │   ├── bootstrap/              # Bootstrap CSS/JS integration
 │   ├── media/                  # Media management
@@ -1154,13 +1157,14 @@ plugins/adminUsers/
 ├── main.js                    # Plugin logic (standard)
 ├── pluginConfig.json5         # Plugin configuration (with adminSections array)
 ├── pluginDescription.json5    # Plugin metadata (standard)
-├── usersManagment/            # Admin section directory (name = sectionId)
-│   ├── index.ejs              # Main section page
-│   ├── userView.ejs           # Sub-pages
-│   ├── userUpsert.ejs
-│   └── userDelete.ejs
-├── rolesManagment/            # Second admin section directory
-│   └── index.ejs              # Role management page
+├── adminWebSections/          # Admin sections container directory
+│   ├── usersManagment/        # Admin section directory (name = sectionId)
+│   │   ├── index.ejs          # Main section page
+│   │   ├── userView.ejs       # Sub-pages
+│   │   ├── userUpsert.ejs
+│   │   └── userDelete.ejs
+│   └── rolesManagment/        # Second admin section directory
+│       └── index.ejs          # Role management page
 ├── userAccount.json5          # Plugin data files
 ├── userRole.json5
 ├── userManagement.js          # Plugin modules
@@ -1190,9 +1194,9 @@ plugins/adminUsers/
   // Non è necessario alcun flag esplicito (es. isAdminPlugin)
 
   // Array di ID delle sezioni admin gestite da questo plugin
-  // Ogni sezione DEVE avere una directory corrispondente nella root del plugin
+  // Ogni sezione DEVE avere una directory corrispondente in adminWebSections/ del plugin
   // I metadata UI (label, icon, description) sono centralizzati in /core/admin/adminConfig.json5
-  // Es. plugins/adminUsers/usersManagment/ e plugins/adminUsers/rolesManagment/
+  // Es. plugins/adminUsers/adminWebSections/usersManagment/ e plugins/adminUsers/adminWebSections/rolesManagment/
   "adminSections": [
     "usersManagment",
     "rolesManagment"
@@ -1323,7 +1327,7 @@ plugins/adminUsers/
 **Principle:** Zero file duplication, single source of truth.
 
 ```
-Source (plugin):       plugins/adminUsers/usersManagment/
+Source (plugin):       plugins/adminUsers/adminWebSections/usersManagment/
                               ↓
                         (symlink created)
                               ↓
@@ -1342,8 +1346,8 @@ URL:                   /admin/usersManagment/index.ejs
    - Verify plugin name starts with `'admin'` (automatic detection)
    - Read `adminSections` array from `pluginConfig.json5`
    - For each section ID in the array:
-     - Verify directory `plugins/{pluginName}/{sectionId}/` exists
-     - Create symlink: `core/admin/webPages/{sectionId} → plugins/{pluginName}/{sectionId}/`
+     - Verify directory `plugins/{pluginName}/adminWebSections/{sectionId}/` exists
+     - Create symlink: `core/admin/webPages/{sectionId} → plugins/{pluginName}/adminWebSections/{sectionId}/`
 
 **Symlink Removal:**
 - Plugin uninstalled: `SymlinkManager.uninstallPluginSection(plugin)`
@@ -1520,14 +1524,14 @@ adminSystem.getEndpointsForPassData()
 ✅ **Step 1: Create plugin structure with "admin" prefix**
 ```bash
 # IMPORTANT: Plugin name MUST start with "admin"
-mkdir -p plugins/admin{Feature}/{sectionId}
+mkdir -p plugins/admin{Feature}/adminWebSections/{sectionId}
 ```
 
 ✅ **Step 2: Create required files**
 - [ ] `main.js` with `loadPlugin()`, `getRouteArray()`, etc.
 - [ ] `pluginConfig.json5` with `adminSections` array
 - [ ] `pluginDescription.json5`
-- [ ] `{sectionId}/index.ejs` (section directory with EJS files)
+- [ ] `adminWebSections/{sectionId}/index.ejs` (section directory with EJS files)
 
 ✅ **Step 3: Configure `pluginConfig.json5`**
 ```json5
@@ -2821,15 +2825,15 @@ const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
 - `/core/admin/lib/symlinkManager.js` - Symlink manager
 - `/core/admin/webPages/index.ejs` - Admin dashboard (dynamic menu)
 - `/core/admin/webPages/systemSettings/` - System settings UI
-- `/core/admin/webPages/usersManagment/` - Symlink → plugins/adminUsers/usersManagment/
+- `/core/admin/webPages/usersManagment/` - Symlink → plugins/adminUsers/adminWebSections/usersManagment/
 
 ### Authentication & User Management
 
 - `/plugins/adminUsers/userAccount.json5` - User credentials
 - `/plugins/adminUsers/userRole.json5` - Role definitions
 - `/plugins/adminUsers/main.js` - Authentication logic
-- `/plugins/adminUsers/adminConfig.json5` - Admin section metadata
-- `/plugins/adminUsers/usersManagment/` - User management UI files
+- `/plugins/adminUsers/adminWebSections/usersManagment/` - User management UI files
+- `/plugins/adminUsers/adminWebSections/rolesManagment/` - Role management UI files
 
 ### Databases
 
@@ -2984,11 +2988,28 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2026-01-03
-**Version:** 1.6.0
+**Last Updated:** 2026-01-09
+**Version:** 1.6.1
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v1.6.1 (2026-01-09): **REFACTORING** - Reorganized admin plugin sections structure with `adminWebSections/` directory. Key changes:
+  - **New Directory Structure:**
+    - Admin sections now organized in `adminWebSections/` container directory
+    - Pattern: `plugins/{adminPlugin}/adminWebSections/{sectionId}/`
+    - Example: `plugins/adminUsers/adminWebSections/usersManagment/`
+  - **Benefits:**
+    - Better organization: clear separation between logic files and UI sections
+    - Consistency: mirrors `webPages/` pattern used for public plugin pages
+    - Scalability: cleaner root directory for plugins with multiple sections
+  - **Files Modified:**
+    - `core/admin/lib/symlinkManager.js` - Updated path resolution to include `adminWebSections/`
+    - `plugins/adminUsers/` - Moved sections into `adminWebSections/` directory
+    - `CLAUDE.md` - Updated all documentation and examples
+  - **Migration:**
+    - Directory structure: `usersManagment/` → `adminWebSections/usersManagment/`
+    - Symlinks automatically recreated with new paths on server restart
+    - No changes to URLs or functionality - purely organizational improvement
 - v1.6.0 (2026-01-03): **NEW FEATURE** - Implemented Global Functions system for EJS templates. Key changes:
   - **REFACTORING (2026-01-04):** Separated local and global function exports with new plugin standard
     - Added `getGlobalFunctionsForTemplates()` method to plugin standard
@@ -3066,15 +3087,15 @@ When working on this codebase as an AI assistant:
   - **Admin Plugin Architecture:**
     - Admin plugins MUST start with `admin` prefix (e.g., `adminUsers`, `adminMailer`)
     - Automatic detection by naming convention
-    - Section files in plugin root directory (e.g., `plugins/adminUsers/usersManagment/`)
+    - Section files in plugin's `adminWebSections/` directory (e.g., `plugins/adminUsers/adminWebSections/usersManagment/`)
   - **Symlink-Based Serving:**
-    - Plugin sections served via symlinks: `core/admin/webPages/{sectionId} → plugins/{plugin}/{sectionId}/`
+    - Plugin sections served via symlinks: `core/admin/webPages/{sectionId} → plugins/{plugin}/adminWebSections/{sectionId}/`
     - Zero file duplication, single source of truth
     - Automatic symlink creation during plugin initialization
   - **Plugin Renamed:**
     - `adminUsers` → `adminUsers` (admin plugin for user management)
     - All API endpoints updated: `/api/adminUsers/` → `/api/adminUsers/`
-    - Files moved: `core/admin/webPages/usersManagment/` → `plugins/adminUsers/usersManagment/`
+    - Files moved: `core/admin/webPages/usersManagment/` → `plugins/adminUsers/adminWebSections/usersManagment/`
   - **2-Phase Initialization:**
     - Dependency injection pattern to avoid circular dependencies
     - Phase 1: Create instances | Phase 2: Link dependencies | Phase 3: Initialize
