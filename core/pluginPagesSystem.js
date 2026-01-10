@@ -79,8 +79,22 @@ class PluginPagesSystem {
   createSymlinkForPlugin(pluginName, sourceDir) {
     const targetSymlink = path.join(this.pluginPagesDir, pluginName);
 
-    // Se il symlink esiste già, verifica che sia valido
-    if (fs.existsSync(targetSymlink)) {
+    // Verifica se il symlink esiste (anche se rotto)
+    // IMPORTANTE: Usiamo lstatSync invece di existsSync perché existsSync restituisce false
+    // per symlink rotti (che puntano a target inesistenti)
+    let symlinkExists = false;
+    try {
+      fs.lstatSync(targetSymlink);
+      symlinkExists = true;
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        console.error(`[PluginPagesSystem] Error checking symlink: ${error.message}`);
+        return;
+      }
+      // ENOENT = symlink non esiste, ok procedere
+    }
+
+    if (symlinkExists) {
       const stats = fs.lstatSync(targetSymlink);
 
       if (stats.isSymbolicLink()) {

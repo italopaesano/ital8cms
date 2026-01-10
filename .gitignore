@@ -1,6 +1,9 @@
 node_modules/
 .env
 
+# Plugin Pages System - auto-generated symlinks
+/pluginPages/
+
 # Init system
 /scripts/initState.json5
 /plugins/*/scripts/initState.json5
