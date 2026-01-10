@@ -27,8 +27,9 @@ class PluginPagesSystem {
   /**
    * Inizializza il sistema:
    * - Crea directory /pluginPages/ se non esiste
+   * - Valida e pulisce symlink esistenti (rimuove rotti)
    * - Scansiona tutti i plugin attivi
-   * - Crea symlink per plugin con directory webPages/
+   * - Crea/ricrea symlink per plugin con directory webPages/
    */
   initialize() {
     console.log('[PluginPagesSystem] Starting initialization...');
@@ -43,6 +44,9 @@ class PluginPagesSystem {
         return;
       }
     }
+
+    // IMPORTANTE: Valida e pulisci symlink esistenti prima di creare nuovi
+    this.validateAndCleanSymlinks();
 
     // Ottieni tutti i plugin attivi
     const allPlugins = this.pluginSys.getAllPlugins();
@@ -179,6 +183,92 @@ class PluginPagesSystem {
 
     const webPagesDir = path.join(plugin.pathPluginFolder, 'webPages');
     return fs.existsSync(webPagesDir) && fs.statSync(webPagesDir).isDirectory();
+  }
+
+  /**
+   * Valida e pulisce symlink esistenti nella directory pluginPages/
+   * - Rimuove symlink rotti (che puntano a target inesistenti)
+   * - Rimuove symlink che puntano a plugin disattivi
+   * - Rimuove symlink orfani (per plugin che non esistono più)
+   *
+   * Chiamato all'avvio per garantire uno stato consistente
+   */
+  validateAndCleanSymlinks() {
+    if (!fs.existsSync(this.pluginPagesDir)) {
+      return; // Directory non esiste ancora, niente da validare
+    }
+
+    console.log('[PluginPagesSystem] Validating existing symlinks...');
+
+    let removedCount = 0;
+    let validCount = 0;
+
+    // Ottieni tutti i file/symlink nella directory pluginPages/
+    const entries = fs.readdirSync(this.pluginPagesDir);
+
+    for (const entry of entries) {
+      const symlinkPath = path.join(this.pluginPagesDir, entry);
+
+      // Usa lstatSync per rilevare anche symlink rotti
+      let stats = null;
+      try {
+        stats = fs.lstatSync(symlinkPath);
+      } catch (error) {
+        console.warn(`[PluginPagesSystem] Error checking entry "${entry}": ${error.message}`);
+        continue;
+      }
+
+      // Verifica che sia un symlink
+      if (!stats.isSymbolicLink()) {
+        console.warn(`[PluginPagesSystem] Entry "${entry}" is not a symlink, skipping`);
+        continue;
+      }
+
+      // Leggi il target del symlink
+      let targetPath = null;
+      try {
+        targetPath = fs.readlinkSync(symlinkPath);
+      } catch (error) {
+        console.warn(`[PluginPagesSystem] Cannot read symlink target for "${entry}": ${error.message}`);
+        continue;
+      }
+
+      // Verifica che il target esista
+      if (!fs.existsSync(targetPath)) {
+        console.warn(`[PluginPagesSystem] Symlink "${entry}" points to non-existent target: ${targetPath}`);
+        console.warn(`[PluginPagesSystem] Removing broken symlink...`);
+        try {
+          fs.unlinkSync(symlinkPath);
+          removedCount++;
+          console.log(`[PluginPagesSystem] ✓ Removed broken symlink: ${entry}`);
+        } catch (unlinkError) {
+          console.error(`[PluginPagesSystem] ✗ Failed to remove symlink: ${unlinkError.message}`);
+        }
+        continue;
+      }
+
+      // Verifica che il plugin corrispondente sia ancora attivo
+      const pluginName = entry; // Nome del symlink = nome del plugin
+      const plugin = this.pluginSys.getPlugin(pluginName);
+
+      if (!plugin) {
+        console.warn(`[PluginPagesSystem] Symlink "${entry}" points to plugin that no longer exists or is inactive`);
+        console.warn(`[PluginPagesSystem] Removing orphaned symlink...`);
+        try {
+          fs.unlinkSync(symlinkPath);
+          removedCount++;
+          console.log(`[PluginPagesSystem] ✓ Removed orphaned symlink: ${entry}`);
+        } catch (unlinkError) {
+          console.error(`[PluginPagesSystem] ✗ Failed to remove symlink: ${unlinkError.message}`);
+        }
+        continue;
+      }
+
+      // Symlink è valido
+      validCount++;
+    }
+
+    console.log(`[PluginPagesSystem] Validation complete: ${validCount} valid, ${removedCount} removed`);
   }
 
   /**

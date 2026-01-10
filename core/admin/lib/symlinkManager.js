@@ -73,8 +73,20 @@ class SymlinkManager {
       // 6. Path del symlink in admin/webPages
       const symlinkPath = path.join(this.adminWebPagesPath, sectionId);
 
-      // 7. Verifica conflitti
-      if (fs.existsSync(symlinkPath)) {
+      // 7. Verifica conflitti (usando lstatSync per rilevare anche symlink rotti)
+      let symlinkExists = false;
+      try {
+        fs.lstatSync(symlinkPath);
+        symlinkExists = true;
+      } catch (error) {
+        if (error.code !== 'ENOENT') {
+          console.error(`✗ Error checking symlink for section "${sectionId}":`, error.message);
+          throw error;
+        }
+        // ENOENT = symlink non esiste, ok procedere
+      }
+
+      if (symlinkExists) {
         const stats = fs.lstatSync(symlinkPath);
 
         if (stats.isSymbolicLink()) {
@@ -86,13 +98,15 @@ class SymlinkManager {
             console.log(`✓ Symlink already exists for section "${sectionId}" (plugin "${pluginName}")`);
             continue;
           } else {
-            // Symlink esiste ma punta altrove!
-            throw new Error(
-              `Section "${sectionId}" symlink already exists, pointing to:\n` +
-              `  Current: ${currentTarget}\n` +
-              `  New: ${sectionSourcePath}\n` +
-              `  Conflict! Another plugin may be using this section.`
-            );
+            // Symlink esiste ma punta altrove - rimuovi e ricrea
+            console.warn(`⚠️ Symlink for section "${sectionId}" points to wrong location, recreating...`);
+            console.warn(`  Current: ${currentTarget}`);
+            console.warn(`  Expected: ${sectionSourcePath}`);
+            try {
+              fs.unlinkSync(symlinkPath);
+            } catch (unlinkError) {
+              throw new Error(`Failed to remove invalid symlink: ${unlinkError.message}`);
+            }
           }
         } else {
           // Esiste ma non è un symlink (directory hardcoded?)
@@ -134,14 +148,22 @@ class SymlinkManager {
 
       const symlinkPath = path.join(this.adminWebPagesPath, sectionId);
 
-      // 3. Verifica che il symlink esista
-      if (!fs.existsSync(symlinkPath)) {
-        console.log(`ℹ️ Symlink for section "${sectionId}" not found, nothing to remove`);
-        continue;
+      // 3. Verifica che il symlink esista (usando lstatSync per rilevare anche symlink rotti)
+      let symlinkExists = false;
+      let stats = null;
+      try {
+        stats = fs.lstatSync(symlinkPath);
+        symlinkExists = true;
+      } catch (error) {
+        if (error.code === 'ENOENT') {
+          console.log(`ℹ️ Symlink for section "${sectionId}" not found, nothing to remove`);
+          continue;
+        }
+        console.error(`✗ Error checking symlink for section "${sectionId}":`, error.message);
+        throw error;
       }
 
       // 4. Verifica che sia un symlink
-      const stats = fs.lstatSync(symlinkPath);
       if (!stats.isSymbolicLink()) {
         console.warn(`⚠️ Section "${sectionId}" at "${symlinkPath}" is not a symlink, skipping removal`);
         continue;
