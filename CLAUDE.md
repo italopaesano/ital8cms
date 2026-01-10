@@ -146,9 +146,10 @@ Understanding the initialization sequence is critical:
 
 1. **Load Koa Application** (`index.js`)
 2. **Initialize Priority Middlewares:**
-   - Body parser (request parsing)
-   - Sessions (authentication state)
-   - Router (URL routing)
+   - Body parser (request parsing) - **CORE** (always active)
+   - Sessions (authentication state) - **OPTIONAL** (configurable in `ital8Config.json5`)
+   - Router (URL routing) - **CORE** (always active)
+   - Order is fixed and guaranteed: bodyParser → session → router
 3. **Initialize Plugin System** (`pluginSys`)
 4. **Load Active Plugins:**
    - Resolve dependencies
@@ -1894,9 +1895,65 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
   "httpPort": 3000,                   // HTTP port
   "useHttps": false,                  // Enable HTTPS
   "httpsPort": "",                    // HTTPS port
-  "AutoRedirectHttpPortToHttpsPort": false
+  "AutoRedirectHttpPortToHttpsPort": false,
+
+  // Priority Middlewares Configuration
+  "priorityMiddlewares": {
+    "session": true             // Optional middleware (true=enabled, false=disabled)
+  }
 }
 ```
+
+### Priority Middlewares Configuration
+
+Priority middlewares are loaded **before everything else** in a fixed, guaranteed order. They provide foundational infrastructure for the entire application.
+
+**Configuration in `ital8Config.json5`:**
+
+```json5
+{
+  "priorityMiddlewares": {
+    "session": true  // Gestione sessioni (true = attivo, false = disattivato)
+  }
+}
+```
+
+**Middleware Types:**
+
+| Middleware | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `bodyParser` | **CORE** | Always active | Parses request bodies (JSON, form data). **Hardcoded, non-configurable**. |
+| `session` | **OPTIONAL** | `true` | Manages user sessions (koa-session). Required for authentication. |
+| `router` | **CORE** | Always active | Main routing system (@koa/router). **Hardcoded, non-configurable**. |
+
+**Loading Order (fixed, non-modifiable):**
+```
+1. bodyParser  → Parse request body
+2. session     → Initialize ctx.session (if enabled)
+3. router      → Route matching and handler execution
+```
+
+**Why This Order:**
+- `bodyParser` MUST be first → Otherwise `ctx.request.body` is undefined in route handlers
+- `session` MUST be before `router` → Otherwise `ctx.session` is undefined in route handlers
+- `router` MUST be last → Can safely use body and session in all route handlers
+
+**Disabling Optional Middlewares:**
+
+```json5
+{
+  "priorityMiddlewares": {
+    "session": false  // Disable session management
+  }
+}
+```
+
+⚠️ **Warning:** Disabling `session` will cause:
+- `ctx.session` to be `undefined` in all code
+- Authentication plugins (like `adminUsers`) to fail
+- Admin panel login to stop working
+
+**Only disable if:** Your application doesn't need user authentication at all.
 
 ### Session Configuration: core/priorityMiddlewares/koaSession.json5
 
@@ -2988,11 +3045,40 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2026-01-09
-**Version:** 1.6.1
+**Last Updated:** 2026-01-10
+**Version:** 1.7.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v1.7.0 (2026-01-10): **NEW FEATURE** - Implemented configurable priority middlewares system. Key changes:
+  - **Priority Middlewares Architecture:**
+    - Distinction between CORE (hardcoded, always active) and OPTIONAL (configurable) middlewares
+    - CORE: bodyParser, router - always loaded, non-configurable
+    - OPTIONAL: session - configurable via `ital8Config.json5`
+  - **New Configuration Section:**
+    - Added `priorityMiddlewares` section in `ital8Config.json5`
+    - Optional middlewares can be enabled/disabled individually
+    - Default: session enabled (`"session": true`)
+  - **Loading Order (fixed, guaranteed):**
+    - 1. bodyParser (CORE)
+    - 2. session (OPTIONAL)
+    - 3. router (CORE)
+    - Order cannot be modified to ensure correct middleware execution
+  - **Implementation:**
+    - Modified `/core/priorityMiddlewares/priorityMiddlewares.js` to support conditional loading
+    - Added configuration validation and console logging
+    - Session middleware returns `null` if disabled (backward compatible)
+  - **Documentation:**
+    - Added "Priority Middlewares Configuration" section in CLAUDE.md
+    - Updated "Application Startup Flow" to reflect optional middlewares
+    - Clear warnings about consequences of disabling session
+  - **Future-Proof:**
+    - Architecture ready to support additional optional middlewares (e.g., urlRewriter)
+    - Placeholder comments in code for future extensions
+  - **Files Modified:**
+    - `/ital8Config.json5` - Added priorityMiddlewares configuration section
+    - `/core/priorityMiddlewares/priorityMiddlewares.js` - Implemented conditional loading logic
+    - `/CLAUDE.md` - Added comprehensive documentation
 - v1.6.1 (2026-01-09): **REFACTORING** - Reorganized admin plugin sections structure with `adminWebSections/` directory. Key changes:
   - **New Directory Structure:**
     - Admin sections now organized in `adminWebSections/` container directory
