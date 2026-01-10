@@ -62,7 +62,7 @@
       "plugin": "simpleI18n",
       "description": "Translation function for internationalization",
       "required": true
-    }
+    },
     // Aggiungi altre funzioni globali qui quando necessario
     // Esempio:
     // "formatDate": {
