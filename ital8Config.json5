@@ -20,6 +20,24 @@
   "AutoRedirectHttpPortToHttpsPort": false,
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // PRIORITY MIDDLEWARES CONFIGURATION
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Configurazione dei priority middlewares (middleware caricati prima di tutto)
+  // NOTA: bodyParser e router sono SEMPRE attivi (core hardcoded, non disabilitabili)
+  // Ordine di caricamento fisso: bodyParser → session → router → [futuri optional]
+  //
+  // Middleware configurabili:
+  //   - "session": Gestione sessioni utente (richiesto per autenticazione)
+  //     Default: true - Disabilitare solo se autenticazione non serve
+  //
+  // Futuri middleware opzionali verranno aggiunti qui
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  "priorityMiddlewares": {
+    "session": true  // Gestione sessioni (true = attivo, false = disattivato)
+  },
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // GLOBAL FUNCTIONS WHITELIST
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // Definisce quali plugin possono esportare funzioni globali nei template EJS
