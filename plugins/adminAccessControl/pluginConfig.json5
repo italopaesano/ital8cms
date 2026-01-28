@@ -1,7 +1,7 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
   "active": 1,
-  "isInstalled": 0,
+  "isInstalled": 1,
   "weight": -5, // Peso negativo per caricare PRIMA degli altri plugin (il middleware deve intercettare prima)
 
   // Dipendenze plugin

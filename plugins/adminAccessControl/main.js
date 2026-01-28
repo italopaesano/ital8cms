@@ -17,6 +17,9 @@ const RuleValidator = require('./lib/ruleValidator');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
 
+// Carica configurazione principale per ottenere apiPrefix
+const ital8Conf = loadJson5(path.join(__dirname, '../../ital8Config.json5'));
+
 // Variabile di modulo per mantenere riferimenti
 let accessManager = null;
 let ruleValidator = null;
@@ -37,7 +40,7 @@ module.exports = {
     accessManager = new AccessManager(pluginSys, pathPluginFolder);
 
     // Inizializza RuleValidator
-    ruleValidator = new RuleValidator(pluginSys);
+    ruleValidator = new RuleValidator(pluginSys, ital8Conf);
 
     // Valida configurazione al boot
     const configPath = path.join(pathPluginFolder, 'accessControl.json5');
@@ -57,15 +60,32 @@ module.exports = {
   },
 
   /**
+   * Installazione plugin (prima volta)
+   */
+  async installPlugin(pluginSys, pathPluginFolder) {
+    console.log('[adminAccessControl] Installing plugin...');
+
+    // Nessuna operazione speciale necessaria
+    // La configurazione accessControl.json5 è già presente
+    // Le regole hardcoded sono già definite
+
+    console.log('[adminAccessControl] ✓ Plugin installed successfully');
+  },
+
+  /**
    * Middleware da aggiungere all'applicazione Koa
    * IMPORTANTE: Questo middleware deve essere caricato DOPO session ma PRIMA del router
+   * @param {object} app - Koa application instance
+   * @returns {array} - Array di middleware functions
    */
-  getMiddlewareToAdd(pluginSys, pathPluginFolder) {
-    return [
-      {
-        func: accessManager.createMiddleware()
-      }
-    ];
+  getMiddlewareToAdd(app) {
+    const middlewareArray = [];
+
+    // Aggiungi il middleware di access control
+    // accessManager è già inizializzato in loadPlugin() che viene chiamato prima
+    middlewareArray.push(accessManager.createMiddleware());
+
+    return middlewareArray;
   },
 
   /**

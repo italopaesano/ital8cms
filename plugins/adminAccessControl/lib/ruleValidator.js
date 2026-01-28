@@ -15,8 +15,9 @@
 const PatternMatcher = require('./patternMatcher');
 
 class RuleValidator {
-  constructor(pluginSys) {
+  constructor(pluginSys, ital8Conf) {
     this.pluginSys = pluginSys;
+    this.ital8Conf = ital8Conf || { apiPrefix: 'api' }; // Fallback se non passato
     this.patternMatcher = new PatternMatcher();
   }
 
@@ -149,7 +150,7 @@ class RuleValidator {
     }
 
     // Carica ruoli da adminUsers
-    const loadJson5 = require('../../core/loadJson5');
+    const loadJson5 = require('../../../core/loadJson5');
     const path = require('path');
     let allRoles;
 
@@ -248,8 +249,8 @@ class RuleValidator {
           if (Array.isArray(routeArray)) {
             for (const route of routeArray) {
               // Costruisci full path come in pluginSys.loadRoutes()
-              const apiPrefix = this.pluginSys.getConfig().apiPrefix || 'api';
-              const fullPath = `/api/${pluginName}${route.path}`;
+              const apiPrefix = this.ital8Conf.apiPrefix || 'api';
+              const fullPath = `/${apiPrefix}/${pluginName}${route.path}`;
 
               routes.push({
                 plugin: pluginName,
