@@ -1759,14 +1759,625 @@ Located in `/plugins/adminUsers/userAccount.json5`
 }
 ```
 
-### Access Control Middleware
+### Access Control System (adminAccessControl plugin)
 
-Protected URL prefixes:
-- `/reserved` - Requires authentication
-- `/private` - Requires authentication
-- `/lib` - Requires authentication
+The **adminAccessControl** plugin provides a comprehensive, pattern-based access control system for managing permissions across all pages and routes in ital8cms. It features automatic priority resolution, mandatory route protection, and a user-friendly admin interface.
 
-Returns 401 Unauthorized if not logged in.
+**Key Features:**
+- ✅ **Pattern Matching:** Exact, wildcard (*,**), and regex patterns
+- ✅ **Automatic Priority:** More specific patterns automatically win conflicts
+- ✅ **Mandatory Access Field:** All plugin routes MUST declare access requirements
+- ✅ **Hybrid Architecture:** JSON rules for pages + code-level protection for plugin routes
+- ✅ **Admin UI:** Visual editor with JSON5 syntax support
+- ✅ **Boot Validation:** Comprehensive validation prevents misconfigurations
+- ✅ **Immutable Hardcoded Rules:** Core protections cannot be modified
+
+---
+
+#### Architecture Overview
+
+**Components:**
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| **AccessManager** | `lib/accessManager.js` | Core access control logic, middleware creation, rule loading |
+| **PatternMatcher** | `lib/patternMatcher.js` | Pattern matching engine with automatic priority calculation |
+| **RuleValidator** | `lib/ruleValidator.js` | Comprehensive validation (syntax, roles, conflicts, patterns) |
+| **Configuration** | `accessControl.json5` | Central configuration file (hardcoded + custom rules) |
+| **Admin UI** | `adminWebSections/adminAccessControl/index.ejs` | Visual editor for managing access rules |
+| **Access Denied Page** | `webPages/access-denied.ejs` | Custom 403 page for authenticated users without permission |
+
+**Flow:**
+
+```
+Request → AccessManager Middleware → Pattern Matcher → Rule Matched?
+                                           ↓                ↓ no
+                                        yes ↓           Apply Default Policy
+                                           ↓
+                              Check Authentication → Check Roles → Allow/Deny
+```
+
+---
+
+#### Configuration File: accessControl.json5
+
+**Location:** `/plugins/adminAccessControl/accessControl.json5`
+
+```json5
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "version": "1.0.0",
+
+  // HARDCODED RULES (immutable, cannot be modified via UI)
+  "hardcodedRules": {
+    "/admin/**": {
+      "requiresAuth": true,
+      "allowedRoles": [0, 1],  // Only root (0) and admin (1)
+      "priority": 100,          // Optional: system auto-calculates if omitted
+      "editable": false
+    }
+  },
+
+  // CUSTOM RULES (user-defined, managed via admin UI)
+  "customRules": {
+    // Example: Protect specific pages
+    "/my-protected-page": {
+      "requiresAuth": true,
+      "allowedRoles": [0, 1, 102]  // root, admin, custom role 102
+    },
+
+    // Example: Public page override
+    "/public/**": {
+      "requiresAuth": false,
+      "allowedRoles": []
+    },
+
+    // Example: Regex pattern
+    "regex:^/download/.*\\.pdf$": {
+      "requiresAuth": true,
+      "allowedRoles": [0, 1, 2]  // root, admin, editor
+    }
+  },
+
+  // DEFAULT POLICY (when no rule matches)
+  "defaultPolicy": {
+    "action": "allow",  // "allow" | "deny" | "requireAuth"
+    "redirectOnDenied": "/pluginPages/adminUsers/login.ejs"
+  }
+}
+```
+
+**Rule Fields:**
+
+| Field | Required | Type | Description |
+|-------|----------|------|-------------|
+| `requiresAuth` | Yes | Boolean | Whether authentication is required |
+| `allowedRoles` | Yes | Array\<Number\> | Role IDs that can access (empty = all authenticated users) |
+| `priority` | No | Number | Manual priority (auto-calculated if omitted) |
+| `editable` | No | Boolean | Marks hardcoded rules (false = immutable) |
+
+---
+
+#### Pattern Matching with Automatic Priority
+
+The system supports three pattern types with automatic priority resolution:
+
+**1. Exact Match** (Priority: 1000)
+```json5
+"/admin/users": { ... }
+```
+Matches only: `/admin/users`
+
+**2. Wildcard - Single Level** `*` (Priority: 300)
+```json5
+"/admin/*": { ... }
+```
+Matches: `/admin/users`, `/admin/settings`
+Does NOT match: `/admin/users/edit` (multiple levels)
+
+**3. Wildcard - Recursive** `**` (Priority: 100)
+```json5
+"/admin/**": { ... }
+```
+Matches: `/admin/users`, `/admin/users/edit`, `/admin/settings/general` (all levels)
+
+**4. Regex** (Priority: 500)
+```json5
+"regex:^/download/.*\\.pdf$": { ... }
+```
+Matches: `/download/file.pdf`, `/download/document.pdf`
+Prefix `regex:` is **mandatory**
+
+**Priority Resolution:**
+
+When multiple patterns match the same URL, the most specific pattern wins:
+
+```
+Exact (1000) > Regex (500) > Wildcard-Single (300) > Wildcard-Recursive (100)
+```
+
+**Example:**
+```json5
+{
+  "/admin/**": { requiresAuth: true, allowedRoles: [0, 1] },           // Priority: 100
+  "/admin/users": { requiresAuth: true, allowedRoles: [0, 1, 2] },     // Priority: 1000 (WINS!)
+  "regex:^/admin/.*": { requiresAuth: true, allowedRoles: [0] }        // Priority: 500
+}
+```
+
+For URL `/admin/users`, the exact match wins (priority 1000).
+
+---
+
+#### Mandatory Access Field for Plugin Routes
+
+**CRITICAL:** All plugin routes **MUST** include an `access` field. Missing this field causes a **fatal boot error**.
+
+**Standard Route Format:**
+
+```javascript
+// In plugins/myPlugin/main.js
+getRouteArray(router, pluginSys, pathPluginFolder) {
+  return [
+    // PUBLIC ROUTE
+    {
+      method: 'get',
+      path: '/public-page',
+      access: {
+        requiresAuth: false,
+        allowedRoles: []  // Empty = everyone (no authentication needed)
+      },
+      func: async (ctx) => {
+        ctx.body = 'Public content';
+      }
+    },
+
+    // AUTHENTICATED ROUTE (all logged-in users)
+    {
+      method: 'get',
+      path: '/user-dashboard',
+      access: {
+        requiresAuth: true,
+        allowedRoles: []  // Empty = all authenticated users
+      },
+      func: async (ctx) => {
+        ctx.body = `Welcome, ${ctx.session.user.username}!`;
+      }
+    },
+
+    // ADMIN-ONLY ROUTE
+    {
+      method: 'post',
+      path: '/admin/delete-user',
+      access: {
+        requiresAuth: true,
+        allowedRoles: [0, 1]  // Only root (0) and admin (1)
+      },
+      func: async (ctx) => {
+        // Delete user logic
+      }
+    },
+
+    // ROLE-SPECIFIC ROUTE
+    {
+      method: 'get',
+      path: '/editor/content',
+      access: {
+        requiresAuth: true,
+        allowedRoles: [0, 1, 2, 103]  // root, admin, editor, custom role 103
+      },
+      func: async (ctx) => {
+        // Editor-specific content
+      }
+    }
+  ];
+}
+```
+
+**Common Patterns:**
+
+| Access Pattern | Configuration |
+|----------------|---------------|
+| Public (no auth) | `{ requiresAuth: false, allowedRoles: [] }` |
+| All authenticated | `{ requiresAuth: true, allowedRoles: [] }` |
+| Admin only | `{ requiresAuth: true, allowedRoles: [0, 1] }` |
+| Root only | `{ requiresAuth: true, allowedRoles: [0] }` |
+| Specific roles | `{ requiresAuth: true, allowedRoles: [0, 1, 102, 105] }` |
+
+---
+
+#### Admin UI for Managing Access Rules
+
+**Access:** `http://localhost:3000/admin/adminAccessControl/`
+**Requires:** Root (0) or Admin (1) role
+
+**Features:**
+
+1. **JSON5 Editor:**
+   - Single textarea for complete `accessControl.json5` file
+   - Syntax highlighting and validation
+   - Comments and trailing commas supported
+
+2. **Real-Time Validation:**
+   - Syntax checking before save
+   - Role existence verification
+   - Pattern validity testing
+   - Conflict detection
+
+3. **Hardcoded Rules Protection:**
+   - Hardcoded rules displayed but cannot be modified
+   - UI prevents submission if hardcoded rules changed
+   - Server-side validation enforces immutability
+
+4. **Pattern Documentation:**
+   - Built-in reference for pattern syntax
+   - Priority explanation
+   - Example rules
+
+5. **Test Access Simulator:** *(Future Feature)*
+   - Test URL against current rules
+   - See which rule matches
+   - Preview access decision
+
+**Editing Workflow:**
+
+1. Navigate to `/admin/adminAccessControl/`
+2. Edit `customRules` section in the JSON5 editor
+3. Click "Save Changes"
+4. System validates:
+   - JSON5 syntax
+   - Required fields present
+   - Roles exist in `userRole.json5`
+   - Patterns are valid
+   - No conflicts with plugin routes
+   - Hardcoded rules unchanged
+5. If valid: Rules saved, middleware auto-reloads
+6. If invalid: Error message displayed, changes rejected
+
+---
+
+#### Validation System
+
+**Boot-Time Validation:**
+
+When the server starts, `RuleValidator` performs comprehensive checks:
+
+1. **JSON5 Syntax:** File parses without errors
+2. **Required Fields:** `requiresAuth`, `allowedRoles` present in all rules
+3. **Pattern URLs:** No invalid characters, regex compiles successfully
+4. **Role Existence:** All role IDs exist in `/plugins/adminUsers/userRole.json5`
+5. **Plugin Route Conflicts:** Custom rules DO NOT define routes owned by plugins
+6. **Hardcoded Rules:** Immutable rules have `editable: false`
+
+**If validation fails:** Server **DOES NOT START**, errors logged to console.
+
+**Runtime Validation (Admin UI):**
+
+When saving from admin interface, additional checks:
+
+1. All boot-time validations
+2. **Hardcoded Immutability:** Submitted hardcodedRules match original (byte-for-byte JSON comparison)
+3. **No Breaking Changes:** Modifications won't break active sessions
+
+**If validation fails:** Changes rejected, error message shown, file unchanged.
+
+---
+
+#### Default Policy
+
+When a URL doesn't match any pattern, the **defaultPolicy** determines access:
+
+**Action Types:**
+
+| Action | Behavior |
+|--------|----------|
+| `"allow"` | Everyone can access (default) |
+| `"deny"` | Nobody can access (403 for all) |
+| `"requireAuth"` | Only authenticated users (redirect if not logged in) |
+
+**Example:**
+
+```json5
+"defaultPolicy": {
+  "action": "requireAuth",
+  "redirectOnDenied": "/pluginPages/adminUsers/login.ejs"
+}
+```
+
+With `"requireAuth"`, unauthenticated users visiting any unmatched URL are redirected to login.
+
+---
+
+#### Access Denied Page
+
+**Location:** `/plugins/adminAccessControl/webPages/access-denied.ejs`
+**URL:** `/pluginPages/adminAccessControl/access-denied.ejs`
+
+**Shown When:**
+- User is **authenticated** but lacks required role
+- Alternative to 403 status code
+- Provides user-friendly explanation
+
+**Content:**
+- User information (username, current roles)
+- Required roles for the requested page
+- Link to homepage
+- Admin note (if user is admin)
+
+---
+
+#### Migration Guide: Adding Access Field to Existing Plugins
+
+**Before:** (Old plugin without access field)
+```javascript
+getRouteArray() {
+  return [
+    {
+      method: 'get',
+      path: '/my-route',
+      func: async (ctx) => { /* ... */ }
+    }
+  ];
+}
+```
+
+**After:** (With mandatory access field)
+```javascript
+getRouteArray() {
+  return [
+    {
+      method: 'get',
+      path: '/my-route',
+      access: {
+        requiresAuth: false,  // or true if authentication needed
+        allowedRoles: []      // or [0, 1, ...] for specific roles
+      },
+      func: async (ctx) => { /* ... */ }
+    }
+  ];
+}
+```
+
+**Steps:**
+
+1. **Identify Route Type:** Public, authenticated, or role-restricted?
+2. **Add Access Field:** Choose appropriate configuration
+3. **Test Server Start:** Ensure no validation errors
+4. **Test Access:** Verify permissions work as expected
+
+---
+
+#### Testing Access Control
+
+**Manual Testing:**
+
+1. **Start Server:**
+   ```bash
+   node index.js
+   ```
+   Check for validation errors in console
+
+2. **Test Public Routes:**
+   ```bash
+   curl http://localhost:3000/api/myPlugin/public-route
+   ```
+   Should return 200 OK
+
+3. **Test Protected Routes (Unauthenticated):**
+   ```bash
+   curl http://localhost:3000/api/adminUsers/userList
+   ```
+   Should redirect to login or return 401
+
+4. **Test Protected Routes (Authenticated without Role):**
+   - Login as user without required role
+   - Access protected route
+   - Should redirect to access-denied.ejs
+
+5. **Test Admin UI:**
+   - Login as admin (role 0 or 1)
+   - Navigate to `/admin/adminAccessControl/`
+   - Modify customRules
+   - Save and verify changes applied
+
+6. **Test Pattern Matching:**
+   - Add wildcard rule: `"/test/**": { requiresAuth: true, allowedRoles: [] }`
+   - Access `/test/page1` → should require auth
+   - Access `/test/page1/subpage` → should require auth
+   - Access `/other/page` → follows default policy
+
+**Automated Testing:** *(Recommended for production)*
+
+```javascript
+// Example test suite (using Jest)
+describe('Access Control System', () => {
+  test('Public route allows unauthenticated access', async () => {
+    const response = await request(app).get('/api/myPlugin/public');
+    expect(response.status).toBe(200);
+  });
+
+  test('Protected route redirects unauthenticated users', async () => {
+    const response = await request(app).get('/api/adminUsers/userList');
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toContain('login');
+  });
+
+  test('Admin-only route denies non-admin users', async () => {
+    // Login as regular user (role 3)
+    const response = await request(app)
+      .get('/api/adminUsers/deleteUser')
+      .set('Cookie', regularUserCookie);
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toContain('access-denied');
+  });
+});
+```
+
+---
+
+#### Troubleshooting
+
+**Server Won't Start:**
+
+```
+Error: adminAccessControl: Configuration validation failed.
+  - customRules["regex:^/invalid["]: Invalid regex pattern
+```
+
+**Solution:** Fix regex syntax in `accessControl.json5`
+
+---
+
+**Plugin Route Conflict:**
+
+```
+FATAL: Rule conflict detected! Pattern "/api/myPlugin/**" in customRules
+matches plugin route "/api/myPlugin/endpoint" (plugin: myPlugin).
+```
+
+**Solution:** Remove pattern from customRules - plugin routes must declare `access` in their code
+
+---
+
+**Hardcoded Rules Modification Attempt:**
+
+```
+Cannot modify hardcodedRules section. This section is read-only.
+```
+
+**Solution:** Only edit `customRules` section. Hardcoded rules protect critical system paths.
+
+---
+
+**Role Not Found:**
+
+```
+customRules["/my-page"]: Role 999 not found in userRole.json5 (WARNING)
+```
+
+**Solution:** Ensure role ID exists in `/plugins/adminUsers/userRole.json5`
+
+---
+
+**Pattern Not Matching:**
+
+If a pattern doesn't match as expected:
+
+1. Check pattern syntax:
+   - Exact: no wildcards or regex prefix
+   - Wildcard: use `*` (single level) or `**` (recursive)
+   - Regex: prefix with `regex:` and escape special chars
+2. Verify priority: more specific patterns win
+3. Test with access simulator (coming soon)
+4. Check console logs for AccessManager decisions
+
+---
+
+#### Best Practices
+
+1. **✅ Use Hardcoded Rules for Critical Paths:**
+   ```json5
+   "hardcodedRules": {
+     "/admin/**": { requiresAuth: true, allowedRoles: [0, 1], editable: false }
+   }
+   ```
+
+2. **✅ Prefer Specific Patterns Over Broad Wildcards:**
+   ```json5
+   // GOOD: Specific control
+   "/admin/users": { allowedRoles: [0, 1, 2] },
+   "/admin/settings": { allowedRoles: [0, 1] }
+
+   // OK but less precise:
+   "/admin/**": { allowedRoles: [0, 1] }
+   ```
+
+3. **✅ Always Add Access Field to Plugin Routes:**
+   - Never omit the field
+   - Be explicit about requirements
+   - Test during development
+
+4. **✅ Use Custom Roles for Granular Permissions:**
+   ```json5
+   {
+     "requiresAuth": true,
+     "allowedRoles": [0, 1, 102, 105]  // Include custom roles for flexibility
+   }
+   ```
+
+5. **✅ Document Pattern Intent:**
+   ```json5
+   // Protect all download URLs requiring editor role
+   "regex:^/download/.*\\.pdf$": {
+     "requiresAuth": true,
+     "allowedRoles": [0, 1, 2]  // root, admin, editor
+   }
+   ```
+
+6. **⚠️ Don't Define Plugin Routes in JSON:**
+   - Plugin routes managed in code via `access` field
+   - JSON rules for non-plugin pages only
+
+7. **⚠️ Test Default Policy:**
+   - Understand fallback behavior
+   - Set appropriate action (`allow`, `deny`, `requireAuth`)
+
+---
+
+#### API Endpoints
+
+**adminAccessControl Plugin Routes:**
+
+```
+GET  /api/adminAccessControl/rules
+     Returns all rules (hardcoded + custom)
+     Access: { requiresAuth: true, allowedRoles: [0, 1] }
+
+GET  /api/adminAccessControl/rules-json
+     Returns accessControl.json5 as string
+     Access: { requiresAuth: true, allowedRoles: [0, 1] }
+
+POST /api/adminAccessControl/rules
+     Saves modified rules (validates before save)
+     Body: { jsonContent: "..." }
+     Access: { requiresAuth: true, allowedRoles: [0, 1] }
+
+POST /api/adminAccessControl/test-access (Future)
+     Tests URL against current rules
+     Body: { url: "/test", userId: 1 }
+     Access: { requiresAuth: true, allowedRoles: [0, 1] }
+```
+
+---
+
+#### File Locations
+
+| File | Path | Purpose |
+|------|------|---------|
+| Plugin Main | `/plugins/adminAccessControl/main.js` | Plugin logic, middleware, endpoints |
+| Configuration | `/plugins/adminAccessControl/accessControl.json5` | Access rules (hardcoded + custom) |
+| Access Manager | `/plugins/adminAccessControl/lib/accessManager.js` | Core access control logic |
+| Pattern Matcher | `/plugins/adminAccessControl/lib/patternMatcher.js` | Pattern matching engine |
+| Rule Validator | `/plugins/adminAccessControl/lib/ruleValidator.js` | Validation engine |
+| Admin UI | `/plugins/adminAccessControl/adminWebSections/adminAccessControl/index.ejs` | Visual editor |
+| Access Denied Page | `/plugins/adminAccessControl/webPages/access-denied.ejs` | Custom 403 page |
+| Plugin Config | `/plugins/adminAccessControl/pluginConfig.json5` | Plugin configuration |
+| Admin Registration | `/core/admin/adminConfig.json5` | Admin section metadata |
+
+---
+
+#### Future Enhancements
+
+- [ ] **Access Simulator:** Test URLs against rules in admin UI
+- [ ] **Audit Log:** Track access attempts and denials
+- [ ] **IP-Based Rules:** Allow/deny based on IP address
+- [ ] **Time-Based Rules:** Restrict access by time of day/week
+- [ ] **Rate Limiting:** Per-route request throttling
+- [ ] **EJS Template Function:** `passData.accessControl.check()` for page-level control
+- [ ] **Export/Import Rules:** Backup and restore access configurations
+- [ ] **Visual Rule Builder:** GUI for creating rules without JSON editing
+
+---
 
 ### Checking Authentication in Code
 
@@ -3045,11 +3656,72 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2026-01-10
-**Version:** 1.7.0
+**Last Updated:** 2026-01-28
+**Version:** 1.8.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v1.8.0 (2026-01-28): **MAJOR FEATURE** - Implemented comprehensive access control system (adminAccessControl plugin). Key changes:
+  - **NEW PLUGIN: adminAccessControl**
+    - Pattern-based access control for all pages and routes
+    - Supports exact match, wildcards (*, **), and regex patterns
+    - Automatic priority resolution (more specific patterns win)
+    - Mandatory `access` field for all plugin routes
+  - **Architecture:**
+    - AccessManager: Core middleware for request interception
+    - PatternMatcher: Pattern matching engine with automatic priority calculation
+    - RuleValidator: Comprehensive validation (syntax, roles, conflicts, patterns)
+    - Configuration: Central JSON5 file with hardcoded and custom rules
+  - **Hybrid Access Control Model:**
+    - Pages: Managed via JSON5 configuration file
+    - Plugin Routes: Declared in code via mandatory `access` field
+    - Prevents conflicts between JSON rules and plugin routes
+  - **Admin UI:**
+    - Visual JSON5 editor at `/admin/adminAccessControl/`
+    - Real-time validation before save
+    - Hardcoded rules protected from modification
+    - Pattern syntax documentation built-in
+  - **Validation System:**
+    - Boot-time validation (fatal error if misconfigurations detected)
+    - Runtime validation (admin UI saves)
+    - Role existence checking against adminUsers
+    - Plugin route conflict detection
+  - **Pattern Matching Priority:**
+    - Exact match: 1000 (highest)
+    - Regex: 500
+    - Wildcard single level (*): 300
+    - Wildcard recursive (**): 100 (lowest)
+  - **Breaking Change: Mandatory Access Field:**
+    - ALL plugin routes MUST include `access: { requiresAuth, allowedRoles }`
+    - Missing field causes fatal boot error
+    - Ensures explicit security decision for every endpoint
+  - **Refactored All Plugins:**
+    - adminUsers: 14 routes updated
+    - bootstrap: 9 routes updated
+    - admin: All routes updated
+    - ccxt, dbApi, media, ostrukUtility: All routes updated
+  - **Custom 403 Page:**
+    - Access-denied.ejs for authenticated users without permission
+    - User-friendly error message with role information
+  - **Documentation:**
+    - Complete section added to CLAUDE.md
+    - Architecture overview, configuration guide, best practices
+    - Migration guide, testing guide, troubleshooting section
+  - **Files Added:**
+    - `/plugins/adminAccessControl/main.js` - Plugin entry point
+    - `/plugins/adminAccessControl/accessControl.json5` - Central configuration
+    - `/plugins/adminAccessControl/lib/accessManager.js` - Core logic
+    - `/plugins/adminAccessControl/lib/patternMatcher.js` - Pattern engine
+    - `/plugins/adminAccessControl/lib/ruleValidator.js` - Validation engine
+    - `/plugins/adminAccessControl/webPages/access-denied.ejs` - Custom 403 page
+    - `/plugins/adminAccessControl/adminWebSections/adminAccessControl/index.ejs` - Admin UI
+  - **Files Modified:**
+    - `/core/admin/adminConfig.json5` - Registered admin section
+    - `/plugins/adminUsers/main.js` - Added access field to 14 routes
+    - `/plugins/bootstrap/main.js` - Added access field to 9 routes
+    - `/plugins/admin/main.js` and submodules - Added access fields
+    - `/plugins/ccxt/main.js` - Added access fields
+    - `/plugins/dbApi/main.js`, `/plugins/media/main.js`, `/plugins/ostrukUtility/main.js` - Added access fields
 - v1.7.0 (2026-01-10): **NEW FEATURE** - Implemented configurable priority middlewares system. Key changes:
   - **Priority Middlewares Architecture:**
     - Distinction between CORE (hardcoded, always active) and OPTIONAL (configurable) middlewares
