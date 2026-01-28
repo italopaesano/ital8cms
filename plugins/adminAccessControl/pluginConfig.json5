@@ -1,0 +1,23 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "active": 1,
+  "isInstalled": 0,
+  "weight": -5, // Peso negativo per caricare PRIMA degli altri plugin (il middleware deve intercettare prima)
+
+  // Dipendenze plugin
+  "dependency": {
+    "adminUsers": "^1.0.0" // Dipende da adminUsers per autenticazione e sistema ruoli
+  },
+
+  // Dipendenze Node modules
+  "nodeModuleDependency": {
+    "ejs": "^3.1.9"
+  },
+
+  // Sezioni admin gestite da questo plugin
+  "adminSections": [
+    "adminAccessControl"
+  ],
+
+  "custom": {}
+}

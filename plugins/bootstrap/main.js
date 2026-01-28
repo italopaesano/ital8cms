@@ -31,6 +31,10 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     {
       method: 'GET',
       path: '/test-icons',
+      access: {
+        requiresAuth: false,
+        allowedRoles: [] // Pubblico - pagina di test
+      },
       handler: async (ctx) => {
         ctx.type = 'text/html';
         ctx.body = `
@@ -117,6 +121,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     {
       method: 'GET',
       path: '/css/bootstrap.min.css',
+      access: { requiresAuth: false, allowedRoles: [] }, // Pubblico - risorsa statica
       handler: async (ctx) => {
         const bootstrapCssPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','css','bootstrap.min.css');
         ctx.body = fs.createReadStream(bootstrapCssPath);
@@ -126,6 +131,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     {
       method: 'GET',
       path: '/css/bootstrap.min.css.map',
+      access: { requiresAuth: false, allowedRoles: [] }, // Pubblico - risorsa statica
       handler: async (ctx) => {
         const bootstrapCssPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','css','bootstrap.min.css.map');
         ctx.body = fs.createReadStream(bootstrapCssPath);
@@ -136,6 +142,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     {
       method: 'GET',
       path: '/js/bootstrap.min.js',
+      access: { requiresAuth: false, allowedRoles: [] }, // Pubblico - risorsa statica
       handler: async (ctx) => {
         const bootstrapJsPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','js','bootstrap.min.js');
         ctx.body = fs.createReadStream(bootstrapJsPath);
@@ -145,6 +152,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     {
       method: 'GET',
       path: '/js/bootstrap.min.js.map',
+      access: { requiresAuth: false, allowedRoles: [] }, // Pubblico - risorsa statica
       handler: async (ctx) => {
         const bootstrapJsPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','js','bootstrap.min.js.map');
         ctx.body = fs.createReadStream(bootstrapJsPath);
@@ -155,6 +163,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     {
       method: 'GET',
       path: '/css/bootstrap-icons.min.css',
+      access: { requiresAuth: false, allowedRoles: [] }, // Pubblico - risorsa statica
       handler: async (ctx) => {
         const bootstrapIconsCssPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap-icons','font','bootstrap-icons.min.css');
         ctx.body = fs.createReadStream(bootstrapIconsCssPath);
@@ -164,6 +173,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     {
       method: 'GET',
       path: '/css/bootstrap-icons.css',
+      access: { requiresAuth: false, allowedRoles: [] }, // Pubblico - risorsa statica
       handler: async (ctx) => {
         const bootstrapIconsCssPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap-icons','font','bootstrap-icons.css');
         ctx.body = fs.createReadStream(bootstrapIconsCssPath);
@@ -174,6 +184,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     {
       method: 'GET',
       path: '/css/fonts/bootstrap-icons.woff',
+      access: { requiresAuth: false, allowedRoles: [] }, // Pubblico - risorsa statica
       handler: async (ctx) => {
         const fontPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap-icons','font','fonts','bootstrap-icons.woff');
         ctx.body = fs.createReadStream(fontPath);
@@ -183,6 +194,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     {
       method: 'GET',
       path: '/css/fonts/bootstrap-icons.woff2',
+      access: { requiresAuth: false, allowedRoles: [] }, // Pubblico - risorsa statica
       handler: async (ctx) => {
         const fontPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap-icons','font','fonts','bootstrap-icons.woff2');
         ctx.body = fs.createReadStream(fontPath);

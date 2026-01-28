@@ -391,6 +391,7 @@ function getRoutes(getPluginSys) {
         {
             method: 'GET',
             path: '/themes',
+            access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - gestione temi
             handler: async (ctx) => {
                 try {
                     // Ottieni pluginSys tramite funzione getter (closure)
@@ -425,6 +426,7 @@ function getRoutes(getPluginSys) {
         {
             method: 'GET',
             path: '/themes/:name',
+            access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - dettagli tema
             handler: async (ctx) => {
                 try {
                     const themeName = ctx.params.name;
@@ -462,6 +464,7 @@ function getRoutes(getPluginSys) {
         {
             method: 'POST',
             path: '/setTheme',
+            access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - attiva tema
             handler: async (ctx) => {
                 try {
                     const { themeName, themeType } = ctx.request.body;

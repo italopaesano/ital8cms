@@ -75,6 +75,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     {
       method: 'GET',
       path: `/${ital8Conf.adminPrefix}/adminSections`,
+      access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - gestione pannello admin
       handler: async (ctx) => {
         try {
           // Ottiene adminSystem da pluginSys

@@ -1,0 +1,9 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "name": "adminAccessControl",
+  "version": "1.0.0",
+  "description": "Sistema di controllo accessi basato su ruoli per pagine e route. Gestisce permessi granulari con supporto per pattern matching, regex e priorità automatica.",
+  "author": "Italo Paesano",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC"
+}

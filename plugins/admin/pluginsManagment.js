@@ -306,6 +306,7 @@ function getRoutes(router, pluginSys, pathPluginFolder) {
     routes.push({
         method: 'GET',
         path: `/plugins`,
+        access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - gestione plugin
         handler: async (ctx) => {
             try {
                 const pluginsList = getPluginsList();
@@ -328,6 +329,7 @@ function getRoutes(router, pluginSys, pathPluginFolder) {
     routes.push({
         method: 'GET',
         path: `/plugins/:name`,
+        access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - dettagli plugin
         handler: async (ctx) => {
             try {
                 const pluginName = ctx.params.name;
@@ -360,6 +362,7 @@ function getRoutes(router, pluginSys, pathPluginFolder) {
     routes.push({
         method: 'POST',
         path: `/plugins/:name/toggle`,
+        access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - modifica stato plugin
         handler: async (ctx) => {
             try {
                 const pluginName = ctx.params.name;
@@ -396,6 +399,7 @@ function getRoutes(router, pluginSys, pathPluginFolder) {
     routes.push({
         method: 'POST',
         path: `/plugins/:name/config`,
+        access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - modifica configurazione
         handler: async (ctx) => {
             try {
                 const pluginName = ctx.params.name;

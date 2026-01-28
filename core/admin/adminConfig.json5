@@ -28,6 +28,16 @@
       "description": "Creazione e gestione ruoli personalizzati"
     },
 
+    "adminAccessControl": {
+      "type": "plugin",
+      "plugin": "adminAccessControl",   // Nome del plugin che gestisce questa sezione
+      "enabled": true,                  // Abilitata
+      "required": false,                // Opzionale (il sistema funziona anche senza)
+      "label": "Controllo Accessi",     // Testo mostrato nel menu
+      "icon": "🔐",                     // Icona (emoji, HTML, o classe CSS)
+      "description": "Gestione regole di accesso basate su ruoli per pagine e route"
+    },
+
     // SEZIONI HARDCODED (statiche) - da implementare in futuro
     "pagesManagment": {
       "type": "hardcoded",
@@ -66,6 +76,7 @@
   "menuOrder": [
     "usersManagment",
     "rolesManagment",
+    "adminAccessControl",
     "pagesManagment",
     "systemSettings",
     "pluginsManagment",
