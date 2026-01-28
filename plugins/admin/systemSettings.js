@@ -246,6 +246,7 @@ function getRoutes() {
         {
             method: 'GET',
             path: '/systemSettings/config',
+            access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - leggi configurazione sistema
             handler: async (ctx) => {
                 try {
                     const result = getSystemConfig();
@@ -271,6 +272,7 @@ function getRoutes() {
         {
             method: 'POST',
             path: '/systemSettings/config',
+            access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - modifica configurazione sistema
             handler: async (ctx) => {
                 try {
                     const { config } = ctx.request.body;

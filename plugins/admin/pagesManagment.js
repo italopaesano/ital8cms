@@ -983,6 +983,7 @@ function getRoutes() {
         {
             method: 'GET',
             path: `/pages`,
+            access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - gestione pagine
             handler: async (ctx) => {
                 try {
                     const pages = getPagesList();
@@ -1012,6 +1013,7 @@ function getRoutes() {
         {
             method: 'GET',
             path: `/pages/detail`,
+            access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - dettagli pagina
             handler: async (ctx) => {
                 try {
                     const pagePath = ctx.query.path;
@@ -1048,6 +1050,7 @@ function getRoutes() {
         {
             method: 'POST',
             path: `/pages/create`,
+            access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - crea pagina
             handler: async (ctx) => {
                 try {
                     const { path: pagePath, content, createMissingFolders } = ctx.request.body;
@@ -1084,6 +1087,7 @@ function getRoutes() {
         {
             method: 'POST',
             path: `/pages/update`,
+            access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - modifica pagina
             handler: async (ctx) => {
                 try {
                     const { path: pagePath, content } = ctx.request.body;
@@ -1129,6 +1133,7 @@ function getRoutes() {
         {
             method: 'POST',
             path: `/pages/delete`,
+            access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - elimina pagina
             handler: async (ctx) => {
                 try {
                     const { path: pagePath } = ctx.request.body;
@@ -1165,6 +1170,7 @@ function getRoutes() {
         {
             method: 'POST',
             path: `/pages/createFolder`,
+            access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - crea cartella
             handler: async (ctx) => {
                 try {
                     const { path: folderPath } = ctx.request.body;
@@ -1201,6 +1207,7 @@ function getRoutes() {
         {
             method: 'POST',
             path: `/pages/deleteFolder`,
+            access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - elimina cartella
             handler: async (ctx) => {
                 try {
                     const { path: folderPath } = ctx.request.body;
@@ -1237,6 +1244,7 @@ function getRoutes() {
         {
             method: 'GET',
             path: `/pages/info`,
+            access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - info tema e template
             handler: async (ctx) => {
                 try {
                     const result = getThemeInfo();
@@ -1262,6 +1270,7 @@ function getRoutes() {
         {
             method: 'GET',
             path: `/pages/parseTemplate`,
+            access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - parsing template
             handler: async (ctx) => {
                 try {
                     const { template, theme } = ctx.query;
@@ -1320,6 +1329,7 @@ function getRoutes() {
         {
             method: 'GET',
             path: `/pages/parsePage`,
+            access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - parsing pagina
             handler: async (ctx) => {
                 try {
                     const { path: pagePath } = ctx.query;
@@ -1389,6 +1399,7 @@ function getRoutes() {
         {
             method: 'POST',
             path: `/pages/createFromTemplate`,
+            access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - crea da template
             handler: async (ctx) => {
                 try {
                     const { theme, template, pagePath, placeholderValues } = ctx.request.body;
@@ -1493,6 +1504,7 @@ function getRoutes() {
         {
             method: 'POST',
             path: `/pages/updateWithPlaceholders`,
+            access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - aggiorna con placeholder
             handler: async (ctx) => {
                 try {
                     const { pagePath, placeholderValues } = ctx.request.body;

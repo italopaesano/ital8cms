@@ -1,0 +1,70 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "version": "1.0.0",
+  "lastModified": "2026-01-28T10:00:00Z",
+
+  // ==========================================================================
+  // REGOLE HARDCODED (non modificabili via UI)
+  // ==========================================================================
+  // Queste regole proteggono aree critiche del sistema e hanno priorità massima.
+  // Il campo "editable: false" impedisce la modifica via interfaccia admin.
+  //
+  // IMPORTANTE: Queste regole sono presenti nel file solo per chiarezza e documentazione.
+  // La validazione impedisce qualsiasi modifica della sezione hardcodedRules via UI.
+  // ==========================================================================
+  "hardcodedRules": {
+    "/admin/**": {
+      "requiresAuth": true,
+      "allowedRoles": [0, 1], // root (0), admin (1)
+      "priority": 100,
+      "editable": false
+    }
+  },
+
+  // ==========================================================================
+  // REGOLE CUSTOM (modificabili via UI admin)
+  // ==========================================================================
+  // Queste regole possono essere aggiunte, modificate ed eliminate tramite
+  // l'interfaccia admin in /admin/adminAccessControl/
+  //
+  // Pattern supportati:
+  //   - Match esatto: "/dashboard.ejs"
+  //   - Wildcard singolo: "/content/*.ejs" (non ricorsivo)
+  //   - Wildcard ricorsivo: "/content/**" (tutti i livelli)
+  //   - Regex: "regex:/api/user/\\d+" (prefisso "regex:" obbligatorio)
+  //
+  // Priorità automatica (da alta a bassa):
+  //   1. Match esatto (es: /dashboard.ejs)
+  //   2. Regex (es: regex:/api/user/\\d+)
+  //   3. Wildcard singolo (es: /content/*.ejs)
+  //   4. Wildcard ricorsivo (es: /admin/**)
+  //
+  // In caso di conflitto, la regola più specifica vince.
+  // ==========================================================================
+  "customRules": {
+    // Esempio di regola custom (rimuovi se non necessaria)
+    // "/dashboard.ejs": {
+    //   "requiresAuth": true,
+    //   "allowedRoles": [0, 1, 2, 3], // Tutti i ruoli autenticati
+    //   "priority": 50,
+    //   "editable": true
+    // }
+  },
+
+  // ==========================================================================
+  // DEFAULT POLICY
+  // ==========================================================================
+  // Comportamento quando nessuna regola matcha l'URL richiesto.
+  //
+  // action:
+  //   - "allow": Accesso pubblico (default)
+  //   - "deny": Accesso negato (403 Forbidden)
+  //   - "requireAuth": Solo utenti autenticati
+  //
+  // redirectOnDenied: URL di redirect quando l'accesso è negato
+  // ==========================================================================
+  "defaultPolicy": {
+    "action": "allow", // "allow" | "deny" | "requireAuth"
+    "redirectOnDenied": "/pluginPages/adminUsers/login.ejs"
+  }
+}

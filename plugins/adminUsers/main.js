@@ -84,9 +84,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     // URL: /pluginPages/adminUsers/login.ejs
     // File sorgente: /plugins/adminUsers/webPages/login.ejs
 
-    { //questo end point POST verrà chemato dal form di login per implementare il login se le credenziali sono corrette
+    { // POST /login - Endpoint per autenticazione utenti (pubblico)
       method: 'POST',
-      path: '/login', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
+      path: '/login',
+      access: {
+        requiresAuth: false,
+        allowedRoles: [] // Pubblico, tutti possono tentare il login
+      },
       handler: async (ctx) => {//
         const { username, password, referrerTo } = ctx.request.body;
         if( await libAccess.autenticate( username, password ) ){// login riuscito 
@@ -110,9 +114,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         ctx.set('Content-Type', 'text/html'); */
        }
     },
-    {
+    { // GET /logged - Test endpoint per verificare stato autenticazione (pubblico)
       method: 'GET',
-      path: '/logged', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
+      path: '/logged',
+      access: {
+        requiresAuth: false,
+        allowedRoles: [] // Pubblico, utile per test
+      },
       handler: async (ctx) => { 
         if (!ctx.session || !ctx.session.authenticated) {
 
@@ -132,9 +140,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     // URL: /pluginPages/adminUsers/logout.ejs
     // File sorgente: /plugins/adminUsers/webPages/logout.ejs
 
-    { //questo end point POST verrà chemato dal form di logout per effettuare il logout
-      method: 'POST', 
-      path: '/logout', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
+    { // POST /logout - Endpoint per logout (pubblico, ma tipicamente usato da utenti autenticati)
+      method: 'POST',
+      path: '/logout',
+      access: {
+        requiresAuth: false,
+        allowedRoles: [] // Pubblico, chiunque può chiamare logout
+      },
       handler: async (ctx) => {//
         const {referrerTo } = ctx.request.body;
         ctx.session = null;
@@ -143,10 +155,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         ctx.redirect(referrerTo);
        }
     },
-      // ATTENZIONE BISOGNA LIMITARE l'ACCESSO A QUESTO RL SOLO A UTENTI LOGGATI
-    { // url richiesto(dalla pagina di amministrazione) per ottenere la lista degli utenti attivi nel sito
+    { // GET /userList - Lista tutti gli utenti (solo admin)
       method: 'GET',
-      path: '/userList', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
+      path: '/userList',
+      access: {
+        requiresAuth: true,
+        allowedRoles: [0, 1] // Solo root e admin
+      },
       handler: async (ctx) => {//
         const userFilePath = path.join(__dirname, 'userAccount.json5');
         try {
@@ -163,9 +178,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         ctx.type = 'application/json'; // oppure semplicemente 'json'
        }
     },
-    { // url richiesto(dalla pagina di amministrazione) per ottenere tutte le informazioni sull'utente
+    { // GET /userInfo - Dettagli specifico utente (solo admin)
       method: 'GET',
-      path: '/userInfo', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
+      path: '/userInfo',
+      access: {
+        requiresAuth: true,
+        allowedRoles: [0, 1] // Solo root e admin
+      },
       handler: async (ctx) => {//
         const username = ctx.query.username; //username pasatocon la queystrng
         const userFilePath = path.join(__dirname, 'userAccount.json5');
@@ -182,9 +201,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         ctx.type = 'application/json'; // oppure semplicemente 'json'
        }
     },
-    { // url richiesto(dalla pagina di amministrazione) per ottenere la lista degli utenti attivi nel sito
+    { // GET /roleList - Lista tutti i ruoli (hardcoded + custom) (solo admin)
       method: 'GET',
-      path: '/roleList', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
+      path: '/roleList',
+      access: {
+        requiresAuth: true,
+        allowedRoles: [0, 1] // Solo root e admin
+      },
       handler: async (ctx) => {//
         const roleFilePath = path.join(__dirname, 'userRole.json5');
         try {
@@ -197,10 +220,14 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         ctx.type = 'application/json'; // oppure semplicemente 'json'
        }
     },
-    //START CURA USER create update delete user
-    { // url richiesto(dalla pagina di amministrazione) per creare/modificare utenti
+    //START CRUD USER create update delete user
+    { // POST /usertUser - Crea o modifica utente (solo admin)
       method: 'POST',
-      path: '/usertUser', // l'url completo avra la forma /api/namePlugin/usertUser
+      path: '/usertUser',
+      access: {
+        requiresAuth: true,
+        allowedRoles: [0, 1] // Solo root e admin
+      },
       handler: async (ctx) => {//
 
         const { username, email, password, roleIds, isNewUser } = ctx.request.body;
@@ -212,9 +239,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
        }
     },
     //START GESTIONE RUOLI CUSTOM
-    { // Ottiene lista ruoli custom (isHardcoded: false)
+    { // GET /customRoleList - Lista ruoli custom (solo admin)
       method: 'GET',
       path: '/customRoleList',
+      access: {
+        requiresAuth: true,
+        allowedRoles: [0, 1] // Solo root e admin
+      },
       handler: async (ctx) => {
         try {
           const customRoles = roleManagement.getCustomRoles();
@@ -226,9 +257,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         ctx.type = 'application/json';
       }
     },
-    { // Ottiene lista ruoli hardcoded (isHardcoded: true)
+    { // GET /hardcodedRoleList - Lista ruoli hardcoded (solo admin)
       method: 'GET',
       path: '/hardcodedRoleList',
+      access: {
+        requiresAuth: true,
+        allowedRoles: [0, 1] // Solo root e admin
+      },
       handler: async (ctx) => {
         try {
           const hardcodedRoles = roleManagement.getHardcodedRoles();
@@ -240,9 +275,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         ctx.type = 'application/json';
       }
     },
-    { // Crea un nuovo ruolo custom
+    { // POST /createCustomRole - Crea nuovo ruolo custom (solo admin)
       method: 'POST',
       path: '/createCustomRole',
+      access: {
+        requiresAuth: true,
+        allowedRoles: [0, 1] // Solo root e admin
+      },
       handler: async (ctx) => {
         const { name, description } = ctx.request.body;
         const result = roleManagement.createCustomRole(name, description);
@@ -250,9 +289,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         ctx.type = 'application/json';
       }
     },
-    { // Aggiorna un ruolo custom esistente
+    { // POST /updateCustomRole - Aggiorna ruolo custom esistente (solo admin)
       method: 'POST',
       path: '/updateCustomRole',
+      access: {
+        requiresAuth: true,
+        allowedRoles: [0, 1] // Solo root e admin
+      },
       handler: async (ctx) => {
         const { roleId, name, description } = ctx.request.body;
         const result = roleManagement.updateCustomRole(roleId, name, description);
@@ -260,9 +303,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         ctx.type = 'application/json';
       }
     },
-    { // Elimina un ruolo custom
+    { // POST /deleteCustomRole - Elimina ruolo custom (solo admin)
       method: 'POST',
       path: '/deleteCustomRole',
+      access: {
+        requiresAuth: true,
+        allowedRoles: [0, 1] // Solo root e admin
+      },
       handler: async (ctx) => {
         const { roleId } = ctx.request.body;
         const result = roleManagement.deleteCustomRole(roleId);
@@ -275,9 +322,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     // URL: /pluginPages/adminUsers/userProfile.ejs
     // File sorgente: /plugins/adminUsers/webPages/userProfile.ejs
 
-    { // Ottiene i dati dell'utente correntemente loggato
+    { // GET /getCurrentUser - Dati utente corrente (qualsiasi utente autenticato)
       method: 'GET',
       path: '/getCurrentUser',
+      access: {
+        requiresAuth: true,
+        allowedRoles: [] // Tutti gli utenti autenticati (qualsiasi ruolo)
+      },
       handler: async (ctx) => {
         // Usa username dalla sessione se loggato, altrimenti da query string per testing
         let username;
@@ -313,9 +364,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         ctx.type = 'application/json';
       }
     },
-    { // Aggiorna il profilo dell'utente corrente (username e/o password)
+    { // POST /updateUserProfile - Aggiorna profilo utente corrente (qualsiasi utente autenticato)
       method: 'POST',
       path: '/updateUserProfile',
+      access: {
+        requiresAuth: true,
+        allowedRoles: [] // Tutti gli utenti autenticati possono modificare il proprio profilo
+      },
       handler: async (ctx) => {
         // Usa username dalla sessione se loggato, altrimenti da body per testing
         let currentUsername;

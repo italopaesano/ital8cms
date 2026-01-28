@@ -95,6 +95,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     { //Ritornerà un array di ogetti come contenuto in customExchangesKey.json5 tranne per le chiavi pubbliche e private che non saranno presenti
       method: 'GET',
       path: '/listExchangesWithAccount', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
+      access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - informazioni account exchange
       handler: async (ctx, next) => {
         ctx.body = loadJson5(path.join(__dirname, './custom/customExchangesKey.json5')).exchanges.map( (item) => { return {exchangeName: item.exchangeName, refCoin: item.refCoin, id: item.id, accountName: item.accountName } }); // la funzione map è fatta in modo che l'array non contenga informazioni senzibili come l' apiKey o altro
         ctx.set('Content-Type', 'application/json');
@@ -103,7 +104,8 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     {
       method: 'GET',
       path: '/exchanges', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
-      handler: async (ctx, next) => { 
+      access: { requiresAuth: false, allowedRoles: [] }, // Pubblico - lista exchange disponibili
+      handler: async (ctx, next) => {
         ctx.body = ccxt.exchanges; // old ora farò restituire direttamente l'array ctx.body = Object.assign({}, ccxt.exchanges );// utilizzo --> Object.assign({}, ... per convertire l'array in un ogetto che è maggiormente corrispondente al formato json
         ctx.set('Content-Type', 'application/json');
        }
@@ -111,6 +113,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     {
       method: 'GET',   // exchange -> nome del'excange in lista ccxt , fnCcxt --> funzione in excange.fnCcxt() riciesta
       path: '/:exchange/:fnCcxt', // l'url completo avra la forma /api/namePlugin/questo nome -> se vengono mantenute le impostazioni di default
+      access: { requiresAuth: true, allowedRoles: [0, 1] }, // Admin only - esecuzione funzioni exchange
       handler: async (ctx, next) => { 
 
         const instanceUid = getUidMessage();
@@ -188,6 +191,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     {
       method: 'GET',
       path: '/test', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
+      access: { requiresAuth: false, allowedRoles: [] }, // Pubblico - endpoint di test
       handler: async (ctx, next) => { 
         //const bootstrapCssPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','css','bootstrap.min.css');
         ctx.body = "ciao ciao";

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="it">
+<%# ========== INCLUDE TEMA HEAD ========== %>
+<%- include(passData.themeSys.getThemePartPath('head.ejs')) %>
+<%- passData.themeSys.injectPluginCss() %>
+<%- passData.themeSys.injectPluginJs() %>
+
+<title>Accesso Negato - ital8CMS</title>
+</head>
+
+<body>
+<%# ========== HEADER/NAV TEMA ========== %>
+<%- include(passData.themeSys.getThemePartPath('header.ejs')) %>
+<%- include(passData.themeSys.getThemePartPath('nav.ejs')) %>
+
+<%# ========== HTML CUSTOM PRIMA ========== %>
+<%- passData.themeSys.injectPluginHtmlBefore() %>
+
+<%# ========== CONTENUTO ========== %>
+<main class="plugin-page plugin-adminAccessControl page-access-denied" style="min-height: 60vh; display: flex; align-items: center; justify-content: center;">
+  <div class="container">
+    <div class="row">
+      <div class="col-md-8 offset-md-2 text-center">
+        <!-- Icona -->
+        <div style="font-size: 120px; color: #dc3545; margin-bottom: 1rem;">
+          🚫
+        </div>
+
+        <!-- Titolo -->
+        <h1 class="display-4 mb-3">Accesso Negato</h1>
+
+        <!-- Messaggio -->
+        <p class="lead text-muted mb-4">
+          Non disponi dei permessi necessari per accedere a questa risorsa.
+        </p>
+
+        <!-- Info utente (se autenticato) -->
+        <% if (passData.ctx.session?.authenticated) { %>
+          <div class="alert alert-info">
+            <strong>Utente:</strong> <%= passData.ctx.session.user.username %><br>
+            <strong>Ruoli:</strong> <%= passData.ctx.session.user.roleIds.join(', ') %>
+          </div>
+        <% } %>
+
+        <!-- Azioni -->
+        <div class="mt-4">
+          <a href="/" class="btn btn-primary btn-lg me-2">
+            🏠 Torna alla Homepage
+          </a>
+
+          <% if (!passData.ctx.session?.authenticated) { %>
+            <a href="/pluginPages/adminUsers/login.ejs" class="btn btn-outline-secondary btn-lg">
+              🔐 Accedi
+            </a>
+          <% } %>
+        </div>
+
+        <!-- Note per admin (solo se utente è admin) -->
+        <% if (passData.ctx.session?.user?.roleIds?.includes(0) || passData.ctx.session?.user?.roleIds?.includes(1)) { %>
+          <div class="mt-5 text-start">
+            <div class="alert alert-warning">
+              <strong>ℹ️ Nota per Amministratori:</strong><br>
+              Se ritieni che questo sia un errore, verifica le regole di accesso in:
+              <a href="/<%= passData.adminPrefix %>/adminAccessControl/">
+                Gestione Controllo Accessi
+              </a>
+            </div>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</main>
+
+<%# ========== HTML CUSTOM DOPO ========== %>
+<%- passData.themeSys.injectPluginHtmlAfter() %>
+
+<%# ========== FOOTER TEMA ========== %>
+<%- include(passData.themeSys.getThemePartPath('footer.ejs')) %>
+</body>
+</html>

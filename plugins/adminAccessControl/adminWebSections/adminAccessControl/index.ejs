@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="it">
+<%# ========== INCLUDE TEMA ADMIN HEAD ========== %>
+<%- include(passData.themeSys.getThemePartPath('head.ejs')) %>
+<title>Gestione Controllo Accessi - Admin</title>
+
+<style>
+  .rule-editor {
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 600px;
+    resize: vertical;
+  }
+
+  .alert-fixed {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 9999;
+    min-width: 300px;
+    animation: slideIn 0.3s ease-out;
+  }
+
+  @keyframes slideIn {
+    from {
+      transform: translateX(400px);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  .hardcoded-badge {
+    background-color: #6c757d;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    margin-left: 10px;
+  }
+
+  .validation-error {
+    background-color: #f8d7da;
+    border: 1px solid #f5c2c7;
+    border-radius: 4px;
+    padding: 12px;
+    margin: 10px 0;
+    color: #842029;
+  }
+</style>
+</head>
+
+<body>
+<%# ========== HEADER ADMIN ========== %>
+<%- include(passData.themeSys.getThemePartPath('header.ejs')) %>
+<%- include(passData.themeSys.getThemePartPath('nav.ejs')) %>
+
+<main class="admin-page admin-access-control">
+  <div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+      <div class="col">
+        <h1>
+          🔐 Gestione Controllo Accessi
+          <span class="hardcoded-badge">ADVANCED</span>
+        </h1>
+        <p class="text-muted">
+          Configura le regole di accesso per pagine e route del sistema.
+          Le regole <strong>hardcoded</strong> sono immutabili e proteggono aree critiche.
+        </p>
+      </div>
+    </div>
+
+    <!-- Alert container (popolato da JavaScript) -->
+    <div id="alert-container"></div>
+
+    <!-- Documentazione rapida -->
+    <div class="row mb-4">
+      <div class="col">
+        <div class="card">
+          <div class="card-header bg-info text-white">
+            <strong>ℹ️ Pattern Supportati</strong>
+          </div>
+          <div class="card-body">
+            <ul class="mb-0">
+              <li><code>/dashboard.ejs</code> - <strong>Match esatto</strong> (priorità massima)</li>
+              <li><code>regex:/api/user/\\d+</code> - <strong>Regex</strong> con prefisso esplicito (alta priorità)</li>
+              <li><code>/content/*.ejs</code> - <strong>Wildcard singolo</strong> (un livello, media priorità)</li>
+              <li><code>/admin/**</code> - <strong>Wildcard ricorsivo</strong> (tutti i livelli, bassa priorità)</li>
+            </ul>
+            <hr>
+            <p class="mb-0 text-muted">
+              <strong>Priorità automatica:</strong> In caso di conflitto, la regola più specifica vince.
+              Le regole hardcoded hanno sempre priorità su quelle custom.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Editor JSON5 -->
+    <div class="row">
+      <div class="col">
+        <div class="card">
+          <div class="card-header bg-primary text-white">
+            <strong>📝 Editor Regole (JSON5)</strong>
+            <button class="btn btn-sm btn-light float-end" onclick="loadRules()">
+              🔄 Ricarica
+            </button>
+          </div>
+          <div class="card-body">
+            <!-- Warning hardcoded rules -->
+            <div class="alert alert-warning">
+              <strong>⚠️ ATTENZIONE:</strong> La sezione <code>hardcodedRules</code> è di sola lettura.
+              Qualsiasi modifica a questa sezione verrà respinta durante la validazione.
+            </div>
+
+            <!-- Textarea editor -->
+            <textarea
+              id="rules-editor"
+              class="form-control rule-editor"
+              placeholder="Caricamento in corso..."></textarea>
+
+            <!-- Validation errors container -->
+            <div id="validation-errors" class="mt-3"></div>
+
+            <!-- Buttons -->
+            <div class="mt-3">
+              <button class="btn btn-success btn-lg" onclick="saveRules()">
+                💾 Salva Modifiche
+              </button>
+              <button class="btn btn-outline-secondary" onclick="loadRules()">
+                🔄 Annulla Modifiche
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Test accesso (opzionale) -->
+    <div class="row mt-4">
+      <div class="col">
+        <div class="card">
+          <div class="card-header bg-secondary text-white">
+            <strong>🧪 Test Accesso (BETA)</strong>
+          </div>
+          <div class="card-body">
+            <p>Simula l'accesso per verificare se un utente con determinati ruoli può accedere a un URL.</p>
+
+            <div class="row">
+              <div class="col-md-6 mb-2">
+                <label class="form-label">URL da testare:</label>
+                <input type="text" id="test-url" class="form-control" placeholder="/dashboard.ejs" value="/dashboard.ejs">
+              </div>
+              <div class="col-md-6 mb-2">
+                <label class="form-label">Ruoli (comma-separated):</label>
+                <input type="text" id="test-roles" class="form-control" placeholder="0, 1, 2" value="0, 1">
+              </div>
+            </div>
+
+            <button class="btn btn-primary mt-2" onclick="testAccess()">
+              🔍 Testa Accesso
+            </button>
+
+            <!-- Test result -->
+            <div id="test-result" class="mt-3"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<%# ========== FOOTER ADMIN ========== %>
+<%- include(passData.themeSys.getThemePartPath('footer.ejs')) %>
+
+<script>
+  // API prefix
+  const API_BASE = '/<%= passData.apiPrefix %>/adminAccessControl';
+
+  /**
+   * Carica regole da server
+   */
+  async function loadRules() {
+    try {
+      const response = await fetch(`${API_BASE}/rules-json`);
+      const data = await response.json();
+
+      if (data.success) {
+        document.getElementById('rules-editor').value = data.data;
+        clearValidationErrors();
+      } else {
+        showAlert('error', 'Errore nel caricamento delle regole');
+      }
+    } catch (err) {
+      console.error('Error loading rules:', err);
+      showAlert('error', 'Errore di rete durante il caricamento');
+    }
+  }
+
+  /**
+   * Salva regole modificate
+   */
+  async function saveRules() {
+    const jsonContent = document.getElementById('rules-editor').value;
+
+    // Clear previous errors
+    clearValidationErrors();
+
+    try {
+      const response = await fetch(`${API_BASE}/rules`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ jsonContent })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showAlert('success', '✓ Regole salvate con successo!');
+        // Ricarica per mostrare versione salvata
+        setTimeout(() => loadRules(), 1000);
+      } else {
+        // Mostra errori di validazione
+        if (data.errors && Array.isArray(data.errors)) {
+          showValidationErrors(data.errors);
+        } else {
+          showAlert('error', data.error || 'Errore nel salvataggio');
+        }
+      }
+    } catch (err) {
+      console.error('Error saving rules:', err);
+      showAlert('error', 'Errore di rete durante il salvataggio');
+    }
+  }
+
+  /**
+   * Testa accesso per URL e ruoli
+   */
+  async function testAccess() {
+    const url = document.getElementById('test-url').value.trim();
+    const rolesStr = document.getElementById('test-roles').value.trim();
+
+    if (!url) {
+      showAlert('error', 'Inserisci un URL da testare');
+      return;
+    }
+
+    // Parse ruoli (comma-separated)
+    const roleIds = rolesStr.split(',').map(r => parseInt(r.trim())).filter(r => !isNaN(r));
+
+    if (roleIds.length === 0) {
+      showAlert('error', 'Inserisci almeno un ruolo (es: 0, 1, 2)');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/test-access`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ url, roleIds })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showTestResult(data.data);
+      } else {
+        showAlert('error', data.error || 'Errore nel test');
+      }
+    } catch (err) {
+      console.error('Error testing access:', err);
+      showAlert('error', 'Errore di rete durante il test');
+    }
+  }
+
+  /**
+   * Mostra risultato test accesso
+   */
+  function showTestResult(result) {
+    const container = document.getElementById('test-result');
+
+    let html = '<div class="card mt-3">';
+    html += `<div class="card-header ${result.allowed ? 'bg-success' : 'bg-danger'} text-white">`;
+    html += result.allowed ? '✓ Accesso Consentito' : '✗ Accesso Negato';
+    html += '</div>';
+    html += '<div class="card-body">';
+    html += `<p><strong>Motivo:</strong> ${result.reason}</p>`;
+
+    if (result.redirect) {
+      html += `<p><strong>Redirect:</strong> <code>${result.redirect}</code></p>`;
+    }
+
+    if (result.status) {
+      html += `<p><strong>Status Code:</strong> ${result.status}</p>`;
+    }
+
+    html += '</div></div>';
+
+    container.innerHTML = html;
+  }
+
+  /**
+   * Mostra alert temporaneo
+   */
+  function showAlert(type, message) {
+    const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+    const icon = type === 'success' ? '✓' : '✗';
+
+    const alert = document.createElement('div');
+    alert.className = `alert ${alertClass} alert-fixed alert-dismissible fade show`;
+    alert.innerHTML = `
+      ${icon} ${message}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    document.getElementById('alert-container').appendChild(alert);
+
+    // Auto-remove dopo 5 secondi
+    setTimeout(() => {
+      alert.remove();
+    }, 5000);
+  }
+
+  /**
+   * Mostra errori di validazione sotto l'editor
+   */
+  function showValidationErrors(errors) {
+    const container = document.getElementById('validation-errors');
+
+    let html = '<div class="validation-error">';
+    html += '<strong>❌ Errori di Validazione:</strong><ul>';
+
+    errors.forEach(err => {
+      html += `<li>${err}</li>`;
+    });
+
+    html += '</ul></div>';
+
+    container.innerHTML = html;
+  }
+
+  /**
+   * Clear errori di validazione
+   */
+  function clearValidationErrors() {
+    document.getElementById('validation-errors').innerHTML = '';
+  }
+
+  // Carica regole al caricamento pagina
+  document.addEventListener('DOMContentLoaded', () => {
+    loadRules();
+  });
+</script>
+
+</body>
+</html>
