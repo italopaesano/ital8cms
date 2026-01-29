@@ -93,10 +93,19 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       },
       handler: async (ctx) => {//
         const { username, password, referrerTo } = ctx.request.body;
-        if( await libAccess.autenticate( username, password ) ){// login riuscito 
+        if( await libAccess.autenticate( username, password ) ){// login riuscito
+
+          // Carica dati completi utente da userAccount.json5
+          const userAccountPath = path.join(__dirname, 'userAccount.json5');
+          const usersData = loadJson5(userAccountPath);
+          const userData = usersData.users[username];
 
           ctx.session.authenticated = true;
-          ctx.session.user = { name: username };// inizializzo una sessione
+          ctx.session.user = {
+            username: username, // Nome utente
+            email: userData.email, // Email
+            roleIds: userData.roleIds || [] // Array di ruoli (con fallback per compatibilità)
+          };
           if(pluginConfig.custom.redirectToHttpReferer){// se è impostata questa variabile la redirezione avverrà nella pagina dalla quale è partita il click per l appagina di login
             ctx.redirect(referrerTo);
           }else{// altrimenti rediriggo la pagina in un url di default definito nella configurazione

@@ -91,7 +91,9 @@ class AccessManager {
 
     // 4. Verifica ruoli
     if (rule.requiresAuth && rule.allowedRoles && rule.allowedRoles.length > 0) {
-      const userRoles = user.roleIds || [];
+      // Gestisci sia roleIds (array) che roleId (singolo) per backward compatibility
+      const userRoles = user.roleIds ||
+                        (user.roleId !== undefined ? [user.roleId] : []);
       const hasRequiredRole = userRoles.some(roleId => rule.allowedRoles.includes(roleId));
 
       if (!hasRequiredRole) {
@@ -176,8 +178,18 @@ class AccessManager {
       const url = ctx.path;
       const user = ctx.session?.user || null;
 
+      // DEBUG: Log dettagliato della richiesta
+      console.log(`[AccessControl] Request: ${url}`);
+      console.log(`[AccessControl] Session authenticated: ${!!ctx.session?.authenticated}`);
+      console.log(`[AccessControl] User data:`, user);
+      if (user) {
+        console.log(`[AccessControl] User roleIds:`, user.roleIds);
+      }
+
       // Verifica accesso
       const accessResult = this.checkAccess(url, user);
+
+      console.log(`[AccessControl] Access result:`, accessResult);
 
       if (!accessResult.allowed) {
         // Accesso negato
@@ -223,7 +235,9 @@ class AccessManager {
 
     // Verifica ruoli
     if (requirements.allowedRoles && requirements.allowedRoles.length > 0) {
-      const userRoles = user?.roleIds || [];
+      // Gestisci sia roleIds (array) che roleId (singolo) per backward compatibility
+      const userRoles = user?.roleIds ||
+                        (user?.roleId !== undefined ? [user.roleId] : []);
       const hasRequiredRole = userRoles.some(roleId => requirements.allowedRoles.includes(roleId));
 
       if (!hasRequiredRole) {
