@@ -121,11 +121,9 @@ class RuleValidator {
         errors.push(`${sectionName}["${pattern}"]: "editable" must be boolean`);
       }
 
-      // Se da UI, verifica che hardcodedRules non siano state modificate
-      if (fromUI && sectionName === 'hardcodedRules') {
-        // L'UI non dovrebbe permettere modifiche, ma verifichiamo comunque
-        errors.push(`Cannot modify hardcodedRules via UI`);
-      }
+      // NOTA: Il controllo per hardcodedRules immutabili è fatto in validateFromUI()
+      // tramite confronto byte-per-byte dell'intera sezione (linee 295-301)
+      // Non serve controllare qui ogni singola regola
     }
 
     return errors;
