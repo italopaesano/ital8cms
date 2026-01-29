@@ -38,7 +38,13 @@
         <% if (passData.ctx.session?.authenticated) { %>
           <div class="alert alert-info">
             <strong>Utente:</strong> <%= passData.ctx.session.user.username %><br>
-            <strong>Ruoli:</strong> <%= passData.ctx.session.user.roleIds.join(', ') %>
+            <strong>Ruoli:</strong>
+            <%
+              // Gestisci sia roleIds (array) che roleId (singolo) per backward compatibility
+              const userRoles = passData.ctx.session.user.roleIds ||
+                                (passData.ctx.session.user.roleId !== undefined ? [passData.ctx.session.user.roleId] : []);
+            %>
+            <%= userRoles.length > 0 ? userRoles.join(', ') : 'Nessun ruolo assegnato' %>
           </div>
         <% } %>
 
