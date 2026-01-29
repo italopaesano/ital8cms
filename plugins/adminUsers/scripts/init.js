@@ -135,15 +135,19 @@ async function run(answers, context) {
     const userRolePath = path.join(pathPluginFolder, 'userRole.json5')
 
     // Leggi file esistenti o crea struttura vuota
-    let userAccounts = {}
+    let userAccounts = { users: {} }
     let userRoles = {}
 
     if (fs.existsSync(userAccountPath)) {
       try {
         userAccounts = loadJson5(userAccountPath)
+        // Assicura che esista la chiave "users"
+        if (!userAccounts.users) {
+          userAccounts.users = {}
+        }
       } catch (error) {
         logger.warning('File userAccount.json5 corrotto, creo nuovo file')
-        userAccounts = {}
+        userAccounts = { users: {} }
       }
     }
 
@@ -157,7 +161,7 @@ async function run(answers, context) {
     }
 
     // Verifica se username già esistente
-    if (userAccounts[answers.username]) {
+    if (userAccounts.users[answers.username]) {
       return {
         success: false,
         message: `Username "${answers.username}" già esistente. Utilizza un altro username o elimina l'utente esistente.`
@@ -168,8 +172,8 @@ async function run(answers, context) {
     logger.info('Generazione hash password...')
     const hashedPassword = await bcrypt.hash(answers.password, 10)
 
-    // Crea utente root
-    userAccounts[answers.username] = {
+    // Crea utente root (con struttura corretta usando "users")
+    userAccounts.users[answers.username] = {
       email: answers.email,
       hashPassword: hashedPassword,
       roleIds: [0] // Root role (roleId 0 = massimi privilegi)

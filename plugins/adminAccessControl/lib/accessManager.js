@@ -178,8 +178,18 @@ class AccessManager {
       const url = ctx.path;
       const user = ctx.session?.user || null;
 
+      // DEBUG: Log dettagliato della richiesta
+      console.log(`[AccessControl] Request: ${url}`);
+      console.log(`[AccessControl] Session authenticated: ${!!ctx.session?.authenticated}`);
+      console.log(`[AccessControl] User data:`, user);
+      if (user) {
+        console.log(`[AccessControl] User roleIds:`, user.roleIds);
+      }
+
       // Verifica accesso
       const accessResult = this.checkAccess(url, user);
+
+      console.log(`[AccessControl] Access result:`, accessResult);
 
       if (!accessResult.allowed) {
         // Accesso negato
