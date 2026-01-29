@@ -91,7 +91,7 @@ module.exports = {
   /**
    * API Endpoints per gestione regole
    */
-  getRouteArray(router, pluginSys, pathPluginFolder) {
+  getRouteArray() {
     return [
       // GET /api/adminAccessControl/rules - Ottieni tutte le regole
       {
