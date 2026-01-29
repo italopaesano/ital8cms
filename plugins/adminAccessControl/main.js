@@ -186,8 +186,8 @@ module.exports = {
               return;
             }
 
-            // Salva regole
-            const saveResult = accessManager.saveRules(validation.parsed);
+            // Salva regole (passa la stringa JSON5 originale per preservare commenti e formattazione)
+            const saveResult = accessManager.saveRules(jsonContent);
 
             if (!saveResult.success) {
               ctx.status = 500;
