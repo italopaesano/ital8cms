@@ -13,6 +13,12 @@
   // La validazione impedisce qualsiasi modifica della sezione hardcodedRules via UI.
   // ==========================================================================
   "hardcodedRules": {
+    "/admin": {
+      "requiresAuth": true,
+      "allowedRoles": [0, 1], // root (0), admin (1)
+      "priority": 1000, // Higher priority than /admin/** (exact match wins)
+      "editable": false
+    },
     "/admin/**": {
       "requiresAuth": true,
       "allowedRoles": [0, 1], // root (0), admin (1)
