@@ -256,17 +256,18 @@ class AccessManager {
 
   /**
    * Salva regole modificate da admin UI
-   * @param {object} newConfig - Nuova configurazione completa
+   * @param {string} jsonString - Stringa JSON5 completa (già validata)
    * @returns {object} - { success: boolean, error: string|null }
    */
-  saveRules(newConfig) {
+  saveRules(jsonString) {
     try {
       const fs = require('fs');
       const configPath = path.join(this.pathPluginFolder, 'accessControl.json5');
 
       // Scrivi file (con backup temporaneo)
+      // Salva la stringa JSON5 originale per preservare commenti e formattazione
       const tempPath = configPath + '.tmp';
-      fs.writeFileSync(tempPath, JSON.stringify(newConfig, null, 2), 'utf8');
+      fs.writeFileSync(tempPath, jsonString, 'utf8');
       fs.renameSync(tempPath, configPath);
 
       // Reload regole
