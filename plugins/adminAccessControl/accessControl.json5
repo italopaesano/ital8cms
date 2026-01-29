@@ -48,13 +48,11 @@
   // In caso di conflitto, la regola più specifica vince.
   // ==========================================================================
   "customRules": {
-    // Esempio di regola custom (rimuovi se non necessaria)
-    // "/dashboard.ejs": {
-    //   "requiresAuth": true,
-    //   "allowedRoles": [0, 1, 2, 3], // Tutti i ruoli autenticati
-    //   "priority": 50,
-    //   "editable": true
-    // }
+    // Pagina profilo utente: accessibile solo a utenti autenticati (qualsiasi ruolo)
+    "/pluginPages/adminUsers/userProfile.ejs": {
+      "requiresAuth": true,
+      "allowedRoles": [] // Tutti gli utenti autenticati
+    }
   },
 
   // ==========================================================================
