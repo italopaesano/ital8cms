@@ -91,7 +91,9 @@ class AccessManager {
 
     // 4. Verifica ruoli
     if (rule.requiresAuth && rule.allowedRoles && rule.allowedRoles.length > 0) {
-      const userRoles = user.roleIds || [];
+      // Gestisci sia roleIds (array) che roleId (singolo) per backward compatibility
+      const userRoles = user.roleIds ||
+                        (user.roleId !== undefined ? [user.roleId] : []);
       const hasRequiredRole = userRoles.some(roleId => rule.allowedRoles.includes(roleId));
 
       if (!hasRequiredRole) {
@@ -223,7 +225,9 @@ class AccessManager {
 
     // Verifica ruoli
     if (requirements.allowedRoles && requirements.allowedRoles.length > 0) {
-      const userRoles = user?.roleIds || [];
+      // Gestisci sia roleIds (array) che roleId (singolo) per backward compatibility
+      const userRoles = user?.roleIds ||
+                        (user?.roleId !== undefined ? [user.roleId] : []);
       const hasRequiredRole = userRoles.some(roleId => requirements.allowedRoles.includes(roleId));
 
       if (!hasRequiredRole) {
