@@ -41,6 +41,7 @@ class pluginSys{
         // Aggiungi metadata al plugin object per uso futuro
         plugin.pluginName = pluginName;
         plugin.pathPluginFolder = pathPluginFolder;
+        plugin.pluginConfig = pluginConfig;  // Aggiungi pluginConfig (necessario per adminSystem.getMenuSections())
 
         // setto i plugin attivi prima del loading e dell'onstall i modo che ,, una volta caricati gliogeti condivisi questi potranno essere utilizati nel loading e nell'install
         this.#activePlugins.set( pluginName, plugin);//pluginName è il nome del plugin oltre che aggiungo il plugin alla lista dei plugin attivi
@@ -67,7 +68,7 @@ class pluginSys{
             throw installError; // Rilancia per gestione esterna
           }
           pluginConfig.isInstalled = 1;//ora devo aggiornare pluginConfig.json5 settando isInstalled = 1
-          plugin.pluginConfig = pluginConfig ;// aggiorno anche l'ogetto interno al plugin
+          // plugin.pluginConfig è già impostato sopra (linea 43)
 
           // scrivo il nuovo file pluginConfig.json5 con la variabile isInstalled aggiornata correttamente
           // IMPORTANTE: Usa saveJson5() per preservare il formato JSON5 con commenti
