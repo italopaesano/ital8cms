@@ -95,7 +95,7 @@ module.exports = {
     return [
       // GET /api/adminAccessControl/rules - Ottieni tutte le regole
       {
-        method: 'get',
+        method: 'GET',
         path: '/rules',
         access: {
           requiresAuth: true,
@@ -121,7 +121,7 @@ module.exports = {
 
       // GET /api/adminAccessControl/rules-json - Ottieni JSON5 completo come stringa
       {
-        method: 'get',
+        method: 'GET',
         path: '/rules-json',
         access: {
           requiresAuth: true,
@@ -150,7 +150,7 @@ module.exports = {
 
       // POST /api/adminAccessControl/rules - Salva regole modificate
       {
-        method: 'post',
+        method: 'POST',
         path: '/rules',
         access: {
           requiresAuth: true,
@@ -215,7 +215,7 @@ module.exports = {
 
       // POST /api/adminAccessControl/test-access - Testa accesso per URL e ruolo
       {
-        method: 'post',
+        method: 'POST',
         path: '/test-access',
         access: {
           requiresAuth: true,
