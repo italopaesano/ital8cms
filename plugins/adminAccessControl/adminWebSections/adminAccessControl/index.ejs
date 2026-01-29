@@ -108,11 +108,18 @@
         <div class="card">
           <div class="card-header bg-primary text-white">
             <strong>📝 Editor Regole (JSON5)</strong>
+            <span class="badge bg-light text-dark ms-2">File: accessControl.json5</span>
             <button class="btn btn-sm btn-light float-end" onclick="loadRules()">
               🔄 Ricarica
             </button>
           </div>
           <div class="card-body">
+            <!-- Info file -->
+            <div class="alert alert-info">
+              <strong>📄 File:</strong> <code>/plugins/adminAccessControl/accessControl.json5</code><br>
+              <small class="text-muted">Questo file contiene tutte le regole di accesso del sistema (hardcoded + custom)</small>
+            </div>
+
             <!-- Warning hardcoded rules -->
             <div class="alert alert-warning">
               <strong>⚠️ ATTENZIONE:</strong> La sezione <code>hardcodedRules</code> è di sola lettura.
