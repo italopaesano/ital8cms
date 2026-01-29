@@ -339,13 +339,8 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         allowedRoles: [] // Tutti gli utenti autenticati (qualsiasi ruolo)
       },
       handler: async (ctx) => {
-        // Usa username dalla sessione se loggato, altrimenti da query string per testing
-        let username;
-        if (ctx.session && ctx.session.authenticated && ctx.session.user) {
-          username = ctx.session.user.name; // Utente loggato
-        } else {
-          username = ctx.query.username || 'testuser'; // Testing senza login
-        }
+        // Usa username dalla sessione (solo utenti autenticati)
+        const username = ctx.session.user.username;
 
         const userFilePath = path.join(__dirname, 'userAccount.json5');
 
@@ -359,11 +354,24 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
             return;
           }
 
+          // Carica i ruoli con nome e descrizione
+          const roleFilePath = path.join(__dirname, 'userRole.json5');
+          const roleData = loadJson5(roleFilePath);
+          const rolesDetails = (userData.roleIds || []).map(roleId => {
+            const role = roleData.roles[String(roleId)];
+            return {
+              id: roleId,
+              name: role ? role.name : `ruolo_${roleId}`,
+              description: role ? role.description : 'Ruolo non trovato'
+            };
+          });
+
           // Non esporre la password hashata
           ctx.body = {
             username,
             email: userData.email,
-            roleIds: userData.roleIds
+            roleIds: userData.roleIds,
+            roles: rolesDetails
           };
         } catch (error) {
           ctx.status = 500;
@@ -381,15 +389,10 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         allowedRoles: [] // Tutti gli utenti autenticati possono modificare il proprio profilo
       },
       handler: async (ctx) => {
-        // Usa username dalla sessione se loggato, altrimenti da body per testing
-        let currentUsername;
-        if (ctx.session && ctx.session.authenticated && ctx.session.user) {
-          currentUsername = ctx.session.user.name; // Utente loggato
-        } else {
-          currentUsername = ctx.request.body.currentUsername; // Testing senza login
-        }
+        // Usa username dalla sessione (solo utenti autenticati)
+        const currentUsername = ctx.session.user.username;
 
-        const { newUsername, newPassword, currentPassword } = ctx.request.body;
+        const { newUsername, newPassword, newEmail, currentPassword } = ctx.request.body;
 
         // Verifica che la password attuale sia stata fornita
         if (!currentPassword) {
@@ -401,9 +404,9 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         }
 
         // Verifica che almeno un campo sia da modificare
-        if (!newUsername && !newPassword) {
+        if (!newUsername && !newPassword && !newEmail) {
           ctx.body = {
-            error: 'Devi specificare almeno un campo da modificare (username o password).',
+            error: 'Devi specificare almeno un campo da modificare (username, email o password).',
             errorField: null
           };
           return;
@@ -432,6 +435,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
           }
 
           let successMessages = [];
+          let usernameChanged = false;
 
           // Modifica username se fornito
           if (newUsername && newUsername !== currentUsername) {
@@ -465,7 +469,26 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
             userAccount.users[newUsername] = { ...userAccount.users[currentUsername] };
             delete userAccount.users[currentUsername];
 
+            usernameChanged = true;
             successMessages.push('Username modificato con successo');
+          }
+
+          const targetUsername = (newUsername && newUsername !== currentUsername) ? newUsername : currentUsername;
+
+          // Modifica email se fornita
+          if (newEmail) {
+            // Validazione email
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(newEmail)) {
+              ctx.body = {
+                error: 'Formato email non valido.',
+                errorField: 'newEmail'
+              };
+              return;
+            }
+
+            userAccount.users[targetUsername].email = newEmail;
+            successMessages.push('Email modificata con successo');
           }
 
           // Modifica password se fornita
@@ -482,7 +505,6 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
             const bcrypt = require('bcryptjs');
             const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-            const targetUsername = newUsername || currentUsername;
             userAccount.users[targetUsername].hashPassword = hashedPassword;
 
             successMessages.push('Password modificata con successo');
@@ -491,14 +513,23 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
           // Salva le modifiche
           fs.writeFileSync(userFilePath, JSON.stringify(userAccount, null, 2), 'utf8');
 
-          // Se l'utente è loggato e ha cambiato username, aggiorna la sessione
-          if (ctx.session && ctx.session.authenticated && newUsername && newUsername !== currentUsername) {
-            ctx.session.user.name = newUsername;
-          }
+          // Se username cambiato, invalidare la sessione per forzare il re-login
+          if (usernameChanged) {
+            ctx.session = null;
+            ctx.body = {
+              success: successMessages.join('. ') + '. Verrai reindirizzato alla pagina di login.',
+              requireRelogin: true
+            };
+          } else {
+            // Aggiorna email nella sessione se modificata
+            if (newEmail) {
+              ctx.session.user.email = newEmail;
+            }
 
-          ctx.body = {
-            success: successMessages.join('. ') + '.'
-          };
+            ctx.body = {
+              success: successMessages.join('. ') + '.'
+            };
+          }
 
         } catch (error) {
           console.error('Errore aggiornamento profilo:', error);
@@ -530,7 +561,7 @@ function getHooksPage(){
       let message;
 
       if(passData.ctx.session.user){
-        message = `ciao ${passData.ctx.session.user.name} <br> <a href="/${ital8Conf.pluginPagesPrefix}/adminUsers/userProfile.ejs">🔐 Profilo</a> | <a href="/${ital8Conf.pluginPagesPrefix}/adminUsers/logout.ejs">Logout</a>` ;
+        message = `ciao ${passData.ctx.session.user.username} <br> <a href="/${ital8Conf.pluginPagesPrefix}/adminUsers/userProfile.ejs">Profilo</a> | <a href="/${ital8Conf.pluginPagesPrefix}/adminUsers/logout.ejs">Logout</a>` ;
       }else{
         message = `non sei loggato <br> <a href="/${ital8Conf.pluginPagesPrefix}/adminUsers/login.ejs">Login</a>`;
       }

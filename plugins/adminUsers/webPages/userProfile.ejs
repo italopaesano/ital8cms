@@ -4,8 +4,9 @@
   Template standard: Plugin Pages System
   Customization: themes/{themeName}/pluginsEndpointsMarkup/adminUsers/userProfile/
 
-  TEMPLATE PER LA MODIFICA DEL PROFILO UTENTE (username e password)
-  Permette all'utente loggato di modificare i propri dati
+  PROFILO UTENTE - Solo utenti autenticati
+  Tab "Profilo": visualizzazione dati (username, email mascherata, ruoli con descrizione)
+  Tab "Modifica Credenziali": 3 sezioni indipendenti (username, email, password)
 -->
 <!DOCTYPE html>
 <html lang="it">
@@ -19,7 +20,7 @@
 <!-- Inject theme custom JS for this specific plugin page -->
 <%- passData.themeSys.injectPluginJs() %>
 
-<title>Modifica Profilo - ital8cms</title>
+<title>Profilo Utente - ital8cms</title>
 </head>
 
 <body class="plugin-page plugin-adminUsers page-userProfile">
@@ -30,113 +31,171 @@
 <!-- Inject custom HTML BEFORE main content (from theme) -->
 <%- passData.themeSys.injectPluginHtmlBefore() %>
 
-<!-- Dati sessione (JSON nascosto per JavaScript) -->
 <%
-// Costruisci oggetto session da passData.ctx.session
-const session = {
-  isAuthenticated: passData.ctx.session && passData.ctx.session.authenticated ? true : false,
-  username: passData.ctx.session && passData.ctx.session.user ? passData.ctx.session.user.name : null
-};
+// Redirect server-side se non autenticato
+if (!passData.ctx.session || !passData.ctx.session.authenticated || !passData.ctx.session.user) {
+  // Il redirect viene gestito dalla regola accessControl, ma come fallback:
+  // non renderizziamo il contenuto protetto
+}
+const isAuthenticated = passData.ctx.session && passData.ctx.session.authenticated && passData.ctx.session.user;
+const sessionUsername = isAuthenticated ? passData.ctx.session.user.username : null;
 %>
+
+<% if (!isAuthenticated) { %>
+<!-- Fallback: se l'utente non è autenticato mostra un messaggio -->
+<main class="container mt-5">
+  <div class="card border-warning">
+    <div class="card-body text-center">
+      <h5 class="card-title">Accesso richiesto</h5>
+      <p class="card-text">Devi effettuare il login per accedere al tuo profilo.</p>
+      <a href="/<%= passData.pluginPagesPrefix %>/adminUsers/login.ejs" class="btn btn-primary">Vai al Login</a>
+    </div>
+  </div>
+</main>
+<% } else { %>
+
+<!-- Dati sessione per JavaScript -->
 <script id="sessionData" type="application/json">
-<%- JSON.stringify(session) %>
+<%- JSON.stringify({ username: sessionUsername }) %>
 </script>
 
-<!-- Main plugin content -->
+<main class="container mt-4 mb-5">
 
-<main class="container mt-4">
-    <div class="text-center mb-4">
-        <h1>🔐 Modifica Profilo Utente</h1>
-        <p class="text-muted">Aggiorna il tuo username e la tua password</p>
+  <!-- Navigazione superiore -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Profilo Utente</h2>
+    <div class="d-flex gap-2">
+      <a href="/" class="btn btn-outline-secondary btn-sm">Home</a>
+      <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.history.back()">Indietro</button>
+    </div>
+  </div>
+
+  <!-- Alert messaggi -->
+  <div id="alertContainer"></div>
+
+  <!-- Tabs -->
+  <ul class="nav nav-tabs" id="profileTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="tab-profilo" data-bs-toggle="tab" data-bs-target="#panel-profilo" type="button" role="tab" aria-controls="panel-profilo" aria-selected="true">Profilo</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-modifica" data-bs-toggle="tab" data-bs-target="#panel-modifica" type="button" role="tab" aria-controls="panel-modifica" aria-selected="false">Modifica Credenziali</button>
+    </li>
+  </ul>
+
+  <div class="tab-content border border-top-0 rounded-bottom p-4" id="profileTabContent">
+
+    <!-- ========== TAB PROFILO ========== -->
+    <div class="tab-pane fade show active" id="panel-profilo" role="tabpanel" aria-labelledby="tab-profilo">
+
+      <!-- Username -->
+      <div class="mb-3">
+        <label class="form-label fw-bold">Username</label>
+        <p class="form-control-plaintext" id="profileUsername">Caricamento...</p>
+      </div>
+
+      <!-- Email (mascherata) -->
+      <div class="mb-3">
+        <label class="form-label fw-bold">Email</label>
+        <div class="d-flex align-items-center gap-2">
+          <span id="profileEmailMasked" class="form-control-plaintext">Caricamento...</span>
+          <button type="button" class="btn btn-outline-secondary btn-sm" id="btnToggleEmail" onclick="toggleEmailVisibility()" style="display:none;">Mostra</button>
+        </div>
+        <span id="profileEmailFull" class="form-control-plaintext" style="display:none;"></span>
+      </div>
+
+      <!-- Ruoli -->
+      <div class="mb-3">
+        <label class="form-label fw-bold">Ruoli assegnati</label>
+        <div id="profileRoles">Caricamento...</div>
+      </div>
+
     </div>
 
-    <!-- Alert messaggi -->
-    <div id="alertContainer"></div>
+    <!-- ========== TAB MODIFICA CREDENZIALI ========== -->
+    <div class="tab-pane fade" id="panel-modifica" role="tabpanel" aria-labelledby="tab-modifica">
 
-    <!-- Form modifica profilo -->
-    <form id="userProfileForm" class="mt-3">
-        <!-- Username da cercare (per testing senza autenticazione) - nascosto se loggato -->
-        <div class="card mb-3 border-warning" id="testingCard">
-            <div class="card-header bg-warning text-dark">
-                <h5 class="mb-0">⚙️ Testing (senza autenticazione)</h5>
-            </div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <label for="testUsername" class="form-label">Username da modificare</label>
-                    <input type="text" class="form-control" id="testUsername" value="testuser" placeholder="Inserisci username">
-                    <small class="form-text text-muted">Inserisci lo username dell'utente da modificare (es: testuser)</small>
-                </div>
-                <button type="button" class="btn btn-warning" onclick="loadCurrentUserData()">🔄 Carica Dati Utente</button>
-            </div>
+      <!-- Sezione 1: Modifica Username -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <h6 class="mb-0">Modifica Username</h6>
         </div>
+        <div class="card-body">
+          <div class="alert alert-info" role="alert">
+            Dopo la modifica dell'username verrai disconnesso e dovrai effettuare nuovamente il login con il nuovo username.
+          </div>
+          <form id="formUsername" novalidate>
+            <div class="mb-3">
+              <label for="newUsername" class="form-label">Nuovo Username</label>
+              <input type="text" class="form-control" id="newUsername" placeholder="Minimo 3 caratteri, lettere, numeri, _ e -" minlength="3" pattern="^[a-zA-Z0-9_-]+$" required>
+              <div class="form-text">Minimo 3 caratteri. Solo lettere, numeri, underscore (_) e trattini (-).</div>
+            </div>
+            <div class="mb-3">
+              <label for="pwdForUsername" class="form-label">Password attuale <span class="text-danger">*</span></label>
+              <input type="password" class="form-control" id="pwdForUsername" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Salva Username</button>
+          </form>
+        </div>
+      </div>
 
-        <!-- Informazioni utente corrente -->
-        <div class="card mb-3">
-            <div class="card-header bg-info text-white">
-                <h5 class="mb-0">👤 Informazioni Attuali</h5>
-            </div>
-            <div class="card-body">
-                <p><strong>Username attuale:</strong> <span id="currentUsername">-</span></p>
-                <p><strong>Email:</strong> <span id="currentEmail">-</span></p>
-                <p class="text-muted mb-0">
-                    <small>💡 Per motivi di sicurezza, dovrai inserire la tua password attuale per confermare le modifiche.</small>
-                </p>
-            </div>
+      <!-- Sezione 2: Modifica Email -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <h6 class="mb-0">Modifica Email</h6>
         </div>
+        <div class="card-body">
+          <form id="formEmail" novalidate>
+            <div class="mb-3">
+              <label for="newEmail" class="form-label">Nuova Email</label>
+              <input type="email" class="form-control" id="newEmail" placeholder="esempio@dominio.com" required>
+            </div>
+            <div class="mb-3">
+              <label for="pwdForEmail" class="form-label">Password attuale <span class="text-danger">*</span></label>
+              <input type="password" class="form-control" id="pwdForEmail" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Salva Email</button>
+          </form>
+        </div>
+      </div>
 
-        <!-- Sezione modifica username -->
-        <div class="card mb-3">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">📝 Modifica Username</h5>
-            </div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <label for="newUsername" class="form-label">Nuovo Username</label>
-                    <input type="text" class="form-control" id="newUsername" placeholder="Inserisci nuovo username (lascia vuoto per mantenere attuale)">
-                    <small class="form-text text-muted">Minimo 3 caratteri, solo lettere, numeri, underscore e trattini</small>
-                </div>
-            </div>
+      <!-- Sezione 3: Modifica Password -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <h6 class="mb-0">Modifica Password</h6>
         </div>
+        <div class="card-body">
+          <form id="formPassword" novalidate>
+            <div class="mb-3">
+              <label for="newPassword" class="form-label">Nuova Password</label>
+              <input type="password" class="form-control" id="newPassword" placeholder="Minimo 6 caratteri (8 raccomandati)" minlength="6" required>
+              <div class="form-text">Minimo 6 caratteri. Si raccomandano almeno 8 caratteri.</div>
+            </div>
+            <div class="mb-3">
+              <label for="confirmPassword" class="form-label">Conferma Nuova Password</label>
+              <input type="password" class="form-control" id="confirmPassword" required>
+            </div>
+            <div class="mb-3">
+              <label for="pwdForPassword" class="form-label">Password attuale <span class="text-danger">*</span></label>
+              <input type="password" class="form-control" id="pwdForPassword" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Salva Password</button>
+          </form>
+        </div>
+      </div>
 
-        <!-- Sezione modifica password -->
-        <div class="card mb-3">
-            <div class="card-header bg-warning text-dark">
-                <h5 class="mb-0">🔑 Modifica Password</h5>
-            </div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <label for="newPassword" class="form-label">Nuova Password</label>
-                    <input type="password" class="form-control" id="newPassword" placeholder="Inserisci nuova password (lascia vuoto per mantenere attuale)">
-                    <small class="form-text text-muted">Minimo 8 caratteri raccomandati</small>
-                </div>
-                <div class="mb-3">
-                    <label for="confirmPassword" class="form-label">Conferma Nuova Password</label>
-                    <input type="password" class="form-control" id="confirmPassword" placeholder="Reinserisci la nuova password">
-                </div>
-            </div>
-        </div>
+    </div>
+  </div>
 
-        <!-- Password attuale (richiesta per confermare modifiche) -->
-        <div class="card mb-3">
-            <div class="card-header bg-danger text-white">
-                <h5 class="mb-0">🔒 Conferma Identità</h5>
-            </div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <label for="currentPassword" class="form-label">Password Attuale <span class="text-danger">*</span></label>
-                    <input type="password" class="form-control" id="currentPassword" placeholder="Inserisci la tua password attuale" required>
-                    <small class="form-text text-danger">Obbligatorio per confermare le modifiche</small>
-                </div>
-            </div>
-        </div>
+  <!-- Navigazione inferiore -->
+  <div class="d-flex justify-content-end gap-2 mt-3">
+    <a href="/" class="btn btn-outline-secondary btn-sm">Home</a>
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.history.back()">Indietro</button>
+  </div>
 
-        <!-- Pulsanti azione -->
-        <div class="d-flex gap-2">
-            <button type="submit" class="btn btn-success">💾 Salva Modifiche</button>
-            <button type="button" class="btn btn-secondary" onclick="window.history.back()">❌ Annulla</button>
-        </div>
-    </form>
 </main>
+
+<% } %>
 
 <!-- Inject custom HTML AFTER main content (from theme) -->
 <%- passData.themeSys.injectPluginHtmlAfter() %>
@@ -144,226 +203,229 @@ const session = {
 <!-- Include theme footer partial (scripts, closing tags) -->
 <%- include(passData.themeSys.getThemePartPath('footer.ejs')) %>
 
-<!-- Page-specific JavaScript -->
+<% if (isAuthenticated) { %>
 <script>
-    let currentUserData = {};
+  const apiPrefix = '<%= passData.apiPrefix %>';
+  const loginUrl = '/<%= passData.pluginPagesPrefix %>/adminUsers/login.ejs';
+  let currentUserData = {};
+  let emailVisible = false;
 
-    // Leggi dati sessione dal JSON nascosto
-    const sessionData = JSON.parse(document.getElementById('sessionData').textContent);
-    const isAuthenticated = sessionData.isAuthenticated;
-    const sessionUsername = sessionData.username;
+  // --- Utility ---
 
-    // Inizializza la pagina in base allo stato di autenticazione
-    window.addEventListener('DOMContentLoaded', () => {
-        if (isAuthenticated && sessionUsername) {
-            // Utente loggato: nascondi il card di testing e carica automaticamente
-            document.getElementById('testingCard').style.display = 'none';
-            document.getElementById('testUsername').value = sessionUsername;
-            loadCurrentUserData();
-            showAlert(`👋 Benvenuto ${sessionUsername}! Modifica il tuo profilo qui sotto.`, 'info');
+  function showAlert(message, type) {
+    const container = document.getElementById('alertContainer');
+    container.innerHTML = '<div class="alert alert-' + type + ' alert-dismissible fade show" role="alert">' +
+      message +
+      '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Chiudi"></button>' +
+      '</div>';
+    container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (type === 'success') {
+      setTimeout(() => { container.innerHTML = ''; }, 5000);
+    }
+  }
+
+  function maskEmail(email) {
+    if (!email) return '-';
+    const parts = email.split('@');
+    if (parts.length !== 2) return email;
+    const local = parts[0];
+    const domain = parts[1];
+    const visibleChars = Math.min(2, local.length);
+    return local.substring(0, visibleChars) + '***@' + domain;
+  }
+
+  function toggleEmailVisibility() {
+    emailVisible = !emailVisible;
+    const maskedEl = document.getElementById('profileEmailMasked');
+    const fullEl = document.getElementById('profileEmailFull');
+    const btn = document.getElementById('btnToggleEmail');
+    if (emailVisible) {
+      maskedEl.style.display = 'none';
+      fullEl.style.display = '';
+      btn.textContent = 'Nascondi';
+    } else {
+      maskedEl.style.display = '';
+      fullEl.style.display = 'none';
+      btn.textContent = 'Mostra';
+    }
+  }
+
+  // --- Caricamento dati profilo ---
+
+  async function loadProfile() {
+    try {
+      const response = await fetch('/' + apiPrefix + '/adminUsers/getCurrentUser');
+      if (!response.ok) throw new Error('Errore nel caricamento del profilo');
+      currentUserData = await response.json();
+
+      // Username
+      document.getElementById('profileUsername').textContent = currentUserData.username;
+
+      // Email mascherata
+      document.getElementById('profileEmailMasked').textContent = maskEmail(currentUserData.email);
+      document.getElementById('profileEmailFull').textContent = currentUserData.email || '-';
+      document.getElementById('btnToggleEmail').style.display = '';
+      // Reset visibilità email
+      emailVisible = false;
+      document.getElementById('profileEmailMasked').style.display = '';
+      document.getElementById('profileEmailFull').style.display = 'none';
+      document.getElementById('btnToggleEmail').textContent = 'Mostra';
+
+      // Ruoli
+      const rolesContainer = document.getElementById('profileRoles');
+      if (currentUserData.roles && currentUserData.roles.length > 0) {
+        rolesContainer.innerHTML = currentUserData.roles.map(function(role) {
+          return '<div class="d-flex align-items-start mb-2">' +
+            '<span class="badge bg-secondary me-2 mt-1">' + role.name + '</span>' +
+            '<small class="text-muted">' + role.description + '</small>' +
+            '</div>';
+        }).join('');
+      } else {
+        rolesContainer.innerHTML = '<span class="text-muted">Nessun ruolo assegnato</span>';
+      }
+    } catch (error) {
+      showAlert('Errore nel caricamento del profilo: ' + error.message, 'danger');
+    }
+  }
+
+  // --- Submit: Modifica Username ---
+
+  document.getElementById('formUsername').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const newUsername = document.getElementById('newUsername').value.trim();
+    const currentPassword = document.getElementById('pwdForUsername').value;
+
+    if (!newUsername || newUsername.length < 3) {
+      showAlert('Il nuovo username deve contenere almeno 3 caratteri.', 'warning');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(newUsername)) {
+      showAlert('Il nuovo username può contenere solo lettere, numeri, underscore e trattini.', 'warning');
+      return;
+    }
+    if (!currentPassword) {
+      showAlert('Inserisci la password attuale per confermare.', 'warning');
+      return;
+    }
+
+    try {
+      const response = await fetch('/' + apiPrefix + '/adminUsers/updateUserProfile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newUsername: newUsername, currentPassword: currentPassword })
+      });
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        if (result.requireRelogin) {
+          showAlert(result.success, 'success');
+          setTimeout(function() { window.location.href = loginUrl; }, 2000);
         } else {
-            // Utente non loggato: mostra il card di testing
-            document.getElementById('testingCard').style.display = 'block';
-            showAlert('⚠️ Non sei loggato. Puoi testare la funzionalità specificando manualmente uno username.', 'warning');
+          showAlert(result.success, 'success');
+          document.getElementById('formUsername').reset();
+          loadProfile();
         }
-    });
-
-    // Carica dati utente corrente
-    async function loadCurrentUserData() {
-        try {
-            let url;
-            if (isAuthenticated && sessionUsername) {
-                // Utente loggato: usa endpoint senza parametri (userà sessione)
-                url = `/${apiPrefix}/adminUsers/getCurrentUser`;
-            } else {
-                // Testing: usa username da input
-                const username = document.getElementById('testUsername').value;
-                if (!username) {
-                    showAlert('⚠️ Inserisci uno username valido', 'warning');
-                    return;
-                }
-                url = `/${apiPrefix}/adminUsers/getCurrentUser?username=${encodeURIComponent(username)}`;
-            }
-
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error('Errore caricamento dati utente');
-            }
-
-            currentUserData = await response.json();
-
-            // Popola i campi informativi
-            document.getElementById('currentUsername').textContent = currentUserData.username || 'N/A';
-            document.getElementById('currentEmail').textContent = currentUserData.email || 'N/A';
-
-            if (!isAuthenticated) {
-                showAlert('✅ Dati utente caricati con successo', 'success');
-            }
-
-        } catch (error) {
-            console.error('Errore caricamento dati utente:', error);
-            showAlert('❌ Errore nel caricamento dei dati utente: ' + error.message, 'danger');
+      } else if (result.error) {
+        showAlert(result.error, 'danger');
+        if (result.errorField) {
+          const field = document.getElementById(result.errorField);
+          if (field) { field.classList.add('is-invalid'); field.focus(); setTimeout(function() { field.classList.remove('is-invalid'); }, 3000); }
         }
+      }
+    } catch (error) {
+      showAlert('Errore nella modifica dell\'username: ' + error.message, 'danger');
+    }
+  });
+
+  // --- Submit: Modifica Email ---
+
+  document.getElementById('formEmail').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const newEmail = document.getElementById('newEmail').value.trim();
+    const currentPassword = document.getElementById('pwdForEmail').value;
+
+    if (!newEmail) {
+      showAlert('Inserisci la nuova email.', 'warning');
+      return;
+    }
+    if (!currentPassword) {
+      showAlert('Inserisci la password attuale per confermare.', 'warning');
+      return;
     }
 
-    // Mostra alert messaggi
-    function showAlert(message, type = 'info') {
-        const alertContainer = document.getElementById('alertContainer');
-        const alertDiv = document.createElement('div');
-        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-        alertDiv.innerHTML = `
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        alertContainer.innerHTML = '';
-        alertContainer.appendChild(alertDiv);
+    try {
+      const response = await fetch('/' + apiPrefix + '/adminUsers/updateUserProfile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newEmail: newEmail, currentPassword: currentPassword })
+      });
+      const result = await response.json();
 
-        // Scroll alla vista
-        alertContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-        // Auto-dismiss dopo 5 secondi
-        if (type === 'success') {
-            setTimeout(() => {
-                alertDiv.remove();
-            }, 5000);
+      if (response.ok && result.success) {
+        showAlert(result.success, 'success');
+        document.getElementById('formEmail').reset();
+        loadProfile();
+      } else if (result.error) {
+        showAlert(result.error, 'danger');
+        if (result.errorField) {
+          const field = document.getElementById(result.errorField);
+          if (field) { field.classList.add('is-invalid'); field.focus(); setTimeout(function() { field.classList.remove('is-invalid'); }, 3000); }
         }
+      }
+    } catch (error) {
+      showAlert('Errore nella modifica dell\'email: ' + error.message, 'danger');
+    }
+  });
+
+  // --- Submit: Modifica Password ---
+
+  document.getElementById('formPassword').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    const currentPassword = document.getElementById('pwdForPassword').value;
+
+    if (!newPassword || newPassword.length < 6) {
+      showAlert('La nuova password deve contenere almeno 6 caratteri.', 'warning');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showAlert('Le password non coincidono.', 'warning');
+      document.getElementById('confirmPassword').focus();
+      return;
+    }
+    if (!currentPassword) {
+      showAlert('Inserisci la password attuale per confermare.', 'warning');
+      return;
     }
 
-    // Validazione form
-    function validateForm() {
-        const newUsername = document.getElementById('newUsername').value.trim();
-        const newPassword = document.getElementById('newPassword').value;
-        const confirmPassword = document.getElementById('confirmPassword').value;
-        const currentPassword = document.getElementById('currentPassword').value;
+    try {
+      const response = await fetch('/' + apiPrefix + '/adminUsers/updateUserProfile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword: newPassword, currentPassword: currentPassword })
+      });
+      const result = await response.json();
 
-        // Verifica che almeno un campo sia compilato
-        if (!newUsername && !newPassword) {
-            showAlert('⚠️ Devi modificare almeno il username o la password.', 'warning');
-            return false;
+      if (response.ok && result.success) {
+        showAlert(result.success, 'success');
+        document.getElementById('formPassword').reset();
+      } else if (result.error) {
+        showAlert(result.error, 'danger');
+        if (result.errorField) {
+          const field = document.getElementById(result.errorField);
+          if (field) { field.classList.add('is-invalid'); field.focus(); setTimeout(function() { field.classList.remove('is-invalid'); }, 3000); }
         }
-
-        // Verifica password attuale obbligatoria
-        if (!currentPassword) {
-            showAlert('⚠️ La password attuale è obbligatoria per confermare le modifiche.', 'warning');
-            document.getElementById('currentPassword').focus();
-            return false;
-        }
-
-        // Validazione username (se modificato)
-        if (newUsername) {
-            if (newUsername.length < 3) {
-                showAlert('⚠️ Il nuovo username deve contenere almeno 3 caratteri.', 'warning');
-                document.getElementById('newUsername').focus();
-                return false;
-            }
-            if (!/^[a-zA-Z0-9_-]+$/.test(newUsername)) {
-                showAlert('⚠️ Il nuovo username può contenere solo lettere, numeri, underscore (_) e trattini (-).', 'warning');
-                document.getElementById('newUsername').focus();
-                return false;
-            }
-        }
-
-        // Validazione password (se modificata)
-        if (newPassword) {
-            if (newPassword.length < 6) {
-                showAlert('⚠️ La nuova password deve contenere almeno 6 caratteri (8 raccomandati).', 'warning');
-                document.getElementById('newPassword').focus();
-                return false;
-            }
-            if (newPassword !== confirmPassword) {
-                showAlert('⚠️ Le password non coincidono. Controlla e riprova.', 'warning');
-                document.getElementById('confirmPassword').focus();
-                return false;
-            }
-        }
-
-        return true;
+      }
+    } catch (error) {
+      showAlert('Errore nella modifica della password: ' + error.message, 'danger');
     }
+  });
 
-    // Gestione submit form
-    document.getElementById('userProfileForm').addEventListener('submit', async function (event) {
-        event.preventDefault();
-
-        // Validazione
-        if (!validateForm()) {
-            return;
-        }
-
-        const newUsername = document.getElementById('newUsername').value.trim() || null;
-        const newPassword = document.getElementById('newPassword').value || null;
-        const currentPassword = document.getElementById('currentPassword').value;
-
-        // Prepara body della richiesta
-        const requestBody = {
-            newUsername,
-            newPassword,
-            currentPassword
-        };
-
-        // Se NON è autenticato, aggiungi currentUsername dal campo di testing
-        if (!isAuthenticated) {
-            const currentUsername = document.getElementById('testUsername').value;
-            if (!currentUsername) {
-                showAlert('⚠️ Devi prima caricare i dati di un utente', 'warning');
-                return;
-            }
-            requestBody.currentUsername = currentUsername;
-        }
-        // Se è autenticato, il backend userà ctx.session.user.name
-
-        try {
-            const response = await fetch(`/${apiPrefix}/adminUsers/updateUserProfile`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(requestBody)
-            });
-
-            const result = await response.json();
-
-            if (response.ok && result.success) {
-                showAlert(`✅ ${result.success}`, 'success');
-
-                // Se username è cambiato, aggiorna il campo testUsername
-                if (newUsername) {
-                    document.getElementById('testUsername').value = newUsername;
-                    showAlert('⚠️ Username modificato! Aggiorna il campo "Username da modificare" se necessario.', 'info');
-                }
-
-                // Reset solo i campi di modifica (non il testUsername)
-                document.getElementById('newUsername').value = '';
-                document.getElementById('newPassword').value = '';
-                document.getElementById('confirmPassword').value = '';
-                document.getElementById('currentPassword').value = '';
-
-                // Ricarica dati utente
-                setTimeout(() => {
-                    loadCurrentUserData();
-                }, 1000);
-            } else if (result.error) {
-                showAlert(`❌ ${result.error}`, 'danger');
-
-                // Evidenzia campo con errore se specificato
-                if (result.errorField) {
-                    const field = document.getElementById(result.errorField);
-                    if (field) {
-                        field.classList.add('is-invalid');
-                        field.focus();
-                        setTimeout(() => field.classList.remove('is-invalid'), 3000);
-                    }
-                }
-            } else {
-                throw new Error('Risposta del server non valida');
-            }
-        } catch (error) {
-            console.error('Errore:', error);
-            showAlert(`❌ Errore nella modifica del profilo: ${error.message}`, 'danger');
-        }
-    });
-
-    // Non caricare automaticamente - l'utente deve cliccare il pulsante "Carica Dati Utente"
+  // --- Caricamento iniziale ---
+  document.addEventListener('DOMContentLoaded', loadProfile);
 </script>
+<% } %>
 
 </body>
 </html>
