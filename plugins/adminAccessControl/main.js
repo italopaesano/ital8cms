@@ -101,7 +101,7 @@ module.exports = {
           requiresAuth: true,
           allowedRoles: [0, 1] // Solo root e admin
         },
-        func: async (ctx) => {
+        handler: async (ctx) => {
           try {
             const rules = accessManager.getRulesForUI();
             ctx.body = {
@@ -127,7 +127,7 @@ module.exports = {
           requiresAuth: true,
           allowedRoles: [0, 1]
         },
-        func: async (ctx) => {
+        handler: async (ctx) => {
           try {
             const fs = require('fs');
             const configPath = path.join(pathPluginFolder, 'accessControl.json5');
@@ -156,7 +156,7 @@ module.exports = {
           requiresAuth: true,
           allowedRoles: [0, 1]
         },
-        func: async (ctx) => {
+        handler: async (ctx) => {
           try {
             const { jsonContent } = ctx.request.body;
 
@@ -221,7 +221,7 @@ module.exports = {
           requiresAuth: true,
           allowedRoles: [0, 1]
         },
-        func: async (ctx) => {
+        handler: async (ctx) => {
           try {
             const { url, roleIds } = ctx.request.body;
 
