@@ -1,0 +1,40 @@
+/* Theme customization: adminUsers/userProfile
+   Sfondo neutro chiaro con focus sulla leggibilità */
+
+/* Container principale con sfondo chiaro */
+.page-userProfile main.container {
+  background-color: #f8f9fa;
+  border-radius: 0.5rem;
+  padding: 2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Tabs: sfondo opaco per leggibilità su qualsiasi sfondo tema */
+.page-userProfile .nav-tabs {
+  border-bottom-color: #dee2e6;
+}
+
+.page-userProfile .nav-tabs .nav-link {
+  background-color: #e9ecef;
+  color: #495057;
+  border-color: #dee2e6 #dee2e6 transparent;
+  margin-right: 2px;
+}
+
+.page-userProfile .nav-tabs .nav-link:hover {
+  background-color: #fff;
+  color: #212529;
+  border-color: #dee2e6 #dee2e6 transparent;
+}
+
+.page-userProfile .nav-tabs .nav-link.active {
+  background-color: #fff;
+  color: #212529;
+  font-weight: 600;
+  border-color: #dee2e6 #dee2e6 #fff;
+}
+
+/* Contenuto tabs */
+.page-userProfile .tab-content {
+  background-color: #fff;
+}
