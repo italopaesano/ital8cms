@@ -98,10 +98,10 @@ const sessionUsername = isAuthenticated ? passData.ctx.session.user.username : n
       <div class="mb-3">
         <label class="form-label fw-bold">Email</label>
         <div class="d-flex align-items-center gap-2">
-          <span id="profileEmailMasked" class="form-control-plaintext">Caricamento...</span>
+          <span id="profileEmailMasked">Caricamento...</span>
+          <span id="profileEmailFull" style="display:none;"></span>
           <button type="button" class="btn btn-outline-secondary btn-sm" id="btnToggleEmail" onclick="toggleEmailVisibility()" style="display:none;">Mostra</button>
         </div>
-        <span id="profileEmailFull" class="form-control-plaintext" style="display:none;"></span>
       </div>
 
       <!-- Ruoli -->
