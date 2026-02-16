@@ -8,6 +8,10 @@ const { defineConfig, devices } = require('@playwright/test');
 module.exports = defineConfig({
   testDir: './tests/e2e',
 
+  /* Global setup and teardown for test users */
+  globalSetup: './tests/e2e/globalSetup.js',
+  globalTeardown: './tests/e2e/globalTeardown.js',
+
   /* Run tests in files in parallel */
   fullyParallel: true,
 
