@@ -68,16 +68,19 @@ test.describe('GlobalPrefix - API Routes', () => {
     expect(response.status()).toBe(200);
   });
 
-  test('adminUsers login endpoint is accessible', async ({ request }) => {
+  test('adminUsers login endpoint is accessible (POST only)', async ({ request }) => {
     const loginPath = globalPrefix === ''
       ? '/api/adminUsers/login'
       : `${globalPrefix}/api/adminUsers/login`;
 
-    const response = await request.get(loginPath);
-    expect(response.status()).toBe(200);
+    // Login is POST-only; verify POST works (returns redirect on invalid credentials)
+    const response = await request.post(loginPath, {
+      form: { username: 'nonexistent', password: 'test' }
+    });
+    expect([302, 200]).toContain(response.status());
   });
 
-  test('adminUsers logged endpoint returns JSON', async ({ request }) => {
+  test('adminUsers logged endpoint returns text status', async ({ request }) => {
     const loggedPath = globalPrefix === ''
       ? '/api/adminUsers/logged'
       : `${globalPrefix}/api/adminUsers/logged`;
@@ -85,8 +88,10 @@ test.describe('GlobalPrefix - API Routes', () => {
     const response = await request.get(loggedPath);
     expect(response.status()).toBe(200);
 
-    const data = await response.json();
-    expect(data).toBeDefined();
+    // /logged returns text/plain, not JSON
+    const text = await response.text();
+    expect(text).toBeDefined();
+    expect(text.length).toBeGreaterThan(0);
   });
 
   test('non-existent API route returns 404', async ({ request }) => {
