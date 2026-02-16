@@ -111,7 +111,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         </div>
     </div>
 
-    <script src="/${ital8Conf.apiPrefix}/${pluginName}/js/bootstrap.min.js"></script>
+    <script src="/${ital8Conf.apiPrefix}/${pluginName}/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
         `;
@@ -138,13 +138,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         ctx.set('Content-Type', 'application/json');
        }
     },
-    // Bootstrap JS
+    // Bootstrap JS (bundle include Popper.js, necessario per dropdown, offcanvas, tooltip, popover)
     {
       method: 'GET',
       path: '/js/bootstrap.min.js',
       access: { requiresAuth: false, allowedRoles: [] }, // Pubblico - risorsa statica
       handler: async (ctx) => {
-        const bootstrapJsPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','js','bootstrap.min.js');
+        const bootstrapJsPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','js','bootstrap.bundle.min.js');
         ctx.body = fs.createReadStream(bootstrapJsPath);
         ctx.set('Content-Type', 'text/javascript');
        }
@@ -154,7 +154,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       path: '/js/bootstrap.min.js.map',
       access: { requiresAuth: false, allowedRoles: [] }, // Pubblico - risorsa statica
       handler: async (ctx) => {
-        const bootstrapJsPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','js','bootstrap.min.js.map');
+        const bootstrapJsPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','js','bootstrap.bundle.min.js.map');
         ctx.body = fs.createReadStream(bootstrapJsPath);
         ctx.set('Content-Type', 'application/json');
        }
