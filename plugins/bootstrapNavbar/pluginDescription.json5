@@ -1,0 +1,10 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "name": "bootstrapNavbar",
+  "version": "1.0.0",
+  "description": "Bootstrap navbar plugin with JSON5 configuration. Supports horizontal, vertical and offcanvas navbars with dropdowns, auth/roles visibility, and auto-active detection.",
+  "author": "Italo Paesano",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC",
+  "note": "Reads navbar.{name}.json5 files from the same directory as the calling EJS template"
+}
