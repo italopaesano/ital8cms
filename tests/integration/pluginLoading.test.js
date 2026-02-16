@@ -111,7 +111,7 @@ describe('Plugin Loading Integration', () => {
         const config = loadJson5(configPath);
 
         expect(typeof config.weight).toBe('number');
-        expect(config.weight).toBeGreaterThanOrEqual(0);
+        expect(Number.isInteger(config.weight)).toBe(true);
       });
     });
   });
