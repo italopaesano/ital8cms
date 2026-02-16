@@ -1,0 +1,67 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs' ) ) %>
+
+<title>Navbar Example: Vertical Sidebar</title>
+<style>
+  .sidebar-layout { display: flex; min-height: 80vh; }
+  .sidebar-content { flex: 1; padding: 2rem; }
+  .sidebar-nav { width: 250px; min-width: 250px; }
+</style>
+</head>
+
+<body>
+
+<div class="sidebar-layout">
+  <%# ========== VERTICAL SIDEBAR NAVBAR (dark, bg-dark) ========== %>
+  <div class="sidebar-nav">
+    <%- passData.plugin.bootstrapNavbar.render({name: 'sidebar'}, passData) %>
+  </div>
+
+  <div class="sidebar-content">
+    <h1>Vertical Navbar - Sidebar</h1>
+
+    <div class="card mt-3">
+      <div class="card-header">Caratteristiche di questo esempio</div>
+      <div class="card-body">
+        <ul>
+          <li><strong>type:</strong> <code>vertical</code></li>
+          <li><strong>colorScheme:</strong> <code>dark</code></li>
+          <li><strong>bgClass:</strong> <code>bg-dark</code></li>
+          <li><strong>position:</strong> <code>start</code> (sidebar a sinistra)</li>
+          <li><strong>sections.left:</strong> parte superiore della sidebar</li>
+          <li><strong>sections.right:</strong> parte inferiore (separata da <code>&lt;hr&gt;</code>)</li>
+          <li><strong>Auth items:</strong> "Users" visibile solo per admin, "Settings" e "Logout" condizionali</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card mt-3">
+      <div class="card-header">Codice EJS</div>
+      <div class="card-body">
+        <pre><code>&lt;div class="sidebar-layout"&gt;
+  &lt;div class="sidebar-nav"&gt;
+    &lt;%- passData.plugin.bootstrapNavbar.render({name: 'sidebar'}, passData) %&gt;
+  &lt;/div&gt;
+  &lt;div class="sidebar-content"&gt;
+    &lt;!-- contenuto pagina --&gt;
+  &lt;/div&gt;
+&lt;/div&gt;</code></pre>
+      </div>
+    </div>
+
+    <div class="card mt-3">
+      <div class="card-header">Note</div>
+      <div class="card-body">
+        <p>Il layout sidebar richiede un wrapper flex. Nel type <code>vertical</code>:</p>
+        <ul>
+          <li><code>sections.left</code> = items nella parte alta</li>
+          <li><code>sections.right</code> = items nella parte bassa (separati da &lt;hr&gt;)</li>
+          <li>I dropdown funzionano anche in verticale</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="mt-3"><a href="/navbarExamples/">&larr; Tutti gli esempi</a></p>
+  </div>
+</div>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs' ) ) %>

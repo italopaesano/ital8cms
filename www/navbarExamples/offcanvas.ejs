@@ -1,0 +1,46 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs' ) ) %>
+
+<title>Navbar Example: Offcanvas Responsive</title>
+</head>
+
+<body>
+
+<%# ========== OFFCANVAS NAVBAR (responsive - above lg shows inline) ========== %>
+<%- passData.plugin.bootstrapNavbar.render({name: 'offcanvasResponsive'}, passData) %>
+
+<div class="container mt-4">
+  <h1>Offcanvas Navbar - Responsive</h1>
+
+  <div class="card mt-3">
+    <div class="card-header">Caratteristiche di questo esempio</div>
+    <div class="card-body">
+      <ul>
+        <li><strong>type:</strong> <code>offcanvas</code></li>
+        <li><strong>bgClass:</strong> <code>bg-success</code> (verde)</li>
+        <li><strong>expandAt:</strong> <code>lg</code></li>
+        <li><strong>offcanvasAlways:</strong> <code>false</code> (responsive: sopra <code>lg</code> mostra navbar inline)</li>
+        <li><strong>position:</strong> <code>start</code> (offcanvas da sinistra)</li>
+        <li><strong>Auth:</strong> Cart e Account dropdown visibili solo per utenti autenticati, Sign In solo per non autenticati</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card mt-3">
+    <div class="card-header">Differenza con Horizontal collapse</div>
+    <div class="card-body">
+      <p>A differenza del tipo <code>horizontal</code> che usa <code>collapse</code>, il tipo <code>offcanvas</code> mostra un pannello scorrevole laterale quando il menu viene aperto sotto il breakpoint.</p>
+      <p><strong>Prova:</strong> Ridimensiona la finestra sotto <code>lg</code> e clicca il hamburger per vedere il pannello offcanvas.</p>
+    </div>
+  </div>
+
+  <div class="card mt-3">
+    <div class="card-header">Codice EJS</div>
+    <div class="card-body">
+      <pre><code>&lt;%- passData.plugin.bootstrapNavbar.render({name: 'offcanvasResponsive'}, passData) %&gt;</code></pre>
+    </div>
+  </div>
+
+  <p class="mt-3"><a href="/navbarExamples/">&larr; Tutti gli esempi</a></p>
+</div>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs' ) ) %>

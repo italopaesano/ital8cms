@@ -1,0 +1,148 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// EXAMPLE: Auth-heavy navbar (demonstrates all auth/roles filtering features)
+// Demonstrates: requiresAuth, allowedRoles, showWhen, role-specific dropdowns,
+//               nested auth checks within dropdowns
+//
+// Test this by logging in/out and with different roles to see items appear/disappear
+//
+{
+  "settings": {
+    "type": "horizontal",
+    "colorScheme": "dark",
+    "bgClass": "bg-danger",
+    "expandAt": "lg",
+    "containerClass": "container-fluid",
+    "autoActive": true,
+    "id": "navbarAuthHeavy",
+  },
+
+  "sections": {
+    "left": [
+      // Always visible
+      {
+        "label": "Home",
+        "href": "/navbarExamples/authHeavy.ejs",
+        "icon": "<i class='bi bi-house'></i>",
+      },
+
+      // Visible only when NOT authenticated
+      {
+        "label": "Public Only",
+        "href": "#public",
+        "icon": "<i class='bi bi-unlock'></i>",
+        "showWhen": "unauthenticated",
+      },
+
+      // Visible only when authenticated (any role)
+      {
+        "label": "Authenticated",
+        "href": "#auth",
+        "icon": "<i class='bi bi-lock'></i>",
+        "showWhen": "authenticated",
+      },
+
+      // Visible only for root (0) and admin (1)
+      {
+        "label": "Admin Panel",
+        "href": "/admin",
+        "icon": "<i class='bi bi-shield-lock'></i>",
+        "requiresAuth": true,
+        "allowedRoles": [0, 1],
+      },
+
+      // Visible only for root (0)
+      {
+        "label": "Root Only",
+        "href": "#root",
+        "icon": "<i class='bi bi-key'></i>",
+        "requiresAuth": true,
+        "allowedRoles": [0],
+      },
+
+      // Visible for root, admin, editor (0, 1, 2)
+      {
+        "label": "Editor+",
+        "href": "#editor",
+        "icon": "<i class='bi bi-pencil-square'></i>",
+        "requiresAuth": true,
+        "allowedRoles": [0, 1, 2],
+      },
+
+      // Dropdown with mixed auth items inside
+      {
+        "type": "dropdown",
+        "label": "Mixed Dropdown",
+        "icon": "<i class='bi bi-list-nested'></i>",
+        "requiresAuth": true,
+        "items": [
+          // Always visible (to authenticated users, since parent has requiresAuth)
+          { "label": "My Profile", "href": "/pluginPages/adminUsers/userProfile.ejs", "icon": "<i class='bi bi-person'></i>" },
+
+          { "type": "divider" },
+
+          // Only for admin+
+          {
+            "label": "User Management",
+            "href": "/admin/usersManagment/index.ejs",
+            "icon": "<i class='bi bi-people'></i>",
+            "requiresAuth": true,
+            "allowedRoles": [0, 1],
+          },
+
+          // Only for root
+          {
+            "label": "System Settings",
+            "href": "/admin/systemSettings/index.ejs",
+            "icon": "<i class='bi bi-sliders'></i>",
+            "requiresAuth": true,
+            "allowedRoles": [0],
+          },
+
+          { "type": "divider" },
+
+          // Visible for role 102 (custom role) or admin
+          {
+            "label": "Custom Role Area",
+            "href": "#custom-role",
+            "icon": "<i class='bi bi-star'></i>",
+            "requiresAuth": true,
+            "allowedRoles": [0, 1, 102],
+          },
+        ],
+      },
+    ],
+
+    "right": [
+      // Login button (only when unauthenticated)
+      {
+        "label": "Sign In",
+        "href": "/pluginPages/adminUsers/login.ejs",
+        "icon": "<i class='bi bi-box-arrow-in-right'></i>",
+        "showWhen": "unauthenticated",
+      },
+
+      // Register button (only when unauthenticated)
+      {
+        "label": "Register",
+        "href": "#register",
+        "icon": "<i class='bi bi-person-plus'></i>",
+        "showWhen": "unauthenticated",
+      },
+
+      // User dropdown (only when authenticated)
+      {
+        "type": "dropdown",
+        "label": "My Account",
+        "icon": "<i class='bi bi-person-circle'></i>",
+        "showWhen": "authenticated",
+        "items": [
+          { "label": "Profile", "href": "/pluginPages/adminUsers/userProfile.ejs", "icon": "<i class='bi bi-person'></i>" },
+          { "label": "Settings", "href": "#settings", "icon": "<i class='bi bi-gear'></i>" },
+          { "type": "divider" },
+          { "label": "Logout", "href": "/pluginPages/adminUsers/logout.ejs", "icon": "<i class='bi bi-box-arrow-right'></i>" },
+        ],
+      },
+    ],
+  },
+}

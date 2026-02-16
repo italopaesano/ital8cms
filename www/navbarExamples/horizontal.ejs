@@ -1,0 +1,46 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs' ) ) %>
+
+<title>Navbar Example: Horizontal Light</title>
+</head>
+
+<body>
+
+<%# ========== HORIZONTAL NAVBAR (light, bg-body-tertiary, expandAt: md) ========== %>
+<%- passData.plugin.bootstrapNavbar.render({name: 'horizontalLight'}, passData) %>
+
+<div class="container mt-4">
+  <h1>Horizontal Navbar - Light Theme</h1>
+
+  <div class="card mt-3">
+    <div class="card-header">Caratteristiche di questo esempio</div>
+    <div class="card-body">
+      <ul>
+        <li><strong>type:</strong> <code>horizontal</code></li>
+        <li><strong>colorScheme:</strong> <code>light</code></li>
+        <li><strong>bgClass:</strong> <code>bg-body-tertiary</code></li>
+        <li><strong>expandAt:</strong> <code>md</code> (collassa sotto il breakpoint md)</li>
+        <li><strong>containerClass:</strong> <code>container</code> (centrato, non fluid)</li>
+        <li><strong>autoActive:</strong> <code>true</code> (evidenzia pagina corrente)</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card mt-3">
+    <div class="card-header">Codice EJS</div>
+    <div class="card-body">
+      <pre><code>&lt;%- passData.plugin.bootstrapNavbar.render({name: 'horizontalLight'}, passData) %&gt;</code></pre>
+    </div>
+  </div>
+
+  <div class="card mt-3">
+    <div class="card-header">File di configurazione: <code>navbar.horizontalLight.json5</code></div>
+    <div class="card-body">
+      <p>Include: dropdown "Services" con divider, separator, dropdown "Language" a destra.</p>
+      <p>Ridimensiona la finestra sotto il breakpoint <code>md</code> per vedere il menu hamburger.</p>
+    </div>
+  </div>
+
+  <p class="mt-3"><a href="/navbarExamples/">&larr; Tutti gli esempi</a></p>
+</div>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs' ) ) %>

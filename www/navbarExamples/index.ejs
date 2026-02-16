@@ -1,0 +1,201 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs' ) ) %>
+
+<title>Bootstrap Navbar Plugin - Examples</title>
+</head>
+
+<body>
+
+<div class="container mt-4 mb-5">
+  <h1>Bootstrap Navbar Plugin - Esempi</h1>
+  <p class="lead">Tutti i casi d'uso del plugin <code>bootstrapNavbar</code> con pagine demo interattive.</p>
+
+  <hr>
+
+  <%# ========== NAVBAR TYPES ========== %>
+  <h2 class="mt-4">Tipi di Navbar</h2>
+
+  <div class="row g-4 mt-1">
+
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title"><i class="bi bi-layout-navbar"></i> Horizontal Light</h5>
+          <p class="card-text">Navbar orizzontale con tema chiaro, <code>bg-body-tertiary</code>, <code>expandAt: md</code>, container centrato.</p>
+          <ul class="list-unstyled small text-muted">
+            <li>Dropdown con divider</li>
+            <li>Separator tra items</li>
+            <li>Container non-fluid</li>
+          </ul>
+        </div>
+        <div class="card-footer">
+          <a href="/navbarExamples/horizontal.ejs" class="btn btn-primary btn-sm">Apri demo</a>
+          <span class="badge bg-light text-dark ms-1">type: horizontal</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title"><i class="bi bi-layout-sidebar"></i> Vertical Sidebar</h5>
+          <p class="card-text">Sidebar verticale dark con layout flex. Sezioni top/bottom separate da <code>&lt;hr&gt;</code>.</p>
+          <ul class="list-unstyled small text-muted">
+            <li>Dropdown in verticale</li>
+            <li>Auth: items condizionali</li>
+            <li>sections.left = top, .right = bottom</li>
+          </ul>
+        </div>
+        <div class="card-footer">
+          <a href="/navbarExamples/vertical.ejs" class="btn btn-dark btn-sm">Apri demo</a>
+          <span class="badge bg-light text-dark ms-1">type: vertical</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title"><i class="bi bi-layout-sidebar-inset"></i> Offcanvas Responsive</h5>
+          <p class="card-text">Offcanvas che sopra <code>lg</code> diventa navbar inline. Sotto <code>lg</code> pannello scorrevole.</p>
+          <ul class="list-unstyled small text-muted">
+            <li>offcanvasAlways: false</li>
+            <li>bg-success (verde)</li>
+            <li>Auth: Cart e Account condizionali</li>
+          </ul>
+        </div>
+        <div class="card-footer">
+          <a href="/navbarExamples/offcanvas.ejs" class="btn btn-success btn-sm">Apri demo</a>
+          <span class="badge bg-light text-dark ms-1">type: offcanvas</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title"><i class="bi bi-list"></i> Offcanvas Always</h5>
+          <p class="card-text">Hamburger SEMPRE visibile (non diventa mai inline). Offcanvas da destra (<code>end</code>).</p>
+          <ul class="list-unstyled small text-muted">
+            <li>offcanvasAlways: true</li>
+            <li>position: end (da destra)</li>
+            <li>Confronto tabellare true vs false</li>
+          </ul>
+        </div>
+        <div class="card-footer">
+          <a href="/navbarExamples/offcanvasAlways.ejs" class="btn btn-secondary btn-sm">Apri demo</a>
+          <span class="badge bg-light text-dark ms-1">type: offcanvas</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <%# ========== FEATURES ========== %>
+  <h2 class="mt-5">Features</h2>
+
+  <div class="row g-4 mt-1">
+
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 border-danger">
+        <div class="card-body">
+          <h5 class="card-title"><i class="bi bi-shield-lock"></i> Auth/Roles Filtering</h5>
+          <p class="card-text">Dimostra tutte le opzioni di visibilit&agrave;: <code>showWhen</code>, <code>requiresAuth</code>, <code>allowedRoles</code>.</p>
+          <ul class="list-unstyled small text-muted">
+            <li>Tabella stato sessione in tempo reale</li>
+            <li>Dropdown con sub-items filtrati per ruolo</li>
+            <li>Root, Admin, Editor, Custom roles</li>
+          </ul>
+        </div>
+        <div class="card-footer">
+          <a href="/navbarExamples/authHeavy.ejs" class="btn btn-danger btn-sm">Apri demo</a>
+          <span class="badge bg-light text-dark ms-1">auth + roles</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 border-warning">
+        <div class="card-body">
+          <h5 class="card-title"><i class="bi bi-sliders"></i> Settings Overrides</h5>
+          <p class="card-text">Stesso file JSON5, 5 render diversi con <code>settingsOverrides</code>. Cambia type, bg, expandAt, autoActive al volo.</p>
+          <ul class="list-unstyled small text-muted">
+            <li>5 varianti dello stesso menu</li>
+            <li>Override: bgClass, colorScheme, type</li>
+            <li>Override: expandAt, autoActive, id</li>
+          </ul>
+        </div>
+        <div class="card-footer">
+          <a href="/navbarExamples/settingsOverrides.ejs" class="btn btn-warning btn-sm">Apri demo</a>
+          <span class="badge bg-light text-dark ms-1">settingsOverrides</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <%# ========== QUICK REFERENCE ========== %>
+  <h2 class="mt-5">Quick Reference</h2>
+
+  <div class="card mt-3">
+    <div class="card-header">Sintassi EJS</div>
+    <div class="card-body">
+      <pre class="mb-0"><code><%# Render base %>
+&lt;%- passData.plugin.bootstrapNavbar.render({name: 'main'}, passData) %&gt;
+
+<%# Con settingsOverrides %>
+&lt;%- passData.plugin.bootstrapNavbar.render({
+  name: 'main',
+  settingsOverrides: { type: 'offcanvas', bgClass: 'bg-dark' }
+}, passData) %&gt;</code></pre>
+    </div>
+  </div>
+
+  <div class="card mt-3">
+    <div class="card-header">Struttura navbar.{name}.json5</div>
+    <div class="card-body">
+      <pre class="mb-0"><code>{
+  "settings": {
+    "type": "horizontal",          // horizontal | vertical | offcanvas
+    "colorScheme": "dark",         // dark | light
+    "bgClass": "bg-primary",      // qualsiasi classe Bootstrap bg-*
+    "expandAt": "lg",              // sm | md | lg | xl | xxl
+    "containerClass": "container-fluid",
+    "autoActive": true,
+    "offcanvasAlways": false,      // solo per type: offcanvas
+    "position": "start",           // start | end
+    "id": "navbarMain"
+  },
+  "sections": {
+    "left": [ /* items */ ],
+    "right": [ /* items */ ]
+  }
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="card mt-3">
+    <div class="card-header">Tipi di Items</div>
+    <div class="card-body">
+      <pre class="mb-0"><code>// Link semplice
+{ "label": "Home", "href": "/", "icon": "&lt;i class='bi bi-house'&gt;&lt;/i&gt;" }
+
+// Link con target
+{ "label": "Docs", "href": "https://example.com", "target": "_blank" }
+
+// Dropdown
+{ "type": "dropdown", "label": "Menu", "items": [ /* sub-items */ ] }
+
+// Divider (dentro dropdown)
+{ "type": "divider" }
+
+// Separator (tra items nella barra)
+{ "type": "separator" }
+
+// Visibilit&agrave; condizionale
+{ "label": "Login", "href": "/login", "showWhen": "unauthenticated" }
+{ "label": "Profile", "href": "/profile", "showWhen": "authenticated" }
+{ "label": "Admin", "href": "/admin", "requiresAuth": true, "allowedRoles": [0, 1] }</code></pre>
+    </div>
+  </div>
+
+</div>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs' ) ) %>
