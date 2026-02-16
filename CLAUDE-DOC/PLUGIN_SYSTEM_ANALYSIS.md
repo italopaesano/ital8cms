@@ -648,7 +648,7 @@ function getHooksPage() {
 
   hooks.set('script', (passData) => {
     return `
-      <script src="/api/bootstrap/js/bootstrap.min.js"></script>
+      <script src="/api/bootstrap/js/bootstrap.bundle.min.js"></script>
     `
   })
 

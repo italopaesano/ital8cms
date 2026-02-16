@@ -61,8 +61,8 @@ test.describe('GlobalPrefix - API Routes', () => {
 
   test('Bootstrap JS API endpoint is accessible', async ({ request }) => {
     const apiPath = globalPrefix === ''
-      ? '/api/bootstrap/js/bootstrap.min.js'
-      : `${globalPrefix}/api/bootstrap/js/bootstrap.min.js`;
+      ? '/api/bootstrap/js/bootstrap.bundle.min.js'
+      : `${globalPrefix}/api/bootstrap/js/bootstrap.bundle.min.js`;
 
     const response = await request.get(apiPath);
     expect(response.status()).toBe(200);

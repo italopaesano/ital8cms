@@ -121,9 +121,9 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     },
     {
       method: 'GET',
-      path: '/js/bootstrap.min.js', // // l'url completo avra la forma /api/binance/js -> se vengono mantenute le impostazioni di default
-      handler: async (ctx) => { 
-        const bootstrapJsPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','js','bootstrap.min.js');
+      path: '/js/bootstrap.bundle.min.js', // // l'url completo avra la forma /api/binance/js -> se vengono mantenute le impostazioni di default
+      handler: async (ctx) => {
+        const bootstrapJsPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','js','bootstrap.bundle.min.js');
         ctx.body = fs.createReadStream(bootstrapJsPath);
         ctx.set('Content-Type', 'text/javascript');
        }

@@ -1998,7 +1998,7 @@ window.AdminLib = AdminLib;
     </div>
 
     <!-- Scripts -->
-    <script src="/<%= passData.apiPrefix %>/bootstrap/js/bootstrap.min.js"></script>
+    <script src="/<%= passData.apiPrefix %>/bootstrap/js/bootstrap.bundle.min.js"></script>
     <script src="/<%= passData.adminPrefix %>/assets/js/admin.js"></script>
     <script>
         // Inizializza AdminLib
