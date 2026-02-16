@@ -1,6 +1,6 @@
 { pkgs ? import <nixpkgs> {} }:
 
-(pkgs.buildFHSUserEnv {
+(pkgs.buildFHSEnv {
   name = "playwright-env";
   targetPkgs = pkgs: with pkgs; [
     nodejs_20
