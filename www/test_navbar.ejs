@@ -1,0 +1,39 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs' ) ) %>
+
+<title>Test Bootstrap Navbar Plugin</title>
+</head>
+
+<body>
+
+<%# ========== NAVBAR RENDERED BY PLUGIN ========== %>
+<%- passData.plugin.bootstrapNavbar.render({name: 'main'}, passData) %>
+
+<%# ========== PAGE CONTENT ========== %>
+<div class="container mt-4">
+  <h1>Bootstrap Navbar Plugin Test</h1>
+  <p>This page demonstrates the <code>bootstrapNavbar</code> plugin.</p>
+
+  <div class="card mt-3">
+    <div class="card-header">Usage</div>
+    <div class="card-body">
+      <p>In any EJS template, call:</p>
+      <pre><code>&lt;%- passData.plugin.bootstrapNavbar.render({name: 'main'}, passData) %&gt;</code></pre>
+      <p>The plugin will look for a file called <code>navbar.main.json5</code> in the same directory as this template.</p>
+    </div>
+  </div>
+
+  <div class="card mt-3">
+    <div class="card-header">Current Info</div>
+    <div class="card-body">
+      <ul>
+        <li><strong>Current URL:</strong> <%= passData.href %></li>
+        <li><strong>Template Path:</strong> <%= passData.filePath %></li>
+        <li><strong>Authenticated:</strong> <%= passData.ctx.session ? !!passData.ctx.session.authenticated : false %></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs' ) ) %>
+</body>
+</html>
