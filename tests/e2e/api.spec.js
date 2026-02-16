@@ -13,17 +13,23 @@ test.describe('API Endpoints', () => {
     expect(response.status()).toBe(200);
   });
 
-  test('should have adminUsers login endpoint', async ({ request }) => {
-    const response = await request.get('/api/adminUsers/login');
-    expect(response.status()).toBe(200);
+  test('should have adminUsers login endpoint (POST only)', async ({ request }) => {
+    // Login is a POST-only endpoint; GET returns 405 Method Not Allowed
+    const response = await request.post('/api/adminUsers/login', {
+      form: { username: 'nonexistent', password: 'test' }
+    });
+    // POST should return a redirect (302) or error, not 405
+    expect([302, 200]).toContain(response.status());
   });
 
   test('should have adminUsers logged endpoint', async ({ request }) => {
     const response = await request.get('/api/adminUsers/logged');
     expect(response.status()).toBe(200);
 
-    const data = await response.json();
-    expect(data).toBeDefined();
+    // /logged returns text/plain, not JSON
+    const text = await response.text();
+    expect(text).toBeDefined();
+    expect(text.length).toBeGreaterThan(0);
   });
 
   test('should return 404 for non-existent API route', async ({ request }) => {
