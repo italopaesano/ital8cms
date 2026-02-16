@@ -1,0 +1,119 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs' ) ) %>
+
+<title>Navbar Example: Auth/Roles Filtering</title>
+</head>
+
+<body>
+
+<%# ========== AUTH-HEAVY NAVBAR (role-based visibility) ========== %>
+<%- passData.plugin.bootstrapNavbar.render({name: 'authHeavy'}, passData) %>
+
+<div class="container mt-4">
+  <h1>Auth/Roles Filtering Demo</h1>
+
+  <%
+    const session = passData.ctx.session || {};
+    const isAuth = !!session.authenticated;
+    const user = session.user || {};
+    const roleIds = user.roleIds || [];
+  %>
+
+  <div class="card mt-3 border-info">
+    <div class="card-header bg-info text-white">Stato attuale sessione</div>
+    <div class="card-body">
+      <ul>
+        <li><strong>Autenticato:</strong> <code><%= isAuth %></code></li>
+        <% if (isAuth) { %>
+          <li><strong>Username:</strong> <code><%= user.username %></code></li>
+          <li><strong>Role IDs:</strong> <code>[<%= roleIds.join(', ') %>]</code></li>
+        <% } %>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card mt-3">
+    <div class="card-header">Come funziona il filtering</div>
+    <div class="card-body">
+      <p>Questa navbar usa tutte le opzioni di visibilit&agrave; disponibili:</p>
+
+      <table class="table table-bordered table-sm mt-2">
+        <thead class="table-dark">
+          <tr>
+            <th>Item</th>
+            <th>Condizione</th>
+            <th>Visibile ora?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Home</td>
+            <td>Sempre</td>
+            <td class="text-success">Si</td>
+          </tr>
+          <tr>
+            <td>Public Only</td>
+            <td><code>showWhen: "unauthenticated"</code></td>
+            <td class="<%= !isAuth ? 'text-success' : 'text-danger' %>"><%= !isAuth ? 'Si' : 'No' %></td>
+          </tr>
+          <tr>
+            <td>Authenticated</td>
+            <td><code>showWhen: "authenticated"</code></td>
+            <td class="<%= isAuth ? 'text-success' : 'text-danger' %>"><%= isAuth ? 'Si' : 'No' %></td>
+          </tr>
+          <tr>
+            <td>Admin Panel</td>
+            <td><code>requiresAuth: true, allowedRoles: [0, 1]</code></td>
+            <td class="<%= (isAuth && roleIds.some(r => [0,1].includes(r))) ? 'text-success' : 'text-danger' %>">
+              <%= (isAuth && roleIds.some(r => [0,1].includes(r))) ? 'Si' : 'No' %>
+            </td>
+          </tr>
+          <tr>
+            <td>Root Only</td>
+            <td><code>requiresAuth: true, allowedRoles: [0]</code></td>
+            <td class="<%= (isAuth && roleIds.includes(0)) ? 'text-success' : 'text-danger' %>">
+              <%= (isAuth && roleIds.includes(0)) ? 'Si' : 'No' %>
+            </td>
+          </tr>
+          <tr>
+            <td>Editor+</td>
+            <td><code>requiresAuth: true, allowedRoles: [0, 1, 2]</code></td>
+            <td class="<%= (isAuth && roleIds.some(r => [0,1,2].includes(r))) ? 'text-success' : 'text-danger' %>">
+              <%= (isAuth && roleIds.some(r => [0,1,2].includes(r))) ? 'Si' : 'No' %>
+            </td>
+          </tr>
+          <tr>
+            <td>Mixed Dropdown</td>
+            <td><code>requiresAuth: true</code> (parent) + sub-items con ruoli diversi</td>
+            <td class="<%= isAuth ? 'text-success' : 'text-danger' %>"><%= isAuth ? 'Si' : 'No' %></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card mt-3">
+    <div class="card-header">Opzioni di filtering disponibili</div>
+    <div class="card-body">
+      <dl>
+        <dt><code>showWhen: "authenticated"</code></dt>
+        <dd>L'item appare solo se l'utente &egrave; loggato</dd>
+
+        <dt><code>showWhen: "unauthenticated"</code></dt>
+        <dd>L'item appare solo se l'utente NON &egrave; loggato</dd>
+
+        <dt><code>requiresAuth: true</code></dt>
+        <dd>L'item appare solo se l'utente &egrave; loggato</dd>
+
+        <dt><code>requiresAuth: false</code></dt>
+        <dd>L'item appare solo se l'utente NON &egrave; loggato (inverso)</dd>
+
+        <dt><code>allowedRoles: [0, 1, 102]</code></dt>
+        <dd>L'item appare solo se l'utente ha almeno uno dei ruoli specificati (richiede <code>requiresAuth: true</code>)</dd>
+      </dl>
+    </div>
+  </div>
+
+  <p class="mt-3"><a href="/navbarExamples/">&larr; Tutti gli esempi</a></p>
+</div>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs' ) ) %>

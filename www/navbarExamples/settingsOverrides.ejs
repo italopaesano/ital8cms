@@ -1,0 +1,113 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs' ) ) %>
+
+<title>Navbar Example: Settings Overrides</title>
+</head>
+
+<body>
+
+<div class="container mt-4">
+  <h1>Settings Overrides Demo</h1>
+  <p>Stesso file <code>navbar.overridable.json5</code> renderizzato con override diversi:</p>
+
+  <%# ========== 1. DEFAULT (nessun override) ========== %>
+  <div class="card mt-4">
+    <div class="card-header">1. Default (nessun override)</div>
+    <div class="card-body p-0">
+      <%- passData.plugin.bootstrapNavbar.render({name: 'overridable'}, passData) %>
+    </div>
+    <div class="card-footer">
+      <pre class="mb-0"><code>render({name: 'overridable'}, passData)</code></pre>
+    </div>
+  </div>
+
+  <%# ========== 2. Override bgClass e colorScheme ========== %>
+  <div class="card mt-4">
+    <div class="card-header">2. Override: bg-dark + light colorScheme</div>
+    <div class="card-body p-0">
+      <%- passData.plugin.bootstrapNavbar.render({
+        name: 'overridable',
+        settingsOverrides: {
+          bgClass: 'bg-dark',
+          colorScheme: 'light',
+          id: 'navbarOverrides2'
+        }
+      }, passData) %>
+    </div>
+    <div class="card-footer">
+      <pre class="mb-0"><code>render({name: 'overridable', settingsOverrides: {bgClass: 'bg-dark', colorScheme: 'light', id: 'navbarOverrides2'}}, passData)</code></pre>
+    </div>
+  </div>
+
+  <%# ========== 3. Override type a offcanvas ========== %>
+  <div class="card mt-4">
+    <div class="card-header">3. Override: type offcanvas + bg-warning</div>
+    <div class="card-body p-0">
+      <%- passData.plugin.bootstrapNavbar.render({
+        name: 'overridable',
+        settingsOverrides: {
+          type: 'offcanvas',
+          bgClass: 'bg-warning',
+          colorScheme: 'dark',
+          id: 'navbarOverrides3'
+        }
+      }, passData) %>
+    </div>
+    <div class="card-footer">
+      <pre class="mb-0"><code>render({name: 'overridable', settingsOverrides: {type: 'offcanvas', bgClass: 'bg-warning', colorScheme: 'dark', id: 'navbarOverrides3'}}, passData)</code></pre>
+    </div>
+  </div>
+
+  <%# ========== 4. Override expandAt ========== %>
+  <div class="card mt-4">
+    <div class="card-header">4. Override: expandAt sm + bg-info</div>
+    <div class="card-body p-0">
+      <%- passData.plugin.bootstrapNavbar.render({
+        name: 'overridable',
+        settingsOverrides: {
+          expandAt: 'sm',
+          bgClass: 'bg-info',
+          id: 'navbarOverrides4'
+        }
+      }, passData) %>
+    </div>
+    <div class="card-footer">
+      <pre class="mb-0"><code>render({name: 'overridable', settingsOverrides: {expandAt: 'sm', bgClass: 'bg-info', id: 'navbarOverrides4'}}, passData)</code></pre>
+    </div>
+  </div>
+
+  <%# ========== 5. Override autoActive false ========== %>
+  <div class="card mt-4">
+    <div class="card-header">5. Override: autoActive false + bg-secondary</div>
+    <div class="card-body p-0">
+      <%- passData.plugin.bootstrapNavbar.render({
+        name: 'overridable',
+        settingsOverrides: {
+          autoActive: false,
+          bgClass: 'bg-secondary',
+          id: 'navbarOverrides5'
+        }
+      }, passData) %>
+    </div>
+    <div class="card-footer">
+      <pre class="mb-0"><code>render({name: 'overridable', settingsOverrides: {autoActive: false, bgClass: 'bg-secondary', id: 'navbarOverrides5'}}, passData)</code></pre>
+      <p class="mb-0 mt-1 text-muted"><small>Nota: nessun item &egrave; evidenziato come "active" perch&eacute; <code>autoActive: false</code></small></p>
+    </div>
+  </div>
+
+  <div class="card mt-4 border-success">
+    <div class="card-header bg-success text-white">Quando usare settingsOverrides</div>
+    <div class="card-body">
+      <ul>
+        <li><strong>Stesso menu, stile diverso:</strong> una pagina vuole il menu scuro, un'altra chiaro</li>
+        <li><strong>Test rapido:</strong> provare varianti senza modificare il JSON5</li>
+        <li><strong>Contesti diversi:</strong> stesso menu come offcanvas su mobile, horizontal su desktop (via logica EJS)</li>
+        <li><strong>ID univoci:</strong> se includi lo stesso menu pi&ugrave; volte nella stessa pagina, cambia l'<code>id</code></li>
+      </ul>
+      <p class="mb-0"><strong>Priorit&agrave;:</strong> <code>DEFAULT_SETTINGS</code> &lt; <code>navbar.*.json5 settings</code> &lt; <code>settingsOverrides</code></p>
+    </div>
+  </div>
+
+  <p class="mt-3"><a href="/navbarExamples/">&larr; Tutti gli esempi</a></p>
+</div>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs' ) ) %>
