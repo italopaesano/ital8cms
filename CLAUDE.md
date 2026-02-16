@@ -2455,8 +2455,8 @@ POST /api/adminUsers/deleteCustomRole   # Delete custom role (removes from users
 ```
 GET /api/bootstrap/css/bootstrap.min.css
 GET /api/bootstrap/css/bootstrap.min.css.map
-GET /api/bootstrap/js/bootstrap.min.js
-GET /api/bootstrap/js/bootstrap.min.js.map
+GET /api/bootstrap/js/bootstrap.bundle.min.js
+GET /api/bootstrap/js/bootstrap.bundle.min.js.map
 ```
 
 ### Creating New Routes

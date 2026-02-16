@@ -46,8 +46,8 @@ GET /api/bootstrap/css/bootstrap-icons.css
 
 ### JavaScript
 ```
-GET /api/bootstrap/js/bootstrap.min.js
-GET /api/bootstrap/js/bootstrap.min.js.map
+GET /api/bootstrap/js/bootstrap.bundle.min.js
+GET /api/bootstrap/js/bootstrap.bundle.min.js.map
 ```
 
 ### Font Files
@@ -73,7 +73,7 @@ Il plugin inietta automaticamente Bootstrap nelle pagine attraverso il sistema d
 <link rel='stylesheet' href='/api/bootstrap/css/bootstrap-icons.min.css'>
 
 // Hook "script" - inietta JavaScript
-<script src="/api/bootstrap/js/bootstrap.min.js"></script>
+<script src="/api/bootstrap/js/bootstrap.bundle.min.js"></script>
 ```
 
 Tutte le pagine che utilizzano `pluginSys.hookPage()` riceveranno automaticamente Bootstrap.
@@ -92,7 +92,7 @@ Puoi anche includere manualmente i file nelle tue pagine EJS:
 <body>
     <!-- Il tuo contenuto -->
 
-    <script src="/api/bootstrap/js/bootstrap.min.js"></script>
+    <script src="/api/bootstrap/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
 ```

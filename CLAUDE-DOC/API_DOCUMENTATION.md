@@ -235,7 +235,7 @@ Serve la source map del CSS Bootstrap.
 
 ### Assets JavaScript
 
-#### GET /api/bootstrap/js/bootstrap.min.js
+#### GET /api/bootstrap/js/bootstrap.bundle.min.js
 
 Serve il file JavaScript minificato di Bootstrap.
 
@@ -243,7 +243,7 @@ Serve il file JavaScript minificato di Bootstrap.
 
 ---
 
-#### GET /api/bootstrap/js/bootstrap.min.js.map
+#### GET /api/bootstrap/js/bootstrap.bundle.min.js.map
 
 Serve la source map del JS Bootstrap.
 

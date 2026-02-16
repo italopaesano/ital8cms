@@ -129,7 +129,7 @@ function getFnInPageMap(){
 
   const fnInPageMap = new Map();
   fnInPageMap.set( 'head', (passData) => '<link href="../../../node_modules/bootstrap/dist/css/bootstrap.min.css">' );
-  fnInPageMap.set('script', (passData) => '<script src="../../../node_modules/bootstrap/dist/js/bootstrap.min.js" type="text/javascript" ></script>' );
+  fnInPageMap.set('script', (passData) => '<script src="../../../node_modules/bootstrap/dist/js/bootstrap.bundle.min.js" type="text/javascript" ></script>' );
 
   return fnInPageMap;
 }

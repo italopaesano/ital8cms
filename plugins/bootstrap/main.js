@@ -111,7 +111,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         </div>
     </div>
 
-    <script src="/${ital8Conf.apiPrefix}/${pluginName}/js/bootstrap.bundle.min.js"></script>
+    <script src="/${ital8Conf.apiPrefix}/${pluginName}/js/bootstrap.bundle.min.js" type="text/javascript" ></script>
 </body>
 </html>
         `;
@@ -141,7 +141,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     // Bootstrap JS (bundle include Popper.js, necessario per dropdown, offcanvas, tooltip, popover)
     {
       method: 'GET',
-      path: '/js/bootstrap.min.js',
+      path: '/js/bootstrap.bundle.min.js',
       access: { requiresAuth: false, allowedRoles: [] }, // Pubblico - risorsa statica
       handler: async (ctx) => {
         const bootstrapJsPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','js','bootstrap.bundle.min.js');
@@ -151,7 +151,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     },
     {
       method: 'GET',
-      path: '/js/bootstrap.min.js.map',
+      path: '/js/bootstrap.bundle.min.js.map',
       access: { requiresAuth: false, allowedRoles: [] }, // Pubblico - risorsa statica
       handler: async (ctx) => {
         const bootstrapJsPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','js','bootstrap.bundle.min.js.map');
@@ -219,7 +219,7 @@ function getHooksPage(){
     <link rel='stylesheet' href='/${ital8Conf.apiPrefix}/${pluginName}/css/bootstrap-icons.min.css' type='text/css'  media='all' />
     ` );
   HookMap.set('script', (passData) => `
-    <script src="/${ital8Conf.apiPrefix}/${pluginName}/js/bootstrap.min.js" type="text/javascript" ></script>
+    <script src="/${ital8Conf.apiPrefix}/${pluginName}/js/bootstrap.bundle.min.js" type="text/javascript" ></script>
     ` );
 
   return HookMap;

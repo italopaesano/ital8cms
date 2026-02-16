@@ -153,7 +153,7 @@ function getHooksPage(section, passData, pluginSys, pathPluginFolder) {
   );
 
   hookMap.set('script', (data) =>
-    `<script src="/api/bootstrap/js/bootstrap.min.js"></script>`
+    `<script src="/api/bootstrap/js/bootstrap.bundle.min.js"></script>`
   );
 
   hookMap.set('header', (data) => {

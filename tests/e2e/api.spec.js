@@ -9,7 +9,7 @@ test.describe('API Endpoints', () => {
   });
 
   test('should serve Bootstrap JS', async ({ request }) => {
-    const response = await request.get('/api/bootstrap/js/bootstrap.min.js');
+    const response = await request.get('/api/bootstrap/js/bootstrap.bundle.min.js');
     expect(response.status()).toBe(200);
   });
 
