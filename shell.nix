@@ -37,6 +37,7 @@
     freetype
     fontconfig
     libgbm
+    systemdMinimal
     stdenv.cc.cc.lib
   ];
   runScript = "bash";
