@@ -36,6 +36,7 @@
     libxkbcommon
     freetype
     fontconfig
+    libgbm
     stdenv.cc.cc.lib
   ];
   runScript = "bash";
