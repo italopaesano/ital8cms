@@ -533,20 +533,58 @@ class pluginSys{
     for( const[ key, Avalue ] of  this.#routes ){ // itero la mappa key è il nome del modulo Avalue è l'array che contiene tuti gli ogrtti che rapresentano le rotte
       for (const oRoute of Avalue) {
         const path = `${prefix}/${key}${oRoute.path}`;
+
+        // Se la route dichiara un campo access, wrappa l'handler con un controllo di autenticazione e ruoli
+        const handler = oRoute.access ? this.#wrapHandlerWithAccessCheck(oRoute.handler, oRoute.access) : oRoute.handler;
+
         if( oRoute.method == 'GET'){
-          router.get( path , oRoute.handler );// key è il nome del plugin che farà parte del percorso per evitare conflitti
+          router.get( path , handler );// key è il nome del plugin che farà parte del percorso per evitare conflitti
         }else if( oRoute.method == 'POST' ){
-          router.post( path , oRoute.handler );
+          router.post( path , handler );
         }else if( oRoute.method == 'PUT' ){
-          router.put( path , oRoute.handler );
+          router.put( path , handler );
         }else if( oRoute.method == 'DEL' ){
-          router.del( path , oRoute.handler );
+          router.del( path , handler );
         }else if( oRoute.method == 'ALL' ){
-          router.all( path , oRoute.handler );
+          router.all( path , handler );
         }
       }
 
     }
+  }
+
+  /**
+   * Wrappa un route handler con controllo access (autenticazione e ruoli)
+   * @private
+   * @param {Function} originalHandler - Handler originale della route
+   * @param {object} access - Configurazione accesso { requiresAuth: boolean, allowedRoles: number[] }
+   * @returns {Function} - Handler wrappato con controllo accesso
+   */
+  #wrapHandlerWithAccessCheck(originalHandler, access) {
+    return async (ctx) => {
+      if (access.requiresAuth) {
+        // Verifica autenticazione
+        if (!ctx.session || !ctx.session.authenticated) {
+          ctx.status = 401;
+          ctx.body = { error: 'Authentication required' };
+          return;
+        }
+
+        // Verifica ruoli (solo se allowedRoles è un array non vuoto)
+        if (access.allowedRoles && access.allowedRoles.length > 0) {
+          const userRoles = ctx.session.user?.roleIds || [];
+          const hasRequiredRole = userRoles.some(roleId => access.allowedRoles.includes(roleId));
+          if (!hasRequiredRole) {
+            ctx.status = 403;
+            ctx.body = { error: 'Insufficient permissions' };
+            return;
+          }
+        }
+      }
+
+      // Accesso consentito, esegui l'handler originale
+      await originalHandler(ctx);
+    };
   }
 
 /**
