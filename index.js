@@ -102,6 +102,7 @@ app.use(
   koaClassicServer(
     __dirname + `${ital8Conf.wwwPath}`,
     (opt = {
+      index: ['index.ejs'],
       urlPrefix: `${ital8Conf.globalPrefix}`,
       showDirContents: true,
       urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.pluginPagesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources','/pluginPages' -> questi sarebbero i percorsi di default pero adesso sono configurabili
