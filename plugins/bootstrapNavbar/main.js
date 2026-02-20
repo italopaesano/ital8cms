@@ -13,6 +13,14 @@ const navbarCache = new Map();
 // Debug mode flag (true = re-read files every request)
 const isDebugMode = ital8Conf.debugMode >= 1;
 
+// Serving configuration for configDir resolution (used by servingRootResolver)
+const projectRoot = path.join(__dirname, '..', '..');
+const servingPaths = {
+  wwwPath: ital8Conf.wwwPath,
+  pluginPagesPath: ital8Conf.pluginPagesPath,
+  adminPagesPath: ital8Conf.adminPagesPath,
+};
+
 
 function loadPlugin(pluginSys, pathPluginFolder) {
   if (isDebugMode) {
@@ -45,13 +53,20 @@ function getObjectToShareToWebPages() {
      *
      * @param {object} options - Render options
      * @param {string} options.name - Navbar name (required). Maps to navbar.{name}.json5
+     * @param {string} [options.configDir] - Directory where to search for navbar config file,
+     *   relative to the serving root. If omitted, searches in the same directory as the template.
+     *   Examples: '/', '/shared', 'subdir'. With and without leading '/' are equivalent.
+     *   Path traversal (../) outside the serving root is blocked for security.
      * @param {object} [options.settingsOverrides] - Optional overrides for settings from JSON5
      * @param {object} passData - The passData object from the EJS template (required)
      * @returns {string} - Generated HTML string, or empty string on error
      *
      * @example
-     * // In EJS template:
+     * // In EJS template (default - same directory):
      * <%- passData.plugin.bootstrapNavbar.render({name: 'main'}, passData) %>
+     *
+     * // With configDir (search in /www/shared/ instead of template's directory):
+     * <%- passData.plugin.bootstrapNavbar.render({name: 'main', configDir: '/shared'}, passData) %>
      *
      * // With settings overrides:
      * <%- passData.plugin.bootstrapNavbar.render({
@@ -60,7 +75,7 @@ function getObjectToShareToWebPages() {
      * }, passData) %>
      */
     render: (options, passData) => {
-      return navbarRenderer.render(options, passData, isDebugMode, navbarCache);
+      return navbarRenderer.render(options, passData, isDebugMode, navbarCache, { projectRoot, servingPaths });
     },
   };
 }
