@@ -17,6 +17,7 @@
 const fs = require('fs');
 const path = require('path');
 const loadJson5 = require('../../../core/loadJson5');
+const resolveServingRoot = require('../../../core/servingRootResolver');
 
 // Default settings applied when not specified in the JSON5 file
 const DEFAULT_SETTINGS = {
@@ -333,13 +334,18 @@ function renderOffcanvas(config, settings, currentHref, ctx) {
  *
  * @param {object} options - Render options
  * @param {string} options.name - Navbar name (matches navbar.{name}.json5)
+ * @param {string} [options.configDir] - Directory where to search for navbar config,
+ *   relative to the serving root. If omitted, searches in template's directory.
  * @param {object} [options.settingsOverrides] - Optional overrides for settings
  * @param {object} passData - The passData object from the EJS template
  * @param {boolean} isDebugMode - If true, re-reads file on every call (no cache)
  * @param {Map} cache - Cache map for parsed navbar configs
+ * @param {object} [servingConfig] - Serving configuration for configDir resolution
+ * @param {string} [servingConfig.projectRoot] - Absolute path to project root
+ * @param {object} [servingConfig.servingPaths] - Paths from ital8Config.json5
  * @returns {string} - Generated HTML string, or empty string on error
  */
-function render(options, passData, isDebugMode, cache) {
+function render(options, passData, isDebugMode, cache, servingConfig) {
   const { name } = options;
 
   if (!name) {
@@ -352,10 +358,64 @@ function render(options, passData, isDebugMode, cache) {
     return '';
   }
 
-  // Resolve the directory of the calling EJS template
-  const templateDir = path.dirname(passData.filePath);
+  // Determine the directory where to search for the navbar config file
+  let configSearchDir;
+
+  if (options.configDir != null && options.configDir !== '') {
+    // ── configDir mode: resolve relative to the serving root ──────────────
+    if (!servingConfig || !servingConfig.projectRoot || !servingConfig.servingPaths) {
+      console.warn('[bootstrapNavbar] configDir specified but servingConfig not available. Ignoring configDir.');
+      configSearchDir = path.dirname(passData.filePath);
+    } else {
+      const rootInfo = resolveServingRoot(
+        passData.filePath,
+        servingConfig.projectRoot,
+        servingConfig.servingPaths
+      );
+
+      if (!rootInfo) {
+        console.warn(
+          `[bootstrapNavbar] configDir not supported for file: ${passData.filePath} ` +
+          `(admin root level or unknown serving context). Ignoring configDir.`
+        );
+        return '';
+      }
+
+      // Normalize configDir: with and without leading '/' are equivalent
+      // Both '/subdir' and 'subdir' resolve to {root}/subdir/
+      const normalizedConfigDir = options.configDir.replace(/^\/+/, '');
+
+      // Resolve configDir relative to the serving root
+      const resolvedDir = path.resolve(rootInfo.root, normalizedConfigDir);
+
+      // Security: ensure resolved path stays within the serving root
+      // Blocks path traversal attacks (e.g., configDir: '../../etc')
+      const isWithinRoot = resolvedDir === rootInfo.root ||
+        resolvedDir.startsWith(rootInfo.root + path.sep);
+
+      if (!isWithinRoot) {
+        console.warn(
+          `[bootstrapNavbar] Security: configDir "${options.configDir}" resolves outside ` +
+          `serving root "${rootInfo.root}". Access denied.`
+        );
+        return '';
+      }
+
+      configSearchDir = resolvedDir;
+
+      // Always log the resolved path (both debug and production)
+      console.log(
+        `[bootstrapNavbar] configDir resolved: "${options.configDir}" → "${resolvedDir}" ` +
+        `(root: "${rootInfo.root}", context: "${rootInfo.context}")`
+      );
+    }
+  } else {
+    // ── Default mode: search in the same directory as the calling template ──
+    configSearchDir = path.dirname(passData.filePath);
+  }
+
   const navbarFileName = `navbar.${name}.json5`;
-  const navbarFilePath = path.join(templateDir, navbarFileName);
+  const navbarFilePath = path.join(configSearchDir, navbarFileName);
 
   // Cache key based on full file path
   const cacheKey = navbarFilePath;

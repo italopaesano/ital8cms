@@ -9,6 +9,12 @@
   "activeTheme": "placeholderExample",
   "adminActiveTheme": "defaultAdminTheme",
   "wwwPath": "/www",
+  // Path alla directory di serving delle plugin pages (relativo alla root del progetto)
+  // Usato da servingRootResolver per determinare il root di isolamento per-plugin
+  "pluginPagesPath": "/pluginPages",
+  // Path alla directory di serving delle pagine admin (relativo alla root del progetto)
+  // Usato da servingRootResolver per determinare il root di isolamento per-sezione
+  "adminPagesPath": "/core/admin/webPages",
   "browserCacheEnabled": false,
   "browserCacheMaxAge": 86400,
   "publicThemeResourcesPrefix": "public-theme-resources",
