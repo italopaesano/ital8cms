@@ -1,6 +1,9 @@
 node_modules/
 .env
 
+# Certificati TLS (mai committare chiavi private)
+/certs/
+
 # Plugin Pages System - auto-generated symlinks
 /pluginPages/
 
