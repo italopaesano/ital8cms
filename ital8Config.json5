@@ -47,13 +47,34 @@
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   "https": {
-    "enabled": false,                       // true = abilita HTTPS
-    "port": 443,                            // Porta HTTPS (default 443)
-    "AutoRedirectHttpPortToHttpsPort": false, // true = redirect 301 HTTP→HTTPS
-    "certFile": "./certs/fullchain.pem",    // Percorso certificato server
-    "keyFile": "./certs/privkey.pem",       // Percorso chiave privata
-    "caFile": "",                           // Percorso CA intermedia (opzionale, "" = disabilitato)
-    "tlsOptions": {},                       // Opzioni TLS avanzate (opzionale)
+    "enabled": false,                         // true = abilita HTTPS
+    "port": 443,                              // Porta HTTPS (default 443)
+    "AutoRedirectHttpPortToHttpsPort": false,  // true = redirect 301 HTTP→HTTPS
+    "certFile": "./certs/fullchain.pem",      // Percorso certificato server
+    "keyFile": "./certs/privkey.pem",         // Percorso chiave privata
+    "caFile": "",                             // Percorso CA intermedia (opzionale, "" = disabilitato)
+    "tlsOptions": {},                         // Opzioni TLS avanzate (opzionale)
+
+    // Soglie di avviso scadenza certificato (giorni rimanenti alla scadenza)
+    "expiryWarningDays": 60,                  // ⚠  warning  — avviare il rinnovo
+    "expiryCriticalDays": 15,                 // 🔴 critical — rinnovo urgente
+
+    // Ricarica certificati senza riavvio quando i file cambiano su disco
+    // Utile dopo certbot renew: ital8cms rileva la modifica e chiama setSecureContext()
+    "hotReload": {
+      "enabled": true,
+      "debounceMs": 2000,                     // attesa dopo l'ultimo evento fs prima di ricaricare (evita reload su scritture parziali)
+    },
+
+    // Endpoint ACME HTTP-01 challenge per rinnovo automatico Let's Encrypt
+    // Path fisso (RFC 8555): GET /.well-known/acme-challenge/:token
+    // webroot: stesso path passato a certbot --webroot -w (es. "/var/www/html")
+    //   ital8cms legge i token da: {webroot}/.well-known/acme-challenge/{token}
+    //   Comando certbot compatibile: certbot certonly --webroot -w {webroot} -d example.com
+    "acmeChallenge": {
+      "enabled": false,
+      "webroot": "",                          // path assoluto o relativo alla root del progetto
+    },
   },
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

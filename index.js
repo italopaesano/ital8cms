@@ -6,9 +6,7 @@ const ejs = require("ejs");
 const loadJson5 = require('./core/loadJson5');
 const ital8Conf = loadJson5('./ital8Config.json5');
 const path = require('path');
-const http = require('http');
-const https = require('https');
-const fs = require('fs');
+const httpsManager = require('./core/httpsManager');
 
 const priorityMiddlewares = require('./core/priorityMiddlewares/priorityMiddlewares.js')(app, ital8Conf);
 router = priorityMiddlewares.router ;
@@ -272,66 +270,7 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
 //   3. https.enabled = true (cert KO) → console.error + fallback a HTTP puro su httpPort
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-if (ital8Conf.https && ital8Conf.https.enabled) {
-
-  // ── Caricamento certificati TLS ───────────────────────────────────────────────
-  let tlsConfig = null;
-  try {
-    const certPath = path.resolve(__dirname, ital8Conf.https.certFile);
-    const keyPath  = path.resolve(__dirname, ital8Conf.https.keyFile);
-
-    // tlsOptions (opzionale) viene unito PER PRIMO; certFile/keyFile/caFile hanno sempre priorità
-    tlsConfig = {
-      ...(ital8Conf.https.tlsOptions || {}),
-      cert: fs.readFileSync(certPath),
-      key:  fs.readFileSync(keyPath),
-    };
-
-    if (ital8Conf.https.caFile) {
-      const caPath = path.resolve(__dirname, ital8Conf.https.caFile);
-      tlsConfig.ca = fs.readFileSync(caPath);
-    }
-  } catch (certError) {
-    console.error('[HTTPS] Errore nel caricamento dei certificati: ' + certError.message);
-    console.error('[HTTPS] Fallback: avvio in HTTP puro sulla porta ' + ital8Conf.httpPort);
-    http.createServer(app.callback()).listen(ital8Conf.httpPort, () => {
-      console.log('server started on port: ' + ital8Conf.httpPort + '  (HTTP - HTTPS fallback per cert mancanti)');
-    });
-  }
-
-  // ── Avvio server HTTPS (solo se i certificati sono stati caricati correttamente) ─
-  if (tlsConfig) {
-    https.createServer(tlsConfig, app.callback()).listen(ital8Conf.https.port, () => {
-      console.log('server started on HTTPS port: ' + ital8Conf.https.port);
-    });
-
-    if (ital8Conf.https.AutoRedirectHttpPortToHttpsPort) {
-      // ── Server HTTP minimale: redirect 301 verso HTTPS ────────────────────────
-      // La porta 443 viene omessa dall'URL (standard HTTP); porte non-standard incluse
-      const httpsPort   = ital8Conf.https.port;
-      const portSuffix  = httpsPort === 443 ? '' : ':' + httpsPort;
-
-      http.createServer((req, res) => {
-        const hostname = (req.headers.host || 'localhost').split(':')[0];
-        res.writeHead(301, { 'Location': 'https://' + hostname + portSuffix + req.url });
-        res.end();
-      }).listen(ital8Conf.httpPort, () => {
-        console.log('HTTP port ' + ital8Conf.httpPort + ' → redirect 301 to HTTPS port ' + httpsPort);
-      });
-    } else {
-      // ── Server HTTP completo in parallelo all'HTTPS ───────────────────────────
-      http.createServer(app.callback()).listen(ital8Conf.httpPort, () => {
-        console.log('server started on HTTP port: ' + ital8Conf.httpPort);
-      });
-    }
-  }
-
-} else {
-  // ── HTTPS disabilitato: HTTP puro (comportamento originale) ───────────────────
-  http.createServer(app.callback()).listen(ital8Conf.httpPort, () => {
-    console.log('server started on port: ' + ital8Conf.httpPort);
-  });
-}
+httpsManager.start(app, router, ital8Conf);
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // END HTTP/HTTPS SERVER SETUP

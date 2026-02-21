@@ -66,6 +66,9 @@ function writeTestConfig(httpsOverride) {
     https: {
       ...original.https,
       ...httpsOverride,
+      // hotReload disabilitato nei test: evita che fs.watch() tenga attivi
+      // watcher nel processo figlio interferendo con il ciclo di vita del test
+      hotReload: { enabled: false },
     },
   };
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(testConfig, null, 2), 'utf8');
