@@ -2944,9 +2944,17 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
   "wwwPath": "/www",                  // Public web root
   "debugMode": 1,                     // Debug level (0=off, 1=on)
   "httpPort": 3000,                   // HTTP port
-  "useHttps": false,                  // Enable HTTPS
-  "httpsPort": "",                    // HTTPS port
-  "AutoRedirectHttpPortToHttpsPort": false,
+
+  // HTTPS configuration (see "HTTPS Configuration" section for full docs)
+  "https": {
+    "enabled": false,                         // true = abilita HTTPS
+    "port": 443,                              // Porta HTTPS
+    "AutoRedirectHttpPortToHttpsPort": false, // true = redirect 301 HTTP→HTTPS
+    "certFile": "./certs/fullchain.pem",      // Certificato server
+    "keyFile": "./certs/privkey.pem",         // Chiave privata
+    "caFile": "",                             // CA intermedia (opzionale)
+    "tlsOptions": {},                         // Opzioni TLS avanzate (opzionale)
+  },
 
   // Priority Middlewares Configuration
   "priorityMiddlewares": {
@@ -3005,6 +3013,130 @@ Priority middlewares are loaded **before everything else** in a fixed, guarantee
 - Admin panel login to stop working
 
 **Only disable if:** Your application doesn't need user authentication at all.
+
+### HTTPS Configuration
+
+#### Overview
+
+ital8cms supports HTTPS natively through Node.js's built-in `https` module. All HTTPS settings are grouped in the `https` block of `ital8Config.json5`. The three legacy flat variables (`useHttps`, `httpsPort`, `AutoRedirectHttpPortToHttpsPort`) have been removed.
+
+#### Configuration Block
+
+```json5
+// In ital8Config.json5
+{
+  "httpPort": 3000,
+
+  "https": {
+    "enabled": false,                         // true = abilita HTTPS
+    "port": 443,                              // Porta HTTPS (default 443)
+    "AutoRedirectHttpPortToHttpsPort": false, // true = redirect 301 HTTP→HTTPS
+    "certFile": "./certs/fullchain.pem",      // Percorso certificato server
+    "keyFile": "./certs/privkey.pem",         // Percorso chiave privata
+    "caFile": "",                             // CA intermedia (opzionale, "" = disabilitato)
+    "tlsOptions": {},                         // Opzioni TLS avanzate (opzionale)
+  },
+}
+```
+
+#### Fields Reference
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `enabled` | boolean | Yes | `true` = abilita HTTPS, `false` = HTTP puro |
+| `port` | number | Yes | Porta HTTPS (tipicamente 443) |
+| `AutoRedirectHttpPortToHttpsPort` | boolean | Yes | Se `true`, il server HTTP su `httpPort` risponde solo con redirect 301 verso HTTPS |
+| `certFile` | string | If enabled | Percorso al certificato server (es. `fullchain.pem` di Let's Encrypt). Assoluto o relativo alla root del progetto. |
+| `keyFile` | string | If enabled | Percorso alla chiave privata (es. `privkey.pem`). Assoluto o relativo. |
+| `caFile` | string | No | Percorso alla CA intermedia (es. `chain.pem`). Stringa vuota `""` = disabilitato. |
+| `tlsOptions` | object | No | Opzioni raw passate a `https.createServer()`. Vengono unite **prima** di certFile/keyFile/caFile, che hanno sempre priorità. Utile per `ciphers`, `secureProtocol`, `requestCert`, ecc. |
+
+#### Behavioral Scenarios
+
+**Scenario 1: `enabled: false` (default)**
+
+Solo HTTP su `httpPort`.
+
+```
+httpPort:3000 → App Koa completa
+```
+
+**Scenario 2: `enabled: true` + `AutoRedirectHttpPortToHttpsPort: false`**
+
+Due server paralleli: HTTPS completo + HTTP completo.
+
+```
+httpPort:3000  → App Koa completa (HTTP)
+https.port:443 → App Koa completa (HTTPS)
+```
+
+**Scenario 3: `enabled: true` + `AutoRedirectHttpPortToHttpsPort: true`**
+
+HTTPS completo + HTTP minimale che redirige.
+
+```
+httpPort:3000  → redirect 301 → https://hostname[:port]/path
+https.port:443 → App Koa completa (HTTPS)
+```
+
+La porta 443 viene **omessa** dall'URL di redirect (standard HTTP). Porte non-standard (es. 8443) vengono incluse.
+
+**Scenario 4: `enabled: true` + certificati mancanti o illeggibili**
+
+Fallback automatico a HTTP puro.
+
+```
+[HTTPS] Errore nel caricamento dei certificati: ENOENT: no such file or directory...
+[HTTPS] Fallback: avvio in HTTP puro sulla porta 3000
+httpPort:3000 → App Koa completa (HTTP - fallback)
+```
+
+#### Let's Encrypt Setup (esempio pratico)
+
+```json5
+"https": {
+  "enabled": true,
+  "port": 443,
+  "AutoRedirectHttpPortToHttpsPort": true,
+  "certFile": "/etc/letsencrypt/live/example.com/fullchain.pem",
+  "keyFile": "/etc/letsencrypt/live/example.com/privkey.pem",
+  "caFile": "/etc/letsencrypt/live/example.com/chain.pem",
+  "tlsOptions": {},
+},
+```
+
+#### Self-Signed Certificate (sviluppo locale)
+
+```bash
+# Genera certificato self-signed
+mkdir -p certs
+openssl req -x509 -newkey rsa:4096 -keyout certs/privkey.pem \
+  -out certs/fullchain.pem -days 365 -nodes \
+  -subj "/CN=localhost"
+```
+
+```json5
+"https": {
+  "enabled": true,
+  "port": 3443,
+  "AutoRedirectHttpPortToHttpsPort": false,
+  "certFile": "./certs/fullchain.pem",
+  "keyFile": "./certs/privkey.pem",
+  "caFile": "",
+  "tlsOptions": {},
+},
+```
+
+Accesso: `https://localhost:3443` (browser mostrerà warning per self-signed, normale in sviluppo).
+
+#### Implementation Notes
+
+- `http` e `https` sono moduli built-in di Node.js — nessuna dipendenza npm aggiuntiva
+- La logica di avvio è in `index.js`, racchiusa tra i commenti `START HTTP/HTTPS SERVER SETUP` e `END HTTP/HTTPS SERVER SETUP`
+- `app.callback()` viene chiamato invece di `app.listen()` per poter passare l'app Koa sia a `http.createServer()` che a `https.createServer()`
+- `tlsOptions` viene unito con spread (`...tlsOptions`) **prima** di `cert`/`key`/`ca`, garantendo che i percorsi file abbiano sempre priorità
+
+---
 
 ### Session Configuration: core/priorityMiddlewares/koaSession.json5
 
@@ -4106,10 +4238,40 @@ When working on this codebase as an AI assistant:
 ---
 
 **Last Updated:** 2026-02-21
-**Version:** 1.9.0
+**Version:** 2.0.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v2.0.0 (2026-02-21): **BREAKING CHANGE** - Implemented native HTTPS support with nested config block. Key changes:
+  - **BREAKING: Removed three flat config variables:**
+    - `useHttps` → rimossa
+    - `httpsPort` → rimossa
+    - `AutoRedirectHttpPortToHttpsPort` (root-level) → spostata dentro `https {}`
+  - **New `https` config block in `ital8Config.json5`:**
+    - `https.enabled` → abilita/disabilita HTTPS
+    - `https.port` → porta HTTPS (default 443)
+    - `https.AutoRedirectHttpPortToHttpsPort` → redirect 301 HTTP→HTTPS
+    - `https.certFile` → percorso certificato server (obbligatorio se enabled)
+    - `https.keyFile` → percorso chiave privata (obbligatorio se enabled)
+    - `https.caFile` → CA intermedia (opzionale, `""` = disabilitato)
+    - `https.tlsOptions` → opzioni TLS raw avanzate (opzionale, merge con priorità ai file)
+  - **4 scenari di avvio gestiti:**
+    - `enabled: false` → HTTP puro su `httpPort` (comportamento precedente invariato)
+    - `enabled: true` + cert ok + `AutoRedirect: false` → HTTP + HTTPS in parallelo
+    - `enabled: true` + cert ok + `AutoRedirect: true` → HTTP 301 redirect + HTTPS completo
+    - `enabled: true` + cert KO → `console.error` + fallback automatico a HTTP puro
+  - **Refactoring `index.js`:**
+    - Aggiunti `require('http')`, `require('https')`, `require('fs')` in cima
+    - `app.listen()` sostituito con `http.createServer(app.callback())` / `https.createServer(tlsConfig, app.callback())`
+    - Logica racchiusa tra commenti `START/END HTTP/HTTPS SERVER SETUP`
+    - Porta 443 omessa automaticamente dall'URL di redirect (standard HTTP)
+  - **Nessuna dipendenza npm aggiuntiva** (`http`, `https`, `fs` sono built-in Node.js)
+  - **Nuova sezione documentazione:** "HTTPS Configuration" in Configuration Management
+    - Fields reference table, 4 scenari comportamentali, Let's Encrypt example, self-signed example
+  - **Files Modified:**
+    - `/ital8Config.json5` - rimossi 3 flag flat, aggiunto blocco `https {}`
+    - `/index.js` - nuova logica HTTP/HTTPS server setup
+    - `/CLAUDE.md` - documentazione aggiornata
 - v1.9.0 (2026-02-21): **DOCUMENTATION** - Added comprehensive bootstrapNavbar plugin documentation to CLAUDE.md. Key changes:
   - **New Section: Bootstrap Navbar Plugin**
     - Complete plugin overview with feature list
