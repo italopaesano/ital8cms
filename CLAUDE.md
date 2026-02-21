@@ -1120,6 +1120,446 @@ Themes call `pluginSys.hookPage()` to allow plugins to inject content:
 <%- await pluginSys.hookPage("script", passData) %>
 ```
 
+## Bootstrap Navbar Plugin
+
+### Overview
+
+The **bootstrapNavbar** plugin generates Bootstrap 5 navbars from JSON5 configuration files. It supports three navbar types, auth/role-based visibility filtering, auto-active page detection, and secure cross-directory configuration sharing.
+
+**Key Features:**
+- ✅ **Three navbar types:** horizontal (with collapse), vertical (sidebar), offcanvas (drawer)
+- ✅ **JSON5-driven:** Navbar structure defined in `navbar.{name}.json5` files
+- ✅ **Auth/roles visibility:** Items shown/hidden based on authentication state and user roles
+- ✅ **Auto-active detection:** Current page highlighted automatically
+- ✅ **Dropdowns:** Nested menus with dividers and per-item visibility
+- ✅ **Separators:** Visual spacers between items
+- ✅ **Settings overrides:** Runtime overrides from EJS templates
+- ✅ **configDir:** Cross-directory config sharing with path traversal protection
+- ✅ **Caching:** Production mode caches parsed configs; debug mode re-reads every request
+- ✅ **XSS protection:** All labels and hrefs escaped; icons inserted as raw HTML (trusted)
+
+**Plugin Structure:**
+
+```
+plugins/bootstrapNavbar/
+├── main.js                    # Plugin entry point, exposes render() to templates
+├── pluginConfig.json5         # Plugin configuration (depends on bootstrap ^1.0.0)
+├── pluginDescription.json5    # Plugin metadata
+└── lib/
+    └── navbarRenderer.js      # Core rendering engine (all logic)
+```
+
+**Dependency:** `/core/servingRootResolver.js` — Utility for path isolation used by configDir feature.
+
+### Usage in EJS Templates
+
+The plugin exposes a single `render()` function via `passData.plugin.bootstrapNavbar`:
+
+```ejs
+<%# Basic usage — searches for navbar.main.json5 in the same directory as this template %>
+<%- passData.plugin.bootstrapNavbar.render({name: 'main'}, passData) %>
+
+<%# With configDir — searches in /www/ root instead of template's directory %>
+<%- passData.plugin.bootstrapNavbar.render({name: 'main', configDir: '/'}, passData) %>
+
+<%# With settings overrides — override specific settings at render time %>
+<%- passData.plugin.bootstrapNavbar.render({
+  name: 'main',
+  settingsOverrides: { colorScheme: 'light', bgClass: 'bg-dark' }
+}, passData) %>
+```
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `options.name` | string | Yes | Navbar name → maps to `navbar.{name}.json5` |
+| `options.configDir` | string | No | Directory relative to serving root where to search for config. If omitted, searches in template's directory |
+| `options.settingsOverrides` | object | No | Runtime overrides for settings (highest priority) |
+| `passData` | object | Yes | The passData object from the EJS template context |
+
+**Returns:** HTML string, or empty string on error (with `console.warn`).
+
+### Configuration File Format
+
+**File naming:** `navbar.{name}.json5` (e.g., `navbar.main.json5`, `navbar.sidebar.json5`)
+
+**File location:** Same directory as the calling EJS template (default), or configurable via `configDir`.
+
+```json5
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  // Settings control the navbar's appearance and behavior
+  "settings": {
+    "type": "horizontal",         // "horizontal" | "vertical" | "offcanvas"
+    "colorScheme": "dark",        // "dark" | "light" (Bootstrap data-bs-theme)
+    "bgClass": "bg-primary",      // Any Bootstrap background class
+    "expandAt": "lg",             // "sm" | "md" | "lg" | "xl" | "xxl" (collapse breakpoint)
+    "containerClass": "container-fluid",  // Bootstrap container class
+    "autoActive": true,           // Auto-detect and highlight current page
+    "offcanvasAlways": false,     // true = hamburger always visible (offcanvas only)
+    "position": "start",          // "start" | "end" (offcanvas direction / vertical alignment)
+    "id": "navbarMain",           // HTML id for collapse/offcanvas target
+  },
+
+  // Sections organize items into left and right groups
+  "sections": {
+    "left": [
+      // ... items (see Item Types below)
+    ],
+    "right": [
+      // ... items
+    ],
+  },
+}
+```
+
+**Note:** In vertical navbars, "left" = top section, "right" = bottom section (separated by `<hr>`).
+
+### Settings Reference
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `type` | string | `"horizontal"` | Navbar type: `horizontal`, `vertical`, `offcanvas` |
+| `colorScheme` | string | `"dark"` | Bootstrap theme: `dark` or `light` |
+| `bgClass` | string | `"bg-primary"` | Bootstrap background class (e.g., `bg-dark`, `bg-danger`) |
+| `expandAt` | string | `"lg"` | Breakpoint for collapse: `sm`, `md`, `lg`, `xl`, `xxl` |
+| `containerClass` | string | `"container-fluid"` | Bootstrap container class |
+| `autoActive` | boolean | `true` | Auto-detect current page and add `active` class |
+| `offcanvasAlways` | boolean | `false` | If `true`, hamburger menu is always visible (offcanvas only) |
+| `position` | string | `"start"` | Direction: `start` (left) or `end` (right) |
+| `id` | string | `"navbarMain"` | HTML `id` used for collapse/offcanvas targeting |
+
+**Settings merge priority (lowest to highest):**
+1. **Built-in defaults** (hardcoded in navbarRenderer.js)
+2. **JSON5 file settings** (`config.settings`)
+3. **Runtime overrides** (`options.settingsOverrides`)
+
+### Item Types
+
+#### Regular Item (Link)
+
+```json5
+{
+  "label": "Home",                    // Text displayed (HTML-escaped)
+  "href": "/",                        // URL (HTML-escaped, defaults to "#")
+  "icon": "<i class='bi bi-house'></i>",  // Optional: raw HTML (NOT escaped)
+  "target": "_blank",                // Optional: link target attribute
+  "requiresAuth": true,              // Optional: auth filter (see Visibility)
+  "allowedRoles": [0, 1],            // Optional: role filter (see Visibility)
+  "showWhen": "authenticated",       // Optional: shortcut filter (see Visibility)
+}
+```
+
+#### Dropdown
+
+```json5
+{
+  "type": "dropdown",
+  "label": "Menu",
+  "icon": "<i class='bi bi-list'></i>",   // Optional icon in toggle
+  "requiresAuth": true,                    // Optional: filters the ENTIRE dropdown
+  "items": [
+    { "label": "Item 1", "href": "/item1" },
+    { "type": "divider" },                 // Horizontal separator
+    { "label": "Item 2", "href": "/item2", "requiresAuth": true, "allowedRoles": [0] },
+  ],
+}
+```
+
+**Behavior:** If all sub-items are hidden (auth filtering), the entire dropdown is hidden.
+
+**Dropdown ID generation:** `dropdown-{settings.id}-{slugified-label}` (e.g., `dropdown-navbarMain-my-services`)
+
+#### Separator
+
+```json5
+{ "type": "separator" }
+```
+
+Renders a visual vertical bar (`|`) between items. **Never filtered by visibility.**
+
+#### Divider (inside dropdown only)
+
+```json5
+{ "type": "divider" }
+```
+
+Renders `<hr class="dropdown-divider">` inside a dropdown menu. **Never filtered by visibility.**
+
+### Visibility Filtering
+
+Items can be shown/hidden based on authentication state and user roles. Checks are applied in this order:
+
+**1. `showWhen` (shortcut)**
+
+| Value | Behavior |
+|-------|----------|
+| `"authenticated"` | Show only to logged-in users |
+| `"unauthenticated"` | Show only to non-logged-in users |
+| *(omitted)* | No filter |
+
+**2. `requiresAuth`**
+
+| Value | Behavior |
+|-------|----------|
+| `true` | Show only to authenticated users |
+| `false` | Show only to NON-authenticated users |
+| *(omitted)* | No filter |
+
+**3. `allowedRoles`** (checked only when `requiresAuth: true`)
+
+| Value | Behavior |
+|-------|----------|
+| `[0, 1]` | Show only to users with role 0 OR role 1 |
+| `[]` | Show to all authenticated users (no role check) |
+| *(omitted)* | Show to all authenticated users |
+
+**Priority:** `showWhen` → `requiresAuth` → `allowedRoles`
+
+**Examples:**
+
+```json5
+// Public item (no restrictions)
+{ "label": "Home", "href": "/" }
+
+// Only for logged-in users
+{ "label": "Profile", "href": "/profile", "showWhen": "authenticated" }
+
+// Only for guests
+{ "label": "Login", "href": "/login", "showWhen": "unauthenticated" }
+
+// Only for root and admin
+{ "label": "Admin", "href": "/admin", "requiresAuth": true, "allowedRoles": [0, 1] }
+
+// Only for root
+{ "label": "System", "href": "/system", "requiresAuth": true, "allowedRoles": [0] }
+```
+
+### Auto-Active Page Detection
+
+When `autoActive: true` (default), the plugin compares each item's `href` with the current page URL:
+
+- Only the **pathname** is compared (query strings and fragments are ignored)
+- **Trailing slashes** are normalized (`/page/` matches `/page`)
+- Active items receive the `active` CSS class and `aria-current="page"` attribute
+- Works in both top-level nav items and dropdown sub-items
+
+### configDir: Cross-Directory Configuration
+
+By default, navbar config files are searched in the **same directory** as the calling EJS template. The `configDir` parameter allows searching in a different directory, relative to the **serving root**.
+
+```ejs
+<%# Template at /www/pages/deep/home.ejs wants config from /www/shared/ %>
+<%- passData.plugin.bootstrapNavbar.render({name: 'main', configDir: '/shared'}, passData) %>
+```
+
+**Serving root resolution** (determined by `/core/servingRootResolver.js`):
+
+| Context | Serving Root | Example |
+|---------|-------------|---------|
+| **www** | Entire `/www/` directory | All www files share one root |
+| **pluginPages** | Per-plugin: `/pluginPages/{pluginName}/` | Each plugin isolated |
+| **admin** | Per-section: `/core/admin/webPages/{sectionId}/` | Each section isolated |
+
+**Security:**
+- Path traversal (`../`) that escapes the serving root is **blocked** with a security warning
+- Plugin pages cannot access other plugins' config files
+- Admin sections cannot access other sections' config files
+- `configDir` with or without leading `/` are equivalent (`/shared` = `shared`)
+
+**Fallback behavior:**
+- If `servingConfig` is unavailable, falls back to template's directory (with warning)
+- If file not found at resolved path, returns empty string (with warning)
+- Admin dashboard (`/core/admin/webPages/index.ejs`) returns empty string (no section root)
+
+### Navbar Type Details
+
+#### Horizontal (default)
+
+Standard Bootstrap navbar with collapse toggle for mobile.
+
+```
+┌─────────────────────────────────────────────────┐
+│ [≡] ← toggler    [Left items...]    [Right items...] │
+└─────────────────────────────────────────────────┘
+```
+
+- Uses `navbar-expand-{expandAt}` for responsive collapse
+- Left items in `<ul>` with `me-auto` (push right items to the end)
+- Right items in separate `<ul>`
+- Collapse toggle button with `data-bs-toggle="collapse"`
+
+#### Vertical (sidebar)
+
+Flex-column sidebar layout.
+
+```
+┌──────────────┐
+│ [Left items]  │
+│    ...        │
+│ ──────────── │  ← <hr> (only if right items exist)
+│ [Right items] │
+│    ...        │
+└──────────────┘
+```
+
+- Uses `flex-column align-items-stretch p-3`
+- `position: "end"` adds `ms-auto` (right-align the sidebar)
+- `<hr>` separator between left and right only if right items have content
+- No collapse toggle (always visible)
+
+#### Offcanvas (drawer)
+
+Offcanvas sidebar that slides in from a side.
+
+```
+Toggle: [≡]     ┌───────────────┐
+                │ ✕ Close       │
+                │ [Left items]  │
+                │ [Right items] │
+                └───────────────┘
+```
+
+- `offcanvasAlways: true` → hamburger **always visible** (no inline expansion)
+- `offcanvasAlways: false` → hamburger only below `expandAt` breakpoint
+- `position: "start"` → slides from left (`offcanvas-start`)
+- `position: "end"` → slides from right (`offcanvas-end`)
+- Offcanvas ID: `{settings.id}-offcanvas`
+
+### Caching Behavior
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| **Debug** (`debugMode >= 1`) | Re-reads JSON5 file on **every** request | Development (instant changes) |
+| **Production** (`debugMode = 0`) | Reads once, caches in memory (`Map`) | Production (performance) |
+
+- Cache key = absolute file path of the JSON5 file
+- Different `configDir` values produce different cache keys
+- Cache is never invalidated (server restart required for production changes)
+
+### Example Configurations
+
+Seven example configurations are available in `/www/navbarExamples/`:
+
+| File | Type | Demonstrates |
+|------|------|-------------|
+| `navbar.main.json5` | horizontal | Main navbar with dropdown, separator, auth items |
+| `navbar.horizontalLight.json5` | horizontal | Light color scheme |
+| `navbar.sidebar.json5` | vertical | Sidebar with dropdown, auth, position |
+| `navbar.offcanvasResponsive.json5` | offcanvas | Responsive offcanvas (collapses at breakpoint) |
+| `navbar.offcanvasAlways.json5` | offcanvas | Always-visible hamburger, slides from right |
+| `navbar.authHeavy.json5` | horizontal | Comprehensive auth/roles demo |
+| `navbar.overridable.json5` | horizontal | Designed for settingsOverrides demo |
+
+### Complete Example: Theme Integration
+
+**File: `/www/index.ejs`**
+
+```ejs
+<!DOCTYPE html>
+<html lang="it">
+<%- include(passData.themeSys.getThemePartPath('head.ejs')) %>
+<title>Home</title>
+</head>
+
+<body>
+  <%# Render the main navbar (searches for navbar.main.json5 in /www/) %>
+  <%- passData.plugin.bootstrapNavbar.render({name: 'main'}, passData) %>
+
+  <main class="container mt-4">
+    <h1>Welcome</h1>
+  </main>
+
+  <%- include(passData.themeSys.getThemePartPath('footer.ejs')) %>
+</body>
+</html>
+```
+
+**File: `/www/navbar.main.json5`**
+
+```json5
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "settings": {
+    "type": "horizontal",
+    "colorScheme": "dark",
+    "bgClass": "bg-primary",
+    "expandAt": "lg",
+    "autoActive": true,
+    "id": "navbarMain",
+  },
+  "sections": {
+    "left": [
+      { "label": "Home", "href": "/", "icon": "<i class='bi bi-house'></i>" },
+      {
+        "type": "dropdown",
+        "label": "Pages",
+        "items": [
+          { "label": "About", "href": "/about.ejs" },
+          { "type": "divider" },
+          { "label": "Contact", "href": "/contact.ejs" },
+        ],
+      },
+      { "type": "separator" },
+      { "label": "Admin", "href": "/admin", "requiresAuth": true, "allowedRoles": [0, 1] },
+    ],
+    "right": [
+      { "label": "Login", "href": "/pluginPages/adminUsers/login.ejs", "showWhen": "unauthenticated" },
+      { "label": "Logout", "href": "/pluginPages/adminUsers/logout.ejs", "showWhen": "authenticated" },
+    ],
+  },
+}
+```
+
+### Exported API (for testing)
+
+`navbarRenderer.js` exports four functions:
+
+```javascript
+module.exports = {
+  render,          // Main render function
+  isItemVisible,   // Auth/role visibility check
+  isActivePage,    // Active page URL comparison
+  escapeHtml,      // HTML character escaping
+};
+```
+
+### Troubleshooting
+
+**Navbar not rendering (empty string):**
+- Check that `navbar.{name}.json5` exists in the expected directory
+- Verify `passData` is passed as the second argument
+- Check console for `[bootstrapNavbar]` warnings
+
+**Items not visible:**
+- Check `requiresAuth`, `allowedRoles`, `showWhen` fields
+- Verify user session: `ctx.session.authenticated`, `ctx.session.user.roleIds`
+- Dropdown with all sub-items hidden → entire dropdown hidden
+
+**configDir not working:**
+- Ensure `servingConfig` is available (requires correct `ital8Config.json5` paths)
+- Check console for security warnings (path traversal blocked)
+- Admin dashboard (`index.ejs` in webPages root) does not support configDir
+
+**Changes not reflected:**
+- In production mode (`debugMode: 0`), restart server to clear cache
+- In debug mode (`debugMode >= 1`), changes are immediate
+
+### Reference Files
+
+| File | Purpose |
+|------|---------|
+| `/plugins/bootstrapNavbar/main.js` | Plugin entry point, render() exposure |
+| `/plugins/bootstrapNavbar/lib/navbarRenderer.js` | Core rendering engine |
+| `/plugins/bootstrapNavbar/pluginConfig.json5` | Plugin configuration |
+| `/plugins/bootstrapNavbar/pluginDescription.json5` | Plugin metadata |
+| `/core/servingRootResolver.js` | Path isolation utility for configDir |
+| `/www/navbar.main.json5` | Primary navbar configuration |
+| `/www/navbarExamples/` | 6 additional example configurations |
+| `/tests/unit/bootstrapNavbar/` | Unit tests (5 files, 206 tests) |
+| `/tests/unit/core/servingRootResolver.test.js` | servingRootResolver tests (22 tests) |
+
 ## Admin System Architecture
 
 ### Overview
@@ -3483,6 +3923,7 @@ const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
 - `/core/themeSys.js` - Theme system manager
 - `/core/admin/adminSystem.js` - Admin system coordinator
 - `/core/loadJson5.js` - JSON5 file loader utility
+- `/core/servingRootResolver.js` - Serving root path isolation utility
 
 ### Admin System
 
@@ -3502,6 +3943,14 @@ const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
 - `/plugins/adminUsers/main.js` - Authentication logic
 - `/plugins/adminUsers/adminWebSections/usersManagment/` - User management UI files
 - `/plugins/adminUsers/adminWebSections/rolesManagment/` - Role management UI files
+
+### Bootstrap Navbar Plugin
+
+- `/plugins/bootstrapNavbar/main.js` - Plugin entry point
+- `/plugins/bootstrapNavbar/lib/navbarRenderer.js` - Core rendering engine
+- `/core/servingRootResolver.js` - Path isolation utility for configDir
+- `/www/navbar.main.json5` - Primary navbar configuration
+- `/www/navbarExamples/` - Example navbar configurations (6 files)
 
 ### Databases
 
@@ -3656,11 +4105,36 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2026-01-28
-**Version:** 1.8.0
+**Last Updated:** 2026-02-21
+**Version:** 1.9.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v1.9.0 (2026-02-21): **DOCUMENTATION** - Added comprehensive bootstrapNavbar plugin documentation to CLAUDE.md. Key changes:
+  - **New Section: Bootstrap Navbar Plugin**
+    - Complete plugin overview with feature list
+    - Usage in EJS templates (render API with parameters table)
+    - Configuration file format (navbar.{name}.json5 schema)
+    - Settings reference table (all 9 settings with types, defaults, descriptions)
+    - Settings merge priority (defaults < file < runtime)
+    - Item types documentation: regular items, dropdowns, separators, dividers
+    - Visibility filtering system (showWhen, requiresAuth, allowedRoles with priority)
+    - Auto-active page detection behavior
+    - configDir feature: cross-directory config sharing with path traversal protection
+    - Serving root resolution per context (www, pluginPages, admin)
+    - Three navbar type details with ASCII diagrams (horizontal, vertical, offcanvas)
+    - Caching behavior (debug vs production mode)
+    - Example configurations index (7 files)
+    - Complete theme integration example
+    - Exported API reference (4 functions)
+    - Troubleshooting guide
+    - Reference files table
+  - **Updated Important Files Reference**
+    - Added `/core/servingRootResolver.js` to Entry Points
+    - Added Bootstrap Navbar Plugin subsection (5 entries)
+  - **Unit Tests** (added in prior commits)
+    - 6 test files, 228 tests total (206 bootstrapNavbar + 22 servingRootResolver)
+    - Coverage: escapeHtml, isActivePage, isItemVisible, configDir, rendering pipeline, servingRootResolver
 - v1.8.0 (2026-01-28): **MAJOR FEATURE** - Implemented comprehensive access control system (adminAccessControl plugin). Key changes:
   - **NEW PLUGIN: adminAccessControl**
     - Pattern-based access control for all pages and routes
