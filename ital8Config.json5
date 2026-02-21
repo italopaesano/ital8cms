@@ -21,9 +21,40 @@
   "adminThemeResourcesPrefix": "admin-theme-resources",
   "debugMode": 1,
   "httpPort": 3000,
-  "useHttps": false,
-  "httpsPort": "",
-  "AutoRedirectHttpPortToHttpsPort": false,
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // HTTPS CONFIGURATION
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Configurazione server HTTPS. Se "enabled": false il server parte solo in HTTP.
+  //
+  // Comportamento:
+  //   - "enabled": false → Solo HTTP su httpPort (default)
+  //   - "enabled": true  → Server HTTPS su https.port
+  //       + "AutoRedirectHttpPortToHttpsPort": true  → HTTP su httpPort redirige 301 a HTTPS
+  //       + "AutoRedirectHttpPortToHttpsPort": false → HTTP su httpPort serve l'app completa in parallelo
+  //
+  // In caso di errore nel caricamento dei certificati:
+  //   → console.error + fallback automatico a HTTP puro su httpPort
+  //
+  // Percorsi certificati: assoluti oppure relativi alla root del progetto
+  //   - "certFile": certificato server (es. fullchain.pem di Let's Encrypt) [OBBLIGATORIO se enabled]
+  //   - "keyFile":  chiave privata (es. privkey.pem di Let's Encrypt)        [OBBLIGATORIO se enabled]
+  //   - "caFile":   catena CA intermedia (es. chain.pem di Let's Encrypt)    [OPZIONALE]
+  //
+  // "tlsOptions": oggetto opzionale passato raw a https.createServer().
+  //   Viene unito DOPO certFile/keyFile/caFile, quindi NON può sovrascriverli.
+  //   Utile per parametri avanzati TLS: ciphers, secureProtocol, requestCert, ecc.
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  "https": {
+    "enabled": false,                       // true = abilita HTTPS
+    "port": 443,                            // Porta HTTPS (default 443)
+    "AutoRedirectHttpPortToHttpsPort": false, // true = redirect 301 HTTP→HTTPS
+    "certFile": "./certs/fullchain.pem",    // Percorso certificato server
+    "keyFile": "./certs/privkey.pem",       // Percorso chiave privata
+    "caFile": "",                           // Percorso CA intermedia (opzionale, "" = disabilitato)
+    "tlsOptions": {},                       // Opzioni TLS avanzate (opzionale)
+  },
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // PRIORITY MIDDLEWARES CONFIGURATION
