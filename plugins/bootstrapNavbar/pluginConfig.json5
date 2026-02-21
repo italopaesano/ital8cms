@@ -1,11 +1,11 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
   "active": 1,
-  "isInstalled": 0,
+  "isInstalled": 1,
   "weight": 10,
   "dependency": {
-    "bootstrap": "^1.0.0",
+    "bootstrap": "^1.0.0"
   },
   "nodeModuleDependency": {},
-  "custom": {},
+  "custom": {}
 }
