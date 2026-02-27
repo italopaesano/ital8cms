@@ -238,6 +238,59 @@ function createHttpRedirectServer(httpsPort, ital8Conf) {
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// WARNING CERTIFICATI MANCANTI
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * Emette un warning visivo prominente (box ASCII) quando uno o entrambi i file
+ * certificato TLS configurati in ital8Config.json5 non esistono su disco.
+ *
+ * Distingue tra cert mancante, key mancante, o entrambi, per facilitare
+ * la diagnosi. Mostra i comandi esatti per risolvere il problema.
+ *
+ * @param {string[]} missingLabels - Array con i label dei file mancanti
+ *                                   (sottoinsieme di ['certFile', 'keyFile'])
+ * @param {string} certConfPath    - Valore di https.certFile in ital8Config.json5
+ * @param {string} keyConfPath     - Valore di https.keyFile  in ital8Config.json5
+ * @param {number} httpPort        - Porta HTTP su cui il server farà il fallback
+ */
+function warnMissingCertificates(missingLabels, certConfPath, keyConfPath, httpPort) {
+  const certMissing = missingLabels.includes('certFile');
+  const keyMissing  = missingLabels.includes('keyFile');
+
+  const certLine = `[HTTPS]    certFile: ${certConfPath}${certMissing ? '  ← non trovato' : ''}`;
+  const keyLine  = `[HTTPS]    keyFile:  ${keyConfPath}${keyMissing  ? '  ← non trovato' : ''}`;
+
+  const lines = [
+    '[HTTPS] ══════════════════════════════════════════════════════════',
+    '[HTTPS]  ⚠  HTTPS abilitato ma certificat' + (missingLabels.length === 1 ? 'o mancante' : 'i mancanti'),
+    '[HTTPS] ══════════════════════════════════════════════════════════',
+    certLine,
+    keyLine,
+    '[HTTPS]',
+    '[HTTPS]  Opzione A — genera un certificato self-signed (sviluppo locale):',
+    '[HTTPS]',
+    '[HTTPS]    mkdir -p certs',
+    '[HTTPS]    openssl req -x509 -newkey rsa:2048 \\',
+    '[HTTPS]      -keyout certs/privkey.pem \\',
+    '[HTTPS]      -out certs/fullchain.pem \\',
+    '[HTTPS]      -days 365 -nodes \\',
+    '[HTTPS]      -subj "/CN=localhost" \\',
+    '[HTTPS]      -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"',
+    '[HTTPS]',
+    '[HTTPS]  Opzione B — disabilita HTTPS in ital8Config.json5:',
+    '[HTTPS]',
+    '[HTTPS]    "https": { "enabled": false }',
+    '[HTTPS]',
+    `[HTTPS]  ▶ Avvio in HTTP puro sulla porta ${httpPort} (fallback)`,
+    '[HTTPS] ══════════════════════════════════════════════════════════',
+  ];
+
+  console.warn(lines.join('\n'));
+}
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // FUNZIONE PRINCIPALE
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -275,6 +328,24 @@ function start(app, router, ital8Conf) {
       ? path.resolve(PROJECT_ROOT, ital8Conf.https.caFile)
       : null;
 
+    // ── Verifica esistenza file certificati (pre-emptiva, distingue i casi) ──
+    const missingCertFiles = [];
+    if (!fs.existsSync(certPath)) missingCertFiles.push('certFile');
+    if (!fs.existsSync(keyPath))  missingCertFiles.push('keyFile');
+
+    if (missingCertFiles.length > 0) {
+      warnMissingCertificates(
+        missingCertFiles,
+        ital8Conf.https.certFile,
+        ital8Conf.https.keyFile,
+        ital8Conf.httpPort
+      );
+      http.createServer(app.callback()).listen(ital8Conf.httpPort, () => {
+        console.log('server started on port: ' + ital8Conf.httpPort);
+      });
+      return;
+    }
+
     // ── Caricamento certificati TLS ───────────────────────────────────────────
     let tlsConfig = null;
     try {
@@ -288,7 +359,7 @@ function start(app, router, ital8Conf) {
       console.error('[HTTPS] Errore nel caricamento dei certificati: ' + certError.message);
       console.error('[HTTPS] Fallback: avvio in HTTP puro sulla porta ' + ital8Conf.httpPort);
       http.createServer(app.callback()).listen(ital8Conf.httpPort, () => {
-        console.log('server started on port: ' + ital8Conf.httpPort + '  (HTTP - HTTPS fallback per cert mancanti)');
+        console.log('server started on port: ' + ital8Conf.httpPort + '  (HTTP - HTTPS fallback)');
       });
       return;
     }
