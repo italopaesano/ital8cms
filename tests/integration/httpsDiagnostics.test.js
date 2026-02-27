@@ -48,7 +48,7 @@ const https = require('https');
 const net   = require('net');
 const tls   = require('tls');
 const { X509Certificate, createPublicKey, createPrivateKey } = require('crypto');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const json5 = require('json5');
 
 // ── Costanti ──────────────────────────────────────────────────────────────────
@@ -239,6 +239,83 @@ async function killProcess(proc) {
     proc.kill('SIGTERM');
   });
 }
+
+/**
+ * Genera automaticamente un certificato self-signed per il testing
+ * se i file cert/key configurati in ital8Config.json5 non esistono.
+ *
+ * Requisiti: openssl installato nel PATH di sistema.
+ * Il certificato generato include SAN per localhost e 127.0.0.1,
+ * necessario per i browser moderni (Chrome >= 58).
+ *
+ * NON sovrascrive cert esistenti — se i file sono già presenti non fa nulla.
+ */
+function ensureTestCertificates() {
+  if (!certPath || !keyPath) return; // percorsi non configurati in ital8Config.json5
+
+  const certExists = fs.existsSync(certPath);
+  const keyExists  = fs.existsSync(keyPath);
+  if (certExists && keyExists) return; // già presenti — nessuna azione necessaria
+
+  const certsDir = path.dirname(certPath);
+  if (!fs.existsSync(certsDir)) {
+    fs.mkdirSync(certsDir, { recursive: true });
+  }
+
+  console.log([
+    '',
+    '🔧 Certificati non trovati — generazione automatica per il testing...',
+    `   certFile: ${certPath}`,
+    `   keyFile:  ${keyPath}`,
+    '',
+  ].join('\n'));
+
+  try {
+    execSync(
+      [
+        'openssl req -x509 -newkey rsa:2048',
+        `-keyout "${keyPath}"`,
+        `-out "${certPath}"`,
+        '-days 365 -nodes',
+        '-subj "/CN=localhost"',
+        '-addext "subjectAltName=DNS:localhost,IP:127.0.0.1"',
+      ].join(' '),
+      { stdio: 'pipe' }
+    );
+
+    console.log([
+      '   ✅ Certificato generato con successo (valido 365 giorni).',
+      '   ⚠️  Certificato di TEST — non usare in produzione.',
+      '',
+    ].join('\n'));
+  } catch (err) {
+    console.error([
+      '   ❌ Generazione automatica fallita.',
+      `   Errore: ${err.message}`,
+      '',
+      '   Assicurarsi che openssl sia installato:',
+      '     Linux:  sudo apt install openssl   (Debian/Ubuntu)',
+      '             sudo dnf install openssl   (Fedora/RHEL)',
+      '             nix-env -iA nixpkgs.openssl (NixOS)',
+      '     macOS:  brew install openssl',
+      '',
+      '   Oppure generare il certificato manualmente:',
+      '     mkdir -p certs',
+      '     openssl req -x509 -newkey rsa:2048 \\',
+      '       -keyout certs/privkey.pem \\',
+      '       -out certs/fullchain.pem \\',
+      '       -days 365 -nodes \\',
+      '       -subj "/CN=localhost" \\',
+      '       -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"',
+      '',
+    ].join('\n'));
+  }
+}
+
+// ── Genera i certificati prima di qualsiasi test ──────────────────────────────
+beforeAll(() => {
+  ensureTestCertificates();
+});
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
