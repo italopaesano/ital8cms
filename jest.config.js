@@ -34,5 +34,10 @@ module.exports = {
   setupFilesAfterEnv: ['./tests/setup.js'],
 
   // Clear mocks tra i test
-  clearMocks: true
+  clearMocks: true,
+
+  // Esecuzione seriale: i test di integrazione (httpsServer, httpsDiagnostics)
+  // modificano lo stesso file ital8Config.json5 e spawnano server sulle stesse porte.
+  // Con maxWorkers > 1 si verificano race condition su config e EADDRINUSE sulle porte.
+  maxWorkers: 1
 };
