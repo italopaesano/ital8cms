@@ -3083,13 +3083,39 @@ La porta 443 viene **omessa** dall'URL di redirect (standard HTTP). Porte non-st
 
 **Scenario 4: `enabled: true` + certificati mancanti o illeggibili**
 
-Fallback automatico a HTTP puro.
+Fallback automatico a HTTP puro + warning visivo prominente con istruzioni actionable.
 
 ```
-[HTTPS] Errore nel caricamento dei certificati: ENOENT: no such file or directory...
-[HTTPS] Fallback: avvio in HTTP puro sulla porta 3000
+[HTTPS] ══════════════════════════════════════════════════════════
+[HTTPS]  ⚠  HTTPS abilitato ma certificati mancanti
+[HTTPS] ══════════════════════════════════════════════════════════
+[HTTPS]    certFile: ./certs/fullchain.pem  ← non trovato
+[HTTPS]    keyFile:  ./certs/privkey.pem  ← non trovato
+[HTTPS]
+[HTTPS]  Opzione A — genera un certificato self-signed (sviluppo locale):
+[HTTPS]
+[HTTPS]    mkdir -p certs
+[HTTPS]    openssl req -x509 -newkey rsa:2048 \
+[HTTPS]      -keyout certs/privkey.pem \
+[HTTPS]      -out certs/fullchain.pem \
+[HTTPS]      -days 365 -nodes \
+[HTTPS]      -subj "/CN=localhost" \
+[HTTPS]      -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+[HTTPS]
+[HTTPS]  Opzione B — disabilita HTTPS in ital8Config.json5:
+[HTTPS]
+[HTTPS]    "https": { "enabled": false }
+[HTTPS]
+[HTTPS]  ▶ Avvio in HTTP puro sulla porta 3000 (fallback)
+[HTTPS] ══════════════════════════════════════════════════════════
 httpPort:3000 → App Koa completa (HTTP - fallback)
 ```
+
+**Comportamento di dettaglio:**
+- Se manca **solo** il cert → `← non trovato` appare solo sulla riga `certFile`, il titolo usa il singolare
+- Se manca **solo** la key → `← non trovato` appare solo sulla riga `keyFile`
+- Se mancano **entrambi** → entrambe le righe annotate, titolo al plurale
+- Errori di altro tipo (permessi, file corrotto) → `console.error` generico (catch separato)
 
 #### Let's Encrypt Setup (esempio pratico)
 
@@ -3108,12 +3134,17 @@ httpPort:3000 → App Koa completa (HTTP - fallback)
 #### Self-Signed Certificate (sviluppo locale)
 
 ```bash
-# Genera certificato self-signed
+# Genera certificato self-signed con SAN (richiesto da Chrome >= 58)
 mkdir -p certs
-openssl req -x509 -newkey rsa:4096 -keyout certs/privkey.pem \
-  -out certs/fullchain.pem -days 365 -nodes \
-  -subj "/CN=localhost"
+openssl req -x509 -newkey rsa:2048 \
+  -keyout certs/privkey.pem \
+  -out certs/fullchain.pem \
+  -days 365 -nodes \
+  -subj "/CN=localhost" \
+  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
 ```
+
+**Nota:** il flag `-addext "subjectAltName=..."` è necessario perché i browser moderni (Chrome ≥ 58, Firefox, Safari) rifiutano i certificati che hanno solo `CN=localhost` senza Subject Alternative Name (SAN). Senza SAN il browser mostra `ERR_CERT_COMMON_NAME_INVALID` anche se Node.js accetta la connessione.
 
 ```json5
 "https": {
@@ -3132,9 +3163,16 @@ Accesso: `https://localhost:3443` (browser mostrerà warning per self-signed, no
 #### Implementation Notes
 
 - `http` e `https` sono moduli built-in di Node.js — nessuna dipendenza npm aggiuntiva
-- La logica di avvio è in `index.js`, racchiusa tra i commenti `START HTTP/HTTPS SERVER SETUP` e `END HTTP/HTTPS SERVER SETUP`
+- La logica di avvio è centralizzata in `core/httpsManager.js`, esportata come `start(app, router, ital8Conf)` e chiamata da `index.js`
 - `app.callback()` viene chiamato invece di `app.listen()` per poter passare l'app Koa sia a `http.createServer()` che a `https.createServer()`
 - `tlsOptions` viene unito con spread (`...tlsOptions`) **prima** di `cert`/`key`/`ca`, garantendo che i percorsi file abbiano sempre priorità
+- **Warning certificati mancanti** (`warnMissingCertificates()` in `httpsManager.js`):
+  - Effettua un controllo `fs.existsSync()` **pre-emptivo** prima di tentare `readFileSync()`
+  - Distingue quale file è assente (`certFile`, `keyFile`, o entrambi) — annotazione `← non trovato` solo sul file mancante
+  - Emette un box ASCII visivo con bordi `═══`, difficile da ignorare nello scroll del terminale
+  - Include il comando `openssl` esatto con SAN e lo snippet per disabilitare HTTPS
+  - Il server **continua ad avviarsi** in HTTP puro (fallback — comportamento invariato)
+  - Errori diversi da "file not found" (permessi, corruzione) passano al `catch` generico separato
 
 ---
 
@@ -3934,41 +3972,108 @@ module.exports = {
 
 ## Testing Strategy
 
-**Current Status:** No formal testing framework configured.
+**Current Status:** Jest è installato e configurato. Sono presenti test unitari e un test di integrazione diagnostico per HTTPS.
 
-### Recommendations for Testing
+### Test Esistenti
 
-1. **Add Jest or Mocha:**
-```bash
-npm install --save-dev jest
-```
-
-2. **Create test directory:**
 ```
 tests/
 ├── unit/
-│   ├── plugins/
+│   ├── bootstrapNavbar/          # 5 file, 206 test
+│   │   ├── escapeHtml.test.js
+│   │   ├── isActivePage.test.js
+│   │   ├── isItemVisible.test.js
+│   │   ├── configDir.test.js
+│   │   └── rendering.test.js
 │   └── core/
+│       └── servingRootResolver.test.js  # 22 test
 └── integration/
-    └── api/
+    └── httpsDiagnostics.test.js         # 26 test (4 fasi diagnostiche HTTPS)
 ```
 
-3. **Write tests for:**
-- Plugin loading and dependency resolution
-- Authentication flows
-- API endpoints
-- Database operations
-- Theme rendering
+**Totale: 254 test**
 
-4. **Update package.json:**
-```json
-{
-  "scripts": {
-    "test": "jest",
-    "test:watch": "jest --watch"
-  }
-}
+### Eseguire i test
+
+```bash
+# Tutti i test
+npx jest --verbose
+
+# Solo unit test
+npx jest tests/unit --verbose
+
+# Solo test HTTPS (diagnostica)
+npx jest tests/integration/httpsDiagnostics.test.js --verbose
+
+# Watch mode (sviluppo)
+npx jest --watch
 ```
+
+### Test di Integrazione HTTPS: httpsDiagnostics.test.js
+
+**File:** `/tests/integration/httpsDiagnostics.test.js`
+
+Il test diagnostico HTTPS è organizzato in 4 fasi indipendenti, ognuna con messaggi di errore actionable. Utile per diagnosticare problemi TLS su qualsiasi installazione.
+
+**Auto-generazione certificati (`ensureTestCertificates()`):**
+
+Il test include un `beforeAll()` globale che, se i file cert/key configurati in `ital8Config.json5` non esistono, li genera automaticamente con `openssl` (incluso SAN per `localhost` e `127.0.0.1`). **Non sovrascrive certificati già presenti.** Se `openssl` non è disponibile nel PATH, mostra istruzioni di installazione per distro.
+
+```
+tests/integration/httpsDiagnostics.test.js
+│
+├── beforeAll: ensureTestCertificates()   ← genera cert se mancanti
+│
+├── Fase 1 — Pre-flight certificati       (nessun server avviato)
+│   • file cert/key esistono e leggibili
+│   • PEM parseable come X.509
+│   • certificato non scaduto (+ warning se < 7 giorni)
+│   • coppia cert/key coerente (stessa chiave pubblica)
+│   • SAN include "localhost" o "127.0.0.1" (warning se assente)
+│   • diagnostica completa (output informativo)
+│
+├── Fase 2 — Disponibilità porte          (nessun server avviato)
+│   • porta HTTP libera
+│   • porta HTTPS libera
+│   • porte HTTP e HTTPS diverse
+│
+├── Fase 3 — TLS isolato                  (server Node.js minimale, senza Koa)
+│   • https.createServer() con i cert configurati
+│   • handshake TLS completato (rejectUnauthorized: false)
+│   • versione TLS e cipher suite (informativo)
+│   • comportamento browser-like (rejectUnauthorized: true, informativo)
+│
+└── Fase 4 — Server completo              (spawn node index.js)
+    • porte di test: HTTP 19100, HTTPS 19443 (no conflitti con prod)
+    • config temporanea iniettata senza modificare ital8Config.json5 permanentemente
+    • server parte senza crash (log di avvio HTTPS ricevuto)
+    • log NON contiene errori di caricamento certificati
+    • HTTPS risponde su 127.0.0.1:19443
+    • HTTP risponde su 127.0.0.1:19100
+    • comportamento AutoRedirect verificato (301 o parallelo)
+    • riepilogo configurazione finale (informativo)
+```
+
+**Porte riservate per i test (Fase 4):**
+
+| Porta | Uso |
+|-------|-----|
+| `19100` | HTTP di test (evita conflitti con porta 3000 di produzione) |
+| `19200` | TLS isolato di Fase 3 |
+| `19443` | HTTPS di test (evita conflitti con porta 3443 di produzione) |
+
+### Aggiungere Nuovi Test
+
+**Unit test per un nuovo plugin:**
+```
+tests/unit/myPlugin/
+└── myFeature.test.js
+```
+
+**Convenzioni:**
+- Unit test: testano funzioni pure esportate dal modulo (`module.exports`)
+- Integration test: testano comportamento end-to-end (spawn server, richieste HTTP reali)
+- Ogni test deve essere indipendente e non modificare file permanentemente
 
 ## Deployment Guidelines
 
@@ -4237,11 +4342,35 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2026-02-21
-**Version:** 2.0.0
+**Last Updated:** 2026-02-27
+**Version:** 2.1.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v2.1.0 (2026-02-27): **ENHANCEMENT** - Warning visivo per certificati HTTPS mancanti + auto-generazione cert nel test diagnostico. Key changes:
+  - **`warnMissingCertificates()` in `core/httpsManager.js`:**
+    - Aggiunto controllo pre-emptivo `fs.existsSync()` prima di `readFileSync()` nel flusso di avvio HTTPS
+    - Distingue quale file è assente: annotazione `← non trovato` solo sulla riga del file mancante
+    - Titolo al singolare/plurale in base a quanti file mancano
+    - Box ASCII visivo delimitato da righe `═══` — difficile da ignorare nello scroll
+    - **Opzione A**: comando `openssl` completo con flag `-addext SAN` (DNS:localhost, IP:127.0.0.1)
+    - **Opzione B**: snippet di config per disabilitare HTTPS (`"https": { "enabled": false }`)
+    - Il server **continua ad avviarsi** in HTTP puro (fallback invariato)
+    - Errori non-ENOENT (permessi, corruzione) gestiti dal `catch` generico separato
+  - **`ensureTestCertificates()` in `tests/integration/httpsDiagnostics.test.js`:**
+    - `beforeAll()` globale che genera automaticamente cert/key con `openssl` se mancanti
+    - Include SAN (`DNS:localhost,IP:127.0.0.1`) — necessario per browser moderni
+    - Non sovrascrive certificati già presenti
+    - Se `openssl` non è nel PATH: istruzioni di installazione per Debian/Ubuntu, Fedora/RHEL, NixOS, macOS
+  - **Documentazione aggiornata in CLAUDE.md:**
+    - Scenario 4 mostra il nuovo output box ASCII
+    - Comando self-signed aggiornato con `-addext SAN` e note sui browser
+    - Implementation Notes cita `warnMissingCertificates()` e la distinzione pre-emptive vs catch
+    - Testing Strategy riscritta: Jest è configurato, lista test esistenti (254 totali), dettaglio 4 fasi di `httpsDiagnostics.test.js`, porte riservate
+  - **Files Modified:**
+    - `/core/httpsManager.js` - aggiunta `warnMissingCertificates()`, controllo pre-emptivo in `start()`
+    - `/tests/integration/httpsDiagnostics.test.js` - aggiunta `ensureTestCertificates()` + `beforeAll()`
+    - `/CLAUDE.md` - documentazione aggiornata
 - v2.0.0 (2026-02-21): **BREAKING CHANGE** - Implemented native HTTPS support with nested config block. Key changes:
   - **BREAKING: Removed three flat config variables:**
     - `useHttps` → rimossa
