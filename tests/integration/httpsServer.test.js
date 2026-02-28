@@ -377,7 +377,9 @@ describe('Scenario 4 - Fallback HTTP su certificati mancanti', () => {
     server.stdout.on('data', (d) => { capturedOutput += d.toString(); });
     server.stderr.on('data', (d) => { capturedOutput += d.toString(); });
 
-    await waitForLog(server, 'HTTP - HTTPS fallback per cert mancanti');
+    // Quando i file cert non esistono, httpsManager emette un warning box
+    // e poi avvia il server HTTP puro con il log standard
+    await waitForLog(server, `server started on port: ${TEST_HTTP_PORT}`);
   });
 
   afterAll(async () => {
@@ -396,12 +398,15 @@ describe('Scenario 4 - Fallback HTTP su certificati mancanti', () => {
     ).rejects.toThrow();
   });
 
-  test('i log contengono il messaggio di errore certificati', () => {
-    expect(capturedOutput).toContain('[HTTPS] Errore nel caricamento dei certificati');
+  test('i log contengono il warning di certificati mancanti', () => {
+    // Quando i file cert non esistono su disco, httpsManager emette
+    // warnMissingCertificates() con un box ASCII prominente
+    expect(capturedOutput).toContain('HTTPS abilitato ma certificat');
   });
 
-  test('i log contengono il messaggio di fallback', () => {
-    expect(capturedOutput).toContain('[HTTPS] Fallback');
+  test('i log contengono il messaggio di fallback HTTP', () => {
+    // Il box ASCII include la riga "▶ Avvio in HTTP puro sulla porta ... (fallback)"
+    expect(capturedOutput).toContain('Avvio in HTTP puro');
   });
 });
 
