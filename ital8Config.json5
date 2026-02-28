@@ -92,7 +92,7 @@
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   "priorityMiddlewares": {
-    "session": true  // Gestione sessioni (true = attivo, false = disattivato)
+    "session": true, // Gestione sessioni (true = attivo, false = disattivato)
   },
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

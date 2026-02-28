@@ -1,0 +1,1479 @@
+
+> ital8cms@0.0.1-alpha.0 test
+> node scripts/checkNixShell.js && jest && npx playwright test
+
+[32m✓ nix-shell attivo (IN_NIX_SHELL=impure)[0m
+  console.log
+    
+    📋 Riepilogo certificato:
+       Soggetto:     CN=localhost
+       Emittente:    CN=localhost
+       Self-signed:  sì
+       Validità:     2026-02-27 → 2027-02-27
+       Giorni rimasti: 364
+       SAN:          DNS:localhost, IP Address:127.0.0.1
+       Percorso:     /home/oxtor/nodejs/ital8cms/certs/fullchain.pem
+
+      at Object.log (tests/integration/httpsDiagnostics.test.js:467:13)
+
+PASS tests/unit/bootstrapNavbar/rendering.test.js
+  navbarRenderer.render()
+    validazione input
+      ✓ senza name → warning + stringa vuota (17 ms)
+      ✓ name vuoto → warning + stringa vuota (2 ms)
+      ✓ senza passData → warning + stringa vuota (3 ms)
+      ✓ passData senza filePath → warning + stringa vuota (2 ms)
+      ✓ input validi → genera HTML (2 ms)
+    file loading
+      ✓ file non trovato → warning + stringa vuota (2 ms)
+      ✓ errore parsing JSON5 → error + stringa vuota (3 ms)
+      ✓ il nome del file segue il pattern navbar.{name}.json5 (2 ms)
+    caching
+      ✓ production: prima chiamata popola la cache (1 ms)
+      ✓ production: seconda chiamata usa la cache (3 ms)
+      ✓ debug: non popola la cache (1 ms)
+      ✓ debug: rilegge il file ogni volta (1 ms)
+      ✓ debug: ignora la cache anche se popolata (2 ms)
+    settings merge (defaults < file < runtime)
+      ✓ settings di default applicati quando file non li specifica (1 ms)
+      ✓ settings del file sovrascrivono i default (1 ms)
+      ✓ settingsOverrides sovrascrivono il file (6 ms)
+      ✓ override parziale: solo un campo sovrascritto (2 ms)
+    type dispatch
+      ✓ type horizontal → navbar con collapse (2 ms)
+      ✓ type vertical → navbar con flex-column (2 ms)
+      ✓ type offcanvas → navbar con offcanvas (2 ms)
+      ✓ type sconosciuto → default a horizontal (1 ms)
+      ✓ type non specificato → default a horizontal (1 ms)
+    horizontal navbar
+      ✓ contiene navbar-toggler per mobile (1 ms)
+      ✓ applica expandAt al breakpoint (2 ms)
+      ✓ containerClass applicato (2 ms)
+      ✓ id usato per collapse target (2 ms)
+      ✓ left items in ul con me-auto (1 ms)
+      ✓ right items nel secondo ul (1 ms)
+    vertical navbar
+      ✓ struttura flex-column (2 ms)
+      ✓ position: start → nessuna classe ms-auto (2 ms)
+      ✓ position: end → classe ms-auto (1 ms)
+      ✓ right items presenti → hr separator + secondo ul (2 ms)
+      ✓ right items vuoti → nessun hr separator (1 ms)
+      ✓ nessun navbar-toggler (no collapse in vertical) (2 ms)
+    offcanvas navbar
+      ✓ struttura offcanvas con header e body (1 ms)
+      ✓ id offcanvas = settingsId + "-offcanvas" (2 ms)
+      ✓ position: start → offcanvas-start (1 ms)
+      ✓ position: end → offcanvas-end (1 ms)
+      ✓ offcanvasAlways: true → nessun navbar-expand-* (2 ms)
+      ✓ offcanvasAlways: false → navbar-expand-{expandAt} (2 ms)
+      ✓ data-bs-toggle="offcanvas" sul toggler (2 ms)
+    nav items
+      ✓ item semplice → li.nav-item con a.nav-link (2 ms)
+      ✓ item con icon → icon inserita prima del label (1 ms)
+      ✓ item con target → attributo target nel link (2 ms)
+      ✓ item senza href → href="#" (1 ms)
+      ✓ item con label contenente HTML → label escaped (2 ms)
+      ✓ icon NON escaped (HTML raw) (1 ms)
+    auto-active
+      ✓ item con href uguale a currentHref → classe active (8 ms)
+      ✓ item con href diverso → nessuna classe active (2 ms)
+      ✓ autoActive: false → nessuna classe active anche se href match (1 ms)
+    dropdown
+      ✓ dropdown con sub-items → struttura completa (8 ms)
+      ✓ dropdown con divider → <hr class="dropdown-divider"> (1 ms)
+      ✓ dropdown con icon → icon nel toggle button (1 ms)
+      ✓ dropdown ID generato da settings.id + label (2 ms)
+      ✓ dropdown senza sub-items visibili → non renderizzato (1 ms)
+      ✓ dropdown con items undefined → non renderizzato (2 ms)
+      ✓ sub-item active → classe active sul dropdown-item (3 ms)
+    separator
+      ✓ type separator → barra verticale (2 ms)
+      ✓ separator non filtrato dalla visibilita (2 ms)
+    visibility filtering nel rendering
+      ✓ item con requiresAuth: true nascosto per utente anonimo (1 ms)
+      ✓ item con showWhen: "authenticated" visibile per utente autenticato (3 ms)
+      ✓ item con allowedRoles filtrato per ruolo (2 ms)
+      ✓ tutti gli item nascosti → HTML navbar vuoto ma struttura presente (7 ms)
+    passData fallback
+      ✓ passData.href mancante → currentHref stringa vuota (2 ms)
+      ✓ passData.ctx mancante → trattato come utente anonimo (3 ms)
+    scenario realistico completo
+      ✓ navbar con tutti i tipi di item per utente autenticato (6 ms)
+
+PASS tests/unit/bootstrapNavbar/isItemVisible.test.js
+  isItemVisible
+    item senza restrizioni (sempre visibile)
+      ✓ visibile per utente anonimo (10 ms)
+      ✓ visibile per utente autenticato (1 ms)
+      ✓ visibile per admin (1 ms)
+    showWhen: "authenticated"
+      ✓ visibile quando autenticato (1 ms)
+      ✓ nascosto quando NON autenticato (1 ms)
+      ✓ visibile per root (2 ms)
+    showWhen: "unauthenticated"
+      ✓ visibile quando NON autenticato (1 ms)
+      ✓ nascosto quando autenticato (3 ms)
+      ✓ nascosto per admin (1 ms)
+    requiresAuth: true (senza allowedRoles)
+      ✓ visibile quando autenticato (1 ms)
+      ✓ nascosto quando NON autenticato
+    requiresAuth: false (solo utenti anonimi)
+      ✓ visibile quando NON autenticato (1 ms)
+      ✓ nascosto quando autenticato
+      ✓ nascosto per root (1 ms)
+    allowedRoles
+      ✓ visibile per root (ruolo 0) (1 ms)
+      ✓ visibile per admin (ruolo 1) (1 ms)
+      ✓ nascosto per editor (ruolo 2) senza permesso
+      ✓ nascosto per custom role (ruolo 102) senza permesso
+      ✓ nascosto per utente anonimo (requiresAuth prima di allowedRoles) (1 ms)
+      ✓ visibile se utente ha ALMENO un ruolo consentito (1 ms)
+    allowedRoles con ruolo singolo (root-only)
+      ✓ visibile solo per root
+      ✓ nascosto per admin (1 ms)
+      ✓ nascosto per editor (1 ms)
+    allowedRoles vuoto (tutti gli utenti autenticati)
+      ✓ visibile per qualsiasi utente autenticato (4 ms)
+      ✓ visibile per admin
+      ✓ nascosto per utente anonimo
+    allowedRoles ignorato quando requiresAuth non e true
+      ✓ allowedRoles senza requiresAuth → visibile per tutti (1 ms)
+      ✓ allowedRoles con requiresAuth: false → ignorato (1 ms)
+    priorita showWhen vs requiresAuth
+      ✓ showWhen: "unauthenticated" nasconde anche se requiresAuth assente
+      ✓ showWhen + requiresAuth combinati
+    edge cases del ctx
+      ✓ ctx senza session → trattato come anonimo
+      ✓ session senza user → roleIds vuoto (1 ms)
+      ✓ session.user senza roleIds → roleIds vuoto
+      ✓ ctx undefined → TypeError (ctx.session senza guardia) (80 ms)
+    ruoli custom (100+)
+      ✓ ruolo custom 102 accede a item con allowedRoles [102]
+      ✓ ruolo custom 102 non accede a item con allowedRoles [103]
+      ✓ multi-ruoli: admin + custom accede a item con [102]
+
+  console.log
+    🔒 Dettagli TLS:
+       Versione:   TLSv1.3
+       Cipher:     TLS_AES_256_GCM_SHA384
+       Autorizzato (CA fidata): false
+       authError:  DEPTH_ZERO_SELF_SIGNED_CERT
+       ℹ️  Certificato self-signed — authError è normale senza rejectUnauthorized: false.
+
+      at Object.log (tests/integration/httpsDiagnostics.test.js:607:13)
+
+  console.log
+    
+    ℹ️  Comportamento browser simulato:
+       Con rejectUnauthorized: true il client rifiuta il cert self-signed.
+       Questo è CORRETTO — i browser mostrano "Connessione non sicura".
+    
+       Per eliminare il warning nel browser (sviluppo locale):
+       Opzione A — Aggiungere il cert al trust store del sistema:
+         Linux (Ubuntu/Debian):
+           sudo cp certs/fullchain.pem /usr/local/share/ca-certificates/ital8cms-localhost.crt
+           sudo update-ca-certificates
+         macOS:
+           sudo security add-trusted-cert -d -r trustRoot \
+             -k /Library/Keychains/System.keychain certs/fullchain.pem
+    
+       Opzione B — Usare mkcert (genera cert localmente trusted):
+         brew install mkcert && mkcert -install
+         mkcert -key-file certs/privkey.pem -cert-file certs/fullchain.pem localhost 127.0.0.1
+
+      at Object.log (tests/integration/httpsDiagnostics.test.js:655:15)
+
+PASS tests/unit/themeSys.test.js
+  Theme System
+    Theme Validation
+      ✓ valida correttamente il tema default (12 ms)
+      ✓ valida correttamente il tema baseExampleTheme (1 ms)
+      ✓ valida correttamente il tema exampleTheme (2 ms)
+      ✓ ritorna errore per tema inesistente (3 ms)
+      ✓ ritorna errore se manca config-theme.json (2 ms)
+    Theme Description
+      ✓ legge correttamente themeDescription.json del tema default (11 ms)
+      ✓ legge correttamente themeDescription.json del tema exampleTheme (8 ms)
+      ✓ ritorna null per tema senza themeDescription.json (1 ms)
+      ✓ verifica presenza di tutti i campi richiesti (7 ms)
+      ✓ versione è in formato semver (9 ms)
+    Theme Dependencies
+      ✓ legge correttamente le dipendenze del tema default (7 ms)
+      ✓ tema default richiede plugin bootstrap (3 ms)
+      ✓ tema default richiede modulo ejs (3 ms)
+      ✓ ritorna oggetti vuoti per tema senza dipendenze (3 ms)
+      ✓ verifica formato versioni delle dipendenze (3 ms)
+    Theme Path Resolution
+      ✓ genera correttamente path per partial pubblico (1 ms)
+      ✓ genera correttamente path per partial admin (1 ms)
+      ✓ i file dei partials esistono effettivamente (1 ms)
+    Theme Resource URL Generation
+      ✓ genera URL corretto per CSS (1 ms)
+      ✓ genera URL corretto per JS (1 ms)
+      ✓ rimuove slash iniziali
+      ✓ gestisce path senza slash (1 ms)
+    Plugin Customization
+      ✓ tema default ha personalizzazione login
+      ✓ tema default ha personalizzazione logout (1 ms)
+      ✓ tema exampleTheme ha personalizzazione login (1 ms)
+      ✓ ritorna false per endpoint non personalizzato
+      ✓ verifica esistenza file CSS personalizzato (1 ms)
+    Available Themes
+      ✓ trova tutti i temi nella directory (1 ms)
+      ✓ tutti i temi hanno themeConfig.json (2 ms)
+    Hook Support
+      ✓ tema default supporta tutti gli hook standard (25 ms)
+      ✓ tema exampleTheme supporta tutti gli hook standard (28 ms)
+      ✓ tema baseExampleTheme ha hook limitati (10 ms)
+    Version Format Checking
+      ✓ versione tema è in formato valido (4 ms)
+      ✓ tutte le versioni dei temi sono in formato valido (9 ms)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessControl] Access denied: /admin/dashboard - Authentication required
+
+      at log (plugins/adminAccessControl/lib/accessManager.js:188:17)
+
+  console.error
+    [PatternMatcher] Invalid regex: [invalid SyntaxError: Invalid regular expression: /[invalid/: Unterminated character class
+        at new RegExp (<anonymous>)
+        at PatternMatcher.matchRegex (/home/oxtor/nodejs/ital8cms/plugins/adminAccessControl/lib/patternMatcher.js:100:39)
+        at PatternMatcher.matchRegex [as matches] (/home/oxtor/nodejs/ital8cms/plugins/adminAccessControl/lib/patternMatcher.js:64:21)
+        at Object.matches (/home/oxtor/nodejs/ital8cms/tests/unit/patternMatcher.test.js:153:22)
+        at Promise.finally.completed (/home/oxtor/nodejs/ital8cms/node_modules/jest-circus/build/jestAdapterInit.js:1557:28)
+        at new Promise (<anonymous>)
+        at callAsyncCircusFn (/home/oxtor/nodejs/ital8cms/node_modules/jest-circus/build/jestAdapterInit.js:1497:10)
+        at _callCircusTest (/home/oxtor/nodejs/ital8cms/node_modules/jest-circus/build/jestAdapterInit.js:1007:40)
+        at processTicksAndRejections (node:internal/process/task_queues:103:5)
+        at _runTest (/home/oxtor/nodejs/ital8cms/node_modules/jest-circus/build/jestAdapterInit.js:947:3)
+        at /home/oxtor/nodejs/ital8cms/node_modules/jest-circus/build/jestAdapterInit.js:849:7
+        at _runTestsForDescribeBlock (/home/oxtor/nodejs/ital8cms/node_modules/jest-circus/build/jestAdapterInit.js:862:11)
+        at _runTestsForDescribeBlock (/home/oxtor/nodejs/ital8cms/node_modules/jest-circus/build/jestAdapterInit.js:857:11)
+        at _runTestsForDescribeBlock (/home/oxtor/nodejs/ital8cms/node_modules/jest-circus/build/jestAdapterInit.js:857:11)
+        at run (/home/oxtor/nodejs/ital8cms/node_modules/jest-circus/build/jestAdapterInit.js:761:3)
+        at runAndTransformResultsToJestFormat (/home/oxtor/nodejs/ital8cms/node_modules/jest-circus/build/jestAdapterInit.js:1918:21)
+        at jestAdapter (/home/oxtor/nodejs/ital8cms/node_modules/jest-circus/build/runner.js:101:19)
+        at runTestInternal (/home/oxtor/nodejs/ital8cms/node_modules/jest-runner/build/testWorker.js:275:16)
+        at runTest (/home/oxtor/nodejs/ital8cms/node_modules/jest-runner/build/testWorker.js:343:7)
+        at Object.worker (/home/oxtor/nodejs/ital8cms/node_modules/jest-runner/build/testWorker.js:497:12)
+
+      101 |       } catch (err) {
+      102 |         // Regex invalida → già validata al boot, ma gestisci comunque
+    > 103 |         console.error(`[PatternMatcher] Invalid regex: ${regexStr}`, err);
+          |                 ^
+      104 |         return false;
+      105 |       }
+      106 |     }
+
+      at PatternMatcher.error [as matchRegex] (plugins/adminAccessControl/lib/patternMatcher.js:103:17)
+      at PatternMatcher.matchRegex [as matches] (plugins/adminAccessControl/lib/patternMatcher.js:64:21)
+      at Object.matches (tests/unit/patternMatcher.test.js:153:22)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessControl] Access denied: /admin/dashboard - Required roles: 0, 1, user has: 2
+
+      at log (plugins/adminAccessControl/lib/accessManager.js:188:17)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+  console.log
+    [AccessManager] Rules loaded: 3 patterns
+
+      at AccessManager.log [as loadRules] (plugins/adminAccessControl/lib/accessManager.js:50:15)
+
+PASS tests/unit/accessManager.test.js
+  AccessManager
+    checkAccess - unauthenticated user
+      ✓ should deny access to admin pages (132 ms)
+      ✓ should deny access to exact admin path (7 ms)
+      ✓ should deny access to user profile (7 ms)
+      ✓ should allow access to public pages (default policy: allow) (6 ms)
+    checkAccess - authenticated user with correct role
+      ✓ should allow admin access with admin role (6 ms)
+      ✓ should allow admin access with root role (6 ms)
+      ✓ should allow user profile access for any authenticated user (5 ms)
+    checkAccess - authenticated user with wrong role
+      ✓ should deny admin access with editor role (5 ms)
+      ✓ should deny admin access with selfEditor role (7 ms)
+      ✓ should include role info in denial reason (7 ms)
+    checkAccess - multi-role users
+      ✓ should allow if user has at least one required role (4 ms)
+      ✓ should deny if user has no required roles (4 ms)
+    applyDefaultPolicy
+      ✓ should allow everyone when action is "allow" (4 ms)
+      ✓ should deny everyone when action is "deny" (4 ms)
+      ✓ should require auth when action is "requireAuth" (3 ms)
+      ✓ should fallback to allow for unknown action (3 ms)
+    createMiddleware
+      ✓ should return a function (3 ms)
+      ✓ should call next() when access is allowed (4 ms)
+      ✓ should redirect when access is denied (unauthenticated) (7 ms)
+      ✓ should redirect to access-denied for wrong role (15 ms)
+      ✓ should allow access for correct role (4 ms)
+    backward compatibility - single roleId
+      ✓ should support legacy roleId field (3 ms)
+
+PASS tests/unit/patternMatcher.test.js
+  PatternMatcher
+    getPatternInfo
+      ✓ should identify exact match patterns (4 ms)
+      ✓ should identify wildcard-single patterns (2 ms)
+      ✓ should identify wildcard-recursive patterns (2 ms)
+      ✓ should identify regex patterns (1 ms)
+      ✓ should treat paths without wildcards as exact (1 ms)
+    matchExact
+      ✓ should match identical URLs (1 ms)
+      ✓ should NOT match different URLs (2 ms)
+      ✓ should NOT match partial URLs (1 ms)
+      ✓ should NOT match prefix of URL (1 ms)
+      ✓ should be case-sensitive (1 ms)
+    matchWildcardSingle
+      ✓ should match single path segment (1 ms)
+      ✓ should match different single segments (1 ms)
+      ✓ should NOT match multiple path segments (1 ms)
+      ✓ should match with extension pattern (1 ms)
+      ✓ should NOT match empty segment (1 ms)
+    matchWildcardRecursive
+      ✓ should match single level path (2 ms)
+      ✓ should match deep nested paths (1 ms)
+      ✓ should match two levels
+      ✓ should match with extension (1 ms)
+      ✓ should NOT match unrelated paths (1 ms)
+      ✓ should match empty suffix (1 ms)
+    matchRegex
+      ✓ should match regex pattern for numeric IDs (1 ms)
+      ✓ should NOT match non-numeric for numeric regex (1 ms)
+      ✓ should match PDF file pattern
+      ✓ should NOT match non-PDF for PDF regex
+      ✓ should handle invalid regex gracefully (146 ms)
+      ✓ should cache compiled regex patterns (1 ms)
+    findMatchingRule
+      ✓ should return null when no rules match (2 ms)
+      ✓ should return matching rule (1 ms)
+      ✓ should prefer exact match over wildcard (3 ms)
+      ✓ should prefer regex over wildcard-recursive (1 ms)
+      ✓ should prefer wildcard-single over wildcard-recursive (1 ms)
+      ✓ should use custom priority from rule when defined (1 ms)
+      ✓ should handle multiple matching rules correctly (1 ms)
+    validatePattern
+      ✓ should accept valid exact patterns (2 ms)
+      ✓ should accept valid wildcard patterns (1 ms)
+      ✓ should accept valid regex patterns (1 ms)
+      ✓ should reject invalid regex patterns (1 ms)
+      ✓ should reject empty patterns (5 ms)
+      ✓ should reject null patterns (3 ms)
+      ✓ should reject patterns with whitespace (1 ms)
+
+PASS tests/unit/logger.test.js
+  Logger Module
+    Log Levels
+      ✓ logger.info scrive su console.log (31 ms)
+      ✓ logger.error scrive su console.error (15 ms)
+      ✓ logger.debug non scrive se LOG_LEVEL=INFO (16 ms)
+      ✓ logger.debug scrive se LOG_LEVEL=DEBUG (14 ms)
+      ✓ logger.warn scrive warning (14 ms)
+    Log Filtering
+      ✓ LOG_LEVEL=ERROR filtra INFO e WARN (13 ms)
+      ✓ LOG_LEVEL=WARN filtra INFO e DEBUG (15 ms)
+    Utility Functions
+      ✓ getLevel ritorna il livello corrente (12 ms)
+      ✓ isLevelEnabled verifica se livello attivo (13 ms)
+    Output Format
+      ✓ include timestamp ISO (13 ms)
+      ✓ include prefisso modulo (11 ms)
+    Error Handling
+      ✓ logga stack trace per oggetti Error (36 ms)
+      ✓ logga dati extra per non-Error (13 ms)
+
+PASS tests/integration/pluginLoading.test.js
+  Plugin Loading Integration
+    Plugin Structure Validation
+      ✓ tutti i plugin hanno main.js (15 ms)
+      ✓ tutti i plugin hanno pluginConfig.json (7 ms)
+      ✓ tutti i plugin hanno pluginDescription.json (5 ms)
+      ✓ pluginConfig.json ha campi obbligatori (46 ms)
+      ✓ pluginDescription.json ha campi obbligatori (27 ms)
+    Plugin Config Validation
+      ✓ versioni sono semver valide (55 ms)
+      ✓ dipendenze hanno formato semver valido (32 ms)
+      ✓ weight è un numero valido (28 ms)
+    Plugin Module Loading
+      ✓ main.js è caricabile senza errori (235 ms)
+      ✓ plugin attivi esportano loadPlugin (33 ms)
+    Node Module Dependencies
+      ✓ nodeModuleDependency moduli sono installati (21 ms)
+    Plugin Dependencies
+      ✓ non ci sono dipendenze circolari (18 ms)
+      ✓ tutte le dipendenze esistono (18 ms)
+
+PASS tests/unit/pluginSys.test.js
+  Plugin System Utilities
+    Dependency Checking
+      ✓ ritorna true se non ci sono dipendenze (2 ms)
+      ✓ ritorna true se tutte le dipendenze sono soddisfatte (1 ms)
+      ✓ ritorna false se manca una dipendenza (1 ms)
+      ✓ ritorna false se mancano tutte le dipendenze
+    Circular Dependency Detection
+      ✓ ritorna null se non ci sono cicli (1 ms)
+      ✓ rileva ciclo diretto A -> B -> A (1 ms)
+      ✓ rileva ciclo indiretto A -> B -> C -> A (1 ms)
+      ✓ rileva self-dependency A -> A (1 ms)
+      ✓ gestisce plugin senza dipendenze
+      ✓ gestisce grafo complesso senza cicli
+    Semver Version Checking
+      ✓ versione soddisfa range ^ (8 ms)
+      ✓ versione soddisfa range ~ (3 ms)
+      ✓ versione esatta (1 ms)
+      ✓ confronto versioni con gt (4 ms)
+    Plugin Weight Sorting
+      ✓ ordina plugin per weight (1 ms)
+      ✓ mantiene ordine alfabetico per stesso weight (30 ms)
+
+PASS tests/unit/bootstrapNavbar/isActivePage.test.js
+  isActivePage
+    match esatto
+      ✓ path identici (5 ms)
+      ✓ root path / (1 ms)
+      ✓ path con segmenti multipli (5 ms)
+    normalizzazione trailing slashes
+      ✓ item senza slash finale, URL con slash finale (1 ms)
+      ✓ item con slash finale, URL senza slash finale (4 ms)
+      ✓ entrambi con slash finale (1 ms)
+      ✓ path root senza trailing slash normalizzato (1 ms)
+      ✓ multipli trailing slashes
+    query string e fragment ignorati
+      ✓ URL con query string match il path base (1 ms)
+      ✓ URL con fragment match il path base (1 ms)
+      ✓ URL con query string E fragment match il path base (1 ms)
+      ✓ path diversi anche con query string uguale
+    path che non matchano
+      ✓ path completamente diversi (1 ms)
+      ✓ path simili ma diversi (prefix) (1 ms)
+      ✓ path simili ma diversi (suffix) (1 ms)
+      ✓ case sensitive (1 ms)
+    input falsy
+      ✓ itemHref null → false (1 ms)
+      ✓ itemHref undefined → false (1 ms)
+      ✓ itemHref stringa vuota → false
+      ✓ currentHref null → false (1 ms)
+      ✓ currentHref undefined → false
+      ✓ currentHref stringa vuota → false (13 ms)
+      ✓ entrambi null → false
+    fallback string comparison (URL invalida)
+      ✓ URL non parsabile fa fallback a comparazione diretta (1 ms)
+      ✓ fallback: stringhe diverse → false (1 ms)
+      ✓ path relativo come currentHref fa fallback (1 ms)
+    protocolli e domini
+      ✓ HTTPS funziona come HTTP (4 ms)
+      ✓ dominio diverso ma path uguale → true (solo pathname confrontato) (1 ms)
+      ✓ porta diversa ma path uguale → true (1 ms)
+    caratteri speciali nei path
+      ✓ path con trattini
+      ✓ path con underscore (1 ms)
+      ✓ path con .ejs estensione
+
+PASS tests/unit/bootstrapNavbar/configDir.test.js
+  bootstrapNavbar configDir
+    senza configDir (comportamento default)
+      ✓ cerca il file nella directory del template (5 ms)
+      ✓ funziona senza servingConfig quando configDir non specificato (2 ms)
+    configDir nel contesto www
+      ✓ configDir: "/" cerca nella root di www (4 ms)
+      ✓ configDir: "/shared" cerca in www/shared/ (2 ms)
+      ✓ configDir senza "/" iniziale equivale a con "/" (3 ms)
+      ✓ configDir con sottocartella annidata (14 ms)
+    configDir nel contesto pluginPages
+      ✓ configDir: "/" cerca nella root del plugin (15 ms)
+      ✓ configDir isola tra plugin diversi (16 ms)
+    configDir nel contesto admin
+      ✓ configDir: "/" cerca nella root della sezione admin (2 ms)
+      ✓ admin root-level (dashboard) ritorna stringa vuota (6 ms)
+    sicurezza: path traversal
+      ✓ blocca ../ che esce dalla root (1 ms)
+      ✓ blocca path traversal da pluginPages verso altri plugin (9 ms)
+      ✓ blocca path traversal da sezione admin verso altra sezione (9 ms)
+      ✓ permette sottocartelle valide (non traversal) (2 ms)
+    logging
+      ✓ logga sempre il path risolto in debug mode (5 ms)
+      ✓ logga sempre il path risolto in production mode (2 ms)
+      ✓ log contiene il configDir originale e il path risolto (2 ms)
+      ✓ non logga quando configDir non specificato (1 ms)
+    servingConfig mancante
+      ✓ fallback a templateDir quando servingConfig e undefined (2 ms)
+      ✓ fallback a templateDir quando servingConfig incompleto (2 ms)
+    file non trovato
+      ✓ ritorna stringa vuota se il file non esiste (21 ms)
+    rendering con configDir
+      ✓ genera HTML valido quando file trovato via configDir (1 ms)
+    cache con configDir
+      ✓ chiavi cache diverse per configDir diversi (2 ms)
+      ✓ stessa chiave cache per stesso configDir (production mode) (1 ms)
+    edge cases
+      ✓ configDir: "" (stringa vuota) usa comportamento default (1 ms)
+      ✓ configDir: null usa comportamento default (2 ms)
+      ✓ configDir con multipli "/" iniziali normalizzati (1 ms)
+      ✓ contesto sconosciuto con configDir ritorna stringa vuota (1 ms)
+
+PASS tests/unit/bootstrapNavbar/escapeHtml.test.js
+  escapeHtml
+    sostituzione singoli caratteri
+      ✓ & → &amp; (4 ms)
+      ✓ < → &lt; (1 ms)
+      ✓ > → &gt; (5 ms)
+      ✓ " → &quot; (1 ms)
+      ✓ ' → &#39; (1 ms)
+    combinazioni multiple
+      ✓ tutti e 5 i caratteri nella stessa stringa (1 ms)
+      ✓ caratteri ripetuti consecutivi (1 ms)
+      ✓ & appare prima e dopo il replace (1 ms)
+    stringhe sicure
+      ✓ stringa senza caratteri speciali (1 ms)
+      ✓ stringa vuota
+      ✓ stringa con solo lettere e numeri (1 ms)
+      ✓ stringa con caratteri speciali non-HTML (1 ms)
+      ✓ stringa con Unicode (1 ms)
+    input non-string
+      ✓ null → stringa vuota (1 ms)
+      ✓ undefined → stringa vuota (2 ms)
+      ✓ numero → stringa vuota (1 ms)
+      ✓ booleano → stringa vuota (1 ms)
+      ✓ oggetto → stringa vuota (1 ms)
+      ✓ array → stringa vuota (1 ms)
+      ✓ zero → stringa vuota (1 ms)
+    scenari XSS realistici
+      ✓ script injection (1 ms)
+      ✓ event handler injection
+      ✓ href javascript injection
+      ✓ img onerror injection (1 ms)
+
+PASS tests/unit/core/servingRootResolver.test.js
+  servingRootResolver
+    contesto www
+      ✓ file nella root di www (3 ms)
+      ✓ file in sottocartella di www
+      ✓ file in sottocartella profonda di www (1 ms)
+      ✓ root www rimane invariata indipendentemente dalla profondita (1 ms)
+    contesto pluginPages
+      ✓ file di un plugin
+      ✓ file in sottocartella di un plugin (1 ms)
+      ✓ isolamento tra plugin diversi
+      ✓ file direttamente nella root di pluginPages ritorna null (1 ms)
+    contesto admin
+      ✓ file in una sezione admin
+      ✓ file in sottocartella di una sezione admin (1 ms)
+      ✓ isolamento tra sezioni admin diverse (1 ms)
+      ✓ file alla root dell admin (dashboard) ritorna null
+    path sconosciuti
+      ✓ file fuori da qualsiasi contesto ritorna null (1 ms)
+      ✓ file nella root del progetto ritorna null
+      ✓ file in directory plugins (non pluginPages) ritorna null (1 ms)
+    ordine di priorita detection
+      ✓ admin ha priorita su www se i path si sovrappongono
+    configurazione custom dei serving paths
+      ✓ funziona con wwwPath personalizzato
+      ✓ funziona con pluginPagesPath personalizzato (1 ms)
+      ✓ funziona con adminPagesPath personalizzato
+    struttura del risultato
+      ✓ root e sempre un path assoluto
+      ✓ context e uno dei valori previsti (1 ms)
+      ✓ root non termina con separatore (1 ms)
+
+PASS tests/integration/globalPrefix.test.js
+  GlobalPrefix Configuration
+    Config Loading
+      ✓ ital8Config.json5 contiene globalPrefix (10 ms)
+      ✓ globalPrefix è una stringa (9 ms)
+      ✓ globalPrefix vuoto è valido (retrocompatibilità) (6 ms)
+    Path Construction
+      ✓ route API costruite correttamente con globalPrefix vuoto
+      ✓ route API costruite correttamente con globalPrefix impostato
+      ✓ route admin costruite correttamente con globalPrefix (1 ms)
+      ✓ theme resources costruite correttamente con globalPrefix (1 ms)
+      ✓ percorsi multipli con stesso globalPrefix (1 ms)
+    GlobalPrefix Validation
+      ✓ globalPrefix deve iniziare con / se non vuoto (2 ms)
+      ✓ globalPrefix non deve contenere spazi (7 ms)
+      ✓ globalPrefix non deve contenere caratteri speciali problematici (2 ms)
+    Session Path Configuration
+      ✓ session path usa globalPrefix se impostato
+      ✓ session path usa / se globalPrefix è vuoto (1 ms)
+      ✓ session path non termina con / (1 ms)
+    Multi-CMS Scenario
+      ✓ simulazione di 3 CMS con prefissi diversi (1 ms)
+      ✓ CMS con globalPrefix vuoto non interferisce con altri
+    PassData Integration
+      ✓ globalPrefix disponibile in passData per template EJS (3 ms)
+      ✓ passData costruisce URL completi correttamente (1 ms)
+    Reserved URLs Configuration
+      ✓ urlsReserved includono globalPrefix
+      ✓ urlsReserved con globalPrefix vuoto (1 ms)
+    Edge Cases
+      ✓ globalPrefix con sottopercorso multiplo è formattato correttamente
+      ✓ globalPrefix con numeri è valido
+      ✓ globalPrefix con trattini è valido
+      ✓ globalPrefix con underscore è valido (1 ms)
+
+  console.error
+    
+    ❌ Il server NON ha emesso il log di avvio HTTPS atteso.
+       Atteso: "server started on HTTPS port: 19443"
+    
+       Output catturato dal processo:
+       ──────────────────────────────
+       [PriorityMiddleware] ✓ bodyParser loaded (core, always active)
+       [PriorityMiddleware] ✓ session loaded (optional, enabled in config)
+       [PriorityMiddleware] ✓ router loaded (core, always active)
+       [32m[2026-02-27T22:02:40.100Z] [INFO] [pluginSys][0m Plugin caricato: admin
+       [32m[2026-02-27T22:02:40.114Z] [INFO] [pluginSys][0m Plugin caricato: bootstrap
+       [32m[2026-02-27T22:02:40.118Z] [INFO] [pluginSys][0m Plugin caricato: media
+       [32m[2026-02-27T22:02:40.121Z] [INFO] [pluginSys][0m Plugin caricato: ostrukUtility
+       [32m[2026-02-27T22:02:40.179Z] [INFO] [pluginSys][0m Upgrade plugin simpleI18n: 0.0.0 -> 1.0.0
+       [simpleI18n] Upgrading from 0.0.0 to 1.0.0
+       [simpleI18n] Upgrade completed successfully
+       [32m[2026-02-27T22:02:40.179Z] [INFO] [pluginSys][0m Upgrade simpleI18n completato con successo
+       [simpleI18n] Plugin loaded - Default language: en
+       [simpleI18n] Supported languages: en, it, es, fr, de
+       [32m[2026-02-27T22:02:40.180Z] [INFO] [pluginSys][0m Plugin caricato: simpleI18n
+       [32m[2026-02-27T22:02:40.193Z] [INFO] [pluginSys][0m Plugin caricato: adminUsers
+       [32m[2026-02-27T22:02:40.198Z] [INFO] [pluginSys][0m Upgrade plugin bootstrapNavbar: 0.0.0 -> 1.0.0
+       [32m[2026-02-27T22:02:40.199Z] [INFO] [pluginSys][0m Upgrade bootstrapNavbar completato con successo
+       [bootstrapNavbar] Loaded in DEBUG mode (navbar files re-read on every request)
+       [32m[2026-02-27T22:02:40.199Z] [INFO] [pluginSys][0m Plugin caricato: bootstrapNavbar
+       [32m[2026-02-27T22:02:40.204Z] [INFO] [pluginSys][0m Upgrade plugin adminAccessControl: 0.0.0 -> 1.0.0
+       [36m[2026-02-27T22:02:40.205Z] [DEBUG] [pluginSys][0m Nessuna funzione upgradePlugin() per adminAccessControl, skip migrazione
+       [adminAccessControl] Loading plugin...
+       [AccessManager] Rules loaded: 3 patterns
+       [adminAccessControl] ✓ Configuration validated successfully
+       [adminAccessControl] ✓ Plugin loaded
+       [32m[2026-02-27T22:02:40.211Z] [INFO] [pluginSys][0m Plugin caricato: adminAccessControl
+       [36m[2026-02-27T22:02:40.216Z] [DEBUG] [pluginSys][0m ✓ Global function "__" registered from plugin "simpleI18n"
+       [themeSys] Tema pubblico 'placeholderExample' caricato correttamente
+       [themeSys] ✅ Contenuto tema pubblico validato correttamente
+       [themeSys] Tema admin 'defaultAdminTheme' caricato correttamente
+       [themeSys] ✅ Contenuto tema admin validato correttamente
+       ✓ Admin config loaded
+       ✓ Admin config validated
+       ✓ Admin System created
+       Initializing Admin System...
+       Processing admin plugin: admin
+       ℹ️ Plugin "admin" is admin plugin but has no adminSections array, skipping section install
+       Processing admin plugin: adminUsers
+       ✓ Symlink already exists for section "usersManagment" (plugin "adminUsers")
+       ✓ Symlink already exists for section "rolesManagment" (plugin "adminUsers")
+       Processing admin plugin: adminAccessControl
+       ✓ Symlink already exists for section "adminAccessControl" (plugin "adminAccessControl")
+       ✓ Service "auth" → plugin "adminUsers"
+       ✓ Admin System initialized
+       ✓ Admin System initialized
+       [PluginPagesSystem] Initialized with directory: /home/oxtor/nodejs/ital8cms/pluginPages
+       [PluginPagesSystem] Starting initialization...
+       [PluginPagesSystem] Validating existing symlinks...
+       [PluginPagesSystem] Validation complete: 2 valid, 0 removed
+       [PluginPagesSystem] Symlink already valid: adminUsers → /home/oxtor/nodejs/ital8cms/plugins/adminUsers/webPages
+       [PluginPagesSystem] Symlink already valid: adminAccessControl → /home/oxtor/nodejs/ital8cms/plugins/adminAccessControl/webPages
+       [PluginPagesSystem] Initialization complete: 8 plugins scanned, 2 symlinks created/verified
+       ✓ Plugin Pages System initialized
+       [themeSys] Risorse del tema pubblico servite da /public-theme-resources/ -> themes/placeholderExample/themeResources/
+       [PluginPagesSystem] Plugin pages servite da /pluginPages/ -> /home/oxtor/nodejs/ital8cms/pluginPages
+       [themeSys] Risorse del tema admin servite da /admin-theme-resources/ -> themes/defaultAdminTheme/themeResources/
+       [HTTPS] ─────────────────────────────────────────
+       [HTTPS] Certificato: localhost
+       [HTTPS] Emittente:   localhost
+       [HTTPS] ⓘ  Certificato self-signed (sviluppo locale)
+       [HTTPS] Scade il:    2027-02-27 (tra 364 giorni)
+       [HTTPS] ✓  Certificato OK
+       [HTTPS] ─────────────────────────────────────────
+       node:events:486
+             throw er; // Unhandled 'error' event
+             ^
+       
+       Error: listen EADDRINUSE: address already in use :::19443
+           at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+           at listenInCluster (node:net:1997:12)
+           at Server.listen (node:net:2102:7)
+           at Object.start (/home/oxtor/nodejs/ital8cms/core/httpsManager.js:372:17)
+           at Object.<anonymous> (/home/oxtor/nodejs/ital8cms/index.js:273:14)
+           at Module._compile (node:internal/modules/cjs/loader:1761:14)
+           at Object..js (node:internal/modules/cjs/loader:1893:10)
+           at Module.load (node:internal/modules/cjs/loader:1481:32)
+           at Module._load (node:internal/modules/cjs/loader:1300:12)
+           at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+       Emitted 'error' event on Server instance at:
+           at emitErrorNT (node:net:1976:8)
+           at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+         code: 'EADDRINUSE',
+         errno: -98,
+         syscall: 'listen',
+         address: '::',
+         port: 19443
+       }
+       
+       Node.js v24.11.1
+       
+       ──────────────────────────────
+    
+       Cause comuni:
+         • Errore nel caricamento dei certificati → cerca "[HTTPS] Errore" nell'output
+         • Plugin che crasha durante l'inizializzazione
+         • Porta già in uso
+
+      711 |     } catch (err) {
+      712 |       startFailed = true;
+    > 713 |       console.error([
+          |               ^
+      714 |         '',
+      715 |         '❌ Il server NON ha emesso il log di avvio HTTPS atteso.',
+      716 |         `   Atteso: "server started on HTTPS port: ${TEST_HTTPS_PORT}"`,
+
+      at Object.error (tests/integration/httpsDiagnostics.test.js:713:15)
+
+  console.log
+    
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    📊 RIEPILOGO CONFIGURAZIONE HTTPS
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       https.enabled:                  true
+       httpPort:                       3000
+       https.port:                     3443
+       AutoRedirectHttpPortToHttpsPort: false
+       certFile:                       /home/oxtor/nodejs/ital8cms/certs/fullchain.pem
+       keyFile:                        /home/oxtor/nodejs/ital8cms/certs/privkey.pem
+       caFile:                         (non configurato)
+       cert scade tra:                 364 giorni
+       cert SAN:                       DNS:localhost, IP Address:127.0.0.1
+       cert ha SAN localhost:          ✅ sì
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+      at Object.log (tests/integration/httpsDiagnostics.test.js:866:13)
+
+FAIL tests/integration/httpsDiagnostics.test.js
+  [DIAGNOSTICA] Fase 1 — Pre-flight: configurazione e file certificati
+    ✓ ital8Config.json5: https.enabled è true (10 ms)
+    ✓ ital8Config.json5: https.certFile è configurato (1 ms)
+    ✓ ital8Config.json5: https.keyFile è configurato (2 ms)
+    ✓ file cert esiste sul disco: /home/oxtor/nodejs/ital8cms/certs/fullchain.pem (2 ms)
+    ✓ file key esiste sul disco: /home/oxtor/nodejs/ital8cms/certs/privkey.pem (2 ms)
+    ✓ file cert è leggibile (permessi sufficienti) (3 ms)
+    ✓ file key è leggibile (permessi sufficienti) (1 ms)
+    ✓ cert è un PEM X.509 valido (parseable) (3 ms)
+    ✓ cert non è scaduto (3 ms)
+    ✓ cert non scade nei prossimi 7 giorni (2 ms)
+    ✓ coppia cert/key coerente (stessa chiave pubblica) (6 ms)
+    ✓ cert ha SAN (Subject Alternative Name) con "localhost" o "127.0.0.1" (1 ms)
+    ✓ diagnostica completa certificato (output informativo) (156 ms)
+  [DIAGNOSTICA] Fase 2 — Disponibilità porte configurate
+    ✓ porta HTTP 3000 è libera (nessun server già in ascolto) (19 ms)
+    ✓ porta HTTPS 3443 è libera (nessun server già in ascolto) (7 ms)
+    ✓ le porte HTTP e HTTPS sono diverse (2 ms)
+  [DIAGNOSTICA] Fase 3 — TLS isolato: Node.js + cert di produzione
+    ✓ Node.js può creare un server HTTPS con i cert di produzione (2 ms)
+    ✓ handshake TLS completato (rejectUnauthorized: false) (42 ms)
+    ✓ dettagli TLS: versione protocollo e cipher suite (9 ms)
+    ✓ connessione HTTPS rifiutata con rejectUnauthorized: true (comportamento browser) (16 ms)
+  [DIAGNOSTICA] Fase 4 — Server completo con cert di produzione
+    ✕ server parte senza crash (log HTTPS ricevuto) (4 ms)
+    ✓ log di avvio NON contiene "[HTTPS] Errore nel caricamento dei certificati"
+    ✓ HTTPS risponde su 127.0.0.1:19443
+    ✓ HTTP risponde su 127.0.0.1:19100 (1 ms)
+    ✓ (AutoRedirect=false) comportamento HTTP verificato
+    ✓ riepilogo diagnostica finale (output informativo) (3 ms)
+
+  ● [DIAGNOSTICA] Fase 4 — Server completo con cert di produzione › server parte senza crash (log HTTPS ricevuto)
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: false
+    Received: true
+
+      737 |   test('server parte senza crash (log HTTPS ricevuto)', () => {
+      738 |     if (startFailed && (!certPath || !fs.existsSync(certPath))) return; // skip
+    > 739 |     expect(startFailed).toBe(false);
+          |                         ^
+      740 |   });
+      741 |
+      742 |   test('log di avvio NON contiene "[HTTPS] Errore nel caricamento dei certificati"', () => {
+
+      at Object.toBe (tests/integration/httpsDiagnostics.test.js:739:25)
+
+PASS tests/unit/libAccess.test.js
+  libAccess - autenticate
+    ✓ should authenticate with valid credentials (446 ms)
+    ✓ should reject invalid password (364 ms)
+    ✓ should reject non-existent username (5 ms)
+    ✓ should reject empty username (3 ms)
+    ✓ should reject empty password (174 ms)
+    ✓ should reject null username (3 ms)
+    ✓ should reject null password (3 ms)
+    ✓ should reject undefined username (3 ms)
+    ✓ should handle bcrypt hash with correct salt rounds (287 ms)
+
+FAIL tests/integration/httpsServer.test.js (51.92 s)
+  Scenario 1 - HTTP puro (https.enabled: false)
+    ✕ il server risponde su HTTP (14 ms)
+    ✕ HTTPS non è in ascolto (connessione rifiutata)
+  Scenario 2 - HTTPS + redirect 301 da HTTP (AutoRedirect: true)
+    ✓ HTTP risponde con status 301 (41 ms)
+    ✓ Location header punta a HTTPS (4 ms)
+    ✓ Location header include la porta non-standard (:19443) (4 ms)
+    ✓ Location header preserva il path originale (3 ms)
+    ✓ HTTPS risponde (certificato self-signed accettato) (107 ms)
+  Scenario 3 - HTTPS + HTTP in parallelo (AutoRedirect: false)
+    ✓ HTTP risponde normalmente (nessun redirect) (46 ms)
+    ✓ HTTPS risponde normalmente (24 ms)
+  Scenario 4 - Fallback HTTP su certificati mancanti
+    ✕ il server risponde su HTTP (fallback attivo)
+    ✕ HTTPS non è in ascolto (nessun server HTTPS avviato)
+    ✕ i log contengono il messaggio di errore certificati
+    ✕ i log contengono il messaggio di fallback
+  Scenario 5 - Logica URL redirect (porta 443 vs porta custom)
+    ✓ porta 443 → URL di redirect senza :443 (2 ms)
+    ✓ porta non-standard → URL di redirect con porta inclusa
+    ✓ porta 19443 (test) → URL di redirect con porta inclusa
+    ✓ hostname estratto correttamente da host:porta (1 ms)
+    ✓ path e query string preservati nel redirect (2 ms)
+    ✓ host mancante → fallback a localhost (1 ms)
+
+  ● Scenario 1 - HTTP puro (https.enabled: false) › il server risponde su HTTP
+
+    Timeout (25000ms) in attesa di: "server started on port: 19000"
+    Output catturato:
+    [PriorityMiddleware] ✓ bodyParser loaded (core, always active)
+    [PriorityMiddleware] ✓ session loaded (optional, enabled in config)
+    [PriorityMiddleware] ✓ router loaded (core, always active)
+    [32m[2026-02-27T22:02:39.862Z] [INFO] [pluginSys][0m Plugin caricato: admin
+    [32m[2026-02-27T22:02:39.881Z] [INFO] [pluginSys][0m Plugin caricato: bootstrap
+    [32m[2026-02-27T22:02:39.890Z] [INFO] [pluginSys][0m Plugin caricato: media
+    [32m[2026-02-27T22:02:39.896Z] [INFO] [pluginSys][0m Plugin caricato: ostrukUtility
+    [32m[2026-02-27T22:02:39.969Z] [INFO] [pluginSys][0m Upgrade plugin simpleI18n: 0.0.0 -> 1.0.0
+    [simpleI18n] Upgrading from 0.0.0 to 1.0.0
+    [simpleI18n] Upgrade completed successfully
+    [32m[2026-02-27T22:02:39.971Z] [INFO] [pluginSys][0m Upgrade simpleI18n completato con successo
+    [simpleI18n] Plugin loaded - Default language: en
+    [simpleI18n] Supported languages: en, it, es, fr, de
+    [32m[2026-02-27T22:02:39.973Z] [INFO] [pluginSys][0m Plugin caricato: simpleI18n
+    [32m[2026-02-27T22:02:39.992Z] [INFO] [pluginSys][0m Plugin caricato: adminUsers
+    [32m[2026-02-27T22:02:40.008Z] [INFO] [pluginSys][0m Upgrade plugin bootstrapNavbar: 0.0.0 -> 1.0.0
+    [32m[2026-02-27T22:02:40.012Z] [INFO] [pluginSys][0m Upgrade bootstrapNavbar completato con successo
+    [bootstrapNavbar] Loaded in DEBUG mode (navbar files re-read on every request)
+    [32m[2026-02-27T22:02:40.012Z] [INFO] [pluginSys][0m Plugin caricato: bootstrapNavbar
+    [32m[2026-02-27T22:02:40.019Z] [INFO] [pluginSys][0m Upgrade plugin adminAccessControl: 0.0.0 -> 1.0.0
+    [36m[2026-02-27T22:02:40.020Z] [DEBUG] [pluginSys][0m Nessuna funzione upgradePlugin() per adminAccessControl, skip migrazione
+    [adminAccessControl] Loading plugin...
+    [AccessManager] Rules loaded: 3 patterns
+    [adminAccessControl] ✓ Configuration validated successfully
+    [adminAccessControl] ✓ Plugin loaded
+    [32m[2026-02-27T22:02:40.043Z] [INFO] [pluginSys][0m Plugin caricato: adminAccessControl
+    [36m[2026-02-27T22:02:40.056Z] [DEBUG] [pluginSys][0m ✓ Global function "__" registered from plugin "simpleI18n"
+    [themeSys] Tema pubblico 'placeholderExample' caricato correttamente
+    [themeSys] ✅ Contenuto tema pubblico validato correttamente
+    [themeSys] Tema admin 'defaultAdminTheme' caricato correttamente
+    [themeSys] ✅ Contenuto tema admin validato correttamente
+    ✓ Admin config loaded
+    ✓ Admin config validated
+    ✓ Admin System created
+    Initializing Admin System...
+    Processing admin plugin: admin
+    ℹ️ Plugin "admin" is admin plugin but has no adminSections array, skipping section install
+    Processing admin plugin: adminUsers
+    ✓ Symlink already exists for section "usersManagment" (plugin "adminUsers")
+    ✓ Symlink already exists for section "rolesManagment" (plugin "adminUsers")
+    Processing admin plugin: adminAccessControl
+    ✓ Symlink already exists for section "adminAccessControl" (plugin "adminAccessControl")
+    ✓ Service "auth" → plugin "adminUsers"
+    ✓ Admin System initialized
+    ✓ Admin System initialized
+    [PluginPagesSystem] Initialized with directory: /home/oxtor/nodejs/ital8cms/pluginPages
+    [PluginPagesSystem] Starting initialization...
+    [PluginPagesSystem] Validating existing symlinks...
+    [PluginPagesSystem] Validation complete: 2 valid, 0 removed
+    [PluginPagesSystem] Symlink already valid: adminUsers → /home/oxtor/nodejs/ital8cms/plugins/adminUsers/webPages
+    [PluginPagesSystem] Symlink already valid: adminAccessControl → /home/oxtor/nodejs/ital8cms/plugins/adminAccessControl/webPages
+    [PluginPagesSystem] Initialization complete: 8 plugins scanned, 2 symlinks created/verified
+    ✓ Plugin Pages System initialized
+    [themeSys] Risorse del tema pubblico servite da /public-theme-resources/ -> themes/placeholderExample/themeResources/
+    [PluginPagesSystem] Plugin pages servite da /pluginPages/ -> /home/oxtor/nodejs/ital8cms/pluginPages
+    [themeSys] Risorse del tema admin servite da /admin-theme-resources/ -> themes/defaultAdminTheme/themeResources/
+    [HTTPS] ─────────────────────────────────────────
+    [HTTPS] Certificato: localhost
+    [HTTPS] Emittente:   localhost
+    [HTTPS] ⓘ  Certificato self-signed (sviluppo locale)
+    [HTTPS] Scade il:    2027-02-27 (tra 364 giorni)
+    [HTTPS] ✓  Certificato OK
+    [HTTPS] ─────────────────────────────────────────
+    server started on HTTPS port: 19443
+    server started on HTTP port: 19100
+
+      152 |     const timer = setTimeout(() => {
+      153 |       cleanup();
+    > 154 |       reject(new Error(
+          |              ^
+      155 |         `Timeout (${timeoutMs}ms) in attesa di: "${fragment}"\n` +
+      156 |         `Output catturato:\n${buffer}`
+      157 |       ));
+
+      at Timeout.<anonymous> (tests/integration/httpsServer.test.js:154:14)
+
+  ● Scenario 1 - HTTP puro (https.enabled: false) › HTTPS non è in ascolto (connessione rifiutata)
+
+    Timeout (25000ms) in attesa di: "server started on port: 19000"
+    Output catturato:
+    [PriorityMiddleware] ✓ bodyParser loaded (core, always active)
+    [PriorityMiddleware] ✓ session loaded (optional, enabled in config)
+    [PriorityMiddleware] ✓ router loaded (core, always active)
+    [32m[2026-02-27T22:02:39.862Z] [INFO] [pluginSys][0m Plugin caricato: admin
+    [32m[2026-02-27T22:02:39.881Z] [INFO] [pluginSys][0m Plugin caricato: bootstrap
+    [32m[2026-02-27T22:02:39.890Z] [INFO] [pluginSys][0m Plugin caricato: media
+    [32m[2026-02-27T22:02:39.896Z] [INFO] [pluginSys][0m Plugin caricato: ostrukUtility
+    [32m[2026-02-27T22:02:39.969Z] [INFO] [pluginSys][0m Upgrade plugin simpleI18n: 0.0.0 -> 1.0.0
+    [simpleI18n] Upgrading from 0.0.0 to 1.0.0
+    [simpleI18n] Upgrade completed successfully
+    [32m[2026-02-27T22:02:39.971Z] [INFO] [pluginSys][0m Upgrade simpleI18n completato con successo
+    [simpleI18n] Plugin loaded - Default language: en
+    [simpleI18n] Supported languages: en, it, es, fr, de
+    [32m[2026-02-27T22:02:39.973Z] [INFO] [pluginSys][0m Plugin caricato: simpleI18n
+    [32m[2026-02-27T22:02:39.992Z] [INFO] [pluginSys][0m Plugin caricato: adminUsers
+    [32m[2026-02-27T22:02:40.008Z] [INFO] [pluginSys][0m Upgrade plugin bootstrapNavbar: 0.0.0 -> 1.0.0
+    [32m[2026-02-27T22:02:40.012Z] [INFO] [pluginSys][0m Upgrade bootstrapNavbar completato con successo
+    [bootstrapNavbar] Loaded in DEBUG mode (navbar files re-read on every request)
+    [32m[2026-02-27T22:02:40.012Z] [INFO] [pluginSys][0m Plugin caricato: bootstrapNavbar
+    [32m[2026-02-27T22:02:40.019Z] [INFO] [pluginSys][0m Upgrade plugin adminAccessControl: 0.0.0 -> 1.0.0
+    [36m[2026-02-27T22:02:40.020Z] [DEBUG] [pluginSys][0m Nessuna funzione upgradePlugin() per adminAccessControl, skip migrazione
+    [adminAccessControl] Loading plugin...
+    [AccessManager] Rules loaded: 3 patterns
+    [adminAccessControl] ✓ Configuration validated successfully
+    [adminAccessControl] ✓ Plugin loaded
+    [32m[2026-02-27T22:02:40.043Z] [INFO] [pluginSys][0m Plugin caricato: adminAccessControl
+    [36m[2026-02-27T22:02:40.056Z] [DEBUG] [pluginSys][0m ✓ Global function "__" registered from plugin "simpleI18n"
+    [themeSys] Tema pubblico 'placeholderExample' caricato correttamente
+    [themeSys] ✅ Contenuto tema pubblico validato correttamente
+    [themeSys] Tema admin 'defaultAdminTheme' caricato correttamente
+    [themeSys] ✅ Contenuto tema admin validato correttamente
+    ✓ Admin config loaded
+    ✓ Admin config validated
+    ✓ Admin System created
+    Initializing Admin System...
+    Processing admin plugin: admin
+    ℹ️ Plugin "admin" is admin plugin but has no adminSections array, skipping section install
+    Processing admin plugin: adminUsers
+    ✓ Symlink already exists for section "usersManagment" (plugin "adminUsers")
+    ✓ Symlink already exists for section "rolesManagment" (plugin "adminUsers")
+    Processing admin plugin: adminAccessControl
+    ✓ Symlink already exists for section "adminAccessControl" (plugin "adminAccessControl")
+    ✓ Service "auth" → plugin "adminUsers"
+    ✓ Admin System initialized
+    ✓ Admin System initialized
+    [PluginPagesSystem] Initialized with directory: /home/oxtor/nodejs/ital8cms/pluginPages
+    [PluginPagesSystem] Starting initialization...
+    [PluginPagesSystem] Validating existing symlinks...
+    [PluginPagesSystem] Validation complete: 2 valid, 0 removed
+    [PluginPagesSystem] Symlink already valid: adminUsers → /home/oxtor/nodejs/ital8cms/plugins/adminUsers/webPages
+    [PluginPagesSystem] Symlink already valid: adminAccessControl → /home/oxtor/nodejs/ital8cms/plugins/adminAccessControl/webPages
+    [PluginPagesSystem] Initialization complete: 8 plugins scanned, 2 symlinks created/verified
+    ✓ Plugin Pages System initialized
+    [themeSys] Risorse del tema pubblico servite da /public-theme-resources/ -> themes/placeholderExample/themeResources/
+    [PluginPagesSystem] Plugin pages servite da /pluginPages/ -> /home/oxtor/nodejs/ital8cms/pluginPages
+    [themeSys] Risorse del tema admin servite da /admin-theme-resources/ -> themes/defaultAdminTheme/themeResources/
+    [HTTPS] ─────────────────────────────────────────
+    [HTTPS] Certificato: localhost
+    [HTTPS] Emittente:   localhost
+    [HTTPS] ⓘ  Certificato self-signed (sviluppo locale)
+    [HTTPS] Scade il:    2027-02-27 (tra 364 giorni)
+    [HTTPS] ✓  Certificato OK
+    [HTTPS] ─────────────────────────────────────────
+    server started on HTTPS port: 19443
+    server started on HTTP port: 19100
+
+      152 |     const timer = setTimeout(() => {
+      153 |       cleanup();
+    > 154 |       reject(new Error(
+          |              ^
+      155 |         `Timeout (${timeoutMs}ms) in attesa di: "${fragment}"\n` +
+      156 |         `Output catturato:\n${buffer}`
+      157 |       ));
+
+      at Timeout.<anonymous> (tests/integration/httpsServer.test.js:154:14)
+
+  ● Scenario 4 - Fallback HTTP su certificati mancanti › il server risponde su HTTP (fallback attivo)
+
+    Timeout (25000ms) in attesa di: "HTTP - HTTPS fallback per cert mancanti"
+    Output catturato:
+    [PriorityMiddleware] ✓ bodyParser loaded (core, always active)
+    [PriorityMiddleware] ✓ session loaded (optional, enabled in config)
+    [PriorityMiddleware] ✓ router loaded (core, always active)
+    [32m[2026-02-27T22:03:05.641Z] [INFO] [pluginSys][0m Plugin caricato: admin
+    [32m[2026-02-27T22:03:05.652Z] [INFO] [pluginSys][0m Plugin caricato: bootstrap
+    [32m[2026-02-27T22:03:05.654Z] [INFO] [pluginSys][0m Plugin caricato: media
+    [32m[2026-02-27T22:03:05.656Z] [INFO] [pluginSys][0m Plugin caricato: ostrukUtility
+    [32m[2026-02-27T22:03:05.689Z] [INFO] [pluginSys][0m Upgrade plugin simpleI18n: 0.0.0 -> 1.0.0
+    [simpleI18n] Upgrading from 0.0.0 to 1.0.0
+    [simpleI18n] Upgrade completed successfully
+    [32m[2026-02-27T22:03:05.690Z] [INFO] [pluginSys][0m Upgrade simpleI18n completato con successo
+    [simpleI18n] Plugin loaded - Default language: en
+    [simpleI18n] Supported languages: en, it, es, fr, de
+    [32m[2026-02-27T22:03:05.691Z] [INFO] [pluginSys][0m Plugin caricato: simpleI18n
+    [32m[2026-02-27T22:03:05.700Z] [INFO] [pluginSys][0m Plugin caricato: adminUsers
+    [32m[2026-02-27T22:03:05.704Z] [INFO] [pluginSys][0m Upgrade plugin bootstrapNavbar: 0.0.0 -> 1.0.0
+    [32m[2026-02-27T22:03:05.704Z] [INFO] [pluginSys][0m Upgrade bootstrapNavbar completato con successo
+    [bootstrapNavbar] Loaded in DEBUG mode (navbar files re-read on every request)
+    [32m[2026-02-27T22:03:05.704Z] [INFO] [pluginSys][0m Plugin caricato: bootstrapNavbar
+    [32m[2026-02-27T22:03:05.710Z] [INFO] [pluginSys][0m Upgrade plugin adminAccessControl: 0.0.0 -> 1.0.0
+    [36m[2026-02-27T22:03:05.710Z] [DEBUG] [pluginSys][0m Nessuna funzione upgradePlugin() per adminAccessControl, skip migrazione
+    [adminAccessControl] Loading plugin...
+    [AccessManager] Rules loaded: 3 patterns
+    [adminAccessControl] ✓ Configuration validated successfully
+    [adminAccessControl] ✓ Plugin loaded
+    [32m[2026-02-27T22:03:05.719Z] [INFO] [pluginSys][0m Plugin caricato: adminAccessControl
+    [36m[2026-02-27T22:03:05.725Z] [DEBUG] [pluginSys][0m ✓ Global function "__" registered from plugin "simpleI18n"
+    [themeSys] Tema pubblico 'placeholderExample' caricato correttamente
+    [themeSys] ✅ Contenuto tema pubblico validato correttamente
+    [themeSys] Tema admin 'defaultAdminTheme' caricato correttamente
+    [themeSys] ✅ Contenuto tema admin validato correttamente
+    ✓ Admin config loaded
+    ✓ Admin config validated
+    ✓ Admin System created
+    Initializing Admin System...
+    Processing admin plugin: admin
+    ℹ️ Plugin "admin" is admin plugin but has no adminSections array, skipping section install
+    Processing admin plugin: adminUsers
+    ✓ Symlink already exists for section "usersManagment" (plugin "adminUsers")
+    ✓ Symlink already exists for section "rolesManagment" (plugin "adminUsers")
+    Processing admin plugin: adminAccessControl
+    ✓ Symlink already exists for section "adminAccessControl" (plugin "adminAccessControl")
+    ✓ Service "auth" → plugin "adminUsers"
+    ✓ Admin System initialized
+    ✓ Admin System initialized
+    [PluginPagesSystem] Initialized with directory: /home/oxtor/nodejs/ital8cms/pluginPages
+    [PluginPagesSystem] Starting initialization...
+    [PluginPagesSystem] Validating existing symlinks...
+    [PluginPagesSystem] Validation complete: 2 valid, 0 removed
+    [PluginPagesSystem] Symlink already valid: adminUsers → /home/oxtor/nodejs/ital8cms/plugins/adminUsers/webPages
+    [PluginPagesSystem] Symlink already valid: adminAccessControl → /home/oxtor/nodejs/ital8cms/plugins/adminAccessControl/webPages
+    [PluginPagesSystem] Initialization complete: 8 plugins scanned, 2 symlinks created/verified
+    ✓ Plugin Pages System initialized
+    [themeSys] Risorse del tema pubblico servite da /public-theme-resources/ -> themes/placeholderExample/themeResources/
+    [PluginPagesSystem] Plugin pages servite da /pluginPages/ -> /home/oxtor/nodejs/ital8cms/pluginPages
+    [themeSys] Risorse del tema admin servite da /admin-theme-resources/ -> themes/defaultAdminTheme/themeResources/
+    [HTTPS] ══════════════════════════════════════════════════════════
+    [HTTPS]  ⚠  HTTPS abilitato ma certificati mancanti
+    [HTTPS] ══════════════════════════════════════════════════════════
+    [HTTPS]    certFile: ./certs/INESISTENTE_fullchain.pem  ← non trovato
+    [HTTPS]    keyFile:  ./certs/INESISTENTE_privkey.pem  ← non trovato
+    [HTTPS]
+    [HTTPS]  Opzione A — genera un certificato self-signed (sviluppo locale):
+    [HTTPS]
+    [HTTPS]    mkdir -p certs
+    [HTTPS]    openssl req -x509 -newkey rsa:2048 \
+    [HTTPS]      -keyout certs/privkey.pem \
+    [HTTPS]      -out certs/fullchain.pem \
+    [HTTPS]      -days 365 -nodes \
+    [HTTPS]      -subj "/CN=localhost" \
+    [HTTPS]      -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+    [HTTPS]
+    [HTTPS]  Opzione B — disabilita HTTPS in ital8Config.json5:
+    [HTTPS]
+    [HTTPS]    "https": { "enabled": false }
+    [HTTPS]
+    [HTTPS]  ▶ Avvio in HTTP puro sulla porta 19000 (fallback)
+    [HTTPS] ══════════════════════════════════════════════════════════
+    server started on port: 19000
+
+      152 |     const timer = setTimeout(() => {
+      153 |       cleanup();
+    > 154 |       reject(new Error(
+          |              ^
+      155 |         `Timeout (${timeoutMs}ms) in attesa di: "${fragment}"\n` +
+      156 |         `Output catturato:\n${buffer}`
+      157 |       ));
+
+      at Timeout.<anonymous> (tests/integration/httpsServer.test.js:154:14)
+
+  ● Scenario 4 - Fallback HTTP su certificati mancanti › HTTPS non è in ascolto (nessun server HTTPS avviato)
+
+    Timeout (25000ms) in attesa di: "HTTP - HTTPS fallback per cert mancanti"
+    Output catturato:
+    [PriorityMiddleware] ✓ bodyParser loaded (core, always active)
+    [PriorityMiddleware] ✓ session loaded (optional, enabled in config)
+    [PriorityMiddleware] ✓ router loaded (core, always active)
+    [32m[2026-02-27T22:03:05.641Z] [INFO] [pluginSys][0m Plugin caricato: admin
+    [32m[2026-02-27T22:03:05.652Z] [INFO] [pluginSys][0m Plugin caricato: bootstrap
+    [32m[2026-02-27T22:03:05.654Z] [INFO] [pluginSys][0m Plugin caricato: media
+    [32m[2026-02-27T22:03:05.656Z] [INFO] [pluginSys][0m Plugin caricato: ostrukUtility
+    [32m[2026-02-27T22:03:05.689Z] [INFO] [pluginSys][0m Upgrade plugin simpleI18n: 0.0.0 -> 1.0.0
+    [simpleI18n] Upgrading from 0.0.0 to 1.0.0
+    [simpleI18n] Upgrade completed successfully
+    [32m[2026-02-27T22:03:05.690Z] [INFO] [pluginSys][0m Upgrade simpleI18n completato con successo
+    [simpleI18n] Plugin loaded - Default language: en
+    [simpleI18n] Supported languages: en, it, es, fr, de
+    [32m[2026-02-27T22:03:05.691Z] [INFO] [pluginSys][0m Plugin caricato: simpleI18n
+    [32m[2026-02-27T22:03:05.700Z] [INFO] [pluginSys][0m Plugin caricato: adminUsers
+    [32m[2026-02-27T22:03:05.704Z] [INFO] [pluginSys][0m Upgrade plugin bootstrapNavbar: 0.0.0 -> 1.0.0
+    [32m[2026-02-27T22:03:05.704Z] [INFO] [pluginSys][0m Upgrade bootstrapNavbar completato con successo
+    [bootstrapNavbar] Loaded in DEBUG mode (navbar files re-read on every request)
+    [32m[2026-02-27T22:03:05.704Z] [INFO] [pluginSys][0m Plugin caricato: bootstrapNavbar
+    [32m[2026-02-27T22:03:05.710Z] [INFO] [pluginSys][0m Upgrade plugin adminAccessControl: 0.0.0 -> 1.0.0
+    [36m[2026-02-27T22:03:05.710Z] [DEBUG] [pluginSys][0m Nessuna funzione upgradePlugin() per adminAccessControl, skip migrazione
+    [adminAccessControl] Loading plugin...
+    [AccessManager] Rules loaded: 3 patterns
+    [adminAccessControl] ✓ Configuration validated successfully
+    [adminAccessControl] ✓ Plugin loaded
+    [32m[2026-02-27T22:03:05.719Z] [INFO] [pluginSys][0m Plugin caricato: adminAccessControl
+    [36m[2026-02-27T22:03:05.725Z] [DEBUG] [pluginSys][0m ✓ Global function "__" registered from plugin "simpleI18n"
+    [themeSys] Tema pubblico 'placeholderExample' caricato correttamente
+    [themeSys] ✅ Contenuto tema pubblico validato correttamente
+    [themeSys] Tema admin 'defaultAdminTheme' caricato correttamente
+    [themeSys] ✅ Contenuto tema admin validato correttamente
+    ✓ Admin config loaded
+    ✓ Admin config validated
+    ✓ Admin System created
+    Initializing Admin System...
+    Processing admin plugin: admin
+    ℹ️ Plugin "admin" is admin plugin but has no adminSections array, skipping section install
+    Processing admin plugin: adminUsers
+    ✓ Symlink already exists for section "usersManagment" (plugin "adminUsers")
+    ✓ Symlink already exists for section "rolesManagment" (plugin "adminUsers")
+    Processing admin plugin: adminAccessControl
+    ✓ Symlink already exists for section "adminAccessControl" (plugin "adminAccessControl")
+    ✓ Service "auth" → plugin "adminUsers"
+    ✓ Admin System initialized
+    ✓ Admin System initialized
+    [PluginPagesSystem] Initialized with directory: /home/oxtor/nodejs/ital8cms/pluginPages
+    [PluginPagesSystem] Starting initialization...
+    [PluginPagesSystem] Validating existing symlinks...
+    [PluginPagesSystem] Validation complete: 2 valid, 0 removed
+    [PluginPagesSystem] Symlink already valid: adminUsers → /home/oxtor/nodejs/ital8cms/plugins/adminUsers/webPages
+    [PluginPagesSystem] Symlink already valid: adminAccessControl → /home/oxtor/nodejs/ital8cms/plugins/adminAccessControl/webPages
+    [PluginPagesSystem] Initialization complete: 8 plugins scanned, 2 symlinks created/verified
+    ✓ Plugin Pages System initialized
+    [themeSys] Risorse del tema pubblico servite da /public-theme-resources/ -> themes/placeholderExample/themeResources/
+    [PluginPagesSystem] Plugin pages servite da /pluginPages/ -> /home/oxtor/nodejs/ital8cms/pluginPages
+    [themeSys] Risorse del tema admin servite da /admin-theme-resources/ -> themes/defaultAdminTheme/themeResources/
+    [HTTPS] ══════════════════════════════════════════════════════════
+    [HTTPS]  ⚠  HTTPS abilitato ma certificati mancanti
+    [HTTPS] ══════════════════════════════════════════════════════════
+    [HTTPS]    certFile: ./certs/INESISTENTE_fullchain.pem  ← non trovato
+    [HTTPS]    keyFile:  ./certs/INESISTENTE_privkey.pem  ← non trovato
+    [HTTPS]
+    [HTTPS]  Opzione A — genera un certificato self-signed (sviluppo locale):
+    [HTTPS]
+    [HTTPS]    mkdir -p certs
+    [HTTPS]    openssl req -x509 -newkey rsa:2048 \
+    [HTTPS]      -keyout certs/privkey.pem \
+    [HTTPS]      -out certs/fullchain.pem \
+    [HTTPS]      -days 365 -nodes \
+    [HTTPS]      -subj "/CN=localhost" \
+    [HTTPS]      -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+    [HTTPS]
+    [HTTPS]  Opzione B — disabilita HTTPS in ital8Config.json5:
+    [HTTPS]
+    [HTTPS]    "https": { "enabled": false }
+    [HTTPS]
+    [HTTPS]  ▶ Avvio in HTTP puro sulla porta 19000 (fallback)
+    [HTTPS] ══════════════════════════════════════════════════════════
+    server started on port: 19000
+
+      152 |     const timer = setTimeout(() => {
+      153 |       cleanup();
+    > 154 |       reject(new Error(
+          |              ^
+      155 |         `Timeout (${timeoutMs}ms) in attesa di: "${fragment}"\n` +
+      156 |         `Output catturato:\n${buffer}`
+      157 |       ));
+
+      at Timeout.<anonymous> (tests/integration/httpsServer.test.js:154:14)
+
+  ● Scenario 4 - Fallback HTTP su certificati mancanti › i log contengono il messaggio di errore certificati
+
+    Timeout (25000ms) in attesa di: "HTTP - HTTPS fallback per cert mancanti"
+    Output catturato:
+    [PriorityMiddleware] ✓ bodyParser loaded (core, always active)
+    [PriorityMiddleware] ✓ session loaded (optional, enabled in config)
+    [PriorityMiddleware] ✓ router loaded (core, always active)
+    [32m[2026-02-27T22:03:05.641Z] [INFO] [pluginSys][0m Plugin caricato: admin
+    [32m[2026-02-27T22:03:05.652Z] [INFO] [pluginSys][0m Plugin caricato: bootstrap
+    [32m[2026-02-27T22:03:05.654Z] [INFO] [pluginSys][0m Plugin caricato: media
+    [32m[2026-02-27T22:03:05.656Z] [INFO] [pluginSys][0m Plugin caricato: ostrukUtility
+    [32m[2026-02-27T22:03:05.689Z] [INFO] [pluginSys][0m Upgrade plugin simpleI18n: 0.0.0 -> 1.0.0
+    [simpleI18n] Upgrading from 0.0.0 to 1.0.0
+    [simpleI18n] Upgrade completed successfully
+    [32m[2026-02-27T22:03:05.690Z] [INFO] [pluginSys][0m Upgrade simpleI18n completato con successo
+    [simpleI18n] Plugin loaded - Default language: en
+    [simpleI18n] Supported languages: en, it, es, fr, de
+    [32m[2026-02-27T22:03:05.691Z] [INFO] [pluginSys][0m Plugin caricato: simpleI18n
+    [32m[2026-02-27T22:03:05.700Z] [INFO] [pluginSys][0m Plugin caricato: adminUsers
+    [32m[2026-02-27T22:03:05.704Z] [INFO] [pluginSys][0m Upgrade plugin bootstrapNavbar: 0.0.0 -> 1.0.0
+    [32m[2026-02-27T22:03:05.704Z] [INFO] [pluginSys][0m Upgrade bootstrapNavbar completato con successo
+    [bootstrapNavbar] Loaded in DEBUG mode (navbar files re-read on every request)
+    [32m[2026-02-27T22:03:05.704Z] [INFO] [pluginSys][0m Plugin caricato: bootstrapNavbar
+    [32m[2026-02-27T22:03:05.710Z] [INFO] [pluginSys][0m Upgrade plugin adminAccessControl: 0.0.0 -> 1.0.0
+    [36m[2026-02-27T22:03:05.710Z] [DEBUG] [pluginSys][0m Nessuna funzione upgradePlugin() per adminAccessControl, skip migrazione
+    [adminAccessControl] Loading plugin...
+    [AccessManager] Rules loaded: 3 patterns
+    [adminAccessControl] ✓ Configuration validated successfully
+    [adminAccessControl] ✓ Plugin loaded
+    [32m[2026-02-27T22:03:05.719Z] [INFO] [pluginSys][0m Plugin caricato: adminAccessControl
+    [36m[2026-02-27T22:03:05.725Z] [DEBUG] [pluginSys][0m ✓ Global function "__" registered from plugin "simpleI18n"
+    [themeSys] Tema pubblico 'placeholderExample' caricato correttamente
+    [themeSys] ✅ Contenuto tema pubblico validato correttamente
+    [themeSys] Tema admin 'defaultAdminTheme' caricato correttamente
+    [themeSys] ✅ Contenuto tema admin validato correttamente
+    ✓ Admin config loaded
+    ✓ Admin config validated
+    ✓ Admin System created
+    Initializing Admin System...
+    Processing admin plugin: admin
+    ℹ️ Plugin "admin" is admin plugin but has no adminSections array, skipping section install
+    Processing admin plugin: adminUsers
+    ✓ Symlink already exists for section "usersManagment" (plugin "adminUsers")
+    ✓ Symlink already exists for section "rolesManagment" (plugin "adminUsers")
+    Processing admin plugin: adminAccessControl
+    ✓ Symlink already exists for section "adminAccessControl" (plugin "adminAccessControl")
+    ✓ Service "auth" → plugin "adminUsers"
+    ✓ Admin System initialized
+    ✓ Admin System initialized
+    [PluginPagesSystem] Initialized with directory: /home/oxtor/nodejs/ital8cms/pluginPages
+    [PluginPagesSystem] Starting initialization...
+    [PluginPagesSystem] Validating existing symlinks...
+    [PluginPagesSystem] Validation complete: 2 valid, 0 removed
+    [PluginPagesSystem] Symlink already valid: adminUsers → /home/oxtor/nodejs/ital8cms/plugins/adminUsers/webPages
+    [PluginPagesSystem] Symlink already valid: adminAccessControl → /home/oxtor/nodejs/ital8cms/plugins/adminAccessControl/webPages
+    [PluginPagesSystem] Initialization complete: 8 plugins scanned, 2 symlinks created/verified
+    ✓ Plugin Pages System initialized
+    [themeSys] Risorse del tema pubblico servite da /public-theme-resources/ -> themes/placeholderExample/themeResources/
+    [PluginPagesSystem] Plugin pages servite da /pluginPages/ -> /home/oxtor/nodejs/ital8cms/pluginPages
+    [themeSys] Risorse del tema admin servite da /admin-theme-resources/ -> themes/defaultAdminTheme/themeResources/
+    [HTTPS] ══════════════════════════════════════════════════════════
+    [HTTPS]  ⚠  HTTPS abilitato ma certificati mancanti
+    [HTTPS] ══════════════════════════════════════════════════════════
+    [HTTPS]    certFile: ./certs/INESISTENTE_fullchain.pem  ← non trovato
+    [HTTPS]    keyFile:  ./certs/INESISTENTE_privkey.pem  ← non trovato
+    [HTTPS]
+    [HTTPS]  Opzione A — genera un certificato self-signed (sviluppo locale):
+    [HTTPS]
+    [HTTPS]    mkdir -p certs
+    [HTTPS]    openssl req -x509 -newkey rsa:2048 \
+    [HTTPS]      -keyout certs/privkey.pem \
+    [HTTPS]      -out certs/fullchain.pem \
+    [HTTPS]      -days 365 -nodes \
+    [HTTPS]      -subj "/CN=localhost" \
+    [HTTPS]      -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+    [HTTPS]
+    [HTTPS]  Opzione B — disabilita HTTPS in ital8Config.json5:
+    [HTTPS]
+    [HTTPS]    "https": { "enabled": false }
+    [HTTPS]
+    [HTTPS]  ▶ Avvio in HTTP puro sulla porta 19000 (fallback)
+    [HTTPS] ══════════════════════════════════════════════════════════
+    server started on port: 19000
+
+      152 |     const timer = setTimeout(() => {
+      153 |       cleanup();
+    > 154 |       reject(new Error(
+          |              ^
+      155 |         `Timeout (${timeoutMs}ms) in attesa di: "${fragment}"\n` +
+      156 |         `Output catturato:\n${buffer}`
+      157 |       ));
+
+      at Timeout.<anonymous> (tests/integration/httpsServer.test.js:154:14)
+
+  ● Scenario 4 - Fallback HTTP su certificati mancanti › i log contengono il messaggio di fallback
+
+    Timeout (25000ms) in attesa di: "HTTP - HTTPS fallback per cert mancanti"
+    Output catturato:
+    [PriorityMiddleware] ✓ bodyParser loaded (core, always active)
+    [PriorityMiddleware] ✓ session loaded (optional, enabled in config)
+    [PriorityMiddleware] ✓ router loaded (core, always active)
+    [32m[2026-02-27T22:03:05.641Z] [INFO] [pluginSys][0m Plugin caricato: admin
+    [32m[2026-02-27T22:03:05.652Z] [INFO] [pluginSys][0m Plugin caricato: bootstrap
+    [32m[2026-02-27T22:03:05.654Z] [INFO] [pluginSys][0m Plugin caricato: media
+    [32m[2026-02-27T22:03:05.656Z] [INFO] [pluginSys][0m Plugin caricato: ostrukUtility
+    [32m[2026-02-27T22:03:05.689Z] [INFO] [pluginSys][0m Upgrade plugin simpleI18n: 0.0.0 -> 1.0.0
+    [simpleI18n] Upgrading from 0.0.0 to 1.0.0
+    [simpleI18n] Upgrade completed successfully
+    [32m[2026-02-27T22:03:05.690Z] [INFO] [pluginSys][0m Upgrade simpleI18n completato con successo
+    [simpleI18n] Plugin loaded - Default language: en
+    [simpleI18n] Supported languages: en, it, es, fr, de
+    [32m[2026-02-27T22:03:05.691Z] [INFO] [pluginSys][0m Plugin caricato: simpleI18n
+    [32m[2026-02-27T22:03:05.700Z] [INFO] [pluginSys][0m Plugin caricato: adminUsers
+    [32m[2026-02-27T22:03:05.704Z] [INFO] [pluginSys][0m Upgrade plugin bootstrapNavbar: 0.0.0 -> 1.0.0
+    [32m[2026-02-27T22:03:05.704Z] [INFO] [pluginSys][0m Upgrade bootstrapNavbar completato con successo
+    [bootstrapNavbar] Loaded in DEBUG mode (navbar files re-read on every request)
+    [32m[2026-02-27T22:03:05.704Z] [INFO] [pluginSys][0m Plugin caricato: bootstrapNavbar
+    [32m[2026-02-27T22:03:05.710Z] [INFO] [pluginSys][0m Upgrade plugin adminAccessControl: 0.0.0 -> 1.0.0
+    [36m[2026-02-27T22:03:05.710Z] [DEBUG] [pluginSys][0m Nessuna funzione upgradePlugin() per adminAccessControl, skip migrazione
+    [adminAccessControl] Loading plugin...
+    [AccessManager] Rules loaded: 3 patterns
+    [adminAccessControl] ✓ Configuration validated successfully
+    [adminAccessControl] ✓ Plugin loaded
+    [32m[2026-02-27T22:03:05.719Z] [INFO] [pluginSys][0m Plugin caricato: adminAccessControl
+    [36m[2026-02-27T22:03:05.725Z] [DEBUG] [pluginSys][0m ✓ Global function "__" registered from plugin "simpleI18n"
+    [themeSys] Tema pubblico 'placeholderExample' caricato correttamente
+    [themeSys] ✅ Contenuto tema pubblico validato correttamente
+    [themeSys] Tema admin 'defaultAdminTheme' caricato correttamente
+    [themeSys] ✅ Contenuto tema admin validato correttamente
+    ✓ Admin config loaded
+    ✓ Admin config validated
+    ✓ Admin System created
+    Initializing Admin System...
+    Processing admin plugin: admin
+    ℹ️ Plugin "admin" is admin plugin but has no adminSections array, skipping section install
+    Processing admin plugin: adminUsers
+    ✓ Symlink already exists for section "usersManagment" (plugin "adminUsers")
+    ✓ Symlink already exists for section "rolesManagment" (plugin "adminUsers")
+    Processing admin plugin: adminAccessControl
+    ✓ Symlink already exists for section "adminAccessControl" (plugin "adminAccessControl")
+    ✓ Service "auth" → plugin "adminUsers"
+    ✓ Admin System initialized
+    ✓ Admin System initialized
+    [PluginPagesSystem] Initialized with directory: /home/oxtor/nodejs/ital8cms/pluginPages
+    [PluginPagesSystem] Starting initialization...
+    [PluginPagesSystem] Validating existing symlinks...
+    [PluginPagesSystem] Validation complete: 2 valid, 0 removed
+    [PluginPagesSystem] Symlink already valid: adminUsers → /home/oxtor/nodejs/ital8cms/plugins/adminUsers/webPages
+    [PluginPagesSystem] Symlink already valid: adminAccessControl → /home/oxtor/nodejs/ital8cms/plugins/adminAccessControl/webPages
+    [PluginPagesSystem] Initialization complete: 8 plugins scanned, 2 symlinks created/verified
+    ✓ Plugin Pages System initialized
+    [themeSys] Risorse del tema pubblico servite da /public-theme-resources/ -> themes/placeholderExample/themeResources/
+    [PluginPagesSystem] Plugin pages servite da /pluginPages/ -> /home/oxtor/nodejs/ital8cms/pluginPages
+    [themeSys] Risorse del tema admin servite da /admin-theme-resources/ -> themes/defaultAdminTheme/themeResources/
+    [HTTPS] ══════════════════════════════════════════════════════════
+    [HTTPS]  ⚠  HTTPS abilitato ma certificati mancanti
+    [HTTPS] ══════════════════════════════════════════════════════════
+    [HTTPS]    certFile: ./certs/INESISTENTE_fullchain.pem  ← non trovato
+    [HTTPS]    keyFile:  ./certs/INESISTENTE_privkey.pem  ← non trovato
+    [HTTPS]
+    [HTTPS]  Opzione A — genera un certificato self-signed (sviluppo locale):
+    [HTTPS]
+    [HTTPS]    mkdir -p certs
+    [HTTPS]    openssl req -x509 -newkey rsa:2048 \
+    [HTTPS]      -keyout certs/privkey.pem \
+    [HTTPS]      -out certs/fullchain.pem \
+    [HTTPS]      -days 365 -nodes \
+    [HTTPS]      -subj "/CN=localhost" \
+    [HTTPS]      -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+    [HTTPS]
+    [HTTPS]  Opzione B — disabilita HTTPS in ital8Config.json5:
+    [HTTPS]
+    [HTTPS]    "https": { "enabled": false }
+    [HTTPS]
+    [HTTPS]  ▶ Avvio in HTTP puro sulla porta 19000 (fallback)
+    [HTTPS] ══════════════════════════════════════════════════════════
+    server started on port: 19000
+
+      152 |     const timer = setTimeout(() => {
+      153 |       cleanup();
+    > 154 |       reject(new Error(
+          |              ^
+      155 |         `Timeout (${timeoutMs}ms) in attesa di: "${fragment}"\n` +
+      156 |         `Output catturato:\n${buffer}`
+      157 |       ));
+
+      at Timeout.<anonymous> (tests/integration/httpsServer.test.js:154:14)
+
+Test Suites: 2 failed, 14 passed, 16 total
+Tests:       7 failed, 419 passed, 426 total
+Snapshots:   0 total
+Time:        52.566 s
+Ran all test suites.
