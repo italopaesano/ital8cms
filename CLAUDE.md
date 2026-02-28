@@ -30,6 +30,24 @@
 
 **Target audience:** Web developers comfortable with Node.js, HTML/CSS, and server-side templating. Not suitable for non-technical users looking for a WYSIWYG editor.
 
+### Dipendenze Mantenute dal Team
+
+Il progetto ital8cms è anche manutentore del modulo npm **`koa-classic-server`**. Questo ha un'implicazione importante per la gestione dei bug:
+
+**Regola:** Se durante lo sviluppo di ital8cms viene individuato un bug in `koa-classic-server`, **non si deve aggirarlo** con workaround locali nel codice di ital8cms. Si deve invece **segnalarlo al maintainer (Italo Paesano)** affinché venga corretto nel modulo originale, e successivamente aggiornare la dipendenza alla versione fixata.
+
+**Motivazione:** Aggirare i bug nelle dipendenze che controlliamo direttamente:
+- ❌ Accumula debito tecnico nel codice di ital8cms
+- ❌ Nasconde il problema reale nel modulo
+- ❌ Lascia il bug attivo per altri utilizzatori di `koa-classic-server`
+- ✅ La correzione nel modulo risolve il problema alla radice per tutti
+
+**Procedura quando si trova un bug in `koa-classic-server`:**
+1. Descrivere il bug al maintainer (root cause, comportamento atteso, sistemi affetti)
+2. Attendere la release con la fix
+3. Aggiornare la versione in `package.json` con `npm install koa-classic-server@x.y.z`
+4. Verificare che il comportamento sia corretto senza workaround nel codice ital8cms
+
 **JSON5 Configuration Files:** All configuration files (with .json5 extension) in the project (except `package.json` and `package-lock.json`) are processed with JSON5 and support comments, trailing commas, and other JSON5 features. Each file must have a comment on the first line:
 
 ```javascript
@@ -4342,11 +4360,27 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2026-02-27
-**Version:** 2.1.0
+**Last Updated:** 2026-02-28
+**Version:** 2.2.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v2.2.0 (2026-02-28): **DEPENDENCY UPDATE + POLICY** - Aggiornamento `koa-classic-server` a 2.4.0 (fix symlink) e nuova policy per bug nelle dipendenze mantenute dal team. Key changes:
+  - **`koa-classic-server` aggiornato da 2.3.0 a 2.4.0:**
+    - La versione 2.4.0 corregge il bug in `findIndexFile()` che usava `dirent.isFile()` per rilevare i file indice
+    - `dirent.isFile()` restituisce `false` per i symlink → su NixOS con `buildFHSEnv` i file nella directory `www/` appaiono come symlink verso il Nix store, causando directory listing su `GET /` e 404 su `GET /index.ejs`
+    - La fix nel modulo risolve il problema alla radice seguendo correttamente i symlink
+  - **Rimosso il workaround da `index.js`:**
+    - Revertito il commit con il middleware esplicito per `/` e `/index.ejs` che bypassava `koa-classic-server`
+    - Il comportamento corretto è ora garantito direttamente dal modulo aggiornato
+  - **Nuova sezione in CLAUDE.md — "Dipendenze Mantenute dal Team":**
+    - Documenta che `koa-classic-server` è mantenuto dallo stesso team di ital8cms
+    - Stabilisce la policy: bug in `koa-classic-server` vanno corretti nel modulo, non aggirati in ital8cms
+    - Descrive la procedura da seguire quando viene trovato un bug nella dipendenza
+  - **Files Modified:**
+    - `/package.json` e `/package-lock.json` — versione `koa-classic-server` 2.3.0 → 2.4.0
+    - `/index.js` — rimosso middleware workaround per symlink (revert commit)
+    - `/CLAUDE.md` — aggiunta sezione "Dipendenze Mantenute dal Team" e questo changelog
 - v2.1.0 (2026-02-27): **ENHANCEMENT** - Warning visivo per certificati HTTPS mancanti + auto-generazione cert nel test diagnostico. Key changes:
   - **`warnMissingCertificates()` in `core/httpsManager.js`:**
     - Aggiunto controllo pre-emptivo `fs.existsSync()` prima di `readFileSync()` nel flusso di avvio HTTPS
