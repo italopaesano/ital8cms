@@ -98,6 +98,36 @@ app.use(
 );
 console.log(`[themeSys] Risorse del tema pubblico servite da ${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}/ -> themes/${ital8Conf.activeTheme}/themeResources/`);
 
+// Middleware esplicito per / e /index.ejs dalla directory www.
+// Bypassa findIndexFile di koa-classic-server che usa dirent.isFile() e fallisce
+// con i symlink (es. NixOS buildFHSEnv), causando directory listing su / e 404 su /index.ejs.
+const wwwIndexFilePath = path.join(__dirname, ital8Conf.wwwPath, 'index.ejs');
+const wwwHomeRoute = (ital8Conf.globalPrefix || '') + '/';
+const wwwIndexEjsRoute = (ital8Conf.globalPrefix || '') + '/index.ejs';
+app.use(async (ctx, next) => {
+  if (ctx.method !== 'GET' || (ctx.path !== wwwHomeRoute && ctx.path !== wwwIndexEjsRoute)) {
+    await next();
+    return;
+  }
+  const passData = {
+    isAdminContext: false,
+    globalPrefix: ital8Conf.globalPrefix,
+    apiPrefix: ital8Conf.apiPrefix,
+    pluginSys: pluginSys,
+    plugin: getObjectsToShareInWebPages,
+    adminSystem: adminSystem,
+    filePath: wwwIndexFilePath,
+    href: ctx.href,
+    query: ctx.query,
+    ctx: ctx,
+  };
+  passData.themeSys = createThemeSysWrapper(themeSys, passData);
+  ctx.body = await ejs.renderFile(wwwIndexFilePath, {
+    passData: passData,
+    ...globalFunctions
+  });
+});
+
 // koa classic server
 app.use(
   koaClassicServer(
