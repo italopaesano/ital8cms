@@ -35,6 +35,9 @@ module.exports = defineConfig({
     /* Base URL to use in actions like `await page.goto('/')` */
     baseURL: 'http://localhost:3000',
 
+    /* Accept self-signed certificates (development) */
+    ignoreHTTPSErrors: true,
+
     /* Collect trace when retrying the failed test */
     trace: 'on-first-retry',
 
@@ -63,6 +66,7 @@ module.exports = defineConfig({
   webServer: {
     command: 'node index.js',
     url: 'http://localhost:3000',
+    ignoreHTTPSErrors: true,
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
   },
