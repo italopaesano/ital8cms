@@ -67,9 +67,16 @@ const URLS = {
   accessDenied: '/pluginPages/adminAccessControl/access-denied.ejs'
 };
 
+// Constants for globalPrefix E2E tests (used by playwright.globalPrefix.config.js and globalPrefixSetup.js)
+const GLOBAL_PREFIX_TEST = {
+  prefix: '/testprefix',
+  httpPort: 19300,
+};
+
 module.exports = {
   TEST_PASSWORD,
   TEST_USER_PREFIX,
   TEST_USERS,
-  URLS
+  URLS,
+  GLOBAL_PREFIX_TEST
 };
