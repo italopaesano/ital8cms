@@ -109,7 +109,7 @@ app.use(
       urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.pluginPagesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources','/pluginPages' -> questi sarebbero i percorsi di default pero adesso sono configurabili
       browserCacheEnabled: ital8Conf.browserCacheEnabled,
       browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
-      hideExtension: ital8Conf.hideExtension.wwwPath.enabled ? ital8Conf.hideExtension.wwwPath.ext : undefined,
+      hideExtension: ital8Conf.hideExtension.wwwPath.enabled ? { ext: ital8Conf.hideExtension.wwwPath.ext } : undefined,
       template: {
         render: async (ctx, next, filePath) => {
           // Crea passData base
@@ -156,7 +156,7 @@ app.use(
       showDirContents: false,
       browserCacheEnabled: ital8Conf.browserCacheEnabled,
       browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
-      hideExtension: ital8Conf.hideExtension.pluginPagesPrefix.enabled ? ital8Conf.hideExtension.pluginPagesPrefix.ext : undefined,
+      hideExtension: ital8Conf.hideExtension.pluginPagesPrefix.enabled ? { ext: ital8Conf.hideExtension.pluginPagesPrefix.ext } : undefined,
       template: {
         render: async (ctx, next, filePath) => {
           // Crea passData base per plugin pages
@@ -219,7 +219,7 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
         urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`], // '/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
         browserCacheEnabled: ital8Conf.browserCacheEnabled,
         browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
-        hideExtension: ital8Conf.hideExtension.adminPrefix.enabled ? ital8Conf.hideExtension.adminPrefix.ext : undefined,
+        hideExtension: ital8Conf.hideExtension.adminPrefix.enabled ? { ext: ital8Conf.hideExtension.adminPrefix.ext } : undefined,
         template: {
           render: async (ctx, next, filePath) => {
             // Crea passData base per admin
