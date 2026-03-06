@@ -115,6 +115,23 @@
   //   }
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+  // Nasconde l'estensione dai URL serviti da koa-classic-server (richiede v2.6.1+)
+  // I link esistenti con estensione continuano a funzionare tramite redirect automatico
+  "hideExtension": {
+    "wwwPath": {
+      "enabled": false,
+      "ext": ".ejs"
+    },
+    "pluginPagesPrefix": {
+      "enabled": false,
+      "ext": ".ejs"
+    },
+    "adminPrefix": {
+      "enabled": false,
+      "ext": ".ejs"
+    }
+  },
+
   "globalFunctionsWhitelist": {
     "__": {
       "plugin": "simpleI18n",

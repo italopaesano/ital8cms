@@ -2974,12 +2974,56 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
     "tlsOptions": {},                         // Opzioni TLS avanzate (opzionale)
   },
 
+  // Hide file extension from URLs (clean URLs, requires koa-classic-server v2.6.1+)
+  "hideExtension": {
+    "wwwPath":            { "enabled": false, "ext": ".ejs" },
+    "pluginPagesPrefix":  { "enabled": false, "ext": ".ejs" },
+    "adminPrefix":        { "enabled": false, "ext": ".ejs" }
+  },
+
   // Priority Middlewares Configuration
   "priorityMiddlewares": {
     "session": true             // Optional middleware (true=enabled, false=disabled)
   }
 }
 ```
+
+### Hide Extension (Clean URLs)
+
+The `hideExtension` feature leverages `koa-classic-server` v2.6.1+ to serve pages without the file extension in the URL. Each of the three EJS-rendering koa-classic-server instances can be configured independently.
+
+**Configuration in `ital8Config.json5`:**
+
+```json5
+{
+  "hideExtension": {
+    "wwwPath":            { "enabled": false, "ext": ".ejs" },
+    "pluginPagesPrefix":  { "enabled": false, "ext": ".ejs" },
+    "adminPrefix":        { "enabled": false, "ext": ".ejs" }
+  }
+}
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enabled` | boolean | `true` = hide extension, `false` = show extension (default) |
+| `ext` | string | Extension to hide, including the dot (e.g., `".ejs"`, `".pug"`) |
+
+**Contexts:**
+
+| Key | koa-classic-server Instance | URL Example (enabled) |
+|-----|----------------------------|----------------------|
+| `wwwPath` | Public pages (`/www`) | `/about` instead of `/about.ejs` |
+| `pluginPagesPrefix` | Plugin pages (`/pluginPages/`) | `/pluginPages/adminUsers/login` instead of `/pluginPages/adminUsers/login.ejs` |
+| `adminPrefix` | Admin pages (`/admin/`) | `/admin/usersManagment/index` instead of `/admin/usersManagment/index.ejs` |
+
+**Backward compatibility:** When enabled, existing links with the extension (e.g., `/about.ejs`) continue to work via automatic redirect provided by `koa-classic-server`.
+
+**Not applied to:** Theme resource instances (public and admin) since they serve static assets (CSS, JS, images) whose extensions should remain visible.
+
+**Future use:** The per-context `ext` field allows different template engines per context (e.g., `wwwPath` using `".pug"` while `adminPrefix` uses `".ejs"`).
 
 ### Priority Middlewares Configuration
 
@@ -4360,11 +4404,25 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2026-02-28
-**Version:** 2.2.0
+**Last Updated:** 2026-03-06
+**Version:** 2.3.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v2.3.0 (2026-03-06): **NEW FEATURE** - Clean URLs via hideExtension (koa-classic-server v2.6.1+). Key changes:
+  - **New `hideExtension` config block in `ital8Config.json5`:**
+    - Per-context configuration for 3 EJS-rendering instances (wwwPath, pluginPagesPrefix, adminPrefix)
+    - Each context has `enabled` (boolean) and `ext` (string with dot, e.g., ".ejs") fields
+    - Default: all disabled (backward compatible)
+    - Future-proof: supports different template engines per context
+  - **`index.js` updated:**
+    - WWW Root, Plugin Pages, and Admin Pages instances now pass `hideExtension` option to koa-classic-server
+    - Theme resource instances (public and admin) not affected
+  - **Backward compatibility:** Existing links with `.ejs` extension continue to work via automatic redirect
+  - **Files Modified:**
+    - `/ital8Config.json5` — added `hideExtension` configuration block
+    - `/index.js` — added `hideExtension` option to 3 koa-classic-server instances
+    - `/CLAUDE.md` — added "Hide Extension (Clean URLs)" documentation section
 - v2.2.0 (2026-02-28): **DEPENDENCY UPDATE + POLICY** - Aggiornamento `koa-classic-server` a 2.4.0 (fix symlink) e nuova policy per bug nelle dipendenze mantenute dal team. Key changes:
   - **`koa-classic-server` aggiornato da 2.3.0 a 2.4.0:**
     - La versione 2.4.0 corregge il bug in `findIndexFile()` che usava `dirent.isFile()` per rilevare i file indice
