@@ -32,9 +32,15 @@ const c = {
  * Controlla se siamo attualmente dentro nix-shell.
  * La variabile IN_NIX_SHELL viene impostata automaticamente da nix-shell
  * con il valore "impure" o "pure".
+ *
+ * Per ambienti buildFHSEnv (usato in shell.nix per Playwright), la variabile
+ * viene impostata tramite il parametro `profile` di buildFHSEnv.
+ * Come fallback aggiuntivo, verifichiamo anche NIX_PROFILES che è presente
+ * in ambienti nix-shell anche quando IN_NIX_SHELL non viene propagato
+ * attraverso il namespace FHS.
  */
 function isInsideNixShell() {
-  return !!process.env.IN_NIX_SHELL;
+  return !!process.env.IN_NIX_SHELL || !!process.env.NIX_PROFILES;
 }
 
 /**
@@ -60,9 +66,12 @@ const insideNixShell = isInsideNixShell();
 const nixAvailable   = isNixAvailable();
 
 if (insideNixShell) {
+  const detectionMethod = process.env.IN_NIX_SHELL
+    ? `IN_NIX_SHELL=${process.env.IN_NIX_SHELL}`
+    : 'NIX_PROFILES detected (buildFHSEnv)';
   console.log(
     `${c.green}✓ nix-shell attivo` +
-    ` (IN_NIX_SHELL=${process.env.IN_NIX_SHELL})${c.reset}`
+    ` (${detectionMethod})${c.reset}`
   );
   process.exit(0);
 }
