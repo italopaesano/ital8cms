@@ -92,9 +92,6 @@ ${c.bold}Per eseguire i test correttamente:${c.reset}
   ${c.cyan}2. Poi esegui i test:${c.reset}
      ${c.bold}npm test${c.reset}
 
-${c.yellow}Oppure in un solo comando:${c.reset}
-     ${c.bold}nix-shell --run "npm test"${c.reset}
-
 `);
 
 process.exit(1);
