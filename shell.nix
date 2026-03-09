@@ -40,8 +40,5 @@
     systemdMinimal
     stdenv.cc.cc.lib
   ];
-  profile = ''
-    export IN_NIX_SHELL="''${IN_NIX_SHELL:-impure}"
-  '';
   runScript = "bash";
 }).env
