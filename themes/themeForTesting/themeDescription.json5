@@ -1,0 +1,89 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "name": "themeForTesting",
+  "version": "1.0.0",
+  "description": "Tema pubblico dedicato al testing automatizzato. Basato su placeholderExample per garantire copertura completa delle funzionalita tema incluso lo standard PLACEHOLDER v1.0.",
+  "author": "Italo Paesano",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC",
+  "tags": ["testing", "placeholder", "bootstrap", "automated-tests"],
+  "designTheme": "Testing - Tema per test automatizzati basato su placeholderExample",
+  "supportedHooks": [
+    "head",
+    "header",
+    "footer",
+    "script",
+    "nav",
+    "main",
+    "aside"
+  ],
+  "features": {
+    "placeholderStandard": true,
+    "placeholderPartials": true,
+    "submarineDesign": true,
+    "responsive": true,
+    "bootstrap5": true,
+    "testTemplates": true,
+    "animations": true,
+    "customCSS": true
+  },
+  "templates": [
+    {
+      "name": "page.template.ejs",
+      "description": "Template pagina base - testa text, html, richtext, markdown, image",
+      "placeholderBlocks": 8
+    },
+    {
+      "name": "blog-post.template.ejs",
+      "description": "Template articolo blog - testa metadata, featured image, markdown body",
+      "placeholderBlocks": 10
+    },
+    {
+      "name": "landing.template.ejs",
+      "description": "Template landing page - testa multiple sezioni HTML",
+      "placeholderBlocks": 4
+    },
+    {
+      "name": "gallery.template.ejs",
+      "description": "Template galleria - testa images/files multipli con validazione avanzata",
+      "placeholderBlocks": 6
+    }
+  ],
+  "partials": [
+    {
+      "name": "header.ejs",
+      "description": "Header con logo, tagline, announcement bar e CTA buttons - 3 blocchi PLACEHOLDER",
+      "placeholderBlocks": 3
+    },
+    {
+      "name": "nav.ejs",
+      "description": "Navigazione principale editabile con emoji icons - 1 blocco PLACEHOLDER",
+      "placeholderBlocks": 1
+    },
+    {
+      "name": "aside.ejs",
+      "description": "Sidebar con 3 widget personalizzabili - 3 blocchi PLACEHOLDER",
+      "placeholderBlocks": 3
+    },
+    {
+      "name": "footer.ejs",
+      "description": "Footer con descrizione, link, social e copyright - 4 blocchi PLACEHOLDER",
+      "placeholderBlocks": 4
+    }
+  ],
+  "testCoverage": {
+    "contentTypes": ["text", "html", "richtext", "markdown", "image", "images", "file", "files"],
+    "attributes": ["name", "type", "label", "description", "required", "maxlength", "editor", "allowedTags", "minCount", "maxCount", "minWidth", "maxWidth", "minHeight", "maxHeight", "minSize", "maxSize", "allowedExtensions", "allowedMimeTypes"],
+    "totalBlocks": 39,
+    "templateBlocks": 28,
+    "partialBlocks": 11,
+    "standardVersion": "1.0"
+  },
+  "designColors": {
+    "primary": "#0a1f44",
+    "secondary": "#2b5876",
+    "accent": "#43c6ac",
+    "coral": "#ff6b6b",
+    "sand": "#f39c12"
+  }
+}

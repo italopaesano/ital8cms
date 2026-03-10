@@ -104,6 +104,8 @@ function spawnServer(httpPort, hideExtensionConfig) {
     httpPort: httpPort,
     debugMode: 0,
     wwwPath: FIXTURES_WWW_PATH,
+    activeTheme: 'themeForTesting',
+    adminActiveTheme: 'themeForTestingAdmin',
     hideExtension: hideExtensionConfig,
     // Disabilita HTTPS per questi test
     https: {

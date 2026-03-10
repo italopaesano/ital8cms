@@ -182,6 +182,8 @@ function spawnServerWithRealCerts() {
   const testConf = {
     ...original,
     httpPort: TEST_HTTP_PORT,
+    activeTheme: 'themeForTesting',
+    adminActiveTheme: 'themeForTestingAdmin',
     https: {
       ...original.https,
       enabled: true,

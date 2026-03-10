@@ -14,8 +14,25 @@ const json5 = require('json5');
 const { TEST_PASSWORD, TEST_USERS } = require('./testConstants');
 
 const USER_ACCOUNT_PATH = path.join(__dirname, '../../plugins/adminUsers/userAccount.json5');
+const CONFIG_PATH = path.join(__dirname, '../../ital8Config.json5');
 
 module.exports = async function globalSetup() {
+  // ── Override temi: usa temi dedicati al testing ──
+  console.log('[Test Setup] Overriding activeTheme and adminActiveTheme for testing...');
+
+  const originalConfigContent = fs.readFileSync(CONFIG_PATH, 'utf8');
+  const configBackupPath = CONFIG_PATH + '.test-bak';
+  fs.writeFileSync(configBackupPath, originalConfigContent, 'utf8');
+
+  const configData = json5.parse(originalConfigContent);
+  configData.activeTheme = 'themeForTesting';
+  configData.adminActiveTheme = 'themeForTestingAdmin';
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(configData, null, 2), 'utf8');
+
+  console.log('[Test Setup] Themes set to themeForTesting / themeForTestingAdmin');
+  console.log(`[Test Setup] Config backup saved to ${configBackupPath}`);
+
+  // ── Aggiungi utenti di test ──
   console.log('[Test Setup] Adding test users to userAccount.json5...');
 
   // Read current file content
