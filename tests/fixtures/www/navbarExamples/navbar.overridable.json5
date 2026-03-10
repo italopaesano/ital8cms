@@ -1,0 +1,53 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// EXAMPLE: Minimal navbar used for settings overrides demo
+// This navbar has intentionally simple settings that will be overridden
+// at render time from the EJS template.
+//
+{
+  "settings": {
+    "type": "horizontal",
+    "colorScheme": "dark",
+    "bgClass": "bg-primary",
+    "expandAt": "lg",
+    "containerClass": "container",
+    "autoActive": true,
+    "id": "navbarOverrides",
+  },
+
+  "sections": {
+    "left": [
+      {
+        "label": "Home",
+        "href": "/navbarExamples/settingsOverrides.ejs",
+        "icon": "<i class='bi bi-house'></i>",
+      },
+      {
+        "label": "Page A",
+        "href": "#page-a",
+      },
+      {
+        "label": "Page B",
+        "href": "#page-b",
+      },
+      {
+        "type": "dropdown",
+        "label": "More",
+        "items": [
+          { "label": "Option 1", "href": "#opt-1" },
+          { "label": "Option 2", "href": "#opt-2" },
+          { "type": "divider" },
+          { "label": "Option 3", "href": "#opt-3" },
+        ],
+      },
+    ],
+
+    "right": [
+      {
+        "label": "Login",
+        "href": "/pluginPages/adminUsers/login.ejs",
+        "showWhen": "unauthenticated",
+      },
+    ],
+  },
+}

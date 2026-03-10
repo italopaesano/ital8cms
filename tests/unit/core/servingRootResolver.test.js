@@ -9,7 +9,7 @@ const path = require('path');
 const resolveServingRoot = require('../../../core/servingRootResolver');
 
 // Configurazione di test comune
-const PROJECT_ROOT = '/home/user/ital8cms';
+const PROJECT_ROOT = path.resolve(__dirname, '../../..');
 const SERVING_PATHS = {
   wwwPath: '/www',
   pluginPagesPath: '/pluginPages',

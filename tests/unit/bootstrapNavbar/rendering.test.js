@@ -10,6 +10,7 @@
  */
 
 const fs = require('fs');
+const path = require('path');
 
 jest.mock('../../../core/loadJson5', () => jest.fn());
 const loadJson5 = require('../../../core/loadJson5');
@@ -18,7 +19,7 @@ const navbarRenderer = require('../../../plugins/bootstrapNavbar/lib/navbarRende
 
 // ─── Costanti ────────────────────────────────────────────────────────────────
 
-const PROJECT_ROOT = '/home/user/ital8cms';
+const PROJECT_ROOT = path.resolve(__dirname, '../../..');
 const SERVING_PATHS = {
   wwwPath: '/www',
   pluginPagesPath: '/pluginPages',

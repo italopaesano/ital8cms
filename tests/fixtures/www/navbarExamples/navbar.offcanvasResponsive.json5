@@ -1,0 +1,77 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// EXAMPLE: Offcanvas navbar (responsive - collapses below breakpoint)
+// Demonstrates: type "offcanvas", responsive collapse, offcanvas-start
+//
+{
+  "settings": {
+    "type": "offcanvas",
+    "colorScheme": "dark",
+    "bgClass": "bg-success",
+    "expandAt": "lg",
+    "containerClass": "container-fluid",
+    "autoActive": true,
+    "offcanvasAlways": false,
+    "position": "start",
+    "id": "navbarOffcanvasResponsive",
+  },
+
+  "sections": {
+    "left": [
+      {
+        "label": "Home",
+        "href": "/navbarExamples/offcanvas.ejs",
+        "icon": "<i class='bi bi-house'></i>",
+      },
+      {
+        "label": "Products",
+        "href": "#products",
+        "icon": "<i class='bi bi-shop'></i>",
+      },
+      {
+        "type": "dropdown",
+        "label": "Categories",
+        "icon": "<i class='bi bi-grid'></i>",
+        "items": [
+          { "label": "Electronics", "href": "#electronics" },
+          { "label": "Clothing", "href": "#clothing" },
+          { "label": "Books", "href": "#books" },
+          { "type": "divider" },
+          { "label": "All Categories", "href": "#all" },
+        ],
+      },
+      {
+        "label": "Deals",
+        "href": "#deals",
+        "icon": "<i class='bi bi-tag'></i>",
+      },
+    ],
+
+    "right": [
+      {
+        "label": "Cart",
+        "href": "#cart",
+        "icon": "<i class='bi bi-cart3'></i>",
+        "showWhen": "authenticated",
+      },
+      {
+        "label": "Sign In",
+        "href": "/pluginPages/adminUsers/login.ejs",
+        "icon": "<i class='bi bi-box-arrow-in-right'></i>",
+        "showWhen": "unauthenticated",
+      },
+      {
+        "type": "dropdown",
+        "label": "Account",
+        "icon": "<i class='bi bi-person-circle'></i>",
+        "showWhen": "authenticated",
+        "items": [
+          { "label": "Profile", "href": "/pluginPages/adminUsers/userProfile.ejs" },
+          { "label": "Orders", "href": "#orders" },
+          { "type": "divider" },
+          { "label": "Logout", "href": "/pluginPages/adminUsers/logout.ejs" },
+        ],
+      },
+    ],
+  },
+}

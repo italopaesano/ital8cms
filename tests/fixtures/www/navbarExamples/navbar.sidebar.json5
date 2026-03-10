@@ -1,0 +1,69 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// EXAMPLE: Vertical sidebar navbar
+// Demonstrates: type "vertical", flex-column layout, position start/end, separators
+//
+{
+  "settings": {
+    "type": "vertical",
+    "colorScheme": "dark",
+    "bgClass": "bg-dark",
+    "autoActive": true,
+    "position": "start",
+    "id": "navbarSidebar",
+  },
+
+  "sections": {
+    // In vertical navbars, "left" = top section, "right" = bottom section (separated by <hr>)
+    "left": [
+      {
+        "label": "Dashboard",
+        "href": "/navbarExamples/vertical.ejs",
+        "icon": "<i class='bi bi-speedometer2'></i>",
+      },
+      {
+        "label": "Users",
+        "href": "/admin/usersManagment/index.ejs",
+        "icon": "<i class='bi bi-people'></i>",
+        "requiresAuth": true,
+        "allowedRoles": [0, 1],
+      },
+      {
+        "label": "Content",
+        "href": "#content",
+        "icon": "<i class='bi bi-file-text'></i>",
+      },
+      {
+        "type": "dropdown",
+        "label": "Media",
+        "icon": "<i class='bi bi-images'></i>",
+        "items": [
+          { "label": "Images", "href": "#images", "icon": "<i class='bi bi-image'></i>" },
+          { "label": "Videos", "href": "#videos", "icon": "<i class='bi bi-camera-video'></i>" },
+          { "label": "Documents", "href": "#docs", "icon": "<i class='bi bi-file-earmark-pdf'></i>" },
+        ],
+      },
+      { "type": "separator" },
+      {
+        "label": "Analytics",
+        "href": "#analytics",
+        "icon": "<i class='bi bi-graph-up'></i>",
+      },
+    ],
+
+    "right": [
+      {
+        "label": "Settings",
+        "href": "#settings",
+        "icon": "<i class='bi bi-gear'></i>",
+        "requiresAuth": true,
+      },
+      {
+        "label": "Logout",
+        "href": "/pluginPages/adminUsers/logout.ejs",
+        "icon": "<i class='bi bi-box-arrow-right'></i>",
+        "showWhen": "authenticated",
+      },
+    ],
+  },
+}
