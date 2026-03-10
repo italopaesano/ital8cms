@@ -53,6 +53,7 @@ const json5 = require('json5');
 
 const PROJECT_ROOT = path.join(__dirname, '../..');
 const CONFIG_PATH = path.join(PROJECT_ROOT, 'ital8Config.json5');
+const FIXTURES_WWW_PATH = '/tests/fixtures/www';
 
 // Porte riservate per i test hideExtension
 const TEST_PORT_DISABLED = 19300;
@@ -102,6 +103,7 @@ function spawnServer(httpPort, hideExtensionConfig) {
     ...original,
     httpPort: httpPort,
     debugMode: 0,
+    wwwPath: FIXTURES_WWW_PATH,
     hideExtension: hideExtensionConfig,
     // Disabilita HTTPS per questi test
     https: {

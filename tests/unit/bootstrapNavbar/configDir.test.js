@@ -17,7 +17,7 @@ const navbarRenderer = require('../../../plugins/bootstrapNavbar/lib/navbarRende
 
 // ─── Costanti di test ─────────────────────────────────────────────────────────
 
-const PROJECT_ROOT = '/home/user/ital8cms';
+const PROJECT_ROOT = path.resolve(__dirname, '../../..');
 const SERVING_PATHS = {
   wwwPath: '/www',
   pluginPagesPath: '/pluginPages',
