@@ -1,13 +1,13 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "name": "placeholderExample",
-  "version": "1.1.0",
-  "description": "Tema di esempio completo per testare e validare lo standard PLACEHOLDER v1.0 di ital8cms. Include 4 template diversi e partials editabili con design 'Submarine' blu oceano giocoso. 🌊🐠",
+  "name": "themeForTesting",
+  "version": "1.0.0",
+  "description": "Tema pubblico dedicato al testing automatizzato. Basato su placeholderExample per garantire copertura completa delle funzionalita tema incluso lo standard PLACEHOLDER v1.0.",
   "author": "Italo Paesano",
   "email": "italopaesano@protonmail.com",
   "license": "ISC",
-  "tags": ["example", "placeholder", "testing", "bootstrap", "demo", "submarine", "ocean-theme"],
-  "designTheme": "Submarine Blue - Tema sottomarino con colori blu oceano, animazioni giocose e decorazioni marine",
+  "tags": ["testing", "placeholder", "bootstrap", "automated-tests"],
+  "designTheme": "Testing - Tema per test automatizzati basato su placeholderExample",
   "supportedHooks": [
     "head",
     "header",

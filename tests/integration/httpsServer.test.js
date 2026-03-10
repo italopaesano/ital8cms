@@ -63,6 +63,8 @@ function writeTestConfig(httpsOverride) {
   const testConfig = {
     ...original,
     httpPort: TEST_HTTP_PORT,
+    activeTheme: 'themeForTesting',
+    adminActiveTheme: 'themeForTestingAdmin',
     https: {
       ...original.https,
       ...httpsOverride,

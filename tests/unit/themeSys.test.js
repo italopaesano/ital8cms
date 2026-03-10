@@ -79,6 +79,18 @@ describe('Theme System', () => {
       expect(result.error).toBeNull();
     });
 
+    test('valida correttamente il tema themeForTesting', () => {
+      const result = validateTheme('themeForTesting');
+      expect(result.valid).toBe(true);
+      expect(result.error).toBeNull();
+    });
+
+    test('valida correttamente il tema themeForTestingAdmin', () => {
+      const result = validateTheme('themeForTestingAdmin');
+      expect(result.valid).toBe(true);
+      expect(result.error).toBeNull();
+    });
+
     test('ritorna errore per tema inesistente', () => {
       const result = validateTheme('nonExistentTheme');
       expect(result.valid).toBe(false);
