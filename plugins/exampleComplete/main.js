@@ -177,11 +177,17 @@ function getRouteArray() {
       // Renderizza una pagina EJS
       const templatePath = path.join(__dirname, 'webPages', 'demo.ejs');
 
+      // Use bootstrap URLs from shared objects (received via setSharedObject)
+      const bootstrapUrls = sharedObjects.bootstrap || {};
+      const fallbackPrefix = `/${ital8Conf.apiPrefix}/bootstrap`;
+
       const data = {
         title: 'Demo Plugin',
         counter: pluginData.counter,
         loadedAt: pluginData.loadedAt,
-        config: pluginConfig.custom
+        config: pluginConfig.custom,
+        bootstrapCssUrl: bootstrapUrls.cssUrl || `${fallbackPrefix}/css/bootstrap.min.css`,
+        bootstrapJsUrl: bootstrapUrls.jsUrl || `${fallbackPrefix}/js/bootstrap.bundle.min.js`,
       };
 
       ctx.body = await ejs.renderFile(templatePath, data);
