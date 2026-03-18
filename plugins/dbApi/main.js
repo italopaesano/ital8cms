@@ -51,18 +51,6 @@ function setSharedObject( pluginName, object ){// pluginName = nome dell'altro p
 function getRouteArray(){// restituirà un array contenente tutte le rotte che poi saranno aggiunte al cms
   
   const routeArray = Array();
-  //ES.
-  /* routeArray.push(
-    {
-      method: 'GET',
-      path: '/css/bootstrap.min.css', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
-      handler: async (ctx) => { 
-        const bootstrapCssPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','css','bootstrap.min.css');
-        ctx.body = fs.createReadStream(bootstrapCssPath);
-        ctx.set('Content-Type', 'text/css');
-       }
-    }
-  ); */
 
   return routeArray;
 }

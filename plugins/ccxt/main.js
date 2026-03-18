@@ -192,25 +192,12 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       method: 'GET',
       path: '/test', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
       access: { requiresAuth: false, allowedRoles: [] }, // Pubblico - endpoint di test
-      handler: async (ctx, next) => { 
-        //const bootstrapCssPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','css','bootstrap.min.css');
+      handler: async (ctx, next) => {
         ctx.body = "ciao ciao";
         ctx.set('Content-Type', 'text/css');
        }
     }
   );
-  //ES.
-  /* routeArray.push(
-    {
-      method: 'GET',
-      path: '/css/bootstrap.min.css', // l'url completo avra la forma /api/namePlugin/css -> se vengono mantenute le impostazioni di default
-      handler: async (ctx, next) => { 
-        const bootstrapCssPath = path.join(__dirname , '..', '..', 'node_modules','bootstrap','dist','css','bootstrap.min.css');
-        ctx.body = fs.createReadStream(bootstrapCssPath);
-        ctx.set('Content-Type', 'text/css');
-       }
-    }
-  ); */
 
   return routeArray;
 }
