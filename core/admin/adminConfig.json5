@@ -69,6 +69,16 @@
       "label": "Gestione Temi",
       "url": "/admin/themesManagment/index.ejs",
       "icon": "🎨"
+    },
+
+    "navbarsManagement": {
+      "type": "plugin",
+      "plugin": "adminBootstrapNavbar",
+      "enabled": true,
+      "required": false,
+      "label": "Gestione bootstrapNavbar",
+      "icon": "🧭",
+      "description": "Creazione e gestione dei menu di navigazione bootstrapNavbar"
     }
   },
 
@@ -80,7 +90,8 @@
     "pagesManagment",
     "systemSettings",
     "pluginsManagment",
-    "themesManagment"
+    "themesManagment",
+    "navbarsManagement"
   ],
 
   // Servizi forniti da plugin (backend)

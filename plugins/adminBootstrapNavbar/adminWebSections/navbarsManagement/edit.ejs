@@ -1,0 +1,115 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
+
+<link rel="stylesheet" href="/<%= passData.adminPrefix %>/navbarsManagement/editor.css">
+
+<span id="apiPrefix" style="display: none;"><%- passData.apiPrefix %></span>
+<span id="adminPrefix" style="display: none;"><%- passData.adminPrefix %></span>
+<span id="currentFile" style="display: none;"><%- passData.query.file || '' %></span>
+
+<div class="container mt-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/<%= passData.adminPrefix %>/navbarsManagement/index.ejs"><%= __({it: 'Gestione Navbar', en: 'Navbar Management'}, passData.ctx) %></a></li>
+      <li class="breadcrumb-item active" id="breadcrumbFile"><%= __({it: 'Modifica', en: 'Edit'}, passData.ctx) %></li>
+    </ol>
+  </nav>
+
+  <h3><%= __({it: 'Modifica Navbar', en: 'Edit Navbar'}, passData.ctx) %>: <span id="fileNameDisplay" class="text-muted"></span></h3>
+
+  <!-- Alert area -->
+  <div id="alertArea"></div>
+
+  <!-- Toolbar -->
+  <div class="editor-toolbar mb-2">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <div class="btn-group btn-group-sm">
+        <button class="btn btn-outline-primary" id="btnAddItem" title="<%= __({it: 'Aggiungi Item', en: 'Add Item'}, passData.ctx) %>">
+          <i class="bi bi-plus"></i> Item
+        </button>
+        <button class="btn btn-outline-primary" id="btnAddDropdown" title="<%= __({it: 'Aggiungi Dropdown', en: 'Add Dropdown'}, passData.ctx) %>">
+          <i class="bi bi-caret-down"></i> Dropdown
+        </button>
+        <button class="btn btn-outline-primary" id="btnAddSeparator" title="<%= __({it: 'Aggiungi Separator', en: 'Add Separator'}, passData.ctx) %>">
+          | Sep
+        </button>
+        <button class="btn btn-outline-primary" id="btnAddDivider" title="<%= __({it: 'Aggiungi Divider', en: 'Add Divider'}, passData.ctx) %>">
+          ── Div
+        </button>
+      </div>
+
+      <!-- Section selector for append -->
+      <div class="input-group input-group-sm" style="width: auto;">
+        <span class="input-group-text"><%= __({it: 'Aggiungi a', en: 'Add to'}, passData.ctx) %>:</span>
+        <select class="form-select form-select-sm" id="sectionSelect" style="width: auto;">
+          <option value="left">Left</option>
+          <option value="right">Right</option>
+        </select>
+      </div>
+
+      <div class="vr d-none d-md-block"></div>
+
+      <button class="btn btn-outline-danger btn-sm" id="btnTemplateEmpty" title="<%= __({it: 'Sostituisci con template vuoto', en: 'Replace with empty template'}, passData.ctx) %>">
+        <i class="bi bi-file-earmark"></i> <%= __({it: 'Template Vuoto', en: 'Empty Template'}, passData.ctx) %>
+      </button>
+    </div>
+  </div>
+
+  <!-- Icon helper -->
+  <div class="editor-icon-helper mb-2">
+    <div class="d-flex align-items-center gap-2">
+      <label class="form-label mb-0 text-nowrap"><%= __({it: 'Icona', en: 'Icon'}, passData.ctx) %>:</label>
+      <input type="text" class="form-control form-control-sm" id="iconInput" placeholder="<i class='bi bi-house'></i>" style="max-width: 350px;">
+      <span id="iconPreview" class="fs-5"></span>
+    </div>
+  </div>
+
+  <!-- Editor textarea -->
+  <textarea id="editorTextarea" class="form-control editor-textarea" spellcheck="false"></textarea>
+
+  <!-- Messages area -->
+  <div id="messagesArea" class="editor-messages mt-2"></div>
+
+  <!-- Action buttons -->
+  <div class="d-flex justify-content-between mt-3 mb-4">
+    <div>
+      <button id="btnValidate" class="btn btn-outline-info me-2">
+        <i class="bi bi-check-circle"></i> <%= __({it: 'Valida', en: 'Validate'}, passData.ctx) %>
+      </button>
+      <button id="btnPreview" class="btn btn-outline-success me-2">
+        <i class="bi bi-eye"></i> <%= __({it: 'Preview', en: 'Preview'}, passData.ctx) %> &#9654;
+      </button>
+      <button id="btnSave" class="btn btn-primary">
+        <i class="bi bi-save"></i> <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %>
+      </button>
+    </div>
+    <a href="/<%= passData.adminPrefix %>/navbarsManagement/index.ejs" class="btn btn-outline-secondary">
+      <%= __({it: 'Annulla', en: 'Cancel'}, passData.ctx) %>
+    </a>
+  </div>
+
+  <!-- Preview section (collapsible) -->
+  <div id="previewSection" style="display: none;" class="mb-4">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong><%= __({it: 'Anteprima', en: 'Preview'}, passData.ctx) %></strong>
+        <button type="button" class="btn-close" id="btnClosePreview"></button>
+      </div>
+      <div class="card-body p-0">
+        <div id="previewContainer"></div>
+      </div>
+      <div class="card-footer">
+        <div id="previewInfo" class="small text-muted"></div>
+        <div class="mt-2 small">
+          <span class="badge bg-warning text-dark">&#x1F512;</span> = <%= __({it: 'Richiede autenticazione/ruolo', en: 'Requires authentication/role'}, passData.ctx) %>
+          &nbsp;
+          <span class="badge bg-info text-dark">&#x1F441;</span> = <%= __({it: 'Solo non autenticati', en: 'Non-authenticated only'}, passData.ctx) %>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/<%= passData.adminPrefix %>/navbarsManagement/editor.js"></script>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>
