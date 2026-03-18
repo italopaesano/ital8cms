@@ -246,9 +246,7 @@ function getRouteArray() {
       const sections = config.sections || {};
       const allItemsHtml = renderPreviewWithIndicators(config, settings, navbarRenderer);
 
-      // Also get Bootstrap CSS/JS URLs for the preview iframe
-      const bootstrapPlugin = myPluginSys ? myPluginSys.getPlugin('bootstrap') : null;
-      const bootstrapShared = bootstrapPlugin ? myPluginSys.getSharedObject('bootstrap') : {};
+      // Bootstrap CSS/JS URLs for the preview iframe (hardcoded below via apiPrefix)
 
       ctx.body = {
         success: true,
