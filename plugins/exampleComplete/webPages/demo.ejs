@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= title %> - ital8cms</title>
-  <link rel="stylesheet" href="/api/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="<%= bootstrapCssUrl %>">
   <link rel="stylesheet" href="/api/exampleComplete/style.css">
 </head>
 <body>
@@ -134,7 +134,7 @@
     </div>
   </div>
 
-  <script src="/api/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="<%= bootstrapJsUrl %>"></script>
   <script>
     async function incrementCounter() {
       const amount = parseInt(document.getElementById('increment-amount').value) || 1;

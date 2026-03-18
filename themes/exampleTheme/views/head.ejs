@@ -35,9 +35,11 @@ VARIABILI DISPONIBILI in passData:
     Esempio: il plugin Bootstrap inietta il link al CSS di Bootstrap
 
     Il risultato sarà qualcosa come:
-    <!-- START bootstrap part -->
-    <link rel='stylesheet' href='/api/bootstrap/css/bootstrap.min.css'>
-    <!-- END bootstrap part -->
+    START bootstrap part
+    <link rel='stylesheet' href='/{apiPrefix}/bootstrap/css/bootstrap.min.css'>
+    END bootstrap part
+
+    Gli URL sono costruiti dinamicamente dal plugin usando apiPrefix e pluginName.
     ============================================================================
     -->
     <%- passData.pluginSys.hookPage("head", passData); %>
