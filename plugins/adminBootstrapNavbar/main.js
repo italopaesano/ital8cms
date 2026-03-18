@@ -19,6 +19,7 @@ const navbarTemplates = require('./lib/navbarTemplates');
 
 let myPluginSys = null;
 let cachedNavbarList = null; // Cached scan results
+let bootstrapUrls = null; // Shared URLs from bootstrap plugin
 
 // Absolute path to wwwPath
 const projectRoot = path.join(__dirname, '..', '..');
@@ -246,8 +247,6 @@ function getRouteArray() {
       const sections = config.sections || {};
       const allItemsHtml = renderPreviewWithIndicators(config, settings, navbarRenderer);
 
-      // Bootstrap CSS/JS URLs for the preview iframe (hardcoded below via apiPrefix)
-
       ctx.body = {
         success: true,
         html: allItemsHtml,
@@ -260,8 +259,8 @@ function getRouteArray() {
           itemsRight: (sections.right || []).length,
         },
         bootstrap: {
-          css: `/${ital8Conf.apiPrefix}/bootstrap/css/bootstrap.min.css`,
-          js: `/${ital8Conf.apiPrefix}/bootstrap/js/bootstrap.bundle.min.js`,
+          css: bootstrapUrls ? bootstrapUrls.cssUrl : `/${ital8Conf.apiPrefix}/bootstrap/css/bootstrap.min.css`,
+          js: bootstrapUrls ? bootstrapUrls.jsUrl : `/${ital8Conf.apiPrefix}/bootstrap/js/bootstrap.bundle.min.js`,
         },
       };
       ctx.type = 'application/json';
@@ -553,5 +552,9 @@ module.exports = {
   pluginConfig,
   getObjectToShareToWebPages: () => ({}),
   getObjectToShareToOthersPlugin: () => ({}),
-  setSharedObject: () => {},
+  setSharedObject: (fromPlugin, sharedObject) => {
+    if (fromPlugin === 'bootstrap') {
+      bootstrapUrls = sharedObject;
+    }
+  },
 };

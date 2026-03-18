@@ -226,14 +226,32 @@ function getHooksPage(){
 }
 
 
+/**
+ * Exposes Bootstrap resource URLs to other plugins via the shared object system.
+ * Other plugins receive these URLs through setSharedObject('bootstrap', {...})
+ * during the plugin loading phase, avoiding hardcoded path construction.
+ *
+ * @param {string} forPlugin - Name of the requesting plugin
+ * @returns {object} - Object containing Bootstrap resource URLs
+ */
+function getObjectToShareToOthersPlugin(forPlugin) {
+  const prefix = `/${ital8Conf.apiPrefix}/${pluginName}`;
+  return {
+    cssUrl: `${prefix}/css/bootstrap.min.css`,
+    jsUrl: `${prefix}/js/bootstrap.bundle.min.js`,
+    iconsCssUrl: `${prefix}/css/bootstrap-icons.min.css`,
+  };
+}
+
 module.exports = {
 
-  loadPlugin: loadPlugin,  //questa funzione verrà richiamata per caricare il plugin ogni volta che serve ad esempio ogni volta che si riavviam 
+  loadPlugin: loadPlugin,  //questa funzione verrà richiamata per caricare il plugin ogni volta che serve ad esempio ogni volta che si riavviam
   installPlugin: installPlugin, // questa funzione verrà richiamata per installare il plugin
   unistallPlugin: unistallPlugin, // questa funzione verrà richiamata per disinstallare il plugin
   upgradePlugin: upgradePlugin, // questa funzione verrà richiamata quando sarà necessario aggiornare il plugin
   getRouteArray: getRouteArray,
   pluginConfig: pluginConfig,
-  getHooksPage: getHooksPage
+  getHooksPage: getHooksPage,
+  getObjectToShareToOthersPlugin: getObjectToShareToOthersPlugin,
 
 }
