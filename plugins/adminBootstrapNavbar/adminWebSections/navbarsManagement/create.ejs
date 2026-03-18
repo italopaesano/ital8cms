@@ -1,0 +1,204 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
+
+<span id="apiPrefix" style="display: none;"><%- passData.apiPrefix %></span>
+<span id="adminPrefix" style="display: none;"><%- passData.adminPrefix %></span>
+
+<div class="container mt-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/<%= passData.adminPrefix %>/navbarsManagement/index.ejs"><%= __({it: 'Gestione Navbar', en: 'Navbar Management'}, passData.ctx) %></a></li>
+      <li class="breadcrumb-item active"><%= __({it: 'Nuovo Navbar', en: 'New Navbar'}, passData.ctx) %></li>
+    </ol>
+  </nav>
+
+  <h3><%= __({it: 'Crea Nuovo Navbar', en: 'Create New Navbar'}, passData.ctx) %></h3>
+
+  <!-- Alert area -->
+  <div id="alertArea"></div>
+
+  <!-- Creation mode selector -->
+  <div class="mb-4">
+    <div class="form-check form-check-inline">
+      <input class="form-check-input" type="radio" name="createMode" id="modeEmpty" value="empty" checked>
+      <label class="form-check-label" for="modeEmpty"><%= __({it: 'Da zero', en: 'From scratch'}, passData.ctx) %></label>
+    </div>
+    <div class="form-check form-check-inline">
+      <input class="form-check-input" type="radio" name="createMode" id="modeTemplate" value="template">
+      <label class="form-check-label" for="modeTemplate"><%= __({it: 'Da template', en: 'From template'}, passData.ctx) %></label>
+    </div>
+    <div class="form-check form-check-inline">
+      <input class="form-check-input" type="radio" name="createMode" id="modeDuplicate" value="duplicate">
+      <label class="form-check-label" for="modeDuplicate"><%= __({it: 'Da duplicazione', en: 'From duplication'}, passData.ctx) %></label>
+    </div>
+  </div>
+
+  <!-- Common: Name field -->
+  <div class="mb-3">
+    <label for="navbarName" class="form-label"><%= __({it: 'Nome Navbar', en: 'Navbar Name'}, passData.ctx) %></label>
+    <div class="input-group">
+      <span class="input-group-text">navbar.</span>
+      <input type="text" class="form-control" id="navbarName" placeholder="<%= __({it: 'nome', en: 'name'}, passData.ctx) %>" required>
+      <span class="input-group-text">.json5</span>
+    </div>
+    <div class="form-text"><%= __({it: 'Caratteri ammessi: lettere, numeri, trattino, underscore', en: 'Allowed characters: letters, numbers, hyphen, underscore'}, passData.ctx) %></div>
+  </div>
+
+  <!-- Template selection (shown when mode=template) -->
+  <div id="templateSection" style="display: none;" class="mb-3">
+    <label for="templateSelect" class="form-label"><%= __({it: 'Scegli Template', en: 'Choose Template'}, passData.ctx) %></label>
+    <select class="form-select" id="templateSelect">
+      <option value="" disabled selected><%= __({it: 'Caricamento...', en: 'Loading...'}, passData.ctx) %></option>
+    </select>
+    <div id="templateDescription" class="form-text mt-1"></div>
+  </div>
+
+  <!-- Duplicate selection (shown when mode=duplicate) -->
+  <div id="duplicateSection" style="display: none;" class="mb-3">
+    <label for="sourceSelect" class="form-label"><%= __({it: 'Navbar da duplicare', en: 'Navbar to duplicate'}, passData.ctx) %></label>
+    <select class="form-select" id="sourceSelect">
+      <option value="" disabled selected><%= __({it: 'Caricamento...', en: 'Loading...'}, passData.ctx) %></option>
+    </select>
+  </div>
+
+  <!-- Action buttons -->
+  <div class="mt-4">
+    <button id="btnCreate" class="btn btn-primary">
+      <i class="bi bi-plus-lg"></i> <%= __({it: 'Crea', en: 'Create'}, passData.ctx) %>
+    </button>
+    <a href="/<%= passData.adminPrefix %>/navbarsManagement/index.ejs" class="btn btn-outline-secondary ms-2">
+      <%= __({it: 'Annulla', en: 'Cancel'}, passData.ctx) %>
+    </a>
+  </div>
+</div>
+
+<script>
+  const apiPrefix = document.getElementById('apiPrefix').innerText;
+  const adminPrefix = document.getElementById('adminPrefix').innerText;
+
+  let templates = [];
+  let navbars = [];
+
+  // Read URL params for pre-fill
+  const urlParams = new URLSearchParams(window.location.search);
+  const preMode = urlParams.get('mode');
+  const preName = urlParams.get('name');
+  const preSource = urlParams.get('source');
+
+  function showAlert(message, type) {
+    const alertArea = document.getElementById('alertArea');
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type} alert-dismissible fade show`;
+    alert.innerHTML = `${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+    alertArea.prepend(alert);
+  }
+
+  // Mode switching
+  document.querySelectorAll('input[name="createMode"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      document.getElementById('templateSection').style.display = e.target.value === 'template' ? 'block' : 'none';
+      document.getElementById('duplicateSection').style.display = e.target.value === 'duplicate' ? 'block' : 'none';
+    });
+  });
+
+  // Load templates
+  async function loadTemplates() {
+    try {
+      const response = await fetch(`/${apiPrefix}/adminBootstrapNavbar/templates`);
+      templates = await response.json();
+      const select = document.getElementById('templateSelect');
+      select.innerHTML = templates.map(t => {
+        const lang = document.documentElement.lang || 'it';
+        const label = t.label[lang] || t.label.it || t.id;
+        return `<option value="${t.id}">${label}</option>`;
+      }).join('');
+
+      // Show description on change
+      select.addEventListener('change', () => {
+        const t = templates.find(t => t.id === select.value);
+        const lang = document.documentElement.lang || 'it';
+        document.getElementById('templateDescription').textContent = t ? (t.description[lang] || t.description.it || '') : '';
+      });
+      select.dispatchEvent(new Event('change'));
+    } catch (err) {
+      console.error('Error loading templates:', err);
+    }
+  }
+
+  // Load existing navbars for duplicate
+  async function loadNavbars() {
+    try {
+      const response = await fetch(`/${apiPrefix}/adminBootstrapNavbar/list`);
+      navbars = await response.json();
+      const select = document.getElementById('sourceSelect');
+      select.innerHTML = navbars.map(nb => {
+        const file = nb.relativePath === '.' ? nb.fileName : nb.relativePath + '/' + nb.fileName;
+        return `<option value="${file}">${nb.name} (${nb.fileName})</option>`;
+      }).join('');
+    } catch (err) {
+      console.error('Error loading navbars:', err);
+    }
+  }
+
+  // Create button handler
+  document.getElementById('btnCreate').addEventListener('click', async () => {
+    const name = document.getElementById('navbarName').value.trim();
+    if (!name) {
+      showAlert('<%= __({it: "Inserisci un nome per il navbar", en: "Enter a name for the navbar"}, passData.ctx) %>', 'warning');
+      return;
+    }
+
+    const mode = document.querySelector('input[name="createMode"]:checked').value;
+
+    const body = { name, mode };
+
+    if (mode === 'template') {
+      body.templateId = document.getElementById('templateSelect').value;
+    } else if (mode === 'duplicate') {
+      body.sourceFile = document.getElementById('sourceSelect').value;
+    }
+
+    try {
+      const response = await fetch(`/${apiPrefix}/adminBootstrapNavbar/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        // Redirect to edit
+        window.location.href = `/${adminPrefix}/navbarsManagement/edit.ejs?file=${encodeURIComponent(result.fileName)}`;
+      } else {
+        showAlert(result.error || 'Error', 'danger');
+      }
+    } catch (error) {
+      showAlert(error.message, 'danger');
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    loadTemplates();
+    loadNavbars();
+
+    // Apply URL pre-fill
+    if (preMode) {
+      const radio = document.querySelector(`input[name="createMode"][value="${preMode}"]`);
+      if (radio) {
+        radio.checked = true;
+        radio.dispatchEvent(new Event('change'));
+      }
+    }
+    if (preName) {
+      document.getElementById('navbarName').value = preName;
+    }
+    if (preSource) {
+      // Wait for navbars to load, then set source
+      setTimeout(() => {
+        document.getElementById('sourceSelect').value = preSource;
+      }, 500);
+    }
+  });
+</script>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>

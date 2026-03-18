@@ -1,0 +1,155 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
+
+<span id="apiPrefix" style="display: none;"><%- passData.apiPrefix %></span>
+<span id="adminPrefix" style="display: none;"><%- passData.adminPrefix %></span>
+
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3><%= __({it: 'Gestione Navbar', en: 'Navbar Management'}, passData.ctx) %></h3>
+    <div>
+      <button id="btnRefreshScan" class="btn btn-outline-secondary btn-sm me-2">
+        <i class="bi bi-arrow-clockwise"></i> <%= __({it: 'Aggiorna Scan', en: 'Refresh Scan'}, passData.ctx) %>
+      </button>
+      <a href="/<%= passData.adminPrefix %>/navbarsManagement/create.ejs" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-lg"></i> <%= __({it: 'Nuovo Navbar', en: 'New Navbar'}, passData.ctx) %>
+      </a>
+    </div>
+  </div>
+
+  <!-- Alert area -->
+  <div id="alertArea"></div>
+
+  <!-- Navbar list table -->
+  <div class="table-responsive">
+    <table class="table table-striped table-hover">
+      <thead>
+        <tr>
+          <th><%= __({it: 'Nome', en: 'Name'}, passData.ctx) %></th>
+          <th><%= __({it: 'Tipo', en: 'Type'}, passData.ctx) %></th>
+          <th><%= __({it: 'Percorso', en: 'Path'}, passData.ctx) %></th>
+          <th><%= __({it: 'Azioni', en: 'Actions'}, passData.ctx) %></th>
+        </tr>
+      </thead>
+      <tbody id="navbarListBody">
+        <tr>
+          <td colspan="4" class="text-center text-muted">
+            <%= __({it: 'Caricamento...', en: 'Loading...'}, passData.ctx) %>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const apiPrefix = document.getElementById('apiPrefix').innerText;
+  const adminPrefix = document.getElementById('adminPrefix').innerText;
+
+  // i18n labels
+  const i18n = {
+    noNavbars: '<%= __({it: "Nessun navbar trovato.", en: "No navbars found."}, passData.ctx) %>',
+    loadError: '<%= __({it: "Errore nel caricamento della lista.", en: "Error loading list."}, passData.ctx) %>',
+    edit: '<%= __({it: "Modifica", en: "Edit"}, passData.ctx) %>',
+    duplicate: '<%= __({it: "Duplica", en: "Duplicate"}, passData.ctx) %>',
+    deleteLabel: '<%= __({it: "Elimina", en: "Delete"}, passData.ctx) %>',
+    deleteConfirm: '<%= __({it: "Sei sicuro di voler eliminare", en: "Are you sure you want to delete"}, passData.ctx) %>',
+    deleted: '<%= __({it: "Navbar eliminato con successo.", en: "Navbar deleted successfully."}, passData.ctx) %>',
+    scanComplete: '<%= __({it: "Scan completato", en: "Scan complete"}, passData.ctx) %>',
+    navbarsFound: '<%= __({it: "navbar trovati", en: "navbars found"}, passData.ctx) %>',
+  };
+
+  function showAlert(message, type) {
+    const alertArea = document.getElementById('alertArea');
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type} alert-dismissible fade show`;
+    alert.innerHTML = `${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+    alertArea.prepend(alert);
+  }
+
+  function getTypeBadge(type) {
+    const badges = {
+      horizontal: '<span class="badge bg-primary">horizontal</span>',
+      vertical: '<span class="badge bg-success">vertical</span>',
+      offcanvas: '<span class="badge bg-info">offcanvas</span>',
+    };
+    return badges[type] || `<span class="badge bg-secondary">${type}</span>`;
+  }
+
+  async function loadNavbarList() {
+    const tbody = document.getElementById('navbarListBody');
+    try {
+      const response = await fetch(`/${apiPrefix}/adminBootstrapNavbar/list`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const navbars = await response.json();
+
+      if (!Array.isArray(navbars) || navbars.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">${i18n.noNavbars}</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = navbars.map(nb => `
+        <tr>
+          <td><strong>${nb.name}</strong><br><small class="text-muted">${nb.fileName}</small></td>
+          <td>${getTypeBadge(nb.type)}</td>
+          <td><code>${nb.relativePath}</code></td>
+          <td>
+            <a href="/${adminPrefix}/navbarsManagement/edit.ejs?file=${encodeURIComponent(nb.relativePath === '.' ? nb.fileName : nb.relativePath + '/' + nb.fileName)}" class="btn btn-warning btn-sm me-1">${i18n.edit}</a>
+            <button class="btn btn-outline-secondary btn-sm me-1" onclick="duplicateNavbar('${nb.relativePath === '.' ? nb.fileName : nb.relativePath + '/' + nb.fileName}')">${i18n.duplicate}</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteNavbar('${nb.relativePath === '.' ? nb.fileName : nb.relativePath + '/' + nb.fileName}', '${nb.name}')">${i18n.deleteLabel}</button>
+          </td>
+        </tr>
+      `).join('');
+    } catch (error) {
+      console.error('Error:', error);
+      tbody.innerHTML = `<tr><td colspan="4" class="text-danger">${i18n.loadError}</td></tr>`;
+    }
+  }
+
+  async function deleteNavbar(file, name) {
+    if (!confirm(`${i18n.deleteConfirm} "${name}"?`)) return;
+
+    try {
+      const response = await fetch(`/${apiPrefix}/adminBootstrapNavbar/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        showAlert(i18n.deleted, 'success');
+        loadNavbarList();
+      } else {
+        showAlert(result.error || 'Error', 'danger');
+      }
+    } catch (error) {
+      showAlert(error.message, 'danger');
+    }
+  }
+
+  function duplicateNavbar(sourceFile) {
+    const name = prompt('<%= __({it: "Nome per il nuovo navbar:", en: "Name for the new navbar:"}, passData.ctx) %>');
+    if (!name) return;
+    window.location.href = `/${adminPrefix}/navbarsManagement/create.ejs?mode=duplicate&source=${encodeURIComponent(sourceFile)}&name=${encodeURIComponent(name)}`;
+  }
+
+  // Refresh scan button
+  document.getElementById('btnRefreshScan').addEventListener('click', async () => {
+    try {
+      const response = await fetch(`/${apiPrefix}/adminBootstrapNavbar/refresh-scan`, {
+        method: 'POST',
+      });
+      const result = await response.json();
+      if (result.success) {
+        showAlert(`${i18n.scanComplete}: ${result.count} ${i18n.navbarsFound}`, 'info');
+        loadNavbarList();
+      }
+    } catch (error) {
+      showAlert(error.message, 'danger');
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', loadNavbarList);
+</script>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>

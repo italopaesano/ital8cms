@@ -1,0 +1,9 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "name": "adminBootstrapNavbar",
+  "version": "1.0.0",
+  "description": "Admin plugin for creating and managing bootstrapNavbar navigation menus through a GUI editor",
+  "author": "Italo Paesano",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC"
+}

@@ -1,0 +1,26 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "active": 1,
+  "isInstalled": 1,
+  "weight": 50,
+
+  // Sezioni admin gestite da questo plugin
+  "adminSections": [
+    "navbarsManagement"
+  ],
+
+  "dependency": {
+    "bootstrap": "^1.0.0",
+    "bootstrapNavbar": "^1.0.0",
+    "simpleI18n": "^1.0.0"
+  },
+  "nodeModuleDependency": {},
+  "custom": {
+    // Numero massimo di backup per file navbar
+    "maxBackupsPerFile": 10,
+    // Severità della validazione link interni: "warning" o "error"
+    "linkValidationSeverity": "warning",
+    // Pattern caratteri ammessi nei nomi file navbar
+    "allowedFileNameChars": "a-zA-Z0-9_-"
+  }
+}
