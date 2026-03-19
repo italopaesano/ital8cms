@@ -21,6 +21,9 @@
     // Severità della validazione link interni: "warning" o "error"
     "linkValidationSeverity": "warning",
     // Pattern caratteri ammessi nei nomi file navbar
-    "allowedFileNameChars": "a-zA-Z0-9_-"
+    "allowedFileNameChars": "a-zA-Z0-9_-",
+    // Estensione predefinita nel filtro del file picker (es. ".ejs", ".html", "*")
+    // "*" = mostra tutti i file
+    "filePickerDefaultExt": ".ejs"
   }
 }

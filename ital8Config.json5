@@ -19,6 +19,10 @@
   "browserCacheMaxAge": 86400,
   "publicThemeResourcesPrefix": "public-theme-resources",
   "adminThemeResourcesPrefix": "admin-theme-resources",
+  // Modalità sviluppatore: abilita funzionalità avanzate nell'interfaccia admin
+  // (es. browsing di pluginPages e admin pages nel file picker delle navbar)
+  "developerMode": false,
+
   "debugMode": 1,
   "httpPort": 3000,
 
