@@ -100,6 +100,51 @@ function installPlugin() {}
 function uninstallPlugin() {}
 function upgradePlugin() {}
 
+// ─── File Tree Builder ────────────────────────────────────────────────────────
+
+/**
+ * Recursively builds a file tree for a directory.
+ * Returns { files: [string], dirs: { name: {files, dirs} } }
+ * Follows symlinks to read their contents.
+ */
+function buildFileTree(dirPath) {
+  const result = { files: [], dirs: {} };
+
+  let entries;
+  try {
+    entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  } catch (err) {
+    return result;
+  }
+
+  // Sort entries alphabetically
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+
+    // Resolve symlinks to determine actual type
+    let isDir = false;
+    let isFile = false;
+    try {
+      const stat = fs.statSync(fullPath);
+      isDir = stat.isDirectory();
+      isFile = stat.isFile();
+    } catch (err) {
+      // Broken symlink or permission error — skip
+      continue;
+    }
+
+    if (isDir) {
+      result.dirs[entry.name] = buildFileTree(fullPath);
+    } else if (isFile) {
+      result.files.push(entry.name);
+    }
+  }
+
+  return result;
+}
+
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
 function getRouteArray() {
@@ -397,6 +442,42 @@ function getRouteArray() {
     access: pluginAccess,
     handler: async (ctx) => {
       ctx.body = navbarTemplates.getTemplateList();
+      ctx.type = 'application/json';
+    },
+  });
+
+  // GET /browse-files - Browse files for the file picker (tree view)
+  routeArray.push({
+    method: 'GET',
+    path: '/browse-files',
+    access: pluginAccess,
+    handler: async (ctx) => {
+      const defaultExt = pluginConfig.custom.filePickerDefaultExt || '.ejs';
+      const isDeveloperMode = ital8Conf.developerMode === true;
+
+      const roots = {};
+
+      // Always include /www/
+      roots['/www'] = buildFileTree(wwwDir);
+
+      // In developer mode, also include /pluginPages/ and /admin/
+      if (isDeveloperMode) {
+        const pluginPagesDir = path.join(projectRoot, ital8Conf.pluginPagesPath || '/pluginPages');
+        if (fs.existsSync(pluginPagesDir)) {
+          roots['/pluginPages'] = buildFileTree(pluginPagesDir);
+        }
+
+        const adminPagesDir = path.join(projectRoot, ital8Conf.adminPagesPath || '/core/admin/webPages');
+        if (fs.existsSync(adminPagesDir)) {
+          roots['/admin'] = buildFileTree(adminPagesDir);
+        }
+      }
+
+      ctx.body = {
+        roots,
+        developerMode: isDeveloperMode,
+        defaultExt,
+      };
       ctx.type = 'application/json';
     },
   });
