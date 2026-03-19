@@ -2,6 +2,17 @@
  * editor.js - Client-side logic for the navbar editor
  *
  * Handles: toolbar snippets, icon preview, validation, preview, save
+ *
+ * Alert system (Alternative 5):
+ *   - One alert visible at a time (new replaces old)
+ *   - Timeout by type: success=3s, warning=5s, danger=no timeout (manual dismiss or next alert)
+ *
+ * Auto-preview:
+ *   - On page load (after file content loaded)
+ *   - After snippet insertion (item, dropdown, separator, divider)
+ *   - After "Replace with empty template"
+ *   - After successful save
+ *   - Manual button always available
  */
 
 (function () {
@@ -19,6 +30,9 @@
   const fileNameDisplay = document.getElementById('fileNameDisplay');
   const breadcrumbFile = document.getElementById('breadcrumbFile');
   const alertArea = document.getElementById('alertArea');
+
+  // Timer ID for current alert auto-dismiss
+  let alertDismissTimer = null;
 
   // ─── Initialization ──────────────────────────────────────────────────────
 
@@ -51,6 +65,8 @@
         if (result.parseError) {
           showMessage(`Parse warning: ${result.parseError}`, 'warning');
         }
+        // Auto-preview after loading
+        showPreview();
       } else {
         showAlert(result.error || 'Error loading file', 'danger');
       }
@@ -103,6 +119,7 @@
       showMessage(`Section "${section}" not found in the configuration. Adding to cursor position.`, 'warning');
       // Fallback: insert at cursor
       insertAtCursor(snippet + '\n');
+      showPreview();
       return;
     }
 
@@ -125,6 +142,7 @@
     if (insertPos === -1) {
       showMessage('Could not find section closing bracket. Check JSON structure.', 'warning');
       insertAtCursor(snippet + '\n');
+      showPreview();
       return;
     }
 
@@ -140,6 +158,9 @@
     textarea.value = before + prefix + snippet + '\n' + after;
 
     showMessage(`Snippet added to "${section}" section`, 'success');
+
+    // Auto-preview after insertion
+    showPreview();
   }
 
   function insertAtCursor(text) {
@@ -178,6 +199,8 @@
     if (confirm('Replace all content with empty template?')) {
       textarea.value = emptyTemplate;
       showMessage('Content replaced with empty template', 'success');
+      // Auto-preview after template replacement
+      showPreview();
     }
   }
 
@@ -241,10 +264,7 @@
 
   async function showPreview() {
     const content = textarea.value;
-    if (!content.trim()) {
-      showMessage('Content is empty', 'error');
-      return;
-    }
+    if (!content.trim()) return;
 
     try {
       const response = await fetch(`/${apiPrefix}/adminBootstrapNavbar/preview`, {
@@ -255,7 +275,6 @@
       const result = await response.json();
 
       if (result.success) {
-        // Load Bootstrap CSS into the preview
         previewContainer.innerHTML = result.html;
 
         // Show settings info
@@ -264,9 +283,6 @@
           `Items: ${s.itemsLeft} left, ${s.itemsRight} right | Breakpoint: ${s.expandAt}`;
 
         previewSection.style.display = 'block';
-
-        // Scroll to preview
-        previewSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       } else {
         showMessage(`Preview error: ${result.error}`, 'error');
       }
@@ -318,6 +334,8 @@
 
       if (result.success) {
         showAlert('Navbar saved successfully!', 'success');
+        // Auto-preview after successful save
+        showPreview();
       } else {
         showAlert(`Save error: ${result.error}`, 'danger');
       }
@@ -339,11 +357,43 @@
     messagesArea.innerHTML = '';
   }
 
+  /**
+   * Shows a single alert, replacing any previous one.
+   * Timeout by type: success=3s, warning=5s, danger=no auto-dismiss.
+   */
   function showAlert(message, type) {
-    const alert = document.createElement('div');
-    alert.className = `alert alert-${type} alert-dismissible fade show`;
-    alert.innerHTML = `${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
-    alertArea.prepend(alert);
+    // Clear any existing dismiss timer
+    if (alertDismissTimer) {
+      clearTimeout(alertDismissTimer);
+      alertDismissTimer = null;
+    }
+
+    // Remove previous alert (single alert at a time)
+    alertArea.innerHTML = '';
+
+    // Create new alert
+    const alertEl = document.createElement('div');
+    alertEl.className = `alert alert-${type} alert-dismissible fade show`;
+    alertEl.innerHTML = `${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+    alertArea.appendChild(alertEl);
+
+    // Auto-dismiss timeout based on type
+    const timeouts = { success: 3000, warning: 5000 };
+    const timeout = timeouts[type];
+
+    if (timeout) {
+      alertDismissTimer = setTimeout(() => {
+        // Fade out then remove
+        alertEl.classList.remove('show');
+        setTimeout(() => {
+          if (alertEl.parentNode) {
+            alertEl.remove();
+          }
+        }, 300); // Bootstrap fade transition duration
+        alertDismissTimer = null;
+      }, timeout);
+    }
+    // danger: no timeout — stays until manually dismissed or replaced by next alert
   }
 
   // ─── Start ───────────────────────────────────────────────────────────────

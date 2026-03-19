@@ -4,8 +4,6 @@
   font-family: 'Courier New', Courier, monospace;
   font-size: 0.875rem;
   line-height: 1.5;
-  min-height: 400px;
-  max-height: 700px;
   resize: vertical;
   tab-size: 2;
   white-space: pre;
@@ -75,7 +73,6 @@
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .editor-textarea {
-    min-height: 300px;
     font-size: 0.8rem;
   }
 
