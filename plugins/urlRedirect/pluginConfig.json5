@@ -1,0 +1,53 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "active": 1,
+  "isInstalled": 1,
+  "weight": 1,
+  "dependency": {},
+  "nodeModuleDependency": {},
+  "custom": {
+
+    // ── Hit Counter ──
+    // Conta quante volte ogni redirect viene usato.
+    // I contatori vengono salvati in redirectHitCount.json5
+    "enableHitCounter": true,
+
+    // Intervallo in secondi tra ogni salvataggio su disco dei contatori.
+    // 0 = write immediato ad ogni redirect (più lento sotto carico)
+    "hitCounterFlushInterval": 30,
+
+    // ── URL Matching ──
+    // Preserva i parametri query string durante il redirect.
+    // Esempio: /old?page=2&sort=name → /new?page=2&sort=name
+    "preserveQueryString": true,
+
+    // Normalizza il trailing slash prima del matching.
+    // /pagina/ viene trattato come /pagina
+    "normalizeTrailingSlash": true,
+
+    // Matching case-sensitive. Se false: /Vecchia-Pagina matcha /vecchia-pagina
+    "caseSensitive": true,
+
+    // ── Pattern Support ──
+    // Abilita wildcard (* e **) nei percorsi "from".
+    // * = singolo segmento, ** = ricorsivo (più segmenti)
+    "enablePatternMatching": true,
+
+    // Abilita pattern regex (prefisso "regex:") nei percorsi "from"
+    "enableRegex": true,
+
+    // ── Security ──
+    // Permette redirect verso URL esterni (altri domini).
+    // Se false, i redirect verso URL che iniziano con http:// o https:// vengono bloccati.
+    "allowExternalRedirects": false,
+
+    // ── Diagnostica ──
+    // Logga ogni redirect effettuato in console.
+    // Formato: [urlRedirect] 301 /from → /to
+    "enableLogging": true,
+
+    // Se true: errori di validazione al boot causano crash del server.
+    // Se false: errori generano warning e la regola invalida viene skippata.
+    "strictValidation": false,
+  },
+}

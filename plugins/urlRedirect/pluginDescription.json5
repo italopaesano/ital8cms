@@ -1,0 +1,9 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "name": "urlRedirect",
+  "version": "1.0.0",
+  "description": "URL redirect plugin for site migrations. Supports exact, wildcard, and regex patterns with 301/302 redirects.",
+  "author": "Italo Paesano",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC",
+}

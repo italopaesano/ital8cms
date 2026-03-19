@@ -1578,6 +1578,155 @@ module.exports = {
 | `/tests/unit/bootstrapNavbar/` | Unit tests (5 files, 206 tests) |
 | `/tests/unit/core/servingRootResolver.test.js` | servingRootResolver tests (22 tests) |
 
+### URL Redirect Plugin
+
+#### Overview
+
+The **urlRedirect** plugin manages URL redirects (301/302) for site migrations. It supports exact, wildcard, and regex patterns, evaluated in **first-match-wins** order (array order in `redirectMap.json5`). The plugin operates as a pure middleware (no API routes) and only intercepts GET requests.
+
+**Key Features:**
+- ✅ **Three pattern types:** exact, wildcard (* and **), regex
+- ✅ **First-match-wins:** user controls priority by array order
+- ✅ **Hit counter:** tracks usage per rule with periodic flush
+- ✅ **Query string preservation:** configurable
+- ✅ **External redirect blocking:** security flag (disabled by default)
+- ✅ **Debug/production modes:** re-read vs cache (follows bootstrapNavbar pattern)
+- ✅ **All features configurable:** every feature toggleable via `pluginConfig.json5`
+
+**Plugin Structure:**
+
+```
+plugins/urlRedirect/
+├── main.js                    # Entry point: loadPlugin + getMiddlewareToAdd
+├── pluginConfig.json5         # Feature configuration (all toggleable)
+├── pluginDescription.json5    # Plugin metadata
+├── redirectMap.json5          # Redirect rules (the "database")
+├── redirectHitCount.json5     # Hit counters (auto-generated)
+└── lib/
+    ├── redirectMatcher.js     # Matching engine (exact, wildcard, regex)
+    ├── hitCounter.js          # Hit counter with periodic flush
+    └── configValidator.js     # Boot-time validation
+```
+
+---
+
+#### Redirect Rules Configuration
+
+**File:** `plugins/urlRedirect/redirectMap.json5`
+
+Rules are defined as an array of objects. They are evaluated **in array order** — the first matching rule is applied. To control priority, reorder the rules.
+
+```json5
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "redirects": [
+    // Exact match
+    { "from": "/old-page", "to": "/new-page", "type": 301 },
+
+    // Wildcard single (*) — matches one path segment
+    { "from": "/blog/*", "to": "/articles/*" },
+
+    // Wildcard recursive (**) — matches everything including /
+    { "from": "/old-docs/**", "to": "/docs/**" },
+
+    // Regex with capture groups
+    { "from": "regex:^/product/(\\d+)\\.html$", "to": "/products/$1" },
+
+    // Temporary redirect (302)
+    { "from": "/promo", "to": "/offers", "type": 302 },
+
+    // External redirect (requires allowExternalRedirects: true)
+    { "from": "/old-shop", "to": "https://shop.example.com" },
+  ],
+}
+```
+
+**Rule fields:**
+
+| Field | Required | Type | Description |
+|-------|----------|------|-------------|
+| `from` | Yes | string | Source URL pattern (exact, wildcard, or regex) |
+| `to` | Yes | string | Destination URL (supports `*`, `**`, `$1`-`$N` substitutions) |
+| `type` | No | number | HTTP status code: `301` (permanent, default) or `302` (temporary) |
+
+---
+
+#### Pattern Types
+
+| Type | Syntax | Example | Matches |
+|------|--------|---------|---------|
+| Exact | `/path` | `/about` | Only `/about` |
+| Wildcard `*` | `/prefix/*` | `/blog/*` | `/blog/post` (one segment, no `/`) |
+| Wildcard `**` | `/prefix/**` | `/docs/**` | `/docs/a/b/c` (everything) |
+| Regex | `regex:pattern` | `regex:^/p/(\d+)$` | `/p/42` (with capture group `$1`) |
+
+---
+
+#### Configuration Reference
+
+All features are toggled in `pluginConfig.json5` → `custom`:
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `enableHitCounter` | boolean | `true` | Track redirect usage counts |
+| `hitCounterFlushInterval` | number | `30` | Seconds between disk writes (0 = immediate) |
+| `preserveQueryString` | boolean | `true` | Append original query string to destination |
+| `normalizeTrailingSlash` | boolean | `true` | `/page/` matches `/page` |
+| `caseSensitive` | boolean | `true` | Case-sensitive URL matching |
+| `enablePatternMatching` | boolean | `true` | Enable `*` and `**` wildcards |
+| `enableRegex` | boolean | `true` | Enable `regex:` patterns |
+| `allowExternalRedirects` | boolean | `false` | Allow redirects to other domains |
+| `enableLogging` | boolean | `true` | Log each redirect to console |
+| `strictValidation` | boolean | `false` | Crash on boot if validation errors |
+
+---
+
+#### Behavior Details
+
+**Only GET requests** are intercepted. POST, PUT, DELETE pass through.
+
+**Debug vs production:** In debug mode (`debugMode >= 1`), `redirectMap.json5` is re-read on every request. In production (`debugMode: 0`), it is cached at boot.
+
+**Disabled patterns:** If a rule uses wildcard but `enablePatternMatching: false`, the rule is **skipped with a warning** (not treated as literal). Same for regex with `enableRegex: false`.
+
+**Redirect chains:** Single hop only. If `/a` → `/b` and `/b` → `/c`, the plugin redirects to `/b`; the browser makes a new request. Loop detection warns at boot for direct loops (A→B→A).
+
+**Hit counter** stores data in `redirectHitCount.json5` with `hitCount`, `firstHit`, and `lastHit` per rule. Flush to disk is periodic (configurable). SIGTERM/SIGINT triggers a final flush.
+
+**Shared objects:** Exposes `getRedirectRules()`, `getHitCounts()`, `getRuleCount()` for future admin plugin integration.
+
+---
+
+#### Validation at Boot
+
+| Check | Severity | Behavior |
+|-------|----------|----------|
+| Missing `from`/`to` | ERROR | Rule skipped |
+| Invalid `type` | WARNING | Defaults to 301 |
+| Duplicate `from` | WARNING | First wins |
+| Invalid regex | ERROR | Rule skipped |
+| Pattern with feature disabled | WARNING | Rule skipped |
+| External URL with feature disabled | WARNING | Rule skipped |
+| Direct loop (A→B→A) | WARNING | Logged |
+
+With `strictValidation: true`, all warnings become errors (server crashes).
+
+---
+
+#### Reference Files
+
+| File | Purpose |
+|------|---------|
+| `/plugins/urlRedirect/main.js` | Plugin entry point, middleware |
+| `/plugins/urlRedirect/lib/redirectMatcher.js` | URL matching engine |
+| `/plugins/urlRedirect/lib/hitCounter.js` | Hit counter with periodic flush |
+| `/plugins/urlRedirect/lib/configValidator.js` | Boot-time rule validation |
+| `/plugins/urlRedirect/pluginConfig.json5` | Feature configuration |
+| `/plugins/urlRedirect/redirectMap.json5` | Redirect rules |
+| `/plugins/urlRedirect/redirectHitCount.json5` | Hit counters (auto-generated) |
+| `/plugins/urlRedirect/README.md` | Plugin documentation |
+| `/tests/unit/urlRedirect/` | Unit tests (3 files, 101 tests) |
+
 ## Admin System Architecture
 
 ### Overview
@@ -4047,13 +4196,17 @@ tests/
 │   │   ├── isItemVisible.test.js
 │   │   ├── configDir.test.js
 │   │   └── rendering.test.js
+│   ├── urlRedirect/              # 3 file, 101 test
+│   │   ├── configValidator.test.js
+│   │   ├── redirectMatcher.test.js
+│   │   └── hitCounter.test.js
 │   └── core/
 │       └── servingRootResolver.test.js  # 22 test
 └── integration/
     └── httpsDiagnostics.test.js         # 26 test (4 fasi diagnostiche HTTPS)
 ```
 
-**Totale: 254 test**
+**Totale: 355 test**
 
 ### Eseguire i test
 
@@ -4251,6 +4404,15 @@ const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
 - `/www/navbar.main.json5` - Primary navbar configuration
 - `/www/navbarExamples/` - Example navbar configurations (6 files)
 
+### URL Redirect Plugin
+
+- `/plugins/urlRedirect/main.js` - Plugin entry point, middleware
+- `/plugins/urlRedirect/lib/redirectMatcher.js` - URL matching engine
+- `/plugins/urlRedirect/lib/hitCounter.js` - Hit counter with periodic flush
+- `/plugins/urlRedirect/lib/configValidator.js` - Boot-time rule validation
+- `/plugins/urlRedirect/redirectMap.json5` - Redirect rules
+- `/plugins/urlRedirect/redirectHitCount.json5` - Hit counters (auto-generated)
+
 ### Databases
 
 - `/plugins/dbApi/dbFile/mainDb.db` - Main database
@@ -4404,11 +4566,54 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2026-03-06
-**Version:** 2.3.0
+**Last Updated:** 2026-03-19
+**Version:** 2.4.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v2.4.0 (2026-03-19): **NEW PLUGIN** - urlRedirect plugin for URL redirects (301/302) during site migrations. Key changes:
+  - **New plugin: `urlRedirect`**
+    - Middleware-based redirect engine (no API routes, only GET requests intercepted)
+    - Three pattern types: exact, wildcard (* and **), regex with capture groups ($1-$N)
+    - First-match-wins evaluation order (user controls priority via array order)
+    - All features configurable via `pluginConfig.json5` custom section
+  - **Redirect rules in `redirectMap.json5`:**
+    - Array of objects with `from`, `to`, `type` fields
+    - `type` optional (defaults to 301)
+    - Supports internal and external redirects
+    - External redirects blocked by default (`allowExternalRedirects: false`)
+  - **Hit counter system:**
+    - Tracks `hitCount`, `firstHit`, `lastHit` per rule
+    - Periodic flush to `redirectHitCount.json5` (configurable interval)
+    - Atomic writes (temp file + rename)
+    - Graceful shutdown flush on SIGTERM/SIGINT
+  - **Boot-time validation:**
+    - Required fields, type validation, duplicate detection
+    - Regex compilation check, loop detection (A→B→A)
+    - Warnings for disabled features (skip + warn)
+    - `strictValidation` mode promotes warnings to fatal errors
+  - **Configurable features:**
+    - `preserveQueryString`, `normalizeTrailingSlash`, `caseSensitive`
+    - `enablePatternMatching`, `enableRegex`
+    - `allowExternalRedirects`, `enableLogging`, `strictValidation`
+  - **Debug/production modes:** re-read on every request (debug) vs cache (production)
+  - **Shared objects:** `getRedirectRules()`, `getHitCounts()`, `getRuleCount()` for future admin plugin
+  - **Unit tests:** 3 files, 101 tests (configValidator, redirectMatcher, hitCounter)
+  - **Documentation:** README.md in plugin folder + CLAUDE.md section
+  - **Files Added:**
+    - `/plugins/urlRedirect/main.js` — Plugin entry point, middleware
+    - `/plugins/urlRedirect/lib/redirectMatcher.js` — URL matching engine
+    - `/plugins/urlRedirect/lib/hitCounter.js` — Hit counter with periodic flush
+    - `/plugins/urlRedirect/lib/configValidator.js` — Boot-time validation
+    - `/plugins/urlRedirect/pluginConfig.json5` — Feature configuration
+    - `/plugins/urlRedirect/pluginDescription.json5` — Plugin metadata
+    - `/plugins/urlRedirect/redirectMap.json5` — Redirect rules template
+    - `/plugins/urlRedirect/README.md` — Plugin documentation
+    - `/tests/unit/urlRedirect/configValidator.test.js` — Validation tests
+    - `/tests/unit/urlRedirect/redirectMatcher.test.js` — Matching tests
+    - `/tests/unit/urlRedirect/hitCounter.test.js` — Hit counter tests
+  - **Files Modified:**
+    - `/CLAUDE.md` — Added urlRedirect documentation section, updated test count (254 → 355)
 - v2.3.0 (2026-03-06): **NEW FEATURE** - Clean URLs via hideExtension (koa-classic-server v2.6.1+). Key changes:
   - **New `hideExtension` config block in `ital8Config.json5`:**
     - Per-context configuration for 3 EJS-rendering instances (wwwPath, pluginPagesPrefix, adminPrefix)

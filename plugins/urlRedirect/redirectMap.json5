@@ -1,0 +1,37 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// Mappa dei redirect URL.
+// Le regole vengono valutate in ordine di array (first-match-wins):
+// la PRIMA regola che matcha l'URL richiesto viene applicata.
+// Per controllare la priorità, riordinare le regole nell'array.
+//
+// Tipi di pattern supportati:
+//   - Esatto:    "/vecchia-pagina"           → matcha solo quel path esatto
+//   - Wildcard:  "/blog/*"                   → matcha un singolo segmento (es. /blog/articolo)
+//   - Wildcard:  "/old-docs/**"              → matcha più segmenti (es. /old-docs/guide/install)
+//   - Regex:     "regex:^/product/(\\d+)$"   → matcha con espressione regolare
+//
+// Il campo "type" è opzionale. Se omesso, viene usato 301 (redirect permanente).
+// Valori supportati: 301 (permanente), 302 (temporaneo).
+//
+{
+  "redirects": [
+    // Esempio: redirect esatto
+    // { "from": "/vecchia-pagina", "to": "/nuova-pagina", "type": 301 },
+
+    // Esempio: redirect con wildcard singola
+    // { "from": "/blog/*", "to": "/articoli/*" },
+
+    // Esempio: redirect con wildcard ricorsiva
+    // { "from": "/old-docs/**", "to": "/docs/**" },
+
+    // Esempio: redirect con regex e cattura gruppi
+    // { "from": "regex:^/product/(\\d+)\\.html$", "to": "/products/$1" },
+
+    // Esempio: redirect temporaneo (302)
+    // { "from": "/promo-estate", "to": "/offerte", "type": 302 },
+
+    // Esempio: redirect esterno (richiede allowExternalRedirects: true)
+    // { "from": "/vecchio-shop", "to": "https://shop.example.com", "type": 301 },
+  ],
+}
