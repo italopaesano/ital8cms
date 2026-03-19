@@ -1727,6 +1727,143 @@ With `strictValidation: true`, all warnings become errors (server crashes).
 | `/plugins/urlRedirect/README.md` | Plugin documentation |
 | `/tests/unit/urlRedirect/` | Unit tests (3 files, 101 tests) |
 
+### Admin Bootstrap Navbar Plugin
+
+#### Overview
+
+The **adminBootstrapNavbar** plugin provides a complete admin interface for managing navbar JSON5 configuration files used by the `bootstrapNavbar` plugin. It allows administrators to create, edit, validate, preview, duplicate, and delete navbar configurations through a GUI editor in the admin panel.
+
+**Key Features:**
+- ✅ **GUI editor** with JSON5 syntax and quick-insert toolbar
+- ✅ **Live preview** with Bootstrap rendering (shows all items including auth-filtered ones with indicators)
+- ✅ **JSON5 validation** with internal link checking and role verification
+- ✅ **File picker** to create navbar items from existing EJS/HTML pages
+- ✅ **5 predefined templates** (horizontalBase, horizontalComplete, sidebar, offcanvasResponsive, offcanvasAlways)
+- ✅ **3 creation modes:** from scratch, from template, from duplication
+- ✅ **Soft-delete** with backup (files moved to `backups/` directory)
+- ✅ **Automatic backup** on save with configurable retention
+- ✅ **Recursive scanning** for `navbar.*.json5` files in `/www/`
+- ✅ **Path traversal protection** on all file operations
+- ✅ **XSS prevention** via HTML escaping in preview rendering
+
+**Plugin Structure:**
+
+```
+plugins/adminBootstrapNavbar/
+├── main.js                    # Plugin entry point, routes, preview renderer
+├── pluginConfig.json5         # Plugin configuration
+├── pluginDescription.json5    # Plugin metadata
+├── backups/                   # Backup storage (soft-deletes + save backups)
+├── lib/
+│   ├── navbarFileManager.js   # Filesystem operations (scan, read, write, backup, delete)
+│   ├── navbarTemplates.js     # Predefined navbar templates (5 templates)
+│   └── navbarValidator.js     # JSON5 validation engine
+└── adminWebSections/
+    └── navbarsManagement/     # Admin UI pages
+        ├── index.ejs          # Navbar list (table with actions)
+        ├── create.ejs         # Create new navbar (3 modes)
+        ├── edit.ejs           # JSON5 editor with toolbar and preview
+        ├── editor.css         # Editor styles
+        └── editor.js          # Client-side editor logic
+```
+
+**Dependencies:** `bootstrap ^1.0.0`, `bootstrapNavbar ^1.0.0`, `simpleI18n ^1.0.0`
+
+---
+
+#### Configuration
+
+**In `pluginConfig.json5` → `custom`:**
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `maxBackupsPerFile` | number | `10` | Maximum backup files kept per navbar file |
+| `linkValidationSeverity` | string | `"warning"` | `"warning"` or `"error"` for internal link checks |
+| `allowedFileNameChars` | string | `"a-zA-Z0-9_-"` | Regex character class for valid navbar names |
+| `filePickerDefaultExt` | string | `".ejs"` | Default filter in the file picker |
+
+---
+
+#### API Endpoints
+
+All routes require authentication with roles: root (0), admin (1), or editor (2).
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/adminBootstrapNavbar/list` | List all discovered navbar files |
+| `GET` | `/api/adminBootstrapNavbar/load?file={name}` | Load content of a specific navbar file |
+| `POST` | `/api/adminBootstrapNavbar/save` | Save navbar content (with backup) |
+| `POST` | `/api/adminBootstrapNavbar/validate` | Validate JSON5 content without saving |
+| `POST` | `/api/adminBootstrapNavbar/preview` | Render navbar preview HTML |
+| `POST` | `/api/adminBootstrapNavbar/create` | Create a new navbar file (modes: empty, template, duplicate) |
+| `POST` | `/api/adminBootstrapNavbar/duplicate` | Duplicate an existing navbar |
+| `POST` | `/api/adminBootstrapNavbar/delete` | Soft-delete a navbar file (move to backups) |
+| `GET` | `/api/adminBootstrapNavbar/templates` | List available templates |
+| `GET` | `/api/adminBootstrapNavbar/browse-files` | Browse files for the file picker (tree view) |
+| `POST` | `/api/adminBootstrapNavbar/refresh-scan` | Re-scan filesystem for navbar files |
+
+---
+
+#### Library Modules
+
+**navbarFileManager.js** — Filesystem operations:
+- `scanNavbarFiles(scanDir)` — Recursive scan for `navbar.*.json5` (skips hidden dirs, node_modules)
+- `readNavbarFile(filePath)` — Returns `{ success, content, parsed, parseError }`
+- `saveNavbarFile(filePath, content, backupDir, wwwDir, maxBackups)` — Atomic write with backup
+- `createNavbarFile(filePath, content)` — Creates new file (error if exists)
+- `deleteNavbarFile(filePath, backupDir, wwwDir)` — Soft-delete (moves to backups with DELETED marker)
+- `createBackup(filePath, backupDir, wwwDir, maxBackups)` — Creates timestamped backup with cleanup
+
+**navbarValidator.js** — Validation engine:
+- `validate(content, options)` — Returns `{ valid, errors[], warnings[] }`
+- Validates: JSON5 syntax, required structure, settings values, item structure, visibility fields, internal links, role IDs
+- Exports constants: `VALID_TYPES`, `VALID_EXPAND_AT`, `VALID_COLOR_SCHEMES`, `VALID_POSITIONS`, `VALID_SHOW_WHEN`
+
+**navbarTemplates.js** — Template system:
+- `getTemplateList()` — Returns `[{ id, label: {it, en}, description: {it, en} }]`
+- `generateFromTemplate(templateId, navbarName)` — Returns JSON5 string or null
+- `generateEmpty(navbarName)` — Returns minimal empty navbar JSON5 string
+
+---
+
+#### Admin UI Pages
+
+**Navbar List** (`/admin/navbarsManagement/index.ejs`):
+- Table showing all navbar files with name, type badge, path, action buttons
+- Actions: Edit, Duplicate, Delete with confirmation
+- Refresh Scan and New Navbar buttons
+
+**Create Navbar** (`/admin/navbarsManagement/create.ejs`):
+- Three creation modes: From scratch, From template, From duplication
+- Template selector with i18n labels and descriptions
+- Supports URL pre-fill parameters (`?mode=&name=&source=`)
+
+**Edit Navbar** (`/admin/navbarsManagement/edit.ejs`):
+- Full JSON5 text editor with toolbar
+- Quick-insert: Item, Dropdown, Separator, Divider, From File
+- Section selector (left/right) for snippet insertion
+- Icon helper with live preview
+- Validate, Preview, and Save action buttons
+- Auto-preview on load, snippet insert, template replace, and save
+- Preview shows auth indicators: 🔒 (requires auth) and 👁 (unauthenticated only)
+- File picker modal with tree view, extension filter, and label auto-generation
+
+---
+
+#### Reference Files
+
+| File | Purpose |
+|------|---------|
+| `/plugins/adminBootstrapNavbar/main.js` | Plugin entry point, routes, preview renderer |
+| `/plugins/adminBootstrapNavbar/lib/navbarFileManager.js` | Filesystem operations |
+| `/plugins/adminBootstrapNavbar/lib/navbarTemplates.js` | Predefined templates |
+| `/plugins/adminBootstrapNavbar/lib/navbarValidator.js` | Validation engine |
+| `/plugins/adminBootstrapNavbar/pluginConfig.json5` | Plugin configuration |
+| `/plugins/adminBootstrapNavbar/pluginDescription.json5` | Plugin metadata |
+| `/plugins/adminBootstrapNavbar/README.md` | Internal plugin documentation |
+| `/core/admin/adminConfig.json5` | Admin section registration |
+| `/tests/unit/adminBootstrapNavbar/` | Unit tests (3 files, 131 tests) |
+
 ## Admin System Architecture
 
 ### Overview
@@ -4200,13 +4337,17 @@ tests/
 │   │   ├── configValidator.test.js
 │   │   ├── redirectMatcher.test.js
 │   │   └── hitCounter.test.js
+│   ├── adminBootstrapNavbar/      # 3 file, 131 test
+│   │   ├── navbarValidator.test.js
+│   │   ├── navbarFileManager.test.js
+│   │   └── navbarTemplates.test.js
 │   └── core/
 │       └── servingRootResolver.test.js  # 22 test
 └── integration/
     └── httpsDiagnostics.test.js         # 26 test (4 fasi diagnostiche HTTPS)
 ```
 
-**Totale: 355 test**
+**Totale: 578 test**
 
 ### Eseguire i test
 
@@ -4404,6 +4545,15 @@ const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
 - `/www/navbar.main.json5` - Primary navbar configuration
 - `/www/navbarExamples/` - Example navbar configurations (6 files)
 
+### Admin Bootstrap Navbar Plugin
+
+- `/plugins/adminBootstrapNavbar/main.js` - Plugin entry point, routes, preview renderer
+- `/plugins/adminBootstrapNavbar/lib/navbarFileManager.js` - Filesystem operations
+- `/plugins/adminBootstrapNavbar/lib/navbarTemplates.js` - Predefined templates
+- `/plugins/adminBootstrapNavbar/lib/navbarValidator.js` - Validation engine
+- `/plugins/adminBootstrapNavbar/pluginConfig.json5` - Plugin configuration
+- `/plugins/adminBootstrapNavbar/README.md` - Internal plugin documentation
+
 ### URL Redirect Plugin
 
 - `/plugins/urlRedirect/main.js` - Plugin entry point, middleware
@@ -4567,10 +4717,28 @@ When working on this codebase as an AI assistant:
 ---
 
 **Last Updated:** 2026-03-19
-**Version:** 2.4.0
+**Version:** 2.5.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v2.5.0 (2026-03-19): **DOCUMENTATION + TESTS** - adminBootstrapNavbar plugin tests and documentation. Key changes:
+  - **Unit tests added (3 files, 131 tests):**
+    - `navbarValidator.test.js` (63 tests) — JSON5 parsing, structure validation, settings, items, dropdowns, visibility, internal links, role validation
+    - `navbarFileManager.test.js` (33 tests) — Recursive scan, read, create, save with backup, soft-delete, backup management
+    - `navbarTemplates.test.js` (35 tests) — Template list, generation from templates, empty config, cross-template consistency
+  - **Internal documentation:**
+    - Added `README.md` inside plugin directory with complete API reference, configuration guide, library module docs, admin UI description
+  - **External documentation (CLAUDE.md):**
+    - Added "Admin Bootstrap Navbar Plugin" section with overview, configuration, API endpoints, library modules, admin UI pages, reference files
+    - Added plugin to "Important Files Reference" section
+    - Updated test listing and total count (355 → 578)
+  - **Files Added:**
+    - `/tests/unit/adminBootstrapNavbar/navbarValidator.test.js`
+    - `/tests/unit/adminBootstrapNavbar/navbarFileManager.test.js`
+    - `/tests/unit/adminBootstrapNavbar/navbarTemplates.test.js`
+    - `/plugins/adminBootstrapNavbar/README.md`
+  - **Files Modified:**
+    - `/CLAUDE.md` — Added adminBootstrapNavbar documentation section, updated test count
 - v2.4.0 (2026-03-19): **NEW PLUGIN** - urlRedirect plugin for URL redirects (301/302) during site migrations. Key changes:
   - **New plugin: `urlRedirect`**
     - Middleware-based redirect engine (no API routes, only GET requests intercepted)
