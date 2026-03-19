@@ -64,31 +64,7 @@
     </div>
   </div>
 
-  <!-- Editor textarea -->
-  <textarea id="editorTextarea" class="form-control editor-textarea" spellcheck="false"></textarea>
-
-  <!-- Messages area -->
-  <div id="messagesArea" class="editor-messages mt-2"></div>
-
-  <!-- Action buttons -->
-  <div class="d-flex justify-content-between mt-3 mb-4">
-    <div>
-      <button id="btnValidate" class="btn btn-outline-info me-2">
-        <i class="bi bi-check-circle"></i> <%= __({it: 'Valida', en: 'Validate'}, passData.ctx) %>
-      </button>
-      <button id="btnPreview" class="btn btn-outline-success me-2">
-        <i class="bi bi-eye"></i> <%= __({it: 'Preview', en: 'Preview'}, passData.ctx) %> &#9654;
-      </button>
-      <button id="btnSave" class="btn btn-primary">
-        <i class="bi bi-save"></i> <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %>
-      </button>
-    </div>
-    <a href="/<%= passData.adminPrefix %>/navbarsManagement/index.ejs" class="btn btn-outline-secondary">
-      <%= __({it: 'Annulla', en: 'Cancel'}, passData.ctx) %>
-    </a>
-  </div>
-
-  <!-- Preview section (collapsible) -->
+  <!-- Preview section -->
   <div id="previewSection" style="display: none;" class="mb-4">
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center">
@@ -108,6 +84,30 @@
       </div>
     </div>
   </div>
+
+  <!-- Action buttons -->
+  <div class="d-flex justify-content-between mt-3 mb-4">
+    <div>
+      <button id="btnValidate" class="btn btn-outline-info me-2">
+        <i class="bi bi-check-circle"></i> <%= __({it: 'Valida', en: 'Validate'}, passData.ctx) %>
+      </button>
+      <button id="btnPreview" class="btn btn-outline-success me-2">
+        <i class="bi bi-eye"></i> <%= __({it: 'Preview', en: 'Preview'}, passData.ctx) %> &#9654;
+      </button>
+      <button id="btnSave" class="btn btn-primary">
+        <i class="bi bi-save"></i> <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %>
+      </button>
+    </div>
+    <a href="/<%= passData.adminPrefix %>/navbarsManagement/index.ejs" class="btn btn-outline-secondary">
+      <%= __({it: 'Annulla', en: 'Cancel'}, passData.ctx) %>
+    </a>
+  </div>
+
+  <!-- Messages area -->
+  <div id="messagesArea" class="editor-messages mt-2"></div>
+
+  <!-- Editor textarea (bottom) -->
+  <textarea id="editorTextarea" class="form-control editor-textarea" rows="50" spellcheck="false"></textarea>
 </div>
 
 <script src="/<%= passData.adminPrefix %>/navbarsManagement/editor.js"></script>
