@@ -185,7 +185,9 @@ class pluginSys{
               }
 
               // Ottieni la versione installata dal package.json del modulo
-              const modulePackage = require(modulePackagePath);
+              // Usa fs.readFileSync invece di require() perché alcuni moduli (es. ejs v4+)
+              // usano il campo "exports" in package.json che blocca require('./package.json')
+              const modulePackage = JSON.parse(fs.readFileSync(modulePackagePath, 'utf8'));
               const installedVersion = modulePackage.version;
 
               // Verifica compatibilità versione con semver
