@@ -36,7 +36,7 @@ class pluginSys{
       try {
         //console.log(pluginConfig);
         const pluginConfig = loadJson5(path.join(__dirname, '..', 'plugins', pluginName, 'pluginConfig.json5'));
-        const plugin = require(`../plugins/${pluginName}/main.js`);//
+        const plugin = require(path.join(__dirname, '..', 'plugins', pluginName, 'main.js'));
 
         // Aggiungi metadata al plugin object per uso futuro
         plugin.pluginName = pluginName;
@@ -157,7 +157,18 @@ class pluginSys{
     // adesso leggo tutti i file della cartella plugins e ciclo per attivari e caricare quelli per essere caricati
     const baseDir =  path.join(__dirname, '..', 'plugins' ) ;//ottengo ilpercorso della directory plugins
     let Afiles = fs.readdirSync( baseDir );// gli dico di leggere il contenuto della directori plugins e metterloin un arra ps linux non distingue fra file e directori sono tutti fil eper lui
-    Afiles = Afiles.filter(file => fs.statSync(baseDir + '/' +file).isDirectory())// prendo solo i "file" che in realtà sono directory
+    Afiles = Afiles.filter(file => fs.statSync(path.join(baseDir, file)).isDirectory())// prendo solo i "file" che in realtà sono directory
+
+    // Validazione nomi directory plugin (defense-in-depth)
+    // I nomi provengono da readdirSync quindi sono directory reali, ma per sicurezza
+    // escludiamo nomi che potrebbero causare path traversal o comportamenti imprevisti
+    Afiles = Afiles.filter(dirName => {
+      if (dirName.includes('..') || dirName.includes('/') || dirName.includes('\\')) {
+        logger.warn('pluginSys', `Directory plugin ignorata per nome non valido: "${dirName}"`);
+        return false;
+      }
+      return true;
+    });
 
     const pluginsVersionMap = new Map();// mappa che conter le coppie nomePlugin -> Versione di tutti i plugin caricati o meno
 
