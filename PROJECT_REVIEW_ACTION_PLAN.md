@@ -12,7 +12,7 @@
 - [x] **Fase 2** — Pulizia dipendenze e configurazione *(completata)*
 - [x] **Fase 3** — Sicurezza XSS nei template *(completata)*
 - [x] **Fase 4** — Sicurezza: Open Redirect *(completata)*
-- [ ] **Fase 5** — Accessibilita e qualita HTML
+- [x] **Fase 5** — Accessibilità e qualità HTML *(completata)*
 - [ ] **Fase 6** — Qualita codice e consistenza
 - [ ] **Fase 7** — Robustezza del plugin system
 - [ ] **Fase 8** — Test mancanti
@@ -139,28 +139,28 @@ Vulnerabilita di injection HTML/JS nei template admin e pubblici.
 
 ---
 
-## Fase 5 — Accessibilita e qualita HTML
+## Fase 5 — Accessibilità e qualità HTML
 
-- [ ] **5.1 — Attributo `lang` dinamico nel tema pubblico** (`themes/default/views/head.ejs:2`)
-  - Attualmente hardcoded `<html lang="en">`
-  - Fix: `<html lang="<%= passData.ctx.state?.lang || 'en' %>">`
+- [x] **5.1 — Attributo `lang` dinamico nel tema pubblico**
+  - `themes/default/views/head.ejs`: `<html lang="en">` → `<html lang="<%= (passData.ctx.state && passData.ctx.state.lang) || 'en' %>">`
+  - Usa `ctx.state.lang` impostato dal plugin `simpleI18n`
 
-- [ ] **5.2 — Attributo `lang` dinamico nel tema admin** (`themes/defaultAdminTheme/views/head.ejs:2`)
-  - Attualmente hardcoded `<html lang="it">`
-  - Fix: stessa logica del punto 5.1
+- [x] **5.2 — Attributo `lang` dinamico nel tema admin**
+  - `themes/defaultAdminTheme/views/head.ejs`: `<html lang="it">` → stessa logica del 5.1
 
-- [ ] **5.3 — Rimuovere contenuto placeholder** (`plugins/adminUsers/adminWebSections/usersManagment/userDelete.ejs:19`)
-  - Contiene `<h1>pagina di admin ed adessio vediamo come fare</h1>` — testo placeholder con typo
-  - Fix: sostituire con contenuto reale o rimuovere la pagina se non pronta
+- [x] **5.3 — Rimuovere contenuto placeholder** (`userDelete.ejs`)
+  - Sostituito `<h1>pagina di admin ed adessio vediamo come fare</h1>` con pagina "non ancora disponibile"
+  - Rimossi anche hidden span pattern e usato `<%= %>` per escape
 
-- [ ] **5.4 — Passaggio config via `<span display:none>` invece di `<script>`**
-  - Diversi template usano `<span style="display:none">` per passare configurazione al JS client
-  - Screen reader li annunciano ugualmente
-  - Fix: usare `<script type="application/json">` o variabili JS inline
+- [x] **5.4 — Passaggio config via variabili JS inline invece di `<span display:none>`**
+  - Convertiti tutti i `<span id="apiPrefix" style="display:none">` + `getElementById` → `const apiPrefix = '<%= %>'`
+  - 20 file EJS modificati + 1 file JS (`editor.js`)
+  - Incluse anche variabili aggiuntive: `themeNameParam`, `currentFile`
+  - Usato `<%= %>` (escaped) per prevenire XSS
 
-- [ ] **5.5 — Struttura semantica HTML nei form di visualizzazione**
-  - `userView.ejs`: usa `<p>` con `for` attribute (semanticamente scorretto)
-  - Fix: usare `<div>`, `<span>` o definition list (`<dl>/<dt>/<dd>`)
+- [x] **5.5 — Struttura semantica HTML nei form di visualizzazione**
+  - `userView.ejs`: sostituiti `<label for>` + `<p>` → `<dl>/<dt>/<dd>` (definition list)
+  - Corretto anche `<%- passData.adminPrefix %>` → `<%= passData.adminPrefix %>`
 
 ---
 

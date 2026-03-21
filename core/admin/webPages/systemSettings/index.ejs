@@ -4,16 +4,9 @@
 <%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
 <%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
 
-<!-- api prefix -->
-<span id="apiPrefix" style="display: none;"><%- passData.apiPrefix %></span>
 <script>
-    const apiPrefix = document.getElementById('apiPrefix').innerText;
-</script>
-
-<!-- adminPrefix -->
-<span id="adminPrefix" style="display: none;"><%- passData.adminPrefix %></span>
-<script>
-    const adminPrefix = document.getElementById('adminPrefix').innerText;
+    const apiPrefix = '<%= passData.apiPrefix %>';
+    const adminPrefix = '<%= passData.adminPrefix %>';
 </script>
 
 <%

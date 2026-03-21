@@ -1,21 +1,24 @@
-<!-- TEMPLATE PER LA CREAZIONE DELLE PAGINE DI AMMINISTRAZIONE  -->
+<!-- TEMPLATE PER LA CANCELLAZIONE UTENTE  -->
 <!-- NOTA: Usa getThemePartPath() con passData (che contiene isAdminContext: true) -->
 <!--       per caricare automaticamente i partial del tema admin -->
 <%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
 <%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
 
-<!-- api prefix -->
-<span id="apiPrefix" style="display: none;"><%- passData.apiPrefix %></span>
 <script>
-    const apiPrefix = document.getElementById('apiPrefix').innerText;
+    const apiPrefix = '<%= passData.apiPrefix %>';
+    const adminPrefix = '<%= passData.adminPrefix %>';
 </script>
 
-<!-- adminPrefix -->
-<span id="adminPrefix" style="display: none;"><%- passData.adminPrefix %></span>
-<script>
-    const adminPrefix = document.getElementById('adminPrefix').innerText;
-</script>
-
-<h1>pagina di admin ed adessio vediamo come fare</h1>
+<div class="container mt-5">
+    <div class="card">
+        <div class="card-header bg-warning text-dark">
+            <h2>Eliminazione Utente</h2>
+        </div>
+        <div class="card-body text-center">
+            <p class="text-muted">Questa funzionalità non è ancora disponibile.</p>
+            <a href="/<%= passData.adminPrefix %>/usersManagment/index.ejs" class="btn btn-primary">Torna alla lista utenti</a>
+        </div>
+    </div>
+</div>
 
 <%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>

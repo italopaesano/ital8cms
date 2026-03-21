@@ -18,9 +18,8 @@
 (function () {
   'use strict';
 
-  const apiPrefix = document.getElementById('apiPrefix').innerText;
-  const adminPrefix = document.getElementById('adminPrefix').innerText;
-  const currentFile = document.getElementById('currentFile').innerText;
+  // apiPrefix, adminPrefix, currentFile are defined as global variables
+  // in the <script> block of edit.ejs (injected server-side via EJS)
 
   const textarea = document.getElementById('editorTextarea');
   const messagesArea = document.getElementById('messagesArea');

@@ -4,20 +4,11 @@
 <%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
 <%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
 
-<!-- api prefix -->
-<span id="apiPrefix" style="display: none;"><%- passData.apiPrefix %></span>
 <script>
-    const apiPrefix = document.getElementById('apiPrefix').innerText;
+    const apiPrefix = '<%= passData.apiPrefix %>';
+    const adminPrefix = '<%= passData.adminPrefix %>';
+    const themeNameParam = '<%= passData.query.theme || '' %>';
 </script>
-
-<!-- adminPrefix -->
-<span id="adminPrefix" style="display: none;"><%- passData.adminPrefix %></span>
-<script>
-    const adminPrefix = document.getElementById('adminPrefix').innerText;
-</script>
-
-<!-- Query parameter themeName -->
-<span id="themeNameParam" style="display: none;"><%- passData.query.theme || '' %></span>
 
 <!-- Loading Container -->
 <div class="container mt-4" id="loading-container">
@@ -173,7 +164,7 @@ function escapeHtml(text) {
 
 // Carica dettagli tema all'avvio
 window.addEventListener('DOMContentLoaded', async function() {
-    const themeName = document.getElementById('themeNameParam').innerText.trim();
+    const themeName = themeNameParam.trim();
 
     if (!themeName) {
         showError('Nessun tema specificato. Usa ?theme=nomeTema');
