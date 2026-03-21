@@ -11,7 +11,7 @@
 - [x] **Fase 1** — Bug critici nel core (bloccanti) *(completata)*
 - [x] **Fase 2** — Pulizia dipendenze e configurazione *(completata)*
 - [x] **Fase 3** — Sicurezza XSS nei template *(completata)*
-- [ ] **Fase 4** — Sicurezza: Open Redirect
+- [x] **Fase 4** — Sicurezza: Open Redirect *(completata)*
 - [ ] **Fase 5** — Accessibilita e qualita HTML
 - [ ] **Fase 6** — Qualita codice e consistenza
 - [ ] **Fase 7** — Robustezza del plugin system
@@ -118,17 +118,24 @@ Vulnerabilita di injection HTML/JS nei template admin e pubblici.
 
 ## Fase 4 — Sicurezza: Open Redirect
 
-- [ ] **4.1 — Validazione `referrerTo` in login** (`plugins/adminUsers/webPages/login.ejs:86-88`)
-  - Il parametro URL `referrerTo` viene usato come destinazione redirect senza validazione
-  - Un attaccante puo creare: `/login.ejs?referrerTo=https://attacker.com`
-  - Fix: validare che il redirect sia verso un URL interno (stesso dominio, path relativo)
+- [x] **4.1 — Validazione `referrerTo` in login (client-side)**
+  - `login.ejs`: JS client ora valida che `referrerTo` da query param sia un path interno (`/...`, no `//`, no `/\`)
+  - Se non valido, mantiene il valore server-side dal Referer header
 
-- [ ] **4.2 — Validazione `referrerTo` in logout** (`plugins/adminUsers/webPages/logout.ejs`)
-  - Stesso problema del login
-  - Fix: stessa validazione del punto 4.1
+- [x] **4.2 — Validazione `referrerTo` in logout (template fix)**
+  - `logout.ejs`: cambiato `<%- referrerTo %>` → `<%= referrerTo %>` (escape HTML del Referer header)
 
-- [ ] **4.3 — Validazione `referrerTo` lato server** (`plugins/adminUsers/main.js`)
-  - Verificare che anche il backend validi la destinazione del redirect post-login/logout
+- [x] **4.3 — Validazione `referrerTo` lato server** (`plugins/adminUsers/main.js`)
+  - Creata funzione `getSafeRedirectUrl(url)`:
+    - Accetta solo path interni (iniziano con `/`, non con `//` o `/\`)
+    - Rifiuta URL esterni (https://, http://, javascript:, data:, ftp:, ecc.)
+    - Fallback a `/` se non valido
+  - Applicata a: login success redirect, login error redirect (con `encodeURIComponent`), logout redirect
+  - `login.ejs` e `logout.ejs`: fix XSS secondario — `<%- referrerTo %>` → `<%= referrerTo %>`
+
+- [x] **4.4 — Test unitari Open Redirect** — 35 test
+  - Path interni validi (8 test), URL esterni bloccati (10 test), edge cases (8 test)
+  - Whitespace trimming (4 test), bypass attempts (5 test)
 
 ---
 
