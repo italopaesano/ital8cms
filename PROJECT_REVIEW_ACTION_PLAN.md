@@ -5,9 +5,41 @@
 
 ---
 
+## Indice Fasi
+
+- [x] **Pre-0** — Symlink hardcoded *(completata)*
+- [ ] **Fase 1** — Bug critici nel core (bloccanti)
+- [ ] **Fase 2** — Pulizia dipendenze e configurazione
+- [ ] **Fase 3** — Sicurezza XSS nei template
+- [ ] **Fase 4** — Sicurezza: Open Redirect
+- [ ] **Fase 5** — Accessibilita e qualita HTML
+- [ ] **Fase 6** — Qualita codice e consistenza
+- [ ] **Fase 7** — Robustezza del plugin system
+- [ ] **Fase 8** — Test mancanti
+- [ ] **Fase 9** — Documentazione
+
+---
+
+## Metodo di lavoro
+
+Per **ogni singolo problema** all'interno di una fase, il flusso e il seguente:
+
+1. **Descrizione** — Spiegazione dettagliata del problema, del contesto e dell'impatto
+2. **Soluzioni proposte** — Presentazione di almeno 2 possibili approcci risolutivi con pro/contro
+3. **Scelta** — Il maintainer sceglie la soluzione preferita
+4. **Domande** — Se non ho almeno il 90% delle informazioni necessarie per implementare, faro domande mirate prima di procedere
+5. **Implementazione** — Scrittura del codice correttivo
+6. **Test/Verifica** — Verifica che la fix funzioni e non introduca regressioni
+7. **Commit** — Commit della fix con messaggio descrittivo
+8. **Aggiornamento checklist** — Spunta del task completato in questo file
+
+Solo dopo aver completato tutti i task di una fase si passa alla fase successiva.
+
+---
+
 ## Come usare questo file
 
-Ogni fase contiene una checklist di problematiche. Man mano che vengono risolte, spuntare la casella corrispondente con `[x]` e annotare il commit/data.
+Ogni fase contiene una checklist di problematiche. Man mano che vengono risolte, spuntare la casella corrispondente con `[x]` e annotare il commit/data. L'indice in cima viene aggiornato quando una fase intera e completata.
 
 ---
 
