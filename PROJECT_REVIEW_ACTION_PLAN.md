@@ -13,7 +13,7 @@
 - [x] **Fase 3** — Sicurezza XSS nei template *(completata)*
 - [x] **Fase 4** — Sicurezza: Open Redirect *(completata)*
 - [x] **Fase 5** — Accessibilità e qualità HTML *(completata)*
-- [ ] **Fase 6** — Qualita codice e consistenza
+- [x] **Fase 6** — Qualità codice e consistenza *(completata)*
 - [ ] **Fase 7** — Robustezza del plugin system
 - [ ] **Fase 8** — Test mancanti
 - [ ] **Fase 9** — Documentazione
@@ -164,22 +164,24 @@ Vulnerabilita di injection HTML/JS nei template admin e pubblici.
 
 ---
 
-## Fase 6 — Qualita codice e consistenza
+## Fase 6 — Qualità codice e consistenza
 
-- [ ] **6.1 — Rimuovere codice commentato** (`plugins/adminUsers/adminWebSections/usersManagment/index.ejs:132-159`)
-  - Grosso blocco di JS commentato per form di creazione utente
-  - Fix: rimuovere (e gia in git history se servisse)
+- [x] **6.1 — Rimuovere codice commentato** (`index.ejs`)
+  - Rimosso blocco HTML commentato (form creazione utente, ~30 righe) e blocco JS commentato (~75 righe)
+  - Corretto anche `<%- passData.adminPrefix %>` → `<%= passData.adminPrefix %>` nel link attivo
 
-- [ ] **6.2 — Standardizzare il passaggio di configurazione ai template**
-  - Tre pattern diversi in uso: hidden span, fetch API, attributi EJS diretti
-  - Decidere un pattern unico e applicarlo ovunque
+- [x] **6.2 — Standardizzare il passaggio di configurazione ai template**
+  - Già risolto nella Fase 5 (task 5.4): tutti i file ora usano `const x = '<%= passData.x %>';`
+  - Pattern unico adottato in 20 file EJS
 
-- [ ] **6.3 — Rimuovere stili inline** (`plugins/adminUsers/webPages/logout.ejs:37`)
-  - `style="width: 100%; max-width: 400px;"` mischiato con classi Bootstrap
-  - Fix: usare utility Bootstrap o classi CSS personalizzate
+- [x] **6.3 — Rimuovere stili inline** (`logout.ejs`)
+  - `style="min-height: 100vh;"` → classe Bootstrap `vh-100`
+  - `style="width: 100%;"` → classe Bootstrap `w-100`
+  - `style="max-width: 400px;"` mantenuto (nessuna utility Bootstrap equivalente)
 
-- [ ] **6.4 — Verificare operatore errato in codice commentato** (`core/pluginSys.js:364`)
-  - `if( nomePlugin0 =! nomePlugin1)` — operatore `=!` sbagliato (dovrebbe essere `!==`)
+- [x] **6.4 — Rimuovere codice commentato con operatore errato** (`pluginSys.js`)
+  - Rimosso intero blocco commentato (12 righe) con `=!` sbagliato
+  - Il codice era obsoleto e sostituito da logica funzionante
   - Se il codice e commentato e non in uso, rimuoverlo; se deve essere riattivato, fixare
 
 ---
