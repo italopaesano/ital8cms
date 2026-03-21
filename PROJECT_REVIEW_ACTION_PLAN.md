@@ -10,7 +10,7 @@
 - [x] **Pre-0** — Symlink hardcoded *(completata)*
 - [x] **Fase 1** — Bug critici nel core (bloccanti) *(completata)*
 - [x] **Fase 2** — Pulizia dipendenze e configurazione *(completata)*
-- [ ] **Fase 3** — Sicurezza XSS nei template
+- [x] **Fase 3** — Sicurezza XSS nei template *(completata)*
 - [ ] **Fase 4** — Sicurezza: Open Redirect
 - [ ] **Fase 5** — Accessibilita e qualita HTML
 - [ ] **Fase 6** — Qualita codice e consistenza
@@ -79,26 +79,40 @@ Rimuovere il superfluo e correggere le configurazioni.
 
 Vulnerabilita di injection HTML/JS nei template admin e pubblici.
 
-- [ ] **3.1 — XSS via innerHTML nella lista utenti** (`plugins/adminUsers/adminWebSections/usersManagment/index.ejs:105-113`)
-  - `user.username` inserito in `innerHTML` senza escaping
-  - Fix: usare `textContent` per testo puro, oppure sanitizzare con `escapeHtml()`
+- [x] **3.0a — Utility `escapeHtml` server-side centralizzata** — `d340f94`
+  - Creata `core/escapeHtml.js` come singola fonte per la sanitizzazione HTML
+  - Stessa implementazione di `bootstrapNavbar/navbarRenderer.js` (già testata con 206 test)
 
-- [ ] **3.2 — XSS via innerHTML nella vista utente** (`plugins/adminUsers/adminWebSections/usersManagment/userView.ejs:77-95`)
-  - `role.name` e `role.description` inseriti in `innerHTML` senza escaping
-  - Fix: sanitizzare i valori prima dell'inserimento
+- [x] **3.0b — Sanitizzazione server-side in tutti gli endpoint API** — `d340f94`
+  - `/userList`: username escapato
+  - `/userInfo`: email escapata + validazione null-check (404 se utente non esiste)
+  - `/roleList`: name e description di ogni ruolo escapati
+  - `roleManagement.getCustomRoles()` e `getHardcodedRoles()`: name e description escapati
+  - `adminSystem.getMenuSections()`: label, description, plugin name escapati (icon intenzionalmente HTML)
 
-- [ ] **3.3 — XSS nel menu admin** (`core/admin/webPages/index.ejs:98-108`)
-  - `section.label`, `section.icon`, `section.plugin` non escaped
-  - `menuContainer.innerHTML = menuHTML` senza sanitizzazione
-  - Fix: escape delle stringhe di configurazione
+- [x] **3.1 — XSS via innerHTML nella lista utenti** — `d340f94`
+  - Aggiunto `escapeHtml()` client-side (defense-in-depth) + `encodeURIComponent()` per URL
 
-- [ ] **3.4 — XSS via query parameter** (`plugins/adminUsers/adminWebSections/usersManagment/userUpsert.ejs:33-35`)
-  - `urlParams.get('username')` inserito nel DOM senza validazione
-  - Fix: sanitizzare il valore del parametro
+- [x] **3.2 — XSS via innerHTML nella vista utente** — `d340f94`
+  - Aggiunto `escapeHtml()` client-side + `encodeURIComponent()` per URL query e link
 
-- [ ] **3.5 — Valutare creazione utility `escapeHtml()` centralizzata**
-  - Creare un helper riutilizzabile per i template client-side
-  - Oppure adottare una libreria come DOMPurify per il sanitize lato client
+- [x] **3.3 — XSS nel menu admin** — `d340f94`
+  - Aggiunto `escapeHtml()` client-side per label, title, url, plugin name
+
+- [x] **3.4 — XSS via innerHTML in userUpsert e rolesManagment** — `d340f94`
+  - Sanitizzazione ruoli con `escapeHtml()` client-side
+  - Fix onclick injection: da stringhe inline a `data-attributes` sicuri
+
+- [x] **3.5 — Utility `escapeHtml()` client-side centralizzata (Soluzione B)** — `d340f94`
+  - File condiviso `themes/defaultAdminTheme/themeResources/js/escapeHtml.js`
+  - Incluso in `head.ejs` del tema admin per tutte le pagine
+  - Defense-in-depth: la difesa primaria resta server-side
+
+- [x] **3.6 — Test sanitizzazione XSS server-side** — `54525a5`
+  - 26 test per `core/escapeHtml.js` (utility pura)
+  - 172 test per sanitizzazione server-side endpoint (12 payload XSS × 7 sezioni)
+  - Copertura: userList, userInfo, roleList, getCustomRoles, getHardcodedRoles, getMenuSections
+  - Test idempotenza, double-encoding, scenari combinati completamente malevoli
 
 ---
 
