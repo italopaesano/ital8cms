@@ -9,7 +9,7 @@
 
 - [x] **Pre-0** — Symlink hardcoded *(completata)*
 - [x] **Fase 1** — Bug critici nel core (bloccanti) *(completata)*
-- [ ] **Fase 2** — Pulizia dipendenze e configurazione
+- [x] **Fase 2** — Pulizia dipendenze e configurazione *(completata)*
 - [ ] **Fase 3** — Sicurezza XSS nei template
 - [ ] **Fase 4** — Sicurezza: Open Redirect
 - [ ] **Fase 5** — Accessibilita e qualita HTML
@@ -65,15 +65,13 @@ Problemi che impediscono il funzionamento corretto del sistema. Da risolvere per
 
 Rimuovere il superfluo e correggere le configurazioni.
 
-- [ ] **2.1 — Rimuovere dipendenze fantasma da `package.json`**
-  - `"fs": "^0.0.1-security"` — modulo built-in Node.js, non serve come dipendenza npm
-  - `"path": "^0.12.7"` — modulo built-in Node.js, non serve come dipendenza npm
-  - `"handlebars": "^4.7.8"` — mai usato nel progetto (il template engine usato è EJS)
-  - Fix: rimuovere le 3 voci da `dependencies` e rieseguire `npm install`
+- [x] **2.1 — Rimuovere dipendenze fantasma da `package.json`** — `b7541d5`
+  - Rimossi `fs` e `path` (moduli built-in Node.js)
+  - `handlebars` mantenuto: usato da `simpleI18n` plugin
 
-- [ ] **2.2 — Verificare coerenza `pluginDescription.json5`**
-  - Controllare che ogni plugin abbia `name` e `version` corretti
-  - Verificare che le versioni dichiarate nelle `dependency` dei plugin corrispondano a versioni reali
+- [x] **2.2 — Verificare coerenza `pluginDescription.json5`** — `30c8a73`
+  - Nomi e versioni: tutti coerenti, nessuna inconsistenza
+  - **Soluzione applicata:** Rinominato campo `"licenze"` → `"license"` in 9 file
 
 ---
 
@@ -236,7 +234,7 @@ Vulnerabilita di injection HTML/JS nei template admin e pubblici.
 |------|-------|-------------|
 | Pre-0: Symlink hardcoded | ✅ Completata | `c2c56c8` — relative symlinks + gitignore |
 | 1 — Bug critici core | ✅ Completata | `be267ad`, `9764254`, `f38df31` |
-| 2 — Pulizia dipendenze | ⬜ Da iniziare | |
+| 2 — Pulizia dipendenze | ✅ Completata | `b7541d5`, `30c8a73` |
 | 3 — XSS template | ⬜ Da iniziare | |
 | 4 — Open redirect | ⬜ Da iniziare | |
 | 5 — Accessibilita | ⬜ Da iniziare | |

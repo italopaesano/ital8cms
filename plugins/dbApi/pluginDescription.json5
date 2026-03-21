@@ -5,6 +5,6 @@
         "description": " implementa le funzionalita di sqlite3 come Api basandosi sul modulo node.j better-sqlite3 ",
         "author": "Italo Paesano",
         "email": "italopaesano@protonmail.com",
-        "licenze": "MIT",
+        "license": "MIT",
         "note": "any note"
 }

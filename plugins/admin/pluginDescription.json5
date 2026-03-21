@@ -5,6 +5,6 @@
         "description": " Plugin di amministrazione collegato al core/admin",
         "author": "Italo Paesano",
         "email": "italopaesano@protonmail.com",
-        "licenze": "MIT",
+        "license": "MIT",
         "note": " per non rendere prevedibili le rotte di admin opteremo per delle misure aggountive , le rotte oltre ad esserre pluginName/api/altro prefix/ quindi un prefix aggiuntivo per non rendere standard le api di admin "
 }

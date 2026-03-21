@@ -5,6 +5,6 @@
         "description": "fornira le API per poter usare  slqlite3",
         "author": "Italo Paesano",
         "email": "italopaesano@protonmail.com",
-        "licenze": "MIT",
+        "license": "MIT",
         "note": "any note"
 }
