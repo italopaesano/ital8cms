@@ -88,21 +88,22 @@ function renderDashboard(data) {
     const menuContainer = document.getElementById('menu-container');
     let menuHTML = `
         <a href="/${adminPrefix}/" class="list-group-item list-group-item-action active" aria-current="true">
-            ${ui.title}
+            ${escapeHtml(ui.title)}
         </a>
     `;
 
     // Renderizza sezioni menu
     if (sections.length > 0) {
         sections.forEach(section => {
+            // icon è intenzionalmente HTML (emoji/icone) — già sanitizzato server-side dove necessario
             const icon = section.icon ? `<span class="me-2">${section.icon}</span>` : '';
             const title = section.type === 'plugin'
-                ? `Fornito da plugin: ${section.plugin}`
+                ? `Fornito da plugin: ${escapeHtml(section.plugin)}`
                 : 'Sezione integrata';
 
             menuHTML += `
-                <a href="${section.url}" class="list-group-item list-group-item-action" title="${title}">
-                    ${icon}${section.label}
+                <a href="${escapeHtml(section.url)}" class="list-group-item list-group-item-action" title="${escapeHtml(title)}">
+                    ${icon}${escapeHtml(section.label)}
                 </a>
             `;
         });
@@ -126,12 +127,12 @@ function renderDashboard(data) {
 
         sections.forEach(section => {
             const badge = section.type === 'plugin'
-                ? `<span class="badge bg-primary ms-2">Plugin: ${section.plugin}</span>`
+                ? `<span class="badge bg-primary ms-2">Plugin: ${escapeHtml(section.plugin)}</span>`
                 : `<span class="badge bg-secondary ms-2">Integrato</span>`;
 
             sectionsHTML += `
                 <li class="mb-2">
-                    <strong>${section.icon} ${section.label}</strong>
+                    <strong>${section.icon} ${escapeHtml(section.label)}</strong>
                     ${badge}
                 </li>
             `;

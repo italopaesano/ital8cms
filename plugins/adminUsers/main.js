@@ -4,6 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
+const escapeHtml = require('../../core/escapeHtml');
 
 const ital8Conf = loadJson5(path.join(__dirname, '../../ital8Config.json5'));// questo serve a caricare le impostazioni generali del modulo ed in particolare lìapi Prefix
 
@@ -176,7 +177,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         try {
           const userAccount = loadJson5(userFilePath);
           ctx.body = Object.entries(userAccount.users).map(([username, userData]) => ({//CON QUESTE ISTRUZIONI GENERO UN ARRAY CONTENETE OGETTI CON DUE CAMPI username , roleIds
-            username,
+            username: escapeHtml(username),
             roleIds: userData.roleIds  // Array di ruoli
           }));
         } catch (error) {
@@ -199,9 +200,18 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         const userFilePath = path.join(__dirname, 'userAccount.json5');
         try {
           const userAccount = loadJson5(userFilePath);
-          userAccount.users[username].hashPassword = undefined;// non voglioesporre l'hashPassword per ragioni di sicurezza
-          console.log('userAccount[username]', userAccount.users[username]);
-          ctx.body = userAccount.users[username];//ATTENZIONE CONSIGLIATO NON USARE JSON.stringify() , come -->  ctx.body = JSON.stringify(userAccount.users[username]); vedi articolo --> https://chatgpt.com/share/67e8e119-aa58-8012-ba93-0a69499c9186
+          if (!username || !userAccount.users[username]) {
+            ctx.status = 404;
+            ctx.body = { error: 'User not found' };
+            ctx.type = 'application/json';
+            return;
+          }
+          const userData = { ...userAccount.users[username] };
+          userData.hashPassword = undefined;// non voglioesporre l'hashPassword per ragioni di sicurezza
+          // Sanitizzazione server-side: escape campi stringa per prevenire XSS
+          if (userData.email) userData.email = escapeHtml(userData.email);
+          console.log('userAccount[username]', userData);
+          ctx.body = userData;//ATTENZIONE CONSIGLIATO NON USARE JSON.stringify() , come -->  ctx.body = JSON.stringify(userAccount.users[username]); vedi articolo --> https://chatgpt.com/share/67e8e119-aa58-8012-ba93-0a69499c9186
         } catch (error) {
           ctx.status = 500;
           ctx.body = { error: `Unable to retrieve users Info: ${error}` };
@@ -220,7 +230,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       handler: async (ctx) => {//
         const roleFilePath = path.join(__dirname, 'userRole.json5');
         try {
-          ctx.body = loadJson5(roleFilePath);
+          const roleData = loadJson5(roleFilePath);
+          // Sanitizzazione server-side: escape name e description di ogni ruolo
+          for (const [roleId, role] of Object.entries(roleData.roles)) {
+            if (role.name) role.name = escapeHtml(role.name);
+            if (role.description) role.description = escapeHtml(role.description);
+          }
+          ctx.body = roleData;
         } catch (error) {
           ctx.status = 500;
           ctx.body = { error: 'Unable to retrieve roles list' };
