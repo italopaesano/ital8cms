@@ -151,7 +151,7 @@ describe('SymlinkManager', () => {
       logSpy.mockRestore();
     });
 
-    test('symlinks point to correct source directories', () => {
+    test('symlinks point to correct source directories (relative)', () => {
       const logSpy = jest.spyOn(console, 'log').mockImplementation();
       const cm = createMockConfigManager();
       const manager = createManager(cm);
@@ -160,27 +160,51 @@ describe('SymlinkManager', () => {
       manager.installPluginSection(plugin);
 
       const symlinkPath = path.join(adminWebPagesPath, 'usersManagment');
-      const target = fs.readlinkSync(symlinkPath);
-      const expected = path.join(plugin.pathPluginFolder, 'adminWebSections', 'usersManagment');
-      expect(target).toBe(expected);
+      const rawTarget = fs.readlinkSync(symlinkPath);
+      const expectedAbsolute = path.join(plugin.pathPluginFolder, 'adminWebSections', 'usersManagment');
+      // Symlink is relative — resolve to absolute for comparison
+      const resolvedTarget = path.resolve(path.dirname(symlinkPath), rawTarget);
+      expect(resolvedTarget).toBe(expectedAbsolute);
+      // Verify it's actually a relative path (no leading /)
+      expect(path.isAbsolute(rawTarget)).toBe(false);
       logSpy.mockRestore();
     });
 
-    test('skips if symlink already points to correct target', () => {
+    test('skips if symlink already points to correct target (absolute legacy)', () => {
       const logSpy = jest.spyOn(console, 'log').mockImplementation();
       const cm = createMockConfigManager();
       const manager = createManager(cm);
       const plugin = createAdminPlugin('adminUsers', ['usersManagment']);
 
-      // Create correct symlink first
+      // Create correct symlink with absolute path (legacy format)
       const expectedTarget = path.join(plugin.pathPluginFolder, 'adminWebSections', 'usersManagment');
       const symlinkPath = path.join(adminWebPagesPath, 'usersManagment');
       fs.symlinkSync(expectedTarget, symlinkPath, 'dir');
 
-      // Should skip without error
+      // Should recognize absolute legacy symlink as valid and skip
       manager.installPluginSection(plugin);
 
+      // Symlink should still be the original absolute one (not recreated)
       expect(fs.readlinkSync(symlinkPath)).toBe(expectedTarget);
+      logSpy.mockRestore();
+    });
+
+    test('skips if symlink already points to correct target (relative)', () => {
+      const logSpy = jest.spyOn(console, 'log').mockImplementation();
+      const cm = createMockConfigManager();
+      const manager = createManager(cm);
+      const plugin = createAdminPlugin('adminUsers', ['usersManagment']);
+
+      // Create correct symlink with relative path (new format)
+      const expectedTarget = path.join(plugin.pathPluginFolder, 'adminWebSections', 'usersManagment');
+      const symlinkPath = path.join(adminWebPagesPath, 'usersManagment');
+      const relativeTarget = path.relative(path.dirname(symlinkPath), expectedTarget);
+      fs.symlinkSync(relativeTarget, symlinkPath, 'dir');
+
+      // Should recognize relative symlink as valid and skip
+      manager.installPluginSection(plugin);
+
+      expect(fs.readlinkSync(symlinkPath)).toBe(relativeTarget);
       logSpy.mockRestore();
     });
 
@@ -198,8 +222,11 @@ describe('SymlinkManager', () => {
 
       manager.installPluginSection(plugin);
 
-      const expectedTarget = path.join(plugin.pathPluginFolder, 'adminWebSections', 'usersManagment');
-      expect(fs.readlinkSync(symlinkPath)).toBe(expectedTarget);
+      const expectedAbsolute = path.join(plugin.pathPluginFolder, 'adminWebSections', 'usersManagment');
+      const rawTarget = fs.readlinkSync(symlinkPath);
+      const resolvedTarget = path.resolve(path.dirname(symlinkPath), rawTarget);
+      expect(resolvedTarget).toBe(expectedAbsolute);
+      expect(path.isAbsolute(rawTarget)).toBe(false);
       logSpy.mockRestore();
       warnSpy.mockRestore();
     });

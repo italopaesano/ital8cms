@@ -113,7 +113,7 @@ describe('PluginPagesSystem', () => {
   // ─── createSymlinkForPlugin ───────────────────────────────────────────────
 
   describe('createSymlinkForPlugin', () => {
-    test('creates symlink for plugin with webPages', () => {
+    test('creates relative symlink for plugin with webPages', () => {
       const logSpy = jest.spyOn(console, 'log').mockImplementation();
       const plugin = createPluginWithWebPages('myPlugin');
       const ps = createMockPluginSys([plugin]);
@@ -126,11 +126,15 @@ describe('PluginPagesSystem', () => {
       const symlinkPath = path.join(pluginPagesDir, 'myPlugin');
       expect(fs.existsSync(symlinkPath)).toBe(true);
       expect(fs.lstatSync(symlinkPath).isSymbolicLink()).toBe(true);
-      expect(fs.readlinkSync(symlinkPath)).toBe(sourceDir);
+      // Symlink is relative — resolve to absolute for comparison
+      const rawTarget = fs.readlinkSync(symlinkPath);
+      const resolvedTarget = path.resolve(path.dirname(symlinkPath), rawTarget);
+      expect(resolvedTarget).toBe(sourceDir);
+      expect(path.isAbsolute(rawTarget)).toBe(false);
       logSpy.mockRestore();
     });
 
-    test('skips if symlink already points to correct target', () => {
+    test('skips if absolute legacy symlink already points to correct target', () => {
       const logSpy = jest.spyOn(console, 'log').mockImplementation();
       const plugin = createPluginWithWebPages('existingPlugin');
       const ps = createMockPluginSys([plugin]);
@@ -139,19 +143,40 @@ describe('PluginPagesSystem', () => {
       fs.mkdirSync(pluginPagesDir, { recursive: true });
       const sourceDir = path.join(plugin.pathPluginFolder, 'webPages');
 
-      // Create symlink first
+      // Create symlink with absolute path (legacy format)
       const symlinkPath = path.join(pluginPagesDir, 'existingPlugin');
       fs.symlinkSync(sourceDir, symlinkPath, 'dir');
 
-      // Try to create again — should skip
+      // Try to create again — should recognize as valid and skip
       system.createSymlinkForPlugin('existingPlugin', sourceDir);
 
-      // Symlink should still exist and be valid
+      // Symlink should still be the original absolute one (not recreated)
       expect(fs.readlinkSync(symlinkPath)).toBe(sourceDir);
       logSpy.mockRestore();
     });
 
-    test('recreates symlink if pointing to wrong target', () => {
+    test('skips if relative symlink already points to correct target', () => {
+      const logSpy = jest.spyOn(console, 'log').mockImplementation();
+      const plugin = createPluginWithWebPages('existingPlugin');
+      const ps = createMockPluginSys([plugin]);
+      const system = createSystem(ps);
+
+      fs.mkdirSync(pluginPagesDir, { recursive: true });
+      const sourceDir = path.join(plugin.pathPluginFolder, 'webPages');
+
+      // Create symlink with relative path (new format)
+      const symlinkPath = path.join(pluginPagesDir, 'existingPlugin');
+      const relativeTarget = path.relative(path.dirname(symlinkPath), sourceDir);
+      fs.symlinkSync(relativeTarget, symlinkPath, 'dir');
+
+      // Try to create again — should recognize as valid and skip
+      system.createSymlinkForPlugin('existingPlugin', sourceDir);
+
+      expect(fs.readlinkSync(symlinkPath)).toBe(relativeTarget);
+      logSpy.mockRestore();
+    });
+
+    test('recreates symlink as relative if pointing to wrong target', () => {
       const logSpy = jest.spyOn(console, 'log').mockImplementation();
       const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
       const plugin = createPluginWithWebPages('wrongTarget');
@@ -170,7 +195,10 @@ describe('PluginPagesSystem', () => {
       // Recreate with correct target
       system.createSymlinkForPlugin('wrongTarget', correctSource);
 
-      expect(fs.readlinkSync(symlinkPath)).toBe(correctSource);
+      const rawTarget = fs.readlinkSync(symlinkPath);
+      const resolvedTarget = path.resolve(path.dirname(symlinkPath), rawTarget);
+      expect(resolvedTarget).toBe(correctSource);
+      expect(path.isAbsolute(rawTarget)).toBe(false);
       logSpy.mockRestore();
       warnSpy.mockRestore();
     });

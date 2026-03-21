@@ -4,8 +4,18 @@ node_modules/
 # Certificati TLS (mai committare chiavi private)
 /certs/
 
-# Plugin Pages System - auto-generated symlinks
+# Auto-generated symlinks (recreated at startup by pluginPagesSystem)
 /pluginPages/
+
+# Admin plugin section symlinks (recreated at startup by symlinkManager)
+# When adding a new admin plugin, add its sectionId(s) here
+/core/admin/webPages/usersManagment
+/core/admin/webPages/rolesManagment
+/core/admin/webPages/adminAccessControl
+/core/admin/webPages/navbarsManagement
+
+# Auto-generated runtime data
+/plugins/urlRedirect/redirectHitCount.json5
 
 # Init system
 /scripts/initState.json5
