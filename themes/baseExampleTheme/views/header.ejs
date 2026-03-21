@@ -1,9 +1,8 @@
 
 <body>
 
-<span id="apiPrefix" style="display: none;"><%- passData.apiPrefix %></span>
 <script>
-    const apiPrefix = document.getElementById('apiPrefix').innerText;
+    const apiPrefix = '<%= passData.apiPrefix %>';
     alert(apiPrefix);
 </script>
 

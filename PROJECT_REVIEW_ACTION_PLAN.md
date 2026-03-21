@@ -11,9 +11,9 @@
 - [x] **Fase 1** — Bug critici nel core (bloccanti) *(completata)*
 - [x] **Fase 2** — Pulizia dipendenze e configurazione *(completata)*
 - [x] **Fase 3** — Sicurezza XSS nei template *(completata)*
-- [ ] **Fase 4** — Sicurezza: Open Redirect
-- [ ] **Fase 5** — Accessibilita e qualita HTML
-- [ ] **Fase 6** — Qualita codice e consistenza
+- [x] **Fase 4** — Sicurezza: Open Redirect *(completata)*
+- [x] **Fase 5** — Accessibilità e qualità HTML *(completata)*
+- [x] **Fase 6** — Qualità codice e consistenza *(completata)*
 - [ ] **Fase 7** — Robustezza del plugin system
 - [ ] **Fase 8** — Test mancanti
 - [ ] **Fase 9** — Documentazione
@@ -118,61 +118,70 @@ Vulnerabilita di injection HTML/JS nei template admin e pubblici.
 
 ## Fase 4 — Sicurezza: Open Redirect
 
-- [ ] **4.1 — Validazione `referrerTo` in login** (`plugins/adminUsers/webPages/login.ejs:86-88`)
-  - Il parametro URL `referrerTo` viene usato come destinazione redirect senza validazione
-  - Un attaccante puo creare: `/login.ejs?referrerTo=https://attacker.com`
-  - Fix: validare che il redirect sia verso un URL interno (stesso dominio, path relativo)
+- [x] **4.1 — Validazione `referrerTo` in login (client-side)**
+  - `login.ejs`: JS client ora valida che `referrerTo` da query param sia un path interno (`/...`, no `//`, no `/\`)
+  - Se non valido, mantiene il valore server-side dal Referer header
 
-- [ ] **4.2 — Validazione `referrerTo` in logout** (`plugins/adminUsers/webPages/logout.ejs`)
-  - Stesso problema del login
-  - Fix: stessa validazione del punto 4.1
+- [x] **4.2 — Validazione `referrerTo` in logout (template fix)**
+  - `logout.ejs`: cambiato `<%- referrerTo %>` → `<%= referrerTo %>` (escape HTML del Referer header)
 
-- [ ] **4.3 — Validazione `referrerTo` lato server** (`plugins/adminUsers/main.js`)
-  - Verificare che anche il backend validi la destinazione del redirect post-login/logout
+- [x] **4.3 — Validazione `referrerTo` lato server** (`plugins/adminUsers/main.js`)
+  - Creata funzione `getSafeRedirectUrl(url)`:
+    - Accetta solo path interni (iniziano con `/`, non con `//` o `/\`)
+    - Rifiuta URL esterni (https://, http://, javascript:, data:, ftp:, ecc.)
+    - Fallback a `/` se non valido
+  - Applicata a: login success redirect, login error redirect (con `encodeURIComponent`), logout redirect
+  - `login.ejs` e `logout.ejs`: fix XSS secondario — `<%- referrerTo %>` → `<%= referrerTo %>`
 
----
-
-## Fase 5 — Accessibilita e qualita HTML
-
-- [ ] **5.1 — Attributo `lang` dinamico nel tema pubblico** (`themes/default/views/head.ejs:2`)
-  - Attualmente hardcoded `<html lang="en">`
-  - Fix: `<html lang="<%= passData.ctx.state?.lang || 'en' %>">`
-
-- [ ] **5.2 — Attributo `lang` dinamico nel tema admin** (`themes/defaultAdminTheme/views/head.ejs:2`)
-  - Attualmente hardcoded `<html lang="it">`
-  - Fix: stessa logica del punto 5.1
-
-- [ ] **5.3 — Rimuovere contenuto placeholder** (`plugins/adminUsers/adminWebSections/usersManagment/userDelete.ejs:19`)
-  - Contiene `<h1>pagina di admin ed adessio vediamo come fare</h1>` — testo placeholder con typo
-  - Fix: sostituire con contenuto reale o rimuovere la pagina se non pronta
-
-- [ ] **5.4 — Passaggio config via `<span display:none>` invece di `<script>`**
-  - Diversi template usano `<span style="display:none">` per passare configurazione al JS client
-  - Screen reader li annunciano ugualmente
-  - Fix: usare `<script type="application/json">` o variabili JS inline
-
-- [ ] **5.5 — Struttura semantica HTML nei form di visualizzazione**
-  - `userView.ejs`: usa `<p>` con `for` attribute (semanticamente scorretto)
-  - Fix: usare `<div>`, `<span>` o definition list (`<dl>/<dt>/<dd>`)
+- [x] **4.4 — Test unitari Open Redirect** — 35 test
+  - Path interni validi (8 test), URL esterni bloccati (10 test), edge cases (8 test)
+  - Whitespace trimming (4 test), bypass attempts (5 test)
 
 ---
 
-## Fase 6 — Qualita codice e consistenza
+## Fase 5 — Accessibilità e qualità HTML
 
-- [ ] **6.1 — Rimuovere codice commentato** (`plugins/adminUsers/adminWebSections/usersManagment/index.ejs:132-159`)
-  - Grosso blocco di JS commentato per form di creazione utente
-  - Fix: rimuovere (e gia in git history se servisse)
+- [x] **5.1 — Attributo `lang` dinamico nel tema pubblico**
+  - `themes/default/views/head.ejs`: `<html lang="en">` → `<html lang="<%= (passData.ctx.state && passData.ctx.state.lang) || 'en' %>">`
+  - Usa `ctx.state.lang` impostato dal plugin `simpleI18n`
 
-- [ ] **6.2 — Standardizzare il passaggio di configurazione ai template**
-  - Tre pattern diversi in uso: hidden span, fetch API, attributi EJS diretti
-  - Decidere un pattern unico e applicarlo ovunque
+- [x] **5.2 — Attributo `lang` dinamico nel tema admin**
+  - `themes/defaultAdminTheme/views/head.ejs`: `<html lang="it">` → stessa logica del 5.1
 
-- [ ] **6.3 — Rimuovere stili inline** (`plugins/adminUsers/webPages/logout.ejs:37`)
-  - `style="width: 100%; max-width: 400px;"` mischiato con classi Bootstrap
-  - Fix: usare utility Bootstrap o classi CSS personalizzate
+- [x] **5.3 — Rimuovere contenuto placeholder** (`userDelete.ejs`)
+  - Sostituito `<h1>pagina di admin ed adessio vediamo come fare</h1>` con pagina "non ancora disponibile"
+  - Rimossi anche hidden span pattern e usato `<%= %>` per escape
 
-- [ ] **6.4 — Verificare operatore errato in codice commentato** (`core/pluginSys.js:364`)
-  - `if( nomePlugin0 =! nomePlugin1)` — operatore `=!` sbagliato (dovrebbe essere `!==`)
+- [x] **5.4 — Passaggio config via variabili JS inline invece di `<span display:none>`**
+  - Convertiti tutti i `<span id="apiPrefix" style="display:none">` + `getElementById` → `const apiPrefix = '<%= %>'`
+  - 20 file EJS modificati + 1 file JS (`editor.js`)
+  - Incluse anche variabili aggiuntive: `themeNameParam`, `currentFile`
+  - Usato `<%= %>` (escaped) per prevenire XSS
+
+- [x] **5.5 — Struttura semantica HTML nei form di visualizzazione**
+  - `userView.ejs`: sostituiti `<label for>` + `<p>` → `<dl>/<dt>/<dd>` (definition list)
+  - Corretto anche `<%- passData.adminPrefix %>` → `<%= passData.adminPrefix %>`
+
+---
+
+## Fase 6 — Qualità codice e consistenza
+
+- [x] **6.1 — Rimuovere codice commentato** (`index.ejs`)
+  - Rimosso blocco HTML commentato (form creazione utente, ~30 righe) e blocco JS commentato (~75 righe)
+  - Corretto anche `<%- passData.adminPrefix %>` → `<%= passData.adminPrefix %>` nel link attivo
+
+- [x] **6.2 — Standardizzare il passaggio di configurazione ai template**
+  - Già risolto nella Fase 5 (task 5.4): tutti i file ora usano `const x = '<%= passData.x %>';`
+  - Pattern unico adottato in 20 file EJS
+
+- [x] **6.3 — Rimuovere stili inline** (`logout.ejs`)
+  - `style="min-height: 100vh;"` → classe Bootstrap `vh-100`
+  - `style="width: 100%;"` → classe Bootstrap `w-100`
+  - `style="max-width: 400px;"` mantenuto (nessuna utility Bootstrap equivalente)
+
+- [x] **6.4 — Rimuovere codice commentato con operatore errato** (`pluginSys.js`)
+  - Rimosso intero blocco commentato (12 righe) con `=!` sbagliato
+  - Il codice era obsoleto e sostituito da logica funzionante
   - Se il codice e commentato e non in uso, rimuoverlo; se deve essere riattivato, fixare
 
 ---

@@ -3,9 +3,11 @@
 
 <link rel="stylesheet" href="/<%= passData.adminPrefix %>/navbarsManagement/editor.css">
 
-<span id="apiPrefix" style="display: none;"><%- passData.apiPrefix %></span>
-<span id="adminPrefix" style="display: none;"><%- passData.adminPrefix %></span>
-<span id="currentFile" style="display: none;"><%- passData.query.file || '' %></span>
+<script>
+  const apiPrefix = '<%= passData.apiPrefix %>';
+  const adminPrefix = '<%= passData.adminPrefix %>';
+  const currentFile = '<%= passData.query.file || '' %>';
+</script>
 
 <div class="container mt-4">
   <nav aria-label="breadcrumb">

@@ -19,6 +19,22 @@ const roleManagement = require('./roleManagement');// necessario per gestire i r
 
 let myPluginSys = null;// riferimento al sistema dei plugin per accedere a themeSys
 
+/**
+ * Validates that a redirect URL is a safe internal path.
+ * Prevents Open Redirect attacks by ensuring the URL is relative to the same origin.
+ * @param {string} url - The URL to validate
+ * @returns {string} The original URL if safe, or '/' as fallback
+ */
+function getSafeRedirectUrl(url) {
+  if (!url || typeof url !== 'string') return '/';
+  const trimmed = url.trim();
+  // Must be a relative path starting with /
+  if (!trimmed.startsWith('/')) return '/';
+  // Block protocol-relative URLs (//evil.com) and backslash variants (/\evil.com)
+  if (trimmed.startsWith('//') || trimmed.startsWith('/\\')) return '/';
+  return trimmed;
+}
+
 function loadPlugin(pluginSys, pathPluginFolder){
   //console.log( 'sharedObject: ', sharedObject );
   myPluginSys = pluginSys;// memorizzo il riferimento per usarlo nelle route handlers
@@ -108,7 +124,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
             roleIds: userData.roleIds || [] // Array di ruoli (con fallback per compatibilità)
           };
           if(pluginConfig.custom.redirectToHttpReferer){// se è impostata questa variabile la redirezione avverrà nella pagina dalla quale è partita il click per l appagina di login
-            ctx.redirect(referrerTo);
+            ctx.redirect(getSafeRedirectUrl(referrerTo));
           }else{// altrimenti rediriggo la pagina in un url di default definito nella configurazione
             ctx.redirect(pluginConfig.custom.defaultLoginRedirectURL);
           }
@@ -116,7 +132,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
 
         }else{//login fallito
           //console.log('----------------login fallito --------------');
-          ctx.redirect(`/${ital8Conf.pluginPagesPrefix}/${pluginName}/login.ejs?error=invalid&referrerTo=${referrerTo}`);// se il login fallissce si viene reindirizzati nella pagina di login
+          ctx.redirect(`/${ital8Conf.pluginPagesPrefix}/${pluginName}/login.ejs?error=invalid&referrerTo=${encodeURIComponent(getSafeRedirectUrl(referrerTo))}`);// se il login fallissce si viene reindirizzati nella pagina di login
           return;
 
         }
@@ -162,7 +178,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         ctx.session = null;
         /* ctx.body = 'Logout effettuato con successo';
         ctx.type = 'text'; */
-        ctx.redirect(referrerTo);
+        ctx.redirect(getSafeRedirectUrl(referrerTo));
        }
     },
     { // GET /userList - Lista tutti gli utenti (solo admin)
@@ -631,6 +647,8 @@ module.exports = {
   getRouteArray: getRouteArray,
   pluginConfig: pluginConfig,
   getHooksPage: getHooksPage,
-  getMiddlewareToAdd: getMiddlewareToAdd
+  getMiddlewareToAdd: getMiddlewareToAdd,
+  // Exported for unit testing
+  _getSafeRedirectUrl: getSafeRedirectUrl
 
 }

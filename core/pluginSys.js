@@ -359,19 +359,8 @@ class pluginSys{
       return true;
     }
 
-/*     //adesso crea e carico gli ogetti confivisi fra i plugin : ogni plugin chiamerà la funzione getObjectToShareToOthersPlugin( pluginName); passando il proprio nome come parametro ed ottenendo l'ogetto a lui destinato immagazinandolo con la funzione : setSharedObject( pluginName, object ) dove in questo caso pluginname è il nome del plugin dal quale si riceve l'ogetto o object l'aogetto che si riceve 
-    this.#activePlugins.forEach( ( plugin0, nomePlugin0  ) => { // per ogni plugin itero per tutti gli altri plugins escludendo se stesso
-      if(plugin0.getObjectToShareToOthersPlugin){// mi assicuro che la funzione appropiata esista
-        this.#activePlugins.forEach( ( plugin1, nomePlugin1 ) => {
-            if( nomePlugin0 =! nomePlugin1){// mi assicuro che il plugin non richiami le funzioni su sse stesso
-              if(plugin1.setSharedObject){// mi assicuro che la funzione appropiata esiste 
-                plugin1.setSharedObject( nomePlugin0, plugin0.getObjectToShareToOthersPlugin( nomePlugin1 ) );
-              }
-            }
-        });
-      }// if(plugin0.getObjectToShareToOthersPlugin){/
-    });// this.#activePlugins.forEach( ( nomePlugin0, plugin0 ) => { */
-    
+
+
     
 
   }// END constructor()

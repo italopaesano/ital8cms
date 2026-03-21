@@ -33,14 +33,14 @@ const referrerTo = passData.ctx.headers.referer || '/';
 %>
 
 <!-- Main plugin content -->
-<main class="container d-flex align-items-center justify-content-center" style="min-height: 100vh;">
-  <div class="card shadow p-4" style="width: 100%; max-width: 400px;">
+<main class="container d-flex align-items-center justify-content-center vh-100">
+  <div class="card shadow p-4 w-100" style="max-width: 400px;">
     <h1 class="card-title text-center mb-4">Logout</h1>
     <p class="text-center">Sei sicuro di voler effettuare il logout?</p>
 
     <!-- Il form invia una richiesta POST all'endpoint API -->
     <form method="POST" action="/<%= passData.apiPrefix %>/adminUsers/logout">
-      <input type="hidden" id="referrerTo" name="referrerTo" value="<%- referrerTo %>">
+      <input type="hidden" id="referrerTo" name="referrerTo" value="<%= referrerTo %>">
       <button type="submit" class="btn btn-danger w-100">Conferma Logout</button>
       <a href="javascript:history.back()" class="btn btn-secondary w-100 mt-2">Annulla</a>
     </form>
