@@ -89,7 +89,7 @@ function getRouteArray() {
 module.exports = {
   loadPlugin: loadPlugin,
   installPlugin: installPlugin,
-  unistallPlugin: uninstallPlugin,
+  uninstallPlugin: uninstallPlugin,
   upgradePlugin: upgradePlugin,
   getRouteArray: getRouteArray,
   pluginConfig: pluginConfig,

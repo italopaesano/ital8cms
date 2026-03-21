@@ -627,7 +627,7 @@ function escapeHtml(str) {
 module.exports = {
   loadPlugin,
   installPlugin,
-  unistallPlugin: uninstallPlugin,
+  uninstallPlugin: uninstallPlugin,
   upgradePlugin,
   getRouteArray,
   pluginConfig,
