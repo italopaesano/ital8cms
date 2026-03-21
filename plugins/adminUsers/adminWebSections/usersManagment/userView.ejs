@@ -55,7 +55,8 @@
     if (!username) {
         document.getElementById('error-message').style.display = 'block';
     } else {
-        fetch(`/${apiPrefix}/adminUsers/userInfo?username=${username}`)
+        const encodedUsername = encodeURIComponent(username);
+        fetch(`/${apiPrefix}/adminUsers/userInfo?username=${encodedUsername}`)
             .then(response => response.json())
             .then(userInfo => {
                 // Controllo aggiornato per sistema multi-role
@@ -83,12 +84,12 @@
                                             '🛡️';
                                         const badgeClass = role.isHardcoded ? 'bg-primary' : 'bg-success';
                                         return `
-                                            <span class="badge ${badgeClass} me-2 mb-2" style="font-size: 0.9rem;" title="${role.description || 'Nessuna descrizione'}">
-                                                ${icon} ${role.name} (ID: ${roleId})
+                                            <span class="badge ${badgeClass} me-2 mb-2" style="font-size: 0.9rem;" title="${escapeHtml(role.description || 'Nessuna descrizione')}">
+                                                ${icon} ${escapeHtml(role.name)} (ID: ${escapeHtml(String(roleId))})
                                             </span>
                                         `;
                                     } else {
-                                        return `<span class="badge bg-danger me-2 mb-2">⚠️ Ruolo ${roleId} non trovato</span>`;
+                                        return `<span class="badge bg-danger me-2 mb-2">⚠️ Ruolo ${escapeHtml(String(roleId))} non trovato</span>`;
                                     }
                                 }).join('');
 
@@ -99,8 +100,8 @@
                             document.getElementById('roles').innerHTML = '<span class="text-danger">Errore nel caricamento dei ruoli</span>';
                         });
 
-                    document.getElementById('edit-user-btn').href = `/${adminPrefix}/usersManagment/userUpsert.ejs?username=${username}`;
-                    document.getElementById('delete-user-btn').href = `/${adminPrefix}/usersManagment/userDelete.ejs?username=${username}`;
+                    document.getElementById('edit-user-btn').href = `/${adminPrefix}/usersManagment/userUpsert.ejs?username=${encodedUsername}`;
+                    document.getElementById('delete-user-btn').href = `/${adminPrefix}/usersManagment/userDelete.ejs?username=${encodedUsername}`;
                     document.getElementById('user-info-container').style.display = 'block';
                 } else {
                     document.getElementById('error-message').innerText = 'Utente non trovato o dati non validi.';

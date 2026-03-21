@@ -1,6 +1,7 @@
 const ConfigManager = require('./lib/configManager');
 const AdminServicesManager = require('./lib/adminServicesManager');
 const SymlinkManager = require('./lib/symlinkManager');
+const escapeHtml = require('../escapeHtml');
 
 /**
  * AdminSystem - Sistema centrale di gestione admin
@@ -133,20 +134,20 @@ class AdminSystem {
 
         sections.push({
           id: sectionId,
-          label: sectionConfig.label,
-          icon: sectionConfig.icon || '',
-          description: sectionConfig.description || '',
+          label: escapeHtml(sectionConfig.label),
+          icon: sectionConfig.icon || '', // icon è intenzionalmente HTML (emoji/icone)
+          description: escapeHtml(sectionConfig.description || ''),
           url: `/${config.adminPrefix || 'admin'}/${sectionId}/index.ejs`,
           type: 'plugin',
-          plugin: sectionConfig.plugin
+          plugin: escapeHtml(sectionConfig.plugin)
         });
 
       } else if (sectionConfig.type === 'hardcoded') {
         // Sezione hardcoded
         sections.push({
           id: sectionId,
-          label: sectionConfig.label,
-          icon: sectionConfig.icon || '',
+          label: escapeHtml(sectionConfig.label),
+          icon: sectionConfig.icon || '', // icon è intenzionalmente HTML (emoji/icone)
           url: sectionConfig.url,
           type: 'hardcoded'
         });

@@ -92,9 +92,9 @@
                                     (roleId === 0 ? '🔴' : roleId === 1 ? '👑' : roleId === 2 ? '✏️' : '📝') :
                                     '🛡️';
                                 const badgeClass = role.isHardcoded ? 'bg-primary' : 'bg-success';
-                                return `<span class="badge ${badgeClass} me-1" title="${role.description || ''}">${icon} ${role.name}</span>`;
+                                return `<span class="badge ${badgeClass} me-1" title="${escapeHtml(role.description || '')}">${icon} ${escapeHtml(role.name)}</span>`;
                             } else {
-                                return `<span class="badge bg-danger me-1">⚠️ ID:${roleId}</span>`;
+                                return `<span class="badge bg-danger me-1">⚠️ ID:${escapeHtml(String(roleId))}</span>`;
                             }
                         }).join(' ');
                         rolesHTML = rolesBadges;
@@ -102,13 +102,15 @@
                         rolesHTML = '<span class="text-muted">Nessun ruolo</span>';
                     }
 
+                    const safeUsername = escapeHtml(user.username);
+                    const encodedUsername = encodeURIComponent(user.username);
                     userContainer.innerHTML = `
-                        <p><strong>Username:</strong> ${user.username}</p>
+                        <p><strong>Username:</strong> ${safeUsername}</p>
                         <p><strong>Ruoli:</strong> ${rolesHTML}</p>
                         <div class="text-start">
-                            <a href="/${adminPrefix}/usersManagment/userView.ejs?username=${user.username}" class="btn btn-info btn-sm me-2">Visualizza</a>
-                            <a href="/${adminPrefix}/usersManagment/userUpsert.ejs?username=${user.username}" class="btn btn-warning btn-sm me-2">Modifica</a>
-                            <a href="/${adminPrefix}/usersManagment/userDelete.ejs?username=${user.username}" class="btn btn-danger btn-sm">Elimina</a>
+                            <a href="/${adminPrefix}/usersManagment/userView.ejs?username=${encodedUsername}" class="btn btn-info btn-sm me-2">Visualizza</a>
+                            <a href="/${adminPrefix}/usersManagment/userUpsert.ejs?username=${encodedUsername}" class="btn btn-warning btn-sm me-2">Modifica</a>
+                            <a href="/${adminPrefix}/usersManagment/userDelete.ejs?username=${encodedUsername}" class="btn btn-danger btn-sm">Elimina</a>
                         </div>
                     `;
 

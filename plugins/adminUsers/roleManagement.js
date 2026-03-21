@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
+const escapeHtml = require('../../core/escapeHtml');
 
 // Percorso del file ruoli
 const rolesFilePath = path.join(__dirname, 'userRole.json5');
@@ -186,8 +187,8 @@ function getCustomRoles() {
         if (!role.isHardcoded) {
             customRoles.push({
                 id: parseInt(roleId),
-                name: role.name,
-                description: role.description,
+                name: escapeHtml(role.name),
+                description: escapeHtml(role.description),
                 isHardcoded: role.isHardcoded
             });
         }
@@ -208,8 +209,8 @@ function getHardcodedRoles() {
         if (role.isHardcoded) {
             hardcodedRoles.push({
                 id: parseInt(roleId),
-                name: role.name,
-                description: role.description,
+                name: escapeHtml(role.name),
+                description: escapeHtml(role.description),
                 isHardcoded: role.isHardcoded
             });
         }

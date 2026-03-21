@@ -14,4 +14,7 @@
 
     <!-- CSS del tema admin -->
     <link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/theme.css', passData) %>">
+
+    <!-- Utility escapeHtml client-side (defense-in-depth) -->
+    <script src="<%= passData.themeSys.getThemeResourceUrl('js/escapeHtml.js', passData) %>"></script>
 </head>

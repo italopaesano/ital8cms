@@ -120,18 +120,21 @@
                 const disabled = isRoot ? 'disabled' : '';
                 const title = isRoot ? 'Il ruolo root può essere assegnato solo tramite script di inizializzazione' : '';
 
+                const safeId = escapeHtml(String(role.id));
+                const safeName = escapeHtml(role.name);
+                const safeDesc = escapeHtml(role.description);
                 checkbox.innerHTML = `
                     <input class="form-check-input role-checkbox"
                            type="checkbox"
-                           value="${role.id}"
-                           id="role_${role.id}"
+                           value="${safeId}"
+                           id="role_${safeId}"
                            ${disabled}
                            onchange="updateSelectedSummary()">
-                    <label class="form-check-label" for="role_${role.id}" title="${title}">
+                    <label class="form-check-label" for="role_${safeId}" title="${escapeHtml(title)}">
                         ${isRoot ? '🔴' : role.id === 1 ? '👑' : role.id === 2 ? '✏️' : '📝'}
-                        <strong>${role.name}</strong> (ID: ${role.id})
+                        <strong>${safeName}</strong> (ID: ${safeId})
                         <br>
-                        <small class="text-muted">${role.description}</small>
+                        <small class="text-muted">${safeDesc}</small>
                         ${isRoot ? '<br><small class="text-danger">⛔ Disabilitato - Solo via script init</small>' : ''}
                     </label>
                 `;
@@ -165,16 +168,19 @@
 
                 const checkbox = document.createElement('div');
                 checkbox.className = 'form-check mb-2';
+                const safeId = escapeHtml(String(role.id));
+                const safeName = escapeHtml(role.name);
+                const safeDesc = escapeHtml(role.description);
                 checkbox.innerHTML = `
                     <input class="form-check-input role-checkbox"
                            type="checkbox"
-                           value="${role.id}"
-                           id="role_${role.id}"
+                           value="${safeId}"
+                           id="role_${safeId}"
                            onchange="updateSelectedSummary()">
-                    <label class="form-check-label" for="role_${role.id}">
-                        🛡️ <strong>${role.name}</strong> (ID: ${role.id})
+                    <label class="form-check-label" for="role_${safeId}">
+                        🛡️ <strong>${safeName}</strong> (ID: ${safeId})
                         <br>
-                        <small class="text-muted">${role.description}</small>
+                        <small class="text-muted">${safeDesc}</small>
                     </label>
                 `;
                 container.appendChild(checkbox);
