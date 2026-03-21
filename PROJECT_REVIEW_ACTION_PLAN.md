@@ -8,7 +8,7 @@
 ## Indice Fasi
 
 - [x] **Pre-0** — Symlink hardcoded *(completata)*
-- [ ] **Fase 1** — Bug critici nel core (bloccanti)
+- [x] **Fase 1** — Bug critici nel core (bloccanti) *(completata)*
 - [ ] **Fase 2** — Pulizia dipendenze e configurazione
 - [ ] **Fase 3** — Sicurezza XSS nei template
 - [ ] **Fase 4** — Sicurezza: Open Redirect
@@ -47,21 +47,17 @@ Ogni fase contiene una checklist di problematiche. Man mano che vengono risolte,
 
 Problemi che impediscono il funzionamento corretto del sistema. Da risolvere per primi.
 
-- [ ] **1.1 — Bug parentesi in validazione dipendenze** (`core/pluginSys.js:264`)
+- [x] **1.1 — Bug parentesi in validazione dipendenze** (`core/pluginSys.js:264`) — `be267ad`
   - Il `||` e le parentesi sono posizionati in modo errato dentro `has()`, rendendo la validazione delle dipendenze tra plugin **completamente non funzionante**
-  - Codice attuale: `if( !pluginsVersionMap.has( dependencyPluginName || !semver.satisfies(...) ) )`
-  - Dovrebbe essere: `if( !pluginsVersionMap.has(dependencyPluginName) || !semver.satisfies(...) )`
-  - **Impatto:** I plugin si caricano anche quando le dipendenze non sono soddisfatte
+  - **Soluzione applicata:** Separato in `pluginExists` + `versionOk` per leggibilita
 
-- [ ] **1.2 — Variabile globale implicita** (`index.js:12`)
+- [x] **1.2 — Variabile globale implicita** (`index.js:12`) — `9764254`
   - `router = priorityMiddlewares.router` senza `const`/`let`/`var`
-  - Crea una variabile globale, problematico in strict mode
-  - Fix: aggiungere `const`
+  - **Soluzione applicata:** Aggiunto `const`
 
-- [ ] **1.3 — Typo sistematico `unistallPlugin`** (11 file plugin)
-  - Tutte le `main.js` dei plugin esportano `unistallPlugin` invece di `uninstallPlugin`
-  - Il core (`pluginSys.js`) deve chiamare il metodo corretto — verificare quale nome usa il core per decidere se fixare il core o i plugin
-  - **File coinvolti:** `admin`, `adminUsers`, `adminBootstrapNavbar`, `adminAccessControl`, `bootstrap`, `bootstrapNavbar`, `ccxt`, `dbApi`, `media`, `ostrukUtility`, `OLD_dbApi`, `exaplePlugin`
+- [x] **1.3 — Typo sistematico `unistallPlugin`** (13 file) — `f38df31`
+  - Tutte le `main.js` dei plugin esportavano `unistallPlugin` invece di `uninstallPlugin`
+  - **Soluzione applicata:** Rinominato in tutti gli 11 plugin + 2 file documentazione
 
 ---
 
@@ -239,7 +235,7 @@ Vulnerabilita di injection HTML/JS nei template admin e pubblici.
 | Fase | Stato | Commit/Note |
 |------|-------|-------------|
 | Pre-0: Symlink hardcoded | ✅ Completata | `c2c56c8` — relative symlinks + gitignore |
-| 1 — Bug critici core | ⬜ Da iniziare | |
+| 1 — Bug critici core | ✅ Completata | `be267ad`, `9764254`, `f38df31` |
 | 2 — Pulizia dipendenze | ⬜ Da iniziare | |
 | 3 — XSS template | ⬜ Da iniziare | |
 | 4 — Open redirect | ⬜ Da iniziare | |

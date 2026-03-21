@@ -9,7 +9,7 @@ const path = require('path');
 const httpsManager = require('./core/httpsManager');
 
 const priorityMiddlewares = require('./core/priorityMiddlewares/priorityMiddlewares.js')(app, ital8Conf);
-router = priorityMiddlewares.router ;
+const router = priorityMiddlewares.router ;
 //const priorityMiddlewares(app); // carico i imidlware che vanno impostati in ordine preciso di caricamento
 
 const pluginSys = new ( require("./core/pluginSys") )(ital8Conf); // carico il sistema di plugin e passo la configurazione per whitelist

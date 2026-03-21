@@ -20,7 +20,7 @@ il sistema di plugin funziona nel seguente modo:
          che sarà il file che verrà caricato e poi eseguito per far funzionare il plugin
 
 4) all'interno del file main.js ci saranno le seguenti funzioni:
- loadPlugin() installPlugin() unistallPlugin() upgradePlugin() getObjectToShare()
+ loadPlugin() installPlugin() uninstallPlugin() upgradePlugin() getObjectToShare()
  getRouteArray() getMiddlewareToAdd()
 
 queste funzionisaranno poi rese disponibili attraverso un esportazione del tipo :
@@ -30,7 +30,7 @@ module.exports = {
 
         loadPlugin: loadPlugin,  //questa funzione verrà richiamata per caricare il plugin ogni volta che serve ad esempio ogni volta che si riavviam 
         installPlugin: installPlugin, // questa funzione verrà richiamata per installare il plugin
-        unistallPlugin: unistallPlugin, // questa funzione verrà richiamata per disinstallare il plugin
+        uninstallPlugin: uninstallPlugin, // questa funzione verrà richiamata per disinstallare il plugin
         upgradePlugin: upgradePlugin, // questa funzione verrà richiamata quando sarà necessario aggiornare il plugin
         getObjectToShare: getObjectToShare,// rstituisce un ogetto che verrà condiviso con il template (es EJS) passData.plugins.['nomePlugin'] oppure con gli altri moduli
         getRouteArray: getRouteArray, //questa funzione restituirà tutte le rotte proprie del plugin

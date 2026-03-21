@@ -261,7 +261,9 @@ class pluginSys{
     this.#pluginsToActive.forEach( ( dependencyMap, nomePlugin ) => {
 
       dependencyMap.forEach( ( versionRequest, dependencyPluginName ) => {
-        if( !pluginsVersionMap.has( dependencyPluginName || !semver.satisfies( pluginsVersionMap.get(dependencyPluginName), versionRequest ) ) ){//semver.satisfies è un metoo di una libreria che controlla se la versione richiesta è compatibile con quella installata
+        const pluginExists = pluginsVersionMap.has(dependencyPluginName);
+        const versionOk = pluginExists && semver.satisfies( pluginsVersionMap.get(dependencyPluginName), versionRequest );
+        if( !pluginExists || !versionOk ){
           throw new Error(`ERRORE dipendenza non soddisfatta il plugin ${nomePlugin} a come dipendenza il plugin ${dependencyPluginName} che deve essere almeno alla versione: ${versionRequest} ed è alla versione ${pluginsVersionMap.get(dependencyPluginName)}`);
         }
       });
