@@ -73,10 +73,16 @@ const GLOBAL_PREFIX_TEST = {
   httpPort: 19300,
 };
 
+// Path alla directory www dedicata ai test (relativa alla root del progetto)
+// I test E2E NON devono mai dipendere dai file in /www/ di produzione.
+// Tutti i file necessari ai test devono essere in /tests/fixtures/www/
+const TEST_WWW_PATH = '/tests/fixtures/www';
+
 module.exports = {
   TEST_PASSWORD,
   TEST_USER_PREFIX,
   TEST_USERS,
   URLS,
-  GLOBAL_PREFIX_TEST
+  GLOBAL_PREFIX_TEST,
+  TEST_WWW_PATH
 };

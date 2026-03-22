@@ -4535,6 +4535,71 @@ tests/integration/httpsDiagnostics.test.js
 | `19200` | TLS isolato di Fase 3 |
 | `19443` | HTTPS di test (evita conflitti con porta 3443 di produzione) |
 
+### Isolamento Test E2E dalla directory www/ di produzione
+
+**REGOLA CRITICA:** I test E2E **NON devono mai dipendere** dai file presenti nella directory `/www/` di produzione. Tutti i file necessari ai test devono essere nella directory dedicata `/tests/fixtures/www/`.
+
+**Motivazione:**
+- ✅ La directory `/www/` è l'area di lavoro del developer in produzione — può cambiare liberamente
+- ✅ I test non si rompono quando l'utente modifica/aggiunge/rimuove pagine dal sito
+- ✅ I file di test sono controllati e prevedibili
+- ✅ Isolamento completo tra ambiente di test e ambiente di produzione
+
+**Architettura:**
+
+```
+tests/fixtures/www/           ← Directory www dedicata ai test
+├── index.ejs                 ← Homepage di test
+├── hello_word.ejs            ← Pagina di test
+├── i18n-test.ejs             ← Test internazionalizzazione
+├── prova_thema.ejs           ← Test tema
+├── navbar.main.json5         ← Configurazione navbar di test
+├── navbarExamples/           ← Esempi navbar
+├── reserved/                 ← Area protetta (richiede login)
+│   └── index.ejs
+├── private/                  ← Area privata (richiede login)
+│   └── index.ejs
+└── lib/                      ← Area libreria (richiede login)
+    └── index.ejs
+```
+
+**Come funziona l'override:**
+
+Il `globalSetup.js` (e `globalPrefixSetup.js`) sovrascrivono `wwwPath` in `ital8Config.json5` prima dell'avvio del server di test:
+
+```javascript
+const { TEST_WWW_PATH } = require('./testConstants');
+
+// In globalSetup.js
+configData.wwwPath = TEST_WWW_PATH;  // '/tests/fixtures/www'
+```
+
+Il file originale viene ripristinato dal `globalTeardown.js` tramite il meccanismo di backup/restore.
+
+**Costante centralizzata:**
+
+Il path della directory www di test è definito in `testConstants.js`:
+
+```javascript
+const TEST_WWW_PATH = '/tests/fixtures/www';
+```
+
+**Quando aggiungere nuovi file a tests/fixtures/www/:**
+
+Se un nuovo test E2E necessita di una pagina web specifica:
+1. Creare il file EJS in `tests/fixtures/www/` (NON in `/www/`)
+2. Aggiornare questa documentazione se la struttura cambia significativamente
+3. Verificare che il file segua le convenzioni dei template (inclusione dei partial del tema, ecc.)
+
+**Quando NON servono file in tests/fixtures/www/:**
+
+I seguenti path sono serviti da altre directory e NON necessitano di file nella www di test:
+- `/api/*` → serviti dai route handler dei plugin
+- `/admin/*` → serviti da `core/admin/webPages/`
+- `/pluginPages/*` → serviti da `plugins/{pluginName}/webPages/`
+- `/public-theme-resources/*` → serviti dalla directory del tema
+- `/admin-theme-resources/*` → serviti dalla directory del tema admin
+
 ### Aggiungere Nuovi Test
 
 **Unit test per un nuovo plugin:**
@@ -4546,6 +4611,7 @@ tests/unit/myPlugin/
 **Convenzioni:**
 - Unit test: testano funzioni pure esportate dal modulo (`module.exports`)
 - Integration test: testano comportamento end-to-end (spawn server, richieste HTTP reali)
+- E2E test: usano Playwright, serviti dalla directory `tests/fixtures/www/` (MAI dalla `/www/` di produzione)
 - Ogni test deve essere indipendente e non modificare file permanentemente
 
 ## Deployment Guidelines

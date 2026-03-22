@@ -15,7 +15,7 @@ const path = require('path');
 const json5 = require('json5');
 
 const defaultGlobalSetup = require('./globalSetup');
-const { GLOBAL_PREFIX_TEST } = require('./testConstants');
+const { GLOBAL_PREFIX_TEST, TEST_WWW_PATH } = require('./testConstants');
 
 const CONFIG_PATH = path.join(__dirname, '../../ital8Config.json5');
 const BACKUP_PATH = CONFIG_PATH + '.prefix-bak';
@@ -39,9 +39,12 @@ module.exports = async function globalPrefixSetup() {
     config.https.enabled = false;
   }
 
+  // Override wwwPath to use test fixtures (isolation from production www/)
+  config.wwwPath = TEST_WWW_PATH;
+
   // 3. Write modified config
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
-  console.log(`[Prefix Setup] Config modified: globalPrefix="${prefix}", httpPort=${httpPort}, https=disabled`);
+  console.log(`[Prefix Setup] Config modified: globalPrefix="${prefix}", httpPort=${httpPort}, https=disabled, wwwPath=${TEST_WWW_PATH}`);
 
   // 4. Add test users (reuse existing globalSetup logic)
   await defaultGlobalSetup();
