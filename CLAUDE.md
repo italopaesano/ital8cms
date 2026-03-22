@@ -327,9 +327,26 @@ setSharedObject(fromPlugin, sharedObject) {
   }
 }
 
-// Access shared objects in other code
+// Access shared objects via pull mechanism (on-demand)
+// Generic call (forPlugin = undefined — provider returns generic object)
 const dbApiShared = pluginSys.getSharedObject('dbApi')
+
+// Caller-specific call (provider can customize response for that consumer)
+const dbApiForMedia = pluginSys.getSharedObject('dbApi', 'media')
 ```
+
+**`getSharedObject(providerPluginName, callerName)`**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `providerPluginName` | string | Yes | Plugin that exposes the shared object |
+| `callerName` | string | No | Requesting plugin name (for per-consumer customization) |
+
+Returns `null` if plugin is not active or doesn't implement `getObjectToShareToOthersPlugin()`.
+
+**Push vs Pull:**
+- **Push** (`setSharedObject`) — Automatic during init, per-consumer customized. Best for plugin-to-plugin dependencies.
+- **Pull** (`getSharedObject`) — On-demand at runtime. Best for route handlers, middleware, and framework code.
 
 ### Plugin API Routes
 
@@ -4134,6 +4151,84 @@ if (!ctx.session.authenticated) {
 }
 ```
 
+6. **XSS Prevention in EJS Templates**
+
+The project uses a **defense-in-depth** strategy with two layers:
+
+**Layer 1 — Server-side sanitization (primary defense):**
+
+All API endpoints that return user-controlled data MUST escape HTML before sending to templates:
+
+```javascript
+const escapeHtml = require('../../core/escapeHtml');
+
+// In route handler — escape before sending to template
+ctx.body = {
+  username: escapeHtml(user.username),
+  email: escapeHtml(user.email)
+};
+```
+
+**Layer 2 — Client-side sanitization (defense-in-depth):**
+
+Admin theme includes `escapeHtml.js` globally via `head.ejs`. Use it when inserting dynamic content via `innerHTML`:
+
+```javascript
+// Client-side — always escape before innerHTML
+element.innerHTML = `<td>${escapeHtml(userData.username)}</td>`;
+```
+
+**EJS Tag Rules:**
+
+| Tag | Usage | XSS Safe? |
+|-----|-------|-----------|
+| `<%= value %>` | Output with HTML escaping | ✅ Yes |
+| `<%- value %>` | Output raw HTML (no escaping) | ❌ No — use only for trusted HTML (theme includes, plugin hooks) |
+
+```ejs
+<%# SAFE — escaped output %>
+<p>Welcome, <%= passData.ctx.session.user.username %></p>
+
+<%# SAFE — trusted theme include %>
+<%- include(passData.themeSys.getThemePartPath('head.ejs')) %>
+
+<%# DANGEROUS — never use <%- with user data %>
+<%# <%- userInput %> → XSS vulnerability! %>
+```
+
+**Passing config to client JS — use JS variables, NOT hidden spans:**
+
+```ejs
+<%# CORRECT — JS variable with escaped output %>
+<script>
+  const apiPrefix = '<%= passData.apiPrefix %>';
+</script>
+
+<%# WRONG — hidden span pattern (deprecated) %>
+<%# <span id="apiPrefix" style="display:none"><%= passData.apiPrefix %></span> %>
+```
+
+**Utility files:**
+- Server-side: `/core/escapeHtml.js`
+- Client-side: `/themes/defaultAdminTheme/themeResources/js/escapeHtml.js`
+
+7. **Open Redirect Prevention**
+
+All redirect URLs from user input MUST be validated:
+
+```javascript
+// Use getSafeRedirectUrl() from adminUsers plugin
+function getSafeRedirectUrl(url) {
+  if (!url || typeof url !== 'string') return '/';
+  const trimmed = url.trim();
+  // Must start with / but not // or /\ (protocol-relative URLs)
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.startsWith('/\\')) {
+    return trimmed;
+  }
+  return '/'; // Fallback to safe default
+}
+```
+
 ## Common Tasks
 
 ### Task: Add a New API Endpoint
@@ -4320,34 +4415,56 @@ module.exports = {
 
 ## Testing Strategy
 
-**Current Status:** Jest è installato e configurato. Sono presenti test unitari e un test di integrazione diagnostico per HTTPS.
+**Current Status:** Jest è installato e configurato. Sono presenti test unitari, test di integrazione e test di sicurezza.
 
 ### Test Esistenti
 
 ```
 tests/
 ├── unit/
-│   ├── bootstrapNavbar/          # 5 file, 206 test
+│   ├── bootstrapNavbar/              # 5 file, 187 test
 │   │   ├── escapeHtml.test.js
 │   │   ├── isActivePage.test.js
 │   │   ├── isItemVisible.test.js
 │   │   ├── configDir.test.js
 │   │   └── rendering.test.js
-│   ├── urlRedirect/              # 3 file, 101 test
+│   ├── urlRedirect/                  # 3 file, 101 test
 │   │   ├── configValidator.test.js
 │   │   ├── redirectMatcher.test.js
 │   │   └── hitCounter.test.js
-│   ├── adminBootstrapNavbar/      # 3 file, 131 test
+│   ├── adminBootstrapNavbar/         # 3 file, 131 test
 │   │   ├── navbarValidator.test.js
 │   │   ├── navbarFileManager.test.js
 │   │   └── navbarTemplates.test.js
-│   └── core/
-│       └── servingRootResolver.test.js  # 22 test
-└── integration/
-    └── httpsDiagnostics.test.js         # 26 test (4 fasi diagnostiche HTTPS)
+│   ├── core/                         # 7 file, 172 test
+│   │   ├── servingRootResolver.test.js
+│   │   ├── escapeHtml.test.js
+│   │   ├── loadJson5.test.js
+│   │   ├── saveJson5.test.js
+│   │   ├── pluginPagesSystem.test.js
+│   │   ├── adminServicesManager.test.js
+│   │   ├── configManager.test.js
+│   │   └── symlinkManager.test.js
+│   ├── xss/                          # 1 file, 172 test
+│   │   └── serverSideSanitization.test.js
+│   ├── pluginSys.test.js             # 16 test
+│   ├── themeSys.test.js              # 36 test
+│   ├── accessManager.test.js         # }
+│   ├── patternMatcher.test.js        # } 130 test (adminAccessControl)
+│   ├── ruleValidator.test.js         # }
+│   ├── libAccess.test.js             # }
+│   ├── openRedirect.test.js          # 35 test
+│   └── logger.test.js                # 13 test
+└── integration/                      # 5 file, 140 test
+    ├── httpsDiagnostics.test.js
+    ├── httpsServer.test.js
+    ├── pluginLoading.test.js
+    ├── globalPrefix.test.js
+    ├── hideExtension.test.js
+    └── wwwFilesystem.test.js
 ```
 
-**Totale: 578 test**
+**Totale: 34 file, 1133 test**
 
 ### Eseguire i test
 
@@ -4716,11 +4833,33 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2026-03-19
-**Version:** 2.5.0
+**Last Updated:** 2026-03-22
+**Version:** 2.6.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v2.6.0 (2026-03-22): **PROJECT REVIEW** - Completed phases 7-9 of project review action plan. Key changes:
+  - **Plugin system robustness (Phase 7):**
+    - Directory name validation in pluginSys (defense-in-depth against path traversal) — `a512eec`
+    - Confirmed fail-fast error handling (Solution A) for plugin loading errors
+    - Added `getSharedObject(providerPluginName, callerName)` method to pluginSys — `7e6d0f3`
+      - On-demand pull mechanism (complements existing push via `setSharedObject`)
+      - Optional `callerName` for per-consumer customized objects
+      - Returns `null` for non-existent or non-sharing plugins
+  - **Test verification (Phase 8):**
+    - All 8 task areas already covered by existing tests
+    - Verified 34 test files, 1133 tests — all passing
+  - **Documentation updates (Phase 9):**
+    - Updated test listing with complete file tree (578 → 1133 tests, 34 files)
+    - Documented `getSharedObject()` API in Inter-Plugin Communication section
+    - Added XSS prevention guide for EJS templates (defense-in-depth strategy)
+    - Added Open Redirect prevention pattern
+    - Documented `escapeHtml` utilities (server-side and client-side)
+    - Documented EJS tag rules (`<%= %>` vs `<%- %>`) and JS variable pattern
+  - **Files Modified:**
+    - `/core/pluginSys.js` — Added `getSharedObject()` method
+    - `/CLAUDE.md` — Updated test counts, added security docs, updated changelog
+    - `/PROJECT_REVIEW_ACTION_PLAN.md` — Marked phases 7, 8, 9 as completed
 - v2.5.0 (2026-03-19): **DOCUMENTATION + TESTS** - adminBootstrapNavbar plugin tests and documentation. Key changes:
   - **Unit tests added (3 files, 131 tests):**
     - `navbarValidator.test.js` (63 tests) — JSON5 parsing, structure validation, settings, items, dropdowns, visibility, internal links, role validation

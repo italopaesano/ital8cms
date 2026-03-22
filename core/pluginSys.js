@@ -36,7 +36,7 @@ class pluginSys{
       try {
         //console.log(pluginConfig);
         const pluginConfig = loadJson5(path.join(__dirname, '..', 'plugins', pluginName, 'pluginConfig.json5'));
-        const plugin = require(`../plugins/${pluginName}/main.js`);//
+        const plugin = require(path.join(__dirname, '..', 'plugins', pluginName, 'main.js'));
 
         // Aggiungi metadata al plugin object per uso futuro
         plugin.pluginName = pluginName;
@@ -157,7 +157,18 @@ class pluginSys{
     // adesso leggo tutti i file della cartella plugins e ciclo per attivari e caricare quelli per essere caricati
     const baseDir =  path.join(__dirname, '..', 'plugins' ) ;//ottengo ilpercorso della directory plugins
     let Afiles = fs.readdirSync( baseDir );// gli dico di leggere il contenuto della directori plugins e metterloin un arra ps linux non distingue fra file e directori sono tutti fil eper lui
-    Afiles = Afiles.filter(file => fs.statSync(baseDir + '/' +file).isDirectory())// prendo solo i "file" che in realtà sono directory
+    Afiles = Afiles.filter(file => fs.statSync(path.join(baseDir, file)).isDirectory())// prendo solo i "file" che in realtà sono directory
+
+    // Validazione nomi directory plugin (defense-in-depth)
+    // I nomi provengono da readdirSync quindi sono directory reali, ma per sicurezza
+    // escludiamo nomi che potrebbero causare path traversal o comportamenti imprevisti
+    Afiles = Afiles.filter(dirName => {
+      if (dirName.includes('..') || dirName.includes('/') || dirName.includes('\\')) {
+        logger.warn('pluginSys', `Directory plugin ignorata per nome non valido: "${dirName}"`);
+        return false;
+      }
+      return true;
+    });
 
     const pluginsVersionMap = new Map();// mappa che conter le coppie nomePlugin -> Versione di tutti i plugin caricati o meno
 
@@ -185,7 +196,9 @@ class pluginSys{
               }
 
               // Ottieni la versione installata dal package.json del modulo
-              const modulePackage = require(modulePackagePath);
+              // Usa fs.readFileSync invece di require() perché alcuni moduli (es. ejs v4+)
+              // usano il campo "exports" in package.json che blocca require('./package.json')
+              const modulePackage = JSON.parse(fs.readFileSync(modulePackagePath, 'utf8'));
               const installedVersion = modulePackage.version;
 
               // Verifica compatibilità versione con semver
@@ -677,6 +690,22 @@ class pluginSys{
    */
   getPlugin(pluginName) {
     return this.#activePlugins.get(pluginName) || null;
+  }
+
+  /**
+   * Restituisce l'oggetto condiviso di un plugin provider chiamando getObjectToShareToOthersPlugin() on-demand.
+   * Se callerName è specificato, il provider può personalizzare l'oggetto restituito per quel consumer.
+   * Se callerName è omesso (undefined), il provider restituisce l'oggetto generico.
+   * @param {string} providerPluginName - Nome del plugin che espone l'oggetto condiviso
+   * @param {string} [callerName] - Nome opzionale del plugin richiedente (per oggetti personalizzati)
+   * @returns {object|null} - Oggetto condiviso o null se plugin non attivo o non espone oggetti
+   */
+  getSharedObject(providerPluginName, callerName) {
+    const provider = this.#activePlugins.get(providerPluginName);
+    if (!provider || !provider.getObjectToShareToOthersPlugin) {
+      return null;
+    }
+    return provider.getObjectToShareToOthersPlugin(callerName) || null;
   }
 
 }
