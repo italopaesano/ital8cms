@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const json5 = require('json5');
 
-const { TEST_PASSWORD, TEST_USERS } = require('./testConstants');
+const { TEST_PASSWORD, TEST_USERS, TEST_WWW_PATH } = require('./testConstants');
 
 const USER_ACCOUNT_PATH = path.join(__dirname, '../../plugins/adminUsers/userAccount.json5');
 const CONFIG_PATH = path.join(__dirname, '../../ital8Config.json5');
@@ -27,9 +27,11 @@ module.exports = async function globalSetup() {
   const configData = json5.parse(originalConfigContent);
   configData.activeTheme = 'themeForTesting';
   configData.adminActiveTheme = 'themeForTestingAdmin';
+  configData.wwwPath = TEST_WWW_PATH;
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(configData, null, 2), 'utf8');
 
   console.log('[Test Setup] Themes set to themeForTesting / themeForTestingAdmin');
+  console.log(`[Test Setup] wwwPath overridden to ${TEST_WWW_PATH}`);
   console.log(`[Test Setup] Config backup saved to ${configBackupPath}`);
 
   // ── Aggiungi utenti di test ──
