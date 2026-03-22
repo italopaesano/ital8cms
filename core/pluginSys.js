@@ -14,6 +14,7 @@ class pluginSys{
   #objectToShareToWebPages = {};// variabile che conterà gli ogetti restituiti dai vari plugin che saranno messi a dispozione del motore ejs e degli altri moduli
   #activePlugins = new Map();// Mappa che conterrà i plugin attivi
   #pluginsToActive = new Map();// plugin da attivare non ancora attivati perchè bisogna controllare le dipendenze
+  #sharedObjectsRegistry = new Map();// Registro centralizzato degli oggetti condivisi fra plugin (chiave: pluginName, valore: oggetto generico)
   #themeSys = null;// riferimento al sistema dei temi (impostato dopo l'inizializzazione)
   #ital8Conf = null;// configurazione principale del sistema (per whitelist funzioni globali)
 
@@ -59,6 +60,14 @@ class pluginSys{
             });
           }// if(plugin0.getObjectToShareToOthersPlugin){/
         });// this.#activePlugins.forEach( ( nomePlugin0, plugin0 ) => {
+
+        // Aggiorno il registro centralizzato degli oggetti condivisi
+        // Ogni plugin che espone getObjectToShareToOthersPlugin viene registrato con forPlugin=undefined (generico)
+        this.#activePlugins.forEach( ( pluginObj, pluginObjName ) => {
+          if (pluginObj.getObjectToShareToOthersPlugin) {
+            this.#sharedObjectsRegistry.set(pluginObjName, pluginObj.getObjectToShareToOthersPlugin(undefined));
+          }
+        });
 
         if( pluginConfig.isInstalled == 0 ){// allora il plugin è attivo ma non installto quindi bisogna istallarlo
           try {
@@ -690,6 +699,17 @@ class pluginSys{
    */
   getPlugin(pluginName) {
     return this.#activePlugins.get(pluginName) || null;
+  }
+
+  /**
+   * Restituisce l'oggetto condiviso generico di un plugin (forPlugin=undefined)
+   * Utilizza il registro centralizzato popolato durante la fase di sharing nel costruttore.
+   * Per ottenere oggetti personalizzati per-consumer, usare il meccanismo push (setSharedObject).
+   * @param {string} pluginName - Nome del plugin provider
+   * @returns {object|null} - Oggetto condiviso generico o null se non disponibile
+   */
+  getSharedObject(pluginName) {
+    return this.#sharedObjectsRegistry.get(pluginName) || null;
   }
 
 }
