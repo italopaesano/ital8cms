@@ -67,6 +67,11 @@ const URLS = {
   accessDenied: '/pluginPages/adminAccessControl/access-denied.ejs'
 };
 
+// Porta HTTP dedicata per i test E2E standard (evita conflitti con server di sviluppo su 3000)
+// Il globalSetup sovrascrive httpPort in ital8Config.json5 con questo valore.
+// Playwright si connette a questa porta per eseguire i test.
+const E2E_TEST_HTTP_PORT = 19400;
+
 // Constants for globalPrefix E2E tests (used by playwright.globalPrefix.config.js and globalPrefixSetup.js)
 const GLOBAL_PREFIX_TEST = {
   prefix: '/testprefix',
@@ -83,6 +88,7 @@ module.exports = {
   TEST_USER_PREFIX,
   TEST_USERS,
   URLS,
+  E2E_TEST_HTTP_PORT,
   GLOBAL_PREFIX_TEST,
   TEST_WWW_PATH
 };
