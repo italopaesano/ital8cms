@@ -40,7 +40,7 @@ const json5 = require('json5');
 
 const PROJECT_ROOT  = path.join(__dirname, '../..');
 const CONFIG_PATH   = path.join(PROJECT_ROOT, 'ital8Config.json5');
-const CERTS_DIR     = path.join(__dirname, '../fixtures/certs');
+const CERTS_DIR     = path.join(__dirname, '../certs');
 const TEST_HTTP_PORT  = 19000;
 const TEST_HTTPS_PORT = 19443;
 
@@ -85,7 +85,7 @@ function restoreConfig(rawOriginal) {
 
 /**
  * Genera certificati self-signed per i test HTTPS (validi 1 giorno).
- * Crea la directory tests/fixtures/certs/ se non esiste.
+ * Crea la directory tests/certs/ se non esiste.
  * @returns {{ certPath: string, keyPath: string }}
  */
 function ensureTestCerts() {

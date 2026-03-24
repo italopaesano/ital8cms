@@ -22,7 +22,8 @@ tests/
 │   ├── admin.spec.js           # Test admin panel
 │   ├── auth.spec.js            # Test autenticazione
 │   └── api.spec.js             # Test API endpoints
-└── fixtures/                   # Dati di test
+├── www/                        # Directory www dedicata ai test (isolata da /www/ di produzione)
+└── certs/                      # Certificati di test per HTTPS
 ```
 
 ## Comandi Disponibili

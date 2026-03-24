@@ -4527,17 +4527,19 @@ tests/integration/httpsDiagnostics.test.js
     • riepilogo configurazione finale (informativo)
 ```
 
-**Porte riservate per i test (Fase 4):**
+**Porte riservate per i test:**
 
-| Porta | Uso |
-|-------|-----|
-| `19100` | HTTP di test (evita conflitti con porta 3000 di produzione) |
-| `19200` | TLS isolato di Fase 3 |
-| `19443` | HTTPS di test (evita conflitti con porta 3443 di produzione) |
+| Porta | Contesto | Uso |
+|-------|----------|-----|
+| `19100` | Jest — httpsDiagnostics Fase 4 | HTTP di test (evita conflitti con porta 3000 di produzione) |
+| `19200` | Jest — httpsDiagnostics Fase 3 | TLS isolato |
+| `19300` | Playwright — globalPrefix E2E | HTTP per test con `globalPrefix` non vuoto |
+| `19400` | Playwright — E2E standard | HTTP per test E2E standard (porta dedicata, non collide con server di sviluppo) |
+| `19443` | Jest — httpsDiagnostics Fase 4 | HTTPS di test (evita conflitti con porta 3443 di produzione) |
 
 ### Isolamento Test E2E dalla directory www/ di produzione
 
-**REGOLA CRITICA:** I test E2E **NON devono mai dipendere** dai file presenti nella directory `/www/` di produzione. Tutti i file necessari ai test devono essere nella directory dedicata `/tests/fixtures/www/`.
+**REGOLA CRITICA:** I test E2E **NON devono mai dipendere** dai file presenti nella directory `/www/` di produzione. Tutti i file necessari ai test devono essere nella directory dedicata `/tests/www/`.
 
 **Motivazione:**
 - ✅ La directory `/www/` è l'area di lavoro del developer in produzione — può cambiare liberamente
@@ -4548,7 +4550,7 @@ tests/integration/httpsDiagnostics.test.js
 **Architettura:**
 
 ```
-tests/fixtures/www/           ← Directory www dedicata ai test
+tests/www/                    ← Directory www dedicata ai test
 ├── index.ejs                 ← Homepage di test
 ├── hello_word.ejs            ← Pagina di test
 ├── i18n-test.ejs             ← Test internazionalizzazione
@@ -4563,35 +4565,69 @@ tests/fixtures/www/           ← Directory www dedicata ai test
     └── index.ejs
 ```
 
-**Come funziona l'override:**
+**Come funziona l'isolamento completo:**
 
-Il `globalSetup.js` (e `globalPrefixSetup.js`) sovrascrivono `wwwPath` in `ital8Config.json5` prima dell'avvio del server di test:
-
-```javascript
-const { TEST_WWW_PATH } = require('./testConstants');
-
-// In globalSetup.js
-configData.wwwPath = TEST_WWW_PATH;  // '/tests/fixtures/www'
-```
-
-Il file originale viene ripristinato dal `globalTeardown.js` tramite il meccanismo di backup/restore.
-
-**Costante centralizzata:**
-
-Il path della directory www di test è definito in `testConstants.js`:
+Il `globalSetup.js` sovrascrive `ital8Config.json5` **prima** dell'avvio del server di test, applicando 4 override:
 
 ```javascript
-const TEST_WWW_PATH = '/tests/fixtures/www';
+const { TEST_WWW_PATH, E2E_TEST_HTTP_PORT } = require('./testConstants');
+
+// In globalSetup.js — override COMPLETO della config per i test E2E
+configData.wwwPath = TEST_WWW_PATH;              // '/tests/www' (isolamento da /www/)
+configData.httpPort = E2E_TEST_HTTP_PORT;         // 19400 (evita conflitti con server dev su 3000)
+configData.activeTheme = 'themeForTesting';       // Tema di test dedicato
+configData.adminActiveTheme = 'themeForTestingAdmin';
+configData.https.enabled = false;                 // HTTPS disabilitato (test verificano routing, non TLS)
 ```
 
-**Quando aggiungere nuovi file a tests/fixtures/www/:**
+**Perché la porta dedicata (19400) è fondamentale:**
+
+La directory `/www/` di produzione **NON contiene `index.ejs`** (il file si chiama `__index.ejs`), mentre `/tests/www/` contiene `index.ejs`. Se il server E2E riutilizzasse un server di sviluppo già attivo sulla porta 3000 (che usa `/www/`), i test homepage fallirebbero con:
+- `GET /` → "Index of /" (directory listing, nessun `index.ejs` trovato)
+- `GET /index.ejs` → 404
+
+La porta dedicata 19400 + `reuseExistingServer: false` in `playwright.config.js` garantiscono che il server E2E parta sempre con la config di test modificata.
+
+**Il flusso completo:**
+
+```
+npm test
+  ├─ jest (unit + integration) — usa ital8Config.json5 originale
+  │   └─ tests/setup.js ripristina config a versione git tra i test
+  │
+  └─ npx playwright test (E2E)
+       ├─ 1. globalSetup.js:
+       │     ├─ Backup ital8Config.json5 → .test-bak
+       │     ├─ Override: wwwPath, httpPort, themes, HTTPS off
+       │     ├─ Backup userAccount.json5 → .test-bak
+       │     └─ Aggiunta 4 utenti di test
+       │
+       ├─ 2. Server avviato: node index.js (porta 19400, www di test)
+       │
+       ├─ 3. Test E2E eseguiti su http://localhost:19400
+       │
+       └─ 4. globalTeardown.js:
+             ├─ Ripristino ital8Config.json5 da backup
+             └─ Ripristino userAccount.json5 da backup
+```
+
+Il `globalPrefixSetup.js` applica gli stessi override (compreso `wwwPath = TEST_WWW_PATH`) più `globalPrefix` e `httpPort = 19300`.
+
+**Costanti centralizzate in `testConstants.js`:**
+
+```javascript
+const TEST_WWW_PATH = '/tests/www';    // Directory www di test
+const E2E_TEST_HTTP_PORT = 19400;                // Porta HTTP dedicata E2E
+```
+
+**Quando aggiungere nuovi file a tests/www/:**
 
 Se un nuovo test E2E necessita di una pagina web specifica:
-1. Creare il file EJS in `tests/fixtures/www/` (NON in `/www/`)
+1. Creare il file EJS in `tests/www/` (NON in `/www/`)
 2. Aggiornare questa documentazione se la struttura cambia significativamente
 3. Verificare che il file segua le convenzioni dei template (inclusione dei partial del tema, ecc.)
 
-**Quando NON servono file in tests/fixtures/www/:**
+**Quando NON servono file in tests/www/:**
 
 I seguenti path sono serviti da altre directory e NON necessitano di file nella www di test:
 - `/api/*` → serviti dai route handler dei plugin
@@ -4611,7 +4647,7 @@ tests/unit/myPlugin/
 **Convenzioni:**
 - Unit test: testano funzioni pure esportate dal modulo (`module.exports`)
 - Integration test: testano comportamento end-to-end (spawn server, richieste HTTP reali)
-- E2E test: usano Playwright, serviti dalla directory `tests/fixtures/www/` (MAI dalla `/www/` di produzione)
+- E2E test: usano Playwright, serviti dalla directory `tests/www/` (MAI dalla `/www/` di produzione)
 - Ogni test deve essere indipendente e non modificare file permanentemente
 
 ## Deployment Guidelines
