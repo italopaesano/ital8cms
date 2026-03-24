@@ -19,7 +19,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const wwwDir = path.join(__dirname, '..', 'fixtures', 'www');
+const wwwDir = path.join(__dirname, '..', 'www');
 
 /**
  * Replica esatta di isFileOrSymlinkToFile da koa-classic-server v2.6.1

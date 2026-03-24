@@ -39,7 +39,7 @@ module.exports = async function globalPrefixSetup() {
     config.https.enabled = false;
   }
 
-  // Override wwwPath to use test fixtures (isolation from production www/)
+  // Override wwwPath to use test www directory (isolation from production www/)
   config.wwwPath = TEST_WWW_PATH;
 
   // 3. Write modified config

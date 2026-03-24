@@ -4,7 +4,7 @@
  * Eseguito PRIMA dell'avvio del server e dei test E2E.
  *
  * 1. Override ital8Config.json5:
- *    - wwwPath → /tests/fixtures/www (isolamento da /www/ di produzione)
+ *    - wwwPath → /tests/www (isolamento da /www/ di produzione)
  *    - httpPort → porta dedicata E2E (evita conflitti con server di sviluppo)
  *    - HTTPS disabilitato (i test E2E verificano routing, non TLS)
  *    - Temi di test (themeForTesting / themeForTestingAdmin)

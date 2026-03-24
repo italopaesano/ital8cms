@@ -80,8 +80,8 @@ const GLOBAL_PREFIX_TEST = {
 
 // Path alla directory www dedicata ai test (relativa alla root del progetto)
 // I test E2E NON devono mai dipendere dai file in /www/ di produzione.
-// Tutti i file necessari ai test devono essere in /tests/fixtures/www/
-const TEST_WWW_PATH = '/tests/fixtures/www';
+// Tutti i file necessari ai test devono essere in /tests/www/
+const TEST_WWW_PATH = '/tests/www';
 
 module.exports = {
   TEST_PASSWORD,
