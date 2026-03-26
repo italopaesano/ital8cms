@@ -72,39 +72,44 @@ module.exports = {
 
   /**
    * Hook per iniettare contenuto nel <head> delle pagine.
+   * Restituisce una Map come richiesto dal sistema hookPage di pluginSys.
    */
-  getHooksPage(section, passData, pluginSys, pathPluginFolder) {
-    if (section !== 'head') return '';
+  getHooksPage() {
+    const hookMap = new Map();
 
-    // In debug mode, rileggi seoPages.json5 ad ogni richiesta
-    if (this.ital8Conf && this.ital8Conf.debugMode >= 1) {
-      this.seoPages = this._loadSeoPages();
-    }
-
-    const ctx = passData.ctx;
-    let tags = [];
-
-    // ── CONTESTO ADMIN → noindex automatico ──
-    if (passData.isAdminContext) {
-      if (this.config.enableMetaTags) {
-        tags.push('<meta name="robots" content="noindex, nofollow">');
+    hookMap.set('head', (passData) => {
+      // In debug mode, rileggi seoPages.json5 ad ogni richiesta
+      if (this.ital8Conf && this.ital8Conf.debugMode >= 1) {
+        this.seoPages = this._loadSeoPages();
       }
+
+      const ctx = passData.ctx;
+      let tags = [];
+
+      // ── CONTESTO ADMIN → noindex automatico ──
+      if (passData.isAdminContext) {
+        if (this.config.enableMetaTags) {
+          tags.push('<meta name="robots" content="noindex, nofollow">');
+        }
+        return tags.join('\n    ');
+      }
+
+      // ── CONTESTO PUBBLICO → regole SEO complete ──
+      // Trova la regola matchante per la pagina corrente
+      const pageRule = this._findPageRule(ctx.path);
+
+      // Genera meta tags (description, keywords, robots, OG, Twitter, canonical)
+      const metaHtml = generateMetaTags(pageRule, passData, this.config);
+      if (metaHtml) tags.push(metaHtml);
+
+      // Genera structured data (JSON-LD)
+      const structuredHtml = generateStructuredData(this.config);
+      if (structuredHtml) tags.push(structuredHtml);
+
       return tags.join('\n    ');
-    }
+    });
 
-    // ── CONTESTO PUBBLICO → regole SEO complete ──
-    // Trova la regola matchante per la pagina corrente
-    const pageRule = this._findPageRule(ctx.path);
-
-    // Genera meta tags (description, keywords, robots, OG, Twitter, canonical)
-    const metaHtml = generateMetaTags(pageRule, passData, this.config);
-    if (metaHtml) tags.push(metaHtml);
-
-    // Genera structured data (JSON-LD)
-    const structuredHtml = generateStructuredData(this.config);
-    if (structuredHtml) tags.push(structuredHtml);
-
-    return tags.join('\n    ');
+    return hookMap;
   },
 
   /**
