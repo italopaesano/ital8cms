@@ -313,8 +313,12 @@ function warnMissingCertificates(missingLabels, certConfPath, keyConfPath, httpP
  * @param {import('koa')} app          - Istanza Koa
  * @param {import('@koa/router')} router - Router Koa (priority middleware)
  * @param {object} ital8Conf           - Configurazione principale ital8cms
+ * @returns {Array<http.Server|https.Server>} Array dei server creati (per graceful shutdown)
  */
 function start(app, router, ital8Conf) {
+
+  // Array dei server creati, restituito al chiamante per il graceful shutdown
+  const servers = [];
 
   // Registra la route ACME challenge nel router (prioritaria su koa-classic-server)
   setupAcmeChallengeRoute(router, ital8Conf);
@@ -340,10 +344,12 @@ function start(app, router, ital8Conf) {
         ital8Conf.https.keyFile,
         ital8Conf.httpPort
       );
-      http.createServer(app.callback()).listen(ital8Conf.httpPort, () => {
+      const httpServer = http.createServer(app.callback());
+      httpServer.listen(ital8Conf.httpPort, () => {
         console.log('server started on port: ' + ital8Conf.httpPort);
       });
-      return;
+      servers.push(httpServer);
+      return servers;
     }
 
     // ── Caricamento certificati TLS ───────────────────────────────────────────
@@ -358,10 +364,12 @@ function start(app, router, ital8Conf) {
     } catch (certError) {
       console.error('[HTTPS] Errore nel caricamento dei certificati: ' + certError.message);
       console.error('[HTTPS] Fallback: avvio in HTTP puro sulla porta ' + ital8Conf.httpPort);
-      http.createServer(app.callback()).listen(ital8Conf.httpPort, () => {
+      const httpServer = http.createServer(app.callback());
+      httpServer.listen(ital8Conf.httpPort, () => {
         console.log('server started on port: ' + ital8Conf.httpPort + '  (HTTP - HTTPS fallback)');
       });
-      return;
+      servers.push(httpServer);
+      return servers;
     }
 
     // ── Analisi certificato (solo se caricato con successo) ───────────────────
@@ -372,6 +380,7 @@ function start(app, router, ital8Conf) {
     httpsServer.listen(ital8Conf.https.port, () => {
       console.log('server started on HTTPS port: ' + ital8Conf.https.port);
     });
+    servers.push(httpsServer);
 
     // ── Hot reload certificati ────────────────────────────────────────────────
     if (ital8Conf.https.hotReload && ital8Conf.https.hotReload.enabled) {
@@ -381,24 +390,31 @@ function start(app, router, ital8Conf) {
     // ── Server HTTP ───────────────────────────────────────────────────────────
     if (ital8Conf.https.AutoRedirectHttpPortToHttpsPort) {
       // Server HTTP minimale: redirect 301 → HTTPS (con gestione ACME challenge)
-      createHttpRedirectServer(ital8Conf.https.port, ital8Conf)
-        .listen(ital8Conf.httpPort, () => {
-          console.log('HTTP port ' + ital8Conf.httpPort + ' → redirect 301 to HTTPS port ' + ital8Conf.https.port);
-        });
+      const httpRedirectServer = createHttpRedirectServer(ital8Conf.https.port, ital8Conf);
+      httpRedirectServer.listen(ital8Conf.httpPort, () => {
+        console.log('HTTP port ' + ital8Conf.httpPort + ' → redirect 301 to HTTPS port ' + ital8Conf.https.port);
+      });
+      servers.push(httpRedirectServer);
     } else {
       // Server HTTP completo in parallelo all'HTTPS
-      http.createServer(app.callback()).listen(ital8Conf.httpPort, () => {
+      const httpServer = http.createServer(app.callback());
+      httpServer.listen(ital8Conf.httpPort, () => {
         console.log('server started on HTTP port: ' + ital8Conf.httpPort);
       });
+      servers.push(httpServer);
     }
 
   } else {
 
     // ── HTTPS disabilitato: HTTP puro (comportamento originale) ───────────────
-    http.createServer(app.callback()).listen(ital8Conf.httpPort, () => {
+    const httpServer = http.createServer(app.callback());
+    httpServer.listen(ital8Conf.httpPort, () => {
       console.log('server started on port: ' + ital8Conf.httpPort);
     });
+    servers.push(httpServer);
   }
+
+  return servers;
 }
 
 

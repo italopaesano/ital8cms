@@ -274,8 +274,58 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
 //   3. https.enabled = true (cert KO) → console.error + fallback a HTTP puro su httpPort
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-httpsManager.start(app, router, ital8Conf);
+const servers = httpsManager.start(app, router, ital8Conf);
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // END HTTP/HTTPS SERVER SETUP
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// GRACEFUL SHUTDOWN
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Chiude ordinatamente i server HTTP/HTTPS quando il processo riceve SIGINT o SIGTERM.
+// Se la chiusura non avviene entro shutdownTimeout (configurabile in ital8Config.json5),
+// il processo viene terminato forzatamente con process.exit(1).
+//
+// TODO: In futuro valutare l'aggiunta di una fase di cleanup dei plugin
+//       (flush dati, chiusura connessioni DB, ecc.) prima della chiusura dei server.
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const shutdownTimeout = ital8Conf.shutdownTimeout || 10000;
+let shuttingDown = false;
+
+function gracefulShutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[Shutdown] ${signal} ricevuto, chiusura server in corso...`);
+
+  const forceExit = setTimeout(() => {
+    console.log('[Shutdown] Timeout raggiunto (' + shutdownTimeout + 'ms), chiusura forzata');
+    process.exit(1);
+  }, shutdownTimeout);
+  forceExit.unref();
+
+  let closed = 0;
+  const total = servers.length;
+
+  if (total === 0) {
+    console.log('[Shutdown] Nessun server attivo, uscita immediata');
+    clearTimeout(forceExit);
+    process.exit(0);
+  }
+
+  for (const server of servers) {
+    server.close(() => {
+      closed++;
+      if (closed >= total) {
+        console.log('[Shutdown] Tutti i server chiusi correttamente');
+        clearTimeout(forceExit);
+        process.exit(0);
+      }
+    });
+  }
+}
+
+process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

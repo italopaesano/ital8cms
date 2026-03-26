@@ -25,6 +25,7 @@
 
   "debugMode": 1,
   "httpPort": 3000,
+  "shutdownTimeout": 10000, // Timeout in ms per il graceful shutdown dei server HTTP/HTTPS (default 10s, dopo scatta process.exit forzato)
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // HTTPS CONFIGURATION
