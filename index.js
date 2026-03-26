@@ -43,7 +43,7 @@ pluginSys.setThemeSys(themeSys);
 let adminSystem = null;
 if (ital8Conf.enableAdmin) {
   const AdminSystem = require('./core/admin/adminSystem');
-  adminSystem = new AdminSystem(themeSys);
+  adminSystem = new AdminSystem(themeSys, ital8Conf);
 
   // Collega PluginSys ad AdminSystem (evita dipendenza circolare)
   adminSystem.setPluginSys(pluginSys);

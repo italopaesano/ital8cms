@@ -565,7 +565,7 @@ describe('Sanitizzazione server-side: adminSystem.getMenuSections()', () => {
     });
 
     const AdminSystem = require('../../../core/admin/adminSystem');
-    const system = new AdminSystem(null); // themeSys non serve per getMenuSections
+    const system = new AdminSystem(null, {}); // themeSys e ital8Conf non servono per getMenuSections (fallback a index.ejs)
     system.pluginSys = mockPluginSys;
     // Override configManager con il nostro mock
     system.configManager = mockConfigManager;
