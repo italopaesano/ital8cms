@@ -1,0 +1,193 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
+
+<div class="container mt-4">
+  <h3 class="mb-4"><%= __({it: 'Gestione SEO', en: 'SEO Management'}, passData.ctx) %></h3>
+
+  <div class="row g-4">
+    <!-- Global Settings Card -->
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title">
+            <i class="bi bi-gear"></i>
+            <%= __({it: 'Impostazioni Globali', en: 'Global Settings'}, passData.ctx) %>
+          </h5>
+          <p class="card-text text-muted">
+            <%= __({
+              it: 'Configura identità del sito, feature toggle, meta tag predefiniti, Open Graph, Twitter Cards, structured data, sitemap e robots.txt.',
+              en: 'Configure site identity, feature toggles, default meta tags, Open Graph, Twitter Cards, structured data, sitemap and robots.txt.'
+            }, passData.ctx) %>
+          </p>
+          <a href="/<%= passData.adminPrefix %>/seoManagement/globalSettings.ejs" class="btn btn-primary">
+            <i class="bi bi-pencil-square"></i>
+            <%= __({it: 'Modifica Impostazioni', en: 'Edit Settings'}, passData.ctx) %>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Page Rules Card -->
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title">
+            <i class="bi bi-file-earmark-text"></i>
+            <%= __({it: 'Regole Per Pagina', en: 'Per-Page Rules'}, passData.ctx) %>
+          </h5>
+          <p class="card-text text-muted">
+            <%= __({
+              it: 'Definisci regole SEO specifiche per singole pagine o gruppi di pagine usando pattern URL (esatti, wildcard, regex).',
+              en: 'Define page-specific SEO rules for individual pages or page groups using URL patterns (exact, wildcard, regex).'
+            }, passData.ctx) %>
+          </p>
+          <a href="/<%= passData.adminPrefix %>/seoManagement/pageRules.ejs" class="btn btn-primary">
+            <i class="bi bi-pencil-square"></i>
+            <%= __({it: 'Modifica Regole', en: 'Edit Rules'}, passData.ctx) %>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Regeneration Card -->
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title">
+            <i class="bi bi-arrow-repeat"></i>
+            <%= __({it: 'Rigenera File', en: 'Regenerate Files'}, passData.ctx) %>
+          </h5>
+          <p class="card-text text-muted">
+            <%= __({
+              it: 'Rigenera manualmente sitemap.xml e robots.txt. Utile dopo aver modificato le impostazioni.',
+              en: 'Manually regenerate sitemap.xml and robots.txt. Useful after changing settings.'
+            }, passData.ctx) %>
+          </p>
+          <button id="btnRegenerate" class="btn btn-success">
+            <i class="bi bi-arrow-repeat"></i>
+            <%= __({it: 'Rigenera Sitemap & robots.txt', en: 'Regenerate Sitemap & robots.txt'}, passData.ctx) %>
+          </button>
+          <div id="regenerateReport" class="mt-3" style="display: none;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview Card -->
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title">
+            <i class="bi bi-eye"></i>
+            <%= __({it: 'Anteprima Meta Tag', en: 'Meta Tag Preview'}, passData.ctx) %>
+          </h5>
+          <p class="card-text text-muted">
+            <%= __({
+              it: 'Testa quali meta tag verrebbero generati per un URL specifico.',
+              en: 'Test which meta tags would be generated for a specific URL.'
+            }, passData.ctx) %>
+          </p>
+          <div class="input-group">
+            <input type="text" id="previewUrl" class="form-control" placeholder="/about.ejs" value="/">
+            <button id="btnPreview" class="btn btn-outline-info">
+              <i class="bi bi-eye"></i>
+              <%= __({it: 'Anteprima', en: 'Preview'}, passData.ctx) %>
+            </button>
+          </div>
+          <div id="previewResult" class="mt-3" style="display: none;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const apiPrefix = '<%= passData.apiPrefix %>';
+
+  // Regenerate
+  document.getElementById('btnRegenerate').addEventListener('click', async () => {
+    const btn = document.getElementById('btnRegenerate');
+    const reportDiv = document.getElementById('regenerateReport');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> ...';
+
+    try {
+      const response = await fetch(`/${apiPrefix}/adminSeo/regenerate`, { method: 'POST' });
+      const result = await response.json();
+
+      if (result.success) {
+        const r = result.report;
+        let html = '<div class="alert alert-success">';
+        if (r.sitemap) {
+          html += `<div><strong>sitemap.xml:</strong> ${r.sitemap.changed ? '<%= __({it: "Aggiornato", en: "Updated"}, passData.ctx) %>' : '<%= __({it: "Invariato", en: "Unchanged"}, passData.ctx) %>'} (${r.sitemap.pages} <%= __({it: "pagine", en: "pages"}, passData.ctx) %>)</div>`;
+        }
+        if (r.robotsTxt) {
+          html += `<div><strong>robots.txt:</strong> ${r.robotsTxt.changed ? '<%= __({it: "Aggiornato", en: "Updated"}, passData.ctx) %>' : '<%= __({it: "Invariato", en: "Unchanged"}, passData.ctx) %>'}</div>`;
+        }
+        html += '</div>';
+        reportDiv.innerHTML = html;
+      } else {
+        reportDiv.innerHTML = `<div class="alert alert-danger">${result.error}</div>`;
+      }
+      reportDiv.style.display = '';
+    } catch (err) {
+      reportDiv.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+      reportDiv.style.display = '';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> <%= __({it: "Rigenera Sitemap & robots.txt", en: "Regenerate Sitemap & robots.txt"}, passData.ctx) %>';
+    }
+  });
+
+  // Preview
+  document.getElementById('btnPreview').addEventListener('click', async () => {
+    const testUrl = document.getElementById('previewUrl').value.trim();
+    const resultDiv = document.getElementById('previewResult');
+    if (!testUrl) return;
+
+    try {
+      const response = await fetch(`/${apiPrefix}/adminSeo/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ testUrl }),
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        const p = result.preview;
+        let html = '<div class="card"><div class="card-body">';
+        if (p.matchedPattern) {
+          html += `<div class="mb-2"><strong><%= __({it: "Pattern matchato:", en: "Matched pattern:"}, passData.ctx) %></strong> <code>${escapeHtml(p.matchedPattern)}</code></div>`;
+        } else {
+          html += `<div class="mb-2 text-muted"><em><%= __({it: "Nessun pattern specifico — vengono usati i valori predefiniti", en: "No specific pattern matched — default values are used"}, passData.ctx) %></em></div>`;
+        }
+        if (p.tags.length > 0) {
+          html += '<pre class="bg-light p-2 rounded" style="font-size:0.8rem; max-height:300px; overflow:auto;">';
+          html += p.tags.map(t => escapeHtml(t)).join('\n');
+          html += '</pre>';
+        }
+        if (p.structuredData.length > 0) {
+          html += `<div class="mt-2"><strong><%= __({it: "Structured Data (JSON-LD):", en: "Structured Data (JSON-LD):"}, passData.ctx) %></strong></div>`;
+          html += '<pre class="bg-light p-2 rounded" style="font-size:0.8rem; max-height:200px; overflow:auto;">';
+          html += p.structuredData.map(t => escapeHtml(t)).join('\n');
+          html += '</pre>';
+        }
+        html += '</div></div>';
+        resultDiv.innerHTML = html;
+      } else {
+        resultDiv.innerHTML = `<div class="alert alert-danger">${result.error}</div>`;
+      }
+      resultDiv.style.display = '';
+    } catch (err) {
+      resultDiv.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+      resultDiv.style.display = '';
+    }
+  });
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+</script>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>

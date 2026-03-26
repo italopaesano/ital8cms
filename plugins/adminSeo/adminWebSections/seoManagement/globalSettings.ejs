@@ -1,0 +1,619 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
+<link rel="stylesheet" href="/<%= passData.adminPrefix %>/seoManagement/editor.css">
+
+<div class="container mt-4">
+  <!-- Breadcrumb -->
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/<%= passData.adminPrefix %>/seoManagement/index.ejs"><%= __({it: 'Gestione SEO', en: 'SEO Management'}, passData.ctx) %></a></li>
+      <li class="breadcrumb-item active"><%= __({it: 'Impostazioni Globali', en: 'Global Settings'}, passData.ctx) %></li>
+    </ol>
+  </nav>
+
+  <h3 class="mb-3"><%= __({it: 'Impostazioni SEO Globali', en: 'Global SEO Settings'}, passData.ctx) %></h3>
+
+  <!-- Alert Area -->
+  <div id="alertArea"></div>
+
+  <!-- Interface Tabs -->
+  <ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="tab-form" data-bs-toggle="tab" data-bs-target="#panel-form" type="button" role="tab">
+        <i class="bi bi-ui-checks-grid"></i> <%= __({it: 'Interfaccia Form', en: 'Form Interface'}, passData.ctx) %>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-json" data-bs-toggle="tab" data-bs-target="#panel-json" type="button" role="tab">
+        <i class="bi bi-code-slash"></i> <%= __({it: 'Editor JSON5', en: 'JSON5 Editor'}, passData.ctx) %>
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content">
+    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <!-- FORM INTERFACE -->
+    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <div class="tab-pane fade show active" id="panel-form" role="tabpanel">
+      <form id="settingsForm">
+        <!-- SITE IDENTITY -->
+        <div class="card mb-3">
+          <div class="card-header"><i class="bi bi-building"></i> <%= __({it: 'Identità del Sito', en: 'Site Identity'}, passData.ctx) %></div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label for="siteName" class="form-label"><%= __({it: 'Nome del Sito', en: 'Site Name'}, passData.ctx) %></label>
+              <input type="text" class="form-control" id="siteName" placeholder="Azienda XYZ">
+            </div>
+            <div class="mb-3">
+              <label for="siteUrl" class="form-label"><%= __({it: 'URL del Sito', en: 'Site URL'}, passData.ctx) %></label>
+              <input type="url" class="form-control" id="siteUrl" placeholder="https://www.example.com">
+            </div>
+          </div>
+        </div>
+
+        <!-- FEATURE TOGGLES -->
+        <div class="card mb-3">
+          <div class="card-header"><i class="bi bi-toggles"></i> <%= __({it: 'Funzionalità Attive', en: 'Feature Toggles'}, passData.ctx) %></div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-6">
+                <div class="form-check form-switch mb-2">
+                  <input class="form-check-input" type="checkbox" id="enableMetaTags" checked>
+                  <label class="form-check-label" for="enableMetaTags">Meta Tags (description, keywords, robots)</label>
+                </div>
+                <div class="form-check form-switch mb-2">
+                  <input class="form-check-input" type="checkbox" id="enableOpenGraph" checked>
+                  <label class="form-check-label" for="enableOpenGraph">Open Graph (og:*)</label>
+                </div>
+                <div class="form-check form-switch mb-2">
+                  <input class="form-check-input" type="checkbox" id="enableTwitterCards" checked>
+                  <label class="form-check-label" for="enableTwitterCards">Twitter Cards</label>
+                </div>
+                <div class="form-check form-switch mb-2">
+                  <input class="form-check-input" type="checkbox" id="enableCanonicalUrl" checked>
+                  <label class="form-check-label" for="enableCanonicalUrl">Canonical URL</label>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-check form-switch mb-2">
+                  <input class="form-check-input" type="checkbox" id="enableStructuredData" checked>
+                  <label class="form-check-label" for="enableStructuredData">Structured Data (JSON-LD)</label>
+                </div>
+                <div class="form-check form-switch mb-2">
+                  <input class="form-check-input" type="checkbox" id="enableSitemap" checked>
+                  <label class="form-check-label" for="enableSitemap">Sitemap (sitemap.xml)</label>
+                </div>
+                <div class="form-check form-switch mb-2">
+                  <input class="form-check-input" type="checkbox" id="enableRobotsTxt" checked>
+                  <label class="form-check-label" for="enableRobotsTxt">Robots.txt</label>
+                </div>
+                <div class="form-check form-switch mb-2">
+                  <input class="form-check-input" type="checkbox" id="canonicalCleanUrl" checked>
+                  <label class="form-check-label" for="canonicalCleanUrl"><%= __({it: 'URL canonical puliti (rimuovi .ejs)', en: 'Clean canonical URLs (remove .ejs)'}, passData.ctx) %></label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- DEFAULT VALUES -->
+        <div class="card mb-3">
+          <div class="card-header"><i class="bi bi-bookmark"></i> <%= __({it: 'Valori Predefiniti', en: 'Default Values'}, passData.ctx) %></div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label for="defaultDescription" class="form-label"><%= __({it: 'Descrizione predefinita', en: 'Default Description'}, passData.ctx) %></label>
+              <textarea class="form-control" id="defaultDescription" rows="2"></textarea>
+            </div>
+            <div class="mb-3">
+              <label for="defaultKeywords" class="form-label"><%= __({it: 'Keywords predefinite', en: 'Default Keywords'}, passData.ctx) %></label>
+              <input type="text" class="form-control" id="defaultKeywords" placeholder="keyword1, keyword2, keyword3">
+            </div>
+            <div class="row">
+              <div class="col-md-4 mb-3">
+                <label for="defaultRobots" class="form-label">Robots</label>
+                <input type="text" class="form-control" id="defaultRobots" value="index, follow">
+              </div>
+              <div class="col-md-4 mb-3">
+                <label for="defaultOgType" class="form-label">Open Graph Type</label>
+                <select class="form-select" id="defaultOgType">
+                  <option value="website">website</option>
+                  <option value="article">article</option>
+                  <option value="profile">profile</option>
+                  <option value="book">book</option>
+                </select>
+              </div>
+              <div class="col-md-4 mb-3">
+                <label for="twitterCardType" class="form-label">Twitter Card Type</label>
+                <select class="form-select" id="twitterCardType">
+                  <option value="summary_large_image">summary_large_image</option>
+                  <option value="summary">summary</option>
+                </select>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="defaultOgImage" class="form-label"><%= __({it: 'Immagine OG predefinita', en: 'Default OG Image'}, passData.ctx) %></label>
+                <input type="text" class="form-control" id="defaultOgImage" placeholder="/media/og-default.jpg">
+              </div>
+              <div class="col-md-6 mb-3">
+                <label for="twitterHandle" class="form-label">Twitter Handle</label>
+                <input type="text" class="form-control" id="twitterHandle" placeholder="@yourhandle">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STRUCTURED DATA / ORGANIZATION -->
+        <div class="card mb-3">
+          <div class="card-header"><i class="bi bi-diagram-3"></i> <%= __({it: 'Structured Data — Organization', en: 'Structured Data — Organization'}, passData.ctx) %></div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="orgName" class="form-label"><%= __({it: 'Nome Organizzazione', en: 'Organization Name'}, passData.ctx) %></label>
+                <input type="text" class="form-control" id="orgName">
+                <small class="text-muted"><%= __({it: 'Se vuoto, usa il nome del sito', en: 'If empty, uses site name'}, passData.ctx) %></small>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label for="orgUrl" class="form-label">URL</label>
+                <input type="url" class="form-control" id="orgUrl">
+                <small class="text-muted"><%= __({it: 'Se vuoto, usa URL del sito', en: 'If empty, uses site URL'}, passData.ctx) %></small>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col-md-4 mb-3">
+                <label for="orgLogo" class="form-label">Logo URL</label>
+                <input type="text" class="form-control" id="orgLogo">
+              </div>
+              <div class="col-md-4 mb-3">
+                <label for="orgContactEmail" class="form-label">Email</label>
+                <input type="email" class="form-control" id="orgContactEmail">
+              </div>
+              <div class="col-md-4 mb-3">
+                <label for="orgContactPhone" class="form-label"><%= __({it: 'Telefono', en: 'Phone'}, passData.ctx) %></label>
+                <input type="text" class="form-control" id="orgContactPhone">
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label"><%= __({it: 'Profili Social', en: 'Social Profiles'}, passData.ctx) %></label>
+              <div id="socialProfilesList" class="dynamic-list"></div>
+              <button type="button" class="btn btn-outline-secondary btn-sm mt-1" onclick="addListItem('socialProfilesList', 'https://')">
+                <i class="bi bi-plus"></i> <%= __({it: 'Aggiungi Profilo', en: 'Add Profile'}, passData.ctx) %>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- SITEMAP -->
+        <div class="card mb-3">
+          <div class="card-header"><i class="bi bi-map"></i> Sitemap</div>
+          <div class="card-body">
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" id="sitemapAutoScan" checked>
+              <label class="form-check-label" for="sitemapAutoScan"><%= __({it: 'Auto-scan wwwPath', en: 'Auto-scan wwwPath'}, passData.ctx) %></label>
+            </div>
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="sitemapDefaultChangefreq" class="form-label">Default Changefreq</label>
+                <select class="form-select" id="sitemapDefaultChangefreq">
+                  <option value="always">always</option>
+                  <option value="hourly">hourly</option>
+                  <option value="daily">daily</option>
+                  <option value="weekly">weekly</option>
+                  <option value="monthly" selected>monthly</option>
+                  <option value="yearly">yearly</option>
+                  <option value="never">never</option>
+                </select>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label for="sitemapDefaultPriority" class="form-label">Default Priority (0.0 - 1.0)</label>
+                <input type="number" class="form-control" id="sitemapDefaultPriority" min="0" max="1" step="0.1" value="0.5">
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label"><%= __({it: 'Pattern da Escludere', en: 'Exclude Patterns'}, passData.ctx) %></label>
+              <div id="sitemapExcludeList" class="dynamic-list"></div>
+              <button type="button" class="btn btn-outline-secondary btn-sm mt-1" onclick="addListItem('sitemapExcludeList', '')">
+                <i class="bi bi-plus"></i> <%= __({it: 'Aggiungi Pattern', en: 'Add Pattern'}, passData.ctx) %>
+              </button>
+            </div>
+            <div class="mb-3">
+              <label class="form-label"><%= __({it: 'Pagine Extra', en: 'Extra Pages'}, passData.ctx) %></label>
+              <div id="sitemapExtraPagesList" class="dynamic-list"></div>
+              <button type="button" class="btn btn-outline-secondary btn-sm mt-1" onclick="addExtraPage()">
+                <i class="bi bi-plus"></i> <%= __({it: 'Aggiungi Pagina', en: 'Add Page'}, passData.ctx) %>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ROBOTS.TXT -->
+        <div class="card mb-3">
+          <div class="card-header"><i class="bi bi-robot"></i> robots.txt</div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label for="robotsUserAgent" class="form-label">User-Agent</label>
+              <input type="text" class="form-control" id="robotsUserAgent" value="*">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Allow</label>
+              <div id="robotsAllowList" class="dynamic-list"></div>
+              <button type="button" class="btn btn-outline-secondary btn-sm mt-1" onclick="addListItem('robotsAllowList', '/')">
+                <i class="bi bi-plus"></i> <%= __({it: 'Aggiungi', en: 'Add'}, passData.ctx) %>
+              </button>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Disallow</label>
+              <div id="robotsDisallowList" class="dynamic-list"></div>
+              <button type="button" class="btn btn-outline-secondary btn-sm mt-1" onclick="addListItem('robotsDisallowList', '/')">
+                <i class="bi bi-plus"></i> <%= __({it: 'Aggiungi', en: 'Add'}, passData.ctx) %>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Form Action Buttons -->
+        <div class="d-flex gap-2 mb-4">
+          <button type="button" id="btnSaveForm" class="btn btn-primary">
+            <i class="bi bi-save"></i> <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %>
+          </button>
+          <a href="/<%= passData.adminPrefix %>/seoManagement/index.ejs" class="btn btn-link">
+            <%= __({it: 'Annulla', en: 'Cancel'}, passData.ctx) %>
+          </a>
+        </div>
+      </form>
+    </div>
+
+    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <!-- JSON5 EDITOR INTERFACE -->
+    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <div class="tab-pane fade" id="panel-json" role="tabpanel">
+      <div id="jsonMessages" class="messages-area mb-3"></div>
+
+      <div class="d-flex gap-2 mb-3">
+        <button type="button" id="btnValidateJson" class="btn btn-outline-info btn-sm">
+          <i class="bi bi-check-circle"></i> <%= __({it: 'Valida', en: 'Validate'}, passData.ctx) %>
+        </button>
+        <button type="button" id="btnSaveJson" class="btn btn-primary btn-sm">
+          <i class="bi bi-save"></i> <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %>
+        </button>
+        <a href="/<%= passData.adminPrefix %>/seoManagement/index.ejs" class="btn btn-link btn-sm">
+          <%= __({it: 'Annulla', en: 'Cancel'}, passData.ctx) %>
+        </a>
+      </div>
+
+      <textarea id="jsonEditor" class="seo-editor-textarea" rows="50" spellcheck="false"></textarea>
+    </div>
+  </div>
+</div>
+
+<script src="/<%= passData.adminPrefix %>/seoManagement/editor.js"></script>
+<script>
+  const apiPrefix = '<%= passData.apiPrefix %>';
+  const adminPrefix = '<%= passData.adminPrefix %>';
+
+  const i18n = {
+    saved: '<%= __({it: "Impostazioni salvate con successo.", en: "Settings saved successfully."}, passData.ctx) %>',
+    saveError: '<%= __({it: "Errore nel salvataggio.", en: "Error saving."}, passData.ctx) %>',
+    loadError: '<%= __({it: "Errore nel caricamento.", en: "Error loading."}, passData.ctx) %>',
+    validationOk: '<%= __({it: "Validazione superata.", en: "Validation passed."}, passData.ctx) %>',
+    validationFailed: '<%= __({it: "Validazione fallita.", en: "Validation failed."}, passData.ctx) %>',
+    warnings: '<%= __({it: "Warning", en: "Warnings"}, passData.ctx) %>',
+    errors: '<%= __({it: "Errori", en: "Errors"}, passData.ctx) %>',
+  };
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // DYNAMIC LIST HELPERS
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  function addListItem(containerId, defaultValue) {
+    const container = document.getElementById(containerId);
+    const row = document.createElement('div');
+    row.className = 'input-group input-group-sm mb-1';
+    row.innerHTML = `
+      <input type="text" class="form-control" value="${escapeHtml(defaultValue || '')}">
+      <button class="btn btn-outline-danger" type="button" onclick="this.parentElement.remove()">
+        <i class="bi bi-trash"></i>
+      </button>
+    `;
+    container.appendChild(row);
+  }
+
+  function getListValues(containerId) {
+    const container = document.getElementById(containerId);
+    return Array.from(container.querySelectorAll('input[type="text"]'))
+      .map(input => input.value.trim())
+      .filter(v => v.length > 0);
+  }
+
+  function setListValues(containerId, values) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    if (Array.isArray(values)) {
+      values.forEach(v => addListItem(containerId, v));
+    }
+  }
+
+  function addExtraPage() {
+    const container = document.getElementById('sitemapExtraPagesList');
+    const row = document.createElement('div');
+    row.className = 'input-group input-group-sm mb-1';
+    row.innerHTML = `
+      <input type="text" class="form-control" placeholder="URL" style="flex:3">
+      <select class="form-select" style="flex:2">
+        <option value="monthly">monthly</option>
+        <option value="always">always</option>
+        <option value="hourly">hourly</option>
+        <option value="daily">daily</option>
+        <option value="weekly">weekly</option>
+        <option value="yearly">yearly</option>
+        <option value="never">never</option>
+      </select>
+      <input type="number" class="form-control" placeholder="0.5" min="0" max="1" step="0.1" style="flex:1">
+      <button class="btn btn-outline-danger" type="button" onclick="this.parentElement.remove()">
+        <i class="bi bi-trash"></i>
+      </button>
+    `;
+    container.appendChild(row);
+  }
+
+  function getExtraPages() {
+    const container = document.getElementById('sitemapExtraPagesList');
+    const rows = container.querySelectorAll('.input-group');
+    const pages = [];
+    rows.forEach(row => {
+      const inputs = row.querySelectorAll('input');
+      const select = row.querySelector('select');
+      const url = inputs[0]?.value.trim();
+      if (url) {
+        const page = { url };
+        if (select?.value) page.changefreq = select.value;
+        const priority = parseFloat(inputs[1]?.value);
+        if (!isNaN(priority)) page.priority = priority;
+        pages.push(page);
+      }
+    });
+    return pages;
+  }
+
+  function setExtraPages(pages) {
+    const container = document.getElementById('sitemapExtraPagesList');
+    container.innerHTML = '';
+    if (!Array.isArray(pages)) return;
+    pages.forEach(page => {
+      addExtraPage();
+      const rows = container.querySelectorAll('.input-group');
+      const row = rows[rows.length - 1];
+      const inputs = row.querySelectorAll('input');
+      const select = row.querySelector('select');
+      inputs[0].value = page.url || '';
+      if (page.changefreq && select) select.value = page.changefreq;
+      if (page.priority !== undefined && inputs[1]) inputs[1].value = page.priority;
+    });
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // FORM ↔ DATA CONVERSION
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  function formToData() {
+    return {
+      siteName: document.getElementById('siteName').value,
+      siteUrl: document.getElementById('siteUrl').value,
+      enableMetaTags: document.getElementById('enableMetaTags').checked,
+      enableOpenGraph: document.getElementById('enableOpenGraph').checked,
+      enableTwitterCards: document.getElementById('enableTwitterCards').checked,
+      enableCanonicalUrl: document.getElementById('enableCanonicalUrl').checked,
+      enableStructuredData: document.getElementById('enableStructuredData').checked,
+      enableSitemap: document.getElementById('enableSitemap').checked,
+      enableRobotsTxt: document.getElementById('enableRobotsTxt').checked,
+      canonicalCleanUrl: document.getElementById('canonicalCleanUrl').checked,
+      defaultDescription: document.getElementById('defaultDescription').value,
+      defaultKeywords: document.getElementById('defaultKeywords').value,
+      defaultRobots: document.getElementById('defaultRobots').value,
+      defaultOgType: document.getElementById('defaultOgType').value,
+      defaultOgImage: document.getElementById('defaultOgImage').value,
+      twitterCardType: document.getElementById('twitterCardType').value,
+      twitterHandle: document.getElementById('twitterHandle').value,
+      organization: {
+        name: document.getElementById('orgName').value,
+        url: document.getElementById('orgUrl').value,
+        logo: document.getElementById('orgLogo').value,
+        contactEmail: document.getElementById('orgContactEmail').value,
+        contactPhone: document.getElementById('orgContactPhone').value,
+        socialProfiles: getListValues('socialProfilesList'),
+      },
+      sitemapAutoScan: document.getElementById('sitemapAutoScan').checked,
+      sitemapDefaultChangefreq: document.getElementById('sitemapDefaultChangefreq').value,
+      sitemapDefaultPriority: parseFloat(document.getElementById('sitemapDefaultPriority').value) || 0.5,
+      sitemapExclude: getListValues('sitemapExcludeList'),
+      sitemapExtraPages: getExtraPages(),
+      robotsTxtRules: {
+        userAgent: document.getElementById('robotsUserAgent').value,
+        allow: getListValues('robotsAllowList'),
+        disallow: getListValues('robotsDisallowList'),
+      },
+    };
+  }
+
+  function dataToForm(data) {
+    if (!data) return;
+    document.getElementById('siteName').value = data.siteName || '';
+    document.getElementById('siteUrl').value = data.siteUrl || '';
+    document.getElementById('enableMetaTags').checked = data.enableMetaTags !== false;
+    document.getElementById('enableOpenGraph').checked = data.enableOpenGraph !== false;
+    document.getElementById('enableTwitterCards').checked = data.enableTwitterCards !== false;
+    document.getElementById('enableCanonicalUrl').checked = data.enableCanonicalUrl !== false;
+    document.getElementById('enableStructuredData').checked = data.enableStructuredData !== false;
+    document.getElementById('enableSitemap').checked = data.enableSitemap !== false;
+    document.getElementById('enableRobotsTxt').checked = data.enableRobotsTxt !== false;
+    document.getElementById('canonicalCleanUrl').checked = data.canonicalCleanUrl !== false;
+    document.getElementById('defaultDescription').value = data.defaultDescription || '';
+    document.getElementById('defaultKeywords').value = data.defaultKeywords || '';
+    document.getElementById('defaultRobots').value = data.defaultRobots || 'index, follow';
+    document.getElementById('defaultOgType').value = data.defaultOgType || 'website';
+    document.getElementById('defaultOgImage').value = data.defaultOgImage || '';
+    document.getElementById('twitterCardType').value = data.twitterCardType || 'summary_large_image';
+    document.getElementById('twitterHandle').value = data.twitterHandle || '';
+
+    // Organization
+    const org = data.organization || {};
+    document.getElementById('orgName').value = org.name || '';
+    document.getElementById('orgUrl').value = org.url || '';
+    document.getElementById('orgLogo').value = org.logo || '';
+    document.getElementById('orgContactEmail').value = org.contactEmail || '';
+    document.getElementById('orgContactPhone').value = org.contactPhone || '';
+    setListValues('socialProfilesList', org.socialProfiles || []);
+
+    // Sitemap
+    document.getElementById('sitemapAutoScan').checked = data.sitemapAutoScan !== false;
+    document.getElementById('sitemapDefaultChangefreq').value = data.sitemapDefaultChangefreq || 'monthly';
+    document.getElementById('sitemapDefaultPriority').value = data.sitemapDefaultPriority ?? 0.5;
+    setListValues('sitemapExcludeList', data.sitemapExclude || []);
+    setExtraPages(data.sitemapExtraPages || []);
+
+    // Robots.txt
+    const robots = data.robotsTxtRules || {};
+    document.getElementById('robotsUserAgent').value = robots.userAgent || '*';
+    setListValues('robotsAllowList', robots.allow || []);
+    setListValues('robotsDisallowList', robots.disallow || []);
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // LOAD / SAVE
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  async function loadSettings() {
+    try {
+      // Load for form
+      const resp = await fetch(`/${apiPrefix}/adminSeo/load-settings`);
+      const result = await resp.json();
+      if (result.success) {
+        dataToForm(result.data);
+      } else {
+        showAlert(i18n.loadError + ': ' + result.error, 'danger');
+      }
+
+      // Load for JSON editor
+      const rawResp = await fetch(`/${apiPrefix}/adminSeo/load-settings-raw`);
+      const rawResult = await rawResp.json();
+      if (rawResult.success) {
+        document.getElementById('jsonEditor').value = rawResult.content;
+      }
+    } catch (err) {
+      showAlert(i18n.loadError + ': ' + err.message, 'danger');
+    }
+  }
+
+  // Save from form
+  document.getElementById('btnSaveForm').addEventListener('click', async () => {
+    const data = formToData();
+    try {
+      const resp = await fetch(`/${apiPrefix}/adminSeo/save-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data }),
+      });
+      const result = await resp.json();
+      if (result.success) {
+        showAlert(i18n.saved, 'success');
+        // Sync JSON editor
+        document.getElementById('jsonEditor').value = JSON.stringify(data, null, 2);
+      } else {
+        const msg = result.errors ? result.errors.join('<br>') : result.error;
+        showAlert(i18n.saveError + '<br>' + msg, 'danger');
+      }
+    } catch (err) {
+      showAlert(i18n.saveError + ': ' + err.message, 'danger');
+    }
+  });
+
+  // Validate JSON
+  document.getElementById('btnValidateJson').addEventListener('click', async () => {
+    const content = document.getElementById('jsonEditor').value;
+    const messagesDiv = document.getElementById('jsonMessages');
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch (err) {
+      messagesDiv.innerHTML = `<div class="message-item message-error">${i18n.errors}: JSON syntax error — ${escapeHtml(err.message)}</div>`;
+      return;
+    }
+
+    try {
+      const resp = await fetch(`/${apiPrefix}/adminSeo/validate-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: parsed }),
+      });
+      const result = await resp.json();
+      let html = '';
+      if (result.errors.length > 0) {
+        html += result.errors.map(e => `<div class="message-item message-error">${escapeHtml(e)}</div>`).join('');
+      }
+      if (result.warnings.length > 0) {
+        html += result.warnings.map(w => `<div class="message-item message-warning">${escapeHtml(w)}</div>`).join('');
+      }
+      if (result.valid && result.warnings.length === 0) {
+        html = `<div class="message-item message-success">${i18n.validationOk}</div>`;
+      }
+      messagesDiv.innerHTML = html;
+    } catch (err) {
+      messagesDiv.innerHTML = `<div class="message-item message-error">${escapeHtml(err.message)}</div>`;
+    }
+  });
+
+  // Save JSON
+  document.getElementById('btnSaveJson').addEventListener('click', async () => {
+    const content = document.getElementById('jsonEditor').value;
+    const messagesDiv = document.getElementById('jsonMessages');
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch (err) {
+      messagesDiv.innerHTML = `<div class="message-item message-error">JSON syntax error: ${escapeHtml(err.message)}</div>`;
+      return;
+    }
+
+    try {
+      const resp = await fetch(`/${apiPrefix}/adminSeo/save-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: parsed }),
+      });
+      const result = await resp.json();
+      if (result.success) {
+        showAlert(i18n.saved, 'success');
+        // Sync form
+        dataToForm(parsed);
+        messagesDiv.innerHTML = '';
+      } else {
+        const msg = result.errors ? result.errors.join('<br>') : result.error;
+        messagesDiv.innerHTML = `<div class="message-item message-error">${msg}</div>`;
+      }
+    } catch (err) {
+      messagesDiv.innerHTML = `<div class="message-item message-error">${escapeHtml(err.message)}</div>`;
+    }
+  });
+
+  // Sync between tabs: when switching to JSON tab, update JSON from form
+  document.getElementById('tab-json').addEventListener('shown.bs.tab', () => {
+    const data = formToData();
+    document.getElementById('jsonEditor').value = JSON.stringify(data, null, 2);
+  });
+
+  // Sync between tabs: when switching to form tab, update form from JSON
+  document.getElementById('tab-form').addEventListener('shown.bs.tab', () => {
+    try {
+      const content = document.getElementById('jsonEditor').value;
+      const parsed = JSON.parse(content);
+      dataToForm(parsed);
+    } catch (e) {
+      // If JSON is invalid, don't sync
+    }
+  });
+
+  // Load on page load
+  document.addEventListener('DOMContentLoaded', loadSettings);
+</script>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>
