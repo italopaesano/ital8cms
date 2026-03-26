@@ -5076,6 +5076,7 @@ Based on the codebase analysis, consider these enhancements:
 8. **Validation:** Request validation library (Joi, Yup)
 9. **Build Process:** Frontend asset bundling (webpack, esbuild)
 10. **Internationalization:** i18n support for multiple languages
+11. **Plugin Cleanup on Shutdown:** Il graceful shutdown attuale (`index.js`) chiude solo i server HTTP/HTTPS. In futuro valutare l'aggiunta di una fase di cleanup dei plugin prima della chiusura dei server (flush dati su disco, chiusura connessioni DB, rilascio risorse, ecc.). Attualmente ogni plugin gestisce il proprio cleanup in modo indipendente (es. `urlRedirect/hitCounter.js` ha i propri handler `SIGINT`/`SIGTERM`), ma un sistema centralizzato coordinato da `pluginSys` sarebbe più robusto e garantirebbe un ordine di chiusura corretto.
 
 ## Quick Reference Commands
 
