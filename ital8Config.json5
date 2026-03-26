@@ -136,6 +136,15 @@
     }
   },
 
+  // File indice per ogni istanza di koa-classic-server
+  // Definisce quali nomi di file vengono trattati come indici di directory
+  // Usato anche dal plugin seo per mappare i file indice agli URL di directory nel sitemap
+  "indexFiles": {
+    "wwwPath":           ["index.ejs"],
+    "pluginPagesPrefix": ["index.ejs"],
+    "adminPrefix":       ["index.ejs"]
+  },
+
   "globalFunctionsWhitelist": {
     "__": {
       "plugin": "simpleI18n",
