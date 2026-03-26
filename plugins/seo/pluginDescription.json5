@@ -1,0 +1,9 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "name": "seo",
+  "version": "1.0.0",
+  "description": "SEO management plugin: meta tags, Open Graph, Twitter Cards, canonical URLs, structured data (JSON-LD), sitemap.xml and robots.txt generation",
+  "author": "Italo Paesano",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC"
+}

@@ -11,7 +11,7 @@
  * - Cache delle regole (reload al boot + on save)
  */
 
-const PatternMatcher = require('./patternMatcher');
+const PatternMatcher = require('../../../core/patternMatcher');
 const loadJson5 = require('../../../core/loadJson5');
 const path = require('path');
 

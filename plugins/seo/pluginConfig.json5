@@ -1,0 +1,94 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "active": 1,
+  "isInstalled": 1,
+  "weight": 5,
+  "dependency": {},
+  "nodeModuleDependency": {},
+  "custom": {
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // SITE IDENTITY
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    "siteName": "",                     // Nome del sito (es. "Azienda XYZ")
+    "siteUrl": "",                      // URL base completo (es. "https://www.example.com")
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // FEATURE TOGGLE
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Ogni funzionalità può essere disattivata individualmente.
+    // Se disattivata, il plugin non inietta il relativo markup nel <head>.
+    // Utile se l'utente preferisce gestire manualmente i meta tag nei template.
+    "enableMetaTags": true,             // <meta name="description">, <meta name="keywords">, <meta name="robots">
+    "enableOpenGraph": true,            // <meta property="og:*">
+    "enableTwitterCards": true,         // <meta name="twitter:*">
+    "enableCanonicalUrl": true,         // <link rel="canonical">
+    "enableStructuredData": true,       // <script type="application/ld+json"> (Organization + WebSite)
+    "enableSitemap": true,              // Genera il file sitemap.xml in wwwPath
+    "enableRobotsTxt": true,            // Genera il file robots.txt in wwwPath
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // CANONICAL URL
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Se true, rimuove l'estensione (.ejs) dall'URL canonical.
+    // Es. /about.ejs → /about
+    // Attivare quando hideExtension è attivo in ital8Config.json5 o si vuole
+    // comunque presentare URL puliti ai motori di ricerca.
+    "canonicalCleanUrl": true,
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // DEFAULT VALUES
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Valori usati per le pagine che NON hanno una entry specifica in seoPages.json5.
+    // Se una pagina ha la sua entry, i valori in seoPages.json5 hanno la precedenza.
+    "defaultDescription": "",
+    "defaultKeywords": "",
+    "defaultRobots": "index, follow",
+    "defaultOgType": "website",
+    "defaultOgImage": "",               // Path relativo (es. "/media/og-default.jpg")
+    "twitterCardType": "summary_large_image",  // "summary" | "summary_large_image"
+    "twitterHandle": "",                // Handle Twitter/X (es. "@aziendaxyz")
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // STRUCTURED DATA (JSON-LD)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Dati strutturati iniettati come <script type="application/ld+json"> nel <head>.
+    // Schema supportati nella v1: Organization e WebSite.
+    // Futuri: BreadcrumbList, LocalBusiness, Article, Product, FAQ.
+    "organization": {
+      "name": "",                       // Nome organizzazione (usa siteName se vuoto)
+      "url": "",                        // URL organizzazione (usa siteUrl se vuoto)
+      "logo": "",                       // URL logo (es. "https://www.example.com/logo.png")
+      "contactEmail": "",               // Email di contatto
+      "contactPhone": "",               // Telefono di contatto
+      "socialProfiles": []              // Array URL profili social
+                                        // Es. ["https://facebook.com/aziendaxyz", "https://x.com/aziendaxyz"]
+    },
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // SITEMAP
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // La sitemap viene generata come file fisico in wwwPath (es. /www/sitemap.xml).
+    // Auto-scan: scansiona SOLO la directory wwwPath per file .ejs.
+    // Le pagine admin, pluginPages e API sono escluse per default.
+    "sitemapAutoScan": true,            // Scansiona automaticamente wwwPath
+    "sitemapDefaultChangefreq": "monthly",  // Valori: always, hourly, daily, weekly, monthly, yearly, never
+    "sitemapDefaultPriority": 0.5,      // Valore da 0.0 a 1.0
+    "sitemapExclude": [                 // Pattern da escludere dall'auto-scan (relativi a wwwPath)
+      "**/*test*",                      // Escludi pagine di test
+      "**/navbarExamples/**",           // Escludi esempi navbar
+    ],
+    "sitemapExtraPages": [],            // Pagine aggiuntive non rilevabili dall'auto-scan
+                                        // Formato: [{ "url": "/custom-route", "changefreq": "weekly", "priority": 0.8 }]
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // ROBOTS.TXT
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Il file robots.txt viene generato come file fisico in wwwPath (es. /www/robots.txt).
+    // Il link alla sitemap viene aggiunto automaticamente se enableSitemap è true.
+    "robotsTxtRules": {
+      "userAgent": "*",
+      "allow": ["/"],
+      "disallow": ["/admin/", "/api/", "/pluginPages/"]
+    }
+  }
+}

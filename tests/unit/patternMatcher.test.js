@@ -5,7 +5,7 @@
  * Copre: match esatto, wildcard singolo, wildcard ricorsivo, regex, priorità.
  */
 
-const PatternMatcher = require('../../plugins/adminAccessControl/lib/patternMatcher');
+const PatternMatcher = require('../../core/patternMatcher');
 
 describe('PatternMatcher', () => {
   let matcher;
