@@ -1,11 +1,11 @@
 /**
- * PATTERN MATCHER
+ * PATTERN MATCHER — Utility di sistema per URL pattern matching
  *
- * Sistema di pattern matching per URL con supporto per:
+ * Modulo condiviso del core di ital8cms per il matching di URL con supporto per:
  * - Match esatto: "/dashboard.ejs"
- * - Wildcard singolo: "/content/*.ejs" (un livello)
- * - Wildcard ricorsivo: "/admin/**" (tutti i livelli)
- * - Regex: "regex:/api/user/\\d+" (prefisso esplicito)
+ * - Wildcard singolo: "/content/*.ejs" (un livello, non matcha '/')
+ * - Wildcard ricorsivo: "/admin/**" (tutti i livelli, matcha anche '/')
+ * - Regex: "regex:/api/user/\\d+" (prefisso esplicito "regex:")
  *
  * PRIORITÀ AUTOMATICA (da alta a bassa):
  * 1. Match esatto (priority: 1000)
@@ -14,6 +14,29 @@
  * 4. Wildcard ricorsivo (priority: 100)
  *
  * Quando multiple regole matchano lo stesso URL, vince quella con priorità più alta.
+ * Se una regola specifica un campo "priority" esplicito, quello prevale sulla priorità automatica.
+ *
+ * UTILIZZO:
+ *
+ *   const PatternMatcher = require('../core/patternMatcher');
+ *   const matcher = new PatternMatcher();
+ *
+ *   // Verifica se un URL matcha un pattern
+ *   matcher.matches('/admin/users', '/admin/**'); // true
+ *
+ *   // Trova la regola con priorità più alta che matcha
+ *   const rules = {
+ *     "/admin/**": { robots: "noindex" },
+ *     "/admin/login": { title: "Login" }
+ *   };
+ *   matcher.findMatchingRule('/admin/login', rules);
+ *   // → { pattern: "/admin/login", title: "Login" } (exact match vince, priority 1000)
+ *
+ * PLUGIN CHE UTILIZZANO QUESTO MODULO:
+ * - adminAccessControl — access control basato su pattern URL
+ * - seo — regole SEO per pagina con pattern matching
+ *
+ * @module core/patternMatcher
  */
 
 class PatternMatcher {
@@ -149,7 +172,7 @@ class PatternMatcher {
    * Trova la regola con priorità più alta che matcha l'URL
    * @param {string} url - URL da testare
    * @param {object} rules - Oggetto con regole (es: { "/admin/**": {...}, "/dashboard.ejs": {...} })
-   * @returns {object|null} - Regola matchata o null
+   * @returns {object|null} - Regola matchata con campo "pattern" aggiunto, o null se nessun match
    */
   findMatchingRule(url, rules) {
     let bestMatch = null;

@@ -2986,6 +2986,193 @@ POST /api/adminAccessControl/test-access (Future)
 
 ---
 
+### SEO Plugin
+
+#### Overview
+
+The **seo** plugin manages SEO (Search Engine Optimization) for ital8cms. It injects meta tags, Open Graph, Twitter Cards, canonical URLs, and structured data (JSON-LD) into the `<head>` of all pages via the hook system. It also generates `sitemap.xml` and `robots.txt` as physical files in the wwwPath directory.
+
+**Key Features:**
+- ✅ **Feature toggles:** Every feature individually disableable (meta tags, OG, Twitter, canonical, JSON-LD, sitemap, robots.txt)
+- ✅ **Per-page rules:** SEO rules in `seoPages.json5` with pattern matching (exact, wildcard, regex)
+- ✅ **Multilingual support:** Strada B3 — independent from simpleI18n, reads `ctx.state.lang` if available
+- ✅ **Sitemap auto-scan:** Scans only wwwPath directory + manual extra pages
+- ✅ **Diff before overwrite:** Only updates files when content changes
+- ✅ **Admin auto-noindex:** Automatically injects `noindex, nofollow` on admin pages
+- ✅ **Debug mode:** Re-reads `seoPages.json5` on every request
+- ✅ **On-demand regeneration:** API endpoint for sitemap/robots.txt regeneration
+- ✅ **Zero dependencies:** No required plugin dependencies
+
+**Plugin Structure:**
+
+```
+plugins/seo/
+├── main.js                    # Plugin entry point
+├── pluginConfig.json5         # Configuration + defaults + feature toggles
+├── pluginDescription.json5    # Plugin metadata
+├── seoPages.json5             # Per-page SEO rules (pattern matching)
+└── lib/
+    ├── metaTagGenerator.js    # Meta tags, OG, Twitter Cards, canonical URL
+    ├── structuredData.js      # JSON-LD (Organization, WebSite)
+    ├── sitemapGenerator.js    # sitemap.xml generation (auto-scan + extras)
+    └── robotsTxtGenerator.js  # robots.txt generation
+```
+
+**Weight:** 5 (after simpleI18n -10, before bootstrapNavbar 10)
+
+---
+
+#### Multilingual Support (Strada B3)
+
+The plugin is **completely independent** from simpleI18n. Text fields in `seoPages.json5` support two formats:
+
+**Format 1 — Simple string (monolingual site):**
+```json5
+"title": "Azienda XYZ - Soluzioni innovative"
+```
+
+**Format 2 — Multilingual object:**
+```json5
+"title": { "it": "Azienda XYZ - Soluzioni", "en": "XYZ Corp - Solutions" }
+```
+
+**Resolution cascade:**
+1. If value is a string → used as-is
+2. If value is a multilingual object:
+   a. If `ctx.state.lang` exists (simpleI18n active) → uses matching language
+   b. Otherwise → uses first available language in the object
+
+**Growth path:**
+- Monolingual, no i18n → use simple strings. Works.
+- Preparing for multilingual → convert to objects `{ "it": "..." }`. Works (first language fallback).
+- Activate simpleI18n → add `"en": "..."` to objects. Works automatically.
+
+---
+
+#### Configuration (pluginConfig.json5)
+
+All settings are in the `custom` block:
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `siteName` | string | `""` | Site name (used in OG, structured data) |
+| `siteUrl` | string | `""` | Base URL (e.g., `"https://www.example.com"`) |
+| `enableMetaTags` | boolean | `true` | `<meta name="description">`, keywords, robots |
+| `enableOpenGraph` | boolean | `true` | `<meta property="og:*">` tags |
+| `enableTwitterCards` | boolean | `true` | `<meta name="twitter:*">` tags |
+| `enableCanonicalUrl` | boolean | `true` | `<link rel="canonical">` |
+| `enableStructuredData` | boolean | `true` | JSON-LD `<script>` (Organization + WebSite) |
+| `enableSitemap` | boolean | `true` | Generate `sitemap.xml` in wwwPath |
+| `enableRobotsTxt` | boolean | `true` | Generate `robots.txt` in wwwPath |
+| `canonicalCleanUrl` | boolean | `true` | Remove `.ejs` extension from canonical URLs |
+| `defaultDescription` | string | `""` | Fallback description |
+| `defaultKeywords` | string | `""` | Fallback keywords |
+| `defaultRobots` | string | `"index, follow"` | Fallback robots directive |
+| `defaultOgType` | string | `"website"` | Fallback OG type |
+| `defaultOgImage` | string | `""` | Fallback OG image path |
+| `twitterCardType` | string | `"summary_large_image"` | Twitter Card type |
+| `twitterHandle` | string | `""` | Twitter/X handle |
+| `sitemapAutoScan` | boolean | `true` | Auto-scan wwwPath for .ejs files |
+| `sitemapDefaultChangefreq` | string | `"monthly"` | Default sitemap changefreq |
+| `sitemapDefaultPriority` | number | `0.5` | Default sitemap priority (0.0-1.0) |
+| `sitemapExclude` | array | `[...]` | Patterns to exclude from auto-scan |
+| `sitemapExtraPages` | array | `[]` | Manual extra pages for sitemap |
+
+---
+
+#### Per-Page Rules (seoPages.json5)
+
+Rules use the same pattern matching system as adminAccessControl (via `/core/patternMatcher.js`):
+
+| Pattern Type | Priority | Example | Matches |
+|-------------|----------|---------|---------|
+| Exact | 1000 | `"/about.ejs"` | Only `/about.ejs` |
+| Regex | 500 | `"regex:^/product/\\d+$"` | `/product/42` |
+| Wildcard single | 300 | `"/blog/*.ejs"` | `/blog/post.ejs` |
+| Wildcard recursive | 100 | `"/admin/**"` | `/admin/users/edit` |
+
+**Supported fields per page:**
+
+```json5
+{
+  "/path": {
+    "title": "..." | { "it": "...", "en": "..." },
+    "description": "..." | { "it": "...", "en": "..." },
+    "keywords": "..." | { "it": "...", "en": "..." },
+    "robots": "index, follow",
+    "ogType": "website",
+    "ogImage": "/path/to/image.jpg",
+    "twitterCardType": "summary_large_image",
+    "sitemap": { "priority": 0.8, "changefreq": "weekly" },
+    // or
+    "sitemap": false  // Exclude from sitemap
+  }
+}
+```
+
+---
+
+#### Sitemap Generation
+
+- **Auto-scan:** Scans only the wwwPath directory for `.ejs` files
+- **Index files:** Detected via `ital8Config.json5` → `indexFiles.wwwPath` array, mapped to directory URL
+- **Clean URLs:** If `canonicalCleanUrl: true`, extensions removed from sitemap URLs
+- **Exclusion:** Patterns in `sitemapExclude` + `"sitemap": false` in seoPages.json5
+- **Extra pages:** Added from `sitemapExtraPages` config
+- **Physical file:** Generated at `{wwwPath}/sitemap.xml`
+- **Diff check:** Only overwrites if content changed (atomic write: temp + rename)
+
+---
+
+#### robots.txt Generation
+
+- **Physical file:** Generated at `{wwwPath}/robots.txt`
+- **Configurable:** User-Agent, Allow, Disallow rules in `robotsTxtRules`
+- **Auto sitemap link:** Appended if `enableSitemap: true` and `siteUrl` is set
+- **Diff check:** Only overwrites if content changed
+
+---
+
+#### API Endpoint
+
+```
+POST /api/seo/regenerate
+  Regenerates sitemap.xml and robots.txt
+  Returns: { sitemap: { changed, pages }, robotsTxt: { changed } }
+  Access: { requiresAuth: true, allowedRoles: [0, 1] }
+```
+
+---
+
+#### Reference Files
+
+| File | Purpose |
+|------|---------|
+| `/plugins/seo/main.js` | Plugin entry point |
+| `/plugins/seo/pluginConfig.json5` | Configuration + defaults |
+| `/plugins/seo/seoPages.json5` | Per-page SEO rules |
+| `/plugins/seo/lib/metaTagGenerator.js` | Meta tags, OG, Twitter, canonical |
+| `/plugins/seo/lib/structuredData.js` | JSON-LD generation |
+| `/plugins/seo/lib/sitemapGenerator.js` | Sitemap generation |
+| `/plugins/seo/lib/robotsTxtGenerator.js` | robots.txt generation |
+| `/core/patternMatcher.js` | Shared pattern matching utility |
+
+---
+
+#### Future Enhancements
+
+- [ ] **X-Robots-Tag HTTP headers** — Alternative to meta robots for non-HTML files (v2)
+- [ ] **BreadcrumbList structured data** — Navigation breadcrumbs in JSON-LD
+- [ ] **LocalBusiness structured data** — For local businesses with physical address
+- [ ] **Additional schema.org types** — Article, Product, FAQ, Event
+- [ ] **Plugin `adminSeo`** — Admin UI for managing SEO rules and settings
+- [ ] **hreflang tags** — Advanced multilingual SEO with alternate language links
+- [ ] **Canonical for paginated pages** — Handle pagination correctly
+- [ ] **Social preview** — Test OG/Twitter previews in admin panel
+- [ ] **Auto-detect protected pages** — Read accessControl rules to exclude auth-required pages from sitemap
+
+---
+
 ### Checking Authentication in Code
 
 ```javascript
@@ -4376,6 +4563,7 @@ const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
 - `/core/admin/adminSystem.js` - Admin system coordinator
 - `/core/loadJson5.js` - JSON5 file loader utility
 - `/core/servingRootResolver.js` - Serving root path isolation utility
+- `/core/patternMatcher.js` - URL pattern matching utility (exact, wildcard, regex) — shared by adminAccessControl and seo plugins
 
 ### Admin System
 
@@ -4412,6 +4600,16 @@ const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
 - `/plugins/urlRedirect/lib/configValidator.js` - Boot-time rule validation
 - `/plugins/urlRedirect/redirectMap.json5` - Redirect rules
 - `/plugins/urlRedirect/redirectHitCount.json5` - Hit counters (auto-generated)
+
+### SEO Plugin
+
+- `/plugins/seo/main.js` - Plugin entry point
+- `/plugins/seo/pluginConfig.json5` - Configuration + defaults + feature toggles
+- `/plugins/seo/seoPages.json5` - Per-page SEO rules (pattern matching)
+- `/plugins/seo/lib/metaTagGenerator.js` - Meta tags, OG, Twitter, canonical
+- `/plugins/seo/lib/structuredData.js` - JSON-LD generation (Organization, WebSite)
+- `/plugins/seo/lib/sitemapGenerator.js` - Sitemap generation (auto-scan + extras)
+- `/plugins/seo/lib/robotsTxtGenerator.js` - robots.txt generation
 
 ### Databases
 
@@ -4566,11 +4764,56 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2026-03-19
-**Version:** 2.4.0
+**Last Updated:** 2026-03-26
+**Version:** 2.5.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v2.5.0 (2026-03-26): **NEW PLUGIN + CORE ENHANCEMENTS** - SEO plugin + core improvements. Key changes:
+  - **New plugin: `seo`**
+    - Meta tags injection via hookPage("head"): description, keywords, robots
+    - Open Graph tags (og:title, og:description, og:image, og:url, og:type, og:site_name)
+    - Twitter Cards (twitter:card, twitter:title, twitter:description, twitter:image, twitter:site)
+    - Canonical URL generation with clean URL support (removes .ejs extension)
+    - Structured data JSON-LD: Organization and WebSite schemas
+    - sitemap.xml generation: auto-scan wwwPath + manual extra pages + diff before overwrite
+    - robots.txt generation: configurable rules + auto sitemap link + diff before overwrite
+    - Per-page SEO rules in seoPages.json5 with pattern matching (exact, wildcard, regex)
+    - Every feature individually disableable via feature toggles
+    - Multilingual support (Strada B3): independent from simpleI18n, reads ctx.state.lang if available
+    - Admin pages: automatic noindex, nofollow injection
+    - Debug mode: re-reads seoPages.json5 on every request
+    - API endpoint: POST /api/seo/regenerate for on-demand file regeneration with report
+    - Boot validation: warns about invalid patterns and sitemap config (non-blocking)
+  - **Core: PatternMatcher moved to `/core/patternMatcher.js`**
+    - Extracted from adminAccessControl as shared utility module
+    - Used by both adminAccessControl and seo plugins
+    - Comprehensive JSDoc documentation with usage examples
+    - Tests updated to import from new location (41 tests passing)
+  - **Core: `indexFiles` configuration in `ital8Config.json5`**
+    - New per-instance configuration for koa-classic-server index files
+    - Three contexts: wwwPath, pluginPagesPrefix, adminPrefix
+    - Previously hardcoded `['index.ejs']`, now configurable
+    - Used by seo plugin to correctly map index files to directory URLs in sitemap
+  - **Files Added:**
+    - `/plugins/seo/main.js` — Plugin entry point
+    - `/plugins/seo/pluginConfig.json5` — Configuration + defaults + feature toggles
+    - `/plugins/seo/pluginDescription.json5` — Plugin metadata
+    - `/plugins/seo/seoPages.json5` — Per-page SEO rules (documented with examples)
+    - `/plugins/seo/lib/metaTagGenerator.js` — Meta tags, OG, Twitter, canonical
+    - `/plugins/seo/lib/structuredData.js` — JSON-LD generation
+    - `/plugins/seo/lib/sitemapGenerator.js` — Sitemap generation
+    - `/plugins/seo/lib/robotsTxtGenerator.js` — robots.txt generation
+    - `/core/patternMatcher.js` — Shared pattern matching utility (moved from adminAccessControl)
+  - **Files Modified:**
+    - `/ital8Config.json5` — Added indexFiles configuration block
+    - `/index.js` — Updated 3 koa-classic-server instances to use indexFiles config
+    - `/plugins/adminAccessControl/lib/accessManager.js` — Import patternMatcher from /core/
+    - `/plugins/adminAccessControl/lib/ruleValidator.js` — Import patternMatcher from /core/
+    - `/tests/unit/patternMatcher.test.js` — Updated import path
+    - `/CLAUDE.md` — Added SEO plugin documentation, PatternMatcher as core utility
+  - **Files Removed:**
+    - `/plugins/adminAccessControl/lib/patternMatcher.js` — Moved to `/core/patternMatcher.js`
 - v2.4.0 (2026-03-19): **NEW PLUGIN** - urlRedirect plugin for URL redirects (301/302) during site migrations. Key changes:
   - **New plugin: `urlRedirect`**
     - Middleware-based redirect engine (no API routes, only GET requests intercepted)

@@ -12,7 +12,7 @@
  * 6. Nessuna regola definisce rotte di plugin (conflitto)
  */
 
-const PatternMatcher = require('./patternMatcher');
+const PatternMatcher = require('../../../core/patternMatcher');
 
 class RuleValidator {
   constructor(pluginSys, ital8Conf) {

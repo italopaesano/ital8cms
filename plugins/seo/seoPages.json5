@@ -1,0 +1,86 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SEO PAGES — Regole SEO per pagina
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//
+// Ogni chiave è un pattern URL che matcha una o più pagine.
+//
+// PATTERN SUPPORTATI (stessa logica di adminAccessControl):
+//   - Match esatto:         "/about.ejs"            → solo quella pagina
+//   - Wildcard singolo (*): "/blog/*.ejs"            → un livello (non matcha /)
+//   - Wildcard ricorsivo:   "/admin/**"              → tutti i livelli
+//   - Regex:                "regex:^/product/\\d+$"  → espressione regolare
+//
+// PRIORITÀ (quando più pattern matchano lo stesso URL):
+//   1. Match esatto       (priority: 1000)  ← vince
+//   2. Regex              (priority: 500)
+//   3. Wildcard singolo   (priority: 300)
+//   4. Wildcard ricorsivo (priority: 100)
+//
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// VALORI MULTILINGUA (Strada B3 — indipendente da simpleI18n)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//
+// I campi testuali (title, description, keywords) supportano due formati:
+//
+//   FORMATO 1 — Stringa semplice (sito monolingua):
+//     "title": "Azienda XYZ - Soluzioni innovative"
+//
+//   FORMATO 2 — Oggetto multilingua (sito multilingua):
+//     "title": { "it": "Azienda XYZ - Soluzioni", "en": "XYZ Corp - Solutions" }
+//
+// COME FUNZIONA LA RISOLUZIONE DELLA LINGUA:
+//   1. Se il valore è una stringa → viene usata così com'è
+//   2. Se il valore è un oggetto multilingua:
+//      a. Se simpleI18n è attivo → usa ctx.state.lang (lingua rilevata dal visitatore)
+//      b. Se simpleI18n NON è attivo → usa la prima lingua disponibile nell'oggetto
+//
+// PERCORSO DI CRESCITA:
+//   - Sito monolingua, niente i18n → usa stringhe semplici. Funziona.
+//   - Vuoi prepararti al multilingua → converti in oggetti { "it": "..." }. Funziona (prima lingua).
+//   - Attivi simpleI18n → aggiungi "en": "..." agli oggetti. Funziona automaticamente.
+//
+// IMPORTANTE: Il plugin seo NON dipende da simpleI18n. Se simpleI18n è attivo,
+//             seo ne beneficia leggendo ctx.state.lang. Se non è attivo, usa il fallback.
+//
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// CAMPI SUPPORTATI PER PAGINA
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//
+//   "title":            string | { lang: string }   — Titolo pagina (<title> e og:title)
+//   "description":      string | { lang: string }   — Descrizione (<meta name="description"> e og:description)
+//   "keywords":         string | { lang: string }   — Keywords (<meta name="keywords">)
+//   "robots":           string                      — Direttiva robots (<meta name="robots">)
+//   "ogType":           string                      — Open Graph type (es. "website", "article")
+//   "ogImage":          string                      — Open Graph image (path relativo o URL assoluto)
+//   "twitterCardType":  string                      — Twitter Card type ("summary" | "summary_large_image")
+//   "sitemap":          object | false              — Configurazione sitemap per questa pagina
+//     "sitemap.priority":    number (0.0 - 1.0)     — Priorità nella sitemap
+//     "sitemap.changefreq":  string                 — Frequenza aggiornamento
+//     "sitemap": false                              — Escludi questa pagina dalla sitemap
+//
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{
+  // Homepage — esempio multilingua
+  // "/": {
+  //   "title": { "it": "Azienda XYZ - Soluzioni innovative", "en": "XYZ Corp - Innovative solutions" },
+  //   "description": { "it": "Leader nel settore delle soluzioni", "en": "Leader in innovative solutions" },
+  //   "ogImage": "/media/og-home.jpg",
+  //   "sitemap": { "priority": 1.0, "changefreq": "daily" }
+  // },
+
+  // Pagina about — esempio monolingua
+  // "/about.ejs": {
+  //   "title": "Chi Siamo - Azienda XYZ",
+  //   "description": "La nostra storia dal 1990...",
+  //   "sitemap": { "priority": 0.8, "changefreq": "monthly" }
+  // },
+
+  // Admin — noindex per tutte le pagine admin (iniettato automaticamente dal plugin,
+  // ma può essere sovrascritto qui se necessario)
+  // "/admin/**": {
+  //   "robots": "noindex, nofollow",
+  //   "sitemap": false
+  // },
+}

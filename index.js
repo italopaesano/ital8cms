@@ -103,7 +103,7 @@ app.use(
   koaClassicServer(
     __dirname + `${ital8Conf.wwwPath}`,
     (opt = {
-      index: ['index.ejs'],
+      index: ital8Conf.indexFiles.wwwPath,
       urlPrefix: `${ital8Conf.globalPrefix}`,
       showDirContents: true,
       urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.pluginPagesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources','/pluginPages' -> questi sarebbero i percorsi di default pero adesso sono configurabili
@@ -151,6 +151,7 @@ app.use(
   koaClassicServer(
     pluginPagesSystem.getPluginPagesDirectory(),
     {
+      index: ital8Conf.indexFiles.pluginPagesPrefix,
       urlPrefix: `${ital8Conf.globalPrefix}/${pluginPagesPrefix}`,
       urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`],
       showDirContents: false,
@@ -213,7 +214,7 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
     koaClassicServer(
       path.join(__dirname, 'core', 'admin', 'webPages'),// punto alla cartella delle pagine di admin
       (opt = {
-        index: ['index.ejs'], // Koa v3 + koa-classic-server v2.1.2: formato array raccomandato
+        index: ital8Conf.indexFiles.adminPrefix,
         urlPrefix: `${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`,
         showDirContents: true,
         urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`], // '/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
