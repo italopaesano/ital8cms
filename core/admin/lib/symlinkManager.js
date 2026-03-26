@@ -92,15 +92,18 @@ class SymlinkManager {
         if (stats.isSymbolicLink()) {
           // Esiste già un symlink
           const currentTarget = fs.readlinkSync(symlinkPath);
+          // Risolvi il target a path assoluto per confronto robusto
+          // (gestisce sia symlink relativi che assoluti legacy)
+          const resolvedTarget = path.resolve(path.dirname(symlinkPath), currentTarget);
 
-          if (currentTarget === sectionSourcePath) {
+          if (resolvedTarget === sectionSourcePath) {
             // Symlink già corretto
             console.log(`✓ Symlink already exists for section "${sectionId}" (plugin "${pluginName}")`);
             continue;
           } else {
             // Symlink esiste ma punta altrove - rimuovi e ricrea
             console.warn(`⚠️ Symlink for section "${sectionId}" points to wrong location, recreating...`);
-            console.warn(`  Current: ${currentTarget}`);
+            console.warn(`  Current: ${currentTarget} (resolved: ${resolvedTarget})`);
             console.warn(`  Expected: ${sectionSourcePath}`);
             try {
               fs.unlinkSync(symlinkPath);
@@ -117,10 +120,11 @@ class SymlinkManager {
         }
       }
 
-      // 8. Crea symlink
+      // 8. Crea symlink (relativo per portabilità tra macchine diverse)
       try {
-        fs.symlinkSync(sectionSourcePath, symlinkPath, 'dir');
-        console.log(`✓ Created symlink for section "${sectionId}": ${symlinkPath} → ${sectionSourcePath}`);
+        const relativeTarget = path.relative(path.dirname(symlinkPath), sectionSourcePath);
+        fs.symlinkSync(relativeTarget, symlinkPath, 'dir');
+        console.log(`✓ Created symlink for section "${sectionId}": ${symlinkPath} → ${relativeTarget}`);
       } catch (error) {
         console.error(`✗ Failed to create symlink for section "${sectionId}":`, error.message);
         throw error;
@@ -172,8 +176,10 @@ class SymlinkManager {
       // 5. Verifica che punti al plugin corretto (safety check)
       const currentTarget = fs.readlinkSync(symlinkPath);
       const expectedTarget = path.join(plugin.pathPluginFolder, 'adminWebSections', sectionId);
+      // Risolvi a path assoluto per confronto robusto (gestisce symlink relativi e assoluti legacy)
+      const resolvedTarget = path.resolve(path.dirname(symlinkPath), currentTarget);
 
-      if (currentTarget !== expectedTarget) {
+      if (resolvedTarget !== expectedTarget) {
         console.warn(
           `⚠️ Symlink for section "${sectionId}" points to different location:\n` +
           `  Current: ${currentTarget}\n` +
@@ -232,10 +238,11 @@ class SymlinkManager {
         continue;
       }
 
-      // Verifica che il target esista
-      const target = fs.readlinkSync(symlinkPath);
+      // Verifica che il target esista (risolvi relativi a assoluti)
+      const rawTarget = fs.readlinkSync(symlinkPath);
+      const target = path.resolve(path.dirname(symlinkPath), rawTarget);
       if (!fs.existsSync(target)) {
-        console.warn(`⚠️ Symlink for section "${sectionId}" points to non-existent target: ${target}`);
+        console.warn(`⚠️ Symlink for section "${sectionId}" points to non-existent target: ${rawTarget} (resolved: ${target})`);
         console.warn(`⚠️ Removing broken symlink: ${symlinkPath}`);
         try {
           fs.unlinkSync(symlinkPath);

@@ -9,7 +9,7 @@
   },
   "nodeModuleDependency": {
     "semver": "^7.0.0",
-    "ejs": "^3.0.0"
+    "ejs": ">=3.0.0"
   },
   "custom": {
     "showBanner": true,

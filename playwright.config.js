@@ -1,36 +1,29 @@
 // @ts-check
 const { defineConfig, devices } = require('@playwright/test');
-const loadJson5 = require('./core/loadJson5');
-const path = require('path');
+
+const { E2E_TEST_HTTP_PORT } = require('./tests/e2e/testConstants');
 
 /**
  * Playwright configuration for ital8cms
  *
- * Reads ital8Config.json5 to determine the correct baseURL:
- * - If HTTPS is enabled with AutoRedirect: uses https://localhost:{httpsPort}
- *   (HTTP port only serves 301 redirects, not the app)
- * - Otherwise: uses http://localhost:{httpPort}
+ * Usa una porta HTTP dedicata (E2E_TEST_HTTP_PORT) definita in testConstants.js.
+ * Il globalSetup.js sovrascrive ital8Config.json5 con questa porta, la directory
+ * www di test, i temi di test, e disabilita HTTPS — garantendo isolamento completo
+ * dal server di sviluppo (che gira sulla porta 3000).
+ *
+ * Flusso:
+ *   1. globalSetup.js modifica ital8Config.json5 (porta, wwwPath, temi, HTTPS off)
+ *   2. Playwright avvia il server: `node index.js` (legge la config modificata)
+ *   3. Test E2E eseguiti sulla porta dedicata
+ *   4. globalTeardown.js ripristina ital8Config.json5 dall'originale
  *
  * @see https://playwright.dev/docs/test-configuration
  */
 
-const ital8Conf = loadJson5(path.join(__dirname, 'ital8Config.json5'));
-const httpPort = ital8Conf.httpPort || 3000;
-const httpsEnabled = !!ital8Conf.https?.enabled;
-const httpsPort = ital8Conf.https?.port || 3443;
-const autoRedirect = !!ital8Conf.https?.AutoRedirectHttpPortToHttpsPort;
-
-// When HTTPS is enabled with AutoRedirect, HTTP port only serves 301 redirects.
-// Tests must connect directly to HTTPS to get application-level responses.
-const useHttps = httpsEnabled && autoRedirect;
-const baseURL = useHttps
-  ? `https://localhost:${httpsPort}`
-  : `http://localhost:${httpPort}`;
-
 module.exports = defineConfig({
   testDir: './tests/e2e',
 
-  /* Global setup and teardown for test users */
+  /* Global setup and teardown for test users and config override */
   globalSetup: './tests/e2e/globalSetup.js',
   globalTeardown: './tests/e2e/globalTeardown.js',
 
@@ -54,8 +47,8 @@ module.exports = defineConfig({
 
   /* Shared settings for all the projects below */
   use: {
-    /* Base URL — dynamic based on HTTPS configuration */
-    baseURL,
+    /* Base URL — porta dedicata E2E, sempre HTTP (HTTPS disabilitato dal globalSetup) */
+    baseURL: `http://localhost:${E2E_TEST_HTTP_PORT}`,
 
     /* Accept self-signed certificates (development) */
     ignoreHTTPSErrors: true,
@@ -84,12 +77,16 @@ module.exports = defineConfig({
     // },
   ],
 
-  /* Run your local dev server before starting the tests */
+  /* Run your local dev server before starting the tests
+   * La porta dedicata (E2E_TEST_HTTP_PORT) evita conflitti con un eventuale
+   * server di sviluppo già attivo sulla porta 3000.
+   * reuseExistingServer: false — forza sempre l'avvio di un server nuovo
+   * per garantire che usi la config modificata dal globalSetup. */
   webServer: {
     command: 'node index.js',
-    url: `http://localhost:${httpPort}`,
+    url: `http://localhost:${E2E_TEST_HTTP_PORT}`,
     ignoreHTTPSErrors: true,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120 * 1000,
   },
 });

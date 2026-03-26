@@ -1,9 +1,6 @@
 <%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
 <%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
 
-<span id="apiPrefix" style="display: none;"><%- passData.apiPrefix %></span>
-<span id="adminPrefix" style="display: none;"><%- passData.adminPrefix %></span>
-
 <div class="container mt-4">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h3><%= __({it: 'Gestione Navbar', en: 'Navbar Management'}, passData.ctx) %></h3>
@@ -43,8 +40,8 @@
 </div>
 
 <script>
-  const apiPrefix = document.getElementById('apiPrefix').innerText;
-  const adminPrefix = document.getElementById('adminPrefix').innerText;
+  const apiPrefix = '<%= passData.apiPrefix %>';
+  const adminPrefix = '<%= passData.adminPrefix %>';
 
   // i18n labels
   const i18n = {

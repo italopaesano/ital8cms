@@ -4,16 +4,9 @@
 <%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
 <%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
 
-<!-- api prefix -->
-<span id="apiPrefix" style="display: none;"><%- passData.apiPrefix %></span>
 <script>
-    const apiPrefix = document.getElementById('apiPrefix').innerText;
-</script>
-
-<!-- adminPrefix -->
-<span id="adminPrefix" style="display: none;"><%- passData.adminPrefix %></span>
-<script>
-    const adminPrefix = document.getElementById('adminPrefix').innerText;
+    const apiPrefix = '<%= passData.apiPrefix %>';
+    const adminPrefix = '<%= passData.adminPrefix %>';
 </script>
 
 <div class="container mt-4">
@@ -162,11 +155,14 @@
             tbody.innerHTML = '';
 
             roles.forEach(role => {
+                const safeId = escapeHtml(String(role.id));
+                const safeName = escapeHtml(role.name);
+                const safeDesc = escapeHtml(role.description);
                 const row = `
                     <tr>
-                        <td><strong>${role.id}</strong></td>
-                        <td>${role.name}</td>
-                        <td>${role.description}</td>
+                        <td><strong>${safeId}</strong></td>
+                        <td>${safeName}</td>
+                        <td>${safeDesc}</td>
                     </tr>
                 `;
                 tbody.innerHTML += row;
@@ -195,16 +191,20 @@
 
                 tbody.innerHTML = '';
                 roles.forEach(role => {
+                    const safeId = escapeHtml(String(role.id));
+                    const safeName = escapeHtml(role.name);
+                    const safeDesc = escapeHtml(role.description);
+                    // Uso data-attributes per evitare XSS via onclick con stringhe non sanitizzate
                     const row = `
                         <tr>
-                            <td><strong>${role.id}</strong></td>
-                            <td>${role.name}</td>
-                            <td>${role.description}</td>
+                            <td><strong>${safeId}</strong></td>
+                            <td>${safeName}</td>
+                            <td>${safeDesc}</td>
                             <td>
-                                <button class="btn btn-sm btn-warning" onclick="editRole(${role.id}, '${role.name}', '${role.description}')">
+                                <button class="btn btn-sm btn-warning" data-role-id="${safeId}" data-role-name="${safeName}" data-role-desc="${safeDesc}" onclick="editRole(this.dataset.roleId, this.dataset.roleName, this.dataset.roleDesc)">
                                     ✏️ Modifica
                                 </button>
-                                <button class="btn btn-sm btn-danger" onclick="deleteRole(${role.id}, '${role.name}')">
+                                <button class="btn btn-sm btn-danger" data-role-id="${safeId}" data-role-name="${safeName}" onclick="deleteRole(this.dataset.roleId, this.dataset.roleName)">
                                     🗑️ Elimina
                                 </button>
                             </td>

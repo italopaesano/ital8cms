@@ -11,7 +11,7 @@
 
   // Dipendenze Node modules
   "nodeModuleDependency": {
-    "ejs": "^3.1.9"
+    "ejs": ">=3.1.9"
   },
 
   // Sezioni admin gestite da questo plugin

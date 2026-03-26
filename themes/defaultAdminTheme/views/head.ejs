@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="<%= (passData.ctx.state && passData.ctx.state.lang) || 'en' %>">
 <head>
     <!-- Meta tag essenziali -->
     <meta charset="UTF-8">
@@ -14,4 +14,7 @@
 
     <!-- CSS del tema admin -->
     <link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/theme.css', passData) %>">
+
+    <!-- Utility escapeHtml client-side (defense-in-depth) -->
+    <script src="<%= passData.themeSys.getThemeResourceUrl('js/escapeHtml.js', passData) %>"></script>
 </head>

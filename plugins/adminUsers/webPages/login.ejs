@@ -48,7 +48,7 @@ const referrerTo = passData.ctx.headers.referer || '/';
           <!-- Form login (POST to API endpoint) -->
           <form id="loginForm" method="POST" action="/<%= passData.apiPrefix %>/adminUsers/login">
             <!-- Campo hidden per redirect dopo login -->
-            <input type="hidden" id="referrerTo" name="referrerTo" value="<%- referrerTo %>">
+            <input type="hidden" id="referrerTo" name="referrerTo" value="<%= referrerTo %>">
 
             <!-- Username -->
             <div class="mb-3">
@@ -82,9 +82,14 @@ const referrerTo = passData.ctx.headers.referer || '/';
   document.addEventListener("DOMContentLoaded", function() {
     const params = new URLSearchParams(window.location.search);
 
-    // Se esiste il parametro "referrerTo", aggiorna il campo hidden
+    // Se esiste il parametro "referrerTo", aggiorna il campo hidden (con validazione Open Redirect)
     if (params.has("referrerTo")) {
-      document.getElementById("referrerTo").value = params.get("referrerTo");
+      const referrerTo = params.get("referrerTo");
+      // Accetta solo path interni: deve iniziare con / e non con // o /\ (Open Redirect prevention)
+      if (referrerTo.startsWith('/') && !referrerTo.startsWith('//') && !referrerTo.startsWith('/\\')) {
+        document.getElementById("referrerTo").value = referrerTo;
+      }
+      // Se non valido, mantiene il valore server-side (dal Referer header, già validato)
     }
 
     // Se esiste il parametro "error", mostra il messaggio d'errore

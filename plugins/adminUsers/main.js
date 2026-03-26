@@ -4,6 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
+const escapeHtml = require('../../core/escapeHtml');
 
 const ital8Conf = loadJson5(path.join(__dirname, '../../ital8Config.json5'));// questo serve a caricare le impostazioni generali del modulo ed in particolare lìapi Prefix
 
@@ -18,6 +19,22 @@ const roleManagement = require('./roleManagement');// necessario per gestire i r
 
 let myPluginSys = null;// riferimento al sistema dei plugin per accedere a themeSys
 
+/**
+ * Validates that a redirect URL is a safe internal path.
+ * Prevents Open Redirect attacks by ensuring the URL is relative to the same origin.
+ * @param {string} url - The URL to validate
+ * @returns {string} The original URL if safe, or '/' as fallback
+ */
+function getSafeRedirectUrl(url) {
+  if (!url || typeof url !== 'string') return '/';
+  const trimmed = url.trim();
+  // Must be a relative path starting with /
+  if (!trimmed.startsWith('/')) return '/';
+  // Block protocol-relative URLs (//evil.com) and backslash variants (/\evil.com)
+  if (trimmed.startsWith('//') || trimmed.startsWith('/\\')) return '/';
+  return trimmed;
+}
+
 function loadPlugin(pluginSys, pathPluginFolder){
   //console.log( 'sharedObject: ', sharedObject );
   myPluginSys = pluginSys;// memorizzo il riferimento per usarlo nelle route handlers
@@ -27,7 +44,7 @@ function installPlugin(){
 
 };
 
-function unistallPlugin(){
+function uninstallPlugin(){
 
 };
 
@@ -107,7 +124,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
             roleIds: userData.roleIds || [] // Array di ruoli (con fallback per compatibilità)
           };
           if(pluginConfig.custom.redirectToHttpReferer){// se è impostata questa variabile la redirezione avverrà nella pagina dalla quale è partita il click per l appagina di login
-            ctx.redirect(referrerTo);
+            ctx.redirect(getSafeRedirectUrl(referrerTo));
           }else{// altrimenti rediriggo la pagina in un url di default definito nella configurazione
             ctx.redirect(pluginConfig.custom.defaultLoginRedirectURL);
           }
@@ -115,7 +132,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
 
         }else{//login fallito
           //console.log('----------------login fallito --------------');
-          ctx.redirect(`/${ital8Conf.pluginPagesPrefix}/${pluginName}/login.ejs?error=invalid&referrerTo=${referrerTo}`);// se il login fallissce si viene reindirizzati nella pagina di login
+          ctx.redirect(`/${ital8Conf.pluginPagesPrefix}/${pluginName}/login.ejs?error=invalid&referrerTo=${encodeURIComponent(getSafeRedirectUrl(referrerTo))}`);// se il login fallissce si viene reindirizzati nella pagina di login
           return;
 
         }
@@ -161,7 +178,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         ctx.session = null;
         /* ctx.body = 'Logout effettuato con successo';
         ctx.type = 'text'; */
-        ctx.redirect(referrerTo);
+        ctx.redirect(getSafeRedirectUrl(referrerTo));
        }
     },
     { // GET /userList - Lista tutti gli utenti (solo admin)
@@ -176,7 +193,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         try {
           const userAccount = loadJson5(userFilePath);
           ctx.body = Object.entries(userAccount.users).map(([username, userData]) => ({//CON QUESTE ISTRUZIONI GENERO UN ARRAY CONTENETE OGETTI CON DUE CAMPI username , roleIds
-            username,
+            username: escapeHtml(username),
             roleIds: userData.roleIds  // Array di ruoli
           }));
         } catch (error) {
@@ -199,9 +216,18 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         const userFilePath = path.join(__dirname, 'userAccount.json5');
         try {
           const userAccount = loadJson5(userFilePath);
-          userAccount.users[username].hashPassword = undefined;// non voglioesporre l'hashPassword per ragioni di sicurezza
-          console.log('userAccount[username]', userAccount.users[username]);
-          ctx.body = userAccount.users[username];//ATTENZIONE CONSIGLIATO NON USARE JSON.stringify() , come -->  ctx.body = JSON.stringify(userAccount.users[username]); vedi articolo --> https://chatgpt.com/share/67e8e119-aa58-8012-ba93-0a69499c9186
+          if (!username || !userAccount.users[username]) {
+            ctx.status = 404;
+            ctx.body = { error: 'User not found' };
+            ctx.type = 'application/json';
+            return;
+          }
+          const userData = { ...userAccount.users[username] };
+          userData.hashPassword = undefined;// non voglioesporre l'hashPassword per ragioni di sicurezza
+          // Sanitizzazione server-side: escape campi stringa per prevenire XSS
+          if (userData.email) userData.email = escapeHtml(userData.email);
+          console.log('userAccount[username]', userData);
+          ctx.body = userData;//ATTENZIONE CONSIGLIATO NON USARE JSON.stringify() , come -->  ctx.body = JSON.stringify(userAccount.users[username]); vedi articolo --> https://chatgpt.com/share/67e8e119-aa58-8012-ba93-0a69499c9186
         } catch (error) {
           ctx.status = 500;
           ctx.body = { error: `Unable to retrieve users Info: ${error}` };
@@ -220,7 +246,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       handler: async (ctx) => {//
         const roleFilePath = path.join(__dirname, 'userRole.json5');
         try {
-          ctx.body = loadJson5(roleFilePath);
+          const roleData = loadJson5(roleFilePath);
+          // Sanitizzazione server-side: escape name e description di ogni ruolo
+          for (const [roleId, role] of Object.entries(roleData.roles)) {
+            if (role.name) role.name = escapeHtml(role.name);
+            if (role.description) role.description = escapeHtml(role.description);
+          }
+          ctx.body = roleData;
         } catch (error) {
           ctx.status = 500;
           ctx.body = { error: 'Unable to retrieve roles list' };
@@ -606,7 +638,7 @@ module.exports = {
 
   loadPlugin: loadPlugin,  //questa funzione verrà richiamata per caricare il plugin ogni volta che serve ad esempio ogni volta che si riavviam 
   installPlugin: installPlugin, // questa funzione verrà richiamata per installare il plugin
-  unistallPlugin: unistallPlugin, // questa funzione verrà richiamata per disinstallare il plugin
+  uninstallPlugin: uninstallPlugin, // questa funzione verrà richiamata per disinstallare il plugin
   upgradePlugin: upgradePlugin, // questa funzione verrà richiamata quando sarà necessario aggiornare il plugin
   getObjectToShareToWebPages: getObjectToShareToWebPages,
   getObjectToShareToOthersPlugin: getObjectToShareToOthersPlugin,
@@ -615,6 +647,8 @@ module.exports = {
   getRouteArray: getRouteArray,
   pluginConfig: pluginConfig,
   getHooksPage: getHooksPage,
-  getMiddlewareToAdd: getMiddlewareToAdd
+  getMiddlewareToAdd: getMiddlewareToAdd,
+  // Exported for unit testing
+  _getSafeRedirectUrl: getSafeRedirectUrl
 
 }

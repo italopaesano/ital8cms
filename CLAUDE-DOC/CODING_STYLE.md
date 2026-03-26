@@ -207,7 +207,7 @@ class pluginSys {
 module.exports = {
   loadPlugin: loadPlugin,
   installPlugin: installPlugin,
-  unistallPlugin: unistallPlugin,
+  uninstallPlugin: uninstallPlugin,
   upgradePlugin: upgradePlugin,
   getObjectToShareToWebPages: getObjectToShareToWebPages,
   getObjectToShareToOthersPlugin: getObjectToShareToOthersPlugin,
@@ -453,7 +453,7 @@ const sharedObject = {};
 // 3. FUNZIONI LIFECYCLE
 function loadPlugin() { }
 function installPlugin() { }
-function unistallPlugin() { }
+function uninstallPlugin() { }
 function upgradePlugin() { }
 
 // 4. FUNZIONI DI CONDIVISIONE
@@ -832,7 +832,7 @@ il sistema di plugin funziona nel seguente modo:
    che sarà il file che verrà caricato e poi eseguito
 
 4) all'interno del file main.js ci saranno le seguenti funzioni:
-   loadPlugin(), installPlugin(), unistallPlugin(), upgradePlugin(),
+   loadPlugin(), installPlugin(), uninstallPlugin(), upgradePlugin(),
    getObjectToShare(), getRouteArray(), getMiddlewareToAdd()
 
 # [continua con esempi di codice...]
@@ -883,7 +883,7 @@ function installPlugin() {
   // Logica di installazione
 }
 
-function unistallPlugin() {
+function uninstallPlugin() {
   // Logica di disinstallazione
 }
 
@@ -949,7 +949,7 @@ function getHooksPage() {
 module.exports = {
   loadPlugin: loadPlugin,
   installPlugin: installPlugin,
-  unistallPlugin: unistallPlugin,
+  uninstallPlugin: uninstallPlugin,
   upgradePlugin: upgradePlugin,
   getObjectToShareToWebPages: getObjectToShareToWebPages,
   getObjectToShareToOthersPlugin: getObjectToShareToOthersPlugin,

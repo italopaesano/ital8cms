@@ -327,9 +327,26 @@ setSharedObject(fromPlugin, sharedObject) {
   }
 }
 
-// Access shared objects in other code
+// Access shared objects via pull mechanism (on-demand)
+// Generic call (forPlugin = undefined — provider returns generic object)
 const dbApiShared = pluginSys.getSharedObject('dbApi')
+
+// Caller-specific call (provider can customize response for that consumer)
+const dbApiForMedia = pluginSys.getSharedObject('dbApi', 'media')
 ```
+
+**`getSharedObject(providerPluginName, callerName)`**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `providerPluginName` | string | Yes | Plugin that exposes the shared object |
+| `callerName` | string | No | Requesting plugin name (for per-consumer customization) |
+
+Returns `null` if plugin is not active or doesn't implement `getObjectToShareToOthersPlugin()`.
+
+**Push vs Pull:**
+- **Push** (`setSharedObject`) — Automatic during init, per-consumer customized. Best for plugin-to-plugin dependencies.
+- **Pull** (`getSharedObject`) — On-demand at runtime. Best for route handlers, middleware, and framework code.
 
 ### Plugin API Routes
 
@@ -1726,6 +1743,143 @@ With `strictValidation: true`, all warnings become errors (server crashes).
 | `/plugins/urlRedirect/redirectHitCount.json5` | Hit counters (auto-generated) |
 | `/plugins/urlRedirect/README.md` | Plugin documentation |
 | `/tests/unit/urlRedirect/` | Unit tests (3 files, 101 tests) |
+
+### Admin Bootstrap Navbar Plugin
+
+#### Overview
+
+The **adminBootstrapNavbar** plugin provides a complete admin interface for managing navbar JSON5 configuration files used by the `bootstrapNavbar` plugin. It allows administrators to create, edit, validate, preview, duplicate, and delete navbar configurations through a GUI editor in the admin panel.
+
+**Key Features:**
+- ✅ **GUI editor** with JSON5 syntax and quick-insert toolbar
+- ✅ **Live preview** with Bootstrap rendering (shows all items including auth-filtered ones with indicators)
+- ✅ **JSON5 validation** with internal link checking and role verification
+- ✅ **File picker** to create navbar items from existing EJS/HTML pages
+- ✅ **5 predefined templates** (horizontalBase, horizontalComplete, sidebar, offcanvasResponsive, offcanvasAlways)
+- ✅ **3 creation modes:** from scratch, from template, from duplication
+- ✅ **Soft-delete** with backup (files moved to `backups/` directory)
+- ✅ **Automatic backup** on save with configurable retention
+- ✅ **Recursive scanning** for `navbar.*.json5` files in `/www/`
+- ✅ **Path traversal protection** on all file operations
+- ✅ **XSS prevention** via HTML escaping in preview rendering
+
+**Plugin Structure:**
+
+```
+plugins/adminBootstrapNavbar/
+├── main.js                    # Plugin entry point, routes, preview renderer
+├── pluginConfig.json5         # Plugin configuration
+├── pluginDescription.json5    # Plugin metadata
+├── backups/                   # Backup storage (soft-deletes + save backups)
+├── lib/
+│   ├── navbarFileManager.js   # Filesystem operations (scan, read, write, backup, delete)
+│   ├── navbarTemplates.js     # Predefined navbar templates (5 templates)
+│   └── navbarValidator.js     # JSON5 validation engine
+└── adminWebSections/
+    └── navbarsManagement/     # Admin UI pages
+        ├── index.ejs          # Navbar list (table with actions)
+        ├── create.ejs         # Create new navbar (3 modes)
+        ├── edit.ejs           # JSON5 editor with toolbar and preview
+        ├── editor.css         # Editor styles
+        └── editor.js          # Client-side editor logic
+```
+
+**Dependencies:** `bootstrap ^1.0.0`, `bootstrapNavbar ^1.0.0`, `simpleI18n ^1.0.0`
+
+---
+
+#### Configuration
+
+**In `pluginConfig.json5` → `custom`:**
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `maxBackupsPerFile` | number | `10` | Maximum backup files kept per navbar file |
+| `linkValidationSeverity` | string | `"warning"` | `"warning"` or `"error"` for internal link checks |
+| `allowedFileNameChars` | string | `"a-zA-Z0-9_-"` | Regex character class for valid navbar names |
+| `filePickerDefaultExt` | string | `".ejs"` | Default filter in the file picker |
+
+---
+
+#### API Endpoints
+
+All routes require authentication with roles: root (0), admin (1), or editor (2).
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/adminBootstrapNavbar/list` | List all discovered navbar files |
+| `GET` | `/api/adminBootstrapNavbar/load?file={name}` | Load content of a specific navbar file |
+| `POST` | `/api/adminBootstrapNavbar/save` | Save navbar content (with backup) |
+| `POST` | `/api/adminBootstrapNavbar/validate` | Validate JSON5 content without saving |
+| `POST` | `/api/adminBootstrapNavbar/preview` | Render navbar preview HTML |
+| `POST` | `/api/adminBootstrapNavbar/create` | Create a new navbar file (modes: empty, template, duplicate) |
+| `POST` | `/api/adminBootstrapNavbar/duplicate` | Duplicate an existing navbar |
+| `POST` | `/api/adminBootstrapNavbar/delete` | Soft-delete a navbar file (move to backups) |
+| `GET` | `/api/adminBootstrapNavbar/templates` | List available templates |
+| `GET` | `/api/adminBootstrapNavbar/browse-files` | Browse files for the file picker (tree view) |
+| `POST` | `/api/adminBootstrapNavbar/refresh-scan` | Re-scan filesystem for navbar files |
+
+---
+
+#### Library Modules
+
+**navbarFileManager.js** — Filesystem operations:
+- `scanNavbarFiles(scanDir)` — Recursive scan for `navbar.*.json5` (skips hidden dirs, node_modules)
+- `readNavbarFile(filePath)` — Returns `{ success, content, parsed, parseError }`
+- `saveNavbarFile(filePath, content, backupDir, wwwDir, maxBackups)` — Atomic write with backup
+- `createNavbarFile(filePath, content)` — Creates new file (error if exists)
+- `deleteNavbarFile(filePath, backupDir, wwwDir)` — Soft-delete (moves to backups with DELETED marker)
+- `createBackup(filePath, backupDir, wwwDir, maxBackups)` — Creates timestamped backup with cleanup
+
+**navbarValidator.js** — Validation engine:
+- `validate(content, options)` — Returns `{ valid, errors[], warnings[] }`
+- Validates: JSON5 syntax, required structure, settings values, item structure, visibility fields, internal links, role IDs
+- Exports constants: `VALID_TYPES`, `VALID_EXPAND_AT`, `VALID_COLOR_SCHEMES`, `VALID_POSITIONS`, `VALID_SHOW_WHEN`
+
+**navbarTemplates.js** — Template system:
+- `getTemplateList()` — Returns `[{ id, label: {it, en}, description: {it, en} }]`
+- `generateFromTemplate(templateId, navbarName)` — Returns JSON5 string or null
+- `generateEmpty(navbarName)` — Returns minimal empty navbar JSON5 string
+
+---
+
+#### Admin UI Pages
+
+**Navbar List** (`/admin/navbarsManagement/index.ejs`):
+- Table showing all navbar files with name, type badge, path, action buttons
+- Actions: Edit, Duplicate, Delete with confirmation
+- Refresh Scan and New Navbar buttons
+
+**Create Navbar** (`/admin/navbarsManagement/create.ejs`):
+- Three creation modes: From scratch, From template, From duplication
+- Template selector with i18n labels and descriptions
+- Supports URL pre-fill parameters (`?mode=&name=&source=`)
+
+**Edit Navbar** (`/admin/navbarsManagement/edit.ejs`):
+- Full JSON5 text editor with toolbar
+- Quick-insert: Item, Dropdown, Separator, Divider, From File
+- Section selector (left/right) for snippet insertion
+- Icon helper with live preview
+- Validate, Preview, and Save action buttons
+- Auto-preview on load, snippet insert, template replace, and save
+- Preview shows auth indicators: 🔒 (requires auth) and 👁 (unauthenticated only)
+- File picker modal with tree view, extension filter, and label auto-generation
+
+---
+
+#### Reference Files
+
+| File | Purpose |
+|------|---------|
+| `/plugins/adminBootstrapNavbar/main.js` | Plugin entry point, routes, preview renderer |
+| `/plugins/adminBootstrapNavbar/lib/navbarFileManager.js` | Filesystem operations |
+| `/plugins/adminBootstrapNavbar/lib/navbarTemplates.js` | Predefined templates |
+| `/plugins/adminBootstrapNavbar/lib/navbarValidator.js` | Validation engine |
+| `/plugins/adminBootstrapNavbar/pluginConfig.json5` | Plugin configuration |
+| `/plugins/adminBootstrapNavbar/pluginDescription.json5` | Plugin metadata |
+| `/plugins/adminBootstrapNavbar/README.md` | Internal plugin documentation |
+| `/core/admin/adminConfig.json5` | Admin section registration |
+| `/tests/unit/adminBootstrapNavbar/` | Unit tests (3 files, 131 tests) |
 
 ## Admin System Architecture
 
@@ -4184,6 +4338,84 @@ if (!ctx.session.authenticated) {
 }
 ```
 
+6. **XSS Prevention in EJS Templates**
+
+The project uses a **defense-in-depth** strategy with two layers:
+
+**Layer 1 — Server-side sanitization (primary defense):**
+
+All API endpoints that return user-controlled data MUST escape HTML before sending to templates:
+
+```javascript
+const escapeHtml = require('../../core/escapeHtml');
+
+// In route handler — escape before sending to template
+ctx.body = {
+  username: escapeHtml(user.username),
+  email: escapeHtml(user.email)
+};
+```
+
+**Layer 2 — Client-side sanitization (defense-in-depth):**
+
+Admin theme includes `escapeHtml.js` globally via `head.ejs`. Use it when inserting dynamic content via `innerHTML`:
+
+```javascript
+// Client-side — always escape before innerHTML
+element.innerHTML = `<td>${escapeHtml(userData.username)}</td>`;
+```
+
+**EJS Tag Rules:**
+
+| Tag | Usage | XSS Safe? |
+|-----|-------|-----------|
+| `<%= value %>` | Output with HTML escaping | ✅ Yes |
+| `<%- value %>` | Output raw HTML (no escaping) | ❌ No — use only for trusted HTML (theme includes, plugin hooks) |
+
+```ejs
+<%# SAFE — escaped output %>
+<p>Welcome, <%= passData.ctx.session.user.username %></p>
+
+<%# SAFE — trusted theme include %>
+<%- include(passData.themeSys.getThemePartPath('head.ejs')) %>
+
+<%# DANGEROUS — never use <%- with user data %>
+<%# <%- userInput %> → XSS vulnerability! %>
+```
+
+**Passing config to client JS — use JS variables, NOT hidden spans:**
+
+```ejs
+<%# CORRECT — JS variable with escaped output %>
+<script>
+  const apiPrefix = '<%= passData.apiPrefix %>';
+</script>
+
+<%# WRONG — hidden span pattern (deprecated) %>
+<%# <span id="apiPrefix" style="display:none"><%= passData.apiPrefix %></span> %>
+```
+
+**Utility files:**
+- Server-side: `/core/escapeHtml.js`
+- Client-side: `/themes/defaultAdminTheme/themeResources/js/escapeHtml.js`
+
+7. **Open Redirect Prevention**
+
+All redirect URLs from user input MUST be validated:
+
+```javascript
+// Use getSafeRedirectUrl() from adminUsers plugin
+function getSafeRedirectUrl(url) {
+  if (!url || typeof url !== 'string') return '/';
+  const trimmed = url.trim();
+  // Must start with / but not // or /\ (protocol-relative URLs)
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.startsWith('/\\')) {
+    return trimmed;
+  }
+  return '/'; // Fallback to safe default
+}
+```
+
 ## Common Tasks
 
 ### Task: Add a New API Endpoint
@@ -4370,30 +4602,56 @@ module.exports = {
 
 ## Testing Strategy
 
-**Current Status:** Jest è installato e configurato. Sono presenti test unitari e un test di integrazione diagnostico per HTTPS.
+**Current Status:** Jest è installato e configurato. Sono presenti test unitari, test di integrazione e test di sicurezza.
 
 ### Test Esistenti
 
 ```
 tests/
 ├── unit/
-│   ├── bootstrapNavbar/          # 5 file, 206 test
+│   ├── bootstrapNavbar/              # 5 file, 187 test
 │   │   ├── escapeHtml.test.js
 │   │   ├── isActivePage.test.js
 │   │   ├── isItemVisible.test.js
 │   │   ├── configDir.test.js
 │   │   └── rendering.test.js
-│   ├── urlRedirect/              # 3 file, 101 test
+│   ├── urlRedirect/                  # 3 file, 101 test
 │   │   ├── configValidator.test.js
 │   │   ├── redirectMatcher.test.js
 │   │   └── hitCounter.test.js
-│   └── core/
-│       └── servingRootResolver.test.js  # 22 test
-└── integration/
-    └── httpsDiagnostics.test.js         # 26 test (4 fasi diagnostiche HTTPS)
+│   ├── adminBootstrapNavbar/         # 3 file, 131 test
+│   │   ├── navbarValidator.test.js
+│   │   ├── navbarFileManager.test.js
+│   │   └── navbarTemplates.test.js
+│   ├── core/                         # 7 file, 172 test
+│   │   ├── servingRootResolver.test.js
+│   │   ├── escapeHtml.test.js
+│   │   ├── loadJson5.test.js
+│   │   ├── saveJson5.test.js
+│   │   ├── pluginPagesSystem.test.js
+│   │   ├── adminServicesManager.test.js
+│   │   ├── configManager.test.js
+│   │   └── symlinkManager.test.js
+│   ├── xss/                          # 1 file, 172 test
+│   │   └── serverSideSanitization.test.js
+│   ├── pluginSys.test.js             # 16 test
+│   ├── themeSys.test.js              # 36 test
+│   ├── accessManager.test.js         # }
+│   ├── patternMatcher.test.js        # } 130 test (adminAccessControl)
+│   ├── ruleValidator.test.js         # }
+│   ├── libAccess.test.js             # }
+│   ├── openRedirect.test.js          # 35 test
+│   └── logger.test.js                # 13 test
+└── integration/                      # 5 file, 140 test
+    ├── httpsDiagnostics.test.js
+    ├── httpsServer.test.js
+    ├── pluginLoading.test.js
+    ├── globalPrefix.test.js
+    ├── hideExtension.test.js
+    └── wwwFilesystem.test.js
 ```
 
-**Totale: 355 test**
+**Totale: 34 file, 1133 test**
 
 ### Eseguire i test
 
@@ -4456,13 +4714,114 @@ tests/integration/httpsDiagnostics.test.js
     • riepilogo configurazione finale (informativo)
 ```
 
-**Porte riservate per i test (Fase 4):**
+**Porte riservate per i test:**
 
-| Porta | Uso |
-|-------|-----|
-| `19100` | HTTP di test (evita conflitti con porta 3000 di produzione) |
-| `19200` | TLS isolato di Fase 3 |
-| `19443` | HTTPS di test (evita conflitti con porta 3443 di produzione) |
+| Porta | Contesto | Uso |
+|-------|----------|-----|
+| `19100` | Jest — httpsDiagnostics Fase 4 | HTTP di test (evita conflitti con porta 3000 di produzione) |
+| `19200` | Jest — httpsDiagnostics Fase 3 | TLS isolato |
+| `19300` | Playwright — globalPrefix E2E | HTTP per test con `globalPrefix` non vuoto |
+| `19400` | Playwright — E2E standard | HTTP per test E2E standard (porta dedicata, non collide con server di sviluppo) |
+| `19443` | Jest — httpsDiagnostics Fase 4 | HTTPS di test (evita conflitti con porta 3443 di produzione) |
+
+### Isolamento Test E2E dalla directory www/ di produzione
+
+**REGOLA CRITICA:** I test E2E **NON devono mai dipendere** dai file presenti nella directory `/www/` di produzione. Tutti i file necessari ai test devono essere nella directory dedicata `/tests/www/`.
+
+**Motivazione:**
+- ✅ La directory `/www/` è l'area di lavoro del developer in produzione — può cambiare liberamente
+- ✅ I test non si rompono quando l'utente modifica/aggiunge/rimuove pagine dal sito
+- ✅ I file di test sono controllati e prevedibili
+- ✅ Isolamento completo tra ambiente di test e ambiente di produzione
+
+**Architettura:**
+
+```
+tests/www/                    ← Directory www dedicata ai test
+├── index.ejs                 ← Homepage di test
+├── hello_word.ejs            ← Pagina di test
+├── i18n-test.ejs             ← Test internazionalizzazione
+├── prova_thema.ejs           ← Test tema
+├── navbar.main.json5         ← Configurazione navbar di test
+├── navbarExamples/           ← Esempi navbar
+├── reserved/                 ← Area protetta (richiede login)
+│   └── index.ejs
+├── private/                  ← Area privata (richiede login)
+│   └── index.ejs
+└── lib/                      ← Area libreria (richiede login)
+    └── index.ejs
+```
+
+**Come funziona l'isolamento completo:**
+
+Il `globalSetup.js` sovrascrive `ital8Config.json5` **prima** dell'avvio del server di test, applicando 4 override:
+
+```javascript
+const { TEST_WWW_PATH, E2E_TEST_HTTP_PORT } = require('./testConstants');
+
+// In globalSetup.js — override COMPLETO della config per i test E2E
+configData.wwwPath = TEST_WWW_PATH;              // '/tests/www' (isolamento da /www/)
+configData.httpPort = E2E_TEST_HTTP_PORT;         // 19400 (evita conflitti con server dev su 3000)
+configData.activeTheme = 'themeForTesting';       // Tema di test dedicato
+configData.adminActiveTheme = 'themeForTestingAdmin';
+configData.https.enabled = false;                 // HTTPS disabilitato (test verificano routing, non TLS)
+```
+
+**Perché la porta dedicata (19400) è fondamentale:**
+
+La directory `/www/` di produzione **NON contiene `index.ejs`** (il file si chiama `__index.ejs`), mentre `/tests/www/` contiene `index.ejs`. Se il server E2E riutilizzasse un server di sviluppo già attivo sulla porta 3000 (che usa `/www/`), i test homepage fallirebbero con:
+- `GET /` → "Index of /" (directory listing, nessun `index.ejs` trovato)
+- `GET /index.ejs` → 404
+
+La porta dedicata 19400 + `reuseExistingServer: false` in `playwright.config.js` garantiscono che il server E2E parta sempre con la config di test modificata.
+
+**Il flusso completo:**
+
+```
+npm test
+  ├─ jest (unit + integration) — usa ital8Config.json5 originale
+  │   └─ tests/setup.js ripristina config a versione git tra i test
+  │
+  └─ npx playwright test (E2E)
+       ├─ 1. globalSetup.js:
+       │     ├─ Backup ital8Config.json5 → .test-bak
+       │     ├─ Override: wwwPath, httpPort, themes, HTTPS off
+       │     ├─ Backup userAccount.json5 → .test-bak
+       │     └─ Aggiunta 4 utenti di test
+       │
+       ├─ 2. Server avviato: node index.js (porta 19400, www di test)
+       │
+       ├─ 3. Test E2E eseguiti su http://localhost:19400
+       │
+       └─ 4. globalTeardown.js:
+             ├─ Ripristino ital8Config.json5 da backup
+             └─ Ripristino userAccount.json5 da backup
+```
+
+Il `globalPrefixSetup.js` applica gli stessi override (compreso `wwwPath = TEST_WWW_PATH`) più `globalPrefix` e `httpPort = 19300`.
+
+**Costanti centralizzate in `testConstants.js`:**
+
+```javascript
+const TEST_WWW_PATH = '/tests/www';    // Directory www di test
+const E2E_TEST_HTTP_PORT = 19400;                // Porta HTTP dedicata E2E
+```
+
+**Quando aggiungere nuovi file a tests/www/:**
+
+Se un nuovo test E2E necessita di una pagina web specifica:
+1. Creare il file EJS in `tests/www/` (NON in `/www/`)
+2. Aggiornare questa documentazione se la struttura cambia significativamente
+3. Verificare che il file segua le convenzioni dei template (inclusione dei partial del tema, ecc.)
+
+**Quando NON servono file in tests/www/:**
+
+I seguenti path sono serviti da altre directory e NON necessitano di file nella www di test:
+- `/api/*` → serviti dai route handler dei plugin
+- `/admin/*` → serviti da `core/admin/webPages/`
+- `/pluginPages/*` → serviti da `plugins/{pluginName}/webPages/`
+- `/public-theme-resources/*` → serviti dalla directory del tema
+- `/admin-theme-resources/*` → serviti dalla directory del tema admin
 
 ### Aggiungere Nuovi Test
 
@@ -4475,6 +4834,7 @@ tests/unit/myPlugin/
 **Convenzioni:**
 - Unit test: testano funzioni pure esportate dal modulo (`module.exports`)
 - Integration test: testano comportamento end-to-end (spawn server, richieste HTTP reali)
+- E2E test: usano Playwright, serviti dalla directory `tests/www/` (MAI dalla `/www/` di produzione)
 - Ogni test deve essere indipendente e non modificare file permanentemente
 
 ## Deployment Guidelines
@@ -4591,6 +4951,15 @@ const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
 - `/core/servingRootResolver.js` - Path isolation utility for configDir
 - `/www/navbar.main.json5` - Primary navbar configuration
 - `/www/navbarExamples/` - Example navbar configurations (6 files)
+
+### Admin Bootstrap Navbar Plugin
+
+- `/plugins/adminBootstrapNavbar/main.js` - Plugin entry point, routes, preview renderer
+- `/plugins/adminBootstrapNavbar/lib/navbarFileManager.js` - Filesystem operations
+- `/plugins/adminBootstrapNavbar/lib/navbarTemplates.js` - Predefined templates
+- `/plugins/adminBootstrapNavbar/lib/navbarValidator.js` - Validation engine
+- `/plugins/adminBootstrapNavbar/pluginConfig.json5` - Plugin configuration
+- `/plugins/adminBootstrapNavbar/README.md` - Internal plugin documentation
 
 ### URL Redirect Plugin
 
@@ -4765,11 +5134,11 @@ When working on this codebase as an AI assistant:
 ---
 
 **Last Updated:** 2026-03-26
-**Version:** 2.5.0
+**Version:** 2.7.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
-- v2.5.0 (2026-03-26): **NEW PLUGIN + CORE ENHANCEMENTS** - SEO plugin + core improvements. Key changes:
+- v2.7.0 (2026-03-26): **NEW PLUGIN + CORE ENHANCEMENTS** - SEO plugin + core improvements. Key changes:
   - **New plugin: `seo`**
     - Meta tags injection via hookPage("head"): description, keywords, robots
     - Open Graph tags (og:title, og:description, og:image, og:url, og:type, og:site_name)
@@ -4814,6 +5183,46 @@ When working on this codebase as an AI assistant:
     - `/CLAUDE.md` — Added SEO plugin documentation, PatternMatcher as core utility
   - **Files Removed:**
     - `/plugins/adminAccessControl/lib/patternMatcher.js` — Moved to `/core/patternMatcher.js`
+- v2.6.0 (2026-03-22): **PROJECT REVIEW** - Completed phases 7-9 of project review action plan. Key changes:
+  - **Plugin system robustness (Phase 7):**
+    - Directory name validation in pluginSys (defense-in-depth against path traversal) — `a512eec`
+    - Confirmed fail-fast error handling (Solution A) for plugin loading errors
+    - Added `getSharedObject(providerPluginName, callerName)` method to pluginSys — `7e6d0f3`
+      - On-demand pull mechanism (complements existing push via `setSharedObject`)
+      - Optional `callerName` for per-consumer customized objects
+      - Returns `null` for non-existent or non-sharing plugins
+  - **Test verification (Phase 8):**
+    - All 8 task areas already covered by existing tests
+    - Verified 34 test files, 1133 tests — all passing
+  - **Documentation updates (Phase 9):**
+    - Updated test listing with complete file tree (578 → 1133 tests, 34 files)
+    - Documented `getSharedObject()` API in Inter-Plugin Communication section
+    - Added XSS prevention guide for EJS templates (defense-in-depth strategy)
+    - Added Open Redirect prevention pattern
+    - Documented `escapeHtml` utilities (server-side and client-side)
+    - Documented EJS tag rules (`<%= %>` vs `<%- %>`) and JS variable pattern
+  - **Files Modified:**
+    - `/core/pluginSys.js` — Added `getSharedObject()` method
+    - `/CLAUDE.md` — Updated test counts, added security docs, updated changelog
+    - `/PROJECT_REVIEW_ACTION_PLAN.md` — Marked phases 7, 8, 9 as completed
+- v2.5.0 (2026-03-19): **DOCUMENTATION + TESTS** - adminBootstrapNavbar plugin tests and documentation. Key changes:
+  - **Unit tests added (3 files, 131 tests):**
+    - `navbarValidator.test.js` (63 tests) — JSON5 parsing, structure validation, settings, items, dropdowns, visibility, internal links, role validation
+    - `navbarFileManager.test.js` (33 tests) — Recursive scan, read, create, save with backup, soft-delete, backup management
+    - `navbarTemplates.test.js` (35 tests) — Template list, generation from templates, empty config, cross-template consistency
+  - **Internal documentation:**
+    - Added `README.md` inside plugin directory with complete API reference, configuration guide, library module docs, admin UI description
+  - **External documentation (CLAUDE.md):**
+    - Added "Admin Bootstrap Navbar Plugin" section with overview, configuration, API endpoints, library modules, admin UI pages, reference files
+    - Added plugin to "Important Files Reference" section
+    - Updated test listing and total count (355 → 578)
+  - **Files Added:**
+    - `/tests/unit/adminBootstrapNavbar/navbarValidator.test.js`
+    - `/tests/unit/adminBootstrapNavbar/navbarFileManager.test.js`
+    - `/tests/unit/adminBootstrapNavbar/navbarTemplates.test.js`
+    - `/plugins/adminBootstrapNavbar/README.md`
+  - **Files Modified:**
+    - `/CLAUDE.md` — Added adminBootstrapNavbar documentation section, updated test count
 - v2.4.0 (2026-03-19): **NEW PLUGIN** - urlRedirect plugin for URL redirects (301/302) during site migrations. Key changes:
   - **New plugin: `urlRedirect`**
     - Middleware-based redirect engine (no API routes, only GET requests intercepted)

@@ -103,13 +103,15 @@ class PluginPagesSystem {
 
       if (stats.isSymbolicLink()) {
         const currentTarget = fs.readlinkSync(targetSymlink);
+        // Risolvi a path assoluto per confronto robusto (gestisce sia symlink relativi che assoluti legacy)
+        const resolvedTarget = path.resolve(path.dirname(targetSymlink), currentTarget);
 
-        if (currentTarget === sourceDir) {
+        if (resolvedTarget === sourceDir) {
           console.log(`[PluginPagesSystem] Symlink already valid: ${pluginName} → ${sourceDir}`);
           return;
         } else {
           console.warn(`[PluginPagesSystem] Symlink conflict detected for ${pluginName}`);
-          console.warn(`  Current target: ${currentTarget}`);
+          console.warn(`  Current target: ${currentTarget} (resolved: ${resolvedTarget})`);
           console.warn(`  Expected target: ${sourceDir}`);
           console.warn(`  Removing and recreating symlink...`);
 
@@ -129,10 +131,11 @@ class PluginPagesSystem {
       }
     }
 
-    // Crea symlink
+    // Crea symlink (relativo per portabilità tra macchine diverse)
     try {
-      fs.symlinkSync(sourceDir, targetSymlink, 'dir');
-      console.log(`[PluginPagesSystem] Created symlink: ${pluginName} → ${sourceDir}`);
+      const relativeTarget = path.relative(path.dirname(targetSymlink), sourceDir);
+      fs.symlinkSync(relativeTarget, targetSymlink, 'dir');
+      console.log(`[PluginPagesSystem] Created symlink: ${pluginName} → ${relativeTarget}`);
     } catch (error) {
       console.error(`[PluginPagesSystem] Failed to create symlink for ${pluginName}: ${error.message}`);
     }
@@ -225,9 +228,12 @@ class PluginPagesSystem {
       }
 
       // Leggi il target del symlink
+      let rawTarget = null;
       let targetPath = null;
       try {
-        targetPath = fs.readlinkSync(symlinkPath);
+        rawTarget = fs.readlinkSync(symlinkPath);
+        // Risolvi a path assoluto (gestisce sia symlink relativi che assoluti legacy)
+        targetPath = path.resolve(path.dirname(symlinkPath), rawTarget);
       } catch (error) {
         console.warn(`[PluginPagesSystem] Cannot read symlink target for "${entry}": ${error.message}`);
         continue;
@@ -235,7 +241,7 @@ class PluginPagesSystem {
 
       // Verifica che il target esista
       if (!fs.existsSync(targetPath)) {
-        console.warn(`[PluginPagesSystem] Symlink "${entry}" points to non-existent target: ${targetPath}`);
+        console.warn(`[PluginPagesSystem] Symlink "${entry}" points to non-existent target: ${rawTarget} (resolved: ${targetPath})`);
         console.warn(`[PluginPagesSystem] Removing broken symlink...`);
         try {
           fs.unlinkSync(symlinkPath);
