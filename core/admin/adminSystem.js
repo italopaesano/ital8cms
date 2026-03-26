@@ -17,8 +17,9 @@ const escapeHtml = require('../escapeHtml');
  * 3. initialize(): Processa plugin admin, crea symlink, carica servizi
  */
 class AdminSystem {
-  constructor(themeSys) {
+  constructor(themeSys, ital8Conf) {
     this.themeSys = themeSys;
+    this.ital8Conf = ital8Conf;
     this.pluginSys = null;  // Sarà settato dopo con setPluginSys()
 
     // Inizializza manager
@@ -137,7 +138,7 @@ class AdminSystem {
           label: escapeHtml(sectionConfig.label),
           icon: sectionConfig.icon || '', // icon è intenzionalmente HTML (emoji/icone)
           description: escapeHtml(sectionConfig.description || ''),
-          url: `/${config.adminPrefix || 'admin'}/${sectionId}/index.ejs`,
+          url: `/${config.adminPrefix || 'admin'}/${sectionId}/${this.ital8Conf?.indexFiles?.adminPrefix?.[0] || 'index.ejs'}`,
           type: 'plugin',
           plugin: escapeHtml(sectionConfig.plugin)
         });
