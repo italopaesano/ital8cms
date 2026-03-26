@@ -79,6 +79,16 @@
       "label": "Gestione bootstrapNavbar",
       "icon": "🧭",
       "description": "Creazione e gestione dei menu di navigazione bootstrapNavbar"
+    },
+
+    "seoManagement": {
+      "type": "plugin",
+      "plugin": "adminSeo",
+      "enabled": true,
+      "required": false,
+      "label": "Gestione SEO",
+      "icon": "🔍",
+      "description": "Gestione impostazioni SEO, meta tag, sitemap e robots.txt"
     }
   },
 
@@ -91,7 +101,8 @@
     "systemSettings",
     "pluginsManagment",
     "themesManagment",
-    "navbarsManagement"
+    "navbarsManagement",
+    "seoManagement"
   ],
 
   // Servizi forniti da plugin (backend)
