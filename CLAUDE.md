@@ -246,8 +246,8 @@ module.exports = {
   async uninstallPlugin(pluginSys, pathPluginFolder) {},
   async upgradePlugin(pluginSys, pathPluginFolder, oldVersion, newVersion) {},
 
-  // Route registration
-  getRouteArray(router, pluginSys, pathPluginFolder) { return [] },
+  // Route registration (called without arguments by pluginSys)
+  getRouteArray() { return [] },
 
   // Middleware registration
   getMiddlewareToAdd(pluginSys, pathPluginFolder) { return [] },
@@ -352,13 +352,25 @@ Returns `null` if plugin is not active or doesn't implement `getObjectToShareToO
 
 Routes follow pattern: `/${apiPrefix}/${pluginName}/${path}`
 
+**CRITICAL — Route Object Properties:**
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `method` | string | Yes | **MUST be UPPERCASE**: `'GET'`, `'POST'`, `'PUT'`, `'DEL'`, `'ALL'` |
+| `path` | string | Yes | Route path (e.g., `'/hello'`) |
+| `handler` | async function | Yes | Route handler: `async (ctx) => { ... }` |
+| `access` | object | Yes | Access control (see Access Control section) |
+
+**WARNING:** Using lowercase methods (e.g., `'get'` instead of `'GET'`) or `func` instead of `handler` will cause routes to be **silently ignored** by `pluginSys.loadRoutes()`. The route won't be registered and requests will fall through to the static file server, returning HTML instead of JSON.
+
 ```javascript
-getRouteArray(router, pluginSys, pathPluginFolder) {
+getRouteArray() {
   return [
     {
-      method: 'get',  // 'get', 'post', 'put', 'del', 'all'
+      method: 'GET',  // MUST be uppercase: 'GET', 'POST', 'PUT', 'DEL', 'ALL'
       path: '/hello',
-      func: async (ctx) => {
+      access: { requiresAuth: false, allowedRoles: [] },
+      handler: async (ctx) => {
         ctx.body = 'Hello World'
       }
     }
@@ -803,7 +815,7 @@ GET /pluginPages/myPlugin/login.ejs → Rendered by koa-classic-server
 getRouteArray() {
   return [
     {
-      method: 'post',
+      method: 'POST',
       path: '/login',
       handler: async (ctx) => {
         const { username, password } = ctx.request.body;
@@ -830,7 +842,7 @@ getRouteArray() {
 getRouteArray() {
   return [
     {
-      method: 'get',
+      method: 'GET',
       path: '/mypage',
       handler: async (ctx) => {
         const templatePath = path.join(__dirname, 'webPages', 'mypage.ejs');
@@ -2682,52 +2694,52 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
   return [
     // PUBLIC ROUTE
     {
-      method: 'get',
+      method: 'GET',
       path: '/public-page',
       access: {
         requiresAuth: false,
         allowedRoles: []  // Empty = everyone (no authentication needed)
       },
-      func: async (ctx) => {
+      handler: async (ctx) => {
         ctx.body = 'Public content';
       }
     },
 
     // AUTHENTICATED ROUTE (all logged-in users)
     {
-      method: 'get',
+      method: 'GET',
       path: '/user-dashboard',
       access: {
         requiresAuth: true,
         allowedRoles: []  // Empty = all authenticated users
       },
-      func: async (ctx) => {
+      handler: async (ctx) => {
         ctx.body = `Welcome, ${ctx.session.user.username}!`;
       }
     },
 
     // ADMIN-ONLY ROUTE
     {
-      method: 'post',
+      method: 'POST',
       path: '/admin/delete-user',
       access: {
         requiresAuth: true,
         allowedRoles: [0, 1]  // Only root (0) and admin (1)
       },
-      func: async (ctx) => {
+      handler: async (ctx) => {
         // Delete user logic
       }
     },
 
     // ROLE-SPECIFIC ROUTE
     {
-      method: 'get',
+      method: 'GET',
       path: '/editor/content',
       access: {
         requiresAuth: true,
         allowedRoles: [0, 1, 2, 103]  // root, admin, editor, custom role 103
       },
-      func: async (ctx) => {
+      handler: async (ctx) => {
         // Editor-specific content
       }
     }
@@ -2874,9 +2886,9 @@ With `"requireAuth"`, unauthenticated users visiting any unmatched URL are redir
 getRouteArray() {
   return [
     {
-      method: 'get',
+      method: 'GET',
       path: '/my-route',
-      func: async (ctx) => { /* ... */ }
+      handler: async (ctx) => { /* ... */ }
     }
   ];
 }
@@ -2887,13 +2899,13 @@ getRouteArray() {
 getRouteArray() {
   return [
     {
-      method: 'get',
+      method: 'GET',
       path: '/my-route',
       access: {
         requiresAuth: false,  // or true if authentication needed
         allowedRoles: []      // or [0, 1, ...] for specific roles
       },
-      func: async (ctx) => { /* ... */ }
+      handler: async (ctx) => { /* ... */ }
     }
   ];
 }
@@ -3415,16 +3427,16 @@ GET /api/bootstrap/js/bootstrap.bundle.min.js.map
 getRouteArray(router, pluginSys, pathPluginFolder) {
   return [
     {
-      method: 'get',
+      method: 'GET',
       path: '/my-endpoint',
-      func: async (ctx) => {
+      handler: async (ctx) => {
         ctx.body = { message: 'Hello' }
       }
     },
     {
-      method: 'post',
+      method: 'POST',
       path: '/create-item',
-      func: async (ctx) => {
+      handler: async (ctx) => {
         const data = ctx.request.body
         // Process data
         ctx.body = { success: true }
@@ -3845,9 +3857,9 @@ module.exports = {
   getRouteArray(router, pluginSys, pathPluginFolder) {
     return [
       {
-        method: 'get',
+        method: 'GET',
         path: '/hello',
-        func: async (ctx) => {
+        handler: async (ctx) => {
           ctx.body = 'Hello from myPlugin!'
         }
       }
@@ -3911,9 +3923,9 @@ module.exports = {
   getRouteArray(router, pluginSys, pathPluginFolder) {
     return [
       {
-        method: 'get',
+        method: 'GET',
         path: '/mypage',
-        func: async (ctx) => {
+        handler: async (ctx) => {
           // ⭐ Default template in webPages/ directory (RECOMMENDED)
           const defaultTemplate = path.join(__dirname, 'webPages', 'mypage.ejs');
 
@@ -4425,9 +4437,9 @@ function getSafeRedirectUrl(url) {
 getRouteArray(router, pluginSys, pathPluginFolder) {
   return [
     {
-      method: 'post',
+      method: 'POST',
       path: '/create-item',
-      func: async (ctx) => {
+      handler: async (ctx) => {
         // Get request body
         const { name, description } = ctx.request.body
 
@@ -4549,14 +4561,14 @@ async loadPlugin(pluginSys, pathPluginFolder) {
 getMiddlewareToAdd(pluginSys, pathPluginFolder) {
   return [
     {
-      func: async (ctx, next) => {
+      handler: async (ctx, next) => {
         // Log all requests
         console.log(`${ctx.method} ${ctx.url}`)
         await next()
       }
     },
     {
-      func: async (ctx, next) => {
+      handler: async (ctx, next) => {
         // Add custom header
         ctx.set('X-Powered-By', 'ital8cms')
         await next()

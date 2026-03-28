@@ -13,9 +13,14 @@ node_modules/
 /core/admin/webPages/rolesManagment
 /core/admin/webPages/adminAccessControl
 /core/admin/webPages/navbarsManagement
+/core/admin/webPages/seoManagement
 
 # Auto-generated runtime data
 /plugins/urlRedirect/redirectHitCount.json5
+
+# SEO plugin generated files (recreated at startup)
+/www/sitemap.xml
+/www/robots.txt
 
 # Init system
 /scripts/initState.json5

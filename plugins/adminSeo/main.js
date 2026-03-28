@@ -43,7 +43,7 @@ module.exports = {
     console.log(`[${pluginName}] Plugin loaded — managing SEO config at ${seoPluginPath}`);
   },
 
-  getRouteArray(router, pluginSys, pathPluginFolder) {
+  getRouteArray() {
     return [
       // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       // GLOBAL SETTINGS
@@ -51,10 +51,10 @@ module.exports = {
 
       // Load global settings (custom block only)
       {
-        method: 'get',
+        method: 'GET',
         path: '/load-settings',
         access: pluginAccess,
-        func: async (ctx) => {
+        handler: async (ctx) => {
           const result = seoFileManager.readGlobalSettings(seoPluginPath);
           if (!result.success) {
             ctx.status = 500;
@@ -67,10 +67,10 @@ module.exports = {
 
       // Load global settings as raw JSON5 text (for JSON5 editor)
       {
-        method: 'get',
+        method: 'GET',
         path: '/load-settings-raw',
         access: pluginAccess,
-        func: async (ctx) => {
+        handler: async (ctx) => {
           const result = seoFileManager.readFullPluginConfig(seoPluginPath);
           if (!result.success) {
             ctx.status = 500;
@@ -84,10 +84,10 @@ module.exports = {
 
       // Validate global settings
       {
-        method: 'post',
+        method: 'POST',
         path: '/validate-settings',
         access: pluginAccess,
-        func: async (ctx) => {
+        handler: async (ctx) => {
           const { data } = ctx.request.body;
           if (!data || typeof data !== 'object') {
             ctx.body = { valid: false, errors: ['Request body must contain a "data" object'], warnings: [] };
@@ -100,10 +100,10 @@ module.exports = {
 
       // Save global settings
       {
-        method: 'post',
+        method: 'POST',
         path: '/save-settings',
         access: pluginAccess,
-        func: async (ctx) => {
+        handler: async (ctx) => {
           const { data } = ctx.request.body;
           if (!data || typeof data !== 'object') {
             ctx.status = 400;
@@ -136,10 +136,10 @@ module.exports = {
 
       // Load page rules
       {
-        method: 'get',
+        method: 'GET',
         path: '/load-page-rules',
         access: pluginAccess,
-        func: async (ctx) => {
+        handler: async (ctx) => {
           const result = seoFileManager.readPageRules(seoPluginPath);
           if (!result.success) {
             ctx.status = 500;
@@ -152,10 +152,10 @@ module.exports = {
 
       // Validate page rules (accepts JSON5 string)
       {
-        method: 'post',
+        method: 'POST',
         path: '/validate-page-rules',
         access: pluginAccess,
-        func: async (ctx) => {
+        handler: async (ctx) => {
           const { content } = ctx.request.body;
           if (typeof content !== 'string') {
             ctx.body = { valid: false, errors: ['Request body must contain a "content" string (JSON5)'], warnings: [] };
@@ -178,10 +178,10 @@ module.exports = {
 
       // Save page rules (accepts JSON5 string)
       {
-        method: 'post',
+        method: 'POST',
         path: '/save-page-rules',
         access: pluginAccess,
-        func: async (ctx) => {
+        handler: async (ctx) => {
           const { content } = ctx.request.body;
           if (typeof content !== 'string') {
             ctx.status = 400;
@@ -224,10 +224,10 @@ module.exports = {
 
       // Preview meta tags for a test URL
       {
-        method: 'post',
+        method: 'POST',
         path: '/preview',
         access: pluginAccess,
-        func: async (ctx) => {
+        handler: async (ctx) => {
           const { testUrl, config, pageRules } = ctx.request.body;
           if (!testUrl || typeof testUrl !== 'string') {
             ctx.status = 400;
@@ -255,13 +255,13 @@ module.exports = {
 
       // Trigger sitemap & robots.txt regeneration (proxy to seo plugin)
       {
-        method: 'post',
+        method: 'POST',
         path: '/regenerate',
         access: {
           requiresAuth: true,
           allowedRoles: [0, 1], // Only root and admin
         },
-        func: async (ctx) => {
+        handler: async (ctx) => {
           // Use the seo plugin's shared object to trigger regeneration
           const seoShared = myPluginSys.getSharedObject('seo', pluginName);
           if (!seoShared || !seoShared.regenerate) {
@@ -280,10 +280,10 @@ module.exports = {
       // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
       {
-        method: 'get',
+        method: 'GET',
         path: '/constants',
         access: pluginAccess,
-        func: async (ctx) => {
+        handler: async (ctx) => {
           ctx.body = {
             validChangefreq: seoConfigValidator.VALID_CHANGEFREQ,
             validOgTypes: seoConfigValidator.VALID_OG_TYPES,
