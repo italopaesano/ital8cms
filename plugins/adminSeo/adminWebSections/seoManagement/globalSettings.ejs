@@ -946,6 +946,145 @@
     }
   });
 
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // DIRTY TRACKING — detects unsaved changes by comparing to snapshot
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /** Returns true if current form data differs from server snapshot */
+  function isFormDirty() {
+    if (!serverSnapshot) return false;
+    const current = JSON.stringify(formToData());
+    return current !== serverSnapshot;
+  }
+
+  /** Returns true if textarea content differs from server snapshot */
+  function isTextareaDirty() {
+    if (!serverSnapshot) return false;
+    const content = document.getElementById('jsonEditor').value;
+    try {
+      const parsed = JSON5.parse(content);
+      return JSON.stringify(parsed) !== serverSnapshot;
+    } catch {
+      // If textarea has invalid JSON5, consider it dirty
+      return true;
+    }
+  }
+
+  /** Returns true if anything on the page has unsaved changes */
+  function isPageDirty() {
+    return isFormDirty() || isTextareaDirty();
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // UNSAVED CHANGES MODAL — intercepts tab switch and navigation
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  const unsavedModal = new bootstrap.Modal(document.getElementById('unsavedChangesModal'));
+  let pendingTabTarget = null;    // Tab button to activate after modal resolves
+  let pendingNavHref = null;      // URL to navigate to after modal resolves
+
+  /** Gets the tab ID of the currently active tab */
+  function getActiveTabId() {
+    const activeBtn = document.querySelector('#settingsTabsDesktop .nav-link.active');
+    if (!activeBtn) return null;
+    return activeBtn.getAttribute('data-tab') || activeBtn.id.replace('tabBtn-', '');
+  }
+
+  // Intercept desktop tab switches
+  document.querySelectorAll('#settingsTabsDesktop button[data-bs-toggle="tab"]').forEach(btn => {
+    btn.addEventListener('show.bs.tab', function (e) {
+      if (isFormDirty()) {
+        e.preventDefault();
+        pendingTabTarget = this;
+        pendingNavHref = null;
+        unsavedModal.show();
+      }
+    });
+  });
+
+  // Intercept mobile dropdown tab switches
+  const mobileSelect = document.getElementById('settingsTabsMobile');
+  let mobileSelectPrevValue = mobileSelect.value;
+
+  mobileSelect.addEventListener('change', function (e) {
+    if (isFormDirty()) {
+      e.preventDefault();
+      // Store the target and revert the select
+      const targetId = this.value;
+      this.value = mobileSelectPrevValue;
+      pendingTabTarget = document.querySelector(`#settingsTabsDesktop button[data-bs-target="#${targetId}"]`);
+      pendingNavHref = null;
+      unsavedModal.show();
+    } else {
+      mobileSelectPrevValue = this.value;
+    }
+  });
+
+  // Update prev value when tab actually changes
+  document.querySelectorAll('#settingsTabsDesktop button[data-bs-toggle="tab"]').forEach(btn => {
+    btn.addEventListener('shown.bs.tab', function () {
+      const targetId = this.getAttribute('data-bs-target').replace('#', '');
+      mobileSelectPrevValue = targetId;
+    });
+  });
+
+  // Intercept navigation links (breadcrumb, cancel)
+  document.querySelectorAll('a.nav-link-action, .breadcrumb a').forEach(link => {
+    link.addEventListener('click', function (e) {
+      if (isPageDirty()) {
+        e.preventDefault();
+        pendingNavHref = this.href;
+        pendingTabTarget = null;
+        unsavedModal.show();
+      }
+    });
+  });
+
+  // Modal button: Discard changes and proceed
+  document.getElementById('modalBtnDiscard').addEventListener('click', () => {
+    unsavedModal.hide();
+    // Reset snapshot to current form so dirty check passes
+    takeSnapshot(formToData());
+    if (pendingTabTarget) {
+      new bootstrap.Tab(pendingTabTarget).show();
+      pendingTabTarget = null;
+    }
+    if (pendingNavHref) {
+      window.location.href = pendingNavHref;
+      pendingNavHref = null;
+    }
+  });
+
+  // Modal button: Save then proceed
+  document.getElementById('modalBtnSave').addEventListener('click', async () => {
+    // Determine which tab to save from (use the currently active one)
+    const activeBtn = document.querySelector('#settingsTabsDesktop .nav-link.active');
+    const activeTabId = activeBtn ? activeBtn.id.replace('tabBtn-', '') : 'principale';
+
+    const saved = await saveFromTab(activeTabId);
+    unsavedModal.hide();
+
+    if (saved) {
+      if (pendingTabTarget) {
+        new bootstrap.Tab(pendingTabTarget).show();
+        pendingTabTarget = null;
+      }
+      if (pendingNavHref) {
+        window.location.href = pendingNavHref;
+        pendingNavHref = null;
+      }
+    }
+    // If save failed, modal closes but user stays on current tab
+  });
+
+  // Browser beforeunload — native dialog for page exit
+  window.addEventListener('beforeunload', function (e) {
+    if (isPageDirty()) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+
   // Load on page ready
   document.addEventListener('DOMContentLoaded', loadSettings);
 </script>
