@@ -91,6 +91,16 @@
   margin-bottom: 0;
 }
 
+/* Feature Status Panel (Principale tab) */
+#featureStatusList li {
+  font-size: 0.875rem;
+}
+
+#featureStatusList .badge {
+  min-width: 4.5rem;
+  font-size: 0.72rem;
+}
+
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    Global Settings — Tab Layout
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */

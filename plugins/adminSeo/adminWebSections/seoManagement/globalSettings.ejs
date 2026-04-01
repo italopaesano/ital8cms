@@ -120,6 +120,20 @@
         <input type="url" class="form-control" id="siteUrl" placeholder="https://www.example.com">
       </div>
 
+      <!-- Feature status summary (read-only) -->
+      <div id="featureStatusPanel" class="mb-3">
+        <label class="form-label"><%= __({it: 'Stato Funzionalità', en: 'Feature Status'}, passData.ctx) %></label>
+        <ul class="list-unstyled mb-0 ps-1" id="featureStatusList">
+          <li class="mb-1"><span class="badge" id="statusCanonical"></span> Canonical URL</li>
+          <li class="mb-1"><span class="badge" id="statusMetaTags"></span> Meta Tags</li>
+          <li class="mb-1"><span class="badge" id="statusOpenGraph"></span> Open Graph</li>
+          <li class="mb-1"><span class="badge" id="statusTwitter"></span> Twitter Cards</li>
+          <li class="mb-1"><span class="badge" id="statusStructured"></span> Structured Data</li>
+          <li class="mb-1"><span class="badge" id="statusSitemap"></span> Sitemap</li>
+          <li class="mb-1"><span class="badge" id="statusRobots"></span> robots.txt</li>
+        </ul>
+      </div>
+
       <div id="tabMessages-principale" class="messages-area mb-2"></div>
       <button type="button" class="btn btn-primary btn-sm btn-tab-save" data-tab="principale">
         <i class="bi bi-save"></i> <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %>
@@ -1138,6 +1152,30 @@
     document.getElementById('jsonEditor').value = JSON.stringify(data, null, 2);
   }
 
+  /** Updates the feature status badges in the Principale tab */
+  function updateFeatureStatus(data) {
+    if (!data) return;
+    const activeLabel = '<%= __({it: "Attivo", en: "Active"}, passData.ctx) %>';
+    const inactiveLabel = '<%= __({it: "Disattivo", en: "Inactive"}, passData.ctx) %>';
+
+    const features = [
+      { id: 'statusCanonical', key: 'enableCanonicalUrl' },
+      { id: 'statusMetaTags', key: 'enableMetaTags' },
+      { id: 'statusOpenGraph', key: 'enableOpenGraph' },
+      { id: 'statusTwitter', key: 'enableTwitterCards' },
+      { id: 'statusStructured', key: 'enableStructuredData' },
+      { id: 'statusSitemap', key: 'enableSitemap' },
+      { id: 'statusRobots', key: 'enableRobotsTxt' },
+    ];
+
+    features.forEach(f => {
+      const badge = document.getElementById(f.id);
+      const active = data[f.key] !== false;
+      badge.textContent = active ? activeLabel : inactiveLabel;
+      badge.className = active ? 'badge bg-success' : 'badge bg-danger';
+    });
+  }
+
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // LOAD SETTINGS FROM SERVER
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1151,6 +1189,8 @@
         dataToForm(result.data);
         // Populate textarea
         dataToTextarea(result.data);
+        // Update feature status badges
+        updateFeatureStatus(result.data);
         // Take snapshot for dirty tracking
         takeSnapshot(result.data);
       } else {
@@ -1225,6 +1265,8 @@
         showDiffSavedBadge();
         // Sync textarea with saved data
         dataToTextarea(data);
+        // Update feature status badges
+        updateFeatureStatus(data);
         // Update snapshot
         takeSnapshot(data);
         showAlert(i18n.saved, 'success');
@@ -1337,6 +1379,8 @@
         showDiffSavedBadge();
         // Sync all tabs with saved data
         dataToForm(parsed);
+        // Update feature status badges
+        updateFeatureStatus(parsed);
         // Update snapshot
         takeSnapshot(parsed);
         // Show warnings if any
