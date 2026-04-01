@@ -66,23 +66,6 @@ module.exports = {
         },
       },
 
-      // Load global settings as raw JSON5 text (for JSON5 editor)
-      {
-        method: 'GET',
-        path: '/load-settings-raw',
-        access: pluginAccess,
-        handler: async (ctx) => {
-          const result = seoFileManager.readFullPluginConfig(seoPluginPath);
-          if (!result.success) {
-            ctx.status = 500;
-            ctx.body = { success: false, error: result.error };
-            return;
-          }
-          // Return only the custom block as JSON5-formatted string
-          ctx.body = { success: true, content: JSON.stringify(result.data.custom, null, 2) };
-        },
-      },
-
       // Validate global settings
       {
         method: 'POST',
@@ -273,24 +256,6 @@ module.exports = {
 
           const report = seoShared.regenerate();
           ctx.body = { success: true, report };
-        },
-      },
-
-      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-      // CONSTANTS (for client-side form building)
-      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-      {
-        method: 'GET',
-        path: '/constants',
-        access: pluginAccess,
-        handler: async (ctx) => {
-          ctx.body = {
-            validChangefreq: seoConfigValidator.VALID_CHANGEFREQ,
-            validOgTypes: seoConfigValidator.VALID_OG_TYPES,
-            validTwitterCardTypes: seoConfigValidator.VALID_TWITTER_CARD_TYPES,
-            validPageRuleFields: seoConfigValidator.VALID_PAGE_RULE_FIELDS,
-          };
         },
       },
 
