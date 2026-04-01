@@ -762,6 +762,190 @@
     }
   }
 
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // SAVE FROM TAB — collects all form data, validates, saves, syncs
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /** Displays validation messages inside a tab's messages area */
+  function showTabMessages(tabId, errors, warnings) {
+    const container = document.getElementById(`tabMessages-${tabId}`);
+    if (!container) return;
+    let html = '';
+    if (errors && errors.length > 0) {
+      html += errors.map(e => `<div class="message-item message-error">${escapeHtml(e)}</div>`).join('');
+    }
+    if (warnings && warnings.length > 0) {
+      html += warnings.map(w => `<div class="message-item message-warning">${escapeHtml(w)}</div>`).join('');
+    }
+    container.innerHTML = html;
+  }
+
+  function clearTabMessages(tabId) {
+    const container = document.getElementById(`tabMessages-${tabId}`);
+    if (container) container.innerHTML = '';
+  }
+
+  /**
+   * Saves from a tab: reads all form fields, validates server-side, saves.
+   * On success: updates textarea + snapshot.
+   * On failure: shows errors inside the tab.
+   */
+  async function saveFromTab(tabId) {
+    clearTabMessages(tabId);
+    const data = formToData();
+
+    try {
+      // Validate first
+      const valResp = await fetch(`/${apiPrefix}/adminSeo/validate-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data }),
+      });
+      const valResult = await valResp.json();
+
+      if (!valResult.valid) {
+        showTabMessages(tabId, valResult.errors, valResult.warnings);
+        return false;
+      }
+
+      // Save
+      const saveResp = await fetch(`/${apiPrefix}/adminSeo/save-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data }),
+      });
+      const saveResult = await saveResp.json();
+
+      if (saveResult.success) {
+        // Show warnings if any
+        if (saveResult.warnings && saveResult.warnings.length > 0) {
+          showTabMessages(tabId, [], saveResult.warnings);
+        }
+        // Sync textarea with saved data
+        dataToTextarea(data);
+        // Update snapshot
+        takeSnapshot(data);
+        showAlert(i18n.saved, 'success');
+        return true;
+      } else {
+        const errors = saveResult.errors || [saveResult.error || i18n.saveError];
+        showTabMessages(tabId, errors, saveResult.warnings);
+        return false;
+      }
+    } catch (err) {
+      showTabMessages(tabId, [i18n.saveError + ': ' + err.message], []);
+      return false;
+    }
+  }
+
+  // Bind all tab save buttons
+  document.querySelectorAll('.btn-tab-save').forEach(btn => {
+    btn.addEventListener('click', function () {
+      const tabId = this.getAttribute('data-tab');
+      saveFromTab(tabId);
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // VALIDATE TEXTAREA — parses JSON5, validates server-side
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  function showTextareaMessages(errors, warnings) {
+    const container = document.getElementById('textareaMessages');
+    let html = '';
+    if (errors && errors.length > 0) {
+      html += errors.map(e => `<div class="message-item message-error">${escapeHtml(e)}</div>`).join('');
+    }
+    if (warnings && warnings.length > 0) {
+      html += warnings.map(w => `<div class="message-item message-warning">${escapeHtml(w)}</div>`).join('');
+    }
+    if (!html) {
+      html = `<div class="message-item message-success">${i18n.validationOk}</div>`;
+    }
+    container.innerHTML = html;
+  }
+
+  function clearTextareaMessages() {
+    document.getElementById('textareaMessages').innerHTML = '';
+  }
+
+  document.getElementById('btnValidateTextarea').addEventListener('click', async () => {
+    clearTextareaMessages();
+    const content = document.getElementById('jsonEditor').value;
+
+    // Parse JSON5 client-side first
+    let parsed;
+    try {
+      parsed = JSON5.parse(content);
+    } catch (err) {
+      showTextareaMessages([`JSON5 syntax error: ${err.message}`], []);
+      return;
+    }
+
+    // Validate server-side
+    try {
+      const resp = await fetch(`/${apiPrefix}/adminSeo/validate-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: parsed }),
+      });
+      const result = await resp.json();
+      showTextareaMessages(
+        result.errors && result.errors.length > 0 ? result.errors : null,
+        result.warnings && result.warnings.length > 0 ? result.warnings : null
+      );
+    } catch (err) {
+      showTextareaMessages([err.message], []);
+    }
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // SAVE FROM TEXTAREA — parses JSON5, saves, syncs tabs
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  document.getElementById('btnSaveTextarea').addEventListener('click', async () => {
+    clearTextareaMessages();
+    const content = document.getElementById('jsonEditor').value;
+
+    // Parse JSON5 client-side
+    let parsed;
+    try {
+      parsed = JSON5.parse(content);
+    } catch (err) {
+      showTextareaMessages([`JSON5 syntax error: ${err.message}`], []);
+      return;
+    }
+
+    // Save via API
+    try {
+      const resp = await fetch(`/${apiPrefix}/adminSeo/save-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: parsed }),
+      });
+      const result = await resp.json();
+
+      if (result.success) {
+        // Sync all tabs with saved data
+        dataToForm(parsed);
+        // Update snapshot
+        takeSnapshot(parsed);
+        // Show warnings if any
+        if (result.warnings && result.warnings.length > 0) {
+          showTextareaMessages(null, result.warnings);
+        } else {
+          clearTextareaMessages();
+        }
+        showAlert(i18n.saved, 'success');
+      } else {
+        const errors = result.errors || [result.error || i18n.saveError];
+        showTextareaMessages(errors, result.warnings);
+      }
+    } catch (err) {
+      showTextareaMessages([i18n.saveError + ': ' + err.message], []);
+    }
+  });
+
   // Load on page ready
   document.addEventListener('DOMContentLoaded', loadSettings);
 </script>
