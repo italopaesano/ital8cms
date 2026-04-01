@@ -459,6 +459,45 @@
   </div>
 
   <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- CHANGES SUMMARY (diff panel) -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div id="diffPanel" class="diff-panel mb-4">
+    <div class="diff-panel-header">
+      <i class="bi bi-file-diff"></i>
+      <span><%= __({it: 'Riepilogo Modifiche', en: 'Changes Summary'}, passData.ctx) %></span>
+      <span id="diffCounter" class="diff-counter ms-2"></span>
+      <span id="diffSavedBadge" class="diff-saved-badge ms-2 d-none"><%= __({it: 'Salvataggio effettuato', en: 'Save completed'}, passData.ctx) %></span>
+    </div>
+
+    <div id="diffNoChanges" class="diff-no-changes">
+      <i class="bi bi-check-circle"></i> <%= __({it: 'Nessuna modifica', en: 'No changes'}, passData.ctx) %>
+    </div>
+
+    <div id="diffContent" class="d-none">
+      <!-- Before panel -->
+      <div class="diff-subpanel diff-before">
+        <div class="diff-subpanel-header">
+          <i class="bi bi-clock-history"></i> <%= __({it: 'Prima', en: 'Before'}, passData.ctx) %>
+        </div>
+        <pre id="diffBefore" class="diff-pre"></pre>
+      </div>
+
+      <!-- Arrow separator -->
+      <div class="diff-arrow text-center">
+        <i class="bi bi-arrow-down"></i>
+      </div>
+
+      <!-- After panel -->
+      <div class="diff-subpanel diff-after">
+        <div class="diff-subpanel-header">
+          <i class="bi bi-pencil-square"></i> <%= __({it: 'Dopo', en: 'After'}, passData.ctx) %>
+        </div>
+        <pre id="diffAfter" class="diff-pre"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
   <!-- JSON5 TEXTAREA EDITOR (bottom of page) -->
   <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
   <h5 class="mb-2"><i class="bi bi-code-slash"></i> <%= __({it: 'Editor JSON5', en: 'JSON5 Editor'}, passData.ctx) %></h5>
