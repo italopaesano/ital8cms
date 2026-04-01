@@ -98,42 +98,362 @@
 
     <!-- TAB: Principale -->
     <div class="tab-pane fade show active" id="tab-principale" role="tabpanel">
-      <p class="text-muted"><%= __({it: 'Contenuto tab Principale — Fase 2', en: 'Main tab content — Phase 2'}, passData.ctx) %></p>
+      <p class="text-muted mb-1">
+        <%= __({it: 'Impostazioni generali del sito usate come base per tutte le funzionalità SEO: nome del sito e URL.', en: 'General site settings used as the foundation for all SEO features: site name and URL.'}, passData.ctx) %>
+      </p>
+      <details class="mb-3">
+        <summary class="text-muted small"><%= __({it: 'Approfondisci...', en: 'Learn more...'}, passData.ctx) %></summary>
+        <div class="small text-muted mt-1 ps-2 border-start">
+          <%= __({
+            it: 'Il nome del sito e l\'URL base vengono utilizzati da quasi tutte le funzionalità SEO: Open Graph, Structured Data (JSON-LD), Sitemap, canonical URL. Assicurati che l\'URL includa il protocollo (https://) e non termini con una barra. Esempio: https://www.example.com',
+            en: 'The site name and base URL are used by almost every SEO feature: Open Graph, Structured Data (JSON-LD), Sitemap, canonical URL. Make sure the URL includes the protocol (https://) and does not end with a trailing slash. Example: https://www.example.com'
+          }, passData.ctx) %>
+        </div>
+      </details>
+
+      <div class="mb-3">
+        <label for="siteName" class="form-label"><%= __({it: 'Nome del Sito', en: 'Site Name'}, passData.ctx) %></label>
+        <input type="text" class="form-control" id="siteName" placeholder="Azienda XYZ">
+      </div>
+      <div class="mb-3">
+        <label for="siteUrl" class="form-label"><%= __({it: 'URL del Sito', en: 'Site URL'}, passData.ctx) %></label>
+        <input type="url" class="form-control" id="siteUrl" placeholder="https://www.example.com">
+      </div>
+
+      <div id="tabMessages-principale" class="messages-area mb-2"></div>
+      <button type="button" class="btn btn-primary btn-sm btn-tab-save" data-tab="principale">
+        <i class="bi bi-save"></i> <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %>
+      </button>
     </div>
 
     <!-- TAB: Canonical & URLs -->
     <div class="tab-pane fade" id="tab-canonical" role="tabpanel">
-      <p class="text-muted"><%= __({it: 'Contenuto tab Canonical — Fase 2', en: 'Canonical tab content — Phase 2'}, passData.ctx) %></p>
+      <p class="text-muted mb-1">
+        <%= __({it: 'L\'URL canonical indica ai motori di ricerca qual è la versione ufficiale di una pagina, evitando problemi di contenuti duplicati.', en: 'The canonical URL tells search engines which is the official version of a page, avoiding duplicate content issues.'}, passData.ctx) %>
+      </p>
+      <details class="mb-3">
+        <summary class="text-muted small"><%= __({it: 'Approfondisci...', en: 'Learn more...'}, passData.ctx) %></summary>
+        <div class="small text-muted mt-1 ps-2 border-start">
+          <%= __({
+            it: 'Quando la stessa pagina è raggiungibile da URL diversi (es. /about.ejs e /about), il tag <link rel="canonical"> segnala ai motori di ricerca quale URL considerare come principale. Questo previene penalizzazioni per contenuto duplicato. L\'opzione "URL puliti" rimuove automaticamente l\'estensione .ejs dagli URL canonical generati, utile quando hideExtension è attivo o quando si vuole presentare URL più puliti ai motori di ricerca.',
+            en: 'When the same page is reachable from different URLs (e.g., /about.ejs and /about), the <link rel="canonical"> tag tells search engines which URL to consider as the primary one. This prevents duplicate content penalties. The "Clean URLs" option automatically removes the .ejs extension from generated canonical URLs, useful when hideExtension is active or when you want to present cleaner URLs to search engines.'
+          }, passData.ctx) %>
+        </div>
+      </details>
+
+      <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" id="enableCanonicalUrl" checked>
+        <label class="form-check-label fw-semibold" for="enableCanonicalUrl"><%= __({it: 'Abilita Canonical URL', en: 'Enable Canonical URL'}, passData.ctx) %></label>
+      </div>
+
+      <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" id="canonicalCleanUrl" checked>
+        <label class="form-check-label" for="canonicalCleanUrl"><%= __({it: 'URL puliti (rimuovi estensione .ejs)', en: 'Clean URLs (remove .ejs extension)'}, passData.ctx) %></label>
+      </div>
+
+      <div id="tabMessages-canonical" class="messages-area mb-2"></div>
+      <button type="button" class="btn btn-primary btn-sm btn-tab-save" data-tab="canonical">
+        <i class="bi bi-save"></i> <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %>
+      </button>
     </div>
 
     <!-- TAB: Meta Tags -->
     <div class="tab-pane fade" id="tab-metatags" role="tabpanel">
-      <p class="text-muted"><%= __({it: 'Contenuto tab Meta Tags — Fase 2', en: 'Meta Tags tab content — Phase 2'}, passData.ctx) %></p>
+      <p class="text-muted mb-1">
+        <%= __({it: 'I Meta Tags sono elementi HTML invisibili nell\'<head> della pagina. Comunicano ai motori di ricerca informazioni come descrizione, parole chiave e direttive di indicizzazione.', en: 'Meta Tags are invisible HTML elements in the page <head>. They communicate to search engines information like description, keywords, and indexing directives.'}, passData.ctx) %>
+      </p>
+      <details class="mb-3">
+        <summary class="text-muted small"><%= __({it: 'Approfondisci...', en: 'Learn more...'}, passData.ctx) %></summary>
+        <div class="small text-muted mt-1 ps-2 border-start">
+          <%= __({
+            it: 'I meta tag principali gestiti sono: <meta name="description"> (descrizione della pagina mostrata nei risultati di ricerca), <meta name="keywords"> (parole chiave associate alla pagina, meno rilevanti oggi ma ancora usati da alcuni motori), e <meta name="robots"> (direttive per i crawler: index/noindex, follow/nofollow). I valori predefiniti qui configurati vengono usati per tutte le pagine che non hanno regole specifiche in "Regole Per Pagina".',
+            en: 'The main meta tags managed are: <meta name="description"> (page description shown in search results), <meta name="keywords"> (keywords associated with the page, less relevant today but still used by some engines), and <meta name="robots"> (directives for crawlers: index/noindex, follow/nofollow). The default values configured here are used for all pages that do not have specific rules in "Per-Page Rules".'
+          }, passData.ctx) %>
+        </div>
+      </details>
+
+      <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" id="enableMetaTags" checked>
+        <label class="form-check-label fw-semibold" for="enableMetaTags"><%= __({it: 'Abilita Meta Tags', en: 'Enable Meta Tags'}, passData.ctx) %></label>
+      </div>
+
+      <div class="mb-3">
+        <label for="defaultDescription" class="form-label"><%= __({it: 'Descrizione predefinita', en: 'Default Description'}, passData.ctx) %></label>
+        <textarea class="form-control" id="defaultDescription" rows="2"></textarea>
+      </div>
+      <div class="mb-3">
+        <label for="defaultKeywords" class="form-label"><%= __({it: 'Keywords predefinite', en: 'Default Keywords'}, passData.ctx) %></label>
+        <input type="text" class="form-control" id="defaultKeywords" placeholder="keyword1, keyword2, keyword3">
+      </div>
+      <div class="mb-3">
+        <label for="defaultRobots" class="form-label">Robots</label>
+        <input type="text" class="form-control" id="defaultRobots" value="index, follow">
+      </div>
+
+      <div id="tabMessages-metatags" class="messages-area mb-2"></div>
+      <button type="button" class="btn btn-primary btn-sm btn-tab-save" data-tab="metatags">
+        <i class="bi bi-save"></i> <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %>
+      </button>
     </div>
 
     <!-- TAB: Open Graph -->
     <div class="tab-pane fade" id="tab-opengraph" role="tabpanel">
-      <p class="text-muted"><%= __({it: 'Contenuto tab Open Graph — Fase 2', en: 'Open Graph tab content — Phase 2'}, passData.ctx) %></p>
+      <p class="text-muted mb-1">
+        <%= __({it: 'I tag Open Graph (og:*) controllano come le pagine appaiono quando vengono condivise su social network come Facebook, LinkedIn e WhatsApp.', en: 'Open Graph tags (og:*) control how pages appear when shared on social networks like Facebook, LinkedIn, and WhatsApp.'}, passData.ctx) %>
+      </p>
+      <details class="mb-3">
+        <summary class="text-muted small"><%= __({it: 'Approfondisci...', en: 'Learn more...'}, passData.ctx) %></summary>
+        <div class="small text-muted mt-1 ps-2 border-start">
+          <%= __({
+            it: 'Quando un utente condivide un link del tuo sito su Facebook, LinkedIn, WhatsApp o altri social, la piattaforma legge i tag Open Graph per generare il riquadro di anteprima con titolo, descrizione e immagine. Senza questi tag, la piattaforma tenta di estrarre le informazioni autonomamente, spesso con risultati mediocri. Il tipo OG (og:type) definisce la categoria del contenuto: "website" per pagine generiche, "article" per post/blog. L\'immagine OG predefinita viene usata quando una pagina non ha un\'immagine specifica. Dimensioni raccomandate: 1200x630 pixel.',
+            en: 'When a user shares a link to your site on Facebook, LinkedIn, WhatsApp, or other social platforms, the platform reads the Open Graph tags to generate the preview card with title, description, and image. Without these tags, the platform tries to extract the information on its own, often with poor results. The OG type (og:type) defines the content category: "website" for generic pages, "article" for blog posts. The default OG image is used when a page does not have a specific image. Recommended dimensions: 1200x630 pixels.'
+          }, passData.ctx) %>
+        </div>
+      </details>
+
+      <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" id="enableOpenGraph" checked>
+        <label class="form-check-label fw-semibold" for="enableOpenGraph"><%= __({it: 'Abilita Open Graph', en: 'Enable Open Graph'}, passData.ctx) %></label>
+      </div>
+
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label for="defaultOgType" class="form-label">Open Graph Type</label>
+          <select class="form-select" id="defaultOgType">
+            <option value="website">website</option>
+            <option value="article">article</option>
+            <option value="profile">profile</option>
+            <option value="book">book</option>
+            <option value="music.song">music.song</option>
+            <option value="music.album">music.album</option>
+            <option value="video.movie">video.movie</option>
+            <option value="video.episode">video.episode</option>
+          </select>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label for="defaultOgImage" class="form-label"><%= __({it: 'Immagine OG predefinita', en: 'Default OG Image'}, passData.ctx) %></label>
+          <input type="text" class="form-control" id="defaultOgImage" placeholder="/media/og-default.jpg">
+        </div>
+      </div>
+
+      <div id="tabMessages-opengraph" class="messages-area mb-2"></div>
+      <button type="button" class="btn btn-primary btn-sm btn-tab-save" data-tab="opengraph">
+        <i class="bi bi-save"></i> <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %>
+      </button>
     </div>
 
     <!-- TAB: Twitter Cards -->
     <div class="tab-pane fade" id="tab-twitter" role="tabpanel">
-      <p class="text-muted"><%= __({it: 'Contenuto tab Twitter Cards — Fase 2', en: 'Twitter Cards tab content — Phase 2'}, passData.ctx) %></p>
+      <p class="text-muted mb-1">
+        <%= __({it: 'Le Twitter Cards (ora X Cards) controllano come le pagine appaiono quando vengono condivise su Twitter/X.', en: 'Twitter Cards (now X Cards) control how pages appear when shared on Twitter/X.'}, passData.ctx) %>
+      </p>
+      <details class="mb-3">
+        <summary class="text-muted small"><%= __({it: 'Approfondisci...', en: 'Learn more...'}, passData.ctx) %></summary>
+        <div class="small text-muted mt-1 ps-2 border-start">
+          <%= __({
+            it: 'Le Twitter Cards aggiungono meta tag specifici (twitter:card, twitter:title, twitter:description, twitter:image, twitter:site) che Twitter/X usa per generare anteprime arricchite quando un link viene condiviso. Il tipo "summary_large_image" mostra un\'immagine grande sopra il testo, ideale per contenuti visivi. Il tipo "summary" mostra una miniatura a sinistra del testo, più compatto. Il Twitter Handle (@nome) associa le condivisioni al tuo account. Se non configurati, Twitter usa i tag Open Graph come fallback.',
+            en: 'Twitter Cards add specific meta tags (twitter:card, twitter:title, twitter:description, twitter:image, twitter:site) that Twitter/X uses to generate enriched previews when a link is shared. The "summary_large_image" type shows a large image above the text, ideal for visual content. The "summary" type shows a thumbnail to the left of the text, more compact. The Twitter Handle (@name) associates shares with your account. If not configured, Twitter falls back to Open Graph tags.'
+          }, passData.ctx) %>
+        </div>
+      </details>
+
+      <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" id="enableTwitterCards" checked>
+        <label class="form-check-label fw-semibold" for="enableTwitterCards"><%= __({it: 'Abilita Twitter Cards', en: 'Enable Twitter Cards'}, passData.ctx) %></label>
+      </div>
+
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label for="twitterCardType" class="form-label">Twitter Card Type</label>
+          <select class="form-select" id="twitterCardType">
+            <option value="summary_large_image">summary_large_image</option>
+            <option value="summary">summary</option>
+            <option value="app">app</option>
+            <option value="player">player</option>
+          </select>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label for="twitterHandle" class="form-label">Twitter Handle</label>
+          <input type="text" class="form-control" id="twitterHandle" placeholder="@yourhandle">
+        </div>
+      </div>
+
+      <div id="tabMessages-twitter" class="messages-area mb-2"></div>
+      <button type="button" class="btn btn-primary btn-sm btn-tab-save" data-tab="twitter">
+        <i class="bi bi-save"></i> <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %>
+      </button>
     </div>
 
     <!-- TAB: Structured Data -->
     <div class="tab-pane fade" id="tab-structured" role="tabpanel">
-      <p class="text-muted"><%= __({it: 'Contenuto tab Structured Data — Fase 2', en: 'Structured Data tab content — Phase 2'}, passData.ctx) %></p>
+      <p class="text-muted mb-1">
+        <%= __({it: 'I dati strutturati (JSON-LD) forniscono ai motori di ricerca informazioni strutturate sull\'organizzazione: nome, logo, contatti e profili social.', en: 'Structured data (JSON-LD) provides search engines with structured information about the organization: name, logo, contacts, and social profiles.'}, passData.ctx) %>
+      </p>
+      <details class="mb-3">
+        <summary class="text-muted small"><%= __({it: 'Approfondisci...', en: 'Learn more...'}, passData.ctx) %></summary>
+        <div class="small text-muted mt-1 ps-2 border-start">
+          <%= __({
+            it: 'I dati strutturati vengono iniettati come <script type="application/ld+json"> nel <head> della pagina. Google li usa per generare il Knowledge Panel (il riquadro informativo che appare a destra nei risultati di ricerca) e i rich snippets. Schema supportati: Organization (informazioni aziendali) e WebSite (informazioni sul sito con SearchAction per la barra di ricerca nei risultati). I campi vuoti vengono automaticamente compilati con i valori del tab Principale (nome sito, URL sito).',
+            en: 'Structured data is injected as <script type="application/ld+json"> in the page <head>. Google uses it to generate the Knowledge Panel (the informational box appearing on the right side of search results) and rich snippets. Supported schemas: Organization (business information) and WebSite (site information with SearchAction for the search bar in results). Empty fields are automatically filled with values from the Main tab (site name, site URL).'
+          }, passData.ctx) %>
+        </div>
+      </details>
+
+      <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" id="enableStructuredData" checked>
+        <label class="form-check-label fw-semibold" for="enableStructuredData"><%= __({it: 'Abilita Structured Data (JSON-LD)', en: 'Enable Structured Data (JSON-LD)'}, passData.ctx) %></label>
+      </div>
+
+      <h6 class="mt-3 mb-2">Organization</h6>
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label for="orgName" class="form-label"><%= __({it: 'Nome Organizzazione', en: 'Organization Name'}, passData.ctx) %></label>
+          <input type="text" class="form-control" id="orgName">
+          <small class="text-muted"><%= __({it: 'Se vuoto, usa il nome del sito', en: 'If empty, uses site name'}, passData.ctx) %></small>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label for="orgUrl" class="form-label">URL</label>
+          <input type="url" class="form-control" id="orgUrl">
+          <small class="text-muted"><%= __({it: 'Se vuoto, usa URL del sito', en: 'If empty, uses site URL'}, passData.ctx) %></small>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-4 mb-3">
+          <label for="orgLogo" class="form-label">Logo URL</label>
+          <input type="text" class="form-control" id="orgLogo">
+        </div>
+        <div class="col-md-4 mb-3">
+          <label for="orgContactEmail" class="form-label">Email</label>
+          <input type="email" class="form-control" id="orgContactEmail">
+        </div>
+        <div class="col-md-4 mb-3">
+          <label for="orgContactPhone" class="form-label"><%= __({it: 'Telefono', en: 'Phone'}, passData.ctx) %></label>
+          <input type="text" class="form-control" id="orgContactPhone">
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label"><%= __({it: 'Profili Social', en: 'Social Profiles'}, passData.ctx) %></label>
+        <div id="socialProfilesList" class="dynamic-list"></div>
+        <button type="button" class="btn btn-outline-secondary btn-sm mt-1" onclick="addListItem('socialProfilesList', 'https://')">
+          <i class="bi bi-plus"></i> <%= __({it: 'Aggiungi Profilo', en: 'Add Profile'}, passData.ctx) %>
+        </button>
+      </div>
+
+      <div id="tabMessages-structured" class="messages-area mb-2"></div>
+      <button type="button" class="btn btn-primary btn-sm btn-tab-save" data-tab="structured">
+        <i class="bi bi-save"></i> <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %>
+      </button>
     </div>
 
     <!-- TAB: Sitemap -->
     <div class="tab-pane fade" id="tab-sitemap" role="tabpanel">
-      <p class="text-muted"><%= __({it: 'Contenuto tab Sitemap — Fase 2', en: 'Sitemap tab content — Phase 2'}, passData.ctx) %></p>
+      <p class="text-muted mb-1">
+        <%= __({it: 'La Sitemap (sitemap.xml) è un file che elenca tutte le pagine del sito, aiutando i motori di ricerca a scoprirle e indicizzarle.', en: 'The Sitemap (sitemap.xml) is a file that lists all site pages, helping search engines discover and index them.'}, passData.ctx) %>
+      </p>
+      <details class="mb-3">
+        <summary class="text-muted small"><%= __({it: 'Approfondisci...', en: 'Learn more...'}, passData.ctx) %></summary>
+        <div class="small text-muted mt-1 ps-2 border-start">
+          <%= __({
+            it: 'La sitemap viene generata come file fisico sitemap.xml nella directory wwwPath. L\'auto-scan scansiona automaticamente la directory wwwPath alla ricerca di file .ejs e li include nella sitemap. Puoi escludere pagine specifiche tramite pattern (es. **/*test*) e aggiungere pagine extra che non sono rilevabili dall\'auto-scan (es. route dinamiche). Per ogni pagina puoi specificare la frequenza di aggiornamento (changefreq) che suggerisce ai motori quanto spesso controllare, e la priorità relativa (0.0-1.0) che indica l\'importanza relativa rispetto alle altre pagine del sito.',
+            en: 'The sitemap is generated as a physical sitemap.xml file in the wwwPath directory. Auto-scan automatically scans the wwwPath directory for .ejs files and includes them in the sitemap. You can exclude specific pages via patterns (e.g., **/*test*) and add extra pages that are not discoverable by auto-scan (e.g., dynamic routes). For each page, you can specify the update frequency (changefreq) that suggests to engines how often to check, and the relative priority (0.0-1.0) that indicates the relative importance compared to other pages on the site.'
+          }, passData.ctx) %>
+        </div>
+      </details>
+
+      <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" id="enableSitemap" checked>
+        <label class="form-check-label fw-semibold" for="enableSitemap"><%= __({it: 'Abilita generazione Sitemap', en: 'Enable Sitemap Generation'}, passData.ctx) %></label>
+      </div>
+
+      <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" id="sitemapAutoScan" checked>
+        <label class="form-check-label" for="sitemapAutoScan"><%= __({it: 'Auto-scan wwwPath', en: 'Auto-scan wwwPath'}, passData.ctx) %></label>
+      </div>
+
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label for="sitemapDefaultChangefreq" class="form-label">Default Changefreq</label>
+          <select class="form-select" id="sitemapDefaultChangefreq">
+            <option value="always">always</option>
+            <option value="hourly">hourly</option>
+            <option value="daily">daily</option>
+            <option value="weekly">weekly</option>
+            <option value="monthly" selected>monthly</option>
+            <option value="yearly">yearly</option>
+            <option value="never">never</option>
+          </select>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label for="sitemapDefaultPriority" class="form-label">Default Priority (0.0 - 1.0)</label>
+          <input type="number" class="form-control" id="sitemapDefaultPriority" min="0" max="1" step="0.1" value="0.5">
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label"><%= __({it: 'Pattern da Escludere', en: 'Exclude Patterns'}, passData.ctx) %></label>
+        <div id="sitemapExcludeList" class="dynamic-list"></div>
+        <button type="button" class="btn btn-outline-secondary btn-sm mt-1" onclick="addListItem('sitemapExcludeList', '')">
+          <i class="bi bi-plus"></i> <%= __({it: 'Aggiungi Pattern', en: 'Add Pattern'}, passData.ctx) %>
+        </button>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label"><%= __({it: 'Pagine Extra', en: 'Extra Pages'}, passData.ctx) %></label>
+        <div id="sitemapExtraPagesList" class="dynamic-list"></div>
+        <button type="button" class="btn btn-outline-secondary btn-sm mt-1" onclick="addExtraPage()">
+          <i class="bi bi-plus"></i> <%= __({it: 'Aggiungi Pagina', en: 'Add Page'}, passData.ctx) %>
+        </button>
+      </div>
+
+      <div id="tabMessages-sitemap" class="messages-area mb-2"></div>
+      <button type="button" class="btn btn-primary btn-sm btn-tab-save" data-tab="sitemap">
+        <i class="bi bi-save"></i> <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %>
+      </button>
     </div>
 
     <!-- TAB: robots.txt -->
     <div class="tab-pane fade" id="tab-robots" role="tabpanel">
-      <p class="text-muted"><%= __({it: 'Contenuto tab robots.txt — Fase 2', en: 'robots.txt tab content — Phase 2'}, passData.ctx) %></p>
+      <p class="text-muted mb-1">
+        <%= __({it: 'Il file robots.txt indica ai crawler dei motori di ricerca quali aree del sito possono o non possono esplorare. È il primo file che i bot leggono.', en: 'The robots.txt file tells search engine crawlers which areas of the site they can or cannot explore. It is the first file bots read.'}, passData.ctx) %>
+      </p>
+      <details class="mb-3">
+        <summary class="text-muted small"><%= __({it: 'Approfondisci...', en: 'Learn more...'}, passData.ctx) %></summary>
+        <div class="small text-muted mt-1 ps-2 border-start">
+          <%= __({
+            it: 'Il file robots.txt viene posizionato nella root del sito (wwwPath) e viene consultato dai crawler prima di iniziare la scansione. Le regole "Allow" indicano percorsi esplicitamente permessi, mentre "Disallow" indica percorsi da non scansionare. Il campo User-Agent specifica a quali bot si applicano le regole ("*" significa tutti i bot). Se la Sitemap è attiva, il link alla sitemap.xml viene aggiunto automaticamente in fondo al robots.txt. Nota: robots.txt è una direttiva, non un meccanismo di sicurezza — i bot malevoli possono ignorarlo.',
+            en: 'The robots.txt file is placed in the site root (wwwPath) and is consulted by crawlers before they start scanning. "Allow" rules indicate explicitly permitted paths, while "Disallow" indicates paths not to scan. The User-Agent field specifies which bots the rules apply to ("*" means all bots). If Sitemap is active, the sitemap.xml link is automatically appended at the end of robots.txt. Note: robots.txt is a directive, not a security mechanism — malicious bots can ignore it.'
+          }, passData.ctx) %>
+        </div>
+      </details>
+
+      <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" id="enableRobotsTxt" checked>
+        <label class="form-check-label fw-semibold" for="enableRobotsTxt"><%= __({it: 'Abilita generazione robots.txt', en: 'Enable robots.txt Generation'}, passData.ctx) %></label>
+      </div>
+
+      <div class="mb-3">
+        <label for="robotsUserAgent" class="form-label">User-Agent</label>
+        <input type="text" class="form-control" id="robotsUserAgent" value="*">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Allow</label>
+        <div id="robotsAllowList" class="dynamic-list"></div>
+        <button type="button" class="btn btn-outline-secondary btn-sm mt-1" onclick="addListItem('robotsAllowList', '/')">
+          <i class="bi bi-plus"></i> <%= __({it: 'Aggiungi', en: 'Add'}, passData.ctx) %>
+        </button>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Disallow</label>
+        <div id="robotsDisallowList" class="dynamic-list"></div>
+        <button type="button" class="btn btn-outline-secondary btn-sm mt-1" onclick="addListItem('robotsDisallowList', '/')">
+          <i class="bi bi-plus"></i> <%= __({it: 'Aggiungi', en: 'Add'}, passData.ctx) %>
+        </button>
+      </div>
+
+      <div id="tabMessages-robots" class="messages-area mb-2"></div>
+      <button type="button" class="btn btn-primary btn-sm btn-tab-save" data-tab="robots">
+        <i class="bi bi-save"></i> <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %>
+      </button>
     </div>
 
   </div>
@@ -179,6 +499,96 @@
 <script>
   const apiPrefix = '<%= passData.apiPrefix %>';
   const adminPrefix = '<%= passData.adminPrefix %>';
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // DYNAMIC LIST HELPERS
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  function addListItem(containerId, defaultValue) {
+    const container = document.getElementById(containerId);
+    const row = document.createElement('div');
+    row.className = 'input-group input-group-sm mb-1';
+    row.innerHTML = `
+      <input type="text" class="form-control" value="${escapeAttr(defaultValue || '')}">
+      <button class="btn btn-outline-danger" type="button" onclick="this.parentElement.remove()">
+        <i class="bi bi-trash"></i>
+      </button>
+    `;
+    container.appendChild(row);
+  }
+
+  function getListValues(containerId) {
+    const container = document.getElementById(containerId);
+    return Array.from(container.querySelectorAll('input[type="text"]'))
+      .map(input => input.value.trim())
+      .filter(v => v.length > 0);
+  }
+
+  function setListValues(containerId, values) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    if (Array.isArray(values)) {
+      values.forEach(v => addListItem(containerId, v));
+    }
+  }
+
+  function addExtraPage() {
+    const container = document.getElementById('sitemapExtraPagesList');
+    const row = document.createElement('div');
+    row.className = 'input-group input-group-sm mb-1';
+    row.innerHTML = `
+      <input type="text" class="form-control" placeholder="URL" style="flex:3">
+      <select class="form-select" style="flex:2">
+        <option value="monthly">monthly</option>
+        <option value="always">always</option>
+        <option value="hourly">hourly</option>
+        <option value="daily">daily</option>
+        <option value="weekly">weekly</option>
+        <option value="yearly">yearly</option>
+        <option value="never">never</option>
+      </select>
+      <input type="number" class="form-control" placeholder="0.5" min="0" max="1" step="0.1" style="flex:1">
+      <button class="btn btn-outline-danger" type="button" onclick="this.parentElement.remove()">
+        <i class="bi bi-trash"></i>
+      </button>
+    `;
+    container.appendChild(row);
+  }
+
+  function getExtraPages() {
+    const container = document.getElementById('sitemapExtraPagesList');
+    const rows = container.querySelectorAll('.input-group');
+    const pages = [];
+    rows.forEach(row => {
+      const inputs = row.querySelectorAll('input');
+      const select = row.querySelector('select');
+      const url = inputs[0]?.value.trim();
+      if (url) {
+        const page = { url };
+        if (select?.value) page.changefreq = select.value;
+        const priority = parseFloat(inputs[1]?.value);
+        if (!isNaN(priority)) page.priority = priority;
+        pages.push(page);
+      }
+    });
+    return pages;
+  }
+
+  function setExtraPages(pages) {
+    const container = document.getElementById('sitemapExtraPagesList');
+    container.innerHTML = '';
+    if (!Array.isArray(pages)) return;
+    pages.forEach(page => {
+      addExtraPage();
+      const rows = container.querySelectorAll('.input-group');
+      const row = rows[rows.length - 1];
+      const inputs = row.querySelectorAll('input');
+      const select = row.querySelector('select');
+      inputs[0].value = page.url || '';
+      if (page.changefreq && select) select.value = page.changefreq;
+      if (page.priority !== undefined && inputs[1]) inputs[1].value = page.priority;
+    });
+  }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // MOBILE DROPDOWN ↔ TAB SYNC
