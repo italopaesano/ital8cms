@@ -272,3 +272,22 @@
   text-align: center;
   padding: 0.15rem 0;
 }
+
+/* Diff panel: display changed lines as block for proper background */
+.diff-line-changed,
+.diff-line-context,
+.diff-line-separator {
+  display: block;
+}
+
+/* Diff panel responsive: reduce padding on mobile */
+@media (max-width: 767px) {
+  .diff-pre {
+    font-size: 0.72rem;
+    padding: 0.4rem 0.5rem;
+    max-height: 180px;
+  }
+  #diffContent {
+    padding: 0.5rem;
+  }
+}

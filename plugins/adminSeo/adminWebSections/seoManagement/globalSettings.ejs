@@ -538,6 +538,7 @@
 <script>
   const apiPrefix = '<%= passData.apiPrefix %>';
   const adminPrefix = '<%= passData.adminPrefix %>';
+  let suppressDiffRender = false; // Guard to prevent diff render during bulk population
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // DYNAMIC LIST HELPERS
@@ -549,11 +550,16 @@
     row.className = 'input-group input-group-sm mb-1';
     row.innerHTML = `
       <input type="text" class="form-control" value="${escapeAttr(defaultValue || '')}">
-      <button class="btn btn-outline-danger" type="button" onclick="this.parentElement.remove()">
+      <button class="btn btn-outline-danger btn-list-remove" type="button">
         <i class="bi bi-trash"></i>
       </button>
     `;
+    row.querySelector('.btn-list-remove').addEventListener('click', function () {
+      this.parentElement.remove();
+      renderDiffPanel();
+    });
     container.appendChild(row);
+    renderDiffPanel();
   }
 
   function getListValues(containerId) {
@@ -587,11 +593,17 @@
         <option value="never">never</option>
       </select>
       <input type="number" class="form-control" placeholder="0.5" min="0" max="1" step="0.1" style="flex:1">
-      <button class="btn btn-outline-danger" type="button" onclick="this.parentElement.remove()">
+      <button class="btn btn-outline-danger btn-list-remove" type="button">
         <i class="bi bi-trash"></i>
       </button>
     `;
+    row.querySelector('.btn-list-remove').addEventListener('click', function () {
+      this.parentElement.remove();
+      renderDiffPanel();
+    });
+
     container.appendChild(row);
+    renderDiffPanel();
   }
 
   function getExtraPages() {
@@ -915,6 +927,112 @@
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // DIFF PANEL RENDERING — updates the UI from diff results
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /** Converts an array of line objects into escaped HTML with CSS classes */
+  function linesToHtml(lines) {
+    return lines.map(line => {
+      const escaped = escapeHtml(line.text);
+      if (line.type === 'changed') return `<span class="diff-line-changed">${escaped}</span>`;
+      if (line.type === 'separator') return `<span class="diff-line-separator">${escaped}</span>`;
+      return `<span class="diff-line-context">${escaped}</span>`;
+    }).join('\n');
+  }
+
+  /**
+   * Main render function: computes diff and updates the diff panel.
+   * Call this whenever form data changes.
+   */
+  function renderDiffPanel() {
+    if (!serverSnapshot || suppressDiffRender) return;
+
+    const oldData = JSON.parse(serverSnapshot);
+    const newData = formToData();
+    const diffs = computeDiff(oldData, newData);
+    const display = buildDiffDisplay(oldData, newData, diffs);
+
+    const diffPanel = document.getElementById('diffPanel');
+    const diffNoChanges = document.getElementById('diffNoChanges');
+    const diffContent = document.getElementById('diffContent');
+    const diffCounter = document.getElementById('diffCounter');
+    const diffBefore = document.getElementById('diffBefore');
+    const diffAfter = document.getElementById('diffAfter');
+    const diffSavedBadge = document.getElementById('diffSavedBadge');
+
+    if (display.changeCount === 0) {
+      // No changes — show "Nessuna modifica"
+      diffNoChanges.classList.remove('d-none');
+      diffContent.classList.add('d-none');
+      diffCounter.textContent = '';
+      return;
+    }
+
+    // Has changes — show diff panels
+    diffNoChanges.classList.add('d-none');
+    diffContent.classList.remove('d-none');
+    // Hide saved badge when new changes appear
+    diffSavedBadge.classList.add('d-none');
+
+    // Update counter
+    const countLabel = display.changeCount === 1
+      ? '<%= __({it: "1 modifica rilevata", en: "1 change detected"}, passData.ctx) %>'
+      : `${display.changeCount} <%= __({it: "modifiche rilevate", en: "changes detected"}, passData.ctx) %>`;
+    diffCounter.textContent = countLabel;
+
+    // Render Before/After content
+    diffBefore.innerHTML = linesToHtml(display.beforeLines);
+    diffAfter.innerHTML = linesToHtml(display.afterLines);
+  }
+
+  /**
+   * Renders the diff panel from a pre-computed display object.
+   * Used by textarea save where the diff is computed from parsed textarea data.
+   */
+  function renderDiffFromDisplay(display) {
+    const diffNoChanges = document.getElementById('diffNoChanges');
+    const diffContent = document.getElementById('diffContent');
+    const diffCounter = document.getElementById('diffCounter');
+    const diffBefore = document.getElementById('diffBefore');
+    const diffAfter = document.getElementById('diffAfter');
+    const diffSavedBadge = document.getElementById('diffSavedBadge');
+
+    if (display.changeCount === 0) {
+      diffNoChanges.classList.remove('d-none');
+      diffContent.classList.add('d-none');
+      diffCounter.textContent = '';
+      return;
+    }
+
+    diffNoChanges.classList.add('d-none');
+    diffContent.classList.remove('d-none');
+    diffSavedBadge.classList.add('d-none');
+
+    const countLabel = display.changeCount === 1
+      ? '<%= __({it: "1 modifica rilevata", en: "1 change detected"}, passData.ctx) %>'
+      : `${display.changeCount} <%= __({it: "modifiche rilevate", en: "changes detected"}, passData.ctx) %>`;
+    diffCounter.textContent = countLabel;
+
+    diffBefore.innerHTML = linesToHtml(display.beforeLines);
+    diffAfter.innerHTML = linesToHtml(display.afterLines);
+  }
+
+  /** Shows the "Salvataggio effettuato" badge in the diff panel */
+  function showDiffSavedBadge() {
+    document.getElementById('diffSavedBadge').classList.remove('d-none');
+  }
+
+  /** Resets the diff panel to "Nessuna modifica" state */
+  function resetDiffPanel() {
+    document.getElementById('diffNoChanges').classList.remove('d-none');
+    document.getElementById('diffContent').classList.add('d-none');
+    document.getElementById('diffCounter').textContent = '';
+    document.getElementById('diffSavedBadge').classList.add('d-none');
+    document.getElementById('diffBefore').innerHTML = '';
+    document.getElementById('diffAfter').innerHTML = '';
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // FORM ↔ DATA CONVERSION
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -970,6 +1088,7 @@
   /** Populates all form fields across all tabs from a data object */
   function dataToForm(data) {
     if (!data) return;
+    suppressDiffRender = true;
     // Principale
     document.getElementById('siteName').value = data.siteName || '';
     document.getElementById('siteUrl').value = data.siteUrl || '';
@@ -1011,6 +1130,7 @@
     document.getElementById('robotsUserAgent').value = robots.userAgent || '*';
     setListValues('robotsAllowList', robots.allow || []);
     setListValues('robotsDisallowList', robots.disallow || []);
+    suppressDiffRender = false;
   }
 
   /** Updates textarea with current data, formatted as JSON5-compatible JSON */
@@ -1100,6 +1220,9 @@
         if (saveResult.warnings && saveResult.warnings.length > 0) {
           showTabMessages(tabId, [], saveResult.warnings);
         }
+        // Render diff BEFORE updating snapshot (shows what was just saved)
+        renderDiffPanel();
+        showDiffSavedBadge();
         // Sync textarea with saved data
         dataToTextarea(data);
         // Update snapshot
@@ -1205,6 +1328,13 @@
       const result = await resp.json();
 
       if (result.success) {
+        // Render diff BEFORE updating snapshot (shows what was just saved)
+        // Use parsed textarea data as "current" for diff calculation
+        const oldData = JSON.parse(serverSnapshot);
+        const textareaDiffs = computeDiff(oldData, parsed);
+        const textareaDiffDisplay = buildDiffDisplay(oldData, parsed, textareaDiffs);
+        renderDiffFromDisplay(textareaDiffDisplay);
+        showDiffSavedBadge();
         // Sync all tabs with saved data
         dataToForm(parsed);
         // Update snapshot
@@ -1324,6 +1454,7 @@
     unsavedModal.hide();
     // Reset snapshot to current form so dirty check passes
     takeSnapshot(formToData());
+    resetDiffPanel();
     if (pendingTabTarget) {
       new bootstrap.Tab(pendingTabTarget).show();
       pendingTabTarget = null;
@@ -1362,6 +1493,19 @@
       e.preventDefault();
       e.returnValue = '';
     }
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // DIFF PANEL LISTENERS — live update on form changes, reset on tab switch
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  // Live diff update on any form field change (event delegation on tab content)
+  document.getElementById('settingsTabContent').addEventListener('input', renderDiffPanel);
+  document.getElementById('settingsTabContent').addEventListener('change', renderDiffPanel);
+
+  // Reset diff panel on tab switch (after the tab actually changes)
+  document.querySelectorAll('#settingsTabsDesktop button[data-bs-toggle="tab"]').forEach(btn => {
+    btn.addEventListener('shown.bs.tab', resetDiffPanel);
   });
 
   // Load on page ready
