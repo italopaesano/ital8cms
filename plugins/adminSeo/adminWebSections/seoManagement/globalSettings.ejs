@@ -610,6 +610,160 @@
       document.getElementById('settingsTabsMobile').value = targetId;
     });
   });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // i18n STRINGS
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  const i18n = {
+    saved: '<%= __({it: "Impostazioni salvate con successo.", en: "Settings saved successfully."}, passData.ctx) %>',
+    saveError: '<%= __({it: "Errore nel salvataggio.", en: "Error saving."}, passData.ctx) %>',
+    loadError: '<%= __({it: "Errore nel caricamento.", en: "Error loading."}, passData.ctx) %>',
+    validationOk: '<%= __({it: "Validazione superata.", en: "Validation passed."}, passData.ctx) %>',
+    validationFailed: '<%= __({it: "Validazione fallita.", en: "Validation failed."}, passData.ctx) %>',
+    warnings: '<%= __({it: "Warning", en: "Warnings"}, passData.ctx) %>',
+    errors: '<%= __({it: "Errori", en: "Errors"}, passData.ctx) %>',
+  };
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // SERVER SNAPSHOT — used for dirty tracking (Phase 5)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  let serverSnapshot = null; // JSON string of last saved/loaded data
+
+  function takeSnapshot(data) {
+    serverSnapshot = JSON.stringify(data);
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // FORM ↔ DATA CONVERSION
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /** Reads all form fields across all tabs and returns a single data object */
+  function formToData() {
+    return {
+      // Principale
+      siteName: document.getElementById('siteName').value,
+      siteUrl: document.getElementById('siteUrl').value,
+      // Canonical & URLs
+      enableCanonicalUrl: document.getElementById('enableCanonicalUrl').checked,
+      canonicalCleanUrl: document.getElementById('canonicalCleanUrl').checked,
+      // Meta Tags
+      enableMetaTags: document.getElementById('enableMetaTags').checked,
+      defaultDescription: document.getElementById('defaultDescription').value,
+      defaultKeywords: document.getElementById('defaultKeywords').value,
+      defaultRobots: document.getElementById('defaultRobots').value,
+      // Open Graph
+      enableOpenGraph: document.getElementById('enableOpenGraph').checked,
+      defaultOgType: document.getElementById('defaultOgType').value,
+      defaultOgImage: document.getElementById('defaultOgImage').value,
+      // Twitter Cards
+      enableTwitterCards: document.getElementById('enableTwitterCards').checked,
+      twitterCardType: document.getElementById('twitterCardType').value,
+      twitterHandle: document.getElementById('twitterHandle').value,
+      // Structured Data
+      enableStructuredData: document.getElementById('enableStructuredData').checked,
+      organization: {
+        name: document.getElementById('orgName').value,
+        url: document.getElementById('orgUrl').value,
+        logo: document.getElementById('orgLogo').value,
+        contactEmail: document.getElementById('orgContactEmail').value,
+        contactPhone: document.getElementById('orgContactPhone').value,
+        socialProfiles: getListValues('socialProfilesList'),
+      },
+      // Sitemap
+      enableSitemap: document.getElementById('enableSitemap').checked,
+      sitemapAutoScan: document.getElementById('sitemapAutoScan').checked,
+      sitemapDefaultChangefreq: document.getElementById('sitemapDefaultChangefreq').value,
+      sitemapDefaultPriority: parseFloat(document.getElementById('sitemapDefaultPriority').value) || 0.5,
+      sitemapExclude: getListValues('sitemapExcludeList'),
+      sitemapExtraPages: getExtraPages(),
+      // robots.txt
+      enableRobotsTxt: document.getElementById('enableRobotsTxt').checked,
+      robotsTxtRules: {
+        userAgent: document.getElementById('robotsUserAgent').value,
+        allow: getListValues('robotsAllowList'),
+        disallow: getListValues('robotsDisallowList'),
+      },
+    };
+  }
+
+  /** Populates all form fields across all tabs from a data object */
+  function dataToForm(data) {
+    if (!data) return;
+    // Principale
+    document.getElementById('siteName').value = data.siteName || '';
+    document.getElementById('siteUrl').value = data.siteUrl || '';
+    // Canonical & URLs
+    document.getElementById('enableCanonicalUrl').checked = data.enableCanonicalUrl !== false;
+    document.getElementById('canonicalCleanUrl').checked = data.canonicalCleanUrl !== false;
+    // Meta Tags
+    document.getElementById('enableMetaTags').checked = data.enableMetaTags !== false;
+    document.getElementById('defaultDescription').value = data.defaultDescription || '';
+    document.getElementById('defaultKeywords').value = data.defaultKeywords || '';
+    document.getElementById('defaultRobots').value = data.defaultRobots || 'index, follow';
+    // Open Graph
+    document.getElementById('enableOpenGraph').checked = data.enableOpenGraph !== false;
+    document.getElementById('defaultOgType').value = data.defaultOgType || 'website';
+    document.getElementById('defaultOgImage').value = data.defaultOgImage || '';
+    // Twitter Cards
+    document.getElementById('enableTwitterCards').checked = data.enableTwitterCards !== false;
+    document.getElementById('twitterCardType').value = data.twitterCardType || 'summary_large_image';
+    document.getElementById('twitterHandle').value = data.twitterHandle || '';
+    // Structured Data
+    document.getElementById('enableStructuredData').checked = data.enableStructuredData !== false;
+    const org = data.organization || {};
+    document.getElementById('orgName').value = org.name || '';
+    document.getElementById('orgUrl').value = org.url || '';
+    document.getElementById('orgLogo').value = org.logo || '';
+    document.getElementById('orgContactEmail').value = org.contactEmail || '';
+    document.getElementById('orgContactPhone').value = org.contactPhone || '';
+    setListValues('socialProfilesList', org.socialProfiles || []);
+    // Sitemap
+    document.getElementById('enableSitemap').checked = data.enableSitemap !== false;
+    document.getElementById('sitemapAutoScan').checked = data.sitemapAutoScan !== false;
+    document.getElementById('sitemapDefaultChangefreq').value = data.sitemapDefaultChangefreq || 'monthly';
+    document.getElementById('sitemapDefaultPriority').value = data.sitemapDefaultPriority ?? 0.5;
+    setListValues('sitemapExcludeList', data.sitemapExclude || []);
+    setExtraPages(data.sitemapExtraPages || []);
+    // robots.txt
+    document.getElementById('enableRobotsTxt').checked = data.enableRobotsTxt !== false;
+    const robots = data.robotsTxtRules || {};
+    document.getElementById('robotsUserAgent').value = robots.userAgent || '*';
+    setListValues('robotsAllowList', robots.allow || []);
+    setListValues('robotsDisallowList', robots.disallow || []);
+  }
+
+  /** Updates textarea with current data, formatted as JSON5-compatible JSON */
+  function dataToTextarea(data) {
+    document.getElementById('jsonEditor').value = JSON.stringify(data, null, 2);
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // LOAD SETTINGS FROM SERVER
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  async function loadSettings() {
+    try {
+      const resp = await fetch(`/${apiPrefix}/adminSeo/load-settings`);
+      const result = await resp.json();
+      if (result.success) {
+        // Populate all tabs
+        dataToForm(result.data);
+        // Populate textarea
+        dataToTextarea(result.data);
+        // Take snapshot for dirty tracking
+        takeSnapshot(result.data);
+      } else {
+        showAlert(i18n.loadError + ': ' + (result.error || ''), 'danger');
+      }
+    } catch (err) {
+      showAlert(i18n.loadError + ': ' + err.message, 'danger');
+    }
+  }
+
+  // Load on page ready
+  document.addEventListener('DOMContentLoaded', loadSettings);
 </script>
 
 <%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>
