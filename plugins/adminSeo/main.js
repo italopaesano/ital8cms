@@ -10,6 +10,7 @@
  */
 
 const path = require('path');
+const fs = require('fs');
 const JSON5 = require('json5');
 const loadJson5 = require('../../core/loadJson5');
 const seoFileManager = require('./lib/seoFileManager');
@@ -290,6 +291,22 @@ module.exports = {
             validTwitterCardTypes: seoConfigValidator.VALID_TWITTER_CARD_TYPES,
             validPageRuleFields: seoConfigValidator.VALID_PAGE_RULE_FIELDS,
           };
+        },
+      },
+
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // CLIENT-SIDE LIBRARIES
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+      // Serve json5 browser library for client-side JSON5 parsing/validation
+      {
+        method: 'GET',
+        path: '/lib/json5.min.js',
+        access: pluginAccess,
+        handler: async (ctx) => {
+          const json5BrowserPath = require.resolve('json5/dist/index.min.js');
+          ctx.type = 'application/javascript';
+          ctx.body = fs.readFileSync(json5BrowserPath, 'utf8');
         },
       },
     ];
