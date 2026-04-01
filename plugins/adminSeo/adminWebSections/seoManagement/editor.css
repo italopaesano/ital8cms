@@ -90,3 +90,22 @@
 #previewResult pre {
   margin-bottom: 0;
 }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Global Settings — Tab Layout
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* Tab content area with border connected to tab bar */
+#settingsTabContent {
+  border-color: #dee2e6;
+}
+
+/* Active tab button connects to content area */
+#settingsTabsDesktop .nav-link.active {
+  border-bottom-color: #fff;
+}
+
+/* Tab panels inner spacing */
+#settingsTabContent .tab-pane {
+  min-height: 200px;
+}
