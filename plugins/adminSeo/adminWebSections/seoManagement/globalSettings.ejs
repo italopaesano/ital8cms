@@ -538,6 +538,7 @@
 <script>
   const apiPrefix = '<%= passData.apiPrefix %>';
   const adminPrefix = '<%= passData.adminPrefix %>';
+  let suppressDiffRender = false; // Guard to prevent diff render during bulk population
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // DYNAMIC LIST HELPERS
@@ -549,11 +550,16 @@
     row.className = 'input-group input-group-sm mb-1';
     row.innerHTML = `
       <input type="text" class="form-control" value="${escapeAttr(defaultValue || '')}">
-      <button class="btn btn-outline-danger" type="button" onclick="this.parentElement.remove()">
+      <button class="btn btn-outline-danger btn-list-remove" type="button">
         <i class="bi bi-trash"></i>
       </button>
     `;
+    row.querySelector('.btn-list-remove').addEventListener('click', function () {
+      this.parentElement.remove();
+      renderDiffPanel();
+    });
     container.appendChild(row);
+    renderDiffPanel();
   }
 
   function getListValues(containerId) {
@@ -587,11 +593,17 @@
         <option value="never">never</option>
       </select>
       <input type="number" class="form-control" placeholder="0.5" min="0" max="1" step="0.1" style="flex:1">
-      <button class="btn btn-outline-danger" type="button" onclick="this.parentElement.remove()">
+      <button class="btn btn-outline-danger btn-list-remove" type="button">
         <i class="bi bi-trash"></i>
       </button>
     `;
+    row.querySelector('.btn-list-remove').addEventListener('click', function () {
+      this.parentElement.remove();
+      renderDiffPanel();
+    });
+
     container.appendChild(row);
+    renderDiffPanel();
   }
 
   function getExtraPages() {
@@ -933,7 +945,7 @@
    * Call this whenever form data changes.
    */
   function renderDiffPanel() {
-    if (!serverSnapshot) return;
+    if (!serverSnapshot || suppressDiffRender) return;
 
     const oldData = JSON.parse(serverSnapshot);
     const newData = formToData();
@@ -1076,6 +1088,7 @@
   /** Populates all form fields across all tabs from a data object */
   function dataToForm(data) {
     if (!data) return;
+    suppressDiffRender = true;
     // Principale
     document.getElementById('siteName').value = data.siteName || '';
     document.getElementById('siteUrl').value = data.siteUrl || '';
@@ -1117,6 +1130,7 @@
     document.getElementById('robotsUserAgent').value = robots.userAgent || '*';
     setListValues('robotsAllowList', robots.allow || []);
     setListValues('robotsDisallowList', robots.disallow || []);
+    suppressDiffRender = false;
   }
 
   /** Updates textarea with current data, formatted as JSON5-compatible JSON */
