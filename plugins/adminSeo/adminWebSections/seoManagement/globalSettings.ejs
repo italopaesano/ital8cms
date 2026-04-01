@@ -610,6 +610,483 @@
       document.getElementById('settingsTabsMobile').value = targetId;
     });
   });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // i18n STRINGS
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  const i18n = {
+    saved: '<%= __({it: "Impostazioni salvate con successo.", en: "Settings saved successfully."}, passData.ctx) %>',
+    saveError: '<%= __({it: "Errore nel salvataggio.", en: "Error saving."}, passData.ctx) %>',
+    loadError: '<%= __({it: "Errore nel caricamento.", en: "Error loading."}, passData.ctx) %>',
+    validationOk: '<%= __({it: "Validazione superata.", en: "Validation passed."}, passData.ctx) %>',
+    validationFailed: '<%= __({it: "Validazione fallita.", en: "Validation failed."}, passData.ctx) %>',
+    warnings: '<%= __({it: "Warning", en: "Warnings"}, passData.ctx) %>',
+    errors: '<%= __({it: "Errori", en: "Errors"}, passData.ctx) %>',
+  };
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // SERVER SNAPSHOT — used for dirty tracking (Phase 5)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  let serverSnapshot = null; // JSON string of last saved/loaded data
+
+  function takeSnapshot(data) {
+    serverSnapshot = JSON.stringify(data);
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // FORM ↔ DATA CONVERSION
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /** Reads all form fields across all tabs and returns a single data object */
+  function formToData() {
+    return {
+      // Principale
+      siteName: document.getElementById('siteName').value,
+      siteUrl: document.getElementById('siteUrl').value,
+      // Canonical & URLs
+      enableCanonicalUrl: document.getElementById('enableCanonicalUrl').checked,
+      canonicalCleanUrl: document.getElementById('canonicalCleanUrl').checked,
+      // Meta Tags
+      enableMetaTags: document.getElementById('enableMetaTags').checked,
+      defaultDescription: document.getElementById('defaultDescription').value,
+      defaultKeywords: document.getElementById('defaultKeywords').value,
+      defaultRobots: document.getElementById('defaultRobots').value,
+      // Open Graph
+      enableOpenGraph: document.getElementById('enableOpenGraph').checked,
+      defaultOgType: document.getElementById('defaultOgType').value,
+      defaultOgImage: document.getElementById('defaultOgImage').value,
+      // Twitter Cards
+      enableTwitterCards: document.getElementById('enableTwitterCards').checked,
+      twitterCardType: document.getElementById('twitterCardType').value,
+      twitterHandle: document.getElementById('twitterHandle').value,
+      // Structured Data
+      enableStructuredData: document.getElementById('enableStructuredData').checked,
+      organization: {
+        name: document.getElementById('orgName').value,
+        url: document.getElementById('orgUrl').value,
+        logo: document.getElementById('orgLogo').value,
+        contactEmail: document.getElementById('orgContactEmail').value,
+        contactPhone: document.getElementById('orgContactPhone').value,
+        socialProfiles: getListValues('socialProfilesList'),
+      },
+      // Sitemap
+      enableSitemap: document.getElementById('enableSitemap').checked,
+      sitemapAutoScan: document.getElementById('sitemapAutoScan').checked,
+      sitemapDefaultChangefreq: document.getElementById('sitemapDefaultChangefreq').value,
+      sitemapDefaultPriority: parseFloat(document.getElementById('sitemapDefaultPriority').value) || 0.5,
+      sitemapExclude: getListValues('sitemapExcludeList'),
+      sitemapExtraPages: getExtraPages(),
+      // robots.txt
+      enableRobotsTxt: document.getElementById('enableRobotsTxt').checked,
+      robotsTxtRules: {
+        userAgent: document.getElementById('robotsUserAgent').value,
+        allow: getListValues('robotsAllowList'),
+        disallow: getListValues('robotsDisallowList'),
+      },
+    };
+  }
+
+  /** Populates all form fields across all tabs from a data object */
+  function dataToForm(data) {
+    if (!data) return;
+    // Principale
+    document.getElementById('siteName').value = data.siteName || '';
+    document.getElementById('siteUrl').value = data.siteUrl || '';
+    // Canonical & URLs
+    document.getElementById('enableCanonicalUrl').checked = data.enableCanonicalUrl !== false;
+    document.getElementById('canonicalCleanUrl').checked = data.canonicalCleanUrl !== false;
+    // Meta Tags
+    document.getElementById('enableMetaTags').checked = data.enableMetaTags !== false;
+    document.getElementById('defaultDescription').value = data.defaultDescription || '';
+    document.getElementById('defaultKeywords').value = data.defaultKeywords || '';
+    document.getElementById('defaultRobots').value = data.defaultRobots || 'index, follow';
+    // Open Graph
+    document.getElementById('enableOpenGraph').checked = data.enableOpenGraph !== false;
+    document.getElementById('defaultOgType').value = data.defaultOgType || 'website';
+    document.getElementById('defaultOgImage').value = data.defaultOgImage || '';
+    // Twitter Cards
+    document.getElementById('enableTwitterCards').checked = data.enableTwitterCards !== false;
+    document.getElementById('twitterCardType').value = data.twitterCardType || 'summary_large_image';
+    document.getElementById('twitterHandle').value = data.twitterHandle || '';
+    // Structured Data
+    document.getElementById('enableStructuredData').checked = data.enableStructuredData !== false;
+    const org = data.organization || {};
+    document.getElementById('orgName').value = org.name || '';
+    document.getElementById('orgUrl').value = org.url || '';
+    document.getElementById('orgLogo').value = org.logo || '';
+    document.getElementById('orgContactEmail').value = org.contactEmail || '';
+    document.getElementById('orgContactPhone').value = org.contactPhone || '';
+    setListValues('socialProfilesList', org.socialProfiles || []);
+    // Sitemap
+    document.getElementById('enableSitemap').checked = data.enableSitemap !== false;
+    document.getElementById('sitemapAutoScan').checked = data.sitemapAutoScan !== false;
+    document.getElementById('sitemapDefaultChangefreq').value = data.sitemapDefaultChangefreq || 'monthly';
+    document.getElementById('sitemapDefaultPriority').value = data.sitemapDefaultPriority ?? 0.5;
+    setListValues('sitemapExcludeList', data.sitemapExclude || []);
+    setExtraPages(data.sitemapExtraPages || []);
+    // robots.txt
+    document.getElementById('enableRobotsTxt').checked = data.enableRobotsTxt !== false;
+    const robots = data.robotsTxtRules || {};
+    document.getElementById('robotsUserAgent').value = robots.userAgent || '*';
+    setListValues('robotsAllowList', robots.allow || []);
+    setListValues('robotsDisallowList', robots.disallow || []);
+  }
+
+  /** Updates textarea with current data, formatted as JSON5-compatible JSON */
+  function dataToTextarea(data) {
+    document.getElementById('jsonEditor').value = JSON.stringify(data, null, 2);
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // LOAD SETTINGS FROM SERVER
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  async function loadSettings() {
+    try {
+      const resp = await fetch(`/${apiPrefix}/adminSeo/load-settings`);
+      const result = await resp.json();
+      if (result.success) {
+        // Populate all tabs
+        dataToForm(result.data);
+        // Populate textarea
+        dataToTextarea(result.data);
+        // Take snapshot for dirty tracking
+        takeSnapshot(result.data);
+      } else {
+        showAlert(i18n.loadError + ': ' + (result.error || ''), 'danger');
+      }
+    } catch (err) {
+      showAlert(i18n.loadError + ': ' + err.message, 'danger');
+    }
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // SAVE FROM TAB — collects all form data, validates, saves, syncs
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /** Displays validation messages inside a tab's messages area */
+  function showTabMessages(tabId, errors, warnings) {
+    const container = document.getElementById(`tabMessages-${tabId}`);
+    if (!container) return;
+    let html = '';
+    if (errors && errors.length > 0) {
+      html += errors.map(e => `<div class="message-item message-error">${escapeHtml(e)}</div>`).join('');
+    }
+    if (warnings && warnings.length > 0) {
+      html += warnings.map(w => `<div class="message-item message-warning">${escapeHtml(w)}</div>`).join('');
+    }
+    container.innerHTML = html;
+  }
+
+  function clearTabMessages(tabId) {
+    const container = document.getElementById(`tabMessages-${tabId}`);
+    if (container) container.innerHTML = '';
+  }
+
+  /**
+   * Saves from a tab: reads all form fields, validates server-side, saves.
+   * On success: updates textarea + snapshot.
+   * On failure: shows errors inside the tab.
+   */
+  async function saveFromTab(tabId) {
+    clearTabMessages(tabId);
+    const data = formToData();
+
+    try {
+      // Validate first
+      const valResp = await fetch(`/${apiPrefix}/adminSeo/validate-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data }),
+      });
+      const valResult = await valResp.json();
+
+      if (!valResult.valid) {
+        showTabMessages(tabId, valResult.errors, valResult.warnings);
+        return false;
+      }
+
+      // Save
+      const saveResp = await fetch(`/${apiPrefix}/adminSeo/save-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data }),
+      });
+      const saveResult = await saveResp.json();
+
+      if (saveResult.success) {
+        // Show warnings if any
+        if (saveResult.warnings && saveResult.warnings.length > 0) {
+          showTabMessages(tabId, [], saveResult.warnings);
+        }
+        // Sync textarea with saved data
+        dataToTextarea(data);
+        // Update snapshot
+        takeSnapshot(data);
+        showAlert(i18n.saved, 'success');
+        return true;
+      } else {
+        const errors = saveResult.errors || [saveResult.error || i18n.saveError];
+        showTabMessages(tabId, errors, saveResult.warnings);
+        return false;
+      }
+    } catch (err) {
+      showTabMessages(tabId, [i18n.saveError + ': ' + err.message], []);
+      return false;
+    }
+  }
+
+  // Bind all tab save buttons
+  document.querySelectorAll('.btn-tab-save').forEach(btn => {
+    btn.addEventListener('click', function () {
+      const tabId = this.getAttribute('data-tab');
+      saveFromTab(tabId);
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // VALIDATE TEXTAREA — parses JSON5, validates server-side
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  function showTextareaMessages(errors, warnings) {
+    const container = document.getElementById('textareaMessages');
+    let html = '';
+    if (errors && errors.length > 0) {
+      html += errors.map(e => `<div class="message-item message-error">${escapeHtml(e)}</div>`).join('');
+    }
+    if (warnings && warnings.length > 0) {
+      html += warnings.map(w => `<div class="message-item message-warning">${escapeHtml(w)}</div>`).join('');
+    }
+    if (!html) {
+      html = `<div class="message-item message-success">${i18n.validationOk}</div>`;
+    }
+    container.innerHTML = html;
+  }
+
+  function clearTextareaMessages() {
+    document.getElementById('textareaMessages').innerHTML = '';
+  }
+
+  document.getElementById('btnValidateTextarea').addEventListener('click', async () => {
+    clearTextareaMessages();
+    const content = document.getElementById('jsonEditor').value;
+
+    // Parse JSON5 client-side first
+    let parsed;
+    try {
+      parsed = JSON5.parse(content);
+    } catch (err) {
+      showTextareaMessages([`JSON5 syntax error: ${err.message}`], []);
+      return;
+    }
+
+    // Validate server-side
+    try {
+      const resp = await fetch(`/${apiPrefix}/adminSeo/validate-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: parsed }),
+      });
+      const result = await resp.json();
+      showTextareaMessages(
+        result.errors && result.errors.length > 0 ? result.errors : null,
+        result.warnings && result.warnings.length > 0 ? result.warnings : null
+      );
+    } catch (err) {
+      showTextareaMessages([err.message], []);
+    }
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // SAVE FROM TEXTAREA — parses JSON5, saves, syncs tabs
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  document.getElementById('btnSaveTextarea').addEventListener('click', async () => {
+    clearTextareaMessages();
+    const content = document.getElementById('jsonEditor').value;
+
+    // Parse JSON5 client-side
+    let parsed;
+    try {
+      parsed = JSON5.parse(content);
+    } catch (err) {
+      showTextareaMessages([`JSON5 syntax error: ${err.message}`], []);
+      return;
+    }
+
+    // Save via API
+    try {
+      const resp = await fetch(`/${apiPrefix}/adminSeo/save-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: parsed }),
+      });
+      const result = await resp.json();
+
+      if (result.success) {
+        // Sync all tabs with saved data
+        dataToForm(parsed);
+        // Update snapshot
+        takeSnapshot(parsed);
+        // Show warnings if any
+        if (result.warnings && result.warnings.length > 0) {
+          showTextareaMessages(null, result.warnings);
+        } else {
+          clearTextareaMessages();
+        }
+        showAlert(i18n.saved, 'success');
+      } else {
+        const errors = result.errors || [result.error || i18n.saveError];
+        showTextareaMessages(errors, result.warnings);
+      }
+    } catch (err) {
+      showTextareaMessages([i18n.saveError + ': ' + err.message], []);
+    }
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // DIRTY TRACKING — detects unsaved changes by comparing to snapshot
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /** Returns true if current form data differs from server snapshot */
+  function isFormDirty() {
+    if (!serverSnapshot) return false;
+    const current = JSON.stringify(formToData());
+    return current !== serverSnapshot;
+  }
+
+  /** Returns true if textarea content differs from server snapshot */
+  function isTextareaDirty() {
+    if (!serverSnapshot) return false;
+    const content = document.getElementById('jsonEditor').value;
+    try {
+      const parsed = JSON5.parse(content);
+      return JSON.stringify(parsed) !== serverSnapshot;
+    } catch {
+      // If textarea has invalid JSON5, consider it dirty
+      return true;
+    }
+  }
+
+  /** Returns true if anything on the page has unsaved changes */
+  function isPageDirty() {
+    return isFormDirty() || isTextareaDirty();
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // UNSAVED CHANGES MODAL — intercepts tab switch and navigation
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  const unsavedModal = new bootstrap.Modal(document.getElementById('unsavedChangesModal'));
+  let pendingTabTarget = null;    // Tab button to activate after modal resolves
+  let pendingNavHref = null;      // URL to navigate to after modal resolves
+
+  /** Gets the tab ID of the currently active tab */
+  function getActiveTabId() {
+    const activeBtn = document.querySelector('#settingsTabsDesktop .nav-link.active');
+    if (!activeBtn) return null;
+    return activeBtn.getAttribute('data-tab') || activeBtn.id.replace('tabBtn-', '');
+  }
+
+  // Intercept desktop tab switches
+  document.querySelectorAll('#settingsTabsDesktop button[data-bs-toggle="tab"]').forEach(btn => {
+    btn.addEventListener('show.bs.tab', function (e) {
+      if (isFormDirty()) {
+        e.preventDefault();
+        pendingTabTarget = this;
+        pendingNavHref = null;
+        unsavedModal.show();
+      }
+    });
+  });
+
+  // Intercept mobile dropdown tab switches
+  const mobileSelect = document.getElementById('settingsTabsMobile');
+  let mobileSelectPrevValue = mobileSelect.value;
+
+  mobileSelect.addEventListener('change', function (e) {
+    if (isFormDirty()) {
+      e.preventDefault();
+      // Store the target and revert the select
+      const targetId = this.value;
+      this.value = mobileSelectPrevValue;
+      pendingTabTarget = document.querySelector(`#settingsTabsDesktop button[data-bs-target="#${targetId}"]`);
+      pendingNavHref = null;
+      unsavedModal.show();
+    } else {
+      mobileSelectPrevValue = this.value;
+    }
+  });
+
+  // Update prev value when tab actually changes
+  document.querySelectorAll('#settingsTabsDesktop button[data-bs-toggle="tab"]').forEach(btn => {
+    btn.addEventListener('shown.bs.tab', function () {
+      const targetId = this.getAttribute('data-bs-target').replace('#', '');
+      mobileSelectPrevValue = targetId;
+    });
+  });
+
+  // Intercept navigation links (breadcrumb, cancel)
+  document.querySelectorAll('a.nav-link-action, .breadcrumb a').forEach(link => {
+    link.addEventListener('click', function (e) {
+      if (isPageDirty()) {
+        e.preventDefault();
+        pendingNavHref = this.href;
+        pendingTabTarget = null;
+        unsavedModal.show();
+      }
+    });
+  });
+
+  // Modal button: Discard changes and proceed
+  document.getElementById('modalBtnDiscard').addEventListener('click', () => {
+    unsavedModal.hide();
+    // Reset snapshot to current form so dirty check passes
+    takeSnapshot(formToData());
+    if (pendingTabTarget) {
+      new bootstrap.Tab(pendingTabTarget).show();
+      pendingTabTarget = null;
+    }
+    if (pendingNavHref) {
+      window.location.href = pendingNavHref;
+      pendingNavHref = null;
+    }
+  });
+
+  // Modal button: Save then proceed
+  document.getElementById('modalBtnSave').addEventListener('click', async () => {
+    // Determine which tab to save from (use the currently active one)
+    const activeBtn = document.querySelector('#settingsTabsDesktop .nav-link.active');
+    const activeTabId = activeBtn ? activeBtn.id.replace('tabBtn-', '') : 'principale';
+
+    const saved = await saveFromTab(activeTabId);
+    unsavedModal.hide();
+
+    if (saved) {
+      if (pendingTabTarget) {
+        new bootstrap.Tab(pendingTabTarget).show();
+        pendingTabTarget = null;
+      }
+      if (pendingNavHref) {
+        window.location.href = pendingNavHref;
+        pendingNavHref = null;
+      }
+    }
+    // If save failed, modal closes but user stays on current tab
+  });
+
+  // Browser beforeunload — native dialog for page exit
+  window.addEventListener('beforeunload', function (e) {
+    if (isPageDirty()) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+
+  // Load on page ready
+  document.addEventListener('DOMContentLoaded', loadSettings);
 </script>
 
 <%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>

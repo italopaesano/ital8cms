@@ -109,3 +109,34 @@
 #settingsTabContent .tab-pane {
   min-height: 200px;
 }
+
+/* Tab description and details styling */
+#settingsTabContent details summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+#settingsTabContent details summary:hover {
+  text-decoration: underline;
+}
+
+/* Tab nav: compact font on smaller desktops */
+@media (min-width: 768px) and (max-width: 1199px) {
+  #settingsTabsDesktop .nav-link {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.6rem;
+  }
+  #settingsTabsDesktop .nav-link i {
+    display: none;
+  }
+}
+
+/* Mobile select styling */
+#settingsTabsMobile {
+  font-weight: 500;
+}
+
+/* Tab save button spacing */
+.btn-tab-save {
+  margin-top: 0.5rem;
+}
