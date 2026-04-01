@@ -973,6 +973,38 @@
     diffAfter.innerHTML = linesToHtml(display.afterLines);
   }
 
+  /**
+   * Renders the diff panel from a pre-computed display object.
+   * Used by textarea save where the diff is computed from parsed textarea data.
+   */
+  function renderDiffFromDisplay(display) {
+    const diffNoChanges = document.getElementById('diffNoChanges');
+    const diffContent = document.getElementById('diffContent');
+    const diffCounter = document.getElementById('diffCounter');
+    const diffBefore = document.getElementById('diffBefore');
+    const diffAfter = document.getElementById('diffAfter');
+    const diffSavedBadge = document.getElementById('diffSavedBadge');
+
+    if (display.changeCount === 0) {
+      diffNoChanges.classList.remove('d-none');
+      diffContent.classList.add('d-none');
+      diffCounter.textContent = '';
+      return;
+    }
+
+    diffNoChanges.classList.add('d-none');
+    diffContent.classList.remove('d-none');
+    diffSavedBadge.classList.add('d-none');
+
+    const countLabel = display.changeCount === 1
+      ? '<%= __({it: "1 modifica rilevata", en: "1 change detected"}, passData.ctx) %>'
+      : `${display.changeCount} <%= __({it: "modifiche rilevate", en: "changes detected"}, passData.ctx) %>`;
+    diffCounter.textContent = countLabel;
+
+    diffBefore.innerHTML = linesToHtml(display.beforeLines);
+    diffAfter.innerHTML = linesToHtml(display.afterLines);
+  }
+
   /** Shows the "Salvataggio effettuato" badge in the diff panel */
   function showDiffSavedBadge() {
     document.getElementById('diffSavedBadge').classList.remove('d-none');
@@ -1174,6 +1206,9 @@
         if (saveResult.warnings && saveResult.warnings.length > 0) {
           showTabMessages(tabId, [], saveResult.warnings);
         }
+        // Render diff BEFORE updating snapshot (shows what was just saved)
+        renderDiffPanel();
+        showDiffSavedBadge();
         // Sync textarea with saved data
         dataToTextarea(data);
         // Update snapshot
@@ -1279,6 +1314,13 @@
       const result = await resp.json();
 
       if (result.success) {
+        // Render diff BEFORE updating snapshot (shows what was just saved)
+        // Use parsed textarea data as "current" for diff calculation
+        const oldData = JSON.parse(serverSnapshot);
+        const textareaDiffs = computeDiff(oldData, parsed);
+        const textareaDiffDisplay = buildDiffDisplay(oldData, parsed, textareaDiffs);
+        renderDiffFromDisplay(textareaDiffDisplay);
+        showDiffSavedBadge();
         // Sync all tabs with saved data
         dataToForm(parsed);
         // Update snapshot
@@ -1398,6 +1440,7 @@
     unsavedModal.hide();
     // Reset snapshot to current form so dirty check passes
     takeSnapshot(formToData());
+    resetDiffPanel();
     if (pendingTabTarget) {
       new bootstrap.Tab(pendingTabTarget).show();
       pendingTabTarget = null;
@@ -1436,6 +1479,19 @@
       e.preventDefault();
       e.returnValue = '';
     }
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // DIFF PANEL LISTENERS — live update on form changes, reset on tab switch
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  // Live diff update on any form field change (event delegation on tab content)
+  document.getElementById('settingsTabContent').addEventListener('input', renderDiffPanel);
+  document.getElementById('settingsTabContent').addEventListener('change', renderDiffPanel);
+
+  // Reset diff panel on tab switch (after the tab actually changes)
+  document.querySelectorAll('#settingsTabsDesktop button[data-bs-toggle="tab"]').forEach(btn => {
+    btn.addEventListener('shown.bs.tab', resetDiffPanel);
   });
 
   // Load on page ready
