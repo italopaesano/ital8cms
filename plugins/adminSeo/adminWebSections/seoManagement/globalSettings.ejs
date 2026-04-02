@@ -547,6 +547,8 @@
   </div>
 </div>
 
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>
+
 <script src="/<%= passData.adminPrefix %>/seoManagement/editor.js"></script>
 <script src="/<%= passData.apiPrefix %>/adminSeo/lib/json5.min.js"></script>
 <script>
@@ -1555,5 +1557,3 @@
   // Load on page ready
   document.addEventListener('DOMContentLoaded', loadSettings);
 </script>
-
-<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>
