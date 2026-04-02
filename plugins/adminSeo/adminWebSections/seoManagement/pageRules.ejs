@@ -3,653 +3,232 @@
 <link rel="stylesheet" href="/<%= passData.adminPrefix %>/seoManagement/editor.css">
 
 <div class="container mt-4">
-  <!-- Breadcrumb -->
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- BREADCRUMB + TITLE -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
   <nav aria-label="breadcrumb">
     <ol class="breadcrumb">
-      <li class="breadcrumb-item"><a href="/<%= passData.adminPrefix %>/seoManagement/index.ejs"><%= __({it: 'Gestione SEO', en: 'SEO Management'}, passData.ctx) %></a></li>
-      <li class="breadcrumb-item active"><%= __({it: 'Regole Per Pagina', en: 'Per-Page Rules'}, passData.ctx) %></li>
+      <li class="breadcrumb-item">
+        <a href="/<%= passData.adminPrefix %>/seoManagement/index.ejs">
+          <%= __({it: 'Gestione SEO', en: 'SEO Management'}, passData.ctx) %>
+        </a>
+      </li>
+      <li class="breadcrumb-item active">
+        <%= __({it: 'Regole Per Pagina', en: 'Per-Page Rules'}, passData.ctx) %>
+      </li>
     </ol>
   </nav>
 
-  <h3 class="mb-3"><%= __({it: 'Regole SEO Per Pagina', en: 'Per-Page SEO Rules'}, passData.ctx) %></h3>
+  <h3 class="mb-3">
+    <%= __({it: 'Regole SEO Per Pagina', en: 'Per-Page SEO Rules'}, passData.ctx) %>
+  </h3>
 
-  <!-- Alert Area -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- ALERT AREA -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
   <div id="alertArea"></div>
 
-  <!-- Preview Panel -->
-  <div class="card mb-3">
-    <div class="card-header d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#previewPanel" style="cursor:pointer">
-      <span><i class="bi bi-eye"></i> <%= __({it: 'Anteprima Meta Tag', en: 'Meta Tag Preview'}, passData.ctx) %></span>
-      <i class="bi bi-chevron-down"></i>
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- TOP ACTION BAR -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div class="d-flex gap-2 mb-2">
+    <button type="button" id="btnValidate" class="btn btn-outline-info btn-sm">
+      <i class="bi bi-check-circle"></i>
+      <%= __({it: 'Valida JSON5', en: 'Validate JSON5'}, passData.ctx) %>
+    </button>
+    <button type="button" id="btnSave" class="btn btn-primary btn-sm">
+      <i class="bi bi-save"></i>
+      <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %>
+    </button>
+    <a href="/<%= passData.adminPrefix %>/seoManagement/index.ejs"
+       class="btn btn-link btn-sm nav-link-action"
+       id="linkCancel">
+      <%= __({it: 'Annulla', en: 'Cancel'}, passData.ctx) %>
+    </a>
+  </div>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- SNIPPET TOOLBAR -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div class="snippet-toolbar-card mb-3">
+    <div class="snippet-toolbar-header">
+      <small class="fw-semibold text-muted">
+        <i class="bi bi-puzzle"></i>
+        <%= __({it: 'Inserisci snippet', en: 'Insert snippet'}, passData.ctx) %>
+      </small>
     </div>
-    <div id="previewPanel" class="collapse">
-      <div class="card-body">
-        <div class="input-group mb-3">
-          <input type="text" id="previewUrl" class="form-control" placeholder="/about.ejs" value="/">
-          <button id="btnPreview" class="btn btn-outline-info">
-            <i class="bi bi-eye"></i> <%= __({it: 'Anteprima', en: 'Preview'}, passData.ctx) %>
-          </button>
-        </div>
-        <div id="previewResult"></div>
+    <div class="snippet-toolbar-body">
+      <div class="d-flex flex-wrap gap-1">
+        <button class="btn btn-outline-secondary btn-sm" id="snippetExact">
+          <i class="bi bi-plus"></i>
+          <%= __({it: 'Regola Esatta', en: 'Exact Rule'}, passData.ctx) %>
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" id="snippetWildcard">
+          <i class="bi bi-plus"></i> Wildcard (*)
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" id="snippetRecursive">
+          <i class="bi bi-plus"></i> Wildcard (**)
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" id="snippetRegex">
+          <i class="bi bi-plus"></i> Regex
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" id="snippetMultilingual">
+          <i class="bi bi-plus"></i>
+          <%= __({it: 'Multilingua', en: 'Multilingual'}, passData.ctx) %>
+        </button>
       </div>
     </div>
   </div>
 
-  <!-- Interface Tabs -->
-  <ul class="nav nav-tabs mb-3" role="tablist">
-    <li class="nav-item" role="presentation">
-      <button class="nav-link active" id="tab-list" data-bs-toggle="tab" data-bs-target="#panel-list" type="button" role="tab">
-        <i class="bi bi-list-ul"></i> <%= __({it: 'Vista Lista', en: 'List View'}, passData.ctx) %>
-      </button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link" id="tab-json" data-bs-toggle="tab" data-bs-target="#panel-json" type="button" role="tab">
-        <i class="bi bi-code-slash"></i> <%= __({it: 'Editor JSON5', en: 'JSON5 Editor'}, passData.ctx) %>
-      </button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link" id="tab-form" data-bs-toggle="tab" data-bs-target="#panel-form" type="button" role="tab">
-        <i class="bi bi-ui-checks-grid"></i> <%= __({it: 'Form Builder', en: 'Form Builder'}, passData.ctx) %>
-      </button>
-    </li>
-  </ul>
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- MESSAGES AREA -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div id="editorMessages" class="messages-area mb-3"></div>
 
-  <div class="tab-content">
-    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-    <!-- LIST VIEW -->
-    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-    <div class="tab-pane fade show active" id="panel-list" role="tabpanel">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <span class="text-muted" id="listRuleCount"></span>
-        <button class="btn btn-primary btn-sm" onclick="switchToFormForNew()">
-          <i class="bi bi-plus-lg"></i> <%= __({it: 'Nuova Regola', en: 'New Rule'}, passData.ctx) %>
-        </button>
-      </div>
-      <div class="table-responsive">
-        <table class="table table-striped table-hover">
-          <thead>
-            <tr>
-              <th>Pattern</th>
-              <th><%= __({it: 'Tipo', en: 'Type'}, passData.ctx) %></th>
-              <th>Title</th>
-              <th>Description</th>
-              <th>Sitemap</th>
-              <th><%= __({it: 'Azioni', en: 'Actions'}, passData.ctx) %></th>
-            </tr>
-          </thead>
-          <tbody id="rulesListBody">
-            <tr><td colspan="6" class="text-center text-muted"><%= __({it: 'Caricamento...', en: 'Loading...'}, passData.ctx) %></td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="d-flex gap-2 mb-4">
-        <button type="button" id="btnSaveList" class="btn btn-primary">
-          <i class="bi bi-save"></i> <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %>
-        </button>
-        <a href="/<%= passData.adminPrefix %>/seoManagement/index.ejs" class="btn btn-link">
-          <%= __({it: 'Annulla', en: 'Cancel'}, passData.ctx) %>
-        </a>
-      </div>
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- DIFF PANEL (collassabile — si popola dopo il salvataggio) -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div class="diff-panel mb-4">
+    <div class="diff-panel-header collapsed"
+         data-bs-toggle="collapse"
+         data-bs-target="#diffPanelBody"
+         aria-expanded="false"
+         aria-controls="diffPanelBody">
+      <i class="bi bi-file-diff"></i>
+      <span><%= __({it: 'Riepilogo Modifiche', en: 'Changes Summary'}, passData.ctx) %></span>
+      <span id="diffCounter" class="diff-counter ms-2"></span>
+      <span id="diffSavedBadge" class="diff-saved-badge ms-2 d-none">
+        <%= __({it: 'Salvataggio effettuato', en: 'Save completed'}, passData.ctx) %>
+      </span>
+      <i class="bi bi-chevron-right ms-auto diff-chevron"></i>
     </div>
 
-    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-    <!-- JSON5 EDITOR -->
-    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-    <div class="tab-pane fade" id="panel-json" role="tabpanel">
-      <!-- Toolbar -->
-      <div class="d-flex flex-wrap gap-1 mb-2">
-        <button class="btn btn-outline-secondary btn-sm" onclick="insertSnippet('exact')">
-          <i class="bi bi-plus"></i> <%= __({it: 'Regola Esatta', en: 'Exact Rule'}, passData.ctx) %>
-        </button>
-        <button class="btn btn-outline-secondary btn-sm" onclick="insertSnippet('wildcard')">
-          <i class="bi bi-plus"></i> Wildcard (*)
-        </button>
-        <button class="btn btn-outline-secondary btn-sm" onclick="insertSnippet('recursive')">
-          <i class="bi bi-plus"></i> Wildcard (**)
-        </button>
-        <button class="btn btn-outline-secondary btn-sm" onclick="insertSnippet('regex')">
-          <i class="bi bi-plus"></i> Regex
-        </button>
-        <button class="btn btn-outline-secondary btn-sm" onclick="insertSnippet('multilingual')">
-          <i class="bi bi-plus"></i> <%= __({it: 'Multilingua', en: 'Multilingual'}, passData.ctx) %>
-        </button>
+    <div id="diffPanelBody" class="collapse">
+
+      <div id="diffNoSaveYet" class="diff-no-changes">
+        <i class="bi bi-clock-history"></i>
+        <%= __({it: 'Nessun salvataggio ancora eseguito', en: 'No save performed yet'}, passData.ctx) %>
       </div>
 
-      <div id="jsonMessages" class="messages-area mb-3"></div>
+      <div id="diffContent" class="d-none p-3">
+        <!-- Before panel -->
+        <div class="diff-subpanel diff-before mb-2">
+          <div class="diff-subpanel-header">
+            <i class="bi bi-clock-history"></i>
+            <%= __({it: 'Prima', en: 'Before'}, passData.ctx) %>
+          </div>
+          <pre id="diffBefore" class="diff-pre"></pre>
+        </div>
 
-      <div class="d-flex gap-2 mb-3">
-        <button type="button" id="btnValidateJson" class="btn btn-outline-info btn-sm">
-          <i class="bi bi-check-circle"></i> <%= __({it: 'Valida', en: 'Validate'}, passData.ctx) %>
-        </button>
-        <button type="button" id="btnSaveJson" class="btn btn-primary btn-sm">
-          <i class="bi bi-save"></i> <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %>
-        </button>
-        <a href="/<%= passData.adminPrefix %>/seoManagement/index.ejs" class="btn btn-link btn-sm">
-          <%= __({it: 'Annulla', en: 'Cancel'}, passData.ctx) %>
-        </a>
-      </div>
+        <!-- Arrow separator -->
+        <div class="diff-arrow text-center mb-2">
+          <i class="bi bi-arrow-down"></i>
+        </div>
 
-      <textarea id="jsonEditor" class="seo-editor-textarea" rows="40" spellcheck="false"></textarea>
-
-      <!-- Pattern Reference -->
-      <div class="card mt-3 mb-4">
-        <div class="card-header"><%= __({it: 'Riferimento Pattern', en: 'Pattern Reference'}, passData.ctx) %></div>
-        <div class="card-body" style="font-size: 0.85rem;">
-          <table class="table table-sm">
-            <tr><td><code>/about.ejs</code></td><td><%= __({it: 'Match esatto (priorità 1000)', en: 'Exact match (priority 1000)'}, passData.ctx) %></td></tr>
-            <tr><td><code>/blog/*.ejs</code></td><td><%= __({it: 'Wildcard singolo — un livello (priorità 300)', en: 'Single wildcard — one level (priority 300)'}, passData.ctx) %></td></tr>
-            <tr><td><code>/docs/**</code></td><td><%= __({it: 'Wildcard ricorsivo — tutti i livelli (priorità 100)', en: 'Recursive wildcard — all levels (priority 100)'}, passData.ctx) %></td></tr>
-            <tr><td><code>regex:^/product/\d+$</code></td><td><%= __({it: 'Espressione regolare (priorità 500)', en: 'Regular expression (priority 500)'}, passData.ctx) %></td></tr>
-          </table>
+        <!-- After panel -->
+        <div class="diff-subpanel diff-after">
+          <div class="diff-subpanel-header">
+            <i class="bi bi-pencil-square"></i>
+            <%= __({it: 'Dopo (salvato)', en: 'After (saved)'}, passData.ctx) %>
+          </div>
+          <pre id="diffAfter" class="diff-pre"></pre>
         </div>
       </div>
+
     </div>
+  </div>
 
-    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-    <!-- FORM BUILDER -->
-    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-    <div class="tab-pane fade" id="panel-form" role="tabpanel">
-      <div id="formBuilderRules"></div>
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- JSON5 EDITOR -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <h5 class="mb-2">
+    <i class="bi bi-code-slash"></i>
+    <%= __({it: 'Editor JSON5', en: 'JSON5 Editor'}, passData.ctx) %>
+  </h5>
+  <textarea id="jsonEditor" class="seo-editor-textarea" rows="40" spellcheck="false"></textarea>
 
-      <button type="button" class="btn btn-outline-primary btn-sm mb-3" onclick="addFormRule()">
-        <i class="bi bi-plus-lg"></i> <%= __({it: 'Aggiungi Regola', en: 'Add Rule'}, passData.ctx) %>
-      </button>
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- PATTERN REFERENCE (collassabile) -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <details class="pattern-reference mt-3 mb-4">
+    <summary>
+      <i class="bi bi-book"></i>
+      <%= __({it: 'Riferimento Pattern', en: 'Pattern Reference'}, passData.ctx) %>
+    </summary>
+    <div class="pattern-reference-body">
+      <table class="table table-sm mb-0">
+        <tbody>
+          <tr>
+            <td><code>/about.ejs</code></td>
+            <td><%= __({it: 'Match esatto (priorità 1000)', en: 'Exact match (priority 1000)'}, passData.ctx) %></td>
+          </tr>
+          <tr>
+            <td><code>/blog/*.ejs</code></td>
+            <td><%= __({it: 'Wildcard singolo — un livello (priorità 300)', en: 'Single wildcard — one level (priority 300)'}, passData.ctx) %></td>
+          </tr>
+          <tr>
+            <td><code>/docs/**</code></td>
+            <td><%= __({it: 'Wildcard ricorsivo — tutti i livelli (priorità 100)', en: 'Recursive wildcard — all levels (priority 100)'}, passData.ctx) %></td>
+          </tr>
+          <tr>
+            <td><code>regex:^/product/\d+$</code></td>
+            <td><%= __({it: 'Espressione regolare (priorità 500)', en: 'Regular expression (priority 500)'}, passData.ctx) %></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
 
-      <div class="d-flex gap-2 mb-4">
-        <button type="button" id="btnSaveFormBuilder" class="btn btn-primary">
-          <i class="bi bi-save"></i> <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- MODAL — Modifiche non salvate -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="modal fade" id="unsavedChangesModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <%= __({it: 'Modifiche non salvate', en: 'Unsaved Changes'}, passData.ctx) %>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-0">
+          <%= __({it: 'Ci sono modifiche non salvate nell\'editor. Cosa vuoi fare?', en: 'There are unsaved changes in the editor. What do you want to do?'}, passData.ctx) %>
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="modalBtnDiscard">
+          <i class="bi bi-x-circle"></i>
+          <%= __({it: 'Prosegui senza salvare', en: 'Continue without saving'}, passData.ctx) %>
         </button>
-        <a href="/<%= passData.adminPrefix %>/seoManagement/index.ejs" class="btn btn-link">
+        <button type="button" class="btn btn-primary" id="modalBtnSave">
+          <i class="bi bi-save"></i>
+          <%= __({it: 'Salva e prosegui', en: 'Save and continue'}, passData.ctx) %>
+        </button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="modalBtnCancel">
           <%= __({it: 'Annulla', en: 'Cancel'}, passData.ctx) %>
-        </a>
+        </button>
       </div>
     </div>
   </div>
 </div>
 
-<script src="/<%= passData.adminPrefix %>/seoManagement/editor.js"></script>
 <script>
   const apiPrefix = '<%= passData.apiPrefix %>';
   const adminPrefix = '<%= passData.adminPrefix %>';
 
   const i18n = {
-    saved: '<%= __({it: "Regole salvate con successo.", en: "Rules saved successfully."}, passData.ctx) %>',
-    saveError: '<%= __({it: "Errore nel salvataggio.", en: "Error saving."}, passData.ctx) %>',
-    loadError: '<%= __({it: "Errore nel caricamento.", en: "Error loading."}, passData.ctx) %>',
-    validationOk: '<%= __({it: "Validazione superata.", en: "Validation passed."}, passData.ctx) %>',
-    noRules: '<%= __({it: "Nessuna regola definita.", en: "No rules defined."}, passData.ctx) %>',
-    deleteConfirm: '<%= __({it: "Sei sicuro di voler eliminare questa regola?", en: "Are you sure you want to delete this rule?"}, passData.ctx) %>',
-    matchedPattern: '<%= __({it: "Pattern matchato:", en: "Matched pattern:"}, passData.ctx) %>',
-    noMatch: '<%= __({it: "Nessun pattern specifico — vengono usati i valori predefiniti", en: "No specific pattern matched — default values used"}, passData.ctx) %>',
-    ruleCount: '<%= __({it: "regole", en: "rules"}, passData.ctx) %>',
+    saved:          '<%= __({it: "Regole salvate con successo.", en: "Rules saved successfully."}, passData.ctx) %>',
+    saveError:      '<%= __({it: "Errore nel salvataggio.", en: "Error saving."}, passData.ctx) %>',
+    loadError:      '<%= __({it: "Errore nel caricamento.", en: "Error loading."}, passData.ctx) %>',
+    validationOk:   '<%= __({it: "Validazione superata.", en: "Validation passed."}, passData.ctx) %>',
+    deleteConfirm:  '<%= __({it: "Sei sicuro di voler eliminare questa regola?", en: "Are you sure you want to delete this rule?"}, passData.ctx) %>',
   };
 
-  // Current data in memory
-  let currentRules = {};
-
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // SNIPPETS for JSON5 editor
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  const SNIPPETS = {
-    exact: `  "/page.ejs": {
-    "title": "Page Title",
-    "description": "Page description for search engines",
-    "sitemap": { "priority": 0.8, "changefreq": "monthly" }
-  },`,
-    wildcard: `  "/blog/*.ejs": {
-    "description": "Blog post",
-    "ogType": "article",
-    "sitemap": { "priority": 0.6, "changefreq": "weekly" }
-  },`,
-    recursive: `  "/docs/**": {
-    "description": "Documentation section",
-    "sitemap": { "priority": 0.5, "changefreq": "monthly" }
-  },`,
-    regex: `  "regex:^/product/\\\\d+$": {
-    "ogType": "article",
-    "sitemap": { "priority": 0.7, "changefreq": "weekly" }
-  },`,
-    multilingual: `  "/": {
-    "title": { "it": "Titolo Pagina", "en": "Page Title" },
-    "description": { "it": "Descrizione per i motori di ricerca", "en": "Description for search engines" },
-    "sitemap": { "priority": 1.0, "changefreq": "daily" }
-  },`,
-  };
-
-  function insertSnippet(type) {
-    const textarea = document.getElementById('jsonEditor');
-    const snippet = SNIPPETS[type];
-    if (!snippet) return;
-
-    const value = textarea.value;
-    const cursorPos = textarea.selectionStart;
-
-    // Find a good insertion point — before the last closing brace
-    const lastBrace = value.lastIndexOf('}');
-    if (lastBrace === -1) {
-      textarea.value = '{\n' + snippet + '\n}';
-    } else {
-      // Check if we need a comma before the snippet
-      const beforeBrace = value.substring(0, lastBrace).trimEnd();
-      const needsComma = beforeBrace.length > 1 && !beforeBrace.endsWith(',') && !beforeBrace.endsWith('{');
-      const insertion = (needsComma ? ',' : '') + '\n' + snippet;
-      textarea.value = value.substring(0, lastBrace) + insertion + '\n' + value.substring(lastBrace);
-    }
-    textarea.focus();
-  }
-
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // LIST VIEW
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  function renderRulesList() {
-    const tbody = document.getElementById('rulesListBody');
-    const entries = Object.entries(currentRules);
-    const countSpan = document.getElementById('listRuleCount');
-    countSpan.textContent = `${entries.length} ${i18n.ruleCount}`;
-
-    if (entries.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">${i18n.noRules}</td></tr>`;
-      return;
-    }
-
-    tbody.innerHTML = entries.map(([pattern, rule], idx) => {
-      const type = getPatternType(pattern);
-      const title = typeof rule.title === 'string' ? rule.title : (typeof rule.title === 'object' ? Object.values(rule.title)[0] : '—');
-      const desc = typeof rule.description === 'string' ? rule.description : (typeof rule.description === 'object' ? Object.values(rule.description)[0] : '—');
-      const sitemap = rule.sitemap === false ? '<span class="badge bg-danger">excluded</span>'
-        : (rule.sitemap ? `<span class="badge bg-success">p:${rule.sitemap.priority ?? '—'} ${rule.sitemap.changefreq ?? ''}</span>` : '—');
-
-      return `<tr>
-        <td><code>${escapeHtml(pattern)}</code></td>
-        <td><span class="badge bg-${type.color}">${type.label}</span></td>
-        <td class="text-truncate" style="max-width:150px">${escapeHtml(title)}</td>
-        <td class="text-truncate" style="max-width:200px">${escapeHtml(desc)}</td>
-        <td>${sitemap}</td>
-        <td class="text-nowrap">
-          <button class="btn btn-warning btn-sm me-1" onclick="editRuleInForm('${escapeAttr(pattern)}')"><i class="bi bi-pencil"></i></button>
-          <button class="btn btn-danger btn-sm" onclick="deleteRule('${escapeAttr(pattern)}')"><i class="bi bi-trash"></i></button>
-        </td>
-      </tr>`;
-    }).join('');
-  }
-
-  function getPatternType(pattern) {
-    if (pattern.startsWith('regex:')) return { label: 'regex', color: 'info' };
-    if (pattern.includes('**')) return { label: '**', color: 'warning' };
-    if (pattern.includes('*')) return { label: '*', color: 'secondary' };
-    return { label: 'exact', color: 'primary' };
-  }
-
-  function deleteRule(pattern) {
-    if (!confirm(i18n.deleteConfirm)) return;
-    delete currentRules[pattern];
-    renderRulesList();
-    syncJsonFromRules();
-    syncFormBuilderFromRules();
-  }
-
-  function editRuleInForm(pattern) {
-    // Switch to form builder tab and populate for editing
-    const tabBtn = document.getElementById('tab-form');
-    const tab = new bootstrap.Tab(tabBtn);
-    tab.show();
-    // Small delay to let tab render
-    setTimeout(() => populateFormBuilderForEdit(pattern), 100);
-  }
-
-  function switchToFormForNew() {
-    const tabBtn = document.getElementById('tab-form');
-    const tab = new bootstrap.Tab(tabBtn);
-    tab.show();
-    setTimeout(() => addFormRule(), 100);
-  }
-
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // FORM BUILDER
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  let formRuleCounter = 0;
-
-  function addFormRule(pattern, rule) {
-    pattern = pattern || '';
-    rule = rule || {};
-    const id = formRuleCounter++;
-    const container = document.getElementById('formBuilderRules');
-
-    const card = document.createElement('div');
-    card.className = 'card mb-3 form-rule-card';
-    card.id = `formRule-${id}`;
-    card.innerHTML = `
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-file-earmark-text"></i> <span class="rule-pattern-display">${escapeHtml(pattern) || 'New Rule'}</span></span>
-        <button class="btn btn-outline-danger btn-sm" onclick="removeFormRule(${id})"><i class="bi bi-trash"></i></button>
-      </div>
-      <div class="card-body">
-        <div class="row mb-2">
-          <div class="col-md-6">
-            <label class="form-label">Pattern URL</label>
-            <input type="text" class="form-control form-control-sm rule-pattern" value="${escapeAttr(pattern)}" placeholder="/about.ejs" oninput="this.closest('.card').querySelector('.rule-pattern-display').textContent = this.value || 'New Rule'">
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">Robots</label>
-            <input type="text" class="form-control form-control-sm rule-robots" value="${escapeAttr(rule.robots || '')}" placeholder="index, follow">
-          </div>
-        </div>
-        <div class="row mb-2">
-          <div class="col-md-6">
-            <label class="form-label">Title</label>
-            <input type="text" class="form-control form-control-sm rule-title" value="${escapeAttr(typeof rule.title === 'string' ? rule.title : '')}" placeholder="Page Title">
-            ${typeof rule.title === 'object' ? `<small class="text-info">Multilingual value — edit in JSON5 editor for full control</small>` : ''}
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">Description</label>
-            <input type="text" class="form-control form-control-sm rule-description" value="${escapeAttr(typeof rule.description === 'string' ? rule.description : '')}" placeholder="Page description">
-            ${typeof rule.description === 'object' ? `<small class="text-info">Multilingual value — edit in JSON5 editor for full control</small>` : ''}
-          </div>
-        </div>
-        <div class="row mb-2">
-          <div class="col-md-4">
-            <label class="form-label">Keywords</label>
-            <input type="text" class="form-control form-control-sm rule-keywords" value="${escapeAttr(typeof rule.keywords === 'string' ? rule.keywords : '')}" placeholder="kw1, kw2">
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">OG Type</label>
-            <select class="form-select form-select-sm rule-ogType">
-              <option value="">— default —</option>
-              <option value="website" ${rule.ogType === 'website' ? 'selected' : ''}>website</option>
-              <option value="article" ${rule.ogType === 'article' ? 'selected' : ''}>article</option>
-              <option value="profile" ${rule.ogType === 'profile' ? 'selected' : ''}>profile</option>
-            </select>
-          </div>
-          <div class="col-md-5">
-            <label class="form-label">OG Image</label>
-            <input type="text" class="form-control form-control-sm rule-ogImage" value="${escapeAttr(rule.ogImage || '')}" placeholder="/media/image.jpg">
-          </div>
-        </div>
-        <div class="row mb-2">
-          <div class="col-md-3">
-            <label class="form-label">Twitter Card</label>
-            <select class="form-select form-select-sm rule-twitterCardType">
-              <option value="">— default —</option>
-              <option value="summary" ${rule.twitterCardType === 'summary' ? 'selected' : ''}>summary</option>
-              <option value="summary_large_image" ${rule.twitterCardType === 'summary_large_image' ? 'selected' : ''}>summary_large_image</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label">Sitemap</label>
-            <select class="form-select form-select-sm rule-sitemap-toggle" onchange="toggleSitemapFields(this)">
-              <option value="default" ${rule.sitemap === undefined ? 'selected' : ''}>Default</option>
-              <option value="custom" ${rule.sitemap && rule.sitemap !== false ? 'selected' : ''}>Custom</option>
-              <option value="exclude" ${rule.sitemap === false ? 'selected' : ''}>Exclude</option>
-            </select>
-          </div>
-          <div class="col-md-3 sitemap-fields" ${(!rule.sitemap || rule.sitemap === false) ? 'style="display:none"' : ''}>
-            <label class="form-label">Priority</label>
-            <input type="number" class="form-control form-control-sm rule-sitemap-priority" min="0" max="1" step="0.1" value="${rule.sitemap?.priority ?? ''}">
-          </div>
-          <div class="col-md-3 sitemap-fields" ${(!rule.sitemap || rule.sitemap === false) ? 'style="display:none"' : ''}>
-            <label class="form-label">Changefreq</label>
-            <select class="form-select form-select-sm rule-sitemap-changefreq">
-              <option value="">— default —</option>
-              <option value="always" ${rule.sitemap?.changefreq === 'always' ? 'selected' : ''}>always</option>
-              <option value="daily" ${rule.sitemap?.changefreq === 'daily' ? 'selected' : ''}>daily</option>
-              <option value="weekly" ${rule.sitemap?.changefreq === 'weekly' ? 'selected' : ''}>weekly</option>
-              <option value="monthly" ${rule.sitemap?.changefreq === 'monthly' ? 'selected' : ''}>monthly</option>
-              <option value="yearly" ${rule.sitemap?.changefreq === 'yearly' ? 'selected' : ''}>yearly</option>
-              <option value="never" ${rule.sitemap?.changefreq === 'never' ? 'selected' : ''}>never</option>
-            </select>
-          </div>
-        </div>
-      </div>
-    `;
-    container.appendChild(card);
-  }
-
-  function toggleSitemapFields(select) {
-    const card = select.closest('.card-body');
-    const fields = card.querySelectorAll('.sitemap-fields');
-    const show = select.value === 'custom';
-    fields.forEach(f => f.style.display = show ? '' : 'none');
-  }
-
-  function removeFormRule(id) {
-    const card = document.getElementById(`formRule-${id}`);
-    if (card) card.remove();
-  }
-
-  function formBuilderToRules() {
-    const rules = {};
-    const cards = document.querySelectorAll('.form-rule-card');
-    cards.forEach(card => {
-      const pattern = card.querySelector('.rule-pattern').value.trim();
-      if (!pattern) return;
-
-      const rule = {};
-      const title = card.querySelector('.rule-title').value.trim();
-      const description = card.querySelector('.rule-description').value.trim();
-      const keywords = card.querySelector('.rule-keywords').value.trim();
-      const robots = card.querySelector('.rule-robots').value.trim();
-      const ogType = card.querySelector('.rule-ogType').value;
-      const ogImage = card.querySelector('.rule-ogImage').value.trim();
-      const twitterCardType = card.querySelector('.rule-twitterCardType').value;
-      const sitemapToggle = card.querySelector('.rule-sitemap-toggle').value;
-
-      if (title) rule.title = title;
-      if (description) rule.description = description;
-      if (keywords) rule.keywords = keywords;
-      if (robots) rule.robots = robots;
-      if (ogType) rule.ogType = ogType;
-      if (ogImage) rule.ogImage = ogImage;
-      if (twitterCardType) rule.twitterCardType = twitterCardType;
-
-      if (sitemapToggle === 'exclude') {
-        rule.sitemap = false;
-      } else if (sitemapToggle === 'custom') {
-        rule.sitemap = {};
-        const priority = parseFloat(card.querySelector('.rule-sitemap-priority').value);
-        const changefreq = card.querySelector('.rule-sitemap-changefreq').value;
-        if (!isNaN(priority)) rule.sitemap.priority = priority;
-        if (changefreq) rule.sitemap.changefreq = changefreq;
-      }
-
-      rules[pattern] = rule;
-    });
-    return rules;
-  }
-
-  function populateFormBuilder() {
-    const container = document.getElementById('formBuilderRules');
-    container.innerHTML = '';
-    formRuleCounter = 0;
-    for (const [pattern, rule] of Object.entries(currentRules)) {
-      addFormRule(pattern, rule);
-    }
-  }
-
-  function populateFormBuilderForEdit(pattern) {
-    populateFormBuilder();
-    // Scroll to the rule card
-    const cards = document.querySelectorAll('.form-rule-card');
-    for (const card of cards) {
-      if (card.querySelector('.rule-pattern').value === pattern) {
-        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        card.classList.add('border-primary');
-        setTimeout(() => card.classList.remove('border-primary'), 2000);
-        break;
-      }
-    }
-  }
-
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // SYNC BETWEEN VIEWS
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  function syncJsonFromRules() {
-    document.getElementById('jsonEditor').value = JSON.stringify(currentRules, null, 2);
-  }
-
-  function syncFormBuilderFromRules() {
-    populateFormBuilder();
-  }
-
-  function syncRulesFromJson() {
-    try {
-      const content = document.getElementById('jsonEditor').value;
-      currentRules = JSON.parse(content);
-    } catch (e) {
-      // Don't sync if JSON is invalid
-    }
-  }
-
-  // Tab sync
-  document.getElementById('tab-json').addEventListener('shown.bs.tab', () => {
-    syncJsonFromRules();
-  });
-  document.getElementById('tab-form').addEventListener('shown.bs.tab', () => {
-    syncFormBuilderFromRules();
-  });
-  document.getElementById('tab-list').addEventListener('shown.bs.tab', () => {
-    renderRulesList();
-  });
-
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // LOAD / SAVE / VALIDATE
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  async function loadPageRules() {
-    try {
-      const resp = await fetch(`/${apiPrefix}/adminSeo/load-page-rules`);
-      const result = await resp.json();
-      if (result.success) {
-        currentRules = result.data || {};
-        renderRulesList();
-        syncJsonFromRules();
-        populateFormBuilder();
-      } else {
-        showAlert(i18n.loadError + ': ' + result.error, 'danger');
-      }
-    } catch (err) {
-      showAlert(i18n.loadError + ': ' + err.message, 'danger');
-    }
-  }
-
-  async function saveRules(rulesObj) {
-    const content = JSON.stringify(rulesObj, null, 2);
-    try {
-      const resp = await fetch(`/${apiPrefix}/adminSeo/save-page-rules`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
-      });
-      const result = await resp.json();
-      if (result.success) {
-        showAlert(i18n.saved, 'success');
-        currentRules = rulesObj;
-        renderRulesList();
-        syncJsonFromRules();
-        populateFormBuilder();
-        return true;
-      } else {
-        const msg = result.errors ? result.errors.join('<br>') : result.error;
-        showAlert(i18n.saveError + '<br>' + msg, 'danger');
-        return false;
-      }
-    } catch (err) {
-      showAlert(i18n.saveError + ': ' + err.message, 'danger');
-      return false;
-    }
-  }
-
-  // Save from list view
-  document.getElementById('btnSaveList').addEventListener('click', () => saveRules(currentRules));
-
-  // Save from JSON editor
-  document.getElementById('btnSaveJson').addEventListener('click', () => {
-    const messagesDiv = document.getElementById('jsonMessages');
-    try {
-      const parsed = JSON.parse(document.getElementById('jsonEditor').value);
-      saveRules(parsed);
-      messagesDiv.innerHTML = '';
-    } catch (err) {
-      messagesDiv.innerHTML = `<div class="message-item message-error">JSON syntax error: ${escapeHtml(err.message)}</div>`;
-    }
-  });
-
-  // Save from form builder
-  document.getElementById('btnSaveFormBuilder').addEventListener('click', () => {
-    const rules = formBuilderToRules();
-    currentRules = rules;
-    saveRules(rules);
-  });
-
-  // Validate JSON
-  document.getElementById('btnValidateJson').addEventListener('click', async () => {
-    const content = document.getElementById('jsonEditor').value;
-    const messagesDiv = document.getElementById('jsonMessages');
-
-    try {
-      const resp = await fetch(`/${apiPrefix}/adminSeo/validate-page-rules`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
-      });
-      const result = await resp.json();
-      let html = '';
-      if (result.errors?.length > 0) {
-        html += result.errors.map(e => `<div class="message-item message-error">${escapeHtml(e)}</div>`).join('');
-      }
-      if (result.warnings?.length > 0) {
-        html += result.warnings.map(w => `<div class="message-item message-warning">${escapeHtml(w)}</div>`).join('');
-      }
-      if (result.valid && !result.warnings?.length) {
-        html = `<div class="message-item message-success">${i18n.validationOk}</div>`;
-      }
-      messagesDiv.innerHTML = html;
-    } catch (err) {
-      messagesDiv.innerHTML = `<div class="message-item message-error">${escapeHtml(err.message)}</div>`;
-    }
-  });
-
-  // Preview
-  document.getElementById('btnPreview').addEventListener('click', async () => {
-    const testUrl = document.getElementById('previewUrl').value.trim();
-    const resultDiv = document.getElementById('previewResult');
-    if (!testUrl) return;
-
-    try {
-      const resp = await fetch(`/${apiPrefix}/adminSeo/preview`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ testUrl, pageRules: currentRules }),
-      });
-      const result = await resp.json();
-      if (result.success) {
-        const p = result.preview;
-        let html = '';
-        if (p.matchedPattern) {
-          html += `<div class="mb-2"><strong>${i18n.matchedPattern}</strong> <code>${escapeHtml(p.matchedPattern)}</code></div>`;
-        } else {
-          html += `<div class="mb-2 text-muted"><em>${i18n.noMatch}</em></div>`;
-        }
-        if (p.tags.length > 0) {
-          html += '<pre class="bg-light p-2 rounded" style="font-size:0.8rem; max-height:200px; overflow:auto;">';
-          html += p.tags.map(t => escapeHtml(t)).join('\n');
-          html += '</pre>';
-        }
-        resultDiv.innerHTML = html;
-      } else {
-        resultDiv.innerHTML = `<div class="text-danger">${result.error}</div>`;
-      }
-    } catch (err) {
-      resultDiv.innerHTML = `<div class="text-danger">${err.message}</div>`;
-    }
-  });
-
-  // Load on page load
-  document.addEventListener('DOMContentLoaded', loadPageRules);
+  // TODO: JS logic — fase successiva
 </script>
 
 <%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>
