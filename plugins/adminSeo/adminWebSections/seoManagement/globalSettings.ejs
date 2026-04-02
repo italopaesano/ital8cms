@@ -1161,13 +1161,13 @@
     const inactiveLabel = '<%= __({it: "Disattivo", en: "Inactive"}, passData.ctx) %>';
 
     const features = [
-      { id: 'statusCanonical', key: 'enableCanonicalUrl' },
-      { id: 'statusMetaTags', key: 'enableMetaTags' },
-      { id: 'statusOpenGraph', key: 'enableOpenGraph' },
-      { id: 'statusTwitter', key: 'enableTwitterCards' },
-      { id: 'statusStructured', key: 'enableStructuredData' },
-      { id: 'statusSitemap', key: 'enableSitemap' },
-      { id: 'statusRobots', key: 'enableRobotsTxt' },
+      { id: 'statusCanonical', key: 'enableCanonicalUrl', tabBtn: 'tabBtn-canonical' },
+      { id: 'statusMetaTags', key: 'enableMetaTags', tabBtn: 'tabBtn-metatags' },
+      { id: 'statusOpenGraph', key: 'enableOpenGraph', tabBtn: 'tabBtn-opengraph' },
+      { id: 'statusTwitter', key: 'enableTwitterCards', tabBtn: 'tabBtn-twitter' },
+      { id: 'statusStructured', key: 'enableStructuredData', tabBtn: 'tabBtn-structured' },
+      { id: 'statusSitemap', key: 'enableSitemap', tabBtn: 'tabBtn-sitemap' },
+      { id: 'statusRobots', key: 'enableRobotsTxt', tabBtn: 'tabBtn-robots' },
     ];
 
     features.forEach(f => {
@@ -1175,6 +1175,13 @@
       const active = data[f.key] !== false;
       badge.textContent = active ? activeLabel : inactiveLabel;
       badge.className = active ? 'badge bg-success' : 'badge bg-danger';
+
+      // Color the tab button header
+      const tabBtn = document.getElementById(f.tabBtn);
+      if (tabBtn) {
+        tabBtn.classList.remove('tab-feature-active', 'tab-feature-inactive');
+        tabBtn.classList.add(active ? 'tab-feature-active' : 'tab-feature-inactive');
+      }
     });
   }
 
