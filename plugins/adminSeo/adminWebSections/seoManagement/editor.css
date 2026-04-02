@@ -115,6 +115,22 @@
   border-bottom-color: #fff;
 }
 
+/* Tab header colors based on feature status */
+#settingsTabsDesktop .nav-link.tab-feature-active {
+  background-color: rgba(25, 135, 84, 0.08);
+}
+
+#settingsTabsDesktop .nav-link.tab-feature-inactive {
+  background-color: rgba(220, 53, 69, 0.08);
+}
+
+/* Keep white background when tab is active (selected) */
+#settingsTabsDesktop .nav-link.active.tab-feature-active,
+#settingsTabsDesktop .nav-link.active.tab-feature-inactive {
+  background-color: #fff;
+  border-bottom-color: #fff;
+}
+
 /* Tab panels inner spacing */
 #settingsTabContent .tab-pane {
   min-height: 200px;
