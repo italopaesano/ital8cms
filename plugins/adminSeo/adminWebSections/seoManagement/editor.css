@@ -349,6 +349,10 @@
   padding: 0.5rem 0.75rem;
 }
 
+.snippet-toolbar-separator {
+  border-top: 1px solid #dee2e6;
+}
+
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    Page Rules — Diff Panel collapsible: chevron rotation
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */

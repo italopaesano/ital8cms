@@ -79,6 +79,40 @@
         </button>
       </div>
     </div>
+
+    <!-- PATTERN REFERENCE (collassabile) — dentro la snippet toolbar card -->
+    <div class="snippet-toolbar-separator"></div>
+    <div class="snippet-toolbar-body pt-1">
+      <details class="pattern-reference">
+        <summary>
+          <i class="bi bi-book"></i>
+          <%= __({it: 'Riferimento Pattern', en: 'Pattern Reference'}, passData.ctx) %>
+        </summary>
+        <div class="pattern-reference-body">
+          <table class="table table-sm mb-0">
+            <tbody>
+              <tr>
+                <td><code>/about.ejs</code></td>
+                <td><%= __({it: 'Match esatto (priorità 1000)', en: 'Exact match (priority 1000)'}, passData.ctx) %></td>
+              </tr>
+              <tr>
+                <td><code>/blog/*.ejs</code></td>
+                <td><%= __({it: 'Wildcard singolo — un livello (priorità 300)', en: 'Single wildcard — one level (priority 300)'}, passData.ctx) %></td>
+              </tr>
+              <tr>
+                <td><code>/docs/**</code></td>
+                <td><%= __({it: 'Wildcard ricorsivo — tutti i livelli (priorità 100)', en: 'Recursive wildcard — all levels (priority 100)'}, passData.ctx) %></td>
+              </tr>
+              <tr>
+                <td><code>regex:^/product/\d+$</code></td>
+                <td><%= __({it: 'Espressione regolare (priorità 500)', en: 'Regular expression (priority 500)'}, passData.ctx) %></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+
   </div>
 
   <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
@@ -148,37 +182,6 @@
   </h5>
   <textarea id="jsonEditor" class="seo-editor-textarea" rows="40" spellcheck="false"></textarea>
 
-  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-  <!-- PATTERN REFERENCE (collassabile) -->
-  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-  <details class="pattern-reference mt-3 mb-4">
-    <summary>
-      <i class="bi bi-book"></i>
-      <%= __({it: 'Riferimento Pattern', en: 'Pattern Reference'}, passData.ctx) %>
-    </summary>
-    <div class="pattern-reference-body">
-      <table class="table table-sm mb-0">
-        <tbody>
-          <tr>
-            <td><code>/about.ejs</code></td>
-            <td><%= __({it: 'Match esatto (priorità 1000)', en: 'Exact match (priority 1000)'}, passData.ctx) %></td>
-          </tr>
-          <tr>
-            <td><code>/blog/*.ejs</code></td>
-            <td><%= __({it: 'Wildcard singolo — un livello (priorità 300)', en: 'Single wildcard — one level (priority 300)'}, passData.ctx) %></td>
-          </tr>
-          <tr>
-            <td><code>/docs/**</code></td>
-            <td><%= __({it: 'Wildcard ricorsivo — tutti i livelli (priorità 100)', en: 'Recursive wildcard — all levels (priority 100)'}, passData.ctx) %></td>
-          </tr>
-          <tr>
-            <td><code>regex:^/product/\d+$</code></td>
-            <td><%= __({it: 'Espressione regolare (priorità 500)', en: 'Regular expression (priority 500)'}, passData.ctx) %></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </details>
 
 </div>
 
