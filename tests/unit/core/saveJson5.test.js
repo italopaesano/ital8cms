@@ -190,4 +190,75 @@ describe('saveJson5', () => {
       errorSpy.mockRestore();
     });
   });
+
+  // ─── String input (raw JSON5) ─────────────────────────────────────────────
+
+  describe('string input — raw JSON5', () => {
+    test('saves raw JSON5 string as-is', async () => {
+      const filePath = path.join(tmpDir, 'raw.json5');
+      const raw = '// my comment\n{ "key": "value" }\n';
+      await saveJson5(filePath, raw);
+
+      const content = fs.readFileSync(filePath, 'utf8');
+      expect(content).toBe(raw);
+    });
+
+    test('preserves inline comments', async () => {
+      const filePath = path.join(tmpDir, 'comments.json5');
+      const raw = '// header\n{\n  // rule comment\n  "/about.ejs": { "title": "About" }\n}\n';
+      await saveJson5(filePath, raw);
+
+      const content = fs.readFileSync(filePath, 'utf8');
+      expect(content).toContain('// rule comment');
+      expect(content).toContain('// header');
+    });
+
+    test('preserves trailing commas', async () => {
+      const filePath = path.join(tmpDir, 'trailing.json5');
+      const raw = '{ "a": 1, "b": 2, }\n';
+      await saveJson5(filePath, raw);
+
+      const content = fs.readFileSync(filePath, 'utf8');
+      expect(content).toContain('"b": 2,');
+    });
+
+    test('saved string can be loaded back by loadJson5', async () => {
+      const filePath = path.join(tmpDir, 'roundtrip-raw.json5');
+      const raw = '// comment\n{ "x": 42, "y": [1, 2, 3,] }\n';
+      await saveJson5(filePath, raw);
+
+      const loaded = loadJson5(filePath);
+      expect(loaded).toEqual({ x: 42, y: [1, 2, 3] });
+    });
+
+    test('throws on invalid JSON5 string without writing the file', async () => {
+      const filePath = path.join(tmpDir, 'invalid.json5');
+      const logSpy = jest.spyOn(console, 'error').mockImplementation();
+
+      await expect(
+        saveJson5(filePath, '{ invalid json5 :::')
+      ).rejects.toThrow();
+
+      expect(fs.existsSync(filePath)).toBe(false);
+      logSpy.mockRestore();
+    });
+
+    test('does not add the standard header when input is a string', async () => {
+      const filePath = path.join(tmpDir, 'no-header.json5');
+      const raw = '{ "clean": true }\n';
+      await saveJson5(filePath, raw);
+
+      const content = fs.readFileSync(filePath, 'utf8');
+      expect(content).not.toContain('// This file follows the JSON5 standard');
+      expect(content).toBe(raw);
+    });
+
+    test('atomic write: does not leave temp file after successful string save', async () => {
+      const filePath = path.join(tmpDir, 'atomic-str.json5');
+      await saveJson5(filePath, '{ "ok": true }\n');
+
+      expect(fs.existsSync(filePath + '.tmp')).toBe(false);
+      expect(fs.existsSync(filePath)).toBe(true);
+    });
+  });
 });

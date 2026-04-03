@@ -191,7 +191,7 @@ module.exports = {
             return;
           }
 
-          const result = await seoFileManager.savePageRules(seoPluginPath, parsed, backupDir, maxBackups);
+          const result = await seoFileManager.savePageRules(seoPluginPath, content, backupDir, maxBackups);
           if (!result.success) {
             ctx.status = 500;
             ctx.body = { success: false, error: result.error };
