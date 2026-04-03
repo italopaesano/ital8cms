@@ -104,23 +104,23 @@ async function saveGlobalSettings(seoPluginPath, customData, backupDir, maxBacku
 }
 
 /**
- * Saves seoPages.json5 content from raw JSON5 string.
- * Parses and re-serializes to ensure valid JSON format.
+ * Saves seoPages.json5 content from a raw JSON5 string.
+ * Preserves comments, trailing commas, and all JSON5 features as written.
  *
  * @param {string} seoPluginPath - Absolute path to the seo plugin directory
- * @param {object} parsedData - The parsed seoPages object
+ * @param {string} rawContent - Raw JSON5 string (already validated by the caller)
  * @param {string} backupDir - Absolute path to the backup directory
  * @param {number} maxBackups - Maximum number of backups to keep
  * @returns {Promise<{ success: boolean, error?: string }>}
  */
-async function savePageRules(seoPluginPath, parsedData, backupDir, maxBackups) {
+async function savePageRules(seoPluginPath, rawContent, backupDir, maxBackups) {
   const filePath = path.join(seoPluginPath, 'seoPages.json5');
   try {
     // Create backup before modification
     await createBackup(filePath, backupDir, maxBackups, 'seoPages');
 
-    // Save using saveJson5 (atomic write)
-    await saveJson5(filePath, parsedData);
+    // Save raw JSON5 string — preserves comments and JSON5 features
+    await saveJson5(filePath, rawContent);
 
     return { success: true };
   } catch (err) {
