@@ -219,19 +219,318 @@
   </div>
 </div>
 
+<script src="/<%= passData.adminPrefix %>/seoManagement/editor.js"></script>
 <script>
   const apiPrefix = '<%= passData.apiPrefix %>';
   const adminPrefix = '<%= passData.adminPrefix %>';
 
   const i18n = {
-    saved:          '<%= __({it: "Regole salvate con successo.", en: "Rules saved successfully."}, passData.ctx) %>',
-    saveError:      '<%= __({it: "Errore nel salvataggio.", en: "Error saving."}, passData.ctx) %>',
-    loadError:      '<%= __({it: "Errore nel caricamento.", en: "Error loading."}, passData.ctx) %>',
-    validationOk:   '<%= __({it: "Validazione superata.", en: "Validation passed."}, passData.ctx) %>',
-    deleteConfirm:  '<%= __({it: "Sei sicuro di voler eliminare questa regola?", en: "Are you sure you want to delete this rule?"}, passData.ctx) %>',
+    saved:             '<%= __({it: "Regole salvate con successo.", en: "Rules saved successfully."}, passData.ctx) %>',
+    saveError:         '<%= __({it: "Errore nel salvataggio.", en: "Error saving."}, passData.ctx) %>',
+    loadError:         '<%= __({it: "Errore nel caricamento.", en: "Error loading."}, passData.ctx) %>',
+    validationOk:      '<%= __({it: "Validazione superata.", en: "Validation passed."}, passData.ctx) %>',
+    warningsConfirm:   '<%= __({it: "Ci sono avvisi. Procedere comunque con il salvataggio?", en: "There are warnings. Proceed with save anyway?"}, passData.ctx) %>',
   };
 
-  // TODO: JS logic — fase successiva
+  (function () {
+    'use strict';
+
+    // ── DOM references ──────────────────────────────────────────────────────
+    const editor          = document.getElementById('jsonEditor');
+    const btnValidate     = document.getElementById('btnValidate');
+    const btnSave         = document.getElementById('btnSave');
+    const linkCancel      = document.getElementById('linkCancel');
+    const messagesEl      = document.getElementById('editorMessages');
+
+    const diffPanelHeader = document.querySelector('.diff-panel-header');
+    const diffCounter     = document.getElementById('diffCounter');
+    const diffSavedBadge  = document.getElementById('diffSavedBadge');
+    const diffNoSaveYet   = document.getElementById('diffNoSaveYet');
+    const diffContent     = document.getElementById('diffContent');
+    const diffBefore      = document.getElementById('diffBefore');
+    const diffAfter       = document.getElementById('diffAfter');
+
+    const modalEl             = document.getElementById('unsavedChangesModal');
+    const unsavedChangesModal = new bootstrap.Modal(modalEl);
+    const modalBtnDiscard     = document.getElementById('modalBtnDiscard');
+    const modalBtnSave        = document.getElementById('modalBtnSave');
+
+    const snippetExact        = document.getElementById('snippetExact');
+    const snippetWildcard     = document.getElementById('snippetWildcard');
+    const snippetRecursive    = document.getElementById('snippetRecursive');
+    const snippetRegex        = document.getElementById('snippetRegex');
+    const snippetMultilingual = document.getElementById('snippetMultilingual');
+
+    // ── State ───────────────────────────────────────────────────────────────
+    let savedContent  = '';
+    let pendingNavUrl = null;
+
+    const isDirty = () => editor.value !== savedContent;
+
+    // ── Messages area ────────────────────────────────────────────────────────
+    function showMessages(errors, warnings) {
+      messagesEl.innerHTML = '';
+      (errors   || []).forEach(msg => {
+        const div = document.createElement('div');
+        div.className = 'message-item message-error';
+        div.textContent = msg;
+        messagesEl.appendChild(div);
+      });
+      (warnings || []).forEach(msg => {
+        const div = document.createElement('div');
+        div.className = 'message-item message-warning';
+        div.textContent = msg;
+        messagesEl.appendChild(div);
+      });
+    }
+
+    function showSuccessMessage(text) {
+      messagesEl.innerHTML = '';
+      const div = document.createElement('div');
+      div.className = 'message-item message-success';
+      div.textContent = text;
+      messagesEl.appendChild(div);
+    }
+
+    function clearMessages() { messagesEl.innerHTML = ''; }
+
+    // ── Diff panel ───────────────────────────────────────────────────────────
+    function populateDiff(beforeText, afterText) {
+      diffBefore.textContent = beforeText;
+      diffAfter.textContent  = afterText;
+      diffNoSaveYet.classList.add('d-none');
+      diffContent.classList.remove('d-none');
+      diffSavedBadge.classList.remove('d-none');
+
+      // Count changed lines for the counter badge
+      const beforeLines = beforeText.split('\n');
+      const afterLines  = afterText.split('\n');
+      let changes = 0;
+      const maxLen = Math.max(beforeLines.length, afterLines.length);
+      for (let i = 0; i < maxLen; i++) {
+        if (beforeLines[i] !== afterLines[i]) changes++;
+      }
+      diffCounter.textContent = changes > 0 ? String(changes) : '';
+
+      // Auto-expand panel if currently collapsed
+      if (diffPanelHeader.classList.contains('collapsed')) {
+        diffPanelHeader.click();
+      }
+    }
+
+    // ── API helpers ──────────────────────────────────────────────────────────
+    async function apiValidate(content) {
+      const resp = await fetch(`/${apiPrefix}/adminSeo/validate-page-rules`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      return resp.json();
+    }
+
+    async function apiSave(content) {
+      const resp = await fetch(`/${apiPrefix}/adminSeo/save-page-rules`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      return resp.json();
+    }
+
+    // ── Load rules on page init ──────────────────────────────────────────────
+    async function loadRules() {
+      try {
+        const resp   = await fetch(`/${apiPrefix}/adminSeo/load-page-rules`);
+        const result = await resp.json();
+        if (!result.success) {
+          showAlert(escapeHtml(i18n.loadError + (result.error ? ': ' + result.error : '')), 'danger');
+          return;
+        }
+        savedContent = result.raw || '';
+        editor.value = savedContent;
+      } catch (err) {
+        showAlert(escapeHtml(i18n.loadError), 'danger');
+      }
+    }
+
+    // ── Validate button ──────────────────────────────────────────────────────
+    btnValidate.addEventListener('click', async () => {
+      clearMessages();
+      let validation;
+      try {
+        validation = await apiValidate(editor.value);
+      } catch (err) {
+        showAlert(escapeHtml(i18n.saveError), 'danger');
+        return;
+      }
+      if (validation.valid) {
+        if (validation.warnings && validation.warnings.length > 0) {
+          showMessages([], validation.warnings);
+        } else {
+          showSuccessMessage(i18n.validationOk);
+        }
+      } else {
+        showMessages(validation.errors, validation.warnings);
+      }
+    });
+
+    // ── Save logic ───────────────────────────────────────────────────────────
+    async function performSave() {
+      const content = editor.value;
+      clearMessages();
+
+      // Step 1: validate
+      let validation;
+      try {
+        validation = await apiValidate(content);
+      } catch (err) {
+        showAlert(escapeHtml(i18n.saveError), 'danger');
+        return false;
+      }
+
+      if (!validation.valid) {
+        showMessages(validation.errors, validation.warnings);
+        return false;
+      }
+
+      // Step 2: if warnings, ask for confirmation
+      if (validation.warnings && validation.warnings.length > 0) {
+        showMessages([], validation.warnings);
+        if (!window.confirm(i18n.warningsConfirm)) return false;
+      }
+
+      // Step 3: save
+      const beforeContent = savedContent;
+      try {
+        const result = await apiSave(content);
+        if (!result.success) {
+          const errors = result.errors || (result.error ? [result.error] : []);
+          showMessages(errors, result.warnings || []);
+          showAlert(escapeHtml(i18n.saveError), 'danger');
+          return false;
+        }
+        savedContent = content;
+        showSuccessMessage(i18n.saved);
+        showAlert(escapeHtml(i18n.saved), 'success');
+        populateDiff(beforeContent, content);
+        return true;
+      } catch (err) {
+        showAlert(escapeHtml(i18n.saveError), 'danger');
+        return false;
+      }
+    }
+
+    btnSave.addEventListener('click', () => performSave());
+
+    // ── Unsaved changes modal ────────────────────────────────────────────────
+    function interceptNavigation(href) {
+      if (!isDirty()) {
+        window.location.href = href;
+        return;
+      }
+      pendingNavUrl = href;
+      unsavedChangesModal.show();
+    }
+
+    linkCancel.addEventListener('click', (e) => {
+      if (!isDirty()) return;
+      e.preventDefault();
+      interceptNavigation(linkCancel.href);
+    });
+
+    const breadcrumbLink = document.querySelector('.breadcrumb-item:not(.active) a');
+    if (breadcrumbLink) {
+      breadcrumbLink.addEventListener('click', (e) => {
+        if (!isDirty()) return;
+        e.preventDefault();
+        interceptNavigation(breadcrumbLink.href);
+      });
+    }
+
+    modalBtnDiscard.addEventListener('click', () => {
+      unsavedChangesModal.hide();
+      if (pendingNavUrl) window.location.href = pendingNavUrl;
+      pendingNavUrl = null;
+    });
+
+    modalBtnSave.addEventListener('click', async () => {
+      unsavedChangesModal.hide();
+      const saved = await performSave();
+      if (saved && pendingNavUrl) {
+        window.location.href = pendingNavUrl;
+        pendingNavUrl = null;
+      }
+    });
+
+    // ── Snippet insertion ────────────────────────────────────────────────────
+    const SNIPPETS = {
+      exact: [
+        '',
+        '  "/page.ejs": {',
+        '    "title": "Page Title",',
+        '    "description": "Page description",',
+        '    "robots": "index, follow"',
+        '  },',
+        '',
+      ].join('\n'),
+
+      wildcard: [
+        '',
+        '  "/section/*.ejs": {',
+        '    "title": "Section Page",',
+        '    "description": "Section description"',
+        '  },',
+        '',
+      ].join('\n'),
+
+      recursive: [
+        '',
+        '  "/docs/**": {',
+        '    "robots": "noindex, nofollow"',
+        '  },',
+        '',
+      ].join('\n'),
+
+      regex: [
+        '',
+        '  "regex:^/product/\\\\d+\\.ejs$": {',
+        '    "title": "Product",',
+        '    "ogType": "product"',
+        '  },',
+        '',
+      ].join('\n'),
+
+      multilingual: [
+        '',
+        '  "/page.ejs": {',
+        '    "title": { "it": "Titolo", "en": "Title" },',
+        '    "description": { "it": "Descrizione", "en": "Description" }',
+        '  },',
+        '',
+      ].join('\n'),
+    };
+
+    function insertSnippet(text) {
+      const start  = editor.selectionStart;
+      const end    = editor.selectionEnd;
+      const before = editor.value.substring(0, start);
+      const after  = editor.value.substring(end);
+      editor.value = before + text + after;
+      const newPos = start + text.length;
+      editor.selectionStart = editor.selectionEnd = newPos;
+      editor.focus();
+    }
+
+    snippetExact.addEventListener('click',        () => insertSnippet(SNIPPETS.exact));
+    snippetWildcard.addEventListener('click',     () => insertSnippet(SNIPPETS.wildcard));
+    snippetRecursive.addEventListener('click',    () => insertSnippet(SNIPPETS.recursive));
+    snippetRegex.addEventListener('click',        () => insertSnippet(SNIPPETS.regex));
+    snippetMultilingual.addEventListener('click', () => insertSnippet(SNIPPETS.multilingual));
+
+    // ── Init ─────────────────────────────────────────────────────────────────
+    loadRules();
+
+  })();
 </script>
 
 <%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>
