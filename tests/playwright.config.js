@@ -1,7 +1,11 @@
 // @ts-check
+const path = require('path');
 const { defineConfig, devices } = require('@playwright/test');
 
 const { E2E_TEST_HTTP_PORT } = require('./e2e/testConstants');
+
+// Root del progetto (una directory sopra rispetto a questo file in tests/)
+const PROJECT_ROOT = path.resolve(__dirname, '..');
 
 /**
  * Playwright configuration for ital8cms
@@ -84,6 +88,7 @@ module.exports = defineConfig({
    * per garantire che usi la config modificata dal globalSetup. */
   webServer: {
     command: 'node index.js',
+    cwd: PROJECT_ROOT,
     url: `http://localhost:${E2E_TEST_HTTP_PORT}`,
     ignoreHTTPSErrors: true,
     reuseExistingServer: false,
