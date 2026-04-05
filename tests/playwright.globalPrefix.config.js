@@ -1,7 +1,11 @@
 // @ts-check
+const path = require('path');
 const { defineConfig, devices } = require('@playwright/test');
 
 const { GLOBAL_PREFIX_TEST } = require('./e2e/testConstants');
+
+// Root del progetto (una directory sopra rispetto a questo file in tests/)
+const PROJECT_ROOT = path.resolve(__dirname, '..');
 
 /**
  * Playwright configuration for globalPrefix E2E tests
@@ -72,6 +76,7 @@ module.exports = defineConfig({
   /* Start server with modified config (globalPrefixSetup.js runs BEFORE this) */
   webServer: {
     command: 'node index.js',
+    cwd: PROJECT_ROOT,
     url: `http://localhost:${httpPort}${prefix}/`,
     ignoreHTTPSErrors: true,
     reuseExistingServer: !process.env.CI,
