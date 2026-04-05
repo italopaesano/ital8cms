@@ -257,6 +257,7 @@
   </div>
 </div>
 
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>
 <script src="/<%= passData.adminPrefix %>/seoManagement/editor.js"></script>
 <script>
   const apiPrefix  = '<%= passData.apiPrefix %>';
@@ -624,5 +625,3 @@
 
   })();
 </script>
-
-<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>
