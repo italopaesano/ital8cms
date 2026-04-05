@@ -2,6 +2,9 @@
  * Jest Configuration per ital8cms
  */
 module.exports = {
+  // Root del progetto (una directory sopra rispetto a questo file in tests/)
+  rootDir: '..',
+
   // Ambiente di test
   testEnvironment: 'node',
 
@@ -31,7 +34,7 @@ module.exports = {
   testTimeout: 10000,
 
   // Setup file
-  setupFilesAfterEnv: ['./tests/setup.js'],
+  setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
 
   // Clear mocks tra i test
   clearMocks: true,

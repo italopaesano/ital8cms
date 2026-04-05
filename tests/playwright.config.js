@@ -1,7 +1,7 @@
 // @ts-check
 const { defineConfig, devices } = require('@playwright/test');
 
-const { E2E_TEST_HTTP_PORT } = require('./tests/e2e/testConstants');
+const { E2E_TEST_HTTP_PORT } = require('./e2e/testConstants');
 
 /**
  * Playwright configuration for ital8cms
@@ -21,11 +21,11 @@ const { E2E_TEST_HTTP_PORT } = require('./tests/e2e/testConstants');
  */
 
 module.exports = defineConfig({
-  testDir: './tests/e2e',
+  testDir: './e2e',
 
   /* Global setup and teardown for test users and config override */
-  globalSetup: './tests/e2e/globalSetup.js',
-  globalTeardown: './tests/e2e/globalTeardown.js',
+  globalSetup: './e2e/globalSetup.js',
+  globalTeardown: './e2e/globalTeardown.js',
 
   /* Run tests in files in parallel */
   fullyParallel: true,

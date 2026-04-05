@@ -1,7 +1,7 @@
 // @ts-check
 const { defineConfig, devices } = require('@playwright/test');
 
-const { GLOBAL_PREFIX_TEST } = require('./tests/e2e/testConstants');
+const { GLOBAL_PREFIX_TEST } = require('./e2e/testConstants');
 
 /**
  * Playwright configuration for globalPrefix E2E tests
@@ -21,12 +21,12 @@ const { GLOBAL_PREFIX_TEST } = require('./tests/e2e/testConstants');
 const { httpPort, prefix } = GLOBAL_PREFIX_TEST;
 
 module.exports = defineConfig({
-  testDir: './tests/e2e',
+  testDir: './e2e',
   testMatch: 'globalPrefix.spec.js',
 
   /* Dedicated setup/teardown for globalPrefix testing */
-  globalSetup: './tests/e2e/globalPrefixSetup.js',
-  globalTeardown: './tests/e2e/globalPrefixTeardown.js',
+  globalSetup: './e2e/globalPrefixSetup.js',
+  globalTeardown: './e2e/globalPrefixTeardown.js',
 
   /* Run tests in files in parallel */
   fullyParallel: true,
