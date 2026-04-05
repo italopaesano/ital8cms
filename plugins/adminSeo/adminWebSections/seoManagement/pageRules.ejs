@@ -20,9 +20,47 @@
     </ol>
   </nav>
 
-  <h3 class="mb-3">
+  <h3 class="mb-2">
     <%= __({it: 'Regole SEO Per Pagina', en: 'Per-Page SEO Rules'}, passData.ctx) %>
   </h3>
+
+  <p class="text-muted mb-1">
+    <%= __({
+      it: 'Definisci metadati SEO specifici per singole pagine o gruppi di pagine usando pattern URL. Le regole qui configurate hanno la precedenza sui valori globali.',
+      en: 'Define SEO metadata for individual pages or groups of pages using URL patterns. Rules configured here override the global defaults.'
+    }, passData.ctx) %>
+  </p>
+  <details class="mb-3">
+    <summary class="text-muted small">
+      <%= __({it: 'Approfondisci...', en: 'Learn more...'}, passData.ctx) %>
+    </summary>
+    <div class="small text-muted mt-1 ps-2 border-start">
+      <%- __({
+        it: `Il file <code>seoPages.json5</code> è scritto in formato JSON5: supporta commenti (<code>//</code> e <code>/* */</code>), virgole finali e chiavi non quotate.
+             Ogni chiave dell'oggetto radice è un <strong>pattern URL</strong> a cui si applicano le regole.<br><br>
+             <strong>Tipi di pattern e priorità:</strong><br>
+             <code>/about.ejs</code> — match esatto (priorità 1000, la più alta)<br>
+             <code>regex:^/product/\\d+$</code> — espressione regolare (priorità 500)<br>
+             <code>/blog/*.ejs</code> — wildcard singolo, un solo segmento (priorità 300)<br>
+             <code>/docs/**</code> — wildcard ricorsivo, tutti i livelli (priorità 100)<br><br>
+             <strong>Campi supportati per ogni regola:</strong>
+             <code>title</code>, <code>description</code>, <code>keywords</code>, <code>robots</code>, <code>ogType</code>, <code>ogImage</code>, <code>twitterCardType</code>, <code>sitemap</code> (oggetto con <code>priority</code> e <code>changefreq</code>, oppure <code>false</code> per escludere).<br><br>
+             <strong>Multilingua:</strong> ogni campo testuale può essere una stringa semplice o un oggetto <code>{"it": "...", "en": "..."}</code>.
+             Se il plugin <code>simpleI18n</code> è attivo, viene usata la lingua corrente dell'utente; altrimenti viene usata la prima lingua disponibile nell'oggetto.`,
+        en: `The <code>seoPages.json5</code> file is written in JSON5 format: it supports comments (<code>//</code> and <code>/* */</code>), trailing commas, and unquoted keys.
+             Each key of the root object is a <strong>URL pattern</strong> to which the rules apply.<br><br>
+             <strong>Pattern types and priority:</strong><br>
+             <code>/about.ejs</code> — exact match (priority 1000, highest)<br>
+             <code>regex:^/product/\\d+$</code> — regular expression (priority 500)<br>
+             <code>/blog/*.ejs</code> — single wildcard, one segment only (priority 300)<br>
+             <code>/docs/**</code> — recursive wildcard, all levels (priority 100)<br><br>
+             <strong>Supported fields per rule:</strong>
+             <code>title</code>, <code>description</code>, <code>keywords</code>, <code>robots</code>, <code>ogType</code>, <code>ogImage</code>, <code>twitterCardType</code>, <code>sitemap</code> (object with <code>priority</code> and <code>changefreq</code>, or <code>false</code> to exclude).<br><br>
+             <strong>Multilingual:</strong> each text field can be a plain string or an object <code>{"it": "...", "en": "..."}</code>.
+             If the <code>simpleI18n</code> plugin is active, the user's current language is used; otherwise the first available language in the object is used.`
+      }, passData.ctx) %>
+    </div>
+  </details>
 
   <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
   <!-- ALERT AREA -->
@@ -221,21 +259,21 @@
 
 <script src="/<%= passData.adminPrefix %>/seoManagement/editor.js"></script>
 <script>
-  const apiPrefix = '<%= passData.apiPrefix %>';
+  const apiPrefix  = '<%= passData.apiPrefix %>';
   const adminPrefix = '<%= passData.adminPrefix %>';
 
   const i18n = {
-    saved:             '<%= __({it: "Regole salvate con successo.", en: "Rules saved successfully."}, passData.ctx) %>',
-    saveError:         '<%= __({it: "Errore nel salvataggio.", en: "Error saving."}, passData.ctx) %>',
-    loadError:         '<%= __({it: "Errore nel caricamento.", en: "Error loading."}, passData.ctx) %>',
-    validationOk:      '<%= __({it: "Validazione superata.", en: "Validation passed."}, passData.ctx) %>',
-    warningsConfirm:   '<%= __({it: "Ci sono avvisi. Procedere comunque con il salvataggio?", en: "There are warnings. Proceed with save anyway?"}, passData.ctx) %>',
+    saved:           '<%= __({it: "Regole salvate con successo.", en: "Rules saved successfully."}, passData.ctx) %>',
+    saveError:       '<%= __({it: "Errore nel salvataggio.", en: "Error saving."}, passData.ctx) %>',
+    loadError:       '<%= __({it: "Errore nel caricamento.", en: "Error loading."}, passData.ctx) %>',
+    validationOk:    '<%= __({it: "Validazione superata.", en: "Validation passed."}, passData.ctx) %>',
+    warningsConfirm: '<%= __({it: "Ci sono avvisi. Procedere comunque con il salvataggio?", en: "There are warnings. Proceed with save anyway?"}, passData.ctx) %>',
   };
 
   (function () {
     'use strict';
 
-    // ── DOM references ──────────────────────────────────────────────────────
+    // ── DOM references ───────────────────────────────────────────────────────
     const editor          = document.getElementById('jsonEditor');
     const btnValidate     = document.getElementById('btnValidate');
     const btnSave         = document.getElementById('btnSave');
@@ -261,11 +299,42 @@
     const snippetRegex        = document.getElementById('snippetRegex');
     const snippetMultilingual = document.getElementById('snippetMultilingual');
 
-    // ── State ───────────────────────────────────────────────────────────────
+    // Store original button HTML for spinner restore (Fase 6)
+    const btnValidateOriginalHtml = btnValidate.innerHTML;
+    const btnSaveOriginalHtml     = btnSave.innerHTML;
+
+    // ── State ────────────────────────────────────────────────────────────────
     let savedContent  = '';
     let pendingNavUrl = null;
 
     const isDirty = () => editor.value !== savedContent;
+
+    // ── Dirty indicator (Fase 4) ─────────────────────────────────────────────
+    function updateDirtyIndicator() {
+      if (isDirty()) {
+        btnSave.classList.remove('btn-primary');
+        btnSave.classList.add('btn-warning');
+      } else {
+        btnSave.classList.remove('btn-warning');
+        btnSave.classList.add('btn-primary');
+      }
+    }
+
+    editor.addEventListener('input', updateDirtyIndicator);
+
+    // ── Spinner helpers (Fase 6) ─────────────────────────────────────────────
+    const SPINNER_HTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+
+    function setButtonLoading(btn, loading) {
+      if (loading) {
+        btn.disabled = true;
+        btn.innerHTML = SPINNER_HTML;
+      } else {
+        btn.disabled = false;
+        btn.innerHTML = btn === btnValidate ? btnValidateOriginalHtml : btnSaveOriginalHtml;
+        updateDirtyIndicator();
+      }
+    }
 
     // ── Messages area ────────────────────────────────────────────────────────
     function showMessages(errors, warnings) {
@@ -302,7 +371,6 @@
       diffContent.classList.remove('d-none');
       diffSavedBadge.classList.remove('d-none');
 
-      // Count changed lines for the counter badge
       const beforeLines = beforeText.split('\n');
       const afterLines  = afterText.split('\n');
       let changes = 0;
@@ -312,7 +380,6 @@
       }
       diffCounter.textContent = changes > 0 ? String(changes) : '';
 
-      // Auto-expand panel if currently collapsed
       if (diffPanelHeader.classList.contains('collapsed')) {
         diffPanelHeader.click();
       }
@@ -348,21 +415,25 @@
         }
         savedContent = result.raw || '';
         editor.value = savedContent;
+        updateDirtyIndicator();
       } catch (err) {
         showAlert(escapeHtml(i18n.loadError), 'danger');
       }
     }
 
-    // ── Validate button ──────────────────────────────────────────────────────
+    // ── Validate button (Fase 6: spinner) ────────────────────────────────────
     btnValidate.addEventListener('click', async () => {
       clearMessages();
+      setButtonLoading(btnValidate, true);
       let validation;
       try {
         validation = await apiValidate(editor.value);
       } catch (err) {
         showAlert(escapeHtml(i18n.saveError), 'danger');
+        setButtonLoading(btnValidate, false);
         return;
       }
+      setButtonLoading(btnValidate, false);
       if (validation.valid) {
         if (validation.warnings && validation.warnings.length > 0) {
           showMessages([], validation.warnings);
@@ -374,10 +445,11 @@
       }
     });
 
-    // ── Save logic ───────────────────────────────────────────────────────────
+    // ── Save logic (Fase 2: no alert success; Fase 6: spinner) ───────────────
     async function performSave() {
       const content = editor.value;
       clearMessages();
+      setButtonLoading(btnSave, true);
 
       // Step 1: validate
       let validation;
@@ -385,24 +457,29 @@
         validation = await apiValidate(content);
       } catch (err) {
         showAlert(escapeHtml(i18n.saveError), 'danger');
+        setButtonLoading(btnSave, false);
         return false;
       }
 
       if (!validation.valid) {
         showMessages(validation.errors, validation.warnings);
+        setButtonLoading(btnSave, false);
         return false;
       }
 
-      // Step 2: if warnings, ask for confirmation
+      // Step 2: if warnings, ask for confirmation (spinner paused during confirm)
       if (validation.warnings && validation.warnings.length > 0) {
         showMessages([], validation.warnings);
+        setButtonLoading(btnSave, false);
         if (!window.confirm(i18n.warningsConfirm)) return false;
+        setButtonLoading(btnSave, true);
       }
 
       // Step 3: save
       const beforeContent = savedContent;
       try {
         const result = await apiSave(content);
+        setButtonLoading(btnSave, false);
         if (!result.success) {
           const errors = result.errors || (result.error ? [result.error] : []);
           showMessages(errors, result.warnings || []);
@@ -410,17 +487,26 @@
           return false;
         }
         savedContent = content;
-        showSuccessMessage(i18n.saved);
-        showAlert(escapeHtml(i18n.saved), 'success');
+        updateDirtyIndicator();                 // Fase 4: torna btn-primary
+        showSuccessMessage(i18n.saved);         // Fase 2: solo editorMessages
         populateDiff(beforeContent, content);
         return true;
       } catch (err) {
+        setButtonLoading(btnSave, false);
         showAlert(escapeHtml(i18n.saveError), 'danger');
         return false;
       }
     }
 
     btnSave.addEventListener('click', () => performSave());
+
+    // ── Ctrl+S / Cmd+S (Fase 5) ──────────────────────────────────────────────
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        if (!btnSave.disabled) performSave();
+      }
+    });
 
     // ── Unsaved changes modal ────────────────────────────────────────────────
     function interceptNavigation(href) {
@@ -462,7 +548,7 @@
       }
     });
 
-    // ── Snippet insertion ────────────────────────────────────────────────────
+    // ── Smart snippet insertion (Fase 3) ─────────────────────────────────────
     const SNIPPETS = {
       exact: [
         '',
@@ -510,22 +596,28 @@
       ].join('\n'),
     };
 
-    function insertSnippet(text) {
-      const start  = editor.selectionStart;
-      const end    = editor.selectionEnd;
-      const before = editor.value.substring(0, start);
-      const after  = editor.value.substring(end);
-      editor.value = before + text + after;
-      const newPos = start + text.length;
-      editor.selectionStart = editor.selectionEnd = newPos;
+    // Inserisce sempre prima dell'ultima `}` del contenuto
+    function insertSnippetSmart(text) {
+      const content    = editor.value;
+      const lastBrace  = content.lastIndexOf('}');
+      if (lastBrace === -1) {
+        editor.value = content + text;
+        editor.selectionStart = editor.selectionEnd = editor.value.length;
+      } else {
+        const before = content.substring(0, lastBrace);
+        const after  = content.substring(lastBrace);
+        editor.value = before + text + after;
+        editor.selectionStart = editor.selectionEnd = lastBrace + text.length;
+      }
       editor.focus();
+      updateDirtyIndicator();
     }
 
-    snippetExact.addEventListener('click',        () => insertSnippet(SNIPPETS.exact));
-    snippetWildcard.addEventListener('click',     () => insertSnippet(SNIPPETS.wildcard));
-    snippetRecursive.addEventListener('click',    () => insertSnippet(SNIPPETS.recursive));
-    snippetRegex.addEventListener('click',        () => insertSnippet(SNIPPETS.regex));
-    snippetMultilingual.addEventListener('click', () => insertSnippet(SNIPPETS.multilingual));
+    snippetExact.addEventListener('click',        () => insertSnippetSmart(SNIPPETS.exact));
+    snippetWildcard.addEventListener('click',     () => insertSnippetSmart(SNIPPETS.wildcard));
+    snippetRecursive.addEventListener('click',    () => insertSnippetSmart(SNIPPETS.recursive));
+    snippetRegex.addEventListener('click',        () => insertSnippetSmart(SNIPPETS.regex));
+    snippetMultilingual.addEventListener('click', () => insertSnippetSmart(SNIPPETS.multilingual));
 
     // ── Init ─────────────────────────────────────────────────────────────────
     loadRules();
