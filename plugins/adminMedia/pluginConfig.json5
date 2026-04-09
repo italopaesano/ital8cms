@@ -14,8 +14,8 @@
     "bootstrap": "^1.0.0"
   },
   "nodeModuleDependency": {
-    "@koa/multer": "^3.0.2",
-    "multer": "^1.4.5-lts.1",  // peer dependency richiesta da @koa/multer
+    "@koa/multer": "^4.0.0",
+    "multer": "^2.0.0",  // peer dependency richiesta da @koa/multer
   },
   "custom": {
     // Directory media relativa a wwwPath (da ital8Config.json5)
