@@ -1,0 +1,139 @@
+/* adminMedia — media.css */
+
+/* ── Sidebar ────────────────────────────────────────────────────────────── */
+.media-sidebar {
+  width: 220px;
+  min-width: 180px;
+  max-height: calc(100vh - 160px);
+  overflow-y: auto;
+}
+
+/* ── Folder tree ────────────────────────────────────────────────────────── */
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+.tree-item:hover { background: rgba(0,0,0,.06); }
+.tree-item.active { background: rgba(13,110,253,.12); color: #0d6efd; font-weight: 600; }
+.tree-item .tree-toggle { font-size: .7rem; width: 12px; flex-shrink: 0; }
+.tree-item .tree-icon { color: #ffc107; flex-shrink: 0; }
+.tree-children { margin-left: 16px; }
+.tree-root-label {
+  font-size: 0.75rem;
+  padding: 3px 6px;
+  color: #6c757d;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.tree-root-label:hover { background: rgba(0,0,0,.06); }
+.tree-root-label.active { background: rgba(13,110,253,.12); color: #0d6efd; }
+
+/* ── File grid ──────────────────────────────────────────────────────────── */
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.media-card {
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+  cursor: pointer;
+  transition: box-shadow .15s, border-color .15s;
+}
+.media-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.12); border-color: #adb5bd; }
+.media-card.selected { border-color: #0d6efd; box-shadow: 0 0 0 2px rgba(13,110,253,.25); }
+
+.media-card-thumb {
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+  display: block;
+  background: #f8f9fa;
+}
+.media-card-icon {
+  width: 100%;
+  height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8f9fa;
+  font-size: 3rem;
+  color: #adb5bd;
+}
+.media-card-info {
+  padding: 6px 8px;
+  border-top: 1px solid #f0f0f0;
+}
+.media-card-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.media-card-meta {
+  font-size: 0.70rem;
+  color: #6c757d;
+}
+.media-card-actions {
+  display: none;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  gap: 3px;
+}
+.media-card-wrap { position: relative; }
+.media-card-wrap:hover .media-card-actions { display: flex; }
+.media-card-actions .btn { padding: 2px 5px; font-size: .7rem; }
+
+/* Folder card */
+.media-card.is-folder .media-card-icon { font-size: 3.5rem; color: #ffc107; }
+
+/* ── File list (table view) ─────────────────────────────────────────────── */
+#fileArea.list-view .media-grid { display: none; }
+#fileArea.grid-view .media-table-wrap { display: none; }
+
+.media-table th { font-size: 0.8rem; white-space: nowrap; }
+.media-table td { vertical-align: middle; font-size: 0.85rem; }
+.media-table .file-icon { font-size: 1.2rem; }
+.media-table .file-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; }
+
+/* ── Upload progress ────────────────────────────────────────────────────── */
+.upload-progress-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  margin-bottom: 4px;
+}
+.upload-progress-item .progress { flex: 1; height: 6px; }
+
+/* ── Move picker tree ───────────────────────────────────────────────────── */
+.move-tree-item {
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.move-tree-item:hover { background: rgba(0,0,0,.06); }
+.move-tree-item.selected { background: rgba(13,110,253,.15); color: #0d6efd; font-weight: 600; }
+.move-tree-children { margin-left: 16px; }
+
+/* ── Pagination ─────────────────────────────────────────────────────────── */
+.pagination .page-link { font-size: 0.82rem; }

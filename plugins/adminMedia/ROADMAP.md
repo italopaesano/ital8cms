@@ -54,75 +54,72 @@ plugins/adminMedia/
 
 #### Step 1 — Setup & Struttura Plugin
 - [x] Creare struttura directory plugin
-- [ ] `pluginConfig.json5` con tutte le opzioni configurabili
-- [ ] `pluginDescription.json5`
-- [ ] `main.js` skeleton (loadPlugin, getRouteArray, getObjectToShareToOthersPlugin)
-- [ ] Registrare sezione `mediaManagement` in `core/admin/adminConfig.json5`
-- [ ] `loadPlugin()`: leggere `wwwPath` da `ital8Config.json5`, creare `{wwwPath}/{mediaDir}/` se non esiste
+- [x] `pluginConfig.json5` con tutte le opzioni configurabili
+- [x] `pluginDescription.json5`
+- [x] `main.js` con loadPlugin, getRouteArray, getObjectToShareToWebPages
+- [x] Registrare sezione `mediaManagement` in `core/admin/adminConfig.json5`
+- [x] `loadPlugin()`: leggere `wwwPath` da `ital8Config.json5`, creare `{wwwPath}/{mediaDir}/` se non esiste
 
 #### Step 2 — Backend: mediaManager.js
-- [ ] `listDirectory(relPath)` — lista file e cartelle di un percorso (con metadata: nome, tipo, size, data, dimensioni immagine)
-- [ ] `createFolder(relPath, folderName)` — crea sottocartella
-- [ ] `renameItem(relPath, newName)` — rinomina file o cartella (warning se cartella)
-- [ ] `moveFile(srcRelPath, destRelPath)` — sposta file in altra cartella
-- [ ] `deleteFile(relPath)` — elimina file
-- [ ] `deleteFolder(relPath, recursive)` — elimina cartella (vuota o ricorsiva)
-- [ ] Path traversal protection su tutti i metodi (nessun `../` può uscire dalla media dir)
+- [x] `listDirectory(relPath)` — lista file e cartelle con metadata (nome, tipo, size, data)
+- [x] `createFolder(relPath, folderName)` — crea sottocartella
+- [x] `renameItem(relPath, newName)` — rinomina file o cartella
+- [x] `moveFile(srcRelPath, destRelPath)` — sposta file in altra cartella
+- [x] `deleteFile(relPath)` — elimina file
+- [x] `deleteFolder(relPath, recursive)` — elimina cartella (vuota o ricorsiva)
+- [x] `buildFolderTree()` — albero cartelle per move picker
+- [x] `resolveAbsPath()` — utility per main.js
+- [x] Path traversal protection su tutti i metodi
 
 #### Step 3 — Backend: fileValidator.js
-- [ ] Whitelist MIME types (jpg/jpeg/png/gif/webp/avif/bmp/mp4/webm/mov/mp3/wav/ogg/aac/flac)
-- [ ] Validazione doppia: estensione file + MIME type reale (letto da buffer, non solo header)
-- [ ] Limiti dimensione per categoria (configurabili in `pluginConfig.json5`)
-- [ ] Errori chiari: tipo non permesso, file troppo grande
+- [x] Whitelist estensioni per categoria (image/video/audio)
+- [x] Validazione doppia: estensione + magic bytes reali (16 bytes)
+- [x] Limiti dimensione per categoria (configurabili in `pluginConfig.json5`)
+- [x] Errori chiari: tipo non permesso, file troppo grande, magic bytes non corrispondenti
 
 #### Step 4 — Backend: filenameSanitizer.js
-- [ ] `sanitize(originalName)` — lowercase, spazi → `_`, rimuovi chars speciali, tronca a max 200 chars
-- [ ] `resolveCollision(dir, sanitizedName)` — se file esiste, aggiunge `_1`, `_2`, ecc.
-- [ ] Preserva estensione originale dopo sanitizzazione
+- [x] `sanitize(originalName)` — lowercase, spazi → `_`, rimuovi chars speciali, tronca a 200 chars
+- [x] `resolveCollision(dir, sanitizedName)` — aggiunge `_1`, `_2`, ecc. fino a `_9999`
+- [x] Preserva estensione originale dopo sanitizzazione
 
 #### Step 5 — API Routes (main.js)
-- [ ] `GET /api/adminMedia/list?path=` — lista contenuto cartella
-- [ ] `POST /api/adminMedia/upload?path=` — upload multiplo con multer (va nella cartella corrente)
-- [ ] `POST /api/adminMedia/createFolder` — `{ path, name }`
-- [ ] `POST /api/adminMedia/rename` — `{ path, newName }` (file o cartella)
-- [ ] `POST /api/adminMedia/move` — `{ srcPath, destPath }`
-- [ ] `POST /api/adminMedia/deleteFile` — `{ path }`
-- [ ] `POST /api/adminMedia/deleteFolder` — `{ path, recursive: bool }`
-- [ ] Tutte le route con `access: { requiresAuth: true, allowedRoles: [0, 1] }`
+- [x] `GET /api/adminMedia/list?path=` — lista contenuto cartella
+- [x] `POST /api/adminMedia/upload?path=` — upload multiplo con @koa/multer
+- [x] `POST /api/adminMedia/createFolder` — `{ path, name }`
+- [x] `POST /api/adminMedia/rename` — `{ path, newName }` (file o cartella)
+- [x] `POST /api/adminMedia/move` — `{ srcPath, destPath }`
+- [x] `POST /api/adminMedia/deleteFile` — `{ path }`
+- [x] `POST /api/adminMedia/deleteFolder` — `{ path, recursive: bool }`
+- [x] `GET /api/adminMedia/tree` — albero cartelle per move picker
+- [x] Tutte le route con `access: { requiresAuth: true, allowedRoles: [0, 1] }`
 
-#### Step 6 — UI: index.ejs
-- [ ] Layout 2 colonne: sidebar sinistra (tree) + area principale (file grid/list)
-- [ ] Breadcrumb navigazione cartella corrente
-- [ ] Toolbar: toggle griglia/lista, filtro tipo (Tutti/Immagini/Video/Audio), sort (nome/data/size/tipo)
-- [ ] Paginazione (items per pagina configurabile, default 50)
-- [ ] Bottone "New Folder" + "Upload"
-- [ ] Griglia: thumbnail per immagini, icona per video/audio, nome, dimensione
-- [ ] Lista: tabella con icona, nome, tipo, dimensione, data, azioni
+#### Step 6 — UI: index.ejs + media.css
+- [x] Layout 2 colonne: sidebar sinistra (tree) + area principale
+- [x] Breadcrumb navigazione
+- [x] Toolbar: toggle griglia/lista, filtro tipo, sort con direzione
+- [x] Paginazione configurabile (default 50)
+- [x] Bottone "New Folder" + "Upload"
+- [x] Modals: New Folder, Rename, Delete File, Delete Folder, Move File
+- [x] Toast "URL copied"
 
-#### Step 7 — UI: Operazioni sui File (media.js)
-- [ ] Upload: XHR multiplo con progress bar per ogni file
-- [ ] Warning area: rinomina automatica, file non supportati, file troppo grandi
-- [ ] Rename file: inline edit o modal
-- [ ] Rename cartella: modal con warning "il percorso dei file cambierà"
-- [ ] Delete file: confirm dialog
-- [ ] Delete cartella vuota: confirm dialog
-- [ ] Delete cartella con contenuto: confirm dialog con count file ("Questa cartella contiene X file")
-- [ ] Move file: modal con folder picker (tree della media directory)
-- [ ] Copy URL: click → copia percorso relativo in clipboard
-
-#### Step 8 — UI: Sidebar Tree (media.js)
-- [ ] Carica struttura cartelle via `GET /api/adminMedia/list`
-- [ ] Espandi/comprimi cartelle nel tree
-- [ ] Click su cartella → naviga (aggiorna area principale)
-- [ ] Evidenzia cartella corrente
-- [ ] Refresh tree dopo: create folder, rename folder, delete folder, move file
+#### Step 7+8 — UI: media.js
+- [x] Upload XHR multiplo con progress bar
+- [x] Warning area: rinomina automatica, errori upload
+- [x] Rename file/cartella con modal (warning per cartelle)
+- [x] Delete file/cartella con confirm + count contenuto
+- [x] Move file: modal con folder picker tree
+- [x] Copy URL relativo in clipboard
+- [x] Sidebar tree: espandi/comprimi, navigazione, evidenzia corrente
+- [x] Griglia e lista con tutte le azioni per file e cartelle
+- [x] Filtro, sort, paginazione client-side
 
 #### Step 9 — Sicurezza
-- [ ] Path traversal: normalizza percorsi, verifica che restino dentro `{wwwPath}/{mediaDir}/`
-- [ ] Validazione MIME reale (magic bytes) oltre all'estensione
-- [ ] Limite dimensione file per categoria via multer limits
-- [ ] Sanitizzazione nomi file prima di salvare su disco
-- [ ] Tutte le route protette da autenticazione (ruoli 0 e 1)
+- [x] Path traversal: `safeResolve()` in mediaManager verifica che ogni path resti dentro la media root
+- [x] Validazione MIME reale (magic bytes) in fileValidator
+- [x] Limite dimensione per categoria via multer + fileValidator
+- [x] Sanitizzazione nomi file in filenameSanitizer
+- [x] Tutte le route protette da autenticazione (ruoli 0 e 1)
+- [x] `escHtml()` client-side per tutti i valori dinamici nel DOM
 
 ---
 
