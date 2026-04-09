@@ -1,0 +1,9 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "name": "adminMedia",
+  "version": "1.0.0",
+  "description": "Admin plugin for media file management (images, video, audio). Upload, browse, organize and delete media files.",
+  "author": "Italo Paesano",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC",
+}

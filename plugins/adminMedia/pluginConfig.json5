@@ -1,0 +1,36 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "active": 1,
+  "isInstalled": 1,
+  "weight": 0,
+
+  // ℹ️ CONVENZIONE: Plugin con nome che inizia per "admin" sono automaticamente plugin admin
+  // Array di ID delle sezioni admin gestite da questo plugin
+  "adminSections": [
+    "mediaManagement"
+  ],
+
+  "dependency": {
+    "bootstrap": "^1.0.0"
+  },
+  "nodeModuleDependency": {
+    "@koa/multer": "^3.0.2",
+    "multer": "^1.4.5-lts.1",  // peer dependency richiesta da @koa/multer
+  },
+  "custom": {
+    // Directory media relativa a wwwPath (da ital8Config.json5)
+    // Risultato: {wwwPath}/{mediaDir}/ — es. /www/media/
+    "mediaDir": "media",
+
+    // Limiti dimensione file per categoria (in bytes)
+    "fileSizeLimits": {
+      "image": 10485760,   // 10 MB
+      "video": 524288000,  // 500 MB
+      "audio": 52428800,   // 50 MB
+    },
+
+    // Numero di file per pagina nella UI (griglia e lista)
+    "itemsPerPage": 50,
+  },
+  "version": "1.0.0"
+}
