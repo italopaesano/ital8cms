@@ -24,6 +24,14 @@
     <%= __({it: 'Regole SEO Per Pagina', en: 'Per-Page SEO Rules'}, passData.ctx) %>
   </h3>
 
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- FEATURE STATUS BAR -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div id="featureStatusBar" class="mb-3">
+    <span class="spinner-border spinner-border-sm text-secondary me-1" role="status" aria-hidden="true"></span>
+    <span class="text-muted small">Caricamento stato feature...</span>
+  </div>
+
   <p class="text-muted mb-1">
     <%= __({
       it: 'Definisci metadati SEO specifici per singole pagine o gruppi di pagine usando pattern URL. Le regole qui configurate hanno la precedenza sui valori globali.',
@@ -264,11 +272,12 @@
   const adminPrefix = '<%= passData.adminPrefix %>';
 
   const i18n = {
-    saved:           '<%= __({it: "Regole salvate con successo.", en: "Rules saved successfully."}, passData.ctx) %>',
-    saveError:       '<%= __({it: "Errore nel salvataggio.", en: "Error saving."}, passData.ctx) %>',
-    loadError:       '<%= __({it: "Errore nel caricamento.", en: "Error loading."}, passData.ctx) %>',
-    validationOk:    '<%= __({it: "Validazione superata.", en: "Validation passed."}, passData.ctx) %>',
-    warningsConfirm: '<%= __({it: "Ci sono avvisi. Procedere comunque con il salvataggio?", en: "There are warnings. Proceed with save anyway?"}, passData.ctx) %>',
+    saved:                '<%= __({it: "Regole salvate con successo.", en: "Rules saved successfully."}, passData.ctx) %>',
+    saveError:            '<%= __({it: "Errore nel salvataggio.", en: "Error saving."}, passData.ctx) %>',
+    loadError:            '<%= __({it: "Errore nel caricamento.", en: "Error loading."}, passData.ctx) %>',
+    validationOk:         '<%= __({it: "Validazione superata.", en: "Validation passed."}, passData.ctx) %>',
+    warningsConfirm:      '<%= __({it: "Ci sono avvisi. Procedere comunque con il salvataggio?", en: "There are warnings. Proceed with save anyway?"}, passData.ctx) %>',
+    featureLoadError:     '<%= __({it: "Impossibile verificare lo stato delle feature", en: "Unable to verify feature status"}, passData.ctx) %>',
   };
 
   (function () {
@@ -288,6 +297,8 @@
     const diffContent     = document.getElementById('diffContent');
     const diffBefore      = document.getElementById('diffBefore');
     const diffAfter       = document.getElementById('diffAfter');
+
+    const featureStatusBar = document.getElementById('featureStatusBar');
 
     const modalEl             = document.getElementById('unsavedChangesModal');
     const unsavedChangesModal = new bootstrap.Modal(modalEl);
@@ -403,6 +414,36 @@
         body: JSON.stringify({ content }),
       });
       return resp.json();
+    }
+
+    // ── Feature status bar ───────────────────────────────────────────────────
+    const FEATURE_KEYS = [
+      { key: 'enableMetaTags',     label: 'Meta Tags'     },
+      { key: 'enableOpenGraph',    label: 'Open Graph'    },
+      { key: 'enableTwitterCards', label: 'Twitter Cards' },
+      { key: 'enableCanonicalUrl', label: 'Canonical URL' },
+      { key: 'enableSitemap',      label: 'Sitemap'       },
+    ];
+
+    async function loadFeatureStatus() {
+      try {
+        const resp   = await fetch(`/${apiPrefix}/adminSeo/load-settings`);
+        const result = await resp.json();
+        if (!result.success || !result.data) {
+          featureStatusBar.innerHTML =
+            `<span class="text-muted small"><i class="bi bi-exclamation-circle"></i> ${escapeHtml(i18n.featureLoadError)}</span>`;
+          return;
+        }
+        const data = result.data;
+        featureStatusBar.innerHTML = FEATURE_KEYS.map(({ key, label }) => {
+          const active = data[key] !== false;
+          const cls    = active ? 'text-bg-success' : 'text-bg-danger';
+          return `<span class="badge ${cls} me-1">● ${label}</span>`;
+        }).join('');
+      } catch (err) {
+        featureStatusBar.innerHTML =
+          `<span class="text-muted small"><i class="bi bi-exclamation-circle"></i> ${escapeHtml(i18n.featureLoadError)}</span>`;
+      }
     }
 
     // ── Load rules on page init ──────────────────────────────────────────────
@@ -622,6 +663,7 @@
 
     // ── Init ─────────────────────────────────────────────────────────────────
     loadRules();
+    loadFeatureStatus();
 
   })();
 </script>
