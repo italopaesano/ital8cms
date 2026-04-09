@@ -89,6 +89,16 @@
       "label": "Gestione SEO",
       "icon": "🔍",
       "description": "Gestione impostazioni SEO, meta tag, sitemap e robots.txt"
+    },
+
+    "mediaManagement": {
+      "type": "plugin",
+      "plugin": "adminMedia",
+      "enabled": true,
+      "required": false,
+      "label": "Media Management",
+      "icon": "🗂️",
+      "description": "Upload, browse and manage media files (images, video, audio)"
     }
   },
 
@@ -102,7 +112,8 @@
     "pluginsManagment",
     "themesManagment",
     "navbarsManagement",
-    "seoManagement"
+    "seoManagement",
+    "mediaManagement"
   ],
 
   // Servizi forniti da plugin (backend)
