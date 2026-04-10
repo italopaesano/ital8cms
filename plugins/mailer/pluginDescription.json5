@@ -1,0 +1,9 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "name": "mailer",
+  "version": "1.0.0",
+  "description": "Plugin servizio email: invio SMTP con coda persistente, template EJS e transport astratto. Fornisce il servizio email agli altri plugin via getSharedObject('mailer').",
+  "author": "Italo Paesano",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC"
+}

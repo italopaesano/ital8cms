@@ -1,0 +1,65 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "active": 1,
+  "isInstalled": 1,
+  "weight": 7,
+
+  // Il plugin mailer NON è un plugin admin (nome non inizia con "admin")
+  // È un plugin di servizio puro: non ha UI, non ha route pubbliche.
+  // Espone il servizio email ad altri plugin via pluginSys.getSharedObject('mailer')
+  "adminSections": [],
+
+  "dependency": {},
+  "nodeModuleDependency": {
+    "nodemailer": "^8.0.5",
+    "ejs": ">=3.1.9",
+  },
+
+  "custom": {
+    // Transport da usare per l'invio email.
+    // "auto"  → usa "fake" se debugMode >= 1, usa "smtp" in produzione
+    // "smtp"  → forza SMTP anche in debug (richiede env var password)
+    // "fake"  → forza fake anche in produzione (solo log + file, non invia)
+    "transport": "auto",
+
+    // Configurazione SMTP (usata quando transport è "smtp" o "auto" in produzione)
+    "smtp": {
+      "host": "",
+      "port": 587,
+      "secure": false,               // true per porta 465 (TLS diretto), false per STARTTLS
+      "user": "",
+      // Nome della variabile d'ambiente che contiene la password SMTP.
+      // La password NON viene mai salvata in questo file per sicurezza.
+      // Imposta la variabile prima di avviare il server:
+      //   export MAILER_SMTP_PASSWORD=la-tua-password
+      "passwordEnvVar": "MAILER_SMTP_PASSWORD",
+    },
+
+    // Indirizzo mittente di default (es. "Il Mio Sito <noreply@example.com>")
+    // Usato quando send() non specifica il campo "from"
+    "defaultFrom": "",
+
+    // Configurazione coda email persistente
+    "queue": {
+      "pollingIntervalSeconds": 30,   // Worker controlla la coda ogni N secondi
+      "maxRetries": 3,                // Tentativi massimi prima di marcare come "dead"
+      // Intervalli tra i retry in secondi [1° retry, 2° retry, 3° retry, ...]
+      // Se attempts > retryIntervals.length, usa l'ultimo valore
+      "retryIntervals": [30, 300, 1800],   // 30s, 5min, 30min
+      // Warning in console se la coda supera N elementi pending/failed
+      "warningThreshold": 1000,
+    },
+
+    // Configurazione log invii
+    "log": {
+      "enabled": true,
+      "maxEntries": 500,              // Mantieni solo gli ultimi N invii nel log
+    },
+
+    // Configurazione transport fake (sviluppo/test)
+    "fake": {
+      "saveToFile": true,             // Salva le email simulate in mailerFakeOutbox.json5
+      "maxOutboxEntries": 100,        // Mantieni solo le ultime N email nel file
+    },
+  },
+}
