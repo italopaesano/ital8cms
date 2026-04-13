@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= subject %></title>
+  <style>
+    body        { font-family: Arial, Helvetica, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; color: #333; }
+    .container  { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+    .header     { background: #0d6efd; padding: 32px; text-align: center; }
+    .header h1  { color: #ffffff; margin: 0; font-size: 24px; }
+    .body       { padding: 32px; }
+    .body p     { line-height: 1.6; }
+    .cta-btn    { display: inline-block; background: #0d6efd; color: #ffffff !important; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 16px; }
+    .footer     { margin-top: 0; padding: 20px 32px; background: #f8f9fa; border-top: 1px solid #e9ecef; font-size: 12px; color: #6c757d; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <div class="header">
+      <h1>Benvenuto<% if (typeof username !== 'undefined' && username) { %>, <%= username %><% } %>!</h1>
+    </div>
+
+    <div class="body">
+      <p>Il tuo account è stato creato con successo.</p>
+
+      <% if (typeof message !== 'undefined' && message) { %>
+        <p><%= message %></p>
+      <% } %>
+
+      <% if (typeof activationLink !== 'undefined' && activationLink) { %>
+        <p>Per attivare il tuo account clicca sul pulsante qui sotto:</p>
+        <p><a href="<%= activationLink %>" class="cta-btn">Attiva il tuo account</a></p>
+        <p style="font-size:12px;color:#6c757d;">
+          Se il pulsante non funziona, copia e incolla questo link nel browser:<br>
+          <a href="<%= activationLink %>"><%= activationLink %></a>
+        </p>
+      <% } %>
+    </div>
+
+    <div class="footer">
+      <% if (typeof siteName !== 'undefined' && siteName) { %>
+        <p>Questa email è stata inviata da <strong><%= siteName %></strong>.</p>
+      <% } %>
+      <p>Se non hai creato un account, ignora questa email.</p>
+    </div>
+
+  </div>
+</body>
+</html>

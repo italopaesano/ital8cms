@@ -124,8 +124,11 @@
       "plugin": "adminUsers",           // Plugin che fornisce autenticazione
       "required": true,                  // Servizio obbligatorio
     },
+    "mailer": {
+      "plugin": "mailer",               // Plugin che fornisce il servizio email
+      "required": false,                // Opzionale: il sistema funziona senza email
+    },
     // Altri servizi possono essere aggiunti in futuro:
-    // "email": { "plugin": "adminMailer", "required": false },
     // "storage": { "plugin": "adminStorage", "required": false }
   },
 
