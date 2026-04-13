@@ -1,0 +1,92 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "active": 1,
+  "isInstalled": 1,
+
+  // Weight 5: caricamento precoce per misurare tempi di risposta completi.
+  // Il middleware analytics deve precedere routing e altri plugin per catturare
+  // l'intera durata della richiesta (incluso tempo di elaborazione dei plugin successivi).
+  "weight": 5,
+
+  "dependency": {},
+  "nodeModuleDependency": {},
+
+  "custom": {
+
+    // ────────────────────────────────────────────────────────────────
+    // PRIVACY & GDPR
+    // ────────────────────────────────────────────────────────────────
+
+    // Anonimizzazione IP per conformità GDPR (Reg. UE 2016/679).
+    // true  → IPv4: mantieni primi 2 ottetti (es. "151.38.x.x" → "151.38")
+    //          IPv6: mantieni primi 2 gruppi  (es. "2001:0db8::..." → "2001:0db8::")
+    // false → Salva l'IP grezzo (solo se hai base legale o consenso esplicito)
+    "gdprCompliance": true,
+
+    // Salt segreto per l'hash HMAC-SHA256 del session ID.
+    // ⚠ CAMBIA QUESTO VALORE IN PRODUZIONE con una stringa casuale lunga almeno 32 caratteri.
+    // Un salt prevedibile rende l'hash reversibile, compromettendo la pseudonimizzazione.
+    "sessionSalt": "cambia-questo-salt-in-produzione-con-stringa-casuale",
+
+    // Cookie analytics dedicato per tracking cross-sessione.
+    //
+    // false (default, raccomandato):
+    //   Hasha il cookie di sessione Koa già presente ('koa:sess').
+    //   Nessun cookie extra → nessun cookie banner necessario.
+    //   Limite: il tracking si azzera quando la sessione Koa scade.
+    //
+    // true:
+    //   Imposta un cookie analytics dedicato con vita più lunga.
+    //   Permette tracking cross-sessione ma rientra nella categoria
+    //   dei cookie di tracciamento ai sensi del GDPR e della Direttiva ePrivacy.
+    //   ⚠ RICHIEDE l'implementazione di un cookie banner con consenso esplicito
+    //   prima di essere abilitato. La responsabilità è del titolare del sito.
+    "useAnalyticsCookie": false,
+
+    // Nome del cookie analytics dedicato (usato solo se useAnalyticsCookie: true).
+    "analyticsCookieName": "ital8analytics",
+
+    // ────────────────────────────────────────────────────────────────
+    // STORAGE & ROTAZIONE FILE
+    // ────────────────────────────────────────────────────────────────
+
+    // Modalità di rotazione dei file JSONL.
+    //
+    // "none"    → un unico file crescente: analytics.jsonl
+    // "daily"   → file giornaliero:        analytics-YYYY-MM-DD.jsonl
+    // "weekly"  → file settimanale (ISO):  analytics-YYYY-WXX.jsonl
+    // "monthly" → file mensile (default):  analytics-YYYY-MM.jsonl
+    //
+    // La rotazione evita file enormi e facilita la pulizia per retention.
+    // Per siti con traffico elevato si consiglia "daily" o "weekly".
+    "rotationMode": "monthly",
+
+    // Numero di giorni di dati da conservare (retention policy).
+    // I file più vecchi vengono eliminati automaticamente all'avvio del server.
+    // 0 = retention disabilitata (conserva tutto).
+    // Default: 365 giorni (1 anno).
+    "retentionDays": 365,
+
+    // Path della directory dati, relativo alla cartella del plugin.
+    // I file JSONL vengono scritti in: plugins/analytics/data/
+    "dataPath": "./data",
+
+    // ────────────────────────────────────────────────────────────────
+    // PERFORMANCE & BUFFER
+    // ────────────────────────────────────────────────────────────────
+
+    // Secondi tra un flush su disco e il successivo.
+    // Gli eventi si accumulano in RAM e vengono scritti in batch periodicamente,
+    // riducendo le operazioni I/O rispetto a una scrittura per ogni richiesta.
+    //
+    // 0     = flush immediato ad ogni evento (debug, massima sicurezza dati)
+    // 2     = default (buon compromesso performance/sicurezza)
+    // 30+   = sconsigliato (eventi persi in caso di crash del server)
+    //
+    // ⚠ Un valore alto aumenta il rischio di perdere eventi non ancora flushati
+    // in caso di crash imprevisto (SIGKILL, OOM killer, ecc.).
+    // SIGTERM e SIGINT eseguono sempre un flush finale prima di terminare.
+    "flushIntervalSeconds": 2,
+
+  },
+}

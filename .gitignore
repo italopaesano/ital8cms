@@ -17,6 +17,7 @@ node_modules/
 
 # Auto-generated runtime data
 /plugins/urlRedirect/redirectHitCount.json5
+/plugins/analytics/data/
 
 # SEO plugin generated files (recreated at startup)
 /www/sitemap.xml

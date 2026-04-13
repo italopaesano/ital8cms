@@ -1,0 +1,9 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "name": "analytics",
+  "version": "1.0.0",
+  "description": "Traffic monitoring plugin for ital8cms. Tracks page visits in JSONL format with GDPR-compliant IP anonymization, bot detection, configurable file rotation, and in-memory buffering.",
+  "author": "Italo Paesano",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC",
+}
