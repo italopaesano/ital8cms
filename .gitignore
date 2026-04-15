@@ -14,6 +14,7 @@ node_modules/
 /core/admin/webPages/adminAccessControl
 /core/admin/webPages/navbarsManagement
 /core/admin/webPages/seoManagement
+/core/admin/webPages/analyticsManagement
 
 # Auto-generated runtime data
 /plugins/urlRedirect/redirectHitCount.json5

@@ -1,0 +1,52 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "active": 1,
+  "isInstalled": 1,
+
+  // Weight 50: loaded after analytics (weight 5) so setSharedObject receives
+  // a fully initialised analyticsApi reference.
+  "weight": 50,
+
+  // Admin sections provided by this plugin
+  "adminSections": [
+    "analyticsManagement",
+  ],
+
+  "dependency": {
+    "analytics":  "^1.0.0",
+    "bootstrap":  "^1.0.0",
+    "simpleI18n": "^1.0.0",
+  },
+  "nodeModuleDependency": {
+    "chart.js": "^4.0.0",
+  },
+
+  "custom": {
+
+    // ────────────────────────────────────────────────────────────────────────
+    // RAW LOG
+    // ────────────────────────────────────────────────────────────────────────
+
+    // Maximum number of events returned by the /events endpoint.
+    // Prevents memory pressure when filtering large datasets.
+    // The UI shows a "capped" warning banner when this limit is hit.
+    "maxRawLogRows": 10000,
+
+    // ────────────────────────────────────────────────────────────────────────
+    // EXPORT
+    // ────────────────────────────────────────────────────────────────────────
+
+    // When a /export request would produce more than this many rows, the
+    // client-side shows a confirmation dialog warning about the file size.
+    // Set to 0 to disable the warning.
+    "exportWarningThreshold": 100000,
+
+    // ────────────────────────────────────────────────────────────────────────
+    // TOP-N LISTS
+    // ────────────────────────────────────────────────────────────────────────
+
+    // Number of items shown in top-pages, top-bots, and referrer lists.
+    "topN": 10,
+
+  },
+}
