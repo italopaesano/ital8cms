@@ -1,0 +1,9 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "name": "adminAnalytics",
+  "version": "1.0.0",
+  "description": "Admin dashboard for the analytics plugin. Visualizes traffic data with Chart.js charts, configurable period and filter selectors, paginated raw log viewer, and CSV/JSON export.",
+  "author": "Italo Paesano",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC",
+}

@@ -1,0 +1,430 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<link rel="stylesheet" href="/<%= passData.adminPrefix %>/analyticsManagement/analytics.css">
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
+
+<div class="container-fluid mt-3 pb-5">
+
+  <!-- ── Page title + loading indicator ─────────────────────────────────── -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">
+      <i class="bi bi-bar-chart-line-fill me-2 text-primary"></i>
+      <%= __({it: 'Analytics', en: 'Analytics'}, passData.ctx) %>
+    </h3>
+    <div class="d-flex align-items-center gap-2">
+      <span id="loadingSpinner" class="d-none">
+        <span class="spinner-border spinner-border-sm text-secondary" role="status"></span>
+        <span class="text-muted small ms-1"><%= __({it: 'Caricamento...', en: 'Loading...'}, passData.ctx) %></span>
+      </span>
+      <span id="periodLabel" class="badge bg-secondary"></span>
+    </div>
+  </div>
+
+  <!-- ── Global alert area ──────────────────────────────────────────────── -->
+  <div id="globalAlert" class="alert d-none mb-3" role="alert"></div>
+
+  <!-- ── Filter panel ───────────────────────────────────────────────────── -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-body py-2">
+
+      <!-- Row 1: Period selector -->
+      <div class="row g-2 align-items-end mb-2">
+        <div class="col-auto">
+          <label class="form-label small mb-1"><%= __({it: 'Da', en: 'From'}, passData.ctx) %></label>
+          <input type="date" id="inputFrom" class="form-control form-control-sm" style="width:145px">
+        </div>
+        <div class="col-auto">
+          <label class="form-label small mb-1"><%= __({it: 'A', en: 'To'}, passData.ctx) %></label>
+          <input type="date" id="inputTo" class="form-control form-control-sm" style="width:145px">
+        </div>
+        <div class="col-auto">
+          <label class="form-label small mb-1 d-block">&nbsp;</label>
+          <div class="btn-group btn-group-sm" role="group">
+            <button id="btn7d"  class="btn btn-outline-secondary">7d</button>
+            <button id="btn30d" class="btn btn-outline-secondary">30d</button>
+            <button id="btn90d" class="btn btn-outline-secondary">90d</button>
+            <button id="btn1y"  class="btn btn-outline-secondary">1y</button>
+          </div>
+        </div>
+        <div class="col-auto ms-auto">
+          <label class="form-label small mb-1 d-block">&nbsp;</label>
+          <button id="btnRefresh" class="btn btn-primary btn-sm">
+            <i class="bi bi-arrow-clockwise me-1"></i>
+            <%= __({it: 'Aggiorna', en: 'Refresh'}, passData.ctx) %>
+          </button>
+        </div>
+      </div>
+
+      <!-- Row 2: Filters -->
+      <div class="row g-2 align-items-end">
+        <div class="col-auto">
+          <label class="form-label small mb-1"><%= __({it: 'Traffico', en: 'Traffic'}, passData.ctx) %></label>
+          <select id="selTrafficType" class="form-select form-select-sm" style="width:130px">
+            <option value="all"><%= __({it: 'Tutti', en: 'All'}, passData.ctx) %></option>
+            <option value="human"><%= __({it: 'Solo umani', en: 'Human only'}, passData.ctx) %></option>
+            <option value="bot"><%= __({it: 'Solo bot', en: 'Bot only'}, passData.ctx) %></option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <label class="form-label small mb-1"><%= __({it: 'Autenticazione', en: 'Auth'}, passData.ctx) %></label>
+          <select id="selAuthType" class="form-select form-select-sm" style="width:150px">
+            <option value="all"><%= __({it: 'Tutti', en: 'All'}, passData.ctx) %></option>
+            <option value="authenticated"><%= __({it: 'Autenticati', en: 'Authenticated'}, passData.ctx) %></option>
+            <option value="anonymous"><%= __({it: 'Anonimi', en: 'Anonymous'}, passData.ctx) %></option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <label class="form-label small mb-1"><%= __({it: 'Contesto', en: 'Context'}, passData.ctx) %></label>
+          <select id="selContext" class="form-select form-select-sm" style="width:120px">
+            <option value="all"><%= __({it: 'Tutti', en: 'All'}, passData.ctx) %></option>
+            <option value="public"><%= __({it: 'Pubblico', en: 'Public'}, passData.ctx) %></option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <label class="form-label small mb-1"><%= __({it: 'Stato HTTP', en: 'HTTP Status'}, passData.ctx) %></label>
+          <select id="selStatusGroup" class="form-select form-select-sm" style="width:110px">
+            <option value="all"><%= __({it: 'Tutti', en: 'All'}, passData.ctx) %></option>
+            <option value="2xx">2xx</option>
+            <option value="3xx">3xx</option>
+            <option value="4xx">4xx</option>
+            <option value="5xx">5xx</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <label class="form-label small mb-1"><%= __({it: 'Cerca path', en: 'Search path'}, passData.ctx) %></label>
+          <input type="text" id="inputPathSearch" class="form-control form-control-sm" style="width:180px"
+                 placeholder="/about">
+        </div>
+        <div class="col-auto ms-auto">
+          <label class="form-label small mb-1 d-block">&nbsp;</label>
+          <div class="dropdown">
+            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button"
+                    data-bs-toggle="dropdown">
+              <i class="bi bi-download me-1"></i>
+              <%= __({it: 'Esporta', en: 'Export'}, passData.ctx) %>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li>
+                <a class="dropdown-item" href="#" id="btnExportCsv">
+                  <i class="bi bi-filetype-csv me-2"></i>CSV
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item" href="#" id="btnExportJson">
+                  <i class="bi bi-filetype-json me-2"></i>JSON
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Tab navigation ─────────────────────────────────────────────────── -->
+  <ul class="nav nav-tabs mb-3" id="analyticsTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="tab-overview-btn"
+              data-bs-toggle="tab" data-bs-target="#tab-overview"
+              type="button" role="tab">
+        <i class="bi bi-grid-1x2 me-1"></i>
+        <%= __({it: 'Panoramica', en: 'Overview'}, passData.ctx) %>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-pages-btn"
+              data-bs-toggle="tab" data-bs-target="#tab-pages"
+              type="button" role="tab">
+        <i class="bi bi-file-earmark-text me-1"></i>
+        <%= __({it: 'Pagine', en: 'Pages'}, passData.ctx) %>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-bots-btn"
+              data-bs-toggle="tab" data-bs-target="#tab-bots"
+              type="button" role="tab">
+        <i class="bi bi-robot me-1"></i>
+        Bot
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-referrer-btn"
+              data-bs-toggle="tab" data-bs-target="#tab-referrer"
+              type="button" role="tab">
+        <i class="bi bi-link-45deg me-1"></i>
+        Referrer
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-raw-btn"
+              data-bs-toggle="tab" data-bs-target="#tab-raw"
+              type="button" role="tab">
+        <i class="bi bi-table me-1"></i>
+        <%= __({it: 'Traffico Raw', en: 'Raw Traffic'}, passData.ctx) %>
+      </button>
+    </li>
+  </ul>
+
+  <!-- ── Tab content ────────────────────────────────────────────────────── -->
+  <div class="tab-content">
+
+    <!-- ── Tab 1: Overview ────────────────────────────────────────────── -->
+    <div class="tab-pane fade show active" id="tab-overview" role="tabpanel">
+
+      <!-- KPI cards -->
+      <div class="row g-3 mb-4">
+        <div class="col-6 col-md-4 col-xl-2">
+          <div class="card text-center kpi-card h-100">
+            <div class="card-body py-3">
+              <div class="kpi-label text-muted small"><%= __({it: 'Visite totali', en: 'Total visits'}, passData.ctx) %></div>
+              <div class="kpi-value fs-4 fw-bold text-primary" id="kpiTotalVisits">—</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+          <div class="card text-center kpi-card h-100">
+            <div class="card-body py-3">
+              <div class="kpi-label text-muted small"><%= __({it: 'Sessioni uniche', en: 'Unique sessions'}, passData.ctx) %></div>
+              <div class="kpi-value fs-4 fw-bold text-success" id="kpiUniqueSessions">—</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+          <div class="card text-center kpi-card h-100">
+            <div class="card-body py-3">
+              <div class="kpi-label text-muted small"><%= __({it: '% Bot', en: 'Bot %'}, passData.ctx) %></div>
+              <div class="kpi-value fs-4 fw-bold text-warning" id="kpiBotPct">—</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+          <div class="card text-center kpi-card h-100">
+            <div class="card-body py-3">
+              <div class="kpi-label text-muted small"><%= __({it: 'Risposta media', en: 'Avg response'}, passData.ctx) %></div>
+              <div class="kpi-value fs-4 fw-bold text-info" id="kpiAvgResponse">—</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+          <div class="card text-center kpi-card h-100">
+            <div class="card-body py-3">
+              <div class="kpi-label text-muted small"><%= __({it: 'Errori (4xx/5xx)', en: 'Errors (4xx/5xx)'}, passData.ctx) %></div>
+              <div class="kpi-value fs-4 fw-bold text-danger" id="kpiErrors">—</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+          <div class="card text-center kpi-card h-100">
+            <div class="card-body py-3">
+              <div class="kpi-label text-muted small"><%= __({it: 'Pagina top', en: 'Top page'}, passData.ctx) %></div>
+              <div class="kpi-value small fw-bold text-secondary text-truncate" id="kpiTopPage" title="">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Visits trend chart -->
+      <div class="card shadow-sm">
+        <div class="card-header small fw-semibold">
+          <i class="bi bi-graph-up me-1"></i>
+          <%= __({it: 'Visite nel tempo', en: 'Visits over time'}, passData.ctx) %>
+        </div>
+        <div class="card-body">
+          <div class="chart-container" style="position:relative; height:280px;">
+            <canvas id="chartVisitsTrend"></canvas>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /tab-overview -->
+
+    <!-- ── Tab 2: Pages ───────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-pages" role="tabpanel">
+      <div class="row g-3">
+        <!-- Bar chart -->
+        <div class="col-lg-6">
+          <div class="card shadow-sm">
+            <div class="card-header small fw-semibold">
+              <i class="bi bi-bar-chart-horizontal me-1"></i>
+              <%= __({it: 'Pagine più visitate', en: 'Top pages'}, passData.ctx) %>
+            </div>
+            <div class="card-body">
+              <div class="chart-container" style="position:relative; height:320px;">
+                <canvas id="chartTopPages"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Table -->
+        <div class="col-lg-6">
+          <div class="card shadow-sm">
+            <div class="card-header small fw-semibold">
+              <i class="bi bi-list-ol me-1"></i>
+              <%= __({it: 'Dettaglio pagine', en: 'Page details'}, passData.ctx) %>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Path</th>
+                      <th class="text-end"><%= __({it: 'Visite', en: 'Visits'}, passData.ctx) %></th>
+                      <th class="text-end"><%= __({it: 'Sessioni', en: 'Sessions'}, passData.ctx) %></th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbodyTopPages">
+                    <tr><td colspan="3" class="text-center text-muted py-3">—</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <!-- Status codes chart below table -->
+          <div class="card shadow-sm mt-3">
+            <div class="card-header small fw-semibold">
+              <i class="bi bi-reception-4 me-1"></i>
+              <%= __({it: 'Codici HTTP', en: 'HTTP status codes'}, passData.ctx) %>
+            </div>
+            <div class="card-body">
+              <div class="chart-container" style="position:relative; height:160px;">
+                <canvas id="chartStatusCodes"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /tab-pages -->
+
+    <!-- ── Tab 3: Bots ────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-bots" role="tabpanel">
+      <div class="row g-3">
+        <!-- Doughnut chart -->
+        <div class="col-lg-5">
+          <div class="card shadow-sm">
+            <div class="card-header small fw-semibold">
+              <i class="bi bi-pie-chart me-1"></i>
+              <%= __({it: 'Distribuzione bot', en: 'Bot distribution'}, passData.ctx) %>
+            </div>
+            <div class="card-body">
+              <div class="chart-container" style="position:relative; height:300px;">
+                <canvas id="chartTopBots"></canvas>
+              </div>
+              <div id="noBotsMessage" class="text-center text-muted small mt-2 d-none">
+                <%= __({it: 'Nessun bot rilevato nel periodo.', en: 'No bots detected in this period.'}, passData.ctx) %>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Table -->
+        <div class="col-lg-7">
+          <div class="card shadow-sm">
+            <div class="card-header small fw-semibold">
+              <i class="bi bi-list-ul me-1"></i>
+              <%= __({it: 'Classifica bot', en: 'Bot ranking'}, passData.ctx) %>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Bot</th>
+                      <th class="text-end"><%= __({it: 'Visite', en: 'Visits'}, passData.ctx) %></th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbodyTopBots">
+                    <tr><td colspan="2" class="text-center text-muted py-3">—</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /tab-bots -->
+
+    <!-- ── Tab 4: Referrers ───────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-referrer" role="tabpanel">
+      <div class="card shadow-sm">
+        <div class="card-header small fw-semibold">
+          <i class="bi bi-link-45deg me-1"></i>
+          <%= __({it: 'Sorgenti di traffico (referrer)', en: 'Traffic sources (referrer)'}, passData.ctx) %>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Referrer</th>
+                  <th class="text-end"><%= __({it: 'Visite', en: 'Visits'}, passData.ctx) %></th>
+                </tr>
+              </thead>
+              <tbody id="tbodyReferrers">
+                <tr><td colspan="2" class="text-center text-muted py-3">—</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div><!-- /tab-referrer -->
+
+    <!-- ── Tab 5: Raw Traffic ─────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-raw" role="tabpanel">
+
+      <!-- Capped-rows warning -->
+      <div id="capBanner" class="alert alert-warning d-flex align-items-center d-none mb-3" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2 flex-shrink-0"></i>
+        <div>
+          <%= __({it: 'Visualizzati solo i primi', en: 'Showing only the first'}, passData.ctx) %>
+          <strong id="capMaxRows"></strong>
+          <%= __({it: 'eventi. Usa i filtri per restringere la ricerca.', en: 'events. Use filters to narrow results.'}, passData.ctx) %>
+        </div>
+      </div>
+
+      <div class="card shadow-sm">
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0 align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th class="text-nowrap"><%= __({it: 'Timestamp', en: 'Timestamp'}, passData.ctx) %></th>
+                  <th>Path</th>
+                  <th><%= __({it: 'Metodo', en: 'Method'}, passData.ctx) %></th>
+                  <th><%= __({it: 'Stato', en: 'Status'}, passData.ctx) %></th>
+                  <th class="text-end">ms</th>
+                  <th>Type</th>
+                  <th><i class="bi bi-lock" title="Auth"></i></th>
+                  <th>Referrer</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyRawLog">
+                <tr><td colspan="8" class="text-center text-muted py-4">
+                  <%= __({it: 'Apri questo tab per caricare i dati.', en: 'Open this tab to load data.'}, passData.ctx) %>
+                </td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card-footer d-flex justify-content-between align-items-center py-2">
+          <small class="text-muted" id="rawLogCount"></small>
+          <div id="rawLogPagination"></div>
+        </div>
+      </div>
+
+    </div><!-- /tab-raw -->
+
+  </div><!-- /tab-content -->
+
+</div><!-- /container-fluid -->
+
+<script>
+  // ── Variables injected from server side ──────────────────────────────────
+  const apiPrefix             = '<%= passData.apiPrefix %>';
+  const adminPrefix           = '<%= passData.adminPrefix %>';
+  const maxRawLogRows         = <%- passData.plugin && passData.plugin.adminAnalytics ? passData.plugin.adminAnalytics.maxRawLogRows : 10000 %>;
+  const exportWarningThreshold = <%- passData.plugin && passData.plugin.adminAnalytics ? passData.plugin.adminAnalytics.exportWarningThreshold : 100000 %>;
+</script>
+<script src="/<%= passData.apiPrefix %>/adminAnalytics/chartjs/chart.umd.min.js"></script>
+<script src="/<%= passData.adminPrefix %>/analyticsManagement/analytics.js"></script>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>

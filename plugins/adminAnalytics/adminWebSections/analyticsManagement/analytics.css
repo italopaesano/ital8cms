@@ -1,0 +1,55 @@
+/* analytics.css — Styles for the adminAnalytics dashboard */
+
+/* ── KPI cards ───────────────────────────────────────────────────────────── */
+.kpi-card {
+  border: none;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,.08);
+  transition: box-shadow 0.15s ease;
+}
+
+.kpi-card:hover {
+  box-shadow: 0 3px 10px rgba(0,0,0,.12);
+}
+
+.kpi-card .kpi-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+}
+
+.kpi-card .kpi-value {
+  line-height: 1.15;
+  word-break: break-word;
+}
+
+/* ── Chart containers ────────────────────────────────────────────────────── */
+.chart-container canvas {
+  display: block;
+}
+
+/* ── Pagination ──────────────────────────────────────────────────────────── */
+#rawLogPagination .pagination {
+  margin-bottom: 0;
+}
+
+/* ── Raw log table ───────────────────────────────────────────────────────── */
+#tbodyRawLog td {
+  vertical-align: middle;
+  font-size: 0.82rem;
+}
+
+/* ── Period label badge ──────────────────────────────────────────────────── */
+#periodLabel {
+  font-size: 0.78rem;
+  font-weight: normal;
+  letter-spacing: 0.02em;
+}
+
+/* ── Loading spinner alignment ───────────────────────────────────────────── */
+#loadingSpinner .spinner-border {
+  width: 1rem;
+  height: 1rem;
+  border-width: 0.15em;
+}
