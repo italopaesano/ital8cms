@@ -112,7 +112,12 @@ class pluginSys{
 
         // aggiungo gli elementi a this.fnInPage con la struttura descritta nel costruttore
         if(plugin.getHooksPage){ // controllo se esiste la funzione
-          this.#hooksPage.set( pluginName,  plugin.getHooksPage());// aggiungo gli hook alle pagine
+          const hookMap = plugin.getHooksPage();
+          if (hookMap instanceof Map) {
+            this.#hooksPage.set( pluginName, hookMap );
+          } else {
+            logger.warn('pluginSys', `Plugin "${pluginName}": getHooksPage() deve restituire una Map, ricevuto: ${typeof hookMap}. Hook ignorati.`);
+          }
           // OLD this.fnInPage.set( pluginName,  plugin.getFnInPageMap());//pluginName corrisponde al nome del plugin
         }
 
@@ -606,6 +611,10 @@ class pluginSys{
 
     let stingToReturn = "";
     for( const [ nomePlugin, fnMap] of this.#hooksPage ){
+      if( !(fnMap instanceof Map) ){
+        logger.warn('pluginSys', `hookPage("${hook}"): il plugin "${nomePlugin}" ha un hook non valido (atteso Map, trovato: ${typeof fnMap}). Saltato.`);
+        continue;
+      }
       if( fnMap.has(hook) ){// se siste la parte richiesta Es se il plugin bootstrap ha richiesto di inserire qualcosa in 'head'
         stingToReturn += ` <!-- \n START ${nomePlugin} part --> \n` ;
         const fnToExc = fnMap.get(hook);
