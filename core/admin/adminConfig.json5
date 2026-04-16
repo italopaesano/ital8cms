@@ -109,6 +109,16 @@
       "label": "Analytics",
       "icon": "📊",
       "description": "Dashboard per il monitoraggio del traffico: visite, bot, referrer, log raw, export CSV/JSON"
+    },
+
+    "analyticsSettings": {
+      "type": "plugin",
+      "plugin": "adminAnalytics",
+      "enabled": true,
+      "required": false,
+      "label": "Impostazioni Analytics",
+      "icon": "⚙️",
+      "description": "Configurazione del plugin analytics: GDPR, storage, performance, editor JSON5"
     }
   },
 
@@ -124,7 +134,8 @@
     "navbarsManagement",
     "seoManagement",
     "mediaManagement",
-    "analyticsManagement"
+    "analyticsManagement",
+    "analyticsSettings"
   ],
 
   // Servizi forniti da plugin (backend)
