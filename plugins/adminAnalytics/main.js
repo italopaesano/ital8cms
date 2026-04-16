@@ -5,10 +5,18 @@
  * aggregates visits, filters by period/traffic type/auth/status, builds Chart.js
  * datasets, and exposes them through three API routes:
  *
- *   GET /api/adminAnalytics/stats    → aggregated KPIs + chart data
- *   GET /api/adminAnalytics/events   → paginated raw event log
- *   GET /api/adminAnalytics/export   → file download (CSV or JSON)
- *   GET /api/adminAnalytics/chartjs/chart.umd.min.js → serves Chart.js UMD bundle
+ *   GET  /api/adminAnalytics/stats    → aggregated KPIs + chart data
+ *   GET  /api/adminAnalytics/events   → paginated raw event log
+ *   GET  /api/adminAnalytics/export   → file download (CSV or JSON)
+ *   GET  /api/adminAnalytics/chartjs/chart.umd.min.js → serves Chart.js UMD bundle
+ *
+ * Analytics settings (analyticsSettings admin section):
+ *   GET  /api/adminAnalytics/load-settings     → custom block + raw file content
+ *   POST /api/adminAnalytics/validate-settings → validate without saving
+ *   POST /api/adminAnalytics/save-settings     → surgical save preserving comments
+ *   POST /api/adminAnalytics/save-raw-settings → save raw JSON5 from textarea
+ *   GET  /api/adminAnalytics/storage-info      → data dir stats for Info tab
+ *   GET  /api/adminAnalytics/lib/json5.min.js  → JSON5 browser library
  *
  * DEPENDENCY: analytics plugin (shared object injected via setSharedObject)
  *
@@ -20,7 +28,10 @@
 
 const path = require('path');
 const fs   = require('fs');
+const json5 = require('json5');
 const loadJson5 = require('../../core/loadJson5');
+const analyticsFileManager   = require('./lib/analyticsFileManager');
+const analyticsConfigValidator = require('./lib/analyticsConfigValidator');
 
 const { selectFilesForRange }  = require('./lib/fileSelector');
 const { filterEvents, aggregate, determineGroupBy } = require('./lib/aggregator');
@@ -39,6 +50,15 @@ let config = null;
 
 /** @type {object|null} Shared object received from the analytics plugin */
 let analyticsApi = null;
+
+/** @type {string|null} Absolute path to the analytics plugin directory */
+let analyticsPluginPath = null;
+
+/** @type {string|null} Absolute path to the backups directory */
+let backupDir = null;
+
+/** @type {number} Maximum number of backup files to keep */
+let maxBackups = 10;
 
 /** Access level: admin + root only — analytics data is sensitive */
 const adminAccess = { requiresAuth: true, allowedRoles: [0, 1] };
@@ -137,6 +157,10 @@ module.exports = {
     const configPath = path.join(pathPluginFolder, 'pluginConfig.json5');
     const pluginConf = loadJson5(configPath);
     config = pluginConf.custom;
+
+    analyticsPluginPath = path.join(pathPluginFolder, '..', 'analytics');
+    backupDir           = path.join(pathPluginFolder, 'backups');
+    maxBackups          = config.maxBackupsPerFile || 10;
 
     console.log(
       `${LOG_PREFIX} Plugin caricato — maxRawLogRows: ${config.maxRawLogRows}, ` +
@@ -305,6 +329,144 @@ module.exports = {
             ctx.status = 404;
             ctx.body = '/* chart.js bundle not found — run: npm install */';
           }
+        },
+      },
+
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // ANALYTICS SETTINGS (analyticsSettings admin section)
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+      // Load current settings (custom block + raw file text)
+      {
+        method: 'GET',
+        path: '/load-settings',
+        access: adminAccess,
+        handler: async (ctx) => {
+          const result = analyticsFileManager.readSettings(analyticsPluginPath);
+          if (!result.success) {
+            ctx.status = 500;
+            ctx.body = { success: false, error: result.error };
+            return;
+          }
+          ctx.body = { success: true, data: result.data, raw: result.raw };
+        },
+      },
+
+      // Validate settings object without saving
+      {
+        method: 'POST',
+        path: '/validate-settings',
+        access: adminAccess,
+        handler: async (ctx) => {
+          const { data } = ctx.request.body;
+          if (!data || typeof data !== 'object') {
+            ctx.body = { valid: false, errors: ['Request body must contain a "data" object'], warnings: [] };
+            return;
+          }
+          ctx.body = analyticsConfigValidator.validateSettings(data);
+        },
+      },
+
+      // Save settings (surgical write — preserves comments)
+      {
+        method: 'POST',
+        path: '/save-settings',
+        access: adminAccess,
+        handler: async (ctx) => {
+          const { data } = ctx.request.body;
+          if (!data || typeof data !== 'object') {
+            ctx.status = 400;
+            ctx.body = { success: false, error: 'Request body must contain a "data" object' };
+            return;
+          }
+          const validation = analyticsConfigValidator.validateSettings(data);
+          if (!validation.valid) {
+            ctx.status = 400;
+            ctx.body = { success: false, errors: validation.errors, warnings: validation.warnings };
+            return;
+          }
+          const result = await analyticsFileManager.saveSettings(
+            analyticsPluginPath, data, backupDir, maxBackups
+          );
+          if (!result.success) {
+            ctx.status = 500;
+            ctx.body = { success: false, error: result.error };
+            return;
+          }
+          ctx.body = { success: true, warnings: validation.warnings };
+        },
+      },
+
+      // Save raw JSON5 from textarea (preserves comments as written by user)
+      {
+        method: 'POST',
+        path: '/save-raw-settings',
+        access: adminAccess,
+        handler: async (ctx) => {
+          const { content } = ctx.request.body;
+          if (typeof content !== 'string') {
+            ctx.status = 400;
+            ctx.body = { success: false, error: 'Request body must contain a "content" string' };
+            return;
+          }
+
+          // Parse to extract and validate the custom block
+          let parsed;
+          try {
+            parsed = json5.parse(content);
+          } catch (err) {
+            ctx.status = 400;
+            ctx.body = { success: false, error: `JSON5 syntax error: ${err.message}` };
+            return;
+          }
+
+          const customData = parsed.custom || parsed; // accept both full config or just custom block
+          const validation = analyticsConfigValidator.validateSettings(
+            parsed.custom !== undefined ? parsed.custom : parsed
+          );
+          if (!validation.valid) {
+            ctx.status = 400;
+            ctx.body = { success: false, errors: validation.errors, warnings: validation.warnings };
+            return;
+          }
+
+          const result = await analyticsFileManager.saveRawSettings(
+            analyticsPluginPath, content, backupDir, maxBackups
+          );
+          if (!result.success) {
+            ctx.status = 500;
+            ctx.body = { success: false, error: result.error };
+            return;
+          }
+          ctx.body = { success: true, warnings: validation.warnings };
+        },
+      },
+
+      // Storage info for the Info tab
+      {
+        method: 'GET',
+        path: '/storage-info',
+        access: adminAccess,
+        handler: async (ctx) => {
+          const dataDir = analyticsApi ? analyticsApi.getDataDir() : null;
+          if (!dataDir) {
+            ctx.body = { success: false, error: 'Analytics plugin not available' };
+            return;
+          }
+          const info = analyticsFileManager.readStorageInfo(dataDir);
+          ctx.body = { success: true, dataDir, ...info };
+        },
+      },
+
+      // JSON5 browser library (for client-side validation in the textarea editor)
+      {
+        method: 'GET',
+        path: '/lib/json5.min.js',
+        access: adminAccess,
+        handler: async (ctx) => {
+          const json5Path = require.resolve('json5/dist/index.min.js');
+          ctx.type = 'application/javascript';
+          ctx.body = fs.readFileSync(json5Path, 'utf8');
         },
       },
 
