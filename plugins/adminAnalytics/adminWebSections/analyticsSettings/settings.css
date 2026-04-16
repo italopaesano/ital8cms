@@ -1,0 +1,35 @@
+/* Analytics Settings — page-specific styles */
+
+.analytics-editor-textarea {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  resize: vertical;
+  white-space: pre;
+  overflow-x: auto;
+  tab-size: 2;
+}
+
+.messages-area {
+  min-height: 0;
+}
+
+.messages-area:empty {
+  display: none;
+}
+
+.restart-badge {
+  font-size: 0.7rem;
+  font-weight: 500;
+  vertical-align: middle;
+}
+
+.nav-link-action {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Tab content top border radius flush with nav-tabs */
+.tab-content.border.border-top-0 {
+  border-top: none !important;
+}

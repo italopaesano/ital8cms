@@ -10,6 +10,7 @@
   // Admin sections provided by this plugin
   "adminSections": [
     "analyticsManagement",
+    "analyticsSettings",
   ],
 
   "dependency": {
@@ -47,6 +48,13 @@
 
     // Number of items shown in top-pages, top-bots, and referrer lists.
     "topN": 10,
+
+    // ────────────────────────────────────────────────────────────────────────
+    // SETTINGS BACKUPS
+    // ────────────────────────────────────────────────────────────────────────
+
+    // Maximum number of backup copies of analytics/pluginConfig.json5 to keep.
+    "maxBackupsPerFile": 10,
 
   },
 }

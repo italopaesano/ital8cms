@@ -1,0 +1,607 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
+<link rel="stylesheet" href="/<%= passData.adminPrefix %>/analyticsSettings/settings.css">
+
+<div class="container mt-4">
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- BREADCRUMB -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item">
+        <a href="/<%= passData.adminPrefix %>/analyticsManagement/index.ejs">
+          <%= __({it: 'Analytics', en: 'Analytics'}, passData.ctx) %>
+        </a>
+      </li>
+      <li class="breadcrumb-item active">
+        <%= __({it: 'Impostazioni Analytics', en: 'Analytics Settings'}, passData.ctx) %>
+      </li>
+    </ol>
+  </nav>
+
+  <h3 class="mb-3">
+    <%= __({it: 'Impostazioni Analytics', en: 'Analytics Settings'}, passData.ctx) %>
+  </h3>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- BANNER STATICO RIAVVIO (sempre visibile) -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div class="alert alert-info d-flex align-items-center gap-2 mb-3" role="alert">
+    <i class="bi bi-info-circle-fill flex-shrink-0"></i>
+    <span>
+      <%= __({
+        it: 'Le modifiche alle impostazioni hanno effetto solo dopo il riavvio del server.',
+        en: 'Settings changes take effect only after restarting the server.'
+      }, passData.ctx) %>
+    </span>
+  </div>
+
+  <!-- Banner dinamico post-salvataggio (nascosto, mostrato da settings.js dopo ogni save) -->
+  <div id="restartBanner" class="alert alert-success d-flex align-items-center gap-2 mb-3 d-none" role="alert">
+    <i class="bi bi-check-circle-fill flex-shrink-0"></i>
+    <span>
+      <%= __({
+        it: 'Impostazioni salvate — riavvia il server per applicare le modifiche.',
+        en: 'Settings saved — restart the server to apply the changes.'
+      }, passData.ctx) %>
+    </span>
+  </div>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- ALERT AREA (messaggi di esito operazioni) -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div id="alertArea"></div>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- TOP ACTION BAR (Editor JSON5) -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div class="d-flex gap-2 mb-2 flex-wrap">
+    <button type="button" id="btnValidateTextarea" class="btn btn-outline-info btn-sm">
+      <i class="bi bi-check-circle"></i>
+      <%= __({it: 'Valida JSON5', en: 'Validate JSON5'}, passData.ctx) %>
+    </button>
+    <button type="button" id="btnSaveTextarea" class="btn btn-primary btn-sm">
+      <i class="bi bi-save"></i>
+      <%= __({it: 'Salva da Editor JSON5', en: 'Save from JSON5 Editor'}, passData.ctx) %>
+    </button>
+    <a href="/<%= passData.adminPrefix %>/analyticsManagement/index.ejs"
+       class="btn btn-link btn-sm nav-link-action">
+      <%= __({it: 'Annulla', en: 'Cancel'}, passData.ctx) %>
+    </a>
+  </div>
+  <div id="textareaMessages" class="messages-area mb-3"></div>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- SETTINGS TABS — desktop (nav-tabs) -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <ul class="nav nav-tabs mb-0 d-none d-md-flex" id="settingsTabsDesktop" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-privacy"
+              type="button" role="tab" id="tabBtn-privacy">
+        <i class="bi bi-shield-lock"></i>
+        <%= __({it: 'Privacy & GDPR', en: 'Privacy & GDPR'}, passData.ctx) %>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-storage"
+              type="button" role="tab" id="tabBtn-storage">
+        <i class="bi bi-hdd"></i>
+        <%= __({it: 'Storage', en: 'Storage'}, passData.ctx) %>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-performance"
+              type="button" role="tab" id="tabBtn-performance">
+        <i class="bi bi-lightning"></i>
+        <%= __({it: 'Performance', en: 'Performance'}, passData.ctx) %>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-info"
+              type="button" role="tab" id="tabBtn-info">
+        <i class="bi bi-info-circle"></i>
+        <%= __({it: 'Informazioni', en: 'Information'}, passData.ctx) %>
+      </button>
+    </li>
+  </ul>
+
+  <!-- SETTINGS TABS — mobile (select dropdown) -->
+  <div class="d-md-none mb-3">
+    <select id="settingsTabsMobile" class="form-select">
+      <option value="tab-privacy" selected>
+        <%= __({it: 'Privacy & GDPR', en: 'Privacy & GDPR'}, passData.ctx) %>
+      </option>
+      <option value="tab-storage">
+        <%= __({it: 'Storage', en: 'Storage'}, passData.ctx) %>
+      </option>
+      <option value="tab-performance">
+        <%= __({it: 'Performance', en: 'Performance'}, passData.ctx) %>
+      </option>
+      <option value="tab-info">
+        <%= __({it: 'Informazioni', en: 'Information'}, passData.ctx) %>
+      </option>
+    </select>
+  </div>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- TAB PANELS -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div class="tab-content border border-top-0 rounded-bottom p-3 mb-4" id="settingsTabContent">
+
+    <!-- TAB: Privacy & GDPR (fase 3.3) -->
+    <div class="tab-pane fade show active" id="tab-privacy" role="tabpanel">
+
+      <!-- gdprCompliance -->
+      <div class="mb-4">
+        <h6 class="fw-semibold mb-3">
+          <i class="bi bi-shield-check"></i>
+          <%= __({it: 'Conformità GDPR', en: 'GDPR Compliance'}, passData.ctx) %>
+        </h6>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" role="switch"
+                 id="gdprCompliance" name="gdprCompliance">
+          <label class="form-check-label" for="gdprCompliance">
+            <%= __({
+              it: 'Abilita modalità GDPR (anonimizzazione dati, consenso obbligatorio)',
+              en: 'Enable GDPR mode (data anonymisation, mandatory consent)'
+            }, passData.ctx) %>
+          </label>
+        </div>
+        <div class="form-text">
+          <%= __({
+            it: 'Quando attivo, gli indirizzi IP e gli ID sessione vengono pseudonimizzati prima della memorizzazione.',
+            en: 'When active, IP addresses and session IDs are pseudonymised before storage.'
+          }, passData.ctx) %>
+        </div>
+      </div>
+
+      <hr class="my-3">
+
+      <!-- sessionSalt -->
+      <div class="mb-4">
+        <h6 class="fw-semibold mb-3">
+          <i class="bi bi-key"></i>
+          <%= __({it: 'Salt sessione (HMAC-SHA256)', en: 'Session salt (HMAC-SHA256)'}, passData.ctx) %>
+        </h6>
+        <label for="sessionSalt" class="form-label">
+          <%= __({it: 'Chiave segreta di pseudonimizzazione', en: 'Pseudonymisation secret key'}, passData.ctx) %>
+        </label>
+        <div class="input-group mb-1">
+          <input type="password" class="form-control font-monospace"
+                 id="sessionSalt" name="sessionSalt"
+                 autocomplete="off" spellcheck="false">
+          <button type="button" class="btn btn-outline-secondary" id="btnToggleSalt"
+                  title="<%= __({it: 'Mostra/Nascondi', en: 'Show/Hide'}, passData.ctx) %>">
+            <i class="bi bi-eye" id="iconToggleSalt"></i>
+          </button>
+          <button type="button" class="btn btn-outline-warning" id="btnGenerateSalt"
+                  data-bs-toggle="modal" data-bs-target="#modalGenerateSalt">
+            <i class="bi bi-shuffle"></i>
+            <%= __({it: 'Genera', en: 'Generate'}, passData.ctx) %>
+          </button>
+        </div>
+        <div id="saltDefaultWarning" class="alert alert-warning d-flex align-items-center gap-2 py-2 d-none">
+          <i class="bi bi-exclamation-triangle-fill flex-shrink-0"></i>
+          <span class="small">
+            <%= __({
+              it: 'Stai usando il salt di default. Cambialo prima di andare in produzione.',
+              en: 'You are using the default salt. Change it before going to production.'
+            }, passData.ctx) %>
+          </span>
+        </div>
+        <div class="form-text">
+          <%= __({
+            it: 'Minimo 32 caratteri. Usata per l\'HMAC degli ID sessione. Modificarla invalida lo storico.',
+            en: 'Minimum 32 characters. Used for HMAC of session IDs. Changing it invalidates history.'
+          }, passData.ctx) %>
+        </div>
+      </div>
+
+      <hr class="my-3">
+
+      <!-- useAnalyticsCookie -->
+      <div class="mb-4">
+        <h6 class="fw-semibold mb-3">
+          <i class="bi bi-cookie"></i>
+          <%= __({it: 'Cookie analytics', en: 'Analytics cookie'}, passData.ctx) %>
+        </h6>
+        <div class="form-check form-switch mb-2">
+          <input class="form-check-input" type="checkbox" role="switch"
+                 id="useAnalyticsCookie" name="useAnalyticsCookie">
+          <label class="form-check-label" for="useAnalyticsCookie">
+            <%= __({
+              it: 'Usa cookie per il tracciamento sessione',
+              en: 'Use cookie for session tracking'
+            }, passData.ctx) %>
+          </label>
+        </div>
+        <div id="cookieGdprWarning" class="alert alert-info d-flex align-items-center gap-2 py-2 d-none">
+          <i class="bi bi-info-circle-fill flex-shrink-0"></i>
+          <span class="small">
+            <%= __({
+              it: 'Con GDPR attivo, il cookie viene impostato solo dopo il consenso dell\'utente.',
+              en: 'With GDPR active, the cookie is set only after user consent.'
+            }, passData.ctx) %>
+          </span>
+        </div>
+        <div class="mt-2">
+          <label for="analyticsCookieName" class="form-label">
+            <%= __({it: 'Nome del cookie', en: 'Cookie name'}, passData.ctx) %>
+          </label>
+          <input type="text" class="form-control" id="analyticsCookieName"
+                 name="analyticsCookieName" style="max-width: 320px;"
+                 placeholder="_anid">
+          <div class="form-text">
+            <%= __({
+              it: 'Lascia invariato se non hai motivi specifici per cambiarlo.',
+              en: 'Leave unchanged unless you have specific reasons to change it.'
+            }, passData.ctx) %>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab messages -->
+      <div id="tabMessages-privacy" class="messages-area mt-2"></div>
+
+      <!-- Save button -->
+      <div class="d-flex gap-2 mt-3">
+        <button type="button" class="btn btn-primary btn-sm" id="btnSavePrivacy"
+                data-tab="privacy">
+          <i class="bi bi-save"></i>
+          <%= __({it: 'Salva Privacy & GDPR', en: 'Save Privacy & GDPR'}, passData.ctx) %>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- TAB: Storage & Rotazione (fase 3.4) -->
+    <div class="tab-pane fade" id="tab-storage" role="tabpanel">
+
+      <!-- rotationMode -->
+      <div class="mb-4">
+        <h6 class="fw-semibold mb-3">
+          <i class="bi bi-arrow-repeat"></i>
+          <%= __({it: 'Modalità rotazione file', en: 'File rotation mode'}, passData.ctx) %>
+          <span class="badge text-bg-warning restart-badge ms-1">
+            <i class="bi bi-arrow-clockwise"></i>
+            <%= __({it: 'riavvio', en: 'restart'}, passData.ctx) %>
+          </span>
+        </h6>
+        <div class="d-flex flex-wrap gap-3">
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="rotationMode"
+                   id="rotationNone" value="none">
+            <label class="form-check-label" for="rotationNone">
+              <%= __({it: 'Nessuna', en: 'None'}, passData.ctx) %>
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="rotationMode"
+                   id="rotationDaily" value="daily">
+            <label class="form-check-label" for="rotationDaily">
+              <%= __({it: 'Giornaliera', en: 'Daily'}, passData.ctx) %>
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="rotationMode"
+                   id="rotationWeekly" value="weekly">
+            <label class="form-check-label" for="rotationWeekly">
+              <%= __({it: 'Settimanale', en: 'Weekly'}, passData.ctx) %>
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="rotationMode"
+                   id="rotationMonthly" value="monthly">
+            <label class="form-check-label" for="rotationMonthly">
+              <%= __({it: 'Mensile', en: 'Monthly'}, passData.ctx) %>
+            </label>
+          </div>
+        </div>
+        <div class="form-text">
+          <%= __({
+            it: 'Determina con quale frequenza viene creato un nuovo file di log.',
+            en: 'Determines how often a new log file is created.'
+          }, passData.ctx) %>
+        </div>
+      </div>
+
+      <hr class="my-3">
+
+      <!-- retentionDays -->
+      <div class="mb-4">
+        <h6 class="fw-semibold mb-3">
+          <i class="bi bi-calendar-x"></i>
+          <%= __({it: 'Conservazione dati', en: 'Data retention'}, passData.ctx) %>
+          <span class="badge text-bg-warning restart-badge ms-1">
+            <i class="bi bi-arrow-clockwise"></i>
+            <%= __({it: 'riavvio', en: 'restart'}, passData.ctx) %>
+          </span>
+        </h6>
+        <label for="retentionDays" class="form-label">
+          <%= __({it: 'Giorni di conservazione (0 = disabilitato)', en: 'Retention days (0 = disabled)'}, passData.ctx) %>
+        </label>
+        <input type="number" class="form-control" id="retentionDays"
+               name="retentionDays" min="0" step="1" style="max-width: 180px;">
+        <div class="form-text">
+          <%= __({
+            it: 'I file di log più vecchi di questo numero di giorni vengono eliminati automaticamente. 0 = nessuna eliminazione.',
+            en: 'Log files older than this number of days are automatically deleted. 0 = no deletion.'
+          }, passData.ctx) %>
+        </div>
+      </div>
+
+      <hr class="my-3">
+
+      <!-- dataPath -->
+      <div class="mb-4">
+        <h6 class="fw-semibold mb-3">
+          <i class="bi bi-folder"></i>
+          <%= __({it: 'Directory dati', en: 'Data directory'}, passData.ctx) %>
+          <span class="badge text-bg-warning restart-badge ms-1">
+            <i class="bi bi-arrow-clockwise"></i>
+            <%= __({it: 'riavvio', en: 'restart'}, passData.ctx) %>
+          </span>
+        </h6>
+        <label for="dataPath" class="form-label">
+          <%= __({it: 'Percorso relativo alla root del progetto', en: 'Path relative to project root'}, passData.ctx) %>
+        </label>
+        <input type="text" class="form-control font-monospace" id="dataPath"
+               name="dataPath" style="max-width: 400px;"
+               placeholder="plugins/analytics/data">
+        <div class="form-text">
+          <%= __({
+            it: 'Percorso relativo, senza "/" iniziale e senza "..".',
+            en: 'Relative path, no leading "/" and no "..".'
+          }, passData.ctx) %>
+        </div>
+      </div>
+
+      <!-- Tab messages -->
+      <div id="tabMessages-storage" class="messages-area mt-2"></div>
+
+      <!-- Save button -->
+      <div class="d-flex gap-2 mt-3">
+        <button type="button" class="btn btn-primary btn-sm" id="btnSaveStorage"
+                data-tab="storage">
+          <i class="bi bi-save"></i>
+          <%= __({it: 'Salva Storage', en: 'Save Storage'}, passData.ctx) %>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- TAB: Performance (fase 3.5) -->
+    <div class="tab-pane fade" id="tab-performance" role="tabpanel">
+
+      <!-- flushIntervalSeconds -->
+      <div class="mb-4">
+        <h6 class="fw-semibold mb-3">
+          <i class="bi bi-stopwatch"></i>
+          <%= __({it: 'Intervallo flush su disco', en: 'Disk flush interval'}, passData.ctx) %>
+          <span class="badge text-bg-warning restart-badge ms-1">
+            <i class="bi bi-arrow-clockwise"></i>
+            <%= __({it: 'riavvio', en: 'restart'}, passData.ctx) %>
+          </span>
+        </h6>
+        <label for="flushIntervalSeconds" class="form-label">
+          <%= __({it: 'Secondi tra ogni flush (0 = flush immediato)', en: 'Seconds between each flush (0 = immediate)'}, passData.ctx) %>
+        </label>
+        <div class="input-group" style="max-width: 240px;">
+          <input type="number" class="form-control" id="flushIntervalSeconds"
+                 name="flushIntervalSeconds" min="0" step="1">
+          <span class="input-group-text">s</span>
+        </div>
+        <div id="flushIntervalWarning" class="alert alert-warning d-flex align-items-center gap-2 py-2 mt-2 d-none">
+          <i class="bi bi-exclamation-triangle-fill flex-shrink-0"></i>
+          <span class="small">
+            <%= __({
+              it: 'Intervallo > 300 s: gli eventi possono andare persi in caso di crash improvviso.',
+              en: 'Interval > 300 s: events may be lost on unexpected crashes.'
+            }, passData.ctx) %>
+          </span>
+        </div>
+        <div class="form-text">
+          <%= __({
+            it: 'Gli eventi analytics vengono tenuti in memoria e scritti su disco a questo intervallo. Valori bassi aumentano l\'I/O, valori alti aumentano il rischio di perdita dati.',
+            en: 'Analytics events are held in memory and written to disk at this interval. Low values increase I/O; high values increase the risk of data loss.'
+          }, passData.ctx) %>
+        </div>
+      </div>
+
+      <!-- Tab messages -->
+      <div id="tabMessages-performance" class="messages-area mt-2"></div>
+
+      <!-- Save button -->
+      <div class="d-flex gap-2 mt-3">
+        <button type="button" class="btn btn-primary btn-sm" id="btnSavePerformance"
+                data-tab="performance">
+          <i class="bi bi-save"></i>
+          <%= __({it: 'Salva Performance', en: 'Save Performance'}, passData.ctx) %>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- TAB: Informazioni (fase 3.6) -->
+    <div class="tab-pane fade" id="tab-info" role="tabpanel">
+
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="fw-semibold mb-0">
+          <i class="bi bi-hdd-stack"></i>
+          <%= __({it: 'Statistiche storage analytics', en: 'Analytics storage statistics'}, passData.ctx) %>
+        </h6>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnRefreshInfo">
+          <i class="bi bi-arrow-clockwise"></i>
+          <%= __({it: 'Aggiorna', en: 'Refresh'}, passData.ctx) %>
+        </button>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-12 col-sm-6 col-md-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <div class="text-muted small mb-1">
+                <i class="bi bi-folder2"></i>
+                <%= __({it: 'Directory dati', en: 'Data directory'}, passData.ctx) %>
+              </div>
+              <div id="infoDataDir" class="font-monospace small text-break">—</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-sm-6 col-md-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <div class="text-muted small mb-1">
+                <i class="bi bi-files"></i>
+                <%= __({it: 'File di log', en: 'Log files'}, passData.ctx) %>
+              </div>
+              <div id="infoFileCount" class="fs-4 fw-semibold">—</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-sm-6 col-md-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <div class="text-muted small mb-1">
+                <i class="bi bi-database"></i>
+                <%= __({it: 'Dimensione totale', en: 'Total size'}, passData.ctx) %>
+              </div>
+              <div id="infoTotalSize" class="fs-4 fw-semibold">—</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-sm-6">
+          <div class="card h-100">
+            <div class="card-body">
+              <div class="text-muted small mb-1">
+                <i class="bi bi-calendar-event"></i>
+                <%= __({it: 'File più vecchio', en: 'Oldest file'}, passData.ctx) %>
+              </div>
+              <div id="infoOldestFile" class="font-monospace small">—</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-sm-6">
+          <div class="card h-100">
+            <div class="card-body">
+              <div class="text-muted small mb-1">
+                <i class="bi bi-calendar-check"></i>
+                <%= __({it: 'File più recente', en: 'Newest file'}, passData.ctx) %>
+              </div>
+              <div id="infoNewestFile" class="font-monospace small">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div><!-- /tab-content -->
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- EDITOR JSON5 (fondo pagina — fase 3.7) -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <details class="mb-4">
+    <summary class="fw-semibold text-muted" style="cursor:pointer;">
+      <i class="bi bi-code-slash"></i>
+      <%= __({it: 'Editor JSON5 grezzo (avanzato)', en: 'Raw JSON5 editor (advanced)'}, passData.ctx) %>
+    </summary>
+    <div class="mt-2">
+      <textarea id="jsonEditor" class="analytics-editor-textarea form-control font-monospace"
+                rows="30" spellcheck="false" autocomplete="off"
+                autocorrect="off" autocapitalize="off"></textarea>
+    </div>
+  </details>
+
+</div><!-- /container -->
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- MODALI (fase 3.7) -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+
+<!-- Modal: Modifiche non salvate -->
+<div class="modal fade" id="modalUnsavedChanges" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-exclamation-triangle text-warning"></i>
+          <%= __({it: 'Modifiche non salvate', en: 'Unsaved changes'}, passData.ctx) %>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <%= __({
+          it: 'Il tab corrente ha modifiche non salvate. Vuoi procedere e perdere le modifiche?',
+          en: 'The current tab has unsaved changes. Do you want to proceed and discard the changes?'
+        }, passData.ctx) %>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          <%= __({it: 'Annulla', en: 'Cancel'}, passData.ctx) %>
+        </button>
+        <button type="button" class="btn btn-danger" id="btnConfirmSwitchTab">
+          <%= __({it: 'Procedi senza salvare', en: 'Proceed without saving'}, passData.ctx) %>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Conferma rigenerazione salt -->
+<div class="modal fade" id="modalGenerateSalt" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-shuffle text-warning"></i>
+          <%= __({it: 'Genera nuovo salt', en: 'Generate new salt'}, passData.ctx) %>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning mb-3">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          <strong>
+            <%= __({it: 'Attenzione:', en: 'Warning:'}, passData.ctx) %>
+          </strong>
+          <%= __({
+            it: 'Cambiare il salt invalida tutto lo storico delle sessioni: i visitatori di ritorno verranno riconosciuti come nuovi.',
+            en: 'Changing the salt invalidates all session history: returning visitors will be recognised as new ones.'
+          }, passData.ctx) %>
+        </div>
+        <p class="mb-1 text-muted small">
+          <%= __({it: 'Nuovo salt generato:', en: 'Generated new salt:'}, passData.ctx) %>
+        </p>
+        <div id="generatedSaltPreview" class="font-monospace small p-2 bg-light border rounded text-break">
+          —
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          <%= __({it: 'Annulla', en: 'Cancel'}, passData.ctx) %>
+        </button>
+        <button type="button" class="btn btn-warning" id="btnConfirmGenerateSalt"
+                data-bs-dismiss="modal">
+          <i class="bi bi-check-lg"></i>
+          <%= __({it: 'Usa questo salt', en: 'Use this salt'}, passData.ctx) %>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>
+
+<!-- Variabili di configurazione per settings.js -->
+<script>
+  const apiPrefix   = '<%= passData.apiPrefix %>';
+  const adminPrefix = '<%= passData.adminPrefix %>';
+</script>
+
+<!-- Libreria JSON5 per validazione client-side nella textarea -->
+<script src="/<%= passData.apiPrefix %>/adminAnalytics/lib/json5.min.js"></script>
+
+<!-- Logica pagina (fase 5) -->
+<script src="/<%= passData.adminPrefix %>/analyticsSettings/settings.js"></script>
