@@ -1,0 +1,104 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
+<link rel="stylesheet" href="/<%= passData.adminPrefix %>/analyticsSettings/settings.css">
+
+<div class="container mt-4">
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- BREADCRUMB -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item">
+        <a href="/<%= passData.adminPrefix %>/analyticsManagement/index.ejs">
+          <%= __({it: 'Analytics', en: 'Analytics'}, passData.ctx) %>
+        </a>
+      </li>
+      <li class="breadcrumb-item active">
+        <%= __({it: 'Impostazioni Analytics', en: 'Analytics Settings'}, passData.ctx) %>
+      </li>
+    </ol>
+  </nav>
+
+  <h3 class="mb-3">
+    <%= __({it: 'Impostazioni Analytics', en: 'Analytics Settings'}, passData.ctx) %>
+  </h3>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- BANNER STATICO RIAVVIO (sempre visibile) -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div class="alert alert-info d-flex align-items-center gap-2 mb-3" role="alert">
+    <i class="bi bi-info-circle-fill flex-shrink-0"></i>
+    <span>
+      <%= __({
+        it: 'Le modifiche alle impostazioni hanno effetto solo dopo il riavvio del server.',
+        en: 'Settings changes take effect only after restarting the server.'
+      }, passData.ctx) %>
+    </span>
+  </div>
+
+  <!-- Banner dinamico post-salvataggio (nascosto, mostrato da settings.js dopo ogni save) -->
+  <div id="restartBanner" class="alert alert-success d-flex align-items-center gap-2 mb-3 d-none" role="alert">
+    <i class="bi bi-check-circle-fill flex-shrink-0"></i>
+    <span>
+      <%= __({
+        it: 'Impostazioni salvate — riavvia il server per applicare le modifiche.',
+        en: 'Settings saved — restart the server to apply the changes.'
+      }, passData.ctx) %>
+    </span>
+  </div>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- ALERT AREA (messaggi di esito operazioni) -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div id="alertArea"></div>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- TOP ACTION BAR (Editor JSON5) -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div class="d-flex gap-2 mb-2 flex-wrap">
+    <button type="button" id="btnValidateTextarea" class="btn btn-outline-info btn-sm">
+      <i class="bi bi-check-circle"></i>
+      <%= __({it: 'Valida JSON5', en: 'Validate JSON5'}, passData.ctx) %>
+    </button>
+    <button type="button" id="btnSaveTextarea" class="btn btn-primary btn-sm">
+      <i class="bi bi-save"></i>
+      <%= __({it: 'Salva da Editor JSON5', en: 'Save from JSON5 Editor'}, passData.ctx) %>
+    </button>
+    <a href="/<%= passData.adminPrefix %>/analyticsManagement/index.ejs"
+       class="btn btn-link btn-sm nav-link-action">
+      <%= __({it: 'Annulla', en: 'Cancel'}, passData.ctx) %>
+    </a>
+  </div>
+  <div id="textareaMessages" class="messages-area mb-3"></div>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- TAB HEADERS + CONTENUTO (fase 3.2 → 3.6) -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- PLACEHOLDER — verrà completato nelle sotto-fasi 3.2 … 3.6 -->
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- EDITOR JSON5 (fondo pagina — fase 3.7) -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- PLACEHOLDER — verrà completato nella sotto-fase 3.7 -->
+
+</div><!-- /container -->
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- MODALI (fase 3.7) -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- PLACEHOLDER — verrà completato nella sotto-fase 3.7 -->
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>
+
+<!-- Variabili di configurazione per settings.js -->
+<script>
+  const apiPrefix   = '<%= passData.apiPrefix %>';
+  const adminPrefix = '<%= passData.adminPrefix %>';
+</script>
+
+<!-- Libreria JSON5 per validazione client-side nella textarea -->
+<script src="/<%= passData.apiPrefix %>/adminAnalytics/lib/json5.min.js"></script>
+
+<!-- Logica pagina (fase 5) -->
+<script src="/<%= passData.adminPrefix %>/analyticsSettings/settings.js"></script>
