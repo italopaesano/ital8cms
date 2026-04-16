@@ -73,9 +73,83 @@
   <div id="textareaMessages" class="messages-area mb-3"></div>
 
   <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-  <!-- TAB HEADERS + CONTENUTO (fase 3.2 → 3.6) -->
+  <!-- SETTINGS TABS — desktop (nav-tabs) -->
   <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-  <!-- PLACEHOLDER — verrà completato nelle sotto-fasi 3.2 … 3.6 -->
+  <ul class="nav nav-tabs mb-0 d-none d-md-flex" id="settingsTabsDesktop" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-privacy"
+              type="button" role="tab" id="tabBtn-privacy">
+        <i class="bi bi-shield-lock"></i>
+        <%= __({it: 'Privacy & GDPR', en: 'Privacy & GDPR'}, passData.ctx) %>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-storage"
+              type="button" role="tab" id="tabBtn-storage">
+        <i class="bi bi-hdd"></i>
+        <%= __({it: 'Storage', en: 'Storage'}, passData.ctx) %>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-performance"
+              type="button" role="tab" id="tabBtn-performance">
+        <i class="bi bi-lightning"></i>
+        <%= __({it: 'Performance', en: 'Performance'}, passData.ctx) %>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-info"
+              type="button" role="tab" id="tabBtn-info">
+        <i class="bi bi-info-circle"></i>
+        <%= __({it: 'Informazioni', en: 'Information'}, passData.ctx) %>
+      </button>
+    </li>
+  </ul>
+
+  <!-- SETTINGS TABS — mobile (select dropdown) -->
+  <div class="d-md-none mb-3">
+    <select id="settingsTabsMobile" class="form-select">
+      <option value="tab-privacy" selected>
+        <%= __({it: 'Privacy & GDPR', en: 'Privacy & GDPR'}, passData.ctx) %>
+      </option>
+      <option value="tab-storage">
+        <%= __({it: 'Storage', en: 'Storage'}, passData.ctx) %>
+      </option>
+      <option value="tab-performance">
+        <%= __({it: 'Performance', en: 'Performance'}, passData.ctx) %>
+      </option>
+      <option value="tab-info">
+        <%= __({it: 'Informazioni', en: 'Information'}, passData.ctx) %>
+      </option>
+    </select>
+  </div>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <!-- TAB PANELS -->
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div class="tab-content border border-top-0 rounded-bottom p-3 mb-4" id="settingsTabContent">
+
+    <!-- TAB: Privacy & GDPR (fase 3.3) -->
+    <div class="tab-pane fade show active" id="tab-privacy" role="tabpanel">
+      <!-- PLACEHOLDER — verrà completato nella sotto-fase 3.3 -->
+    </div>
+
+    <!-- TAB: Storage & Rotazione (fase 3.4) -->
+    <div class="tab-pane fade" id="tab-storage" role="tabpanel">
+      <!-- PLACEHOLDER — verrà completato nella sotto-fase 3.4 -->
+    </div>
+
+    <!-- TAB: Performance (fase 3.5) -->
+    <div class="tab-pane fade" id="tab-performance" role="tabpanel">
+      <!-- PLACEHOLDER — verrà completato nella sotto-fase 3.5 -->
+    </div>
+
+    <!-- TAB: Informazioni (fase 3.6) -->
+    <div class="tab-pane fade" id="tab-info" role="tabpanel">
+      <!-- PLACEHOLDER — verrà completato nella sotto-fase 3.6 -->
+    </div>
+
+  </div><!-- /tab-content -->
 
   <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
   <!-- EDITOR JSON5 (fondo pagina — fase 3.7) -->
