@@ -7,6 +7,8 @@
 
 > **🆕 NUOVO STANDARD (2026-01-04):** È stato aggiunto il metodo `getGlobalFunctionsForTemplates()` per esportare funzioni globali nei template EJS. Vedi documentazione completa in `/CLAUDE.md` sezione "Global Functions in Templates".
 
+> **📄 Pagine EJS pubbliche:** Per esporre pagine `.ejs` pubbliche (GET) **non serve** definirle in `getRouteArray()`. Basta creare la directory `webPages/` nel plugin: il **Plugin Pages System** crea automaticamente un symlink in `/pluginPages/{pluginName}/` e le serve via `koa-classic-server`. Vedi `/CLAUDE.md` sezione "Plugin Pages System".
+
 ---
 
 il sistema di plugin funziona nel seguente modo:

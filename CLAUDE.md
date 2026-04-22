@@ -594,11 +594,25 @@ The **Plugin Pages System** allows plugins to serve public web pages without man
 
 ```json5
 {
-  "pluginPagesPrefix": "pluginPages"  // URL prefix (hardcoded: /pluginPages/ directory)
+  "pluginPagesPrefix": "pluginPages",  // URL prefix (la directory fisica resta /pluginPages/)
+
+  // File indice serviti su /pluginPages/{pluginName}/ (senza nome file)
+  "indexFiles": {
+    "pluginPagesPrefix": ["index.ejs"]
+  },
+
+  // Clean URLs: se enabled, /pluginPages/myPlugin/page funziona senza .ejs
+  "hideExtension": {
+    "pluginPagesPrefix": { "enabled": false, "ext": ".ejs" }
+  }
 }
 ```
 
 **No plugin configuration needed!** The system auto-detects plugins with `webPages/` directory.
+
+**Effetti pratici:**
+- `indexFiles.pluginPagesPrefix`: con `["index.ejs"]`, l'URL `/pluginPages/myPlugin/` serve direttamente `webPages/index.ejs`.
+- `hideExtension.pluginPagesPrefix.enabled = true`: l'URL `/pluginPages/myPlugin/page` serve `webPages/page.ejs`; i link con `.ejs` continuano a funzionare via redirect automatico (richiede `koa-classic-server` v2.6.1+).
 
 ### How It Works
 
@@ -888,23 +902,24 @@ getRouteArray() {
 
 ```javascript
 {
-  isAdminContext: false,         // Flag per contesto pubblico
-  globalPrefix: '',              // Global prefix (es. '')
-  apiPrefix: 'api',              // API prefix
-  pluginPagesPrefix: 'pluginPages', // Plugin pages prefix
+  isAdminContext: false,         // Flag per contesto pubblico (sempre false qui)
+  globalPrefix: '',              // Global prefix configurato in ital8Config.json5
+  apiPrefix: 'api',              // API prefix configurato in ital8Config.json5
   pluginSys: pluginSys,          // Plugin system instance
-  plugin: {                      // Shared plugin objects
+  plugin: {                      // Shared plugin objects (da getObjectToShareToWebPages)
     bootstrap: { ... },
     myPlugin: { ... }
   },
-  themeSys: themeSysWrapper,     // Theme system wrapper (methods bound)
-  adminSystem: adminSystem,      // Admin system (anche in pagine pubbliche)
-  filePath: '/path/to/file.ejs', // Current template path
-  href: 'http://...',            // Full request URL
-  query: { ... },                // URL query parameters
-  ctx: ctx                       // Full Koa context
+  adminSystem: adminSystem,      // Admin system (disponibile anche in pagine pubbliche)
+  filePath: '/path/to/file.ejs', // Path assoluto del template renderizzato
+  href: 'http://...',            // Full request URL (ctx.href)
+  query: { ... },                // URL query parameters (ctx.query)
+  ctx: ctx,                      // Full Koa context
+  themeSys: themeSysWrapper      // Theme system wrapper (aggiunto dopo, metodi bound)
 }
 ```
+
+**Nota:** il prefisso `pluginPagesPrefix` **non** è esposto nel passData. Se serve nei template, leggerlo dalla configurazione lato server o costruire URL relativi.
 
 **themeSys Wrapper:**
 
@@ -926,6 +941,24 @@ The `themeSys` in passData is a wrapper with methods already bound to passData, 
    - Scans plugins for `webPages/` directory
    - Creates/manages symlinks in `/pluginPages/`
    - Provides API for plugin page operations
+
+   **API pubblica:**
+
+   | Metodo | Descrizione |
+   |--------|-------------|
+   | `initialize()` | Esegue scan + crea symlink + cleanup. Chiamato automaticamente a `index.js` |
+   | `getPluginPagesDirectory()` | Restituisce il path assoluto della directory `/pluginPages/` |
+   | `hasPublicPages(pluginName)` | `true` se il plugin ha una directory `webPages/` |
+   | `getPluginsWithPublicPages()` | Array dei nomi dei plugin attivi con `webPages/` |
+   | `createSymlinkForPlugin(pluginName, sourceDir)` | Crea (o verifica) il symlink per un singolo plugin |
+   | `removeSymlinkForPlugin(pluginName)` | Rimuove il symlink (uso: uninstall plugin) |
+   | `validateAndCleanSymlinks()` | Scansiona `/pluginPages/`, rimuove symlink rotti, orfani o di plugin disattivati. Chiamato automaticamente in `initialize()` |
+
+   **Comportamento al boot (auto-cleanup):**
+   - Crea automaticamente la directory `/pluginPages/` se assente
+   - Rimuove symlink che puntano a path inesistenti
+   - Rimuove symlink di plugin non più attivi
+   - Se in `/pluginPages/{pluginName}` esiste un file/dir regolare (non symlink): logga errore e **non** crea il symlink (no overwrite)
 
 2. **themeSys Extensions** (`/core/themeSys.js`)
    - `extractPluginContext(filePath)` - Auto-detection
