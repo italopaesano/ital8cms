@@ -10,14 +10,14 @@ const path = require('path');
 const fs = require('fs');
 
 // Mock loadJson5 prima di importare il modulo
-jest.mock('../../../core/loadJson5', () => jest.fn());
-const loadJson5 = require('../../../core/loadJson5');
+jest.mock('../../../../core/loadJson5', () => jest.fn());
+const loadJson5 = require('../../../../core/loadJson5');
 
-const navbarRenderer = require('../../../plugins/bootstrapNavbar/lib/navbarRenderer');
+const navbarRenderer = require('../../lib/navbarRenderer');
 
 // ─── Costanti di test ─────────────────────────────────────────────────────────
 
-const PROJECT_ROOT = path.resolve(__dirname, '../../..');
+const PROJECT_ROOT = path.resolve(__dirname, '../../../..');
 const SERVING_PATHS = {
   wwwPath: '/www',
   pluginPagesPath: '/pluginPages',
