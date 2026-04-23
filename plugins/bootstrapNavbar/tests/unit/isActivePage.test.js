@@ -6,7 +6,7 @@
  * con fallback a comparazione stringa semplice.
  */
 
-const { isActivePage } = require('../../../plugins/bootstrapNavbar/lib/navbarRenderer');
+const { isActivePage } = require('../../lib/navbarRenderer');
 
 describe('isActivePage', () => {
 

@@ -5,7 +5,7 @@
  * Ordine di priorita: showWhen → requiresAuth → allowedRoles
  */
 
-const { isItemVisible } = require('../../../plugins/bootstrapNavbar/lib/navbarRenderer');
+const { isItemVisible } = require('../../lib/navbarRenderer');
 
 // ─── Helper per creare ctx ──────────────────────────────────────────────────
 

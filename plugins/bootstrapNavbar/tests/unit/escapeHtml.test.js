@@ -5,7 +5,7 @@
  * Testata direttamente (esportata da navbarRenderer.js).
  */
 
-const { escapeHtml } = require('../../../plugins/bootstrapNavbar/lib/navbarRenderer');
+const { escapeHtml } = require('../../lib/navbarRenderer');
 
 describe('escapeHtml', () => {
 

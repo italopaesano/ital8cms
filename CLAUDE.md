@@ -4882,6 +4882,205 @@ tests/unit/myPlugin/
 - E2E test: usano Playwright, serviti dalla directory `tests/www/` (MAI dalla `/www/` di produzione)
 - Ogni test deve essere indipendente e non modificare file permanentemente
 
+## Testing Conventions for Plugins and Themes
+
+### Overview
+
+Oltre ai test del core in `/tests/`, **ogni plugin e ogni tema può dichiarare i propri test** in una cartella dedicata. Jest li rileva automaticamente e li esegue come parte della suite complessiva.
+
+**Principi:**
+- ✅ **Co-locazione:** i test stanno vicino al codice che testano, nella stessa directory del plugin/tema
+- ✅ **Zero configurazione:** basta creare la cartella `tests/` — Jest la trova automaticamente via pattern globale
+- ✅ **Filtraggio plugin inattivi:** i test di plugin con `active: 0` vengono esclusi automaticamente
+- ✅ **Helper condivisi:** mock factories e utilities in `/core/testHelpers/` per evitare duplicazione
+- ✅ **Isolamento filesystem:** i test che scrivono su disco usano `createPluginSandbox()` (mai nella cartella reale del plugin)
+
+### Directory structure
+
+```
+plugins/myPlugin/
+├── main.js
+├── pluginConfig.json5
+├── pluginDescription.json5
+└── tests/                     # ⭐ scoperta automatica da Jest
+    ├── unit/                  # test di funzioni pure esportate
+    │   └── feature.test.js
+    ├── integration/           # test end-to-end (opzionale)
+    │   └── lifecycle.test.js
+    └── fixtures/              # fixtures locali del plugin
+        └── sampleConfig.json5
+```
+
+Stessa struttura per i temi in `themes/myTheme/tests/`.
+
+### File naming
+
+- Test: `*.test.js` o `*.spec.js` (match Jest standard)
+- Fixtures: qualsiasi nome, tipicamente `.json5` per coerenza con il resto del progetto
+
+### Shared Test Helpers (`/core/testHelpers/`)
+
+Gli helper condivisi sono disponibili come modulo importabile. Tutti gli export sono accessibili via l'entry point `index.js`:
+
+```javascript
+const {
+  createCtxMock,
+  createPluginSysMock,
+  createThemeSysMock,
+  createAdminSystemMock,
+  runRoute,
+  runMiddleware,
+  runPageHook,
+  validateRoute,
+  loadFixture,
+  createPluginSandbox
+} = require('../../../core/testHelpers');
+```
+
+**Path relativo** da un file `plugins/myPlugin/tests/unit/foo.test.js`: `../../../core/testHelpers`.
+
+#### Mock Factories
+
+| Factory | Scopo | Parametri principali |
+|---------|-------|----------------------|
+| `createCtxMock(options)` | Mock del context Koa | `method`, `path`, `query`, `body`, `session`, `headers`, `state` |
+| `createPluginSysMock(options)` | Mock del PluginSys | `sharedObjects`, `plugins`, `hookReturns`, `themeSys`, `globalFunctions` |
+| `createThemeSysMock(options)` | Mock del ThemeSys wrapper | `publicTheme`, `adminTheme`, `customizations`, `getThemePartPath` |
+| `createAdminSystemMock(options)` | Mock dell'AdminSystem | `ui`, `menuSections`, `services`, `endpoints` |
+
+Tutti i metodi restituiti sono `jest.fn()` — permettono asserzioni come `expect(mock.hookPage).toHaveBeenCalledWith(...)`.
+
+#### Runners
+
+| Runner | Scopo |
+|--------|-------|
+| `runRoute(route, ctx)` | Valida struttura rotta (method, path, access, handler) ed esegue handler |
+| `runMiddleware(middleware, ctx, next?)` | Esegue un middleware; se `next` omesso viene creato come `jest.fn()` |
+| `runPageHook(plugin, section, passData, pluginSys?, pathPluginFolder?)` | Esegue `getHooksPage()` del plugin per una sezione |
+| `validateRoute(route)` | Ritorna array di problemi senza eseguire l'handler |
+
+#### Utilities
+
+| Utility | Scopo |
+|---------|-------|
+| `loadFixture(name)` | Carica una fixture JSON5 da `/core/testHelpers/fixtures/` (condivisa tra più plugin) |
+| `createPluginSandbox(pluginName, options)` | Crea dir temporanea in `os.tmpdir()` con scaffolding plugin |
+
+### Filesystem isolation (`createPluginSandbox`)
+
+**REGOLA CRITICA:** i test **NON devono mai scrivere** dentro la cartella reale del plugin (es. `plugins/myPlugin/data.json5`). Questo contaminerebbe l'ambiente di sviluppo e rompererebbe il determinismo dei test.
+
+Usare sempre `createPluginSandbox()` per operazioni su filesystem:
+
+```javascript
+const { createPluginSandbox } = require('../../../core/testHelpers');
+
+describe('myPlugin file operations', () => {
+  let sandbox;
+
+  beforeEach(() => {
+    sandbox = createPluginSandbox('myPlugin', {
+      pluginConfig: { custom: { setting: 'value' } },
+      withPluginPages: true,
+      withAdminSections: ['mySection']
+    });
+  });
+
+  afterEach(() => {
+    sandbox.cleanup();
+  });
+
+  test('writes data file', () => {
+    sandbox.writeJson5('data.json5', { items: [1, 2, 3] });
+    expect(sandbox.exists('data.json5')).toBe(true);
+    const content = sandbox.readFile('data.json5');
+    expect(content).toContain('items');
+  });
+});
+```
+
+**API del sandbox:**
+- `sandbox.path` — path assoluto della directory plugin isolata
+- `sandbox.pluginConfigPath`, `sandbox.pluginDescriptionPath` — path ai file generati
+- `sandbox.writeFile(relativePath, content)` — scrive file arbitrario
+- `sandbox.writeJson5(relativePath, obj)` — scrive file JSON5 con header standard
+- `sandbox.readFile(relativePath)` / `sandbox.exists(relativePath)`
+- `sandbox.cleanup()` — **sempre** in `afterEach` / `afterAll`
+
+### Comandi npm
+
+Oltre a `npm test` che esegue tutto, sono disponibili script per filtrare per scope:
+
+```bash
+# Tutto: core + plugin + temi (quelli attivi)
+npm test
+
+# Solo core del progetto (tests/unit/ e tests/integration/)
+npm run test:core
+
+# Solo un plugin specifico
+npm run test:plugin --plugin=bootstrapNavbar
+
+# Solo i temi
+npm run test:themes
+```
+
+**Nota:** `test:plugin` richiede il flag `--plugin=<nomePlugin>`. Il wrapper (`scripts/testRunner.js`) controlla che il plugin esista e emette un warning se la cartella `tests/` è assente.
+
+### Contratto di qualità (consigliato, Fase 1)
+
+In Fase 1 il contratto è **descrittivo**. Un plugin "ben testato" dovrebbe avere:
+- Un test unitario per ogni metodo pubblico esportato da `main.js` (`loadPlugin`, `getRouteArray`, `getHooksPage`, ecc.)
+- Un test per ogni rotta dichiarata in `getRouteArray()`, incluso il rispetto del contratto `access` (`requiresAuth`, `allowedRoles`)
+- Validazione della struttura di `pluginConfig.json5` e `pluginDescription.json5`
+- Coverage dei lifecycle hooks (`installPlugin`, `uninstallPlugin`, `upgradePlugin` se implementati)
+
+Per i temi:
+- Presenza dei partial richiesti (`head`, `header`, `nav`, `main`, `aside`, `footer`)
+- Validità sintattica dei file `.ejs` (parse-only)
+- Validazione di `themeConfig.json5`
+- Correttezza delle chiamate a `pluginSys.hookPage()`
+
+**Fase 2 (futura):** il contratto diventerà **prescrittivo** con uno scanner al boot del server in `pluginSys` che verifica automaticamente la presenza dei test minimi e emette warning (o fatal error se `testingStrictMode: true`). Vedi sezione "Future Improvements".
+
+### Esempio di riferimento: bootstrapNavbar
+
+Il plugin `bootstrapNavbar` è stato migrato alla nuova convenzione ed è l'**esempio ufficiale** da consultare:
+
+```
+plugins/bootstrapNavbar/tests/unit/
+├── escapeHtml.test.js      # test funzione pura XSS sanitization
+├── isActivePage.test.js    # test detection pagina attiva
+├── isItemVisible.test.js   # test filtri visibilità auth/role
+├── configDir.test.js       # test risoluzione configDir
+└── rendering.test.js       # test pipeline completa di rendering
+```
+
+**5 file di test, 187 test, 100% pass rate.**
+
+Eseguibile con: `npm run test:plugin --plugin=bootstrapNavbar`
+
+### Come Jest filtra i plugin/temi inattivi
+
+Il file `tests/jest.config.js` legge all'avvio tutti i `pluginConfig.json5` e `themeConfig.json5`, e aggiunge dinamicamente a `testPathIgnorePatterns` i path dei plugin/temi con `active: 0`. Disattivando un plugin nel config, i suoi test vengono saltati automaticamente senza modifiche al codice.
+
+### Reference files
+
+| File | Scopo |
+|------|-------|
+| `/core/testHelpers/index.js` | Entry point, re-export di tutti gli helper |
+| `/core/testHelpers/pluginSysMock.js` | Factory `createPluginSysMock` |
+| `/core/testHelpers/ctxMock.js` | Factory `createCtxMock` |
+| `/core/testHelpers/themeSysMock.js` | Factory `createThemeSysMock` |
+| `/core/testHelpers/adminSystemMock.js` | Factory `createAdminSystemMock` |
+| `/core/testHelpers/routeRunner.js` | `runRoute`, `validateRoute` |
+| `/core/testHelpers/middlewareRunner.js` | `runMiddleware` |
+| `/core/testHelpers/hooksPageRunner.js` | `runPageHook` |
+| `/core/testHelpers/fixtureLoader.js` | `loadFixture` per fixtures condivise |
+| `/core/testHelpers/pluginSandbox.js` | `createPluginSandbox` per isolamento FS |
+| `/scripts/testRunner.js` | Wrapper per `test:core`, `test:plugin`, `test:themes` |
+| `/tests/jest.config.js` | Config Jest con filtro plugin/temi inattivi |
+
 ## Deployment Guidelines
 
 ### Pre-Production Checklist
@@ -5111,17 +5310,21 @@ Launch configuration (`.vscode/launch.json`):
 
 Based on the codebase analysis, consider these enhancements:
 
-1. **Testing:** Add Jest/Mocha for unit and integration tests
-2. **TypeScript:** Migrate to TypeScript for type safety
-3. **Environment Variables:** Use .env for configuration
-4. **Database Migrations:** Implement migration system for schema changes
-5. **API Documentation:** Add Swagger/OpenAPI documentation
-6. **Error Handling:** Centralized error handling middleware
-7. **Logging:** Structured logging (Winston, Bunyan)
-8. **Validation:** Request validation library (Joi, Yup)
-9. **Build Process:** Frontend asset bundling (webpack, esbuild)
-10. **Internationalization:** i18n support for multiple languages
-11. **Plugin Cleanup on Shutdown:** Il graceful shutdown attuale (`index.js`) chiude solo i server HTTP/HTTPS. In futuro valutare l'aggiunta di una fase di cleanup dei plugin prima della chiusura dei server (flush dati su disco, chiusura connessioni DB, rilascio risorse, ecc.). Attualmente ogni plugin gestisce il proprio cleanup in modo indipendente (es. `urlRedirect/hitCounter.js` ha i propri handler `SIGINT`/`SIGTERM`), ma un sistema centralizzato coordinato da `pluginSys` sarebbe più robusto e garantirebbe un ordine di chiusura corretto.
+1. **TypeScript:** Migrate to TypeScript for type safety
+2. **Environment Variables:** Use .env for configuration
+3. **Database Migrations:** Implement migration system for schema changes
+4. **API Documentation:** Add Swagger/OpenAPI documentation
+5. **Error Handling:** Centralized error handling middleware
+6. **Logging:** Structured logging (Winston, Bunyan)
+7. **Validation:** Request validation library (Joi, Yup)
+8. **Build Process:** Frontend asset bundling (webpack, esbuild)
+9. **Internationalization:** i18n support for multiple languages
+10. **Plugin Cleanup on Shutdown:** Il graceful shutdown attuale (`index.js`) chiude solo i server HTTP/HTTPS. In futuro valutare l'aggiunta di una fase di cleanup dei plugin prima della chiusura dei server (flush dati su disco, chiusura connessioni DB, rilascio risorse, ecc.). Attualmente ogni plugin gestisce il proprio cleanup in modo indipendente (es. `urlRedirect/hitCounter.js` ha i propri handler `SIGINT`/`SIGTERM`), ma un sistema centralizzato coordinato da `pluginSys` sarebbe più robusto e garantirebbe un ordine di chiusura corretto.
+11. **Migrazione completa test plugin-specifici:** I test specifici dei plugin attualmente in `/tests/unit/{pluginName}/` (es. `bootstrapNavbar`, `urlRedirect`, `adminBootstrapNavbar`) dovrebbero essere migrati nelle rispettive cartelle `plugins/{pluginName}/tests/` secondo la convenzione "Testing Conventions for Plugins and Themes". In Fase 1 è stato migrato solo `bootstrapNavbar` come esempio di riferimento — gli altri vanno portati sulla stessa convenzione per completezza.
+12. **Supporto E2E/Playwright per plugin e temi:** Attualmente solo unit e integration test dei plugin/temi sono scoperti automaticamente via `plugins/*/tests/` e `themes/*/tests/`. In futuro estendere la convenzione per includere test E2E con orchestrazione del server (setup/teardown automatico, fixtures condivise, helper per login programmatico, ecc.).
+13. **Soglia minima di coverage con enforcement:** Aggiungere in `jest.config.js` una soglia minima di code coverage (es. 70% su branches, statements, functions, lines) con fail della CI se non raggiunta. Deve essere calcolata in modo aggregato (core + tutti i plugin attivi + tutti i temi).
+14. **Scanner prescrittivo al boot (Fase 2 del testing):** Aggiungere in `pluginSys` uno scanner che al boot del server verifica per ogni plugin attivo la presenza dei test minimi richiesti: (a) un test per ogni metodo esportato da `main.js`, (b) un test per ogni rotta dichiarata in `getRouteArray()` incluso il campo `access`, (c) validazione dei file JSON5 di configurazione, (d) lifecycle hooks (`loadPlugin`, `installPlugin`, ecc.). Comportamento default: warning a console. Flag `testingStrictMode: true` in `ital8Config.json5` per promuovere i warning a fatal error. Lo stesso vale per i temi (presenza partial richiesti, schema `themeConfig.json5`, ecc.).
+15. **Safety net filesystem nei test:** Aggiungere in `tests/setup.js` un hook `afterEach`/`afterAll` che verifichi che nessun test abbia creato/modificato file all'interno di `plugins/*/` o `themes/*/` reali (solo la `/core/testHelpers/pluginSandbox.js` dovrebbe essere usata per scritture). In Fase 1 è solo una convenzione documentata; in futuro diventare warning automatico e poi fatal error con `testingStrictMode: true`.
 
 ## Quick Reference Commands
 
