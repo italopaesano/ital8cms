@@ -5111,17 +5111,21 @@ Launch configuration (`.vscode/launch.json`):
 
 Based on the codebase analysis, consider these enhancements:
 
-1. **Testing:** Add Jest/Mocha for unit and integration tests
-2. **TypeScript:** Migrate to TypeScript for type safety
-3. **Environment Variables:** Use .env for configuration
-4. **Database Migrations:** Implement migration system for schema changes
-5. **API Documentation:** Add Swagger/OpenAPI documentation
-6. **Error Handling:** Centralized error handling middleware
-7. **Logging:** Structured logging (Winston, Bunyan)
-8. **Validation:** Request validation library (Joi, Yup)
-9. **Build Process:** Frontend asset bundling (webpack, esbuild)
-10. **Internationalization:** i18n support for multiple languages
-11. **Plugin Cleanup on Shutdown:** Il graceful shutdown attuale (`index.js`) chiude solo i server HTTP/HTTPS. In futuro valutare l'aggiunta di una fase di cleanup dei plugin prima della chiusura dei server (flush dati su disco, chiusura connessioni DB, rilascio risorse, ecc.). Attualmente ogni plugin gestisce il proprio cleanup in modo indipendente (es. `urlRedirect/hitCounter.js` ha i propri handler `SIGINT`/`SIGTERM`), ma un sistema centralizzato coordinato da `pluginSys` sarebbe più robusto e garantirebbe un ordine di chiusura corretto.
+1. **TypeScript:** Migrate to TypeScript for type safety
+2. **Environment Variables:** Use .env for configuration
+3. **Database Migrations:** Implement migration system for schema changes
+4. **API Documentation:** Add Swagger/OpenAPI documentation
+5. **Error Handling:** Centralized error handling middleware
+6. **Logging:** Structured logging (Winston, Bunyan)
+7. **Validation:** Request validation library (Joi, Yup)
+8. **Build Process:** Frontend asset bundling (webpack, esbuild)
+9. **Internationalization:** i18n support for multiple languages
+10. **Plugin Cleanup on Shutdown:** Il graceful shutdown attuale (`index.js`) chiude solo i server HTTP/HTTPS. In futuro valutare l'aggiunta di una fase di cleanup dei plugin prima della chiusura dei server (flush dati su disco, chiusura connessioni DB, rilascio risorse, ecc.). Attualmente ogni plugin gestisce il proprio cleanup in modo indipendente (es. `urlRedirect/hitCounter.js` ha i propri handler `SIGINT`/`SIGTERM`), ma un sistema centralizzato coordinato da `pluginSys` sarebbe più robusto e garantirebbe un ordine di chiusura corretto.
+11. **Migrazione completa test plugin-specifici:** I test specifici dei plugin attualmente in `/tests/unit/{pluginName}/` (es. `bootstrapNavbar`, `urlRedirect`, `adminBootstrapNavbar`) dovrebbero essere migrati nelle rispettive cartelle `plugins/{pluginName}/tests/` secondo la convenzione "Testing Conventions for Plugins and Themes". In Fase 1 è stato migrato solo `bootstrapNavbar` come esempio di riferimento — gli altri vanno portati sulla stessa convenzione per completezza.
+12. **Supporto E2E/Playwright per plugin e temi:** Attualmente solo unit e integration test dei plugin/temi sono scoperti automaticamente via `plugins/*/tests/` e `themes/*/tests/`. In futuro estendere la convenzione per includere test E2E con orchestrazione del server (setup/teardown automatico, fixtures condivise, helper per login programmatico, ecc.).
+13. **Soglia minima di coverage con enforcement:** Aggiungere in `jest.config.js` una soglia minima di code coverage (es. 70% su branches, statements, functions, lines) con fail della CI se non raggiunta. Deve essere calcolata in modo aggregato (core + tutti i plugin attivi + tutti i temi).
+14. **Scanner prescrittivo al boot (Fase 2 del testing):** Aggiungere in `pluginSys` uno scanner che al boot del server verifica per ogni plugin attivo la presenza dei test minimi richiesti: (a) un test per ogni metodo esportato da `main.js`, (b) un test per ogni rotta dichiarata in `getRouteArray()` incluso il campo `access`, (c) validazione dei file JSON5 di configurazione, (d) lifecycle hooks (`loadPlugin`, `installPlugin`, ecc.). Comportamento default: warning a console. Flag `testingStrictMode: true` in `ital8Config.json5` per promuovere i warning a fatal error. Lo stesso vale per i temi (presenza partial richiesti, schema `themeConfig.json5`, ecc.).
+15. **Safety net filesystem nei test:** Aggiungere in `tests/setup.js` un hook `afterEach`/`afterAll` che verifichi che nessun test abbia creato/modificato file all'interno di `plugins/*/` o `themes/*/` reali (solo la `/core/testHelpers/pluginSandbox.js` dovrebbe essere usata per scritture). In Fase 1 è solo una convenzione documentata; in futuro diventare warning automatico e poi fatal error con `testingStrictMode: true`.
 
 ## Quick Reference Commands
 
