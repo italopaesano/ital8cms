@@ -5382,11 +5382,77 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2026-03-26
-**Version:** 2.7.0
+**Last Updated:** 2026-04-24
+**Version:** 2.8.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v2.8.0 (2026-04-24): **TESTING INFRASTRUCTURE + DEPS** - Testing conventions for plugins and themes, shared test helpers, per-scope test runner, test platform upgrade, missing dependency fix. Key changes:
+  - **New convention: Testing Conventions for Plugins and Themes**
+    - Plugins e temi possono ora dichiarare i propri test in `plugins/<name>/tests/` e `themes/<name>/tests/`
+    - Struttura standard: `unit/`, `integration/`, `fixtures/`
+    - Scoperta automatica via pattern Jest `**/tests/**/*.test.js`
+    - Contratto di qualità in Fase 1: descrittivo (linee guida), enforcement prescrittivo rimandato alla Fase 2
+    - Sezione completa in CLAUDE.md: API helper, best practices, esempio di riferimento
+  - **Shared test helpers in `/core/testHelpers/`**
+    - Mock factories: `createPluginSysMock`, `createCtxMock`, `createThemeSysMock`, `createAdminSystemMock`
+    - Runners: `runRoute` (con validazione struttura), `runMiddleware`, `runPageHook`, `validateRoute`
+    - Utilities: `loadFixture` (per fixtures JSON5 condivise), `createPluginSandbox` (per isolamento filesystem via `os.tmpdir()`)
+    - Entry point `index.js` per import sintetico
+  - **Jest config: filter inactive plugins/themes**
+    - `tests/jest.config.js` ora legge al boot tutti i `pluginConfig.json5` e `themeConfig.json5`
+    - Aggiunge dinamicamente a `testPathIgnorePatterns` i path di plugin/temi con `active: 0`
+    - Consistente con il filtro già applicato da `pluginSys` al runtime
+  - **New script: `scripts/testRunner.js`**
+    - Wrapper Jest con flag di scope mutuamente esclusivi: `--plugin=<name>`, `--themes`, `--core`
+    - Validazione argomenti, warning se plugin senza cartella `tests/`
+    - Usa `--passWithNoTests` per `--themes` e `--plugin` (expected empty in Fase 1)
+  - **New npm scripts:**
+    - `test:core` - solo `tests/unit/` e `tests/integration/` (core del progetto)
+    - `test:plugin --plugin=<name>` - solo test di un plugin specifico
+    - `test:themes` - solo test dei temi (nessuno attualmente)
+  - **Migration: bootstrapNavbar tests (esempio di riferimento)**
+    - Spostati 5 file da `tests/unit/bootstrapNavbar/` a `plugins/bootstrapNavbar/tests/unit/`
+    - 187 test, 5 suite, 100% pass rate
+    - Aggiornati tutti i path di import (relative paths, `jest.mock`, `PROJECT_ROOT`)
+  - **Deps:**
+    - `jest` aggiornato da 30.2.0 a 30.3.0 (patch all'interno di Jest 30.x)
+    - `@playwright/test` aggiornato da 1.57.0 a 1.59.1 (minor all'interno di 1.x)
+    - `nodemailer` aggiunto come dependency (^8.0.6) — era dichiarato dal plugin `mailer` ma mai installato a livello root
+  - **Fixes:**
+    - `--testPathPattern` → `--testPathPatterns` in `test:unit` e `test:integration` (Jest 30 ha rinominato il flag)
+    - Risolto load failure in 4 suite integration che caricavano tutti i plugin (conseguenza del mancato install di nodemailer)
+  - **Files Added:**
+    - `/core/testHelpers/index.js` — Entry point, re-export helper
+    - `/core/testHelpers/pluginSysMock.js` — Factory `createPluginSysMock`
+    - `/core/testHelpers/ctxMock.js` — Factory `createCtxMock`
+    - `/core/testHelpers/themeSysMock.js` — Factory `createThemeSysMock`
+    - `/core/testHelpers/adminSystemMock.js` — Factory `createAdminSystemMock`
+    - `/core/testHelpers/routeRunner.js` — `runRoute`, `validateRoute`
+    - `/core/testHelpers/middlewareRunner.js` — `runMiddleware`
+    - `/core/testHelpers/hooksPageRunner.js` — `runPageHook`
+    - `/core/testHelpers/fixtureLoader.js` — `loadFixture`
+    - `/core/testHelpers/pluginSandbox.js` — `createPluginSandbox`
+    - `/core/testHelpers/fixtures/.gitkeep` — Placeholder per fixtures condivise
+    - `/scripts/testRunner.js` — Wrapper Jest per scope `--plugin`, `--themes`, `--core`
+    - `/plugins/bootstrapNavbar/tests/unit/*.test.js` — 5 file migrati (187 test)
+  - **Files Modified:**
+    - `/tests/jest.config.js` — Filtro dinamico per plugin/temi inattivi
+    - `/package.json` — 3 nuovi script (test:core, test:plugin, test:themes), fix --testPathPatterns, upgrade jest/playwright, aggiunta nodemailer
+    - `/CLAUDE.md` — Nuova sezione "Testing Conventions for Plugins and Themes" + 5 voci in "Future Improvements"
+  - **Files Removed:**
+    - `/tests/unit/bootstrapNavbar/` — Cartella rimossa, contenuto migrato in `plugins/bootstrapNavbar/tests/unit/`
+  - **Future Improvements aggiunti (5 voci):**
+    - Migrazione completa test plugin-specifici residui (`urlRedirect`, `adminBootstrapNavbar`)
+    - Supporto E2E/Playwright per plugin e temi
+    - Soglia minima coverage con enforcement CI
+    - Scanner prescrittivo al boot di `pluginSys` (Fase 2 del testing)
+    - Safety net filesystem nei test (Fase 2)
+  - **Verifica finale:**
+    - `npm test` (suite completa): 47 suite, 1776 test, 100% pass rate
+    - `npm run test:plugin --plugin=bootstrapNavbar`: 5 suite, 187 test, 100% pass rate
+    - `npm run test:themes`: 0 test trovati, exit 0 (expected in Fase 1)
+    - `npm run test:core`: 47 suite, 1776 test, 100% pass rate
 - v2.7.0 (2026-03-26): **NEW PLUGIN + CORE ENHANCEMENTS** - SEO plugin + core improvements. Key changes:
   - **New plugin: `seo`**
     - Meta tags injection via hookPage("head"): description, keywords, robots
