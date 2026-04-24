@@ -9,8 +9,8 @@
     "test": "node scripts/checkNixShell.js && jest --config=tests/jest.config.js && npx playwright test --config=tests/playwright.config.js",
     "test:watch": "jest --config=tests/jest.config.js --watch",
     "test:coverage": "jest --config=tests/jest.config.js --coverage",
-    "test:unit": "jest --config=tests/jest.config.js --testPathPattern=tests/unit",
-    "test:integration": "jest --config=tests/jest.config.js --testPathPattern=tests/integration",
+    "test:unit": "jest --config=tests/jest.config.js --testPathPatterns=tests/unit",
+    "test:integration": "jest --config=tests/jest.config.js --testPathPatterns=tests/integration",
     "test:plugin": "node scripts/checkNixShell.js && node scripts/testRunner.js --plugin=$npm_config_plugin",
     "test:themes": "node scripts/checkNixShell.js && node scripts/testRunner.js --themes",
     "test:core": "node scripts/checkNixShell.js && node scripts/testRunner.js --core",
@@ -41,6 +41,7 @@
     "koa-classic-server": "^2.6.1",
     "koa-session": "^7.0.2",
     "multer": "^2.1.1",
+    "nodemailer": "^8.0.6",
     "nodemon": "^3.0.1",
     "semver": "^7.5.4"
   },
