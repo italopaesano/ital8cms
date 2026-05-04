@@ -5,6 +5,7 @@ const semver = require('semver');
 const logger = require('./logger');
 const loadJson5 = require('./loadJson5');
 const saveJson5 = require('./saveJson5');
+const editJson5 = require('./editJson5');
 
 class pluginSys{
 
@@ -70,9 +71,10 @@ class pluginSys{
           pluginConfig.isInstalled = 1;//ora devo aggiornare pluginConfig.json5 settando isInstalled = 1
           // plugin.pluginConfig è già impostato sopra (linea 43)
 
-          // scrivo il nuovo file pluginConfig.json5 con la variabile isInstalled aggiornata correttamente
-          // IMPORTANTE: Usa saveJson5() per preservare il formato JSON5 con commenti
-          saveJson5(path.join(__dirname, '..', 'plugins', pluginName, 'pluginConfig.json5'), pluginConfig)
+          // Aggiorno il flag nel file via editJson5: edit-by-position chirurgico
+          // che preserva commenti, trailing comma, formattazione e tutto il
+          // resto del file (saveJson5 con un oggetto avrebbe perso i commenti).
+          editJson5(path.join(__dirname, '..', 'plugins', pluginName, 'pluginConfig.json5'), 'isInstalled', 1)
           .catch( (error) => {
             logger.error('pluginSys', `Errore scrittura pluginConfig.json5 per ${pluginName}`, error);
           });
