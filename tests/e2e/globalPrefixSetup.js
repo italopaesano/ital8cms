@@ -39,15 +39,16 @@ module.exports = async function globalPrefixSetup() {
   fs.writeFileSync(BACKUP_PATH, originalContent, 'utf8');
 
   // 2. Apply edits via editJson5 — preserves comments/formatting of every
-  // part of the config NOT touched. Top-level scalars edit cleanly; the
-  // nested https.enabled is handled by replacing the whole "https" block.
+  // part of the config NOT touched. The nested-path API targets the `enabled`
+  // leaf inside the https block surgically, leaving the block's inner comments
+  // intact.
   await editJson5(CONFIG_PATH, 'globalPrefix', prefix);
   await editJson5(CONFIG_PATH, 'httpPort', httpPort);
   await editJson5(CONFIG_PATH, 'wwwPath', TEST_WWW_PATH);
 
   const currentConfig = json5.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-  if (currentConfig.https) {
-    await editJson5(CONFIG_PATH, 'https', { ...currentConfig.https, enabled: false });
+  if (currentConfig.https && Object.prototype.hasOwnProperty.call(currentConfig.https, 'enabled')) {
+    await editJson5(CONFIG_PATH, ['https', 'enabled'], false);
   }
   console.log(`[Prefix Setup] Config modified: globalPrefix="${prefix}", httpPort=${httpPort}, https=disabled, wwwPath=${TEST_WWW_PATH}`);
 

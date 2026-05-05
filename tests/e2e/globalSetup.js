@@ -45,19 +45,20 @@ module.exports = async function globalSetup() {
   fs.writeFileSync(configBackupPath, originalConfigContent, 'utf8');
 
   // Apply override edits via editJson5 — this preserves comments, formatting,
-  // and trailing commas of every part of ital8Config.json5 NOT being modified.
-  // Top-level scalar edits preserve everything; the nested https.enabled is
-  // handled by replacing the whole "https" block (its internal comments are
-  // lost, but everything outside the block remains intact).
+  // and trailing commas of every part of ital8Config.json5 NOT being modified,
+  // including the nested https block (comments inside it survive thanks to
+  // the array-path API which surgically targets only the `enabled` leaf).
   await editJson5(CONFIG_PATH, 'activeTheme', 'themeForTesting');
   await editJson5(CONFIG_PATH, 'adminActiveTheme', 'themeForTestingAdmin');
   await editJson5(CONFIG_PATH, 'wwwPath', TEST_WWW_PATH);
   await editJson5(CONFIG_PATH, 'httpPort', E2E_TEST_HTTP_PORT);
 
-  // Disabilita HTTPS: leggi blocco corrente, modifica enabled, sostituisci.
+  // Disable HTTPS: nested-path edit (preserves all comments inside `https`).
+  // editJson5 throws if the path doesn't exist; check the parsed object first
+  // so config files without an https block don't break the setup.
   const currentConfig = json5.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-  if (currentConfig.https) {
-    await editJson5(CONFIG_PATH, 'https', { ...currentConfig.https, enabled: false });
+  if (currentConfig.https && Object.prototype.hasOwnProperty.call(currentConfig.https, 'enabled')) {
+    await editJson5(CONFIG_PATH, ['https', 'enabled'], false);
   }
 
   console.log(`[Test Setup] Themes: themeForTesting / themeForTestingAdmin`);

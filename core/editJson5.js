@@ -1,38 +1,47 @@
 /**
  * editJson5 — Edit-by-position editor for JSON5 files.
  *
- * Modifies a single top-level field in a .json5 file while preserving all
- * comments, trailing commas, formatting, and other JSON5 features outside the
- * modified field.
+ * Modifies a single field (top-level or nested) in a .json5 file while
+ * preserving all comments, trailing commas, formatting, and other JSON5
+ * features outside the modified field.
  *
  * Approach:
- *   1. Parse the file with json5 to validate it and confirm the field exists.
+ *   1. Parse the file with json5 to validate it and confirm the path exists.
  *   2. Pre-scan the source to identify code regions vs. strings/comments.
- *   3. Locate the field's key + value at root depth (depth=1).
+ *   3. Walk the path step by step, locating each segment within its parent's
+ *      value range, until the leaf is found.
  *   4. Replace the matched key+value with the normalized form
  *      `"fieldName": <newValue>` where newValue is JSON-serialized.
- *   5. Validate the result by re-parsing with json5 and comparing the field.
+ *   5. Validate the result by re-parsing with json5 and comparing the value
+ *      at the path.
  *   6. Write atomically via saveJson5(path, rawString).
  *
- * Scope (v2):
- *   - Field must already exist at the root level. No creation of new fields.
- *   - The OLD value can be any JSON5 value: scalar (number, string, boolean,
- *     null), object, or array.
+ * Scope (v3):
+ *   - Field must already exist at the specified path. No creation of new
+ *     fields (intermediate or leaf).
+ *   - The path can be a string for top-level fields or an array of strings
+ *     for nested paths. Array indexes (e.g., navigating into an array element)
+ *     are not supported.
+ *   - Intermediate path segments must point to plain objects. Arrays and
+ *     scalars are not navigable.
+ *   - The OLD value at the leaf can be any JSON5 value: scalar, object, array.
  *   - The NEW value can be any JSON-serializable value: scalar, object, array.
- *   - When replacing an object/array, comments INSIDE the old value are lost
- *     (the whole block is substituted). Comments outside the field — above,
- *     below, inline after the closing bracket, on sibling fields — are
- *     preserved.
+ *   - When replacing an object/array LEAF, comments INSIDE the old value are
+ *     lost (the whole block is substituted). Comments at any other position
+ *     in the file — including inside ancestor blocks but outside the leaf —
+ *     are preserved.
  *   - Output is normalized for the modified pair only: quoted key, single
  *     space after colon, JSON.stringify for the value with 2-space indent.
- *   - Line indentation and trailing context (commas, comments, braces)
- *     surrounding the field are preserved unchanged.
  *   - Caller is responsible for value-type semantics (no true→1 normalization).
  *
  * Out of scope:
- *   - Nested paths via dotted notation.
- *   - Adding new fields.
- *   - Editing inside arrays/objects (push, splice, set nested key).
+ *   - Adding new fields (intermediate or leaf).
+ *   - Editing inside arrays via index (e.g., path = ['list', 0, 'name']).
+ *   - Editing inside arrays via push/splice.
+ *
+ * API:
+ *   editJson5(filePath, fieldName, newValue)
+ *   editJson5(filePath, ['parent', 'child', ...], newValue)
  *
  * Returns: Promise<{ changed, oldValue, newValue }>
  *   - changed=false if the field already had the requested value (no-op).
@@ -40,8 +49,9 @@
  * Throws on:
  *   - Invalid JSON5 in the source file.
  *   - Root is not a JSON5 object.
- *   - Field not found at root.
- *   - Field appears multiple times at root (duplicate keys).
+ *   - Path not found, or any intermediate segment missing.
+ *   - Any intermediate segment is not a plain object (array or scalar).
+ *   - Any segment appears multiple times at its expected depth (duplicates).
  *   - NEW value is not JSON-serializable (undefined, function, BigInt, etc.).
  *   - Post-edit validation failure (parse error or value mismatch).
  */
@@ -272,14 +282,19 @@ function scanValue(source, mask, start) {
   return -1;
 }
 
-// ── Find all occurrences of a key at root depth (depth=1) ────────────────────
+// ── Find all occurrences of a key inside a region at a given depth ──────────
+//
+// Generalized locator: scans `source[regionStart..regionEnd)` looking for a
+// key matching `fieldName` whose position has `depth[pos] === expectedDepth`.
+// At root, region = whole file and expectedDepth = 1. For nested paths, the
+// region is constrained to the parent block's value range and expectedDepth
+// is incremented at each descent step.
 
-function findKeyOccurrencesAtRoot(source, mask, depth, fieldName) {
+function findKeyOccurrencesInRegion(source, mask, depth, fieldName, regionStart, regionEnd, expectedDepth) {
   const occurrences = [];
-  const n = source.length;
-  let i = 0;
+  let i = regionStart;
 
-  while (i < n) {
+  while (i < regionEnd) {
     if (mask[i] !== 0) { i++; continue; }
 
     let keyStart = -1;
@@ -289,12 +304,12 @@ function findKeyOccurrencesAtRoot(source, mask, depth, fieldName) {
     if (source[i] === '"' || source[i] === "'") {
       const quote = source[i];
       let j = i + 1;
-      while (j < n) {
-        if (source[j] === '\\' && j + 1 < n) { j += 2; continue; }
+      while (j < regionEnd) {
+        if (source[j] === '\\' && j + 1 < regionEnd) { j += 2; continue; }
         if (source[j] === quote) break;
         j++;
       }
-      if (j >= n) { i++; continue; } // unterminated
+      if (j >= regionEnd) { i++; continue; } // unterminated within region
       const content = source.substring(i + 1, j);
       if (content === fieldName) {
         keyStart = i;
@@ -307,7 +322,7 @@ function findKeyOccurrencesAtRoot(source, mask, depth, fieldName) {
     // Unquoted identifier (JSON5)
     else if (/[A-Za-z_$]/.test(source[i])) {
       let j = i;
-      while (j < n && mask[j] === 0 && /[A-Za-z0-9_$]/.test(source[j])) j++;
+      while (j < regionEnd && mask[j] === 0 && /[A-Za-z0-9_$]/.test(source[j])) j++;
       const ident = source.substring(i, j);
       if (ident === fieldName) {
         keyStart = i;
@@ -321,14 +336,15 @@ function findKeyOccurrencesAtRoot(source, mask, depth, fieldName) {
       continue;
     }
 
-    // Must be at root depth (depth=1 = inside the root object)
-    if (depth[keyStart] !== 1) {
+    // Must be at the expected depth (filter out matches at deeper nesting)
+    if (depth[keyStart] !== expectedDepth) {
       i = keyEnd;
       continue;
     }
 
     // Position context: must be preceded (after ws/comments) by `{` or `,`,
-    // ruling out occurrences in unexpected positions.
+    // ruling out occurrences in unexpected positions (e.g. inside array
+    // literals, after a stray identifier, etc.).
     const prev = skipWsAndCommentsBackward(source, mask, keyStart - 1);
     if (prev < 0 || (source[prev] !== '{' && source[prev] !== ',')) {
       i = keyEnd;
@@ -337,24 +353,24 @@ function findKeyOccurrencesAtRoot(source, mask, depth, fieldName) {
 
     // Find colon
     const colonPos = skipWsAndCommentsForward(source, mask, keyEnd);
-    if (colonPos >= n || source[colonPos] !== ':') {
+    if (colonPos >= regionEnd || source[colonPos] !== ':') {
       i = keyEnd;
       continue;
     }
 
     // Find value start
     const valueStart = skipWsAndCommentsForward(source, mask, colonPos + 1);
-    if (valueStart >= n) {
+    if (valueStart >= regionEnd) {
       i = keyEnd;
       continue;
     }
 
     // Scan value (scalar, object, or array)
     const valueEnd = scanValue(source, mask, valueStart);
-    if (valueEnd === -1) {
+    if (valueEnd === -1 || valueEnd > regionEnd) {
       throw new Error(
-        `editJson5: field "${fieldName}" found at root but its value could ` +
-        `not be parsed (malformed or unsupported value form)`
+        `editJson5: field "${fieldName}" found at depth ${expectedDepth} but ` +
+        `its value could not be parsed (malformed or unsupported value form)`
       );
     }
 
@@ -363,6 +379,59 @@ function findKeyOccurrencesAtRoot(source, mask, depth, fieldName) {
   }
 
   return occurrences;
+}
+
+// ── Walk a path of segments, returning the leaf occurrence ──────────────────
+
+function locatePath(source, mask, depth, pathSegments, filePath) {
+  let regionStart = 0;
+  let regionEnd = source.length;
+  let expectedDepth = 1;
+  let lastOcc = null;
+
+  for (let step = 0; step < pathSegments.length; step++) {
+    const segment = pathSegments[step];
+    const occs = findKeyOccurrencesInRegion(
+      source, mask, depth, segment, regionStart, regionEnd, expectedDepth
+    );
+
+    if (occs.length === 0) {
+      const pathDesc = pathSegments.slice(0, step + 1).map(s => `"${s}"`).join(' → ');
+      throw new Error(
+        `editJson5: path ${pathDesc} not found in "${filePath}" ` +
+        `(parsed but locator failed — likely an unsupported JSON5 feature)`
+      );
+    }
+    if (occs.length > 1) {
+      const pathDesc = pathSegments.slice(0, step + 1).map(s => `"${s}"`).join(' → ');
+      throw new Error(
+        `editJson5: path ${pathDesc} appears ${occs.length} times in "${filePath}" ` +
+        `(duplicate keys at the same depth). Refusing to edit ambiguously.`
+      );
+    }
+
+    lastOcc = occs[0];
+
+    // Last segment: leaf reached, return its occurrence
+    if (step === pathSegments.length - 1) break;
+
+    // Intermediate: must descend into an object literal
+    const valChar = source[lastOcc.valueStart];
+    if (valChar !== '{') {
+      const pathDesc = pathSegments.slice(0, step + 1).map(s => `"${s}"`).join(' → ');
+      throw new Error(
+        `editJson5: cannot descend into ${pathDesc} in "${filePath}" — ` +
+        `value is not a plain object (arrays and scalars are not navigable)`
+      );
+    }
+
+    // Constrain next iteration to the inside of this object block
+    regionStart = lastOcc.valueStart + 1; // after `{`
+    regionEnd = lastOcc.valueEnd - 1;     // before `}`
+    expectedDepth++;
+  }
+
+  return lastOcc;
 }
 
 // ── Format a JS value for insertion, with proper indentation context ────────
@@ -393,12 +462,33 @@ function formatNewValue(value, baseIndent) {
 
 // ── Main API ─────────────────────────────────────────────────────────────────
 
-async function editJson5(filePath, fieldName, newValue) {
+async function editJson5(filePath, fieldNameOrPath, newValue) {
   if (typeof filePath !== 'string' || filePath.length === 0) {
     throw new Error('editJson5: filePath must be a non-empty string');
   }
-  if (typeof fieldName !== 'string' || fieldName.length === 0) {
-    throw new Error('editJson5: fieldName must be a non-empty string');
+
+  // Normalize fieldName/path argument to an array of segments.
+  let pathSegments;
+  if (typeof fieldNameOrPath === 'string') {
+    if (fieldNameOrPath.length === 0) {
+      throw new Error('editJson5: fieldName must be a non-empty string');
+    }
+    pathSegments = [fieldNameOrPath];
+  } else if (Array.isArray(fieldNameOrPath)) {
+    if (fieldNameOrPath.length === 0) {
+      throw new Error('editJson5: path array must contain at least one segment');
+    }
+    for (const seg of fieldNameOrPath) {
+      if (typeof seg !== 'string' || seg.length === 0) {
+        throw new Error('editJson5: every path segment must be a non-empty string');
+      }
+    }
+    pathSegments = fieldNameOrPath;
+  } else {
+    throw new Error(
+      'editJson5: second argument must be a string (top-level field name) or ' +
+      'an array of strings (nested path)'
+    );
   }
 
   const resolvedPath = path.isAbsolute(filePath)
@@ -407,8 +497,9 @@ async function editJson5(filePath, fieldName, newValue) {
 
   const source = await fs.readFile(resolvedPath, 'utf8');
 
-  // High-level validation: file must be valid JSON5 with a root object that
-  // contains fieldName.
+  // High-level validation: file must be valid JSON5 with a root object, and
+  // every segment of the path must navigate into a plain object until the
+  // leaf is found.
   let parsed;
   try {
     parsed = json5.parse(source);
@@ -422,14 +513,41 @@ async function editJson5(filePath, fieldName, newValue) {
       `editJson5: file "${filePath}" must contain a JSON5 object at the root`
     );
   }
-  if (!Object.prototype.hasOwnProperty.call(parsed, fieldName)) {
-    throw new Error(
-      `editJson5: field "${fieldName}" not found at root in "${filePath}". ` +
-      `Adding new fields is out of scope.`
-    );
-  }
 
-  const oldValue = parsed[fieldName];
+  // Walk the path on the parsed object to obtain oldValue and validate
+  // navigability. Each non-leaf segment must point to a plain object.
+  let oldValue = parsed;
+  for (let step = 0; step < pathSegments.length; step++) {
+    const seg = pathSegments[step];
+    const isLeaf = step === pathSegments.length - 1;
+
+    if (oldValue === null || typeof oldValue !== 'object' || Array.isArray(oldValue)) {
+      const pathDesc = pathSegments.slice(0, step).map(s => `"${s}"`).join(' → ') || '<root>';
+      throw new Error(
+        `editJson5: cannot descend past ${pathDesc} in "${filePath}" — ` +
+        `value is not a plain object`
+      );
+    }
+    if (!Object.prototype.hasOwnProperty.call(oldValue, seg)) {
+      const pathDesc = pathSegments.slice(0, step + 1).map(s => `"${s}"`).join(' → ');
+      throw new Error(
+        `editJson5: path ${pathDesc} not found in "${filePath}". ` +
+        `Adding new fields is out of scope.`
+      );
+    }
+    oldValue = oldValue[seg];
+
+    // Intermediate segments must be plain objects (arrays not navigable).
+    if (!isLeaf) {
+      if (oldValue === null || typeof oldValue !== 'object' || Array.isArray(oldValue)) {
+        const pathDesc = pathSegments.slice(0, step + 1).map(s => `"${s}"`).join(' → ');
+        throw new Error(
+          `editJson5: cannot descend into ${pathDesc} in "${filePath}" — ` +
+          `value is not a plain object (arrays and scalars are not navigable)`
+        );
+      }
+    }
+  }
 
   // No-op: field already has the requested value — skip write entirely.
   if (deepEqual(oldValue, newValue)) {
@@ -439,24 +557,9 @@ async function editJson5(filePath, fieldName, newValue) {
   // Locate the key+value in the raw source for surgical replacement.
   const mask = buildCodeMask(source);
   const depth = buildDepthArray(source, mask);
-  const occurrences = findKeyOccurrencesAtRoot(source, mask, depth, fieldName);
+  const occ = locatePath(source, mask, depth, pathSegments, filePath);
 
-  if (occurrences.length === 0) {
-    // Sanity: parser saw the field but the locator did not. Indicates either
-    // a bug in the locator or a JSON5 feature it doesn't recognize.
-    throw new Error(
-      `editJson5: field "${fieldName}" parsed successfully but could not be ` +
-      `located in source for editing (internal error)`
-    );
-  }
-  if (occurrences.length > 1) {
-    throw new Error(
-      `editJson5: field "${fieldName}" appears ${occurrences.length} times ` +
-      `at root in "${filePath}" (duplicate keys). Refusing to edit ambiguously.`
-    );
-  }
-
-  const { keyStart, valueEnd } = occurrences[0];
+  const { keyStart, valueEnd } = occ;
 
   // Compute base indentation: the whitespace from the previous newline up to
   // the field's key. Used to align multi-line new values (objects/arrays).
@@ -465,17 +568,19 @@ async function editJson5(filePath, fieldName, newValue) {
   const indentRaw = source.substring(lineStart, keyStart);
   const baseIndent = /^\s*$/.test(indentRaw) ? indentRaw : '';
 
+  // The replacement uses the LAST segment as the (always-quoted) key name.
+  const leafKey = pathSegments[pathSegments.length - 1];
   const newValueText = formatNewValue(newValue, baseIndent);
-  const replacement = `"${fieldName}": ${newValueText}`;
+  const replacement = `"${leafKey}": ${newValueText}`;
 
   const newSource =
     source.substring(0, keyStart) +
     replacement +
     source.substring(valueEnd);
 
-  // Post-edit validation: must be valid JSON5 and the field's value must
-  // deep-equal newValue. This catches any case where the locator might have
-  // targeted an unintended position.
+  // Post-edit validation: must be valid JSON5 and the value at the path must
+  // deep-equal newValue. Catches any case where the locator targeted an
+  // unintended position.
   let parsedAfter;
   try {
     parsedAfter = json5.parse(newSource);
@@ -484,9 +589,18 @@ async function editJson5(filePath, fieldName, newValue) {
       `editJson5: post-edit validation failed — result is not valid JSON5: ${e.message}`
     );
   }
-  if (!deepEqual(parsedAfter[fieldName], newValue)) {
+  let actualNew = parsedAfter;
+  for (const seg of pathSegments) {
+    if (actualNew === null || typeof actualNew !== 'object') {
+      actualNew = undefined;
+      break;
+    }
+    actualNew = actualNew[seg];
+  }
+  if (!deepEqual(actualNew, newValue)) {
+    const pathDesc = pathSegments.map(s => `"${s}"`).join(' → ');
     throw new Error(
-      `editJson5: post-edit sanity check failed for field "${fieldName}" ` +
+      `editJson5: post-edit sanity check failed for path ${pathDesc} ` +
       `(internal error: replacement targeted the wrong position)`
     );
   }
