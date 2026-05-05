@@ -318,7 +318,7 @@ describe('editJson5', () => {
   "a": 1,
 }
 `);
-      await expect(editJson5(filePath, 'missing', 1)).rejects.toThrow(/not found at root/);
+      await expect(editJson5(filePath, 'missing', 1)).rejects.toThrow(/path "missing" not found/);
     });
 
     test('throws when newValue is undefined', async () => {
@@ -478,6 +478,248 @@ describe('editJson5', () => {
       expect(parsed.data).toEqual({ real: false });
       expect(parsed.msg).toBe('this } looks like a close');
       expect(parsed.msg2).toBe('and { this opens');
+    });
+  });
+
+  // ─── L5: nested path support ────────────────────────────────────────────────
+
+  describe('nested paths (L5)', () => {
+    test('modifies nested scalar preserving sibling comments inside parent', async () => {
+      const filePath = writeFile('cfg.json5', `{
+  // outer comment
+  "https": {
+    // header inside https
+    "enabled": true,
+    // before port
+    "port": 443,
+    // before certFile
+    "certFile": "./cert.pem",
+  },
+  "weight": 0,
+}
+`);
+      const result = await editJson5(filePath, ['https', 'enabled'], false);
+      expect(result.changed).toBe(true);
+      expect(result.oldValue).toBe(true);
+      expect(result.newValue).toBe(false);
+
+      const content = readFile(filePath);
+      // Outer comment preserved
+      expect(content).toContain('// outer comment');
+      // ALL comments inside https preserved (this is the L5 win)
+      expect(content).toContain('// header inside https');
+      expect(content).toContain('// before port');
+      expect(content).toContain('// before certFile');
+      // Sibling values inside https untouched
+      const parsed = json5.parse(content);
+      expect(parsed.https.enabled).toBe(false);
+      expect(parsed.https.port).toBe(443);
+      expect(parsed.https.certFile).toBe('./cert.pem');
+      expect(parsed.weight).toBe(0);
+    });
+
+    test('modifies deeply nested scalar (3 levels)', async () => {
+      const filePath = writeFile('cfg.json5', `{
+  "level1": {
+    // c1
+    "level2": {
+      // c2
+      "level3": {
+        // c3
+        "target": "old",
+        "sibling": 99,
+      },
+    },
+  },
+}
+`);
+      await editJson5(filePath, ['level1', 'level2', 'level3', 'target'], 'new');
+      const content = readFile(filePath);
+      expect(content).toContain('// c1');
+      expect(content).toContain('// c2');
+      expect(content).toContain('// c3');
+      const parsed = json5.parse(content);
+      expect(parsed.level1.level2.level3.target).toBe('new');
+      expect(parsed.level1.level2.level3.sibling).toBe(99);
+    });
+
+    test('replaces nested object value (L4 inside nested path)', async () => {
+      const filePath = writeFile('cfg.json5', `{
+  // top
+  "outer": {
+    // before inner
+    "inner": { "a": 1, "b": 2 },
+    // sibling
+    "next": 99,
+  },
+}
+`);
+      await editJson5(filePath, ['outer', 'inner'], { c: 3, d: 4 });
+      const content = readFile(filePath);
+      expect(content).toContain('// top');
+      expect(content).toContain('// before inner');
+      expect(content).toContain('// sibling');
+      const parsed = json5.parse(content);
+      expect(parsed.outer.inner).toEqual({ c: 3, d: 4 });
+      expect(parsed.outer.next).toBe(99);
+    });
+
+    test('does NOT match a key with the same name at the wrong depth', async () => {
+      const filePath = writeFile('cfg.json5', `{
+  "enabled": "root-level",
+  "https": {
+    "enabled": "https-level",
+  },
+  "outer": {
+    "enabled": "outer-level",
+    "nested": {
+      "enabled": "deepest",
+    },
+  },
+}
+`);
+      await editJson5(filePath, ['https', 'enabled'], 'CHANGED');
+      const parsed = json5.parse(readFile(filePath));
+      expect(parsed.enabled).toBe('root-level');
+      expect(parsed.https.enabled).toBe('CHANGED');
+      expect(parsed.outer.enabled).toBe('outer-level');
+      expect(parsed.outer.nested.enabled).toBe('deepest');
+    });
+
+    test('no-op when nested value already matches', async () => {
+      const filePath = writeFile('cfg.json5', `{
+  "https": { "enabled": false },
+}
+`);
+      const before = readFile(filePath);
+      const beforeMtime = fs.statSync(filePath).mtimeMs;
+      await new Promise(r => setTimeout(r, 10));
+
+      const result = await editJson5(filePath, ['https', 'enabled'], false);
+      expect(result.changed).toBe(false);
+      expect(readFile(filePath)).toBe(before);
+      expect(fs.statSync(filePath).mtimeMs).toBe(beforeMtime);
+    });
+
+    test('single-element array path is equivalent to string fieldName', async () => {
+      const filePath = writeFile('cfg.json5', `{
+  // hdr
+  "active": 0,
+}
+`);
+      await editJson5(filePath, ['active'], 1);
+      const content = readFile(filePath);
+      expect(content).toContain('// hdr');
+      expect(content).toContain('"active": 1');
+    });
+
+    test('throws when intermediate segment is missing', async () => {
+      const filePath = writeFile('cfg.json5', `{
+  "https": { "enabled": true },
+}
+`);
+      await expect(editJson5(filePath, ['nonexistent', 'enabled'], false))
+        .rejects.toThrow(/"nonexistent".*not found/);
+    });
+
+    test('throws when leaf segment is missing', async () => {
+      const filePath = writeFile('cfg.json5', `{
+  "https": { "enabled": true },
+}
+`);
+      await expect(editJson5(filePath, ['https', 'missingLeaf'], 1))
+        .rejects.toThrow(/"https" → "missingLeaf".*not found/);
+    });
+
+    test('throws when intermediate segment is a scalar', async () => {
+      const filePath = writeFile('cfg.json5', `{
+  "https": "i am a string",
+}
+`);
+      await expect(editJson5(filePath, ['https', 'enabled'], false))
+        .rejects.toThrow(/cannot descend.*not a plain object/);
+    });
+
+    test('throws when intermediate segment is an array', async () => {
+      const filePath = writeFile('cfg.json5', `{
+  "list": [{ "enabled": true }],
+}
+`);
+      await expect(editJson5(filePath, ['list', 'enabled'], false))
+        .rejects.toThrow(/cannot descend.*not a plain object/);
+    });
+
+    test('throws on empty path array', async () => {
+      const filePath = writeFile('cfg.json5', `{ "x": 1 }`);
+      await expect(editJson5(filePath, [], 1))
+        .rejects.toThrow(/at least one segment/);
+    });
+
+    test('throws on path with empty-string segment', async () => {
+      const filePath = writeFile('cfg.json5', `{ "x": 1 }`);
+      await expect(editJson5(filePath, ['x', ''], 1))
+        .rejects.toThrow(/non-empty string/);
+    });
+
+    test('throws on path with non-string segment', async () => {
+      const filePath = writeFile('cfg.json5', `{ "x": 1 }`);
+      await expect(editJson5(filePath, ['x', 0], 1))
+        .rejects.toThrow(/non-empty string/);
+    });
+
+    test('throws on second arg of unsupported type', async () => {
+      const filePath = writeFile('cfg.json5', `{ "x": 1 }`);
+      await expect(editJson5(filePath, 42, 1))
+        .rejects.toThrow(/string.*or.*array/);
+    });
+
+    test('realistic ital8Config-style: flips https.enabled preserving https comments', async () => {
+      const filePath = writeFile('ital8Config.json5', `// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "httpPort": 3000,
+
+  // HTTPS configuration block
+  "https": {
+    // true = abilita HTTPS
+    "enabled": true,
+    // Porta HTTPS (default 443)
+    "port": 443,
+    // true = redirect 301 HTTP→HTTPS
+    "AutoRedirectHttpPortToHttpsPort": false,
+    // Percorso certificato server
+    "certFile": "./certs/fullchain.pem",
+    // Percorso chiave privata
+    "keyFile": "./certs/privkey.pem",
+    // CA intermedia (opzionale)
+    "caFile": "",
+    // Opzioni TLS avanzate
+    "tlsOptions": {},
+  },
+
+  "wwwPath": "/www",
+}
+`);
+      const result = await editJson5(filePath, ['https', 'enabled'], false);
+      expect(result.changed).toBe(true);
+
+      const content = readFile(filePath);
+      // EVERY comment in the file is preserved
+      expect(content).toContain('// This file follows the JSON5 standard');
+      expect(content).toContain('// HTTPS configuration block');
+      expect(content).toContain('// true = abilita HTTPS');
+      expect(content).toContain('// Porta HTTPS (default 443)');
+      expect(content).toContain('// true = redirect 301 HTTP→HTTPS');
+      expect(content).toContain('// Percorso certificato server');
+      expect(content).toContain('// Percorso chiave privata');
+      expect(content).toContain('// CA intermedia (opzionale)');
+      expect(content).toContain('// Opzioni TLS avanzate');
+
+      const parsed = json5.parse(content);
+      expect(parsed.https.enabled).toBe(false);
+      expect(parsed.https.port).toBe(443);
+      expect(parsed.https.certFile).toBe('./certs/fullchain.pem');
+      expect(parsed.httpPort).toBe(3000);
+      expect(parsed.wwwPath).toBe('/www');
     });
   });
 
