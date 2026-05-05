@@ -13,6 +13,7 @@ const fsPromises = require('fs').promises;
 const path = require('path');
 const loadJson5 = require('../../../core/loadJson5');
 const saveJson5 = require('../../../core/saveJson5');
+const editJson5 = require('../../../core/editJson5');
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // READ OPERATIONS
@@ -85,17 +86,15 @@ function readPageRules(seoPluginPath) {
 async function saveGlobalSettings(seoPluginPath, customData, backupDir, maxBackups) {
   const configPath = path.join(seoPluginPath, 'pluginConfig.json5');
   try {
-    // Read current full config
-    const fullConfig = loadJson5(configPath);
-
     // Create backup before modification
     await createBackup(configPath, backupDir, maxBackups, 'pluginConfig');
 
-    // Replace only the custom block
-    fullConfig.custom = customData;
-
-    // Save using saveJson5 (atomic write)
-    await saveJson5(configPath, fullConfig);
+    // Surgical edit: replace ONLY the "custom" block, preserving all comments
+    // and formatting in the rest of pluginConfig.json5 (active, isInstalled,
+    // weight, dependency, ecc.). editJson5 substitutes the whole "custom"
+    // value; comments INSIDE the old custom block are lost (expected — the
+    // block is the unit of substitution), but everything outside is preserved.
+    await editJson5(configPath, 'custom', customData);
 
     return { success: true };
   } catch (err) {
