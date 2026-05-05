@@ -8,26 +8,28 @@
  * Approach:
  *   1. Parse the file with json5 to validate it and confirm the field exists.
  *   2. Pre-scan the source to identify code regions vs. strings/comments.
- *   3. Locate the field's key + scalar value at root depth (depth=1).
+ *   3. Locate the field's key + value at root depth (depth=1).
  *   4. Replace the matched key+value with the normalized form
  *      `"fieldName": <newValue>` where newValue is JSON-serialized.
  *   5. Validate the result by re-parsing with json5 and comparing the field.
  *   6. Write atomically via saveJson5(path, rawString).
  *
- * Scope (v1):
+ * Scope (v2):
  *   - Field must already exist at the root level. No creation of new fields.
- *   - The OLD value must be a scalar (number, string, boolean, null).
- *     If it is an object or array, an error is thrown.
- *   - The NEW value can be any JSON-serializable value: number, string,
- *     boolean, null, object, array.
+ *   - The OLD value can be any JSON5 value: scalar (number, string, boolean,
+ *     null), object, or array.
+ *   - The NEW value can be any JSON-serializable value: scalar, object, array.
+ *   - When replacing an object/array, comments INSIDE the old value are lost
+ *     (the whole block is substituted). Comments outside the field — above,
+ *     below, inline after the closing bracket, on sibling fields — are
+ *     preserved.
  *   - Output is normalized for the modified pair only: quoted key, single
  *     space after colon, JSON.stringify for the value with 2-space indent.
  *   - Line indentation and trailing context (commas, comments, braces)
  *     surrounding the field are preserved unchanged.
  *   - Caller is responsible for value-type semantics (no true→1 normalization).
  *
- * Out of scope (v1):
- *   - Replacing object/array values (would require bracket matching).
+ * Out of scope:
  *   - Nested paths via dotted notation.
  *   - Adding new fields.
  *   - Editing inside arrays/objects (push, splice, set nested key).
@@ -40,7 +42,6 @@
  *   - Root is not a JSON5 object.
  *   - Field not found at root.
  *   - Field appears multiple times at root (duplicate keys).
- *   - OLD value is an object or array.
  *   - NEW value is not JSON-serializable (undefined, function, BigInt, etc.).
  *   - Post-edit validation failure (parse error or value mismatch).
  */
@@ -53,10 +54,6 @@ const json5 = require('json5');
 const saveJson5 = require('./saveJson5');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function isScalar(v) {
-  return v === null || (typeof v !== 'object' && typeof v !== 'function');
-}
 
 function deepEqual(a, b) {
   if (a === b) return true;
@@ -196,11 +193,16 @@ function skipWsAndCommentsBackward(source, mask, start) {
   return i;
 }
 
-// ── Scan a scalar value starting at `start`, return end position (exclusive) ─
-// Supported: string ("..." or '...'), boolean, null, number (incl. JSON5
-// extensions: hex, +/-Infinity, NaN, leading/trailing decimal points, signs).
+// ── Scan a value starting at `start`, return end position (exclusive) ───────
+// Supports: string ("..." or '...'), boolean, null, number (incl. JSON5
+// extensions: hex, +/-Infinity, NaN, leading/trailing decimal points, signs),
+// object {...} and array [...] (both with arbitrary nested content, comments,
+// strings).
+//
+// The `mask` is used for container scanning so that brackets inside strings
+// or comments do not affect the matching.
 
-function scanScalarValue(source, start) {
+function scanValue(source, mask, start) {
   const n = source.length;
   if (start >= n) return -1;
   const c = source[start];
@@ -212,6 +214,33 @@ function scanScalarValue(source, start) {
     while (j < n) {
       if (source[j] === '\\' && j + 1 < n) { j += 2; continue; }
       if (source[j] === quote) return j + 1;
+      j++;
+    }
+    return -1; // unterminated
+  }
+
+  // Object / array — scan for matching closing bracket using the mask to
+  // ignore brackets inside strings and comments. Both bracket types are
+  // counted together for nesting depth; the value ends when we see a closing
+  // bracket at nesting depth 0, which must match our opening type.
+  if (c === '{' || c === '[') {
+    const close = c === '{' ? '}' : ']';
+    let nestedDepth = 0;
+    let j = start + 1;
+    while (j < n) {
+      if (mask[j] !== 0) { j++; continue; }
+      const ch = source[j];
+      if (ch === '{' || ch === '[') {
+        nestedDepth++;
+      } else if (ch === '}' || ch === ']') {
+        if (nestedDepth === 0) {
+          // This must be our closing bracket; mismatch indicates malformed
+          // input (will also be caught by the post-edit json5.parse).
+          if (ch === close) return j + 1;
+          return -1;
+        }
+        nestedDepth--;
+      }
       j++;
     }
     return -1; // unterminated
@@ -239,7 +268,7 @@ function scanScalarValue(source, start) {
     return start + numMatch[0].length;
   }
 
-  // Object/array or unrecognized — out of scope
+  // Unrecognized
   return -1;
 }
 
@@ -320,13 +349,12 @@ function findKeyOccurrencesAtRoot(source, mask, depth, fieldName) {
       continue;
     }
 
-    // Scan value (must be scalar in v1)
-    const valueEnd = scanScalarValue(source, valueStart);
+    // Scan value (scalar, object, or array)
+    const valueEnd = scanValue(source, mask, valueStart);
     if (valueEnd === -1) {
       throw new Error(
-        `editJson5: field "${fieldName}" found at root but its current value ` +
-        `is not a scalar (object or array). Replacing object/array values ` +
-        `is out of scope for v1.`
+        `editJson5: field "${fieldName}" found at root but its value could ` +
+        `not be parsed (malformed or unsupported value form)`
       );
     }
 
@@ -397,17 +425,11 @@ async function editJson5(filePath, fieldName, newValue) {
   if (!Object.prototype.hasOwnProperty.call(parsed, fieldName)) {
     throw new Error(
       `editJson5: field "${fieldName}" not found at root in "${filePath}". ` +
-      `Adding new fields is out of scope for v1.`
+      `Adding new fields is out of scope.`
     );
   }
 
   const oldValue = parsed[fieldName];
-  if (!isScalar(oldValue)) {
-    throw new Error(
-      `editJson5: field "${fieldName}" in "${filePath}" currently holds an ` +
-      `object or array. Replacing object/array values is out of scope for v1.`
-    );
-  }
 
   // No-op: field already has the requested value — skip write entirely.
   if (deepEqual(oldValue, newValue)) {

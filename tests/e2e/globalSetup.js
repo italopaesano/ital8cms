@@ -29,8 +29,18 @@ module.exports = async function globalSetup() {
   // ── Override configurazione: isola il server E2E da quello di sviluppo ──
   console.log('[Test Setup] Overriding ital8Config.json5 for E2E testing...');
 
-  const originalConfigContent = fs.readFileSync(CONFIG_PATH, 'utf8');
   const configBackupPath = CONFIG_PATH + '.test-bak';
+
+  // Stale-backup detection: se esiste già un backup, il run precedente è
+  // crashato senza far girare il teardown. Ripristina dal backup PRIMA di
+  // procedere, così partiamo sempre da uno stato pulito.
+  if (fs.existsSync(configBackupPath)) {
+    console.warn('[Test Setup] Stale config backup detected — restoring from backup before proceeding');
+    fs.copyFileSync(configBackupPath, CONFIG_PATH);
+    fs.unlinkSync(configBackupPath);
+  }
+
+  const originalConfigContent = fs.readFileSync(CONFIG_PATH, 'utf8');
   fs.writeFileSync(configBackupPath, originalConfigContent, 'utf8');
 
   const configData = json5.parse(originalConfigContent);
@@ -61,12 +71,21 @@ module.exports = async function globalSetup() {
   // ── Aggiungi utenti di test ──
   console.log('[Test Setup] Adding test users to userAccount.json5...');
 
+  const backupPath = USER_ACCOUNT_PATH + '.test-bak';
+
+  // Stale-backup detection: se esiste già un backup, il run precedente non
+  // ha fatto teardown. Ripristina prima di procedere.
+  if (fs.existsSync(backupPath)) {
+    console.warn('[Test Setup] Stale userAccount backup detected — restoring from backup before proceeding');
+    fs.copyFileSync(backupPath, USER_ACCOUNT_PATH);
+    fs.unlinkSync(backupPath);
+  }
+
   // Read current file content
   const originalContent = fs.readFileSync(USER_ACCOUNT_PATH, 'utf8');
   const usersData = json5.parse(originalContent);
 
   // Backup original file (will be restored in globalTeardown)
-  const backupPath = USER_ACCOUNT_PATH + '.test-bak';
   fs.writeFileSync(backupPath, originalContent, 'utf8');
 
   // Generate bcrypt hash for test password

@@ -321,22 +321,6 @@ describe('editJson5', () => {
       await expect(editJson5(filePath, 'missing', 1)).rejects.toThrow(/not found at root/);
     });
 
-    test('throws when old value is an object', async () => {
-      const filePath = writeFile('cfg.json5', `{
-  "data": { "nested": 1 },
-}
-`);
-      await expect(editJson5(filePath, 'data', 42)).rejects.toThrow(/object or array/);
-    });
-
-    test('throws when old value is an array', async () => {
-      const filePath = writeFile('cfg.json5', `{
-  "list": [1, 2, 3],
-}
-`);
-      await expect(editJson5(filePath, 'list', 42)).rejects.toThrow(/object or array/);
-    });
-
     test('throws when newValue is undefined', async () => {
       const filePath = writeFile('cfg.json5', `{ "x": 1 }`);
       await expect(editJson5(filePath, 'x', undefined)).rejects.toThrow(/undefined/);
@@ -349,6 +333,151 @@ describe('editJson5', () => {
 
     test('throws on empty filePath', async () => {
       await expect(editJson5('', 'x', 1)).rejects.toThrow(/filePath/);
+    });
+  });
+
+  // ─── L4: replacing object/array OLD values ─────────────────────────────────
+
+  describe('replacing object/array OLD values (L4)', () => {
+    test('replaces object value with another object, preserving outer comments', async () => {
+      const filePath = writeFile('cfg.json5', `{
+  // pre comment
+  "active": 1,
+  // before custom
+  "custom": {
+    "old": "value",
+    "n": 42,
+  },
+  // after custom
+  "weight": 0,
+}
+`);
+      const result = await editJson5(filePath, 'custom', { fresh: true, list: [1, 2, 3] });
+      expect(result.changed).toBe(true);
+      expect(result.oldValue).toEqual({ old: 'value', n: 42 });
+      expect(result.newValue).toEqual({ fresh: true, list: [1, 2, 3] });
+
+      const content = readFile(filePath);
+      // Outer comments preserved
+      expect(content).toContain('// pre comment');
+      expect(content).toContain('// before custom');
+      expect(content).toContain('// after custom');
+      // Sibling fields untouched
+      expect(content).toContain('"active": 1');
+      expect(content).toContain('"weight": 0');
+      // Custom block fully replaced
+      const parsed = json5.parse(content);
+      expect(parsed.custom).toEqual({ fresh: true, list: [1, 2, 3] });
+    });
+
+    test('replaces array value with object', async () => {
+      const filePath = writeFile('cfg.json5', `{
+  "items": [1, 2, 3, 4, 5],
+  "name": "stable",
+}
+`);
+      await editJson5(filePath, 'items', { type: 'map', count: 0 });
+      const parsed = json5.parse(readFile(filePath));
+      expect(parsed.items).toEqual({ type: 'map', count: 0 });
+      expect(parsed.name).toBe('stable');
+    });
+
+    test('replaces object value with scalar', async () => {
+      const filePath = writeFile('cfg.json5', `{
+  "data": { "nested": { "deep": [1, 2] } },
+  "version": "1.0.0",
+}
+`);
+      await editJson5(filePath, 'data', null);
+      const parsed = json5.parse(readFile(filePath));
+      expect(parsed.data).toBe(null);
+      expect(parsed.version).toBe('1.0.0');
+    });
+
+    test('handles deeply nested OLD object with mixed brackets and strings', async () => {
+      const filePath = writeFile('cfg.json5', `{
+  // header
+  "complex": {
+    "arr": [{ "x": "} fake close in string" }, [1, 2, "[also]"]],
+    "obj": {
+      "more": [/* comment with } */ "y"],
+    },
+  },
+  "tail": true,
+}
+`);
+      await editJson5(filePath, 'complex', { simplified: true });
+      const parsed = json5.parse(readFile(filePath));
+      expect(parsed.complex).toEqual({ simplified: true });
+      expect(parsed.tail).toBe(true);
+      expect(readFile(filePath)).toContain('// header');
+    });
+
+    test('preserves inline comment after closing bracket of OLD object', async () => {
+      const filePath = writeFile('cfg.json5', `{
+  "config": {
+    "a": 1,
+    "b": 2,
+  }, // inline note after the close brace
+  "next": 99,
+}
+`);
+      await editJson5(filePath, 'config', { c: 3 });
+      const content = readFile(filePath);
+      expect(content).toContain('// inline note after the close brace');
+      const parsed = json5.parse(content);
+      expect(parsed.config).toEqual({ c: 3 });
+      expect(parsed.next).toBe(99);
+    });
+
+    test('no-op when object value matches deeply', async () => {
+      const filePath = writeFile('cfg.json5', `{
+  // important header
+  "shape": { "k": "v", "list": [1, 2] },
+}
+`);
+      const before = readFile(filePath);
+      const beforeMtime = fs.statSync(filePath).mtimeMs;
+      await new Promise(r => setTimeout(r, 10));
+
+      const result = await editJson5(filePath, 'shape', { k: 'v', list: [1, 2] });
+      expect(result.changed).toBe(false);
+      expect(readFile(filePath)).toBe(before);
+      expect(fs.statSync(filePath).mtimeMs).toBe(beforeMtime);
+    });
+
+    test('replaces empty object {} with non-empty', async () => {
+      const filePath = writeFile('cfg.json5', `{
+  "config": {},
+}
+`);
+      await editJson5(filePath, 'config', { populated: true });
+      const parsed = json5.parse(readFile(filePath));
+      expect(parsed.config).toEqual({ populated: true });
+    });
+
+    test('replaces empty array [] with non-empty', async () => {
+      const filePath = writeFile('cfg.json5', `{
+  "items": [],
+}
+`);
+      await editJson5(filePath, 'items', ['a', 'b']);
+      const parsed = json5.parse(readFile(filePath));
+      expect(parsed.items).toEqual(['a', 'b']);
+    });
+
+    test('does not falsely match brackets inside string values', async () => {
+      const filePath = writeFile('cfg.json5', `{
+  "msg": "this } looks like a close",
+  "data": { "real": true },
+  "msg2": "and { this opens",
+}
+`);
+      await editJson5(filePath, 'data', { real: false });
+      const parsed = json5.parse(readFile(filePath));
+      expect(parsed.data).toEqual({ real: false });
+      expect(parsed.msg).toBe('this } looks like a close');
+      expect(parsed.msg2).toBe('and { this opens');
     });
   });
 

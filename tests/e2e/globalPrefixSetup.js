@@ -25,6 +25,14 @@ module.exports = async function globalPrefixSetup() {
 
   console.log(`[Prefix Setup] Configuring server with globalPrefix: "${prefix}" on port ${httpPort}...`);
 
+  // Stale-backup detection: se esiste già un backup, il run precedente non
+  // ha fatto teardown (crash, kill, ecc.). Ripristina prima di procedere.
+  if (fs.existsSync(BACKUP_PATH)) {
+    console.warn('[Prefix Setup] Stale config backup detected — restoring from backup before proceeding');
+    fs.copyFileSync(BACKUP_PATH, CONFIG_PATH);
+    fs.unlinkSync(BACKUP_PATH);
+  }
+
   // 1. Back up original ital8Config.json5
   const originalContent = fs.readFileSync(CONFIG_PATH, 'utf8');
   fs.writeFileSync(BACKUP_PATH, originalContent, 'utf8');
