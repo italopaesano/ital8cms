@@ -1,0 +1,1 @@
+../.claude/skills/ital8cms-theme-creator/SKILL.md
