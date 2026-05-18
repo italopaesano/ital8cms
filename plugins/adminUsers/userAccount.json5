@@ -1,8 +1,8 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
   "users": {
-    "oxtor": {
-      "email": "italopaesano@gmail.com",
+    "test": {
+      "email": "italopaesano+test.tal8cms@gmail.com",
       "hashPassword": "$2b$10$pkmDu0mjqASXk14REJGLl.rpJzSNzKLtUNEfI2N2wlppFtK6vA1Lu",
       "roleIds": [1]
     },
