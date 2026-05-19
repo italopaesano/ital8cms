@@ -1,7 +1,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { createMaintenanceGate, isExemptPath } = require('../../../core/priorityMiddlewares/maintenanceGate');
+const { createMaintenanceGate, isExemptPath } = require('../../../core/priorityMiddlewares/runtimeGate');
 
 describe('isExemptPath', () => {
   test('lets /admin/* through', () => {

@@ -29,7 +29,7 @@
 const path = require('path');
 const loadJson5 = require('../loadJson5');
 const { readState } = require('../cliBridge/stateFile');
-const { createMaintenanceGate } = require('./maintenanceGate');
+const { createMaintenanceGate } = require('./runtimeGate');
 
 function priorityMiddleware(app, ital8Conf, options = {}){
 
