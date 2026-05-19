@@ -97,7 +97,7 @@ app.use(
     {
       urlPrefix: `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`,
       urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.pluginPagesPrefix}`], // '/admin','/api','/views','/admin-theme-resources','/pluginPages' -> questi sarebbero i percorsi di default pero adesso sono configurabili
-      showDirContents: false,
+      dirListing: { enabled: false },
       browserCacheEnabled: ital8Conf.browserCacheEnabled,
       browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
     }
@@ -112,7 +112,7 @@ app.use(
     (opt = {
       index: ital8Conf.indexFiles.wwwPath,
       urlPrefix: `${ital8Conf.globalPrefix}`,
-      showDirContents: true,
+      dirListing: { enabled: true },
       urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.pluginPagesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources','/pluginPages' -> questi sarebbero i percorsi di default pero adesso sono configurabili
       browserCacheEnabled: ital8Conf.browserCacheEnabled,
       browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
@@ -161,7 +161,7 @@ app.use(
       index: ital8Conf.indexFiles.pluginPagesPrefix,
       urlPrefix: `${ital8Conf.globalPrefix}/${pluginPagesPrefix}`,
       urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`],
-      showDirContents: false,
+      dirListing: { enabled: false },
       browserCacheEnabled: ital8Conf.browserCacheEnabled,
       browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
       hideExtension: ital8Conf.hideExtension.pluginPagesPrefix.enabled ? { ext: ital8Conf.hideExtension.pluginPagesPrefix.ext } : undefined,
@@ -208,7 +208,7 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
       {
         urlPrefix: `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`,
         urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
-        showDirContents: false,
+        dirListing: { enabled: false },
         browserCacheEnabled: ital8Conf.browserCacheEnabled,
         browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
       }
@@ -223,7 +223,7 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
       (opt = {
         index: ital8Conf.indexFiles.adminPrefix,
         urlPrefix: `${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`,
-        showDirContents: true,
+        dirListing: { enabled: true },
         urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`], // '/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
         browserCacheEnabled: ital8Conf.browserCacheEnabled,
         browserCacheMaxAge: ital8Conf.browserCacheMaxAge,

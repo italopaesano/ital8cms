@@ -149,7 +149,7 @@
   //   }
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  // Nasconde l'estensione dai URL serviti da koa-classic-server (richiede v2.6.1+)
+  // Nasconde l'estensione dai URL serviti da koa-classic-server (richiede v3.0.0+)
   // I link esistenti con estensione continuano a funzionare tramite redirect automatico
   "hideExtension": {
     "wwwPath": {
