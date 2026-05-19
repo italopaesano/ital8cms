@@ -26,12 +26,16 @@
 //   - router DEVE essere ultimo per poter usare body e session nei route handler
 ///////////////////////////////////////////////////////////////////////////////////////////
 
+const path = require('path');
 const loadJson5 = require('../loadJson5');
+const { readState } = require('../cliBridge/stateFile');
+const { createMaintenanceGate } = require('./maintenanceGate');
 
-function priorityMiddleware(app, ital8Conf){
+function priorityMiddleware(app, ital8Conf, options = {}){
 
     // Leggi configurazione priority middlewares (default: vuoto)
     const config = ital8Conf.priorityMiddlewares || {};
+    const projectRoot = options.projectRoot || process.cwd();
 
     // ========== CORE MIDDLEWARE 1: BODY PARSER (sempre attivo) ==========
     const bodyParser = require('koa-bodyparser');
@@ -56,6 +60,19 @@ function priorityMiddleware(app, ital8Conf){
         console.log('[PriorityMiddleware] ✗ session SKIPPED (disabled in config)');
         console.log('[PriorityMiddleware]   WARNING: ctx.session will be undefined - authentication will not work');
     }
+
+
+    // ========== MAINTENANCE GATE (CLI-controlled public stop) ==========
+    // Posizionato PRIMA del router così intercetta anche le rotte API.
+    // Lascia passare /admin/* e /admin-theme-resources/* per non bloccare l'amministrazione.
+    const initialPublicState = readState().public || 'running';
+    const maintenanceGate = createMaintenanceGate({
+        ital8Conf,
+        projectRoot,
+        initialState: initialPublicState,
+    });
+    app.use(maintenanceGate.middleware);
+    console.log(`[PriorityMiddleware] ✓ maintenance gate loaded (initial public state: ${initialPublicState})`);
 
 
     // ========== CORE MIDDLEWARE 2: ROUTER (sempre attivo) ==========
@@ -83,7 +100,8 @@ function priorityMiddleware(app, ital8Conf){
     return{
         router: router,
         bodyParser: bodyParser,
-        koaSession: koaSession  // Null se session disabilitato
+        koaSession: koaSession,  // Null se session disabilitato
+        maintenanceGate: maintenanceGate  // Gate per public stop via CLI
     }
 
 }// function priorityMiddleware(app, ital8Conf)

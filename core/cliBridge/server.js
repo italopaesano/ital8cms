@@ -142,6 +142,11 @@ async function start(ital8Conf, options = {}) {
   const dispatcher = makeDispatcher({
     startTime: Date.now(),
     ital8Conf,
+    configPath: options.configPath,
+    statePath: options.statePath,
+    requestRestart: options.requestRestart,
+    setPublicState: options.setPublicState,
+    getPublicState: options.getPublicState,
   });
 
   const server = net.createServer((sock) => handleConnection(sock, dispatcher));
