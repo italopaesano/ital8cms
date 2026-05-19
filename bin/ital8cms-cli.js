@@ -19,20 +19,21 @@ program
   .option('--json', 'output raw JSON instead of human-readable text')
   .option('--config <path>', 'path to ital8Config.json5 (default: ./ital8Config.json5)')
   .option('--socket <path>', 'unix socket path (overrides config)')
-  .option('--timeout <ms>', 'connect/read timeout in milliseconds', String(DEFAULT_TIMEOUT_MS));
+  .option('--timeout <ms>', 'connect/read timeout in milliseconds', String(DEFAULT_TIMEOUT_MS))
+  .option('--no-wait', 'do not wait for the server to come back after a restart');
 
 program
   .command('status')
   .description('show current ital8cms server status')
   .action(() => sendCommand('status'));
 
-const admin = program.command('admin').description('admin section control');
-admin.command('start').description('start admin section (stub in v1)').action(() => sendCommand('admin.start'));
-admin.command('stop').description('stop admin section (stub in v1)').action(() => sendCommand('admin.stop'));
+const admin = program.command('admin').description('admin section control (triggers a process restart)');
+admin.command('start').description('enable admin section and restart the process').action(() => sendCommand('admin.start'));
+admin.command('stop').description('disable admin section and restart the process').action(() => sendCommand('admin.stop'));
 
-const pub = program.command('public').description('public section control');
-pub.command('start').description('start public section (stub in v1)').action(() => sendCommand('public.start'));
-pub.command('stop').description('stop public section (stub in v1)').action(() => sendCommand('public.stop'));
+const pub = program.command('public').description('public section control (no restart, soft maintenance gate)');
+pub.command('start').description('serve public pages normally').action(() => sendCommand('public.start'));
+pub.command('stop').description('serve a "be right back" page on all public routes').action(() => sendCommand('public.stop'));
 
 program.parseAsync(process.argv).catch((err) => {
   bail('client_error', err.message || String(err));
@@ -70,8 +71,7 @@ function sendCommand(command) {
     if (finished) return;
     finished = true;
     try { sock.destroy(); } catch (_) {}
-    emit(payload, command);
-    process.exit(exitCode);
+    handleResponse(command, payload, socketPath, exitCode);
   };
 
   sock.setTimeout(timeout);
@@ -99,6 +99,95 @@ function sendCommand(command) {
     sock.write(JSON.stringify({ command }) + '\n');
   });
   sock.connect(socketPath);
+}
+
+function handleResponse(command, payload, socketPath, exitCode) {
+  const opts = program.opts();
+  const restartExpected = payload && payload.ok === true && payload.restart === true;
+
+  if (!restartExpected || opts.wait === false || opts.json) {
+    // wait=false comes from --no-wait (commander negates --no-* flags into wait:false)
+    emit(payload, command);
+    process.exit(exitCode);
+    return;
+  }
+
+  // human-readable mode + restart pending → emit initial line, then poll
+  process.stdout.write(`✓ ${payload.action || command} richiesto (${payload.message || 'restart in corso'})\n`);
+  process.stdout.write('⏳ in attesa del riavvio del processo...\n');
+
+  waitForRestart(socketPath, 15000).then((statusPayload) => {
+    if (statusPayload && statusPayload.ok && statusPayload.data) {
+      process.stdout.write(`✓ server ripartito (pid: ${statusPayload.data.pid})\n`);
+      process.exit(0);
+    } else {
+      process.stderr.write('⚠ server non ripartito entro 15s, controlla manualmente con: ital8cms-cli status\n');
+      process.exit(1);
+    }
+  }).catch((err) => {
+    process.stderr.write(`⚠ errore in attesa del riavvio: ${err.message}\n`);
+    process.exit(1);
+  });
+}
+
+function waitForRestart(socketPath, totalTimeoutMs) {
+  const startTime = Date.now();
+  const pollIntervalMs = 200;
+
+  return new Promise((resolve) => {
+    let phase = 'wait-disappear'; // first the old socket must disappear
+
+    const tick = () => {
+      const elapsed = Date.now() - startTime;
+      if (elapsed > totalTimeoutMs) return resolve(null);
+
+      if (phase === 'wait-disappear') {
+        if (!fs.existsSync(socketPath)) {
+          phase = 'wait-ready';
+        }
+        setTimeout(tick, pollIntervalMs);
+        return;
+      }
+
+      // phase = 'wait-ready' : socket must reappear and respond to status
+      if (!fs.existsSync(socketPath)) {
+        setTimeout(tick, pollIntervalMs);
+        return;
+      }
+
+      probeStatus(socketPath, 1000).then((statusPayload) => {
+        if (statusPayload) return resolve(statusPayload);
+        setTimeout(tick, pollIntervalMs);
+      });
+    };
+
+    setTimeout(tick, pollIntervalMs);
+  });
+}
+
+function probeStatus(socketPath, timeoutMs) {
+  return new Promise((resolve) => {
+    const sock = new net.Socket();
+    let buffer = '';
+    let settled = false;
+    const done = (val) => { if (!settled) { settled = true; try { sock.destroy(); } catch (_) {} resolve(val); } };
+
+    sock.setTimeout(timeoutMs);
+    sock.once('timeout', () => done(null));
+    sock.once('error', () => done(null));
+    sock.on('data', (chunk) => {
+      buffer += chunk.toString('utf8');
+      const nl = buffer.indexOf('\n');
+      if (nl === -1) return;
+      try {
+        done(JSON.parse(buffer.slice(0, nl)));
+      } catch (_) { done(null); }
+    });
+    sock.once('connect', () => {
+      sock.write(JSON.stringify({ command: 'status' }) + '\n');
+    });
+    sock.connect(socketPath);
+  });
 }
 
 function transportError(err, socketPath) {
@@ -152,8 +241,8 @@ function renderHuman(payload, command) {
     process.stderr.write(`ital8cms-cli: ${msg}\n`);
     return;
   }
-  if (payload.stub) {
-    process.stdout.write(`OK ${payload.action} (stub: nessuna azione eseguita in v1)\n`);
+  if (payload.noop) {
+    process.stdout.write(`= ${payload.action || command}: ${payload.message}\n`);
     return;
   }
   if (command === 'status' && payload.data) {
@@ -164,10 +253,16 @@ function renderHuman(payload, command) {
       `  uptime:        ${formatUptime(d.uptime)}`,
       `  http:          ${d.httpPort}`,
       `  https:         ${d.httpsEnabled ? d.httpsPort : 'disabled'}`,
-      `  admin state:   ${d.admin && d.admin.state} (v1)`,
-      `  public state:  ${d.public && d.public.state} (v1)`,
+      `  admin state:   ${d.admin && d.admin.state}`,
+      `  public state:  ${d.public && d.public.state}`,
     ];
+    if (d.supervisor) lines.push(`  supervisor:    ${d.supervisor}`);
     process.stdout.write(lines.join('\n') + '\n');
+    return;
+  }
+  // public.start / public.stop have restart:false but still need a one-line confirmation
+  if (payload.action) {
+    process.stdout.write(`✓ ${payload.action}: ${payload.message || 'done'}\n`);
     return;
   }
   process.stdout.write(`OK ${command}\n`);

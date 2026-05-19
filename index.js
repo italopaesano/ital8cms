@@ -8,15 +8,37 @@ const ital8Conf = loadJson5('./ital8Config.json5');
 const path = require('path');
 const httpsManager = require('./core/httpsManager');
 
-// CLI control plane (unix socket) — avviato per primo, indipendente dal server HTTP.
-// Se il bind fallisce o cli.enabled=false il server prosegue senza canale CLI.
+// Log discreto se la sezione admin è stata disabilitata via CLI (o a mano).
+if (!ital8Conf.enableAdmin) {
+  console.log('[cliBridge] sezione admin disattivata (enableAdmin=false)');
+  console.log('[cliBridge] per riattivare: ital8cms-cli admin start');
+}
+
+const priorityMiddlewares = require('./core/priorityMiddlewares/priorityMiddlewares.js')(app, ital8Conf, { projectRoot: __dirname });
+const router = priorityMiddlewares.router;
+const maintenanceGate = priorityMiddlewares.maintenanceGate;
+
+// CLI control plane (unix socket) — avviato subito dopo i priority middlewares,
+// indipendente dal server HTTP. Se il bind fallisce o cli.enabled=false
+// il server prosegue senza canale CLI.
 const cliBridge = require('./core/cliBridge');
-cliBridge.start(ital8Conf, { projectRoot: __dirname }).catch((err) => {
+const cliBridgeState = require('./core/cliBridge/stateFile');
+cliBridge.start(ital8Conf, {
+  projectRoot: __dirname,
+  configPath: path.join(__dirname, 'ital8Config.json5'),
+  statePath: cliBridgeState.DEFAULT_STATE_PATH,
+  requestRestart: ({ reason, mode } = {}) => {
+    console.log(`[cliBridge] richiesta di restart ricevuta (${reason}, mode=${mode})`);
+    gracefulShutdown('CLI', { respawn: mode === 'self-respawn' });
+  },
+  setPublicState: (newState) => {
+    if (maintenanceGate) maintenanceGate.setState(newState);
+    console.log(`[cliBridge] public state → ${newState}`);
+  },
+  getPublicState: () => maintenanceGate ? maintenanceGate.getState() : 'running',
+}).catch((err) => {
   console.error('[cliBridge] errore inatteso durante l\'avvio:', err && err.message ? err.message : err);
 });
-
-const priorityMiddlewares = require('./core/priorityMiddlewares/priorityMiddlewares.js')(app, ital8Conf);
-const router = priorityMiddlewares.router ;
 //const priorityMiddlewares(app); // carico i imidlware che vanno impostati in ordine preciso di caricamento
 
 const pluginSys = new ( require("./core/pluginSys") )(ital8Conf); // carico il sistema di plugin e passo la configurazione per whitelist
@@ -301,20 +323,30 @@ const servers = httpsManager.start(app, router, ital8Conf);
 
 const shutdownTimeout = ital8Conf.shutdownTimeout || 10000;
 let shuttingDown = false;
+const { selfRespawn } = require('./core/cliBridge/respawn');
 
-function gracefulShutdown(signal) {
+function gracefulShutdown(signal, opts = {}) {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`[Shutdown] ${signal} ricevuto, chiusura server in corso...`);
+  const respawn = opts.respawn === true;
+  console.log(`[Shutdown] ${signal} ricevuto, chiusura server in corso${respawn ? ' (con self-respawn)' : ''}...`);
 
   // Chiusura del CLI bridge in parallelo con i server HTTP/HTTPS (non blocca).
   cliBridge.stop().catch((err) => {
     console.warn('[cliBridge] errore in stop:', err && err.message ? err.message : err);
   });
 
+  const finalize = (exitCode) => {
+    if (respawn) {
+      selfRespawn();
+      return; // selfRespawn schedula il process.exit
+    }
+    process.exit(exitCode);
+  };
+
   const forceExit = setTimeout(() => {
     console.log('[Shutdown] Timeout raggiunto (' + shutdownTimeout + 'ms), chiusura forzata');
-    process.exit(1);
+    finalize(1);
   }, shutdownTimeout);
   forceExit.unref();
 
@@ -324,7 +356,8 @@ function gracefulShutdown(signal) {
   if (total === 0) {
     console.log('[Shutdown] Nessun server attivo, uscita immediata');
     clearTimeout(forceExit);
-    process.exit(0);
+    finalize(0);
+    return;
   }
 
   for (const server of servers) {
@@ -333,7 +366,7 @@ function gracefulShutdown(signal) {
       if (closed >= total) {
         console.log('[Shutdown] Tutti i server chiusi correttamente');
         clearTimeout(forceExit);
-        process.exit(0);
+        finalize(0);
       }
     });
   }

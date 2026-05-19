@@ -106,15 +106,16 @@
   // Canale di controllo locale via unix domain socket. Indipendente dal server
   // HTTP/HTTPS: se il bridge non riesce a partire, il server web funziona comunque.
   //
-  // Comandi disponibili in v1:
+  // Comandi disponibili:
   //   • status               (reale)
-  //   • admin start|stop     (stub, restituiscono { ok:true, stub:true })
-  //   • public start|stop    (stub, restituiscono { ok:true, stub:true })
+  //   • admin start|stop     (hard: riscrive enableAdmin nel config + riavvia il processo)
+  //   • public start|stop    (soft: applica un middleware "torniamo subito" senza riavvio)
   //
   // Utilizzo:
   //   ital8cms-cli status               # human-readable
   //   ital8cms-cli --json status        # JSON grezzo
-  //   ital8cms-cli admin start          # stub in v1
+  //   ital8cms-cli admin stop           # restart del processo, sito admin spento al reboot
+  //   ital8cms-cli public stop          # immediatamente: 503 + pagina di manutenzione
   //
   // Campi:
   //   • enabled     boolean — true (default) abilita il bridge
@@ -127,6 +128,22 @@
     "enabled": true,
     "socketPath": "./ital8cms.sock",
     "socketMode": "0660",
+  },
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // MAINTENANCE PAGE (public stop)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Pagina servita quando la sezione public è stoppata via CLI
+  // (`ital8cms-cli public stop`). Risponde 503 + Retry-After + X-Robots-Tag:noindex.
+  // Lascia passare /admin/* e /admin-theme-resources/*.
+  //
+  //   • pagePath           string  — percorso EJS della pagina (default: ./core/maintenancePage.ejs)
+  //   • retryAfterSeconds  number  — header Retry-After in secondi (default: 600)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  "maintenance": {
+    "pagePath": "./core/maintenancePage.ejs",
+    "retryAfterSeconds": 600,
   },
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
