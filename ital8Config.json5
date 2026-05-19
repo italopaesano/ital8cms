@@ -101,6 +101,35 @@
   },
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // CLI CONTROL PLANE
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Canale di controllo locale via unix domain socket. Indipendente dal server
+  // HTTP/HTTPS: se il bridge non riesce a partire, il server web funziona comunque.
+  //
+  // Comandi disponibili in v1:
+  //   • status               (reale)
+  //   • admin start|stop     (stub, restituiscono { ok:true, stub:true })
+  //   • public start|stop    (stub, restituiscono { ok:true, stub:true })
+  //
+  // Utilizzo:
+  //   ital8cms-cli status               # human-readable
+  //   ital8cms-cli --json status        # JSON grezzo
+  //   ital8cms-cli admin start          # stub in v1
+  //
+  // Campi:
+  //   • enabled     boolean — true (default) abilita il bridge
+  //   • socketPath  string  — path del socket (relativo alla root del progetto
+  //                            o assoluto). Default "./ital8cms.sock"
+  //   • socketMode  string  — permessi ottali (es. "0660"). Default "0660"
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  "cli": {
+    "enabled": true,
+    "socketPath": "./ital8cms.sock",
+    "socketMode": "0660",
+  },
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // GLOBAL FUNCTIONS WHITELIST
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // Definisce quali plugin possono esportare funzioni globali nei template EJS

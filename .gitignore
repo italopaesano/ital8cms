@@ -37,3 +37,6 @@ node_modules/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# CLI control plane unix socket (created at startup, removed on shutdown)
+*.sock
