@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
 const pluginsManagment = require('./pluginsManagment');
+const pluginsInstall = require('./pluginsInstall');
 const themesManagment = require('./themesManagment');
 const systemSettings = require('./systemSettings');
 const pagesManagment = require('./pagesManagment');
@@ -112,6 +113,12 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
   // Aggiungi route per gestione plugin (da pluginsManagment.js)
   const pluginManagmentRoutes = pluginsManagment.getRoutes();
   pluginManagmentRoutes.forEach(route => {
+    routeArray.push(route);
+  });
+
+  // Aggiungi route per installazione plugin da repo Git (da pluginsInstall.js)
+  const pluginInstallRoutes = pluginsInstall.getRoutes();
+  pluginInstallRoutes.forEach(route => {
     routeArray.push(route);
   });
 

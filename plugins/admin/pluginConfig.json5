@@ -6,6 +6,24 @@
   "dependency": {},
   "nodeModuleDependency": {},
   "nodeModuleDependencyPriority": {},
-  "custom": {},
+  "custom": {
+    // Configurazione del modulo di installazione plugin da repo remoto.
+    "install": {
+      // Prefisso obbligatorio dei nomi repo Git accettati. Il nome del plugin
+      // viene estratto da quanto segue questo prefisso.
+      // Esempio: "ital8cms-plugin-mailerSimple" -> plugin name "mailerSimple"
+      "repoPrefix": "ital8cms-plugin-",
+      // Timeout per l'operazione di clone (millisecondi). Oltre questo limite
+      // il processo git viene interrotto e l'installazione fallisce.
+      "cloneTimeoutMs": 120000,
+      // Numero massimo di job di installazione completati da mantenere in memoria
+      // (la map di stato). Job più vecchi vengono espulsi in ordine FIFO.
+      "maxJobHistory": 50,
+      // Se true mostra all'utente l'output stderr di git in caso di errore di
+      // clone. Utile in sviluppo, valutare di disabilitare in produzione per
+      // evitare leak di informazioni sensibili (es. path locali).
+      "exposeGitErrors": true
+    }
+  },
   "version": "1.0.0"
 }

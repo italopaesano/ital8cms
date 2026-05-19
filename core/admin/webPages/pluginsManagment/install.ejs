@@ -1,0 +1,377 @@
+<!-- PAGINA INSTALLAZIONE PLUGIN DA REPO GIT REMOTO -->
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
+
+<script>
+    const apiPrefix = '<%= passData.apiPrefix %>';
+    const adminPrefix = '<%= passData.adminPrefix %>';
+</script>
+
+<%
+  passData.pageTitle = 'Installa Plugin da Git';
+  passData.pageIcon = 'bi bi-cloud-download';
+%>
+
+<div class="container mt-4">
+
+  <div class="mb-3">
+    <a href="/<%= passData.adminPrefix %>/pluginsManagment/index.ejs" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Torna alla lista plugin
+    </a>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header">
+      <h5 class="mb-0"><i class="bi bi-cloud-download"></i> Installa un nuovo plugin da repository Git</h5>
+    </div>
+    <div class="card-body">
+      <div class="alert alert-info small mb-3">
+        <strong>Convenzione obbligatoria:</strong> il repository deve avere un nome che inizia con
+        <code>ital8cms-plugin-</code>. Quanto segue diventa il nome del plugin e deve combaciare con
+        il campo <code>name</code> in <code>pluginDescription.json5</code>.<br>
+        Esempio: <code>https://github.com/utente/ital8cms-plugin-mailerSimple.git</code> &rarr; plugin name <code>mailerSimple</code>.
+      </div>
+
+      <form id="installForm">
+        <div class="mb-3">
+          <label for="repoUrl" class="form-label">URL del repository (HTTPS)</label>
+          <input type="url" class="form-control" id="repoUrl" name="repoUrl" required
+                 placeholder="https://github.com/utente/ital8cms-plugin-mailerSimple.git">
+          <div class="form-text">Solo HTTPS, deve terminare con <code>.git</code>.</div>
+        </div>
+
+        <div class="mb-3">
+          <label for="branchOrTag" class="form-label">Branch o Tag <span class="text-muted">(opzionale)</span></label>
+          <input type="text" class="form-control" id="branchOrTag" name="branchOrTag"
+                 placeholder="es. main, v1.2.0, develop">
+          <div class="form-text">Se vuoto, viene usato il branch di default del repository.</div>
+        </div>
+
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="checkbox" id="wantActive" name="wantActive">
+          <label class="form-check-label" for="wantActive">
+            Attiva il plugin subito dopo l'installazione
+          </label>
+          <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline"
+                  id="wantActiveHelpBtn" tabindex="-1"
+                  title="Clicca per spiegazione">
+            <i class="bi bi-question-circle-fill text-warning"></i>
+          </button>
+          <div class="form-text" id="wantActiveHint" style="display:none;">
+            <strong>Nota:</strong> se il plugin dichiara dipendenze npm
+            (<code>nodeModuleDependency</code>), la richiesta di attivazione viene ignorata
+            e il plugin resta disattivato. Le dipendenze npm <strong>non</strong> vengono installate
+            automaticamente: vanno installate manualmente con <code>npm install ...</code>
+            (il comando esatto verrà mostrato a fine installazione). Solo dopo è sicuro attivare
+            il plugin dalla lista, altrimenti il server crasherebbe al riavvio.
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="submitBtn">
+          <i class="bi bi-cloud-download"></i> Avvia installazione
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- AREA STATO -->
+  <div id="statusCard" class="card mb-4" style="display:none;">
+    <div class="card-header d-flex align-items-center">
+      <h5 class="mb-0 me-2"><i class="bi bi-activity"></i> Stato installazione</h5>
+      <span id="statusBadge" class="badge bg-secondary">pending</span>
+    </div>
+    <div class="card-body">
+      <div id="phasesList" class="mb-3"></div>
+      <div id="warningsBox" class="alert alert-warning" style="display:none;">
+        <strong><i class="bi bi-exclamation-triangle"></i> Avvertimenti:</strong>
+        <ul id="warningsList" class="mb-0"></ul>
+      </div>
+      <div id="errorBox" class="alert alert-danger" style="display:none;">
+        <strong><i class="bi bi-x-octagon"></i> Errore:</strong>
+        <pre id="errorText" class="mb-0 mt-2" style="white-space:pre-wrap; word-break:break-word; font-size:0.9em;"></pre>
+      </div>
+      <div id="successBox" class="alert alert-success" style="display:none;">
+        <strong><i class="bi bi-check-circle"></i> Installazione completata!</strong>
+        <div id="successDetails" class="mt-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOX DIPENDENZE NPM -->
+  <div id="npmDepsCard" class="card mb-4 border-warning" style="display:none;">
+    <div class="card-header bg-warning text-dark">
+      <h5 class="mb-0"><i class="bi bi-box-seam"></i> Dipendenze npm da installare manualmente</h5>
+    </div>
+    <div class="card-body">
+      <p class="mb-2">
+        Il plugin richiede pacchetti npm che <strong>non</strong> sono stati installati automaticamente.
+        Esegui questo comando nella root del progetto, poi attiva il plugin dalla pagina di gestione:
+      </p>
+      <div class="input-group">
+        <input type="text" class="form-control font-monospace" id="npmCommandInput" readonly>
+        <button class="btn btn-outline-secondary" type="button" id="copyNpmCmdBtn" title="Copia comando">
+          <i class="bi bi-clipboard"></i>
+        </button>
+      </div>
+      <div class="form-text mt-2">
+        Pacchetti: <span id="npmDepsListLabel"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOX RIAVVIO -->
+  <div id="restartCard" class="card mb-4 border-info" style="display:none;">
+    <div class="card-header bg-info text-white">
+      <h5 class="mb-0"><i class="bi bi-arrow-clockwise"></i> Riavvio server necessario</h5>
+    </div>
+    <div class="card-body">
+      <p class="mb-2">
+        Le modifiche diventano effettive solo dopo il riavvio del processo Node.js.
+        Il bottone qui sotto invia <code>SIGTERM</code> al processo corrente: usalo solo se hai un
+        supervisor (PM2, nodemon, systemd) che lo riavvia automaticamente.
+      </p>
+      <p class="mb-3 small">
+        <strong>Supervisor rilevato:</strong> <span id="supervisorLabel" class="badge bg-secondary">in rilevamento...</span>
+        <span id="supervisorHint" class="text-muted"></span>
+      </p>
+      <button type="button" class="btn btn-warning" id="restartBtn">
+        <i class="bi bi-power"></i> Riavvia ora
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let pollingTimer = null;
+let supervisorInfo = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadSupervisorInfo();
+  document.getElementById('installForm').addEventListener('submit', handleInstallSubmit);
+  document.getElementById('copyNpmCmdBtn').addEventListener('click', copyNpmCommand);
+  document.getElementById('restartBtn').addEventListener('click', handleRestart);
+  document.getElementById('wantActiveHelpBtn').addEventListener('click', () => {
+    const hint = document.getElementById('wantActiveHint');
+    hint.style.display = (hint.style.display === 'none' || !hint.style.display) ? 'block' : 'none';
+  });
+});
+
+async function loadSupervisorInfo() {
+  try {
+    const r = await fetch(`/${apiPrefix}/admin/plugins/install/restart-info`);
+    const j = await r.json();
+    if (j.success) {
+      supervisorInfo = j.supervisor;
+      const lbl = document.getElementById('supervisorLabel');
+      const hint = document.getElementById('supervisorHint');
+      lbl.innerText = j.supervisor.label;
+      if (j.supervisor.type === 'pm2' || j.supervisor.type === 'nodemon') {
+        lbl.className = 'badge bg-success';
+        hint.innerText = ' — il processo verrà riavviato automaticamente.';
+      } else if (j.supervisor.type === 'unknown') {
+        lbl.className = 'badge bg-warning text-dark';
+        hint.innerText = ' — supervisor non identificato: il server potrebbe non riavviarsi da solo.';
+      } else {
+        lbl.className = 'badge bg-danger';
+        hint.innerText = ' — il riavvio fermerà il server senza farlo ripartire automaticamente.';
+      }
+    }
+  } catch (e) {
+    console.warn('Impossibile caricare info supervisor:', e);
+  }
+}
+
+async function handleInstallSubmit(ev) {
+  ev.preventDefault();
+  const repoUrl = document.getElementById('repoUrl').value.trim();
+  const branchOrTag = document.getElementById('branchOrTag').value.trim();
+  const wantActive = document.getElementById('wantActive').checked;
+
+  resetUi();
+  const submitBtn = document.getElementById('submitBtn');
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Avvio...';
+
+  try {
+    const r = await fetch(`/${apiPrefix}/admin/plugins/install`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ repoUrl, branchOrTag: branchOrTag || null, wantActive })
+    });
+    const j = await r.json();
+    if (!j.success) {
+      showStatusError(j.error || 'Errore sconosciuto.');
+      return;
+    }
+    document.getElementById('statusCard').style.display = 'block';
+    startPolling(j.installId);
+  } catch (e) {
+    showStatusError(e.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="bi bi-cloud-download"></i> Avvia installazione';
+  }
+}
+
+function startPolling(installId) {
+  if (pollingTimer) clearInterval(pollingTimer);
+  const tick = async () => {
+    try {
+      const r = await fetch(`/${apiPrefix}/admin/plugins/install/${encodeURIComponent(installId)}/status`);
+      const j = await r.json();
+      if (!j.success) {
+        showStatusError(j.error || 'Errore sconosciuto.');
+        clearInterval(pollingTimer); pollingTimer = null;
+        return;
+      }
+      renderJob(j.job);
+      if (j.job.status === 'success' || j.job.status === 'failed') {
+        clearInterval(pollingTimer); pollingTimer = null;
+      }
+    } catch (e) {
+      console.error('Errore polling:', e);
+    }
+  };
+  tick();
+  pollingTimer = setInterval(tick, 1000);
+}
+
+function renderJob(job) {
+  const badge = document.getElementById('statusBadge');
+  badge.innerText = job.status;
+  badge.className = 'badge ' + (
+    job.status === 'success' ? 'bg-success' :
+    job.status === 'failed'  ? 'bg-danger'  :
+    job.status === 'running' ? 'bg-primary' : 'bg-secondary'
+  );
+
+  const phasesList = document.getElementById('phasesList');
+  phasesList.innerHTML = job.phases.map(p => `
+    <div class="d-flex align-items-start mb-1">
+      <span class="me-2">${p.ok ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-danger"></i>'}</span>
+      <div>
+        <strong>${escapeHtml(p.name)}</strong>
+        ${p.detail ? `<div class="small text-muted">${escapeHtml(p.detail)}</div>` : ''}
+      </div>
+    </div>
+  `).join('');
+
+  if (job.warnings && job.warnings.length > 0) {
+    document.getElementById('warningsBox').style.display = 'block';
+    document.getElementById('warningsList').innerHTML =
+      job.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('');
+  } else {
+    document.getElementById('warningsBox').style.display = 'none';
+  }
+
+  if (job.status === 'failed') {
+    document.getElementById('errorBox').style.display = 'block';
+    document.getElementById('errorText').innerText = job.error || 'Errore sconosciuto.';
+    document.getElementById('successBox').style.display = 'none';
+    document.getElementById('npmDepsCard').style.display = 'none';
+    document.getElementById('restartCard').style.display = 'none';
+    return;
+  }
+
+  if (job.status === 'success' && job.result) {
+    const res = job.result;
+    document.getElementById('successBox').style.display = 'block';
+    const d = res.description || {};
+    const activeBadge = res.active
+      ? '<span class="badge bg-success">attivo</span>'
+      : '<span class="badge bg-secondary">disattivo</span>';
+    const wasDeact = res.wasDeactivatedDueToNpmDeps
+      ? '<div class="alert alert-warning mt-2 mb-0 small"><i class="bi bi-info-circle"></i> Hai chiesto di attivare il plugin ma il sistema lo ha lasciato disattivato perché dichiara dipendenze npm. Installale e poi attivalo manualmente.</div>'
+      : '';
+    document.getElementById('successDetails').innerHTML = `
+      <ul class="list-unstyled mb-0">
+        <li><strong>Plugin:</strong> ${escapeHtml(res.pluginName)} ${activeBadge}</li>
+        ${d.version ? `<li><strong>Versione:</strong> ${escapeHtml(d.version)}</li>` : ''}
+        ${d.author ? `<li><strong>Autore:</strong> ${escapeHtml(d.author)}</li>` : ''}
+        ${d.license ? `<li><strong>Licenza:</strong> ${escapeHtml(d.license)}</li>` : ''}
+        <li><strong>Path:</strong> <code>${escapeHtml(res.pluginPath)}</code></li>
+      </ul>
+      ${wasDeact}
+    `;
+
+    if (res.hasNpmDeps) {
+      const deps = res.nodeModuleDependency || {};
+      const pkgs = Object.entries(deps).map(([n, v]) => `${n}@${v}`);
+      const cmd = `npm install ${pkgs.join(' ')}`;
+      document.getElementById('npmCommandInput').value = cmd;
+      document.getElementById('npmDepsListLabel').innerText = pkgs.join(', ');
+      document.getElementById('npmDepsCard').style.display = 'block';
+    } else {
+      document.getElementById('npmDepsCard').style.display = 'none';
+    }
+
+    document.getElementById('restartCard').style.display = 'block';
+  }
+}
+
+function showStatusError(msg) {
+  document.getElementById('statusCard').style.display = 'block';
+  document.getElementById('statusBadge').innerText = 'failed';
+  document.getElementById('statusBadge').className = 'badge bg-danger';
+  document.getElementById('errorBox').style.display = 'block';
+  document.getElementById('errorText').innerText = msg;
+}
+
+function resetUi() {
+  if (pollingTimer) { clearInterval(pollingTimer); pollingTimer = null; }
+  document.getElementById('statusCard').style.display = 'none';
+  document.getElementById('phasesList').innerHTML = '';
+  document.getElementById('warningsBox').style.display = 'none';
+  document.getElementById('errorBox').style.display = 'none';
+  document.getElementById('successBox').style.display = 'none';
+  document.getElementById('npmDepsCard').style.display = 'none';
+  document.getElementById('restartCard').style.display = 'none';
+}
+
+function copyNpmCommand() {
+  const input = document.getElementById('npmCommandInput');
+  input.select();
+  input.setSelectionRange(0, 99999);
+  navigator.clipboard.writeText(input.value).then(() => {
+    const btn = document.getElementById('copyNpmCmdBtn');
+    const old = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-check2"></i>';
+    setTimeout(() => { btn.innerHTML = old; }, 1500);
+  });
+}
+
+async function handleRestart() {
+  const supType = supervisorInfo && supervisorInfo.type;
+  let msg;
+  if (supType === 'pm2' || supType === 'nodemon') {
+    msg = `Riavviare il server ora? Il supervisor "${supervisorInfo.label}" dovrebbe riavviarlo automaticamente.`;
+  } else {
+    msg = 'ATTENZIONE: non è stato rilevato un supervisor noto. Il server si fermerà e potrebbe non ripartire da solo. Procedere?';
+  }
+  if (!window.confirm(msg)) return;
+  try {
+    await fetch(`/${apiPrefix}/admin/restart`, { method: 'POST' });
+  } catch (e) {
+    // attesa
+  }
+  alert('Comando di riavvio inviato. La pagina potrebbe essere irraggiungibile per qualche secondo.');
+}
+
+function escapeHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Logica checkbox "Attiva subito" con "?" che spiega quando è disabilitata.
+// La disabilitazione vera avviene solo DOPO l'installazione (si conoscono le deps).
+// In fase di submit, prima di conoscere il plugin, lasciamo l'utente esprimere
+// l'intento; il server fa la decisione finale e mostra eventuale warning.
+</script>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>
