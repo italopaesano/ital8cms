@@ -8,6 +8,13 @@ const ital8Conf = loadJson5('./ital8Config.json5');
 const path = require('path');
 const httpsManager = require('./core/httpsManager');
 
+// CLI control plane (unix socket) — avviato per primo, indipendente dal server HTTP.
+// Se il bind fallisce o cli.enabled=false il server prosegue senza canale CLI.
+const cliBridge = require('./core/cliBridge');
+cliBridge.start(ital8Conf, { projectRoot: __dirname }).catch((err) => {
+  console.error('[cliBridge] errore inatteso durante l\'avvio:', err && err.message ? err.message : err);
+});
+
 const priorityMiddlewares = require('./core/priorityMiddlewares/priorityMiddlewares.js')(app, ital8Conf);
 const router = priorityMiddlewares.router ;
 //const priorityMiddlewares(app); // carico i imidlware che vanno impostati in ordine preciso di caricamento
@@ -299,6 +306,11 @@ function gracefulShutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`[Shutdown] ${signal} ricevuto, chiusura server in corso...`);
+
+  // Chiusura del CLI bridge in parallelo con i server HTTP/HTTPS (non blocca).
+  cliBridge.stop().catch((err) => {
+    console.warn('[cliBridge] errore in stop:', err && err.message ? err.message : err);
+  });
 
   const forceExit = setTimeout(() => {
     console.log('[Shutdown] Timeout raggiunto (' + shutdownTimeout + 'ms), chiusura forzata');
