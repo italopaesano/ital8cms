@@ -29,14 +29,15 @@
         <strong>Convenzione obbligatoria:</strong> il repository deve avere un nome che inizia con
         <code>ital8cms-theme-</code>. Quanto segue diventa il nome del tema (convertito in camelCase) e
         deve combaciare con il campo <code>name</code> in <code>themeDescription.json5</code>.<br>
-        I temi <strong>admin</strong> usano il marker <code>admin-</code> subito dopo il prefisso:
-        in tal caso <code>themeConfig.json5</code> deve dichiarare <code>isAdminTheme: true</code>.
+        Il tipo di tema (public o admin) è dichiarato esclusivamente dal campo
+        <code>isAdminTheme</code> in <code>themeConfig.json5</code>: il nome del repo non distingue
+        fra i due casi.
         <br><br>
         Esempi:
         <ul class="mb-0">
-          <li><code>https://github.com/utente/ital8cms-theme-mySite.git</code> &rarr; tema <code>mySite</code> (public)</li>
-          <li><code>https://github.com/utente/ital8cms-theme-my-cool-site.git</code> &rarr; tema <code>myCoolSite</code> (public)</li>
-          <li><code>https://github.com/utente/ital8cms-theme-admin-dashboard.git</code> &rarr; tema <code>adminDashboard</code> (admin)</li>
+          <li><code>https://github.com/utente/ital8cms-theme-mySite.git</code> &rarr; tema <code>mySite</code></li>
+          <li><code>https://github.com/utente/ital8cms-theme-my-cool-site.git</code> &rarr; tema <code>myCoolSite</code></li>
+          <li><code>https://github.com/utente/ital8cms-theme-adminDashboard.git</code> &rarr; tema <code>adminDashboard</code></li>
         </ul>
       </div>
 
@@ -70,6 +71,34 @@
     </div>
   </div>
 
+  <!-- AREA CONFERMA SOVRASCRITTURA -->
+  <div id="overwriteCard" class="card mb-4 border-danger" style="display:none;">
+    <div class="card-header bg-danger text-white">
+      <h5 class="mb-0"><i class="bi bi-exclamation-octagon"></i> Tema già esistente: conferma sovrascrittura</h5>
+    </div>
+    <div class="card-body">
+      <p class="mb-2">
+        Esiste già una cartella <code id="overwriteThemeName"></code> in <code>themes/</code>.
+        Procedere con la sovrascrittura <strong>cancellerà</strong> il tema attuale prima del clone.
+      </p>
+      <div id="overwriteExistingDetails" class="mb-3"></div>
+      <div class="alert alert-warning small mb-3">
+        <i class="bi bi-exclamation-triangle"></i>
+        <strong>Operazione non recuperabile:</strong> i file del tema attuale verranno rimossi
+        definitivamente. Se il clone successivo fallisce, il tema preesistente <strong>non</strong>
+        verrà ripristinato.
+      </div>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-secondary" id="overwriteCancelBtn">
+          <i class="bi bi-x-lg"></i> Annulla
+        </button>
+        <button type="button" class="btn btn-danger" id="overwriteConfirmBtn">
+          <i class="bi bi-trash3"></i> Sovrascrivi (non recuperabile)
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- AREA STATO -->
   <div id="statusCard" class="card mb-4" style="display:none;">
     <div class="card-header d-flex align-items-center">
@@ -97,10 +126,49 @@
 
 <script>
 let pollingTimer = null;
+// Conserva l'input del form per poterlo rinviare con confirmOverwrite=true.
+let pendingInstallRequest = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('installForm').addEventListener('submit', handleInstallSubmit);
+  document.getElementById('overwriteConfirmBtn').addEventListener('click', handleOverwriteConfirm);
+  document.getElementById('overwriteCancelBtn').addEventListener('click', handleOverwriteCancel);
 });
+
+async function submitInstall(payload) {
+  const submitBtn = document.getElementById('submitBtn');
+  const overwriteBtn = document.getElementById('overwriteConfirmBtn');
+  submitBtn.disabled = true;
+  overwriteBtn.disabled = true;
+  submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Avvio...';
+
+  try {
+    const r = await fetch(`/${apiPrefix}/admin/themes/install`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const j = await r.json();
+    if (!j.success) {
+      if (j.conflict) {
+        showOverwritePrompt(j);
+        return;
+      }
+      showStatusError(j.error || 'Errore sconosciuto.');
+      return;
+    }
+    pendingInstallRequest = null;
+    document.getElementById('overwriteCard').style.display = 'none';
+    document.getElementById('statusCard').style.display = 'block';
+    startPolling(j.installId);
+  } catch (e) {
+    showStatusError(e.message);
+  } finally {
+    submitBtn.disabled = false;
+    overwriteBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="bi bi-cloud-download"></i> Avvia installazione';
+  }
+}
 
 async function handleInstallSubmit(ev) {
   ev.preventDefault();
@@ -108,29 +176,55 @@ async function handleInstallSubmit(ev) {
   const branchOrTag = document.getElementById('branchOrTag').value.trim();
 
   resetUi();
-  const submitBtn = document.getElementById('submitBtn');
-  submitBtn.disabled = true;
-  submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Avvio...';
+  pendingInstallRequest = { repoUrl, branchOrTag: branchOrTag || null };
+  await submitInstall(pendingInstallRequest);
+}
 
-  try {
-    const r = await fetch(`/${apiPrefix}/admin/themes/install`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ repoUrl, branchOrTag: branchOrTag || null })
-    });
-    const j = await r.json();
-    if (!j.success) {
-      showStatusError(j.error || 'Errore sconosciuto.');
-      return;
-    }
-    document.getElementById('statusCard').style.display = 'block';
-    startPolling(j.installId);
-  } catch (e) {
-    showStatusError(e.message);
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.innerHTML = '<i class="bi bi-cloud-download"></i> Avvia installazione';
+async function handleOverwriteConfirm() {
+  if (!pendingInstallRequest) return;
+  document.getElementById('overwriteCard').style.display = 'none';
+  await submitInstall(Object.assign({}, pendingInstallRequest, { confirmOverwrite: true }));
+}
+
+function handleOverwriteCancel() {
+  pendingInstallRequest = null;
+  document.getElementById('overwriteCard').style.display = 'none';
+}
+
+function showOverwritePrompt(conflictResponse) {
+  const themeName = conflictResponse.themeName || '?';
+  const existing = conflictResponse.existingTheme || {};
+  document.getElementById('overwriteThemeName').innerText = themeName;
+
+  const detailsEl = document.getElementById('overwriteExistingDetails');
+  if (existing.invalid) {
+    detailsEl.innerHTML = `
+      <div class="alert alert-secondary small mb-0">
+        <i class="bi bi-question-circle"></i>
+        La cartella esiste ma non sembra contenere un tema valido
+        (${escapeHtml(existing.reason || 'motivo non specificato')}).
+      </div>
+    `;
+  } else {
+    const typeBadge = existing.isAdminTheme === true
+      ? '<span class="badge bg-info text-dark">admin</span>'
+      : existing.isAdminTheme === false
+        ? '<span class="badge bg-light text-dark border">public</span>'
+        : '<span class="badge bg-secondary">tipo sconosciuto</span>';
+    const activeBadge = existing.active
+      ? '<span class="badge bg-success">attivo</span>'
+      : '<span class="badge bg-secondary">disattivato</span>';
+    detailsEl.innerHTML = `
+      <ul class="list-unstyled mb-0">
+        <li><strong>Nome dichiarato:</strong> ${escapeHtml(existing.name || themeName)} ${typeBadge} ${activeBadge}</li>
+        ${existing.version ? `<li><strong>Versione:</strong> ${escapeHtml(existing.version)}</li>` : ''}
+        ${existing.author ? `<li><strong>Autore:</strong> ${escapeHtml(existing.author)}</li>` : ''}
+        ${existing.license ? `<li><strong>Licenza:</strong> ${escapeHtml(existing.license)}</li>` : ''}
+      </ul>
+    `;
   }
+  document.getElementById('overwriteCard').style.display = 'block';
+  document.getElementById('overwriteCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function startPolling(installId) {
@@ -198,10 +292,13 @@ function renderJob(job) {
     const adminBadge = res.isAdminTheme
       ? '<span class="badge bg-info text-dark">admin theme</span>'
       : '<span class="badge bg-light text-dark border">public theme</span>';
+    const overwriteBadge = res.overwritten
+      ? '<span class="badge bg-warning text-dark ms-1">sovrascrittura</span>'
+      : '';
     document.getElementById('successDetails').innerHTML = `
       <ul class="list-unstyled mb-2">
         <li><strong>Tema:</strong> ${escapeHtml(res.themeName)} ${adminBadge}
-            <span class="badge bg-secondary ms-1">disattivato</span></li>
+            <span class="badge bg-secondary ms-1">disattivato</span>${overwriteBadge}</li>
         ${d.version ? `<li><strong>Versione:</strong> ${escapeHtml(d.version)}</li>` : ''}
         ${d.author ? `<li><strong>Autore:</strong> ${escapeHtml(d.author)}</li>` : ''}
         ${d.license ? `<li><strong>Licenza:</strong> ${escapeHtml(d.license)}</li>` : ''}
@@ -229,6 +326,7 @@ function showStatusError(msg) {
 function resetUi() {
   if (pollingTimer) { clearInterval(pollingTimer); pollingTimer = null; }
   document.getElementById('statusCard').style.display = 'none';
+  document.getElementById('overwriteCard').style.display = 'none';
   document.getElementById('phasesList').innerHTML = '';
   document.getElementById('warningsBox').style.display = 'none';
   document.getElementById('errorBox').style.display = 'none';

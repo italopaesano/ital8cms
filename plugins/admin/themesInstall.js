@@ -3,37 +3,36 @@
  *
  * Installa un tema ital8cms clonando un repository Git pubblico.
  *
- * Vincolo principale: il repository remoto DEVE avere un nome che inizia con
+ * Vincolo naming: il repository remoto DEVE avere un nome che inizia con
  * il prefisso configurato in `pluginConfig.json5` (default: "ital8cms-theme-").
- *
- * Convenzione admin theme: se il nome del repo dopo il prefisso inizia con
- * "admin-" (es. "ital8cms-theme-admin-foo"), il tema è considerato un tema
- * admin e DEVE dichiarare `isAdminTheme: true` in `themeConfig.json5`.
- * Viceversa, un repo SENZA "admin-" DEVE dichiarare `isAdminTheme: false`.
- * Mismatch tra naming e flag = installazione fallita con rollback.
+ * Lo stesso prefisso vale per temi public e admin: il tipo è dichiarato
+ * esclusivamente dal campo `isAdminTheme` del `themeConfig.json5` clonato.
  *
  * Nome cartella tema: la parte del nome repo dopo il prefisso viene convertita
  * da kebab-case a camelCase.
  *   "ital8cms-theme-foo"            -> dir themes/foo/
  *   "ital8cms-theme-my-cool-theme"  -> dir themes/myCoolTheme/
- *   "ital8cms-theme-admin-foo"      -> dir themes/adminFoo/         (admin)
- *   "ital8cms-theme-admin-my-foo"   -> dir themes/adminMyFoo/       (admin)
+ *   "ital8cms-theme-admin-foo"      -> dir themes/adminFoo/
  *
  * Post-installazione il tema viene SEMPRE lasciato disattivato e marcato come
  * non installato (`active: 0`, `isInstalled: 0`). L'attivazione manuale è
  * responsabilità dell'amministratore tramite la pagina di gestione temi.
  *
- * Flusso (fasi):
- *   1. Parse e validazione URL, estrazione nome tema, detection admin convention
- *   2. Verifica che la cartella di destinazione non esista
- *   3. Acquisizione lock globale (una sola installazione tema alla volta)
- *   4. Clone via `git clone`
- *   5. Validazione file richiesti, parsing JSON5
- *   6. Controlli incrociati (name coincide, isAdminTheme coerente con URL)
- *   7. Forzatura `active: 0`, `isInstalled: 0`, scrittura `themeConfig.json5`
- *   8. Audit log
+ * Collisione su `themes/<nome>/` esistente:
+ *   - default: 409 con `{conflict: true, existingTheme: {...}}`, nessun job.
+ *   - con `confirmOverwrite: true` nel body: la dir esistente viene rimossa
+ *     prima del clone (fase `overwriteExisting`). Il rollback in caso di
+ *     errore post-clone NON ripristina il tema precedente.
  *
- * Su QUALUNQUE fallimento dopo lo step 4 (clone riuscito) la cartella appena
+ * Flusso (fasi):
+ *   1. Parse e validazione URL, estrazione nome tema
+ *   2. Check destinazione (con eventuale overwrite previa conferma)
+ *   3. Clone via `git clone`
+ *   4. Validazione file richiesti, parsing JSON5, lettura `isAdminTheme`
+ *   5. Forzatura `active: 0`, `isInstalled: 0`, scrittura `themeConfig.json5`
+ *   6. Audit log
+ *
+ * Su QUALUNQUE fallimento dopo lo step 3 (clone riuscito) la cartella appena
  * creata viene rimossa per non lasciare uno stato sporco.
  *
  * I job sono asincroni: il client riceve subito un installId e fa polling
@@ -107,6 +106,7 @@ function snapshotJob(job) {
         branchOrTag: job.branchOrTag || null,
         themeName: job.themeName || null,
         isAdminTheme: typeof job.isAdminTheme === 'boolean' ? job.isAdminTheme : null,
+        confirmOverwrite: !!job.confirmOverwrite,
         phases: job.phases.slice(),
         currentPhase: job.currentPhase || null,
         error: job.error || null,
@@ -144,7 +144,7 @@ function kebabToCamel(input) {
     return input.replace(/-([a-zA-Z0-9])/g, (_, ch) => ch.toUpperCase());
 }
 
-function extractThemeNameFromUrl(repoUrl, repoPrefix, adminInfix) {
+function extractThemeNameFromUrl(repoUrl, repoPrefix) {
     let lastSegment;
     try {
         const parsed = new URL(repoUrl);
@@ -167,7 +167,7 @@ function extractThemeNameFromUrl(repoUrl, repoPrefix, adminInfix) {
     if (!rawSegment) {
         return {
             ok: false,
-            error: `Nome tema vuoto: il repo deve essere "${repoPrefix}<nomeTema>" oppure "${repoPrefix}${adminInfix}<nomeTema>".`,
+            error: `Nome tema vuoto: il repo deve essere "${repoPrefix}<nomeTema>".`,
         };
     }
 
@@ -179,23 +179,7 @@ function extractThemeNameFromUrl(repoUrl, repoPrefix, adminInfix) {
         };
     }
 
-    // Detection admin convention: il segmento inizia con "admin-" (con trattino).
-    // Il caso "admin" da solo è rifiutato perché lascia il nome tema vuoto.
-    let isAdminTheme = false;
-    let baseSegment = rawSegment;
-    if (rawSegment === adminInfix.replace(/-$/, '')) {
-        return {
-            ok: false,
-            error: `Nome tema vuoto dopo il marker admin: il repo deve essere "${repoPrefix}${adminInfix}<nomeTema>".`,
-        };
-    }
-    if (rawSegment.startsWith(adminInfix)) {
-        isAdminTheme = true;
-        // Conserviamo il prefisso "admin-" nella conversione camelCase: diventerà "admin..."
-        baseSegment = rawSegment;
-    }
-
-    const themeName = kebabToCamel(baseSegment);
+    const themeName = kebabToCamel(rawSegment);
     if (!/^[a-zA-Z][a-zA-Z0-9]*$/.test(themeName)) {
         // Sicurezza ulteriore: dopo la conversione restano solo lettere/cifre.
         return {
@@ -208,7 +192,6 @@ function extractThemeNameFromUrl(repoUrl, repoPrefix, adminInfix) {
         ok: true,
         value: {
             themeName,
-            isAdminTheme,
             rawSegment,
         },
     };
@@ -249,6 +232,37 @@ function rollbackThemeDir(themeName) {
     if (fs.existsSync(dir)) {
         fs.rmSync(dir, { recursive: true, force: true });
     }
+}
+
+// Legge i metadati di un tema già presente in themes/<themeName>/.
+// Usato per popolare il dialog di conferma sovrascrittura: l'utente vede
+// cosa sta per essere distrutto. Se la dir esiste ma non sembra un tema
+// valido (file mancanti o non parsificabili) ritorna { invalid: true }.
+function readExistingThemeMetadata(themeName) {
+    const dir = targetThemeDir(themeName);
+    const configPath = path.join(dir, 'themeConfig.json5');
+    const descriptionPath = path.join(dir, 'themeDescription.json5');
+
+    if (!fs.existsSync(configPath) || !fs.existsSync(descriptionPath)) {
+        return { invalid: true, reason: 'file di configurazione assenti' };
+    }
+    let config, description;
+    try {
+        config = loadJson5(configPath);
+        description = loadJson5(descriptionPath);
+    } catch (e) {
+        return { invalid: true, reason: 'file di configurazione non parsificabili' };
+    }
+    return {
+        themeName,
+        name: description.name || null,
+        version: description.version || null,
+        author: description.author || null,
+        license: description.license || null,
+        isAdminTheme: typeof config.isAdminTheme === 'boolean' ? config.isAdminTheme : null,
+        active: config.active === 1,
+        isInstalled: config.isInstalled === 1,
+    };
 }
 
 function writeJson5Atomic(filePath, dataObj, headerComment) {
@@ -310,7 +324,7 @@ function runGitClone({ repoUrl, branchOrTag, destDir, timeoutMs }) {
 
 // ----- POST-CLONE VALIDATION -------------------------------------------------
 
-function validateClonedTheme(themeDir, expectedThemeName, expectedIsAdminTheme) {
+function validateClonedTheme(themeDir, expectedThemeName) {
     const warnings = [];
 
     const configPath = path.join(themeDir, 'themeConfig.json5');
@@ -356,23 +370,12 @@ function validateClonedTheme(themeDir, expectedThemeName, expectedIsAdminTheme) 
         };
     }
 
-    // Cross-check naming convention <-> flag isAdminTheme.
+    // Il flag isAdminTheme è obbligatorio e dichiarato esclusivamente nel
+    // themeConfig.json5; non c'è più alcun cross-check vs URL.
     if (typeof config.isAdminTheme !== 'boolean') {
         return {
             ok: false,
             error: 'themeConfig.json5: il campo "isAdminTheme" è obbligatorio e deve essere booleano (true/false).',
-        };
-    }
-    if (config.isAdminTheme !== expectedIsAdminTheme) {
-        if (expectedIsAdminTheme) {
-            return {
-                ok: false,
-                error: 'Mismatch convenzione admin: il nome repo contiene "admin-" ma themeConfig.json5 ha isAdminTheme=false. Correggere il flag o rinominare il repo.',
-            };
-        }
-        return {
-            ok: false,
-            error: 'Mismatch convenzione admin: il nome repo NON contiene "admin-" ma themeConfig.json5 ha isAdminTheme=true. Correggere il flag o rinominare il repo.',
         };
     }
 
@@ -382,6 +385,7 @@ function validateClonedTheme(themeDir, expectedThemeName, expectedIsAdminTheme) 
             config,
             description,
             configPath,
+            isAdminTheme: config.isAdminTheme,
             warnings,
         },
     };
@@ -447,11 +451,22 @@ async function runInstall(job, installConfig) {
 
     try {
         // FASE 1 - URL parsing già fatto in handler; qui usiamo i valori già validati.
-        pushPhase(job, 'parseUrl', true, `Theme name: "${job.themeName}" (admin: ${job.isAdminTheme})`);
+        pushPhase(job, 'parseUrl', true, `Theme name: "${job.themeName}"`);
 
-        // FASE 2 - check destinazione
+        // FASE 2 - check destinazione. La presenza della dir esistente con
+        // conferma è già stata gestita dall'handler; qui o la dir non esiste
+        // più (overwrite consentito già rimosso poco sopra) o gestiamo il
+        // caso edge in cui sia ricomparsa tra check ed esecuzione del job.
         if (themeDirExists(job.themeName)) {
-            throw new Error(`La cartella themes/${job.themeName} esiste già. Rimuoverla o disinstallare il tema esistente prima di reinstallare.`);
+            if (!job.confirmOverwrite) {
+                throw new Error(`La cartella themes/${job.themeName} esiste già. Operazione interrotta.`);
+            }
+            try {
+                rollbackThemeDir(job.themeName);
+            } catch (e) {
+                throw new Error(`Impossibile rimuovere la cartella esistente themes/${job.themeName}: ${e.message}`);
+            }
+            pushPhase(job, 'overwriteExisting', true, 'Tema preesistente rimosso (sovrascrittura confermata).');
         }
         pushPhase(job, 'checkDestination', true);
 
@@ -473,11 +488,13 @@ async function runInstall(job, installConfig) {
         pushPhase(job, 'cloneDone', true);
 
         // FASE 4 - validazione
-        const valRes = validateClonedTheme(targetThemeDir(job.themeName), job.themeName, job.isAdminTheme);
+        const valRes = validateClonedTheme(targetThemeDir(job.themeName), job.themeName);
         if (!valRes.ok) {
             throw new Error(valRes.error);
         }
-        pushPhase(job, 'validate', true);
+        // Il flag admin viene letto dal config clonato e propagato sul job.
+        job.isAdminTheme = valRes.value.isAdminTheme;
+        pushPhase(job, 'validate', true, `isAdminTheme=${job.isAdminTheme}`);
         valRes.value.warnings.forEach(w => job.warnings.push(w));
 
         // FASE 5 - scrittura config finale (sempre disattivato)
@@ -496,6 +513,7 @@ async function runInstall(job, installConfig) {
             isAdminTheme: job.isAdminTheme,
             active: finalConfig.active === 1,
             isInstalled: finalConfig.isInstalled === 1,
+            overwritten: !!job.confirmOverwrite,
             description: {
                 name: valRes.value.description.name,
                 version: valRes.value.description.version || null,
@@ -509,6 +527,7 @@ async function runInstall(job, installConfig) {
             outcome: 'success',
             themeName: job.themeName,
             isAdminTheme: job.isAdminTheme,
+            overwritten: !!job.confirmOverwrite,
             finishedAt: job.finishedAt,
             warnings: job.warnings,
         }));
@@ -516,7 +535,9 @@ async function runInstall(job, installConfig) {
     } catch (err) {
         if (createdDir) {
             try { rollbackThemeDir(job.themeName); } catch (e) { /* noop */ }
-            pushPhase(job, 'rollback', true, 'Cartella rimossa.');
+            pushPhase(job, 'rollback', true, job.confirmOverwrite
+                ? 'Cartella appena clonata rimossa. Il tema preesistente NON è stato ripristinato.'
+                : 'Cartella rimossa.');
         }
         job.status = JOB_STATUS.FAILED;
         job.finishedAt = new Date().toISOString();
@@ -526,6 +547,7 @@ async function runInstall(job, installConfig) {
             outcome: 'failure',
             themeName: job.themeName || null,
             isAdminTheme: typeof job.isAdminTheme === 'boolean' ? job.isAdminTheme : null,
+            overwritten: !!job.confirmOverwrite,
             finishedAt: job.finishedAt,
             error: err.message,
         }));
@@ -547,7 +569,6 @@ function getRoutes() {
         handler: async (ctx) => {
             const installConfig = loadInstallConfig();
             const repoPrefix = installConfig.repoPrefix || 'ital8cms-theme-';
-            const adminInfix = installConfig.adminInfix || 'admin-';
 
             if (isInstallingTheme) {
                 ctx.status = 409;
@@ -556,6 +577,7 @@ function getRoutes() {
             }
 
             const body = ctx.request.body || {};
+            const confirmOverwrite = body.confirmOverwrite === true || body.confirmOverwrite === 1 || body.confirmOverwrite === '1';
 
             const urlV = validateRepoUrl(body.repoUrl);
             if (!urlV.ok) {
@@ -569,15 +591,26 @@ function getRoutes() {
                 ctx.body = { success: false, error: branchV.error };
                 return;
             }
-            const nameV = extractThemeNameFromUrl(urlV.value, repoPrefix, adminInfix);
+            const nameV = extractThemeNameFromUrl(urlV.value, repoPrefix);
             if (!nameV.ok) {
                 ctx.status = 400;
                 ctx.body = { success: false, error: nameV.error };
                 return;
             }
-            if (themeDirExists(nameV.value.themeName)) {
+
+            // Collisione: senza confirmOverwrite restituiamo i metadati del
+            // tema esistente in modo che la UI possa chiedere conferma. Non
+            // creiamo job né acquisiamo il lock: il client dovrà riinviare
+            // la POST con confirmOverwrite=true se vuole procedere.
+            if (themeDirExists(nameV.value.themeName) && !confirmOverwrite) {
                 ctx.status = 409;
-                ctx.body = { success: false, error: `La cartella themes/${nameV.value.themeName} esiste già.` };
+                ctx.body = {
+                    success: false,
+                    conflict: true,
+                    themeName: nameV.value.themeName,
+                    existingTheme: readExistingThemeMetadata(nameV.value.themeName),
+                    error: `La cartella themes/${nameV.value.themeName} esiste già.`,
+                };
                 return;
             }
 
@@ -589,7 +622,9 @@ function getRoutes() {
                 repoUrl: urlV.value,
                 branchOrTag: branchV.value,
                 themeName: nameV.value.themeName,
-                isAdminTheme: nameV.value.isAdminTheme,
+                // popolato in fase validate dopo lettura del themeConfig.json5
+                isAdminTheme: null,
+                confirmOverwrite,
                 phases: [],
                 currentPhase: null,
                 warnings: [],
@@ -607,7 +642,13 @@ function getRoutes() {
                 });
             });
 
-            ctx.body = { success: true, installId, status: job.status, themeName: job.themeName, isAdminTheme: job.isAdminTheme };
+            ctx.body = {
+                success: true,
+                installId,
+                status: job.status,
+                themeName: job.themeName,
+                overwriting: confirmOverwrite,
+            };
         },
     });
 
@@ -637,5 +678,6 @@ module.exports = {
     _validateBranchOrTag: validateBranchOrTag,
     _validateClonedTheme: validateClonedTheme,
     _kebabToCamel: kebabToCamel,
+    _readExistingThemeMetadata: readExistingThemeMetadata,
     JOB_STATUS,
 };

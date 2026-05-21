@@ -25,18 +25,16 @@
       "exposeGitErrors": true
     },
     // Configurazione del modulo di installazione tema da repo remoto.
-    // Mirror funzionale di "install" ma per i temi, con regole specifiche
-    // sulla convenzione di naming dei repo admin.
+    // Mirror funzionale di "install" ma per i temi. Il tipo di tema (public
+    // vs admin) è determinato esclusivamente dal campo isAdminTheme dichiarato
+    // nel themeConfig.json5 del repo clonato — il nome del repo segue sempre
+    // lo stesso prefisso indipendentemente dal tipo.
     "themesInstall": {
       // Prefisso obbligatorio dei nomi repo Git accettati. Il nome del tema
       // viene estratto da quanto segue questo prefisso (convertito kebab->camel).
-      // Esempio: "ital8cms-theme-myCool" -> tema "myCool"
+      // Esempio: "ital8cms-theme-myCool"        -> tema "myCool"
+      // Esempio: "ital8cms-theme-my-cool-site"  -> tema "myCoolSite"
       "repoPrefix": "ital8cms-theme-",
-      // Marker (post-repoPrefix) che identifica un tema admin. Se il segmento
-      // post-prefisso inizia con questa stringa, il tema deve dichiarare
-      // isAdminTheme: true in themeConfig.json5. Il marker viene MANTENUTO nel
-      // nome cartella finale (es. "ital8cms-theme-admin-foo" -> dir "adminFoo").
-      "adminInfix": "admin-",
       // Timeout per l'operazione di clone (millisecondi).
       "cloneTimeoutMs": 120000,
       // Numero massimo di job di installazione tema completati da mantenere
