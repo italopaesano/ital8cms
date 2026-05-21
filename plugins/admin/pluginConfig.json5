@@ -23,6 +23,27 @@
       // clone. Utile in sviluppo, valutare di disabilitare in produzione per
       // evitare leak di informazioni sensibili (es. path locali).
       "exposeGitErrors": true
+    },
+    // Configurazione del modulo di installazione tema da repo remoto.
+    // Mirror funzionale di "install" ma per i temi, con regole specifiche
+    // sulla convenzione di naming dei repo admin.
+    "themesInstall": {
+      // Prefisso obbligatorio dei nomi repo Git accettati. Il nome del tema
+      // viene estratto da quanto segue questo prefisso (convertito kebab->camel).
+      // Esempio: "ital8cms-theme-myCool" -> tema "myCool"
+      "repoPrefix": "ital8cms-theme-",
+      // Marker (post-repoPrefix) che identifica un tema admin. Se il segmento
+      // post-prefisso inizia con questa stringa, il tema deve dichiarare
+      // isAdminTheme: true in themeConfig.json5. Il marker viene MANTENUTO nel
+      // nome cartella finale (es. "ital8cms-theme-admin-foo" -> dir "adminFoo").
+      "adminInfix": "admin-",
+      // Timeout per l'operazione di clone (millisecondi).
+      "cloneTimeoutMs": 120000,
+      // Numero massimo di job di installazione tema completati da mantenere
+      // in memoria (FIFO).
+      "maxJobHistory": 50,
+      // Se true mostra all'utente l'output stderr di git in caso di errore.
+      "exposeGitErrors": true
     }
   },
   "version": "1.0.0"

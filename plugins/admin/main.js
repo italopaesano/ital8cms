@@ -5,6 +5,7 @@ const loadJson5 = require('../../core/loadJson5');
 const pluginsManagment = require('./pluginsManagment');
 const pluginsInstall = require('./pluginsInstall');
 const themesManagment = require('./themesManagment');
+const themesInstall = require('./themesInstall');
 const systemSettings = require('./systemSettings');
 const pagesManagment = require('./pagesManagment');
 
@@ -126,6 +127,12 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
   // Passa una funzione getter per accedere a myPluginSys a runtime (non a construction time)
   const themeManagmentRoutes = themesManagment.getRoutes(() => myPluginSys);
   themeManagmentRoutes.forEach(route => {
+    routeArray.push(route);
+  });
+
+  // Aggiungi route per installazione tema da repo Git (da themesInstall.js)
+  const themeInstallRoutes = themesInstall.getRoutes();
+  themeInstallRoutes.forEach(route => {
     routeArray.push(route);
   });
 

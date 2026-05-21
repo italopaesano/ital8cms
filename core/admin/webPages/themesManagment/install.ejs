@@ -1,0 +1,249 @@
+<!-- PAGINA INSTALLAZIONE TEMA DA REPO GIT REMOTO -->
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
+
+<script>
+    const apiPrefix = '<%= passData.apiPrefix %>';
+    const adminPrefix = '<%= passData.adminPrefix %>';
+</script>
+
+<%
+  passData.pageTitle = 'Installa Tema da Git';
+  passData.pageIcon = 'bi bi-cloud-download';
+%>
+
+<div class="container mt-4">
+
+  <div class="mb-3">
+    <a href="/<%= passData.adminPrefix %>/themesManagment/index.ejs" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Torna alla lista temi
+    </a>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header">
+      <h5 class="mb-0"><i class="bi bi-cloud-download"></i> Installa un nuovo tema da repository Git</h5>
+    </div>
+    <div class="card-body">
+      <div class="alert alert-info small mb-3">
+        <strong>Convenzione obbligatoria:</strong> il repository deve avere un nome che inizia con
+        <code>ital8cms-theme-</code>. Quanto segue diventa il nome del tema (convertito in camelCase) e
+        deve combaciare con il campo <code>name</code> in <code>themeDescription.json5</code>.<br>
+        I temi <strong>admin</strong> usano il marker <code>admin-</code> subito dopo il prefisso:
+        in tal caso <code>themeConfig.json5</code> deve dichiarare <code>isAdminTheme: true</code>.
+        <br><br>
+        Esempi:
+        <ul class="mb-0">
+          <li><code>https://github.com/utente/ital8cms-theme-mySite.git</code> &rarr; tema <code>mySite</code> (public)</li>
+          <li><code>https://github.com/utente/ital8cms-theme-my-cool-site.git</code> &rarr; tema <code>myCoolSite</code> (public)</li>
+          <li><code>https://github.com/utente/ital8cms-theme-admin-dashboard.git</code> &rarr; tema <code>adminDashboard</code> (admin)</li>
+        </ul>
+      </div>
+
+      <form id="installForm">
+        <div class="mb-3">
+          <label for="repoUrl" class="form-label">URL del repository (HTTPS)</label>
+          <input type="url" class="form-control" id="repoUrl" name="repoUrl" required
+                 placeholder="https://github.com/utente/ital8cms-theme-mySite.git">
+          <div class="form-text">Solo HTTPS, deve terminare con <code>.git</code>.</div>
+        </div>
+
+        <div class="mb-3">
+          <label for="branchOrTag" class="form-label">Branch o Tag <span class="text-muted">(opzionale)</span></label>
+          <input type="text" class="form-control" id="branchOrTag" name="branchOrTag"
+                 placeholder="es. main, v1.2.0, develop">
+          <div class="form-text">Se vuoto, viene usato il branch di default del repository.</div>
+        </div>
+
+        <div class="alert alert-warning small mb-3">
+          <i class="bi bi-info-circle"></i>
+          <strong>Nota:</strong> il tema viene installato sempre <strong>disattivato</strong>
+          (<code>active: 0</code>, <code>isInstalled: 0</code>). Per renderlo disponibile devi attivarlo
+          manualmente dalla pagina di gestione temi; le modifiche all'attivazione richiedono il riavvio
+          del server.
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="submitBtn">
+          <i class="bi bi-cloud-download"></i> Avvia installazione
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- AREA STATO -->
+  <div id="statusCard" class="card mb-4" style="display:none;">
+    <div class="card-header d-flex align-items-center">
+      <h5 class="mb-0 me-2"><i class="bi bi-activity"></i> Stato installazione</h5>
+      <span id="statusBadge" class="badge bg-secondary">pending</span>
+    </div>
+    <div class="card-body">
+      <div id="phasesList" class="mb-3"></div>
+      <div id="warningsBox" class="alert alert-warning" style="display:none;">
+        <strong><i class="bi bi-exclamation-triangle"></i> Avvertimenti:</strong>
+        <ul id="warningsList" class="mb-0"></ul>
+      </div>
+      <div id="errorBox" class="alert alert-danger" style="display:none;">
+        <strong><i class="bi bi-x-octagon"></i> Errore:</strong>
+        <pre id="errorText" class="mb-0 mt-2" style="white-space:pre-wrap; word-break:break-word; font-size:0.9em;"></pre>
+      </div>
+      <div id="successBox" class="alert alert-success" style="display:none;">
+        <strong><i class="bi bi-check-circle"></i> Installazione completata!</strong>
+        <div id="successDetails" class="mt-2"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let pollingTimer = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('installForm').addEventListener('submit', handleInstallSubmit);
+});
+
+async function handleInstallSubmit(ev) {
+  ev.preventDefault();
+  const repoUrl = document.getElementById('repoUrl').value.trim();
+  const branchOrTag = document.getElementById('branchOrTag').value.trim();
+
+  resetUi();
+  const submitBtn = document.getElementById('submitBtn');
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Avvio...';
+
+  try {
+    const r = await fetch(`/${apiPrefix}/admin/themes/install`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ repoUrl, branchOrTag: branchOrTag || null })
+    });
+    const j = await r.json();
+    if (!j.success) {
+      showStatusError(j.error || 'Errore sconosciuto.');
+      return;
+    }
+    document.getElementById('statusCard').style.display = 'block';
+    startPolling(j.installId);
+  } catch (e) {
+    showStatusError(e.message);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="bi bi-cloud-download"></i> Avvia installazione';
+  }
+}
+
+function startPolling(installId) {
+  if (pollingTimer) clearInterval(pollingTimer);
+  const tick = async () => {
+    try {
+      const r = await fetch(`/${apiPrefix}/admin/themes/install/${encodeURIComponent(installId)}/status`);
+      const j = await r.json();
+      if (!j.success) {
+        showStatusError(j.error || 'Errore sconosciuto.');
+        clearInterval(pollingTimer); pollingTimer = null;
+        return;
+      }
+      renderJob(j.job);
+      if (j.job.status === 'success' || j.job.status === 'failed') {
+        clearInterval(pollingTimer); pollingTimer = null;
+      }
+    } catch (e) {
+      console.error('Errore polling:', e);
+    }
+  };
+  tick();
+  pollingTimer = setInterval(tick, 1000);
+}
+
+function renderJob(job) {
+  const badge = document.getElementById('statusBadge');
+  badge.innerText = job.status;
+  badge.className = 'badge ' + (
+    job.status === 'success' ? 'bg-success' :
+    job.status === 'failed'  ? 'bg-danger'  :
+    job.status === 'running' ? 'bg-primary' : 'bg-secondary'
+  );
+
+  const phasesList = document.getElementById('phasesList');
+  phasesList.innerHTML = job.phases.map(p => `
+    <div class="d-flex align-items-start mb-1">
+      <span class="me-2">${p.ok ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-danger"></i>'}</span>
+      <div>
+        <strong>${escapeHtml(p.name)}</strong>
+        ${p.detail ? `<div class="small text-muted">${escapeHtml(p.detail)}</div>` : ''}
+      </div>
+    </div>
+  `).join('');
+
+  if (job.warnings && job.warnings.length > 0) {
+    document.getElementById('warningsBox').style.display = 'block';
+    document.getElementById('warningsList').innerHTML =
+      job.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('');
+  } else {
+    document.getElementById('warningsBox').style.display = 'none';
+  }
+
+  if (job.status === 'failed') {
+    document.getElementById('errorBox').style.display = 'block';
+    document.getElementById('errorText').innerText = job.error || 'Errore sconosciuto.';
+    document.getElementById('successBox').style.display = 'none';
+    return;
+  }
+
+  if (job.status === 'success' && job.result) {
+    const res = job.result;
+    document.getElementById('successBox').style.display = 'block';
+    const d = res.description || {};
+    const adminBadge = res.isAdminTheme
+      ? '<span class="badge bg-info text-dark">admin theme</span>'
+      : '<span class="badge bg-light text-dark border">public theme</span>';
+    document.getElementById('successDetails').innerHTML = `
+      <ul class="list-unstyled mb-2">
+        <li><strong>Tema:</strong> ${escapeHtml(res.themeName)} ${adminBadge}
+            <span class="badge bg-secondary ms-1">disattivato</span></li>
+        ${d.version ? `<li><strong>Versione:</strong> ${escapeHtml(d.version)}</li>` : ''}
+        ${d.author ? `<li><strong>Autore:</strong> ${escapeHtml(d.author)}</li>` : ''}
+        ${d.license ? `<li><strong>Licenza:</strong> ${escapeHtml(d.license)}</li>` : ''}
+        <li><strong>Path:</strong> <code>${escapeHtml(res.themePath)}</code></li>
+      </ul>
+      <div class="alert alert-info small mb-0">
+        <i class="bi bi-info-circle"></i>
+        Il tema è stato installato ma resta <strong>disattivato</strong>. Vai alla
+        <a href="/${adminPrefix}/themesManagment/index.ejs" class="alert-link">pagina di gestione temi</a>
+        per attivarlo come tema pubblico o admin. L'attivazione richiede il riavvio del server
+        per avere effetto.
+      </div>
+    `;
+  }
+}
+
+function showStatusError(msg) {
+  document.getElementById('statusCard').style.display = 'block';
+  document.getElementById('statusBadge').innerText = 'failed';
+  document.getElementById('statusBadge').className = 'badge bg-danger';
+  document.getElementById('errorBox').style.display = 'block';
+  document.getElementById('errorText').innerText = msg;
+}
+
+function resetUi() {
+  if (pollingTimer) { clearInterval(pollingTimer); pollingTimer = null; }
+  document.getElementById('statusCard').style.display = 'none';
+  document.getElementById('phasesList').innerHTML = '';
+  document.getElementById('warningsBox').style.display = 'none';
+  document.getElementById('errorBox').style.display = 'none';
+  document.getElementById('successBox').style.display = 'none';
+}
+
+function escapeHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+</script>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>
