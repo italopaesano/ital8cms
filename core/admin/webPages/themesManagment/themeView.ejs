@@ -10,6 +10,12 @@
     const themeNameParam = '<%= passData.query.theme || '' %>';
 </script>
 
+<%
+  // Determina se l'utente corrente può riavviare ital8cms (root o admin).
+  const _userRoleIds = (passData.ctx && passData.ctx.session && passData.ctx.session.user && passData.ctx.session.user.roleIds) || [];
+  const canRestartIta8cms = _userRoleIds.some(id => id === 0 || id === 1);
+%>
+
 <!-- Loading Container -->
 <div class="container mt-4" id="loading-container">
     <div class="text-center">
@@ -40,10 +46,20 @@
             <i class="bi bi-palette"></i>
             Tema: <span id="theme-name"></span>
         </h2>
-        <a href="/<%= passData.adminPrefix %>/themesManagment/index.ejs" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left"></i> Torna alla Lista Temi
-        </a>
+        <div class="d-flex gap-2">
+            <% if (canRestartIta8cms) { %>
+                <button type="button" class="btn btn-warning" onclick="confirmRestart()" title="Riavvia l'intero processo ital8cms per applicare modifiche che richiedono restart (es. cambio tema)">
+                    <i class="bi bi-arrow-clockwise"></i> Riavvia ital8cms
+                </button>
+            <% } %>
+            <a href="/<%= passData.adminPrefix %>/themesManagment/index.ejs" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Torna alla Lista Temi
+            </a>
+        </div>
     </div>
+
+    <!-- Alert messaggi -->
+    <div id="alert-container"></div>
 
     <!-- Stato Attivazione -->
     <div class="row mb-4">
@@ -135,9 +151,10 @@
             </div>
             <div class="modal-body">
                 <p id="activateThemeMessage"></p>
-                <div class="alert alert-info">
+                <div class="alert alert-info mb-0">
                     <i class="bi bi-info-circle"></i>
-                    <strong>Nota:</strong> Per applicare il nuovo tema, potrebbe essere necessario riavviare il server.
+                    <strong>Nota:</strong> Il nuovo tema sarà effettivamente applicato solo dopo il riavvio di ital8cms.
+                    Dopo l'attivazione potrai cliccare "Riavvia ora" per applicare subito le modifiche.
                 </div>
             </div>
             <div class="modal-footer">
@@ -147,6 +164,48 @@
                 </button>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- Modal Conferma Riavvio ital8cms -->
+<div class="modal fade" id="restartConfirmModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-arrow-clockwise"></i> Riavvia ital8cms</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Stai per riavviare l'intero processo ital8cms.</p>
+                <div class="alert alert-warning mb-0">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Conseguenze:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>Tutte le sessioni HTTP attive verranno interrotte (sia admin che pubblico)</li>
+                        <li>Il sito sarà irraggiungibile per circa 3-5 secondi</li>
+                        <li>Eventuali upload/operazioni in corso verranno terminati</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-warning" id="confirmRestartBtn">
+                    <i class="bi bi-arrow-clockwise"></i> Riavvia ora
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Overlay Riavvio in corso (fullscreen) -->
+<div id="restartOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; color:white; align-items:center; justify-content:center; flex-direction:column;">
+    <div class="text-center">
+        <div class="spinner-border text-light mb-3" role="status" style="width:4rem; height:4rem;">
+            <span class="visually-hidden">Riavvio in corso...</span>
+        </div>
+        <h3 id="restartOverlayTitle">Riavvio di ital8cms in corso...</h3>
+        <p id="restartOverlayMessage" class="mt-3 mb-0">Attendi qualche secondo. La pagina si ricaricherà automaticamente quando il server sarà pronto.</p>
+        <p id="restartOverlayStatus" class="mt-2 text-muted small"></p>
     </div>
 </div>
 
@@ -477,20 +536,143 @@ document.getElementById('confirmActivateBtn').addEventListener('click', async fu
         const result = await response.json();
 
         if (result.success) {
-            alert(result.message || 'Tema attivato con successo!');
-            window.location.reload();
+            // Costruisce un alert "ricco" con nota di chiarimento + pulsante "Riavvia ora"
+            // quando il server segnala che serve un restart per applicare il tema.
+            const baseMsg = escapeHtml(result.message || 'Tema attivato con successo!');
+            if (result.needsRestart) {
+                showAlertHtml('success', `
+                    <div><strong>${baseMsg}</strong></div>
+                    <div class="mt-2">Il nuovo tema sarà effettivamente applicato solo dopo il riavvio di ital8cms. Clicca "Riavvia ora" per applicare subito le modifiche.</div>
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-warning btn-sm" onclick="confirmRestart()">
+                            <i class="bi bi-arrow-clockwise"></i> Riavvia ora
+                        </button>
+                    </div>
+                `);
+            } else {
+                showAlert('success', baseMsg);
+            }
         } else {
-            alert('Errore: ' + (result.error || 'Impossibile attivare il tema'));
+            showAlert('danger', 'Errore: ' + (result.error || 'Impossibile attivare il tema'));
         }
     } catch (error) {
         console.error('Errore:', error);
-        alert('Errore nella richiesta: ' + error.message);
+        showAlert('danger', 'Errore nella richiesta: ' + error.message);
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-check"></i> Conferma';
         bootstrap.Modal.getInstance(document.getElementById('activateThemeModal')).hide();
     }
 });
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Alert UI helpers
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function showAlert(type, message) {
+    showAlertHtml(type, `<div>${escapeHtml(message)}</div>`);
+}
+
+function showAlertHtml(type, innerHtml) {
+    const alertHtml = `
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${innerHtml}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    document.getElementById('alert-container').innerHTML = alertHtml;
+    window.scrollTo(0, 0);
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Logica restart ital8cms
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function confirmRestart() {
+    const modal = new bootstrap.Modal(document.getElementById('restartConfirmModal'));
+    modal.show();
+}
+
+document.getElementById('confirmRestartBtn').addEventListener('click', async function() {
+    const btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Invio richiesta...';
+
+    try {
+        const response = await fetch(`/${apiPrefix}/admin/restart`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.ok) {
+            showAlert('danger', 'Errore nella richiesta di riavvio: ' + (result.error || 'risposta inattesa dal server'));
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Riavvia ora';
+            return;
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById('restartConfirmModal')).hide();
+        startRestartOverlay(result.mode);
+    } catch (error) {
+        console.error('Errore restart:', error);
+        bootstrap.Modal.getInstance(document.getElementById('restartConfirmModal')).hide();
+        startRestartOverlay('unknown');
+    }
+});
+
+function startRestartOverlay(mode) {
+    const overlay = document.getElementById('restartOverlay');
+    const status = document.getElementById('restartOverlayStatus');
+    overlay.style.display = 'flex';
+    status.textContent = mode === 'supervisor'
+        ? 'Modalità: supervisor (PM2/systemd/supervisord)'
+        : (mode === 'self-respawn' ? 'Modalità: self-respawn' : 'Modalità: ' + mode);
+
+    pollServerUp();
+}
+
+async function pollServerUp() {
+    const POLL_INTERVAL_MS = 500;
+    const TIMEOUT_MS = 30000;
+    const startedAt = Date.now();
+
+    // Diamo al server il tempo di chiudersi prima di iniziare il polling,
+    // altrimenti il primo ping potrebbe colpire il vecchio processo ancora vivo.
+    await sleep(800);
+
+    while (Date.now() - startedAt < TIMEOUT_MS) {
+        try {
+            const r = await fetch(`/${apiPrefix}/admin/ping`, {
+                method: 'GET',
+                cache: 'no-store'
+            });
+            if (r.ok) {
+                const data = await r.json().catch(() => ({}));
+                if (data && data.ok) {
+                    document.getElementById('restartOverlayTitle').textContent = 'Server tornato attivo, ricarico la pagina...';
+                    await sleep(300);
+                    window.location.reload();
+                    return;
+                }
+            }
+        } catch (_e) {
+            // Errore di rete atteso mentre il server è giù: continua il polling.
+        }
+        await sleep(POLL_INTERVAL_MS);
+    }
+
+    document.getElementById('restartOverlayTitle').textContent = 'Il server non risponde';
+    document.getElementById('restartOverlayMessage').innerHTML =
+        'Il riavvio sta impiegando più del previsto (oltre 30 secondi). ' +
+        'Controlla i log del processo, poi ricarica manualmente la pagina ' +
+        '<a href="#" onclick="window.location.reload(); return false;" class="text-warning">cliccando qui</a>.';
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 </script>
 
 <%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>

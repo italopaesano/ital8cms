@@ -683,6 +683,32 @@ class pluginSys{
   }
 
   /**
+   * Registra il callback da invocare quando un plugin richiede un riavvio
+   * di ital8cms (es. dopo cambio tema). Il callback è iniettato da index.js
+   * e tipicamente delega a gracefulShutdown(reason, { respawn: true }).
+   * @param {function} fn - funzione ({reason}) => void
+   */
+  setRequestRestart(fn) {
+    this.requestRestartCallback = fn;
+  }
+
+  /**
+   * Invocata dai plugin per richiedere un riavvio dell'intero processo.
+   * Se non è stato registrato alcun callback (situazione anomala) logga
+   * un warning e non fa nulla — il chiamante deve gestire il caso.
+   * @param {object} opts - { reason: string }
+   * @returns {boolean} - true se il callback è stato invocato, false altrimenti
+   */
+  requestRestart(opts = {}) {
+    if (typeof this.requestRestartCallback !== 'function') {
+      logger.warn('pluginSys', 'requestRestart() chiamato ma nessun callback registrato (setRequestRestart mai chiamato)');
+      return false;
+    }
+    this.requestRestartCallback(opts);
+    return true;
+  }
+
+  /**
    * Ottiene tutti i plugin attivi (per AdminSystem.initialize)
    * @returns {Array<object>} - Array di plugin objects
    */
