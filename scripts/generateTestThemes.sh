@@ -16,9 +16,13 @@
 # Risultato atteso al clone via 'git clone --progress': barra visibile per
 # ~2-3 secondi su rete domestica, con transizione visibile tra gli stadi.
 #
-# Naming (convenzione kebabToCamel del modulo themesInstall):
-#   Repo:    ital8cms-theme-theme-public-for-test  →  cartella: themePublicForTest
-#   Repo:    ital8cms-theme-theme-admin-for-test   →  cartella: themeAdminForTest
+# Naming (convenzione del modulo themesInstall):
+#   Repo:    ital8cms-theme-themePublicForTest  →  cartella: themePublicForTest
+#   Repo:    ital8cms-theme-themeAdminForTest   →  cartella: themeAdminForTest
+#
+# Nota: il modulo applica kebabToCamel al segmento dopo "ital8cms-theme-",
+# ma se il segmento è già camelCase (nessun dash) la conversione è un no-op
+# e il segmento viene usato così com'è come nome cartella.
 #
 # Usage:
 #   bash scripts/generateTestThemes.sh [outputDir]
@@ -195,14 +199,14 @@ main() {
     create_theme \
         "themePublicForTest" \
         "false" \
-        "theme-public-for-test" \
+        "themePublicForTest" \
         "pubblico"
     echo
 
     create_theme \
         "themeAdminForTest" \
         "true" \
-        "theme-admin-for-test" \
+        "themeAdminForTest" \
         "admin"
     echo
 
@@ -216,8 +220,8 @@ Prossimi passi per ognuno dei due temi:
   git add .
   git commit -m "Initial commit: dummy public theme for progress bar testing"
   git branch -M main
-  # Crea il repo su GitHub con nome 'ital8cms-theme-theme-public-for-test'
-  git remote add origin https://github.com/<USER>/ital8cms-theme-theme-public-for-test.git
+  # Crea il repo su GitHub con nome 'ital8cms-theme-themePublicForTest'
+  git remote add origin https://github.com/<USER>/ital8cms-theme-themePublicForTest.git
   git push -u origin main
 
   cd $OUT_DIR/themeAdminForTest
@@ -225,14 +229,14 @@ Prossimi passi per ognuno dei due temi:
   git add .
   git commit -m "Initial commit: dummy admin theme for progress bar testing"
   git branch -M main
-  # Crea il repo su GitHub con nome 'ital8cms-theme-theme-admin-for-test'
-  git remote add origin https://github.com/<USER>/ital8cms-theme-theme-admin-for-test.git
+  # Crea il repo su GitHub con nome 'ital8cms-theme-themeAdminForTest'
+  git remote add origin https://github.com/<USER>/ital8cms-theme-themeAdminForTest.git
   git push -u origin main
 
 Poi nel pannello admin ital8cms (/admin/themesManagment/install.ejs) inserisci:
-  https://github.com/<USER>/ital8cms-theme-theme-public-for-test.git
+  https://github.com/<USER>/ital8cms-theme-themePublicForTest.git
 oppure:
-  https://github.com/<USER>/ital8cms-theme-theme-admin-for-test.git
+  https://github.com/<USER>/ital8cms-theme-themeAdminForTest.git
 
 Nota: il push di ~7MB su GitHub può richiedere qualche secondo a seconda
 della banda in upload. Il clone dal pannello admin di ital8cms invece
