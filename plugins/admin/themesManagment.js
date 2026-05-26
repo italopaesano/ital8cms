@@ -20,7 +20,7 @@
  *    - Attiva un tema per il sito pubblico o il pannello admin
  *    - themeType: 'public' (activeTheme) o 'admin' (adminActiveTheme)
  *    - Valida tema prima di attivare
- *    - Modifica ital8Config.json con salvataggio atomico
+ *    - Modifica ital8Config.json5 preservando i commenti (editJson5)
  *    - Ritorna necessità di riavvio server
  *
  * 4. getRoutes()
@@ -36,6 +36,7 @@
 const fs = require('fs');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
+const editJson5 = require('../../core/editJson5');
 
 /**
  * Ritorna la lista di tutti i temi disponibili
@@ -271,7 +272,7 @@ function getAllFiles(dirPath, basePath) {
  * @param {object} themeSys - Istanza del sistema temi
  * @returns {object} Risultato operazione
  */
-function setActiveTheme(themeName, themeType, themeSys) {
+async function setActiveTheme(themeName, themeType, themeSys) {
     try {
         // Validazione parametri
         if (!themeName || !themeType) {
@@ -343,23 +344,11 @@ function setActiveTheme(themeName, themeType, themeSys) {
             }
         }
 
-        // Carica configurazione corrente
-        const configPath = path.join(__dirname, '../../ital8Config.json');
-        const config = loadJson5(configPath);
-
-        // Modifica configurazione
-        const oldTheme = themeType === 'public' ? config.activeTheme : config.adminActiveTheme;
-
-        if (themeType === 'public') {
-            config.activeTheme = themeName;
-        } else {
-            config.adminActiveTheme = themeName;
-        }
-
-        // Salvataggio atomico
-        const tempPath = configPath + '.tmp';
-        fs.writeFileSync(tempPath, JSON.stringify(config, null, 2), 'utf8');
-        fs.renameSync(tempPath, configPath);
+        // Modifica configurazione preservando commenti JSON5
+        const configPath = path.join(__dirname, '../../ital8Config.json5');
+        const fieldName = themeType === 'public' ? 'activeTheme' : 'adminActiveTheme';
+        const editResult = await editJson5(configPath, fieldName, themeName);
+        const oldTheme = editResult.oldValue;
 
         const typeLabel = themeType === 'public' ? 'sito pubblico' : 'pannello admin';
 
@@ -479,7 +468,7 @@ function getRoutes(getPluginSys) {
                         throw new Error('themeSys non disponibile');
                     }
 
-                    const result = setActiveTheme(themeName, themeType, themeSys);
+                    const result = await setActiveTheme(themeName, themeType, themeSys);
 
                     if (result.success) {
                         ctx.body = result;

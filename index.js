@@ -112,7 +112,7 @@ function createThemeSysWrapper(themeSys, passData) {
 
 // Static server per le risorse del tema pubblico
 // Le risorse sono accessibili tramite /{publicThemeResourcesPrefix}/css/, /{publicThemeResourcesPrefix}/js/, ecc.
-// Configurazione cache controllata da browserCacheEnabled e browserCacheMaxAge in ital8Config.json
+// Configurazione cache controllata da browserCacheEnabled e browserCacheMaxAge in ital8Config.json5
 app.use(
   koaClassicServer(
     path.join(__dirname, 'themes', ital8Conf.activeTheme, 'themeResources'),
@@ -223,7 +223,7 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
 
   // Static server per le risorse del tema admin
   // Le risorse sono accessibili tramite /{adminThemeResourcesPrefix}/css/, /{adminThemeResourcesPrefix}/js/, ecc.
-  // Configurazione cache controllata da browserCacheEnabled e browserCacheMaxAge in ital8Config.json
+  // Configurazione cache controllata da browserCacheEnabled e browserCacheMaxAge in ital8Config.json5
   app.use(
     koaClassicServer(
       path.join(__dirname, 'themes', ital8Conf.adminActiveTheme, 'themeResources'),
