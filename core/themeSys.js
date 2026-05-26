@@ -261,27 +261,29 @@ class themeSys{
     // Controlla dipendenze moduli NPM
     const nodeDeps = config.nodeModuleDependency || {};
     for (const [moduleName, versionRequired] of Object.entries(nodeDeps)) {
-      try {
-        // Verifica che il modulo sia installato
-        const modulePath = require.resolve(moduleName);
+      // Risoluzione package.json: accesso diretto a node_modules/{moduleName}/package.json.
+      // NOTA: NON usare require.resolve() + path.dirname() + '..' perché alcuni moduli
+      // hanno l'entry in sotto-cartelle (es. ejs v4+ in lib/cjs/ejs.js). Usare require('{m}/package.json')
+      // non è affidabile perché il campo "exports" può bloccare il subpath './package.json'.
+      const modulePackagePath = path.join(__dirname, '..', 'node_modules', moduleName, 'package.json');
 
-        // Verifica versione se specificata
-        if (versionRequired && versionRequired !== '*') {
-          try {
-            const packageJsonPath = path.join(path.dirname(modulePath), '..', 'package.json');
-            const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-            const installedVersion = packageJson.version;
-
-            if (installedVersion && !semver.satisfies(installedVersion, versionRequired)) {
-              errors.push(`Modulo NPM '${moduleName}' versione ${installedVersion} non soddisfa requisito ${versionRequired}`);
-            }
-          } catch {
-            // Se non riesce a leggere la versione, considera comunque il modulo installato
-            console.warn(`[themeSys] Impossibile verificare versione del modulo '${moduleName}'`);
-          }
-        }
-      } catch {
+      if (!fs.existsSync(modulePackagePath)) {
         errors.push(`Modulo NPM '${moduleName}' richiesto ma non installato`);
+        continue;
+      }
+
+      // Verifica versione se specificata
+      if (versionRequired && versionRequired !== '*') {
+        try {
+          const packageJson = JSON.parse(fs.readFileSync(modulePackagePath, 'utf8'));
+          const installedVersion = packageJson.version;
+
+          if (installedVersion && !semver.satisfies(installedVersion, versionRequired)) {
+            errors.push(`Modulo NPM '${moduleName}' versione ${installedVersion} non soddisfa requisito ${versionRequired}`);
+          }
+        } catch (err) {
+          console.warn(`[themeSys] Impossibile verificare versione del modulo '${moduleName}': ${err.message}`);
+        }
       }
     }
 
