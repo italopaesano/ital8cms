@@ -112,6 +112,8 @@ function snapshotJob(job) {
         error: job.error || null,
         warnings: job.warnings.slice(),
         result: job.result || null,
+        progress: job.progress || null,
+        progressHistory: job.progressHistory ? job.progressHistory.slice() : [],
         startedAt: job.startedAt,
         finishedAt: job.finishedAt || null,
     };
@@ -275,9 +277,59 @@ function writeJson5Atomic(filePath, dataObj, headerComment) {
 
 // ----- GIT CLONE -------------------------------------------------------------
 
-function runGitClone({ repoUrl, branchOrTag, destDir, timeoutMs }) {
+// Parser delle righe di progress emesse da `git clone --progress` su stderr.
+// Riconosce tre stadi: 'receiving' (download oggetti), 'resolving' (risoluzione
+// delta) e 'updatingFiles' (checkout dei file sul working tree).
+// Ritorna null se la riga non è un progress riconosciuto.
+function parseGitProgressLine(line) {
+    if (typeof line !== 'string') return null;
+
+    // Receiving objects:  45% (123/270), 1.20 MiB | 800.00 KiB/s
+    let m = line.match(/Receiving objects:\s+(\d+)%\s+\((\d+)\/(\d+)\)(?:,\s+([\d.]+\s+[KMGT]?i?B))?(?:\s*\|\s*([\d.]+\s+[KMGT]?i?B\/s))?/);
+    if (m) {
+        return {
+            stage: 'receiving',
+            percent: parseInt(m[1], 10),
+            current: parseInt(m[2], 10),
+            total: parseInt(m[3], 10),
+            bytes: m[4] || null,
+            rate: m[5] || null,
+        };
+    }
+
+    // Resolving deltas:  60% (50/83)
+    m = line.match(/Resolving deltas:\s+(\d+)%\s+\((\d+)\/(\d+)\)/);
+    if (m) {
+        return {
+            stage: 'resolving',
+            percent: parseInt(m[1], 10),
+            current: parseInt(m[2], 10),
+            total: parseInt(m[3], 10),
+            bytes: null,
+            rate: null,
+        };
+    }
+
+    // Updating files:  80% (40/50)
+    m = line.match(/Updating files:\s+(\d+)%\s+\((\d+)\/(\d+)\)/);
+    if (m) {
+        return {
+            stage: 'updatingFiles',
+            percent: parseInt(m[1], 10),
+            current: parseInt(m[2], 10),
+            total: parseInt(m[3], 10),
+            bytes: null,
+            rate: null,
+        };
+    }
+
+    return null;
+}
+
+function runGitClone({ repoUrl, branchOrTag, destDir, timeoutMs, onProgress }) {
     return new Promise((resolve) => {
-        const args = ['clone', '--depth', '1'];
+        // `--progress` forza l'emissione dei progress su stderr anche senza TTY.
+        const args = ['clone', '--progress', '--depth', '1'];
         if (branchOrTag) {
             args.push('--branch', branchOrTag);
         }
@@ -290,6 +342,7 @@ function runGitClone({ repoUrl, branchOrTag, destDir, timeoutMs }) {
 
         let stderrBuf = '';
         let stdoutBuf = '';
+        let partialLine = '';
         let timedOut = false;
 
         const child = spawn('git', args, { env });
@@ -300,7 +353,25 @@ function runGitClone({ repoUrl, branchOrTag, destDir, timeoutMs }) {
         }, timeoutMs);
 
         child.stdout.on('data', (d) => { stdoutBuf += d.toString(); });
-        child.stderr.on('data', (d) => { stderrBuf += d.toString(); });
+
+        child.stderr.on('data', (d) => {
+            const chunk = d.toString();
+            stderrBuf += chunk;
+
+            if (typeof onProgress !== 'function') return;
+
+            // git separa gli update di progress con '\r' (overwrite della stessa
+            // riga di terminale) e le righe finali con '\n'. Split su entrambi.
+            const tokens = (partialLine + chunk).split(/[\r\n]+/);
+            partialLine = tokens.pop() || '';
+            for (const token of tokens) {
+                if (!token) continue;
+                const ev = parseGitProgressLine(token);
+                if (ev) {
+                    try { onProgress(ev); } catch (e) { /* noop: callback safety */ }
+                }
+            }
+        });
 
         child.on('error', (err) => {
             clearTimeout(killer);
@@ -309,6 +380,14 @@ function runGitClone({ repoUrl, branchOrTag, destDir, timeoutMs }) {
 
         child.on('close', (code) => {
             clearTimeout(killer);
+            // Flush eventuale ultima riga rimasta nel buffer.
+            if (partialLine && typeof onProgress === 'function') {
+                const ev = parseGitProgressLine(partialLine);
+                if (ev) {
+                    try { onProgress(ev); } catch (e) { /* noop */ }
+                }
+                partialLine = '';
+            }
             if (timedOut) {
                 resolve({ ok: false, error: 'Timeout durante il clone del repository.', stderr: stderrBuf });
                 return;
@@ -472,11 +551,37 @@ async function runInstall(job, installConfig) {
 
         // FASE 3 - clone
         pushPhase(job, 'cloneStart', true, job.branchOrTag ? `branch/tag: ${job.branchOrTag}` : 'default branch');
+
+        // Throttle progress: max 1 update ogni 200ms. Cambio stage e percent===100
+        // bypassano il throttle per non perdere transizioni e completamenti.
+        const THROTTLE_MS = 200;
+        const HISTORY_CAP = 500;
+        let lastEmitMs = 0;
+        let lastStage = null;
+        const onProgress = (ev) => {
+            const now = Date.now();
+            const stageChanged = ev.stage !== lastStage;
+            const isComplete = ev.percent === 100;
+            if (!stageChanged && !isComplete && (now - lastEmitMs) < THROTTLE_MS) {
+                return;
+            }
+            lastEmitMs = now;
+            lastStage = ev.stage;
+            const snapshot = Object.assign({}, ev, { at: new Date(now).toISOString() });
+            job.progress = snapshot;
+            job.progressHistory.push(snapshot);
+            if (job.progressHistory.length > HISTORY_CAP) {
+                // Drop dei più vecchi mantenendo gli ultimi HISTORY_CAP.
+                job.progressHistory.splice(0, job.progressHistory.length - HISTORY_CAP);
+            }
+        };
+
         const cloneRes = await runGitClone({
             repoUrl: job.repoUrl,
             branchOrTag: job.branchOrTag,
             destDir: targetThemeDir(job.themeName),
             timeoutMs: installConfig.cloneTimeoutMs || 120000,
+            onProgress,
         });
         if (!cloneRes.ok) {
             const detail = installConfig.exposeGitErrors && cloneRes.stderr
@@ -630,6 +735,8 @@ function getRoutes() {
                 warnings: [],
                 error: null,
                 result: null,
+                progress: null,
+                progressHistory: [],
                 startedAt: new Date().toISOString(),
                 finishedAt: null,
                 user: ctx.session && ctx.session.user ? ctx.session.user.username : null,
@@ -679,5 +786,6 @@ module.exports = {
     _validateClonedTheme: validateClonedTheme,
     _kebabToCamel: kebabToCamel,
     _readExistingThemeMetadata: readExistingThemeMetadata,
+    _parseGitProgressLine: parseGitProgressLine,
     JOB_STATUS,
 };
