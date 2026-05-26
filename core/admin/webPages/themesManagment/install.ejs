@@ -71,6 +71,24 @@
     </div>
   </div>
 
+  <!-- AREA DRY-RUN (visibile solo se debugMode >= 1 in ital8Config.json5) -->
+  <div id="dryRunCard" class="card mb-4 border-info" style="display:none;">
+    <div class="card-header bg-info bg-opacity-10">
+      <h6 class="mb-0"><i class="bi bi-bug"></i> Debug: dry-run installazione</h6>
+    </div>
+    <div class="card-body">
+      <p class="small mb-2">
+        Esegue una finta installazione che emette eventi di progress realistici per
+        circa 5 secondi, senza scaricare nulla né scrivere su disco. Utile per
+        testare visivamente la progress bar e il flusso UI in isolamento. Disponibile
+        solo con <code>debugMode: 1</code> in <code>ital8Config.json5</code>.
+      </p>
+      <button type="button" class="btn btn-sm btn-outline-info" id="dryRunBtn">
+        <i class="bi bi-play-fill"></i> Esegui dry-run
+      </button>
+    </div>
+  </div>
+
   <!-- AREA CONFERMA SOVRASCRITTURA -->
   <div id="overwriteCard" class="card mb-4 border-danger" style="display:none;">
     <div class="card-header bg-danger text-white">
@@ -140,6 +158,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('installForm').addEventListener('submit', handleInstallSubmit);
   document.getElementById('overwriteConfirmBtn').addEventListener('click', handleOverwriteConfirm);
   document.getElementById('overwriteCancelBtn').addEventListener('click', handleOverwriteCancel);
+  document.getElementById('dryRunBtn').addEventListener('click', handleDryRun);
+  // Discovery del dry-run: visibile solo se il server lo abilita (debugMode >= 1).
+  checkDryRunAvailability();
 });
 
 async function submitInstall(payload) {
@@ -232,6 +253,58 @@ function showOverwritePrompt(conflictResponse) {
   }
   document.getElementById('overwriteCard').style.display = 'block';
   document.getElementById('overwriteCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function checkDryRunAvailability() {
+  try {
+    const r = await fetch(`/${apiPrefix}/admin/themes/install/dryRunAvailable`);
+    if (!r.ok) return;
+    const j = await r.json();
+    if (j && j.success && j.available) {
+      document.getElementById('dryRunCard').style.display = 'block';
+    }
+  } catch (e) {
+    // Silenzioso: l'assenza del bottone dry-run è un default sicuro.
+  }
+}
+
+async function handleDryRun() {
+  const btn = document.getElementById('dryRunBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Dry-run in corso...';
+
+  // Reset UI come per un'installazione reale.
+  document.getElementById('overwriteCard').style.display = 'none';
+  resetUi();
+  document.getElementById('statusCard').style.display = 'block';
+
+  try {
+    const r = await fetch(`/${apiPrefix}/admin/themes/install/dryRun`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const j = await r.json();
+    if (!j.success) {
+      showStatusError(j.error || 'Errore durante l\'avvio del dry-run.');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-play-fill"></i> Esegui dry-run';
+      return;
+    }
+    startPolling(j.installId);
+    // Riabilita il bottone quando il polling segnala la fine.
+    const reEnable = setInterval(() => {
+      if (!pollingTimer) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-play-fill"></i> Esegui dry-run';
+        clearInterval(reEnable);
+      }
+    }, 500);
+  } catch (e) {
+    showStatusError('Errore di rete: ' + e.message);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-play-fill"></i> Esegui dry-run';
+  }
 }
 
 function startPolling(installId) {
