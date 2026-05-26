@@ -106,6 +106,13 @@
       <span id="statusBadge" class="badge bg-secondary">pending</span>
     </div>
     <div class="card-body">
+      <div id="progressBox" class="mb-3" style="display:none;">
+        <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="height: 1.5rem;">
+          <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+               style="width: 0%;">0%</div>
+        </div>
+        <div id="progressDetail" class="small text-muted mt-1"></div>
+      </div>
       <div id="phasesList" class="mb-3"></div>
       <div id="warningsBox" class="alert alert-warning" style="display:none;">
         <strong><i class="bi bi-exclamation-triangle"></i> Avvertimenti:</strong>
@@ -259,6 +266,8 @@ function renderJob(job) {
     job.status === 'running' ? 'bg-primary' : 'bg-secondary'
   );
 
+  renderProgress(job);
+
   const phasesList = document.getElementById('phasesList');
   phasesList.innerHTML = job.phases.map(p => `
     <div class="d-flex align-items-start mb-1">
@@ -315,6 +324,44 @@ function renderJob(job) {
   }
 }
 
+const STAGE_LABELS = {
+  receiving: 'Ricezione oggetti',
+  resolving: 'Risoluzione delta',
+  updatingFiles: 'Checkout file',
+};
+
+function renderProgress(job) {
+  const box = document.getElementById('progressBox');
+  const bar = document.getElementById('progressBar');
+  const detail = document.getElementById('progressDetail');
+  const p = job.progress;
+
+  if (!p) {
+    box.style.display = 'none';
+    return;
+  }
+
+  box.style.display = 'block';
+  const percent = Math.max(0, Math.min(100, Number(p.percent) || 0));
+  bar.style.width = percent + '%';
+  bar.innerText = percent + '%';
+  bar.parentElement.setAttribute('aria-valuenow', String(percent));
+
+  // Quando il job è terminato disattiva l'animazione striped della barra.
+  if (job.status === 'success' || job.status === 'failed') {
+    bar.classList.remove('progress-bar-animated');
+  } else {
+    bar.classList.add('progress-bar-animated');
+  }
+
+  const label = STAGE_LABELS[p.stage] || p.stage;
+  const parts = [`<strong>${escapeHtml(label)}</strong>`,
+                 `${p.current}/${p.total}`];
+  if (p.bytes) parts.push(escapeHtml(p.bytes));
+  if (p.rate) parts.push(escapeHtml(p.rate));
+  detail.innerHTML = parts.join(' &middot; ');
+}
+
 function showStatusError(msg) {
   document.getElementById('statusCard').style.display = 'block';
   document.getElementById('statusBadge').innerText = 'failed';
@@ -327,6 +374,12 @@ function resetUi() {
   if (pollingTimer) { clearInterval(pollingTimer); pollingTimer = null; }
   document.getElementById('statusCard').style.display = 'none';
   document.getElementById('overwriteCard').style.display = 'none';
+  document.getElementById('progressBox').style.display = 'none';
+  const bar = document.getElementById('progressBar');
+  bar.style.width = '0%';
+  bar.innerText = '0%';
+  bar.classList.add('progress-bar-animated');
+  document.getElementById('progressDetail').innerHTML = '';
   document.getElementById('phasesList').innerHTML = '';
   document.getElementById('warningsBox').style.display = 'none';
   document.getElementById('errorBox').style.display = 'none';
