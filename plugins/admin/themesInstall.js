@@ -80,6 +80,20 @@ function loadInstallConfig() {
     return (adminConfig.custom && adminConfig.custom.themesInstall) || {};
 }
 
+// Legge debugMode da ital8Config.json5. Usato per gating del dry-run:
+// il dry-run è uno strumento di diagnostica per testare la UI senza
+// dipendere da rete o repository esterni, quindi viene esposto solo
+// quando il sistema è in modalità debug.
+function isDryRunEnabled() {
+    try {
+        const projectRoot = path.resolve(__dirname, '..', '..');
+        const ital8Conf = loadJson5(path.join(projectRoot, 'ital8Config.json5'));
+        return Number(ital8Conf.debugMode || 0) >= 1;
+    } catch (e) {
+        return false;
+    }
+}
+
 function pruneJobHistory(maxJobHistory) {
     if (installJobs.size <= maxJobHistory) return;
     const overflow = installJobs.size - maxJobHistory;
@@ -552,9 +566,11 @@ async function runInstall(job, installConfig) {
         // FASE 3 - clone
         pushPhase(job, 'cloneStart', true, job.branchOrTag ? `branch/tag: ${job.branchOrTag}` : 'default branch');
 
-        // Throttle progress: max 1 update ogni 200ms. Cambio stage e percent===100
+        // Throttle progress: max 1 update ogni 100ms. Cambio stage e percent===100
         // bypassano il throttle per non perdere transizioni e completamenti.
-        const THROTTLE_MS = 200;
+        // 100ms è coerente con un polling client a 400ms (~4 eventi catturati
+        // per ogni round-trip di polling).
+        const THROTTLE_MS = 100;
         const HISTORY_CAP = 500;
         let lastEmitMs = 0;
         let lastStage = null;
@@ -639,10 +655,30 @@ async function runInstall(job, installConfig) {
 
     } catch (err) {
         if (createdDir) {
-            try { rollbackThemeDir(job.themeName); } catch (e) { /* noop */ }
-            pushPhase(job, 'rollback', true, job.confirmOverwrite
-                ? 'Cartella appena clonata rimossa. Il tema preesistente NON è stato ripristinato.'
-                : 'Cartella rimossa.');
+            let rollbackOk = true;
+            let rollbackErr = null;
+            try {
+                rollbackThemeDir(job.themeName);
+            } catch (e) {
+                rollbackOk = false;
+                rollbackErr = e.message;
+            }
+            if (rollbackOk) {
+                pushPhase(job, 'rollback', true, job.confirmOverwrite
+                    ? 'Cartella appena clonata rimossa. Il tema preesistente NON è stato ripristinato.'
+                    : 'Cartella rimossa.');
+            } else {
+                // Rollback fallito: i file restano su disco. È fondamentale che
+                // l'utente sia avvisato perché altrimenti vedrebbe "failed" ma
+                // troverebbe il tema sul filesystem (e potenzialmente funzionante),
+                // generando confusione su quale sia lo stato reale.
+                pushPhase(job, 'rollback', false,
+                    `Rollback fallito: ${rollbackErr}. I file restano in themes/${job.themeName} — rimuoverli manualmente.`);
+                job.warnings.push(
+                    `Rollback fallito: la cartella themes/${job.themeName} non è stata rimossa (${rollbackErr}). ` +
+                    `Verifica manualmente lo stato del filesystem prima di ritentare l'installazione.`
+                );
+            }
         }
         job.status = JOB_STATUS.FAILED;
         job.finishedAt = new Date().toISOString();
@@ -660,6 +696,142 @@ async function runInstall(job, installConfig) {
         isInstallingTheme = false;
         pruneJobHistory(installConfig.maxJobHistory || 50);
     }
+}
+
+// ----- DRY-RUN ---------------------------------------------------------------
+
+// Simula un'installazione tema completa emettendo finti eventi di progress
+// nello stesso formato del git clone reale. Utile per:
+//   - testare visivamente la progress bar senza dover pushare un tema reale
+//   - validare il client (UI, polling, rendering) end-to-end in isolamento
+//   - debug rapido di modifiche all'EJS senza dipendenze esterne
+//
+// Disponibile SOLO con debugMode >= 1 in ital8Config.json5.
+function runDryRunInstall(job, installConfig) {
+    const totalDurationMs = Math.max(1000, Number(installConfig.dryRunDurationMs) || 5000);
+
+    // Pesi delle fasi: receiving domina (~55%), seguito da updatingFiles (~30%),
+    // resolving deltas è breve (~10%), il resto (5%) per validate/finalize.
+    const receivingMs = totalDurationMs * 0.55;
+    const resolvingMs = totalDurationMs * 0.10;
+    const updatingMs  = totalDurationMs * 0.30;
+    const tailMs      = totalDurationMs * 0.05;
+
+    // Numeri plausibili per un tema di taglia media.
+    const totalObjects = 250;
+    const totalDeltas  = 80;
+    const totalFiles   = 200;
+    const totalBytes   = 5 * 1024 * 1024;
+
+    const startedAt = Date.now();
+    job.status = JOB_STATUS.RUNNING;
+
+    const fmtBytes = (n) => {
+        if (n < 1024) return `${n} B`;
+        if (n < 1024 * 1024) return `${(n / 1024).toFixed(2)} KiB`;
+        return `${(n / (1024 * 1024)).toFixed(2)} MiB`;
+    };
+
+    const emit = (ev) => {
+        const snapshot = Object.assign({}, ev, { at: new Date().toISOString() });
+        job.progress = snapshot;
+        job.progressHistory.push(snapshot);
+        if (job.progressHistory.length > 500) {
+            job.progressHistory.splice(0, job.progressHistory.length - 500);
+        }
+    };
+
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    (async () => {
+        try {
+            pushPhase(job, 'lockAcquired', true, 'DRY-RUN: nessun lock reale acquisito');
+            pushPhase(job, 'validateInput', true, 'DRY-RUN: input simulato');
+            pushPhase(job, 'checkDestination', true, 'DRY-RUN: nessuna scrittura su disco');
+            pushPhase(job, 'cloneStart', true, 'DRY-RUN: clone simulato');
+
+            // Receiving objects (con bytes e rate crescenti, come git reale).
+            const receivingSteps = 50;
+            for (let i = 0; i <= receivingSteps; i++) {
+                const percent = Math.round((i / receivingSteps) * 100);
+                const current = Math.round((i / receivingSteps) * totalObjects);
+                const bytesSent = Math.round((i / receivingSteps) * totalBytes);
+                const elapsedSec = Math.max(0.001, (Date.now() - startedAt) / 1000);
+                const rateBps = bytesSent / elapsedSec;
+                emit({
+                    stage: 'receiving',
+                    percent,
+                    current,
+                    total: totalObjects,
+                    bytes: fmtBytes(bytesSent),
+                    rate: `${fmtBytes(rateBps)}/s`,
+                });
+                if (i < receivingSteps) await sleep(receivingMs / receivingSteps);
+            }
+
+            // Resolving deltas.
+            const resolvingSteps = 10;
+            for (let i = 0; i <= resolvingSteps; i++) {
+                emit({
+                    stage: 'resolving',
+                    percent: Math.round((i / resolvingSteps) * 100),
+                    current: Math.round((i / resolvingSteps) * totalDeltas),
+                    total: totalDeltas,
+                    bytes: null,
+                    rate: null,
+                });
+                if (i < resolvingSteps) await sleep(resolvingMs / resolvingSteps);
+            }
+
+            // Updating files (checkout).
+            const updatingSteps = 40;
+            for (let i = 0; i <= updatingSteps; i++) {
+                emit({
+                    stage: 'updatingFiles',
+                    percent: Math.round((i / updatingSteps) * 100),
+                    current: Math.round((i / updatingSteps) * totalFiles),
+                    total: totalFiles,
+                    bytes: null,
+                    rate: null,
+                });
+                if (i < updatingSteps) await sleep(updatingMs / updatingSteps);
+            }
+
+            pushPhase(job, 'cloneDone', true, 'DRY-RUN');
+            await sleep(tailMs / 3);
+            pushPhase(job, 'validate', true, 'DRY-RUN: isAdminTheme=false');
+            await sleep(tailMs / 3);
+            pushPhase(job, 'finalizeConfig', true, 'DRY-RUN: active=0, isInstalled=0');
+            await sleep(tailMs / 3);
+
+            job.status = JOB_STATUS.SUCCESS;
+            job.finishedAt = new Date().toISOString();
+            job.result = {
+                themeName: job.themeName,
+                themePath: '(dry-run: nessun path reale)',
+                isAdminTheme: false,
+                active: false,
+                isInstalled: false,
+                overwritten: false,
+                description: {
+                    name: job.themeName,
+                    version: '1.0.0-dryrun',
+                    author: 'dry-run simulator',
+                    license: 'N/A',
+                },
+                warnings: ['DRY-RUN: nessuna modifica reale al filesystem.'],
+                dryRun: true,
+            };
+            job.warnings.push('Questo è un dry-run: nessun tema reale è stato installato.');
+        } catch (err) {
+            job.status = JOB_STATUS.FAILED;
+            job.finishedAt = new Date().toISOString();
+            job.error = `Errore durante dry-run: ${err.message}`;
+        } finally {
+            isInstallingTheme = false;
+            pruneJobHistory(installConfig.maxJobHistory || 50);
+        }
+    })();
 }
 
 // ----- ROUTES ----------------------------------------------------------------
@@ -774,6 +946,87 @@ function getRoutes() {
         },
     });
 
+    // Endpoint di discovery: il client lo interroga al caricamento della pagina
+    // per decidere se mostrare il bottone dry-run. Restituisce semplicemente
+    // se la feature è abilitata (debugMode >= 1).
+    routes.push({
+        method: 'GET',
+        path: '/themes/install/dryRunAvailable',
+        access: { requiresAuth: true, allowedRoles: [0, 1] },
+        handler: async (ctx) => {
+            ctx.body = { success: true, available: isDryRunEnabled() };
+        },
+    });
+
+    // Avvia un dry-run: simula tutte le fasi di un'installazione (clone,
+    // validate, finalize) emettendo eventi di progress realistici. Nessuna
+    // scrittura su disco, nessuna chiamata a git. Gating: debugMode >= 1.
+    routes.push({
+        method: 'POST',
+        path: '/themes/install/dryRun',
+        access: { requiresAuth: true, allowedRoles: [0, 1] },
+        handler: async (ctx) => {
+            if (!isDryRunEnabled()) {
+                ctx.status = 403;
+                ctx.body = {
+                    success: false,
+                    error: 'Dry-run disponibile solo con debugMode >= 1 in ital8Config.json5.',
+                };
+                return;
+            }
+            if (isInstallingTheme) {
+                ctx.status = 409;
+                ctx.body = { success: false, error: 'Un\'altra installazione di tema è già in corso.' };
+                return;
+            }
+
+            const installConfig = loadInstallConfig();
+            isInstallingTheme = true;
+            const installId = newInstallId();
+            const themeName = `dryRunTheme${Math.floor(Math.random() * 10000)}`;
+            const job = {
+                installId,
+                status: JOB_STATUS.PENDING,
+                repoUrl: '(dry-run: nessun repo reale)',
+                branchOrTag: null,
+                themeName,
+                isAdminTheme: null,
+                confirmOverwrite: false,
+                phases: [],
+                currentPhase: null,
+                warnings: [],
+                error: null,
+                result: null,
+                progress: null,
+                progressHistory: [],
+                startedAt: new Date().toISOString(),
+                finishedAt: null,
+                user: ctx.session && ctx.session.user ? ctx.session.user.username : null,
+                dryRun: true,
+            };
+            installJobs.set(installId, job);
+
+            setImmediate(() => {
+                try {
+                    runDryRunInstall(job, installConfig);
+                } catch (e) {
+                    console.error('[themesInstall] runDryRunInstall ha sollevato un errore non gestito:', e);
+                    job.status = JOB_STATUS.FAILED;
+                    job.error = e.message;
+                    isInstallingTheme = false;
+                }
+            });
+
+            ctx.body = {
+                success: true,
+                installId,
+                status: job.status,
+                themeName,
+                dryRun: true,
+            };
+        },
+    });
+
     return routes;
 }
 
@@ -787,5 +1040,6 @@ module.exports = {
     _kebabToCamel: kebabToCamel,
     _readExistingThemeMetadata: readExistingThemeMetadata,
     _parseGitProgressLine: parseGitProgressLine,
+    _isDryRunEnabled: isDryRunEnabled,
     JOB_STATUS,
 };
