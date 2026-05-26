@@ -566,9 +566,11 @@ async function runInstall(job, installConfig) {
         // FASE 3 - clone
         pushPhase(job, 'cloneStart', true, job.branchOrTag ? `branch/tag: ${job.branchOrTag}` : 'default branch');
 
-        // Throttle progress: max 1 update ogni 200ms. Cambio stage e percent===100
+        // Throttle progress: max 1 update ogni 100ms. Cambio stage e percent===100
         // bypassano il throttle per non perdere transizioni e completamenti.
-        const THROTTLE_MS = 200;
+        // 100ms è coerente con un polling client a 400ms (~4 eventi catturati
+        // per ogni round-trip di polling).
+        const THROTTLE_MS = 100;
         const HISTORY_CAP = 500;
         let lastEmitMs = 0;
         let lastStage = null;

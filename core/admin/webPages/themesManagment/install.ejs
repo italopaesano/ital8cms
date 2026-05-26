@@ -327,7 +327,12 @@ function startPolling(installId) {
     }
   };
   tick();
-  pollingTimer = setInterval(tick, 1000);
+  // Polling rapido (400ms) per catturare gli stadi intermedi di un clone:
+  // su connessioni veloci un clone reale può durare 1-2 secondi e con polling
+  // a 1Hz si rischia di vedere solo la transizione finale a 100%. La cadenza
+  // si ferma automaticamente al primo stato terminale (success/failed) quindi
+  // il carico aggiuntivo è limitato alla durata effettiva dell'installazione.
+  pollingTimer = setInterval(tick, 400);
 }
 
 function renderJob(job) {
