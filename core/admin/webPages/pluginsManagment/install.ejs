@@ -74,6 +74,24 @@
     </div>
   </div>
 
+  <!-- AREA DRY-RUN (visibile solo se debugMode >= 1 in ital8Config.json5) -->
+  <div id="dryRunCard" class="card mb-4 border-info" style="display:none;">
+    <div class="card-header bg-info bg-opacity-10">
+      <h6 class="mb-0"><i class="bi bi-bug"></i> Debug: dry-run installazione</h6>
+    </div>
+    <div class="card-body">
+      <p class="small mb-2">
+        Esegue una finta installazione che emette eventi di progress realistici per
+        circa 5 secondi, senza scaricare nulla né scrivere su disco. Utile per
+        testare visivamente la progress bar e il flusso UI in isolamento. Disponibile
+        solo con <code>debugMode: 1</code> in <code>ital8Config.json5</code>.
+      </p>
+      <button type="button" class="btn btn-sm btn-outline-info" id="dryRunBtn">
+        <i class="bi bi-play-fill"></i> Esegui dry-run
+      </button>
+    </div>
+  </div>
+
   <!-- AREA STATO -->
   <div id="statusCard" class="card mb-4" style="display:none;">
     <div class="card-header d-flex align-items-center">
@@ -81,6 +99,13 @@
       <span id="statusBadge" class="badge bg-secondary">pending</span>
     </div>
     <div class="card-body">
+      <div id="progressBox" class="mb-3" style="display:none;">
+        <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="height: 1.5rem;">
+          <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+               style="width: 0%;">0%</div>
+        </div>
+        <div id="progressDetail" class="small text-muted mt-1"></div>
+      </div>
       <div id="phasesList" class="mb-3"></div>
       <div id="warningsBox" class="alert alert-warning" style="display:none;">
         <strong><i class="bi bi-exclamation-triangle"></i> Avvertimenti:</strong>
@@ -155,6 +180,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const hint = document.getElementById('wantActiveHint');
     hint.style.display = (hint.style.display === 'none' || !hint.style.display) ? 'block' : 'none';
   });
+  document.getElementById('dryRunBtn').addEventListener('click', handleDryRun);
+  // Discovery del dry-run: visibile solo se il server lo abilita (debugMode >= 1).
+  checkDryRunAvailability();
 });
 
 async function loadSupervisorInfo() {
@@ -214,6 +242,55 @@ async function handleInstallSubmit(ev) {
   }
 }
 
+async function checkDryRunAvailability() {
+  try {
+    const r = await fetch(`/${apiPrefix}/admin/plugins/install/dryRunAvailable`);
+    if (!r.ok) return;
+    const j = await r.json();
+    if (j && j.success && j.available) {
+      document.getElementById('dryRunCard').style.display = 'block';
+    }
+  } catch (e) {
+    // Silenzioso: l'assenza del bottone dry-run è un default sicuro.
+  }
+}
+
+async function handleDryRun() {
+  const btn = document.getElementById('dryRunBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Dry-run in corso...';
+
+  resetUi();
+  document.getElementById('statusCard').style.display = 'block';
+
+  try {
+    const r = await fetch(`/${apiPrefix}/admin/plugins/install/dryRun`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wantActive: false }),
+    });
+    const j = await r.json();
+    if (!j.success) {
+      showStatusError(j.error || 'Errore durante l\'avvio del dry-run.');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-play-fill"></i> Esegui dry-run';
+      return;
+    }
+    startPolling(j.installId);
+    const reEnable = setInterval(() => {
+      if (!pollingTimer) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-play-fill"></i> Esegui dry-run';
+        clearInterval(reEnable);
+      }
+    }, 500);
+  } catch (e) {
+    showStatusError('Errore di rete: ' + e.message);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-play-fill"></i> Esegui dry-run';
+  }
+}
+
 function startPolling(installId) {
   if (pollingTimer) clearInterval(pollingTimer);
   const tick = async () => {
@@ -234,7 +311,49 @@ function startPolling(installId) {
     }
   };
   tick();
-  pollingTimer = setInterval(tick, 1000);
+  // Polling rapido (400ms) per catturare gli stadi intermedi di un clone:
+  // su connessioni veloci un clone reale può durare 1-2 secondi e con polling
+  // a 1Hz si rischia di vedere solo la transizione finale a 100%. La cadenza
+  // si ferma automaticamente al primo stato terminale (success/failed) quindi
+  // il carico aggiuntivo è limitato alla durata effettiva dell'installazione.
+  pollingTimer = setInterval(tick, 400);
+}
+
+const STAGE_LABELS = {
+  receiving: 'Ricezione oggetti',
+  resolving: 'Risoluzione delta',
+  updatingFiles: 'Checkout file',
+};
+
+function renderProgress(job) {
+  const box = document.getElementById('progressBox');
+  const bar = document.getElementById('progressBar');
+  const detail = document.getElementById('progressDetail');
+  const p = job.progress;
+
+  if (!p) {
+    box.style.display = 'none';
+    return;
+  }
+
+  box.style.display = 'block';
+  const percent = Math.max(0, Math.min(100, Number(p.percent) || 0));
+  bar.style.width = percent + '%';
+  bar.innerText = percent + '%';
+  bar.parentElement.setAttribute('aria-valuenow', String(percent));
+
+  if (job.status === 'success' || job.status === 'failed') {
+    bar.classList.remove('progress-bar-animated');
+  } else {
+    bar.classList.add('progress-bar-animated');
+  }
+
+  const label = STAGE_LABELS[p.stage] || p.stage;
+  const parts = [`<strong>${escapeHtml(label)}</strong>`,
+                 `${p.current}/${p.total}`];
+  if (p.bytes) parts.push(escapeHtml(p.bytes));
+  if (p.rate) parts.push(escapeHtml(p.rate));
+  detail.innerHTML = parts.join(' &middot; ');
 }
 
 function renderJob(job) {
@@ -245,6 +364,8 @@ function renderJob(job) {
     job.status === 'failed'  ? 'bg-danger'  :
     job.status === 'running' ? 'bg-primary' : 'bg-secondary'
   );
+
+  renderProgress(job);
 
   const phasesList = document.getElementById('phasesList');
   phasesList.innerHTML = job.phases.map(p => `
@@ -321,6 +442,12 @@ function showStatusError(msg) {
 function resetUi() {
   if (pollingTimer) { clearInterval(pollingTimer); pollingTimer = null; }
   document.getElementById('statusCard').style.display = 'none';
+  document.getElementById('progressBox').style.display = 'none';
+  const bar = document.getElementById('progressBar');
+  bar.style.width = '0%';
+  bar.innerText = '0%';
+  bar.classList.add('progress-bar-animated');
+  document.getElementById('progressDetail').innerHTML = '';
   document.getElementById('phasesList').innerHTML = '';
   document.getElementById('warningsBox').style.display = 'none';
   document.getElementById('errorBox').style.display = 'none';
