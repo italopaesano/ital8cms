@@ -8,6 +8,7 @@ const themesManagment = require('./themesManagment');
 const themesInstall = require('./themesInstall');
 const systemSettings = require('./systemSettings');
 const pagesManagment = require('./pagesManagment');
+const { detectSupervisor } = require('../../core/cliBridge/respawn');
 
 let pluginConfig = loadJson5(path.join(__dirname, 'pluginConfig.json5'));// let perchè questa varibile può cambiare di valore
 const pluginName = path.basename(  __dirname );// restituisce il nome della directory che contiene il file corrente e che è anche il nome del plugin
@@ -107,6 +108,65 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
             error: 'Internal server error'
           };
         }
+      }
+    }
+  );
+
+  // API endpoint: Ping (health-check) — usato dal polling post-restart
+  // per rilevare quando il processo è tornato attivo dopo un riavvio.
+  // Volutamente NO auth: il polling deve funzionare anche se il browser
+  // perdesse la sessione durante il restart (in pratica koa-session firma
+  // i cookie e li ripristina, ma non vogliamo dipenderne).
+  // Path single-prefix (`/ping` → `/api/admin/ping`), coerente con gli
+  // altri endpoint del plugin (themes, setTheme, ecc.).
+  routeArray.push(
+    {
+      method: 'GET',
+      path: '/ping',
+      access: { requiresAuth: false, allowedRoles: [] },
+      handler: async (ctx) => {
+        ctx.body = { ok: true, ts: Date.now() };
+      }
+    }
+  );
+
+  // API endpoint: Restart ital8cms (graceful shutdown + self-respawn o
+  // delega al supervisor). Risponde IMMEDIATAMENTE al client, poi via
+  // setImmediate triggera la chiusura — così il browser riceve la risposta
+  // prima che il server muoia.
+  routeArray.push(
+    {
+      method: 'POST',
+      path: '/restart',
+      access: { requiresAuth: true, allowedRoles: [0, 1] }, // root + admin
+      handler: async (ctx) => {
+        const supervisor = detectSupervisor();
+        const username = ctx.session && ctx.session.user
+          ? ctx.session.user.username
+          : 'unknown';
+
+        console.log(`[admin] richiesta restart da utente "${username}" (supervisor: ${supervisor || 'none'})`);
+
+        ctx.body = {
+          ok: true,
+          restarting: true,
+          supervisor: supervisor,
+          mode: supervisor ? 'supervisor' : 'self-respawn',
+          message: supervisor
+            ? `Riavvio in corso (gestito da ${supervisor})`
+            : 'Riavvio in corso (self-respawn)'
+        };
+
+        // Triggera il restart DOPO che la risposta è stata inviata.
+        // Il delay di 100ms dà al kernel TCP il tempo di flushare la response.
+        setImmediate(() => {
+          setTimeout(() => {
+            const ok = myPluginSys.requestRestart({ reason: 'admin-restart-request' });
+            if (!ok) {
+              console.error('[admin] requestRestart() ha fallito: nessun callback registrato in pluginSys');
+            }
+          }, 100);
+        });
       }
     }
   );

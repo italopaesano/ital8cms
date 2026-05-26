@@ -42,6 +42,16 @@ cliBridge.start(ital8Conf, {
 //const priorityMiddlewares(app); // carico i imidlware che vanno impostati in ordine preciso di caricamento
 
 const pluginSys = new ( require("./core/pluginSys") )(ital8Conf); // carico il sistema di plugin e passo la configurazione per whitelist
+
+// Inietta il callback di restart nel pluginSys: i plugin potranno chiamare
+// pluginSys.requestRestart({reason}) per richiedere un riavvio pulito di ital8cms
+// (es. dopo cambio tema). Riusa l'infrastruttura già esistente di gracefulShutdown
+// + selfRespawn/detectSupervisor del cliBridge.
+pluginSys.setRequestRestart(({ reason } = {}) => {
+  console.log(`[restart] richiesta da plugin: ${reason || 'no-reason'}`);
+  gracefulShutdown(reason || 'plugin-restart-request', { respawn: true });
+});
+
 // carico le rotte di tutti i plugin
 pluginSys.loadRoutes( router , `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`);// il secondo paramentro è il primo prefix
 const getObjectsToShareInWebPages = pluginSys.getObjectsToShareInWebPages();
