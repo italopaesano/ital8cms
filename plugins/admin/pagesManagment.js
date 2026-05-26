@@ -126,8 +126,8 @@ const loadJson5 = require('../../core/loadJson5');
  * Risolve dinamicamente il percorso della cartella www in base alla configurazione del tema attivo
  *
  * LOGICA DI RISOLUZIONE:
- * 1. Legge ital8Config.json per ottenere il tema pubblico attivo (activeTheme)
- * 2. Legge themeConfig.json del tema attivo
+ * 1. Legge ital8Config.json5 per ottenere il tema pubblico attivo (activeTheme)
+ * 2. Legge themeConfig.json5 del tema attivo
  * 3. Se wwwCustomPath === 1:
  *    - Usa themes/[nomeDelTema]/www (cartella www dentro la root del tema)
  *    - Verifica che la directory esista
@@ -155,7 +155,7 @@ function getWwwPath() {
 
         // Verifica esistenza themeConfig.json
         if (!fs.existsSync(themeConfigPath)) {
-            console.warn(`[pagesManagment] themeConfig.json non trovato per tema ${activeTheme}. Uso path standard /www`);
+            console.warn(`[pagesManagment] themeConfig.json5 non trovato per tema ${activeTheme}. Uso path standard /www`);
             return path.join(__dirname, '../../www');
         }
 
@@ -891,7 +891,7 @@ function getThemeInfo() {
         if (!fs.existsSync(themeConfigPath)) {
             return {
                 success: false,
-                error: `themeConfig.json non trovato per tema ${activeTheme}`
+                error: `themeConfig.json5 non trovato per tema ${activeTheme}`
             };
         }
 
