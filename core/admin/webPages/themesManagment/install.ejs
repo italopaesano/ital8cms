@@ -187,7 +187,9 @@ async function submitInstall(payload) {
     }
     pendingInstallRequest = null;
     document.getElementById('overwriteCard').style.display = 'none';
-    document.getElementById('statusCard').style.display = 'block';
+    const statusCard = document.getElementById('statusCard');
+    statusCard.style.display = 'block';
+    statusCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
     startPolling(j.installId);
   } catch (e) {
     showStatusError(e.message);
@@ -276,7 +278,9 @@ async function handleDryRun() {
   // Reset UI come per un'installazione reale.
   document.getElementById('overwriteCard').style.display = 'none';
   resetUi();
-  document.getElementById('statusCard').style.display = 'block';
+  const statusCard = document.getElementById('statusCard');
+  statusCard.style.display = 'block';
+  statusCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   try {
     const r = await fetch(`/${apiPrefix}/admin/themes/install/dryRun`, {
@@ -441,7 +445,9 @@ function renderProgress(job) {
 }
 
 function showStatusError(msg) {
-  document.getElementById('statusCard').style.display = 'block';
+  const statusCard = document.getElementById('statusCard');
+  statusCard.style.display = 'block';
+  statusCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
   document.getElementById('statusBadge').innerText = 'failed';
   document.getElementById('statusBadge').className = 'badge bg-danger';
   document.getElementById('errorBox').style.display = 'block';
