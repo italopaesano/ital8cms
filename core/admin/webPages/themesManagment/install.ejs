@@ -190,6 +190,10 @@ async function submitInstall(payload) {
     const statusCard = document.getElementById('statusCard');
     statusCard.style.display = 'block';
     statusCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Render immediato in stato pending: chiude il gap (0-400ms) tra il
+    // click e il primo poll, durante il quale altrimenti il progressBox
+    // resterebbe nascosto e l'utente penserebbe che non sia successo nulla.
+    renderJob({ status: 'pending', progress: null, phases: [], warnings: [], result: null });
     startPolling(j.installId);
   } catch (e) {
     showStatusError(e.message);
@@ -281,6 +285,8 @@ async function handleDryRun() {
   const statusCard = document.getElementById('statusCard');
   statusCard.style.display = 'block';
   statusCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Render immediato in stato pending (vedi commento in submitInstall).
+  renderJob({ status: 'pending', progress: null, phases: [], warnings: [], result: null });
 
   try {
     const r = await fetch(`/${apiPrefix}/admin/themes/install/dryRun`, {
@@ -419,7 +425,31 @@ function renderProgress(job) {
   const p = job.progress;
 
   if (!p) {
-    box.style.display = 'none';
+    if (job.status === 'pending' || job.status === 'running') {
+      // Nessun progress event ancora ricevuto ma l'install è in volo: mostra
+      // uno stato indeterminato "Avvio..." con la barra a 100% striped/animated.
+      // Cruciale per clone veloci (~1s) dove il primo poll può arrivare prima
+      // che git abbia emesso eventi di progress: senza questo ramo l'utente
+      // non vedrebbe MAI la barra.
+      box.style.display = 'block';
+      bar.style.width = '100%';
+      bar.classList.add('progress-bar-animated');
+      bar.innerText = 'Avvio...';
+      bar.parentElement.setAttribute('aria-valuenow', '0');
+      detail.innerHTML = '<em>Connessione al repository...</em>';
+    } else if (job.status === 'success') {
+      // Clone così veloce da non aver catturato alcun progress event: mostra
+      // comunque la barra completa statica per dare feedback visivo.
+      box.style.display = 'block';
+      bar.style.width = '100%';
+      bar.classList.remove('progress-bar-animated');
+      bar.innerText = '100%';
+      bar.parentElement.setAttribute('aria-valuenow', '100');
+      detail.innerHTML = '<em>Clone completato (troppo veloce per il tracking degli eventi).</em>';
+    } else {
+      // failed senza progress: lascia parlare l'errorBox.
+      box.style.display = 'none';
+    }
     return;
   }
 
