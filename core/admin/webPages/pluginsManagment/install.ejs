@@ -232,7 +232,9 @@ async function handleInstallSubmit(ev) {
       showStatusError(j.error || 'Errore sconosciuto.');
       return;
     }
-    document.getElementById('statusCard').style.display = 'block';
+    const statusCard = document.getElementById('statusCard');
+    statusCard.style.display = 'block';
+    statusCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
     startPolling(j.installId);
   } catch (e) {
     showStatusError(e.message);
@@ -261,7 +263,9 @@ async function handleDryRun() {
   btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Dry-run in corso...';
 
   resetUi();
-  document.getElementById('statusCard').style.display = 'block';
+  const statusCard = document.getElementById('statusCard');
+  statusCard.style.display = 'block';
+  statusCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   try {
     const r = await fetch(`/${apiPrefix}/admin/plugins/install/dryRun`, {
@@ -432,7 +436,9 @@ function renderJob(job) {
 }
 
 function showStatusError(msg) {
-  document.getElementById('statusCard').style.display = 'block';
+  const statusCard = document.getElementById('statusCard');
+  statusCard.style.display = 'block';
+  statusCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
   document.getElementById('statusBadge').innerText = 'failed';
   document.getElementById('statusBadge').className = 'badge bg-danger';
   document.getElementById('errorBox').style.display = 'block';
