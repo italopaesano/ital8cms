@@ -4,7 +4,11 @@
  * Copre il parser delle righe di progress emesse da `git clone --progress`.
  */
 
-const { _parseGitProgressLine: parseGitProgressLine } = require('../../../plugins/admin/themesInstall');
+const {
+  _parseGitProgressLine: parseGitProgressLine,
+  _validateRepoUrl: validateRepoUrl,
+  _extractThemeNameFromUrl: extractThemeNameFromUrl,
+} = require('../../../plugins/admin/themesInstall');
 
 describe('themesInstall — parseGitProgressLine', () => {
   describe('Receiving objects', () => {
@@ -131,5 +135,114 @@ describe('themesInstall — parseGitProgressLine', () => {
       expect(r).not.toBeNull();
       expect(r.percent).toBe(10);
     });
+  });
+});
+
+describe('themesInstall — validateRepoUrl', () => {
+  describe('HTTPS', () => {
+    test('accetta HTTPS pubblico e marca protocol=https', () => {
+      const r = validateRepoUrl('https://github.com/utente/ital8cms-theme-mySite.git');
+      expect(r.ok).toBe(true);
+      expect(r.protocol).toBe('https');
+      expect(r.value).toBe('https://github.com/utente/ital8cms-theme-mySite.git');
+    });
+
+    test('accetta HTTPS con credenziali inline (protocol=https)', () => {
+      const r = validateRepoUrl('https://utente:ghp_token@github.com/utente/ital8cms-theme-mySite.git');
+      expect(r.ok).toBe(true);
+      expect(r.protocol).toBe('https');
+    });
+
+    test('trimma whitespace circostante', () => {
+      const r = validateRepoUrl('  https://github.com/u/ital8cms-theme-x.git  ');
+      expect(r.ok).toBe(true);
+      expect(r.value).toBe('https://github.com/u/ital8cms-theme-x.git');
+    });
+  });
+
+  describe('SSH', () => {
+    test('accetta scp-like git@host:owner/repo.git e marca protocol=ssh', () => {
+      const r = validateRepoUrl('git@github.com:utente/ital8cms-theme-mySite.git');
+      expect(r.ok).toBe(true);
+      expect(r.protocol).toBe('ssh');
+    });
+
+    test('accetta ssh:// URL e marca protocol=ssh', () => {
+      const r = validateRepoUrl('ssh://git@github.com/utente/ital8cms-theme-mySite.git');
+      expect(r.ok).toBe(true);
+      expect(r.protocol).toBe('ssh');
+    });
+
+    test('accetta scp-like con host gitlab', () => {
+      const r = validateRepoUrl('git@gitlab.example.com:group/ital8cms-theme-x.git');
+      expect(r.ok).toBe(true);
+      expect(r.protocol).toBe('ssh');
+    });
+  });
+
+  describe('Rifiuti', () => {
+    test('rifiuta URL vuoto', () => {
+      expect(validateRepoUrl('').ok).toBe(false);
+      expect(validateRepoUrl('   ').ok).toBe(false);
+    });
+
+    test('rifiuta non-stringa', () => {
+      expect(validateRepoUrl(null).ok).toBe(false);
+      expect(validateRepoUrl(undefined).ok).toBe(false);
+      expect(validateRepoUrl(42).ok).toBe(false);
+    });
+
+    test('rifiuta http:// (non TLS)', () => {
+      expect(validateRepoUrl('http://github.com/u/ital8cms-theme-x.git').ok).toBe(false);
+    });
+
+    test('rifiuta URL senza suffisso .git', () => {
+      expect(validateRepoUrl('https://github.com/u/ital8cms-theme-x').ok).toBe(false);
+      expect(validateRepoUrl('git@github.com:u/ital8cms-theme-x').ok).toBe(false);
+    });
+
+    test('rifiuta protocolli non supportati (file://, ftp://)', () => {
+      expect(validateRepoUrl('file:///etc/passwd.git').ok).toBe(false);
+      expect(validateRepoUrl('ftp://host/repo.git').ok).toBe(false);
+    });
+  });
+});
+
+describe('themesInstall — extractThemeNameFromUrl (parsing multi-formato)', () => {
+  const PREFIX = 'ital8cms-theme-';
+
+  test('estrae nome da HTTPS', () => {
+    const r = extractThemeNameFromUrl('https://github.com/u/ital8cms-theme-mySite.git', PREFIX);
+    expect(r.ok).toBe(true);
+    expect(r.value.themeName).toBe('mySite');
+  });
+
+  test('estrae nome da HTTPS con credenziali inline', () => {
+    const r = extractThemeNameFromUrl('https://u:token@github.com/u/ital8cms-theme-mySite.git', PREFIX);
+    expect(r.ok).toBe(true);
+    expect(r.value.themeName).toBe('mySite');
+  });
+
+  test('estrae nome da scp-like SSH', () => {
+    const r = extractThemeNameFromUrl('git@github.com:u/ital8cms-theme-myCoolSite.git', PREFIX);
+    expect(r.ok).toBe(true);
+    expect(r.value.themeName).toBe('myCoolSite');
+  });
+
+  test('converte kebab-case in camelCase da scp-like SSH', () => {
+    const r = extractThemeNameFromUrl('git@github.com:u/ital8cms-theme-my-cool-site.git', PREFIX);
+    expect(r.ok).toBe(true);
+    expect(r.value.themeName).toBe('myCoolSite');
+  });
+
+  test('estrae nome da ssh:// URL', () => {
+    const r = extractThemeNameFromUrl('ssh://git@github.com/u/ital8cms-theme-adminDashboard.git', PREFIX);
+    expect(r.ok).toBe(true);
+    expect(r.value.themeName).toBe('adminDashboard');
+  });
+
+  test('rifiuta repo che non rispetta il prefisso (scp-like)', () => {
+    const r = extractThemeNameFromUrl('git@github.com:u/wrong-prefix-x.git', PREFIX);
+    expect(r.ok).toBe(false);
   });
 });

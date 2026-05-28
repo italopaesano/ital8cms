@@ -135,20 +135,52 @@ function snapshotJob(job) {
 
 // ----- PURE VALIDATORS -------------------------------------------------------
 
-const URL_REGEX = /^https:\/\/[^\s]+\.git$/i;
+// HTTPS classico (anche con credenziali inline `https://user:token@host/...`).
+const URL_REGEX_HTTPS = /^https:\/\/[^\s]+\.git$/i;
+// SSH in formato scp-like: `git@host:owner/repo.git` (host può contenere `.`,
+// `-`, alfanumerici; lo user prima della `@` è opzionalmente alfanumerico).
+const URL_REGEX_SSH_SCP = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+:[^\s:]+\.git$/;
+// SSH come URL: `ssh://[user@]host[:port]/path/repo.git`.
+const URL_REGEX_SSH_URL = /^ssh:\/\/[^\s]+\.git$/i;
 
+// Riconosce il protocollo di un URL di repository git supportato. La
+// distinzione fra `https` e `ssh` è fondamentale per la policy di accesso:
+// SSH usa la chiave del server (`~/.ssh/`) ed è ristretta al ruolo root,
+// HTTPS no (le credenziali, se servono, le porta l'admin inline).
 function validateRepoUrl(repoUrl) {
     if (typeof repoUrl !== 'string' || !repoUrl.trim()) {
         return { ok: false, error: 'URL del repository mancante.' };
     }
     const trimmed = repoUrl.trim();
-    if (!URL_REGEX.test(trimmed)) {
-        return {
-            ok: false,
-            error: 'URL non valido: deve essere HTTPS e terminare con ".git".',
-        };
+    if (URL_REGEX_HTTPS.test(trimmed)) {
+        return { ok: true, value: trimmed, protocol: 'https' };
     }
-    return { ok: true, value: trimmed };
+    if (URL_REGEX_SSH_SCP.test(trimmed) || URL_REGEX_SSH_URL.test(trimmed)) {
+        return { ok: true, value: trimmed, protocol: 'ssh' };
+    }
+    return {
+        ok: false,
+        error: 'URL non valido: deve essere HTTPS (es. "https://host/repo.git") oppure SSH (es. "git@host:owner/repo.git" o "ssh://git@host/owner/repo.git") e terminare con ".git".',
+    };
+}
+
+// Estrae il path "logico" del repository (la parte dopo l'host) per i tre
+// formati supportati. `new URL()` non sa parsare lo scp-like `git@host:path`
+// perché non è un URL valido secondo RFC 3986, quindi va trattato a parte.
+// Ritorna una stringa che inizia con `/` (per uniformità con `URL.pathname`),
+// o null se il parsing fallisce.
+function parseRepoPath(repoUrl) {
+    const scpMatch = repoUrl.match(/^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+:(.+)$/);
+    if (scpMatch) {
+        const tail = scpMatch[1];
+        return tail.startsWith('/') ? tail : '/' + tail;
+    }
+    try {
+        const parsed = new URL(repoUrl);
+        return parsed.pathname;
+    } catch (e) {
+        return null;
+    }
 }
 
 // Converte una stringa kebab-case in camelCase.
@@ -161,14 +193,12 @@ function kebabToCamel(input) {
 }
 
 function extractThemeNameFromUrl(repoUrl, repoPrefix) {
-    let lastSegment;
-    try {
-        const parsed = new URL(repoUrl);
-        const segments = parsed.pathname.split('/').filter(Boolean);
-        lastSegment = segments[segments.length - 1] || '';
-    } catch (e) {
+    const repoPath = parseRepoPath(repoUrl);
+    if (repoPath === null) {
         return { ok: false, error: 'URL non parsificabile.' };
     }
+    const segments = repoPath.split('/').filter(Boolean);
+    const lastSegment = segments[segments.length - 1] || '';
     if (!lastSegment.toLowerCase().endsWith('.git')) {
         return { ok: false, error: 'URL non valido: il path deve terminare con ".git".' };
     }
@@ -862,6 +892,24 @@ function getRoutes() {
                 ctx.body = { success: false, error: urlV.error };
                 return;
             }
+
+            // Policy SSH: il clone via SSH usa la chiave del server (~/.ssh/),
+            // quindi sfrutta l'identità della macchina. Per evitare un confused
+            // deputy (un admin che fa clonare repo a cui ha accesso solo la
+            // chiave del server) lo riserviamo al ruolo root (0). HTTPS resta
+            // [0, 1]: se servono credenziali le porta l'admin inline nell'URL.
+            if (urlV.protocol === 'ssh') {
+                const roleIds = (ctx.session && ctx.session.user && ctx.session.user.roleIds) || [];
+                if (!roleIds.includes(0)) {
+                    ctx.status = 403;
+                    ctx.body = {
+                        success: false,
+                        error: 'L\'installazione via SSH usa la chiave SSH del server ed è riservata al ruolo root (role 0). Usa un URL HTTPS oppure chiedi a un utente root. Vedi la sezione "Future Improvements" in CLAUDE.md per il modello di sicurezza completo.',
+                    };
+                    return;
+                }
+            }
+
             const branchV = validateBranchOrTag(body.branchOrTag);
             if (!branchV.ok) {
                 ctx.status = 400;
