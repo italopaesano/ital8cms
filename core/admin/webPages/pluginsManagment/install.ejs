@@ -29,15 +29,53 @@
         <strong>Convenzione obbligatoria:</strong> il repository deve avere un nome che inizia con
         <code>ital8cms-plugin-</code>. Quanto segue diventa il nome del plugin e deve combaciare con
         il campo <code>name</code> in <code>pluginDescription.json5</code>.<br>
-        Esempio: <code>https://github.com/utente/ital8cms-plugin-mailerSimple.git</code> &rarr; plugin name <code>mailerSimple</code>.
+        Esempi:
+        <ul class="mb-0">
+          <li><code>https://github.com/utente/ital8cms-plugin-mailerSimple.git</code> &rarr; plugin <code>mailerSimple</code></li>
+          <li><code>git@github.com:utente/ital8cms-plugin-mailerSimple.git</code> &rarr; plugin <code>mailerSimple</code> (SSH)</li>
+        </ul>
+      </div>
+
+      <div class="alert alert-secondary small mb-3">
+        <h6 class="alert-heading"><i class="bi bi-shield-lock"></i> Repository privati e accesso SSH</h6>
+        <p class="mb-2">
+          Sono supportati tre formati di URL:
+        </p>
+        <ul class="mb-2">
+          <li><strong>HTTPS pubblico</strong> &mdash; <code>https://host/utente/repo.git</code></li>
+          <li><strong>HTTPS con credenziali</strong> &mdash; <code>https://utente:token@host/utente/repo.git</code>
+              (le credenziali le fornisci tu nell'URL)</li>
+          <li><strong>SSH</strong> &mdash; <code>git@host:utente/repo.git</code> oppure
+              <code>ssh://git@host/utente/repo.git</code></li>
+        </ul>
+        <p class="mb-2">
+          <strong>Perché SSH è riservato al ruolo <code>root</code> (role 0):</strong> il clone via SSH
+          non usa credenziali che fornisci nell'URL, ma la <strong>chiave SSH del server</strong>
+          (quella in <code>~/.ssh/</code> dell'utente che esegue il processo Node). Significa che chi
+          installa via SSH eredita <em>tutti gli accessi che la chiave del server ha</em> su GitHub/GitLab,
+          anche a repository privati che l'installatore personalmente non potrebbe vedere. È un classico
+          <em>confused deputy</em>: per questo l'opzione è concessa solo a chi è <code>root</code>, che ha
+          già il pieno controllo della macchina.
+        </p>
+        <p class="mb-0">
+          Gli admin (role 1) possono comunque installare da repository privati usando il formato
+          <strong>HTTPS con credenziali</strong>: in quel caso l'autenticazione è la loro, non quella
+          del server, quindi non c'è escalation. Il modello di sicurezza completo (audit, scenari
+          multi-tenant, host whitelist) è tracciato nella sezione <em>Future Improvements</em> di
+          <code>CLAUDE.md</code> e verrà approfondito.
+        </p>
       </div>
 
       <form id="installForm">
         <div class="mb-3">
-          <label for="repoUrl" class="form-label">URL del repository (HTTPS)</label>
-          <input type="url" class="form-control" id="repoUrl" name="repoUrl" required
+          <label for="repoUrl" class="form-label">URL del repository (HTTPS o SSH)</label>
+          <input type="text" class="form-control" id="repoUrl" name="repoUrl" required
                  placeholder="https://github.com/utente/ital8cms-plugin-mailerSimple.git">
-          <div class="form-text">Solo HTTPS, deve terminare con <code>.git</code>.</div>
+          <div class="form-text">
+            HTTPS o SSH, deve terminare con <code>.git</code>.
+            Gli URL SSH (<code>git@&hellip;</code> / <code>ssh://&hellip;</code>) richiedono il ruolo
+            <strong>root</strong> (vedi nota sopra).
+          </div>
         </div>
 
         <div class="mb-3">
