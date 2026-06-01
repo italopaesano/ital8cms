@@ -281,3 +281,55 @@ describe('RateLimitEngine — edge case e isolamento', () => {
     expect(seen).toContain('lasca');
   });
 });
+
+describe('RateLimitEngine — azioni admin (release / forceBlock)', () => {
+  test('release rimuove un blocco specifico', () => {
+    const { engine } = makeEngine();
+    triggerShortBlock(engine);
+    expect(engine.check(IP, RULE).blocked).toBe(true);
+    expect(engine.release(IP, RULE)).toBe(true);
+    expect(engine.check(IP, RULE).blocked).toBe(false);
+    expect(engine.state.has(`${IP}|${RULE}`)).toBe(false);
+  });
+
+  test('release su chiave inesistente ritorna false', () => {
+    const { engine } = makeEngine();
+    expect(engine.release(IP, RULE)).toBe(false);
+  });
+
+  test('releaseAllForClient rimuove tutte le regole di un IP, non gli altri IP', () => {
+    const { engine } = makeEngine();
+    engine.recordFailure(IP, 'regolaA');
+    engine.recordFailure(IP, 'regolaB');
+    engine.recordFailure('198.51.100.1', 'regolaA');
+
+    const removed = engine.releaseAllForClient(IP);
+    expect(removed).toBe(2);
+    expect(engine.state.has(`${IP}|regolaA`)).toBe(false);
+    expect(engine.state.has(`${IP}|regolaB`)).toBe(false);
+    expect(engine.state.has('198.51.100.1|regolaA')).toBe(true);
+  });
+
+  test('forceBlock applica un long block con durata indicata', () => {
+    const { engine } = makeEngine();
+    const v = engine.forceBlock(IP, RULE, { seconds: 600 });
+    expect(v.blocked).toBe(true);
+    expect(v.tier).toBe('long');
+    expect(v.retryAfterSeconds).toBe(600);
+    expect(engine.check(IP, RULE).blocked).toBe(true);
+  });
+
+  test('forceBlock con tier short', () => {
+    const { engine } = makeEngine();
+    const v = engine.forceBlock(IP, RULE, { tier: 'short', seconds: 120 });
+    expect(v.tier).toBe('short');
+    expect(v.retryAfterSeconds).toBe(120);
+  });
+
+  test('forceBlock senza opzioni usa longBlockSeconds della policy', () => {
+    const { engine } = makeEngine();
+    const v = engine.forceBlock(IP, RULE);
+    expect(v.tier).toBe('long');
+    expect(v.retryAfterSeconds).toBe(POLICY.longBlockSeconds);
+  });
+});

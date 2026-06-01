@@ -71,6 +71,19 @@ if (loginOk) {
 | `getActiveBlocks()` | Lista dei blocchi attivi |
 | `getRuleNames()` | Nomi delle regole configurate |
 
+**API per il plugin admin (`adminRateLimiter`):**
+
+| Metodo | Descrizione |
+|--------|-------------|
+| `releaseBlock(clientId, ruleName)` | Sblocca una chiave |
+| `releaseAllForClient(clientId)` | Rimuove tutti i blocchi di un IP |
+| `banClient(clientId, ruleName, {tier?, seconds?})` | Ban manuale |
+| `getStats()` | Stato + conteggi blocchi/regole |
+| `getRecentAttempts({limit?, ...})` | Coda dell'audit log |
+| `getConfig()` | Copia profonda di `custom` |
+| `validateRules` / `validateConfig` | Validazione prima del salvataggio |
+| `reloadRules()` / `reloadConfig()` | Hot-reload (regole / config) senza riavvio |
+
 ---
 
 ## Configurazione
@@ -168,4 +181,4 @@ Le directory `state/` e `logs/` sono runtime e **gitignored** (ricreate al boot)
 | `lib/stateStore.js` | Persistenza dello stato attivo |
 | `lib/configValidator.js` | Validazione al boot |
 | `protectedRoutes.json5` | Regole per rotta (per `ruleName`) |
-| `tests/` | Suite di test (7 file, 77 test): motore, keyResolver, configValidator, attemptLog, stateStore, integrazione `main.js` (guard L1 + middleware L2) |
+| `tests/` | Suite di test (7 file, 99 test): motore, keyResolver, configValidator, attemptLog, stateStore, integrazione `main.js` (guard L1 + middleware L2 + API admin + hot-reload) |

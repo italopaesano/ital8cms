@@ -119,3 +119,58 @@ describe('attemptLog — retention', () => {
     expect(fs.existsSync(oldFile)).toBe(true);
   });
 });
+
+describe('attemptLog — readRecent', () => {
+  test('file assente → array vuoto', () => {
+    const al = new AttemptLog(tmpDir, { enabled: true });
+    al.init();
+    expect(al.readRecent()).toEqual([]);
+  });
+
+  test('restituisce gli eventi dal più recente', () => {
+    const al = new AttemptLog(tmpDir, { enabled: true });
+    al.init();
+    al.append({ event: 'failure', clientId: 'a', ruleName: 'r', at: Date.now() });
+    al.append({ event: 'shortBlock', clientId: 'a', ruleName: 'r', at: Date.now() });
+    al.append({ event: 'success', clientId: 'a', ruleName: 'r', at: Date.now() });
+
+    const recent = al.readRecent();
+    expect(recent).toHaveLength(3);
+    expect(recent[0].event).toBe('success');   // più recente per primo
+    expect(recent[2].event).toBe('failure');
+  });
+
+  test('rispetta il limite', () => {
+    const al = new AttemptLog(tmpDir, { enabled: true });
+    al.init();
+    for (let i = 0; i < 5; i++) {
+      al.append({ event: 'failure', clientId: 'a', ruleName: 'r', at: Date.now() });
+    }
+    expect(al.readRecent({ limit: 2 })).toHaveLength(2);
+  });
+
+  test('filtra per clientId / event', () => {
+    const al = new AttemptLog(tmpDir, { enabled: true });
+    al.init();
+    al.append({ event: 'failure', clientId: 'a', ruleName: 'r', at: Date.now() });
+    al.append({ event: 'failure', clientId: 'b', ruleName: 'r', at: Date.now() });
+    al.append({ event: 'shortBlock', clientId: 'a', ruleName: 'r', at: Date.now() });
+
+    expect(al.readRecent({ clientId: 'a' })).toHaveLength(2);
+    expect(al.readRecent({ event: 'shortBlock' })).toHaveLength(1);
+    expect(al.readRecent({ clientId: 'b', event: 'failure' })).toHaveLength(1);
+  });
+
+  test('salta le righe corrotte senza crashare', () => {
+    const al = new AttemptLog(tmpDir, { enabled: true });
+    al.init();
+    al.append({ event: 'failure', clientId: 'a', ruleName: 'r', at: Date.now() });
+    // inserisce una riga non-JSON
+    fs.appendFileSync(path.join(tmpDir, 'logs', 'attempts.jsonl'), 'NON-JSON\n', 'utf8');
+    al.append({ event: 'success', clientId: 'a', ruleName: 'r', at: Date.now() });
+
+    const recent = al.readRecent();
+    expect(recent).toHaveLength(2); // la riga corrotta è ignorata
+    expect(recent[0].event).toBe('success');
+  });
+});

@@ -29,7 +29,7 @@ const CUSTOM = {
     escalationResetSeconds: 86400,
   },
   state: { flushIntervalSeconds: 0 },  // nessun timer
-  log: { enabled: false },
+  log: { enabled: true },              // audit attivo (scrive nel sandbox tmp)
   response: { status: 429, retryAfterHeader: true },
   enforcement: {
     enabled: true,
@@ -196,5 +196,118 @@ describe('Livello 2 — middleware di enforcement', () => {
     const ctxOk = ctxWith(ip, '/altra-pagina');
     const r2 = await runMiddleware(middleware, ctxOk);
     expect(r2.next).toHaveBeenCalled();
+  });
+});
+
+describe('API per adminRateLimiter (Step 1)', () => {
+  test('releaseBlock sblocca una chiave', () => {
+    const ip = '7.7.7.1';
+    shared.recordFailureCtx(ctxWith(ip), 'adminLogin');
+    shared.recordFailureCtx(ctxWith(ip), 'adminLogin'); // bloccato
+    expect(shared.checkCtx(ctxWith(ip), 'adminLogin').blocked).toBe(true);
+    expect(shared.releaseBlock(ip, 'adminLogin')).toBe(true);
+    expect(shared.checkCtx(ctxWith(ip), 'adminLogin').blocked).toBe(false);
+  });
+
+  test('banClient applica un blocco manuale immediato', () => {
+    const ip = '7.7.7.2';
+    const v = shared.banClient(ip, 'adminLogin', { seconds: 600 });
+    expect(v.blocked).toBe(true);
+    expect(v.tier).toBe('long');
+    expect(shared.check(ip, 'adminLogin').blocked).toBe(true);
+  });
+
+  test('releaseAllForClient rimuove tutti i blocchi di un IP', () => {
+    const ip = '7.7.7.3';
+    shared.banClient(ip, 'adminLogin', { seconds: 600 });
+    shared.banClient(ip, 'downloads', { seconds: 600 });
+    expect(shared.releaseAllForClient(ip)).toBe(2);
+    expect(shared.check(ip, 'adminLogin').blocked).toBe(false);
+    expect(shared.check(ip, 'downloads').blocked).toBe(false);
+  });
+
+  test('getStats riporta stato e conteggi', () => {
+    const s = shared.getStats();
+    expect(s.enabled).toBe(true);
+    expect(s.enforcementEnabled).toBe(true);
+    expect(s.ruleCount).toBe(3);
+    expect(typeof s.activeBlocks).toBe('number');
+    expect(typeof s.shortBlocks).toBe('number');
+    expect(typeof s.longBlocks).toBe('number');
+  });
+
+  test('getRecentAttempts restituisce gli eventi recenti (audit)', () => {
+    shared.recordFailureCtx(ctxWith('7.7.7.5'), 'adminLogin');
+    const recent = shared.getRecentAttempts({ limit: 50 });
+    expect(Array.isArray(recent)).toBe(true);
+    expect(recent.length).toBeGreaterThan(0);
+    expect(recent[0]).toHaveProperty('event');
+    expect(recent[0]).toHaveProperty('ts');
+  });
+
+  test('getConfig restituisce una copia profonda del custom', () => {
+    const c1 = shared.getConfig();
+    expect(c1.defaults.maxFailures).toBe(2);
+    const c2 = shared.getConfig();
+    expect(c2).not.toBe(c1); // riferimenti diversi (deep copy)
+    c1.defaults.maxFailures = 999; // la mutazione non deve propagarsi
+    expect(shared.getConfig().defaults.maxFailures).toBe(2);
+  });
+
+  test('validateRules valida le regole', () => {
+    expect(shared.validateRules({ rules: [{ name: 'ok' }] }).valid).toBe(true);
+    expect(shared.validateRules({ rules: [{ name: '' }] }).valid).toBe(false);
+  });
+
+  test('validateConfig valida il custom', () => {
+    const good = {
+      enabled: true,
+      defaults: { findWindowSeconds: 900, maxFailures: 5, shortBlockSeconds: 300, maxShortBlocks: 5, longBlockSeconds: 86400, escalationResetSeconds: 86400 },
+    };
+    expect(shared.validateConfig(good).valid).toBe(true);
+    expect(shared.validateConfig({ enabled: true, defaults: { maxFailures: 5 } }).valid).toBe(false);
+  });
+
+  test('reloadRules non lancia e mantiene le regole', () => {
+    expect(() => shared.reloadRules()).not.toThrow();
+    expect(shared.getRuleNames()).toEqual(expect.arrayContaining(['adminLogin', 'instaBan', 'downloads']));
+  });
+});
+
+describe('hot-reload via reloadConfig (Step 1)', () => {
+  const writeCustom = (c) =>
+    sandbox.writeJson5('pluginConfig.json5', { active: 1, isInstalled: 1, weight: 5, dependency: {}, nodeModuleDependency: {}, custom: c });
+
+  afterAll(() => {
+    // ripristina la config originale per non influenzare altri file/test
+    writeCustom(CUSTOM);
+    shared.reloadConfig();
+  });
+
+  test('reloadConfig aggiorna i defaults a caldo', () => {
+    writeCustom({ ...CUSTOM, defaults: { ...CUSTOM.defaults, maxFailures: 9 } });
+    shared.reloadConfig();
+    expect(shared.getConfig().defaults.maxFailures).toBe(9);
+  });
+
+  test('reloadConfig disattiva l\'enforcement L2 a caldo (middleware live)', async () => {
+    const ip = '8.8.8.1';
+    shared.banClient(ip, 'instaBan', { seconds: 3600 }); // long block attivo
+
+    // enforcement attivo → negato
+    const ctxBefore = ctxWith(ip, '/pagina-x');
+    const r1 = await runMiddleware(middleware, ctxBefore);
+    expect(r1.next).not.toHaveBeenCalled();
+    expect(ctxBefore.status).toBe(429);
+
+    // disattivo l'enforcement e ricarico a caldo
+    writeCustom({ ...CUSTOM, enforcement: { ...CUSTOM.enforcement, enabled: false } });
+    shared.reloadConfig();
+
+    // stesso IP ancora bloccato nell'engine, ma enforcement off → passa
+    const ctxAfter = ctxWith(ip, '/pagina-x');
+    const r2 = await runMiddleware(middleware, ctxAfter);
+    expect(r2.next).toHaveBeenCalled();
+    expect(ctxAfter.status).not.toBe(429);
   });
 });

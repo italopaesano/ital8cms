@@ -60,6 +60,40 @@ class AttemptLog {
     }
   }
 
+  /**
+   * Legge gli ultimi eventi dall'audit log corrente (per la GUI admin).
+   * Scorre il file dal fondo e restituisce dal più recente, con filtri opzionali.
+   * @param {object} [opts] - { limit=100, clientId?, ruleName?, event? }
+   * @returns {Array<object>} eventi parsati (dal più recente)
+   */
+  readRecent(opts = {}) {
+    const limit = (typeof opts.limit === 'number' && opts.limit > 0) ? opts.limit : 100;
+    let raw;
+    try {
+      raw = fs.readFileSync(this.filePath, 'utf8');
+    } catch (err) {
+      return []; // file non ancora creato
+    }
+
+    const lines = raw.split('\n');
+    const out = [];
+    for (let i = lines.length - 1; i >= 0 && out.length < limit; i--) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      let rec;
+      try {
+        rec = JSON.parse(line);
+      } catch (e) {
+        continue; // riga corrotta: salta
+      }
+      if (opts.clientId && rec.clientId !== opts.clientId) continue;
+      if (opts.ruleName && rec.ruleName !== opts.ruleName) continue;
+      if (opts.event && rec.event !== opts.event) continue;
+      out.push(rec);
+    }
+    return out;
+  }
+
   // ── Private ──
 
   _rotateIfNeeded() {

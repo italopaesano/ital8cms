@@ -401,9 +401,27 @@ disattivato → i consumer saltano il guard con `if (rl)`.
 | `recordFailureCtx(ctx, ruleName)` | ctx-aware | Registra un fallimento, applica l'escalation |
 | `recordSuccessCtx(ctx, ruleName)` | ctx-aware | Azzera lo stato per la chiave |
 | `guardCtx(ctx, ruleName)` | ctx-aware | "Tutto-in-uno": se bloccato scrive `429` + `Retry-After` e ritorna `true` |
-| `check / recordFailure / recordSuccess(clientId, ruleName)` | per-chiave | Varianti con IP esplicito (utili a `adminRateLimiter`) |
+| `check / recordFailure / recordSuccess(clientId, ruleName)` | per-chiave | Varianti con IP esplicito |
 | `getActiveBlocks()` | introspezione | Lista dei blocchi attivi |
 | `getRuleNames()` | introspezione | Nomi delle regole configurate |
+
+### API per il plugin admin (`adminRateLimiter`)
+
+| Metodo | Tipo | Descrizione |
+|--------|------|-------------|
+| `releaseBlock(clientId, ruleName)` | azione live | Sblocca una chiave specifica (→ evento `release`) |
+| `releaseAllForClient(clientId)` | azione live | Rimuove tutti i blocchi di un IP (→ evento `releaseAll`) |
+| `banClient(clientId, ruleName, {tier?, seconds?})` | azione live | Ban manuale (→ evento `manualBlock`) |
+| `getStats()` | dati | `{ enabled, enforcementEnabled, activeBlocks, shortBlocks, longBlocks, ruleCount }` |
+| `getRecentAttempts({limit?, clientId?, ruleName?, event?})` | dati | Coda dell'audit log (dal più recente) |
+| `getConfig()` | dati | Copia profonda di `custom` |
+| `validateRules(rulesData)` / `validateConfig(custom)` | validazione | Riuso del `configValidator` prima del salvataggio |
+| `reloadRules()` / `reloadConfig()` | hot-reload | Ricarica regole / config (defaults + enforcement) a caldo, senza riavvio |
+
+Le azioni live agiscono sull'**engine in memoria** (effetto immediato). L'enforcement
+L2 e le policy effettive leggono `custom` in modo **live**, quindi `reloadConfig()`
+ha effetto senza riavvio (i parametri infrastrutturali — timer flush/sweep,
+rotazione/retention log — restano quelli creati al boot).
 
 > **Pull, non push.** I consumer usano `getSharedObject` (pull a runtime), non
 > l'oggetto ricevuto via `setSharedObject` al boot. Motivo: al momento del push
@@ -477,7 +495,7 @@ tentativi falliti. Riprova tra N minuti.").
 
 ## Test
 
-Suite completa co-locata in `tests/` (7 file, 77 test). I test che toccano il
+Suite completa co-locata in `tests/` (7 file, 99 test). I test che toccano il
 filesystem usano una directory temporanea (`os.tmpdir()` / sandbox): **mai** la
 cartella reale del plugin.
 
