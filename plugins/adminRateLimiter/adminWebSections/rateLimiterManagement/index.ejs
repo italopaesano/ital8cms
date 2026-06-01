@@ -1,0 +1,131 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<link rel="stylesheet" href="/<%= passData.adminPrefix %>/rateLimiterManagement/rateLimiter-admin.css">
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
+
+<div class="container mt-4 rl-admin">
+
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <h3 class="mb-0">
+      🛡️ <%= __({it: 'Rate Limiter', en: 'Rate Limiter'}, passData.ctx) %>
+      <span id="statusBadge" class="badge bg-secondary align-middle ms-2">—</span>
+    </h3>
+    <div class="d-flex align-items-center gap-3">
+      <div class="form-check form-switch mb-0">
+        <input class="form-check-input" type="checkbox" role="switch" id="autoRefreshToggle" checked>
+        <label class="form-check-label small" for="autoRefreshToggle">
+          <%= __({it: 'Auto-aggiornamento', en: 'Auto-refresh'}, passData.ctx) %>
+        </label>
+      </div>
+      <button id="btnRefresh" class="btn btn-outline-secondary btn-sm">
+        <span id="loadingSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+        ⟳ <%= __({it: 'Aggiorna', en: 'Refresh'}, passData.ctx) %>
+      </button>
+    </div>
+  </div>
+
+  <div id="globalAlert" class="alert d-none" role="alert"></div>
+
+  <!-- Banner: servizio disattivato -->
+  <div id="disabledBanner" class="alert alert-warning d-none">
+    <%= __({
+      it: 'Il plugin rateLimiter è disattivato (custom.enabled=false). Nessun dato da mostrare.',
+      en: 'The rateLimiter plugin is disabled (custom.enabled=false). No data to show.'
+    }, passData.ctx) %>
+  </div>
+
+  <!-- KPI cards (Vista Dati) -->
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-label text-muted small"><%= __({it: 'Enforcement', en: 'Enforcement'}, passData.ctx) %></div>
+        <div class="kpi-value fs-5 fw-bold" id="kpiEnforcement">—</div>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-label text-muted small"><%= __({it: 'Blocchi attivi', en: 'Active blocks'}, passData.ctx) %></div>
+        <div class="kpi-value fs-4 fw-bold text-primary" id="kpiActive">—</div>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-label text-muted small"><%= __({it: 'Short block', en: 'Short blocks'}, passData.ctx) %></div>
+        <div class="kpi-value fs-4 fw-bold text-warning" id="kpiShort">—</div>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-label text-muted small"><%= __({it: 'Long block', en: 'Long blocks'}, passData.ctx) %></div>
+        <div class="kpi-value fs-4 fw-bold text-danger" id="kpiLong">—</div>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-label text-muted small"><%= __({it: 'Regole', en: 'Rules'}, passData.ctx) %></div>
+        <div class="kpi-value fs-4 fw-bold" id="kpiRules">—</div>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- Blocchi attivi -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header small fw-semibold">
+      <%= __({it: 'Blocchi attivi', en: 'Active blocks'}, passData.ctx) %>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 align-middle">
+          <thead>
+            <tr>
+              <th>IP</th>
+              <th><%= __({it: 'Regola', en: 'Rule'}, passData.ctx) %></th>
+              <th><%= __({it: 'Tipo', en: 'Tier'}, passData.ctx) %></th>
+              <th><%= __({it: 'Scade tra', en: 'Expires in'}, passData.ctx) %></th>
+              <th class="text-end">Short #</th>
+            </tr>
+          </thead>
+          <tbody id="activeBlocksBody">
+            <tr><td colspan="5" class="text-center text-muted py-3">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Audit log -->
+  <div class="card shadow-sm">
+    <div class="card-header small fw-semibold d-flex justify-content-between align-items-center">
+      <span><%= __({it: 'Audit log (recenti)', en: 'Audit log (recent)'}, passData.ctx) %></span>
+      <span class="text-muted fw-normal" id="auditCount"></span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle">
+          <thead>
+            <tr>
+              <th><%= __({it: 'Quando', en: 'When'}, passData.ctx) %></th>
+              <th><%= __({it: 'Evento', en: 'Event'}, passData.ctx) %></th>
+              <th>IP</th>
+              <th><%= __({it: 'Regola', en: 'Rule'}, passData.ctx) %></th>
+            </tr>
+          </thead>
+          <tbody id="auditBody">
+            <tr><td colspan="4" class="text-center text-muted py-3">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Variabili iniettate dal server (convenzione: JS var, non hidden span)
+  const apiPrefix          = '<%= passData.apiPrefix %>';
+  const adminPrefix        = '<%= passData.adminPrefix %>';
+  const autoRefreshSeconds = <%= Number(passData.plugin.adminRateLimiter && passData.plugin.adminRateLimiter.autoRefreshSeconds) || 5 %>;
+  const auditLimit         = <%= Number(passData.plugin.adminRateLimiter && passData.plugin.adminRateLimiter.auditLimit) || 100 %>;
+</script>
+<script src="/<%= passData.adminPrefix %>/rateLimiterManagement/rateLimiter-admin.js"></script>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>

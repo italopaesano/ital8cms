@@ -1,0 +1,23 @@
+/* adminRateLimiter — stili della dashboard (Vista Dati) */
+
+.rl-admin .kpi-card {
+  border: 1px solid var(--bs-border-color, #dee2e6);
+}
+
+.rl-admin .kpi-label {
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.rl-admin .kpi-value {
+  line-height: 1.2;
+}
+
+.rl-admin code {
+  font-size: 0.85em;
+}
+
+.rl-admin table th {
+  white-space: nowrap;
+  font-weight: 600;
+}

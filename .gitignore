@@ -17,6 +17,7 @@ node_modules/
 /core/admin/webPages/analyticsManagement
 /core/admin/webPages/analyticsSettings
 /core/admin/webPages/mediaManagement
+/core/admin/webPages/rateLimiterManagement
 
 # Auto-generated runtime data
 /plugins/urlRedirect/redirectHitCount.json5

@@ -1,0 +1,9 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "name": "adminRateLimiter",
+  "version": "1.0.0",
+  "description": "Admin GUI (twin plugin) for the rateLimiter service: monitor active blocks and the audit log, manage protected-route rules and global settings.",
+  "author": "Italo Paesano",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC",
+}
