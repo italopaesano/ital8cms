@@ -3493,7 +3493,7 @@ A `getMiddlewareToAdd()` middleware acting on **fall-through** requests (pages, 
 | `/plugins/rateLimiter/lib/stateStore.js` | Active-state persistence |
 | `/plugins/rateLimiter/lib/configValidator.js` | Boot validation |
 | `/plugins/rateLimiter/protectedRoutes.json5` | Per-rule policy |
-| `/plugins/rateLimiter/tests/unit/rateLimitEngine.test.js` | Engine unit tests |
+| `/plugins/rateLimiter/tests/` | Test suite (7 files, 77 tests): engine, keyResolver, configValidator, attemptLog, stateStore, main.js integration |
 
 #### Future Enhancements
 
@@ -5552,7 +5552,7 @@ When working on this codebase as an AI assistant:
   - **Persistence & audit:** in-memory state with periodic atomic snapshot to `state/activeBlocks.json5` (survives restart, flush on SIGTERM/SIGINT); append-only `logs/attempts.jsonl` (JSONL) with size rotation + retention cleanup. `state/` and `logs/` are gitignored (recreated at boot)
   - **Proxy-aware:** optional `trustProxy` reads client IP from `X-Forwarded-For`
   - **adminUsers integration:** login handler wired to rule `adminLogin` with graceful `if (rl)` fallback (block check before authenticate, `recordFailureCtx`/`recordSuccessCtx`); `login.ejs` shows a localized rate-limited message on `?error=rateLimited`
-  - **Tests:** 18 unit tests for the engine (window, escalation, expiry, sweep, persistence round-trip, `checkClientLongBlock`, events)
+  - **Tests:** comprehensive suite (7 files, 77 tests) — engine (window, escalation, expiry, sweep, persistence round-trip, `checkClientLongBlock`, events, isolation), `keyResolver`, `configValidator`, `attemptLog` (JSONL/rotation/retention), `stateStore` (atomic flush/handlers), plus integration tests of `main.js` (L1 guard API + L2 enforcement middleware) and the disabled-plugin case. Filesystem-isolated via tmpdir/sandbox
   - **Files Added:**
     - `/plugins/rateLimiter/main.js`, `pluginConfig.json5`, `pluginDescription.json5`, `protectedRoutes.json5`, `README.md`, `.gitignore`
     - `/plugins/rateLimiter/lib/{rateLimitEngine,keyResolver,attemptLog,stateStore,configValidator}.js`

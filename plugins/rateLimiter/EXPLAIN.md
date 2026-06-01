@@ -477,16 +477,19 @@ tentativi falliti. Riprova tra N minuti.").
 
 ## Test
 
-`tests/unit/rateLimitEngine.test.js` (18 test) copre la logica critica del
-motore con **clock iniettata** (deterministico):
-- conteggio sotto soglia, scatto dello short block e `retryAfter`;
-- nessun incremento durante il blocco; ritorno alla normalità alla scadenza;
-- escalation a long block dopo `maxShortBlocks`; reset totale a scadenza del long;
-- finestra `findtime` (fallimenti diluiti non si accumulano);
-- reset della memoria di escalation per inattività;
-- `success` rimuove lo stato; `getActiveBlocks`; `sweep`;
-- `checkClientLongBlock` (Livello 2): short ≠ long, rilevazione, isolamento per IP, scadenza;
-- round-trip `serialize`/`load`; emissione eventi `onEvent`.
+Suite completa co-locata in `tests/` (7 file, 77 test). I test che toccano il
+filesystem usano una directory temporanea (`os.tmpdir()` / sandbox): **mai** la
+cartella reale del plugin.
+
+| File | Copre |
+|------|-------|
+| `tests/unit/rateLimitEngine.test.js` | Motore con clock iniettata: soglia/short block, nessun incremento durante il blocco, scadenze, escalation a long block, `findtime`, reset escalation, `success`/`sweep`/`getActiveBlocks`, `checkClientLongBlock`, `serialize`/`load`, eventi, escalation immediata (`maxShortBlocks=0`), isolamento IP/regola, policy per-regola |
+| `tests/unit/keyResolver.test.js` | Risoluzione IP: `ctx.ip`, fallback, `trustProxy` + `X-Forwarded-For` (catena, trim, header assente/vuoto, ignorato se off) |
+| `tests/unit/configValidator.test.js` | Validazione: defaults completi/invalidi, `maxShortBlocks=0` ammesso, regole (name mancante/vuoto/duplicato, override parziali), `validatePolicy` |
+| `tests/unit/attemptLog.test.js` | JSONL: creazione dir, forma del record (`ts` ISO, niente `at`), append multipli, rotazione per dimensione, retention |
+| `tests/unit/stateStore.test.js` | Persistenza: init vuoto, load round-trip, flush atomico solo se dirty, timer (0 = assente), register/remove handler SIGTERM/SIGINT |
+| `tests/integration/pluginIntegration.test.js` | `main.js` end-to-end via sandbox: API guard (L1) + middleware enforcement (L2: globalLongBlock, exemptPaths, IP pulito, pathPattern) |
+| `tests/integration/disabledPlugin.test.js` | `enabled=false` → oggetto condiviso `null` + middleware `[]` |
 
 Esecuzione: `npm run test:plugin --plugin=rateLimiter` (oppure
 `npx jest plugins/rateLimiter`).
