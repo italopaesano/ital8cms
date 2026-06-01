@@ -9,6 +9,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { createPluginSysMock, createCtxMock, runRoute, validateRoute } = require('../../../../core/testHelpers');
+const loadJson5 = require('../../../../core/loadJson5');
 const plugin = require('../../main.js');
 
 const mockRl = {
@@ -33,6 +34,11 @@ const mockRl = {
     return { valid: true, errors: [], warnings: [] };
   },
   reloadRules: jest.fn(() => new Map()),
+  validateConfig: (cfg) => {
+    if (!cfg || typeof cfg !== 'object' || !cfg.defaults) return { valid: false, errors: ['defaults mancante'], warnings: [] };
+    return { valid: true, errors: [], warnings: [] };
+  },
+  reloadConfig: jest.fn(() => ({ enabled: true })),
 };
 
 const routeOf = (routes, method, path) => routes.find((r) => r.method === method && r.path === path);
@@ -155,6 +161,18 @@ describe('adminRateLimiter — routes (rateLimiter disattivato)', () => {
       createCtxMock({ method: 'POST', path: '/rules', body: { content: '{}' } }));
     expect(ctx.status).toBe(409);
   });
+
+  test('POST /validate-config → 409 quando disattivato', async () => {
+    const ctx = await runRoute(routeOf(routes, 'POST', '/validate-config'),
+      createCtxMock({ method: 'POST', path: '/validate-config', body: { content: '{}' } }));
+    expect(ctx.status).toBe(409);
+  });
+
+  test('POST /config → 409 quando disattivato', async () => {
+    const ctx = await runRoute(routeOf(routes, 'POST', '/config'),
+      createCtxMock({ method: 'POST', path: '/config', body: { content: '{}' } }));
+    expect(ctx.status).toBe(409);
+  });
 });
 
 describe('adminRateLimiter — Regole (editor JSON5, Step 4)', () => {
@@ -233,5 +251,79 @@ describe('adminRateLimiter — Regole (editor JSON5, Step 4)', () => {
       createCtxMock({ method: 'POST', path: '/rules', body: { content: '{ "rules": [ { } ] }' } }));
     expect(ctx.status).toBe(400);
     expect(ctx.body.success).toBe(false);
+  });
+});
+
+describe('adminRateLimiter — Impostazioni (editor JSON5, Step 5)', () => {
+  let routes;
+  let rlFolder;
+  let ownFolder;
+  let requestRestart;
+  const PLUGIN_CONFIG = '// header\n{\n  "active": 1,\n  "isInstalled": 1,\n  "custom": {\n    "enabled": true,\n    "defaults": { "maxFailures": 5 },\n  },\n}\n';
+
+  beforeAll(async () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'ital8-arl-cfg-'));
+    rlFolder = path.join(base, 'rateLimiter');
+    ownFolder = path.join(base, 'adminRateLimiter');
+    fs.mkdirSync(rlFolder, { recursive: true });
+    fs.mkdirSync(ownFolder, { recursive: true });
+    fs.writeFileSync(path.join(rlFolder, 'pluginConfig.json5'), PLUGIN_CONFIG);
+
+    const ps = createPluginSysMock({
+      sharedObjects: { rateLimiter: mockRl },
+      plugins: { rateLimiter: { pathPluginFolder: rlFolder } },
+    });
+    requestRestart = jest.fn(() => true);
+    ps.requestRestart = requestRestart;
+    await plugin.loadPlugin(ps, ownFolder);
+    routes = plugin.getRouteArray();
+  });
+
+  afterAll(() => {
+    const base = path.dirname(rlFolder);
+    if (fs.existsSync(base)) fs.rmSync(base, { recursive: true, force: true });
+  });
+
+  test('GET /config restituisce il blocco custom serializzato', async () => {
+    const ctx = await runRoute(routeOf(routes, 'GET', '/config'), createCtxMock({ path: '/config' }));
+    expect(ctx.body.enabled).toBe(true);
+    expect(JSON.parse(ctx.body.content).defaults.maxFailures).toBe(5);
+  });
+
+  test('POST /validate-config: valido e invalido', async () => {
+    const ok = await runRoute(routeOf(routes, 'POST', '/validate-config'),
+      createCtxMock({ method: 'POST', path: '/validate-config', body: { content: '{ "enabled": true, "defaults": { "maxFailures": 3 } }' } }));
+    expect(ok.body.valid).toBe(true);
+    const bad = await runRoute(routeOf(routes, 'POST', '/validate-config'),
+      createCtxMock({ method: 'POST', path: '/validate-config', body: { content: '{ "enabled": true }' } }));
+    expect(bad.body.valid).toBe(false);
+  });
+
+  test('POST /config aggiorna solo il blocco custom (preserva il resto) e ricarica', async () => {
+    const before = mockRl.reloadConfig.mock.calls.length;
+    const ctx = await runRoute(routeOf(routes, 'POST', '/config'),
+      createCtxMock({ method: 'POST', path: '/config', body: { content: '{ "enabled": true, "defaults": { "maxFailures": 9 } }' } }));
+    expect(ctx.body.success).toBe(true);
+
+    const after = loadJson5(path.join(rlFolder, 'pluginConfig.json5'));
+    expect(after.custom.defaults.maxFailures).toBe(9); // custom aggiornato
+    expect(after.active).toBe(1);                       // resto del file preservato
+    expect(after.isInstalled).toBe(1);
+
+    const baks = fs.readdirSync(path.join(ownFolder, 'backups')).filter((f) => f.endsWith('.bak'));
+    expect(baks.length).toBeGreaterThanOrEqual(1);
+    expect(mockRl.reloadConfig.mock.calls.length).toBeGreaterThan(before);
+  });
+
+  test('POST /config: JSON5 non valido → 400', async () => {
+    const ctx = await runRoute(routeOf(routes, 'POST', '/config'),
+      createCtxMock({ method: 'POST', path: '/config', body: { content: '{ bad ' } }));
+    expect(ctx.status).toBe(400);
+  });
+
+  test('POST /restart invoca pluginSys.requestRestart', async () => {
+    const ctx = await runRoute(routeOf(routes, 'POST', '/restart'), createCtxMock({ method: 'POST', path: '/restart', body: {} }));
+    expect(ctx.body.success).toBe(true);
+    expect(requestRestart).toHaveBeenCalled();
   });
 });

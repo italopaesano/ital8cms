@@ -17,6 +17,7 @@
 const path = require('path');
 const JSON5 = require('json5');
 const loadJson5 = require('../../core/loadJson5');
+const editJson5 = require('../../core/editJson5');
 const configFileManager = require('./lib/configFileManager');
 
 const pluginName = path.basename(__dirname);
@@ -263,6 +264,123 @@ module.exports = {
             return;
           }
           ctx.body = { success: true, warnings: result.warnings };
+        },
+      },
+
+      // ── Impostazioni: carica il blocco custom di pluginConfig.json5 ──
+      {
+        method: 'GET',
+        path: '/config',
+        access: pluginAccess,
+        handler: async (ctx) => {
+          const folder = rateLimiterFolder();
+          if (!folder) {
+            ctx.status = 409;
+            ctx.body = { enabled: false, error: 'rateLimiter non disponibile' };
+            return;
+          }
+          let content = '{}';
+          try {
+            const cfg = loadJson5(path.join(folder, 'pluginConfig.json5'));
+            content = JSON.stringify(cfg.custom || {}, null, 2);
+          } catch (e) {
+            content = '{}';
+          }
+          ctx.body = { enabled: !!getRateLimiter(), content };
+        },
+      },
+
+      // ── Impostazioni: valida senza salvare ──
+      {
+        method: 'POST',
+        path: '/validate-config',
+        access: pluginAccess,
+        handler: async (ctx) => {
+          const rl = getRateLimiter();
+          if (!rl) {
+            ctx.status = 409;
+            ctx.body = { valid: false, errors: ['rateLimiter disattivato'], warnings: [] };
+            return;
+          }
+          const { content } = ctx.request.body || {};
+          if (typeof content !== 'string') {
+            ctx.status = 400;
+            ctx.body = { valid: false, errors: ['content (stringa) obbligatorio'], warnings: [] };
+            return;
+          }
+          let parsed;
+          try {
+            parsed = JSON5.parse(content);
+          } catch (e) {
+            ctx.body = { valid: false, errors: ['JSON5 non valido: ' + e.message], warnings: [] };
+            return;
+          }
+          ctx.body = rl.validateConfig(parsed);
+        },
+      },
+
+      // ── Impostazioni: salva (valida → backup → editJson5 'custom' → reloadConfig) ──
+      {
+        method: 'POST',
+        path: '/config',
+        access: pluginAccess,
+        handler: async (ctx) => {
+          const rl = getRateLimiter();
+          const folder = rateLimiterFolder();
+          if (!rl || !folder) {
+            ctx.status = 409;
+            ctx.body = { success: false, error: 'rateLimiter disattivato' };
+            return;
+          }
+          const { content } = ctx.request.body || {};
+          if (typeof content !== 'string') {
+            ctx.status = 400;
+            ctx.body = { success: false, error: 'content (stringa) obbligatorio' };
+            return;
+          }
+          let parsed;
+          try {
+            parsed = JSON5.parse(content);
+          } catch (e) {
+            ctx.status = 400;
+            ctx.body = { success: false, error: 'JSON5 non valido: ' + e.message };
+            return;
+          }
+          const result = rl.validateConfig(parsed);
+          if (!result.valid) {
+            ctx.status = 400;
+            ctx.body = { success: false, errors: result.errors, warnings: result.warnings };
+            return;
+          }
+          const file = path.join(folder, 'pluginConfig.json5');
+          try {
+            // editJson5 sostituisce SOLO il blocco "custom", preservando il resto
+            // del file (active/isInstalled/weight/dependency e i loro commenti).
+            configFileManager.backup(file, backupDir(), maxBackups);
+            await editJson5(file, 'custom', parsed);
+            rl.reloadConfig(); // hot-reload di defaults + enforcement
+          } catch (e) {
+            ctx.status = 500;
+            ctx.body = { success: false, error: 'Scrittura fallita: ' + e.message };
+            return;
+          }
+          ctx.body = { success: true, warnings: result.warnings };
+        },
+      },
+
+      // ── Salva e riavvia: richiede un restart pulito (i blocchi persistono) ──
+      {
+        method: 'POST',
+        path: '/restart',
+        access: pluginAccess,
+        handler: async (ctx) => {
+          if (myPluginSys && typeof myPluginSys.requestRestart === 'function') {
+            myPluginSys.requestRestart({ reason: 'adminRateLimiter: modifica impostazioni' });
+            ctx.body = { success: true, restarting: true };
+          } else {
+            ctx.status = 501;
+            ctx.body = { success: false, error: 'restart non supportato in questo ambiente' };
+          }
         },
       },
     ];
