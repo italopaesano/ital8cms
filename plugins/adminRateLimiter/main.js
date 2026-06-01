@@ -15,7 +15,9 @@
 'use strict';
 
 const path = require('path');
+const JSON5 = require('json5');
 const loadJson5 = require('../../core/loadJson5');
+const configFileManager = require('./lib/configFileManager');
 
 const pluginName = path.basename(__dirname);
 
@@ -23,8 +25,10 @@ const pluginName = path.basename(__dirname);
 // che pluginSys invoca PRIMA di loadPlugin().
 const ownConfig = loadJson5(path.join(__dirname, 'pluginConfig.json5'));
 const custom = ownConfig.custom || {};
+const maxBackups = custom.maxBackupsPerFile || 10;
 
 let myPluginSys = null;
+let ownFolder = null; // cartella di questo plugin (per i backup)
 
 // Il rate limiter è sensibile: accesso riservato a root (0) e admin (1).
 const pluginAccess = {
@@ -37,9 +41,21 @@ function getRateLimiter() {
   return myPluginSys ? myPluginSys.getSharedObject('rateLimiter') : null;
 }
 
+/** Cartella del plugin di servizio rateLimiter (per leggere/scrivere i suoi .json5). */
+function rateLimiterFolder() {
+  const p = myPluginSys && myPluginSys.getPlugin('rateLimiter');
+  return (p && p.pathPluginFolder) ? p.pathPluginFolder : null;
+}
+
+/** Cartella backup di questo plugin admin. */
+function backupDir() {
+  return path.join(ownFolder || __dirname, 'backups');
+}
+
 module.exports = {
   async loadPlugin(pluginSys, pathPluginFolder) {
     myPluginSys = pluginSys;
+    ownFolder = pathPluginFolder;
     console.log(`[${pluginName}] Plugin loaded`);
   },
 
@@ -148,6 +164,105 @@ module.exports = {
 
           const verdict = rl.banClient(String(clientId), String(ruleName), opts);
           ctx.body = { success: true, verdict };
+        },
+      },
+
+      // ── Regole: carica il contenuto grezzo di protectedRoutes.json5 ──
+      {
+        method: 'GET',
+        path: '/rules',
+        access: pluginAccess,
+        handler: async (ctx) => {
+          const folder = rateLimiterFolder();
+          if (!folder) {
+            ctx.status = 409;
+            ctx.body = { enabled: false, error: 'rateLimiter non disponibile' };
+            return;
+          }
+          let content = '';
+          try {
+            content = configFileManager.readRaw(path.join(folder, 'protectedRoutes.json5'));
+          } catch (e) {
+            content = '';
+          }
+          // enabled = servizio attivo (necessario per validare/salvare)
+          ctx.body = { enabled: !!getRateLimiter(), content };
+        },
+      },
+
+      // ── Regole: valida senza salvare ──
+      {
+        method: 'POST',
+        path: '/validate-rules',
+        access: pluginAccess,
+        handler: async (ctx) => {
+          const rl = getRateLimiter();
+          if (!rl) {
+            ctx.status = 409;
+            ctx.body = { valid: false, errors: ['rateLimiter disattivato'], warnings: [] };
+            return;
+          }
+          const { content } = ctx.request.body || {};
+          if (typeof content !== 'string') {
+            ctx.status = 400;
+            ctx.body = { valid: false, errors: ['content (stringa) obbligatorio'], warnings: [] };
+            return;
+          }
+          let parsed;
+          try {
+            parsed = JSON5.parse(content);
+          } catch (e) {
+            ctx.body = { valid: false, errors: ['JSON5 non valido: ' + e.message], warnings: [] };
+            return;
+          }
+          ctx.body = rl.validateRules(parsed);
+        },
+      },
+
+      // ── Regole: salva (valida → backup → scrittura atomica → reloadRules) ──
+      {
+        method: 'POST',
+        path: '/rules',
+        access: pluginAccess,
+        handler: async (ctx) => {
+          const rl = getRateLimiter();
+          const folder = rateLimiterFolder();
+          if (!rl || !folder) {
+            ctx.status = 409;
+            ctx.body = { success: false, error: 'rateLimiter disattivato' };
+            return;
+          }
+          const { content } = ctx.request.body || {};
+          if (typeof content !== 'string') {
+            ctx.status = 400;
+            ctx.body = { success: false, error: 'content (stringa) obbligatorio' };
+            return;
+          }
+          let parsed;
+          try {
+            parsed = JSON5.parse(content);
+          } catch (e) {
+            ctx.status = 400;
+            ctx.body = { success: false, error: 'JSON5 non valido: ' + e.message };
+            return;
+          }
+          const result = rl.validateRules(parsed);
+          if (!result.valid) {
+            ctx.status = 400;
+            ctx.body = { success: false, errors: result.errors, warnings: result.warnings };
+            return;
+          }
+          const file = path.join(folder, 'protectedRoutes.json5');
+          try {
+            configFileManager.backup(file, backupDir(), maxBackups);
+            configFileManager.writeAtomic(file, content);
+            rl.reloadRules();
+          } catch (e) {
+            ctx.status = 500;
+            ctx.body = { success: false, error: 'Scrittura fallita: ' + e.message };
+            return;
+          }
+          ctx.body = { success: true, warnings: result.warnings };
         },
       },
     ];

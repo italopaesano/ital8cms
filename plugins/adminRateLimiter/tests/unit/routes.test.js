@@ -5,6 +5,9 @@
 
 'use strict';
 
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { createPluginSysMock, createCtxMock, runRoute, validateRoute } = require('../../../../core/testHelpers');
 const plugin = require('../../main.js');
 
@@ -23,6 +26,13 @@ const mockRl = {
   getRuleNames: () => ['adminLogin', 'downloads'],
   releaseBlock: () => true,
   banClient: (clientId, ruleName, opts) => ({ blocked: true, tier: (opts && opts.tier) || 'long', retryAfterSeconds: (opts && opts.seconds) || 86400 }),
+  validateRules: (data) => {
+    if (!data || !Array.isArray(data.rules)) return { valid: false, errors: ['rules array mancante'], warnings: [] };
+    const bad = data.rules.find((r) => !r || typeof r.name !== 'string' || r.name.length === 0);
+    if (bad) return { valid: false, errors: ['regola senza name valido'], warnings: [] };
+    return { valid: true, errors: [], warnings: [] };
+  },
+  reloadRules: jest.fn(() => new Map()),
 };
 
 const routeOf = (routes, method, path) => routes.find((r) => r.method === method && r.path === path);
@@ -131,6 +141,97 @@ describe('adminRateLimiter — routes (rateLimiter disattivato)', () => {
     const ctx = await runRoute(routeOf(routes, 'POST', '/ban'),
       createCtxMock({ method: 'POST', path: '/ban', body: { clientId: '9.9.9.9', ruleName: 'adminLogin', seconds: 600 } }));
     expect(ctx.status).toBe(409);
+    expect(ctx.body.success).toBe(false);
+  });
+
+  test('POST /validate-rules → 409 quando disattivato', async () => {
+    const ctx = await runRoute(routeOf(routes, 'POST', '/validate-rules'),
+      createCtxMock({ method: 'POST', path: '/validate-rules', body: { content: '{}' } }));
+    expect(ctx.status).toBe(409);
+  });
+
+  test('POST /rules → 409 quando disattivato', async () => {
+    const ctx = await runRoute(routeOf(routes, 'POST', '/rules'),
+      createCtxMock({ method: 'POST', path: '/rules', body: { content: '{}' } }));
+    expect(ctx.status).toBe(409);
+  });
+});
+
+describe('adminRateLimiter — Regole (editor JSON5, Step 4)', () => {
+  let routes;
+  let rlFolder;
+  let ownFolder;
+  const INITIAL = '// header\n{ "rules": [ { "name": "adminLogin" } ] }\n';
+
+  beforeAll(async () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'ital8-arl-rules-'));
+    rlFolder = path.join(base, 'rateLimiter');
+    ownFolder = path.join(base, 'adminRateLimiter');
+    fs.mkdirSync(rlFolder, { recursive: true });
+    fs.mkdirSync(ownFolder, { recursive: true });
+    fs.writeFileSync(path.join(rlFolder, 'protectedRoutes.json5'), INITIAL);
+
+    const pluginSys = createPluginSysMock({
+      sharedObjects: { rateLimiter: mockRl },
+      plugins: { rateLimiter: { pathPluginFolder: rlFolder } },
+    });
+    await plugin.loadPlugin(pluginSys, ownFolder);
+    routes = plugin.getRouteArray();
+  });
+
+  afterAll(() => {
+    const base = path.dirname(rlFolder);
+    if (fs.existsSync(base)) fs.rmSync(base, { recursive: true, force: true });
+  });
+
+  test('GET /rules restituisce il contenuto grezzo', async () => {
+    const ctx = await runRoute(routeOf(routes, 'GET', '/rules'), createCtxMock({ path: '/rules' }));
+    expect(ctx.body.enabled).toBe(true);
+    expect(ctx.body.content).toContain('"name": "adminLogin"');
+  });
+
+  test('POST /validate-rules: contenuto valido', async () => {
+    const ctx = await runRoute(routeOf(routes, 'POST', '/validate-rules'),
+      createCtxMock({ method: 'POST', path: '/validate-rules', body: { content: '{ "rules": [ { "name": "x" } ] }' } }));
+    expect(ctx.body.valid).toBe(true);
+  });
+
+  test('POST /validate-rules: JSON5 non valido', async () => {
+    const ctx = await runRoute(routeOf(routes, 'POST', '/validate-rules'),
+      createCtxMock({ method: 'POST', path: '/validate-rules', body: { content: '{ rules: [ ' } }));
+    expect(ctx.body.valid).toBe(false);
+    expect(ctx.body.errors.join(' ')).toMatch(/JSON5/);
+  });
+
+  test('POST /validate-rules: regole invalide (name mancante)', async () => {
+    const ctx = await runRoute(routeOf(routes, 'POST', '/validate-rules'),
+      createCtxMock({ method: 'POST', path: '/validate-rules', body: { content: '{ "rules": [ { } ] }' } }));
+    expect(ctx.body.valid).toBe(false);
+  });
+
+  test('POST /rules salva, fa backup e ricarica', async () => {
+    const before = mockRl.reloadRules.mock.calls.length;
+    const newContent = '{ "rules": [ { "name": "adminLogin", "maxFailures": 7 } ] }\n';
+    const ctx = await runRoute(routeOf(routes, 'POST', '/rules'),
+      createCtxMock({ method: 'POST', path: '/rules', body: { content: newContent } }));
+    expect(ctx.body.success).toBe(true);
+    expect(fs.readFileSync(path.join(rlFolder, 'protectedRoutes.json5'), 'utf8')).toBe(newContent);
+    const baks = fs.readdirSync(path.join(ownFolder, 'backups')).filter((f) => f.endsWith('.bak'));
+    expect(baks.length).toBeGreaterThanOrEqual(1);
+    expect(mockRl.reloadRules.mock.calls.length).toBeGreaterThan(before);
+  });
+
+  test('POST /rules: JSON5 non valido → 400', async () => {
+    const ctx = await runRoute(routeOf(routes, 'POST', '/rules'),
+      createCtxMock({ method: 'POST', path: '/rules', body: { content: '{ bad ' } }));
+    expect(ctx.status).toBe(400);
+    expect(ctx.body.success).toBe(false);
+  });
+
+  test('POST /rules: regole invalide → 400', async () => {
+    const ctx = await runRoute(routeOf(routes, 'POST', '/rules'),
+      createCtxMock({ method: 'POST', path: '/rules', body: { content: '{ "rules": [ { } ] }' } }));
+    expect(ctx.status).toBe(400);
     expect(ctx.body.success).toBe(false);
   });
 });

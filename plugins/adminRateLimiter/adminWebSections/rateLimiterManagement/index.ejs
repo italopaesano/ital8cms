@@ -4,6 +4,12 @@
 
 <div class="container mt-4 rl-admin">
 
+  <ul class="nav nav-pills mb-3 rl-nav">
+    <li class="nav-item"><a class="nav-link active" href="/<%= passData.adminPrefix %>/rateLimiterManagement/index.ejs"><%= __({it: 'Panoramica', en: 'Overview'}, passData.ctx) %></a></li>
+    <li class="nav-item"><a class="nav-link" href="/<%= passData.adminPrefix %>/rateLimiterManagement/rules.ejs"><%= __({it: 'Regole', en: 'Rules'}, passData.ctx) %></a></li>
+    <li class="nav-item"><a class="nav-link" href="/<%= passData.adminPrefix %>/rateLimiterManagement/settings.ejs"><%= __({it: 'Impostazioni', en: 'Settings'}, passData.ctx) %></a></li>
+  </ul>
+
   <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
     <h3 class="mb-0">
       🛡️ <%= __({it: 'Rate Limiter', en: 'Rate Limiter'}, passData.ctx) %>

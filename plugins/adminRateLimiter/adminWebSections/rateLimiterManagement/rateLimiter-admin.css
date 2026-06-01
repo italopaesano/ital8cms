@@ -21,3 +21,20 @@
   white-space: nowrap;
   font-weight: 600;
 }
+
+/* Editor JSON5 (tab Regole / Impostazioni) */
+.rl-admin .rl-editor {
+  font-family: var(--bs-font-monospace, monospace);
+  font-size: 0.85rem;
+  white-space: pre;
+  tab-size: 2;
+}
+
+.rl-admin .rl-nav .nav-link {
+  padding: 0.25rem 0.75rem;
+}
+
+.rl-admin .messages-area ul {
+  padding-left: 1.1rem;
+  margin-bottom: 0;
+}
