@@ -8,6 +8,10 @@ blocchi brevi si passa a un blocco lungo (giorni).
 Configurabile **solo via file `.json5`**. Una futura interfaccia grafica sarà
 fornita dal plugin separato `adminRateLimiter` (non incluso qui).
 
+> 📖 Questo README è la **guida d'uso** (API, configurazione). Per il **deep-dive
+> tecnico** — architettura a due livelli, motore con escalation, diagrammi di
+> flusso, persistenza/audit, sicurezza — vedi [`EXPLAIN.md`](./EXPLAIN.md).
+
 ---
 
 ## Architettura: perché un "guard" e non solo un middleware
