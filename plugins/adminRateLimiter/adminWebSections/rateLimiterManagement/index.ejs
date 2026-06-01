@@ -82,13 +82,40 @@
               <th><%= __({it: 'Tipo', en: 'Tier'}, passData.ctx) %></th>
               <th><%= __({it: 'Scade tra', en: 'Expires in'}, passData.ctx) %></th>
               <th class="text-end">Short #</th>
+              <th class="text-end"><%= __({it: 'Azioni', en: 'Actions'}, passData.ctx) %></th>
             </tr>
           </thead>
           <tbody id="activeBlocksBody">
-            <tr><td colspan="5" class="text-center text-muted py-3">—</td></tr>
+            <tr><td colspan="6" class="text-center text-muted py-3">—</td></tr>
           </tbody>
         </table>
       </div>
+    </div>
+    <div class="card-footer">
+      <form id="banForm" class="row gx-2 gy-2 align-items-end">
+        <div class="col-12 col-md-4">
+          <label for="banClientId" class="form-label small mb-0"><%= __({it: 'IP', en: 'IP'}, passData.ctx) %></label>
+          <input type="text" id="banClientId" class="form-control form-control-sm" placeholder="203.0.113.5" required>
+        </div>
+        <div class="col-6 col-md-3">
+          <label for="banRule" class="form-label small mb-0"><%= __({it: 'Regola', en: 'Rule'}, passData.ctx) %></label>
+          <select id="banRule" class="form-select form-select-sm"></select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label for="banSeconds" class="form-label small mb-0"><%= __({it: 'Durata', en: 'Duration'}, passData.ctx) %></label>
+          <select id="banSeconds" class="form-select form-select-sm">
+            <option value="300">5 min</option>
+            <option value="900">15 min</option>
+            <option value="3600">1 h</option>
+            <option value="86400" selected>1 <%= __({it: 'giorno', en: 'day'}, passData.ctx) %></option>
+          </select>
+        </div>
+        <div class="col-12 col-md-2">
+          <button type="submit" class="btn btn-danger btn-sm w-100">
+            <%= __({it: 'Banna', en: 'Ban'}, passData.ctx) %>
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -125,6 +152,14 @@
   const adminPrefix        = '<%= passData.adminPrefix %>';
   const autoRefreshSeconds = <%= Number(passData.plugin.adminRateLimiter && passData.plugin.adminRateLimiter.autoRefreshSeconds) || 5 %>;
   const auditLimit         = <%= Number(passData.plugin.adminRateLimiter && passData.plugin.adminRateLimiter.auditLimit) || 100 %>;
+  // Etichette client tradotte (i18n) — il JS lato client non può usare __()
+  const i18n = {
+    unblock:   '<%= __({it: "Sblocca", en: "Unblock"}, passData.ctx) %>',
+    unblocked: '<%= __({it: "IP sbloccato", en: "IP unblocked"}, passData.ctx) %>',
+    banned:    '<%= __({it: "IP bannato", en: "IP banned"}, passData.ctx) %>',
+    ruleWord:  '<%= __({it: "regola obbligatoria", en: "rule required"}, passData.ctx) %>',
+    noRules:   '<%= __({it: "(nessuna regola)", en: "(no rules)"}, passData.ctx) %>',
+  };
 </script>
 <script src="/<%= passData.adminPrefix %>/rateLimiterManagement/rateLimiter-admin.js"></script>
 

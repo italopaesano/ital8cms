@@ -20,6 +20,9 @@ const mockRl = {
     ];
     return all.slice(0, opts && opts.limit ? opts.limit : 100);
   },
+  getRuleNames: () => ['adminLogin', 'downloads'],
+  releaseBlock: () => true,
+  banClient: (clientId, ruleName, opts) => ({ blocked: true, tier: (opts && opts.tier) || 'long', retryAfterSeconds: (opts && opts.seconds) || 86400 }),
 };
 
 const routeOf = (routes, method, path) => routes.find((r) => r.method === method && r.path === path);
@@ -46,6 +49,36 @@ describe('adminRateLimiter — routes (rateLimiter attivo)', () => {
     expect(ctx.body.stats.enforcementEnabled).toBe(true);
     expect(ctx.body.activeBlocks).toHaveLength(1);
     expect(ctx.body.activeBlocks[0].clientId).toBe('1.2.3.4');
+    expect(ctx.body.ruleNames).toEqual(['adminLogin', 'downloads']);
+  });
+
+  test('POST /unblock sblocca con clientId+ruleName', async () => {
+    const ctx = await runRoute(routeOf(routes, 'POST', '/unblock'),
+      createCtxMock({ method: 'POST', path: '/unblock', body: { clientId: '1.2.3.4', ruleName: 'adminLogin' } }));
+    expect(ctx.body.success).toBe(true);
+    expect(ctx.body.released).toBe(true);
+  });
+
+  test('POST /unblock senza input → 400', async () => {
+    const ctx = await runRoute(routeOf(routes, 'POST', '/unblock'),
+      createCtxMock({ method: 'POST', path: '/unblock', body: {} }));
+    expect(ctx.status).toBe(400);
+    expect(ctx.body.success).toBe(false);
+  });
+
+  test('POST /ban banna con durata', async () => {
+    const ctx = await runRoute(routeOf(routes, 'POST', '/ban'),
+      createCtxMock({ method: 'POST', path: '/ban', body: { clientId: '9.9.9.9', ruleName: 'adminLogin', seconds: 600 } }));
+    expect(ctx.body.success).toBe(true);
+    expect(ctx.body.verdict.blocked).toBe(true);
+    expect(ctx.body.verdict.retryAfterSeconds).toBe(600);
+  });
+
+  test('POST /ban senza input → 400', async () => {
+    const ctx = await runRoute(routeOf(routes, 'POST', '/ban'),
+      createCtxMock({ method: 'POST', path: '/ban', body: { clientId: '9.9.9.9' } }));
+    expect(ctx.status).toBe(400);
+    expect(ctx.body.success).toBe(false);
   });
 
   test('GET /attempts restituisce l\'audit log', async () => {
@@ -85,5 +118,19 @@ describe('adminRateLimiter — routes (rateLimiter disattivato)', () => {
     const ctx = await runRoute(routeOf(routes, 'GET', '/attempts'), createCtxMock({ path: '/attempts' }));
     expect(ctx.body.enabled).toBe(false);
     expect(ctx.body.attempts).toEqual([]);
+  });
+
+  test('POST /unblock → 409 quando il servizio è disattivato', async () => {
+    const ctx = await runRoute(routeOf(routes, 'POST', '/unblock'),
+      createCtxMock({ method: 'POST', path: '/unblock', body: { clientId: '1.2.3.4', ruleName: 'adminLogin' } }));
+    expect(ctx.status).toBe(409);
+    expect(ctx.body.success).toBe(false);
+  });
+
+  test('POST /ban → 409 quando il servizio è disattivato', async () => {
+    const ctx = await runRoute(routeOf(routes, 'POST', '/ban'),
+      createCtxMock({ method: 'POST', path: '/ban', body: { clientId: '9.9.9.9', ruleName: 'adminLogin', seconds: 600 } }));
+    expect(ctx.status).toBe(409);
+    expect(ctx.body.success).toBe(false);
   });
 });

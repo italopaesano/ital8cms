@@ -1,4 +1,4 @@
-/* globals apiPrefix, autoRefreshSeconds, auditLimit, escapeHtml */
+/* globals apiPrefix, autoRefreshSeconds, auditLimit, escapeHtml, i18n */
 
 /**
  * rateLimiter-admin.js — logica client della dashboard adminRateLimiter (Vista Dati).
@@ -65,6 +65,31 @@
     return `<span class="badge ${map[ev] || 'bg-light text-dark'}">${esc(ev || '—')}</span>`;
   }
 
+  /** POST JSON helper: lancia un Error con il messaggio del server se !success. */
+  async function postJson(action, body) {
+    const res = await fetch(`/${apiPrefix}/adminRateLimiter/${action}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+    return data;
+  }
+
+  /** Popola la select delle regole nel form di ban, preservando la selezione. */
+  function populateRuleSelect(names) {
+    const sel = el('banRule');
+    const current = sel.value;
+    const list = Array.isArray(names) ? names : [];
+    sel.innerHTML = list.length
+      ? list.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('')
+      : `<option value="">${esc((typeof i18n !== 'undefined' && i18n.noRules) || '(no rules)')}</option>`;
+    if (current && list.includes(current)) sel.value = current;
+  }
+
   // ── Fetch + render ──────────────────────────────────────────────────────────
 
   async function fetchStatus() {
@@ -100,14 +125,16 @@
     el('kpiRules').textContent = s.ruleCount != null ? s.ruleCount : '—';
 
     renderActiveBlocks(data.activeBlocks || []);
+    populateRuleSelect(data.ruleNames || []);
   }
 
   function renderActiveBlocks(blocks) {
     const body = el('activeBlocksBody');
     if (!blocks.length) {
-      body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">nessun blocco attivo</td></tr>';
+      body.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">nessun blocco attivo</td></tr>';
       return;
     }
+    const unblockLabel = (typeof i18n !== 'undefined' && i18n.unblock) || 'Unblock';
     body.innerHTML = blocks.map((b) => `
       <tr>
         <td><code>${esc(b.clientId)}</code></td>
@@ -115,6 +142,12 @@
         <td>${tierBadge(b.tier)}</td>
         <td>${esc(formatDuration(b.retryAfterSeconds))}</td>
         <td class="text-end">${Number(b.shortBlockCount) || 0}</td>
+        <td class="text-end">
+          <button class="btn btn-sm btn-outline-danger rl-unblock"
+                  data-client="${esc(b.clientId)}" data-rule="${esc(b.ruleName)}">
+            ${esc(unblockLabel)}
+          </button>
+        </td>
       </tr>`).join('');
   }
 
@@ -160,10 +193,50 @@
     if (timer) { clearInterval(timer); timer = null; }
   }
 
+  // ── Azioni live ─────────────────────────────────────────────────────────────
+
+  async function onUnblockClick(e) {
+    const btn = e.target.closest('.rl-unblock');
+    if (!btn) return;
+    const clientId = btn.getAttribute('data-client');
+    const ruleName = btn.getAttribute('data-rule');
+    btn.disabled = true;
+    try {
+      await postJson('unblock', { clientId, ruleName });
+      showAlert(((typeof i18n !== 'undefined' && i18n.unblocked) || 'Unblocked') + ': ' + clientId, 'success');
+      await refreshAll();
+    } catch (err) {
+      showAlert(err.message, 'danger');
+      btn.disabled = false;
+    }
+  }
+
+  async function onBanSubmit(e) {
+    e.preventDefault();
+    const clientId = el('banClientId').value.trim();
+    const ruleName = el('banRule').value;
+    const seconds = el('banSeconds').value;
+    if (!clientId || !ruleName) {
+      showAlert('IP + ' + ((typeof i18n !== 'undefined' && i18n.ruleWord) || 'rule'), 'warning');
+      return;
+    }
+    try {
+      await postJson('ban', { clientId, ruleName, seconds });
+      showAlert(((typeof i18n !== 'undefined' && i18n.banned) || 'Banned') + ': ' + clientId, 'success');
+      el('banClientId').value = '';
+      await refreshAll();
+    } catch (err) {
+      showAlert(err.message, 'danger');
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     el('btnRefresh').addEventListener('click', refreshAll);
     const toggle = el('autoRefreshToggle');
     toggle.addEventListener('change', () => { if (toggle.checked) startAuto(); else stopAuto(); });
+
+    el('activeBlocksBody').addEventListener('click', onUnblockClick);
+    el('banForm').addEventListener('submit', onBanSubmit);
 
     refreshAll();
     if (toggle.checked) startAuto();

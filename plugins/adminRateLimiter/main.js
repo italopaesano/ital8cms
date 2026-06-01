@@ -68,6 +68,7 @@ module.exports = {
             enabled: true,
             stats: rl.getStats(),
             activeBlocks: rl.getActiveBlocks(),
+            ruleNames: rl.getRuleNames(),
           };
         },
       },
@@ -96,6 +97,57 @@ module.exports = {
           if (ctx.query.event) filter.event = String(ctx.query.event);
 
           ctx.body = { enabled: true, attempts: rl.getRecentAttempts(filter) };
+        },
+      },
+
+      // ── Azione live: sblocca un IP per una regola ──
+      {
+        method: 'POST',
+        path: '/unblock',
+        access: pluginAccess,
+        handler: async (ctx) => {
+          const rl = getRateLimiter();
+          if (!rl) {
+            ctx.status = 409;
+            ctx.body = { success: false, error: 'rateLimiter disattivato' };
+            return;
+          }
+          const { clientId, ruleName } = ctx.request.body || {};
+          if (!clientId || !ruleName) {
+            ctx.status = 400;
+            ctx.body = { success: false, error: 'clientId e ruleName sono obbligatori' };
+            return;
+          }
+          const released = rl.releaseBlock(String(clientId), String(ruleName));
+          ctx.body = { success: true, released };
+        },
+      },
+
+      // ── Azione live: ban manuale di un IP per una regola ──
+      {
+        method: 'POST',
+        path: '/ban',
+        access: pluginAccess,
+        handler: async (ctx) => {
+          const rl = getRateLimiter();
+          if (!rl) {
+            ctx.status = 409;
+            ctx.body = { success: false, error: 'rateLimiter disattivato' };
+            return;
+          }
+          const { clientId, ruleName, seconds, tier } = ctx.request.body || {};
+          if (!clientId || !ruleName) {
+            ctx.status = 400;
+            ctx.body = { success: false, error: 'clientId e ruleName sono obbligatori' };
+            return;
+          }
+          const opts = {};
+          const sec = parseInt(seconds, 10);
+          if (Number.isFinite(sec) && sec > 0) opts.seconds = sec;
+          if (tier === 'short' || tier === 'long') opts.tier = tier;
+
+          const verdict = rl.banClient(String(clientId), String(ruleName), opts);
+          ctx.body = { success: true, verdict };
         },
       },
     ];
