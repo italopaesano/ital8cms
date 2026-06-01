@@ -1,0 +1,9 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "name": "rateLimiter",
+  "version": "1.0.0",
+  "description": "Brute-force / rate limiting service. Protects sensitive routes (e.g. login) via an escalating block engine (short block then long block). Other plugins request protection through the shared-object mechanism.",
+  "author": "Italo Paesano",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC",
+}

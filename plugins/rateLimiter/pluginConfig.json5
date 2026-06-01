@@ -1,0 +1,117 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "active": 1,
+  "isInstalled": 1,
+  "weight": 5,
+  "dependency": {},
+  "nodeModuleDependency": {},
+  "custom": {
+
+    // Interruttore globale del plugin. Se false, il guard è inattivo:
+    // getSharedObject('rateLimiter') restituisce null e i consumer (es. adminUsers)
+    // saltano il controllo grazie al fallback `if (rl)`.
+    "enabled": true,
+
+    // ── Identificazione del client ──
+    // Se true, l'IP del client viene letto dall'header X-Forwarded-For (primo valore).
+    // Abilitalo SOLO se ital8cms è dietro un reverse proxy fidato (es. nginx),
+    // altrimenti un client può falsificare l'header e aggirare il rate limit.
+    // Se false (default) si usa l'IP della socket (ctx.ip).
+    "trustProxy": false,
+
+    // ── Policy di default ──
+    // Applicata ad ogni regola elencata in protectedRoutes.json5.
+    // Ogni regola può sovrascrivere singoli campi (gli altri ereditano da qui).
+    "defaults": {
+      // Finestra (secondi) entro cui accumulare i fallimenti verso uno SHORT block.
+      // Fallimenti più vecchi di questa finestra fanno ripartire il conteggio.
+      "findWindowSeconds": 900,
+
+      // Numero di fallimenti nella finestra che fa scattare uno SHORT block.
+      "maxFailures": 5,
+
+      // Durata dello SHORT block in secondi (default: 5 minuti).
+      "shortBlockSeconds": 300,
+
+      // Quanti SHORT block accumulare prima di passare al LONG block (escalation).
+      "maxShortBlocks": 5,
+
+      // Durata del LONG block in secondi (default: 24 ore).
+      "longBlockSeconds": 86400,
+
+      // Inattività (secondi) dopo cui si azzera la memoria di escalation
+      // (il contatore degli short block). Default: 24 ore.
+      "escalationResetSeconds": 86400,
+    },
+
+    // ── Persistenza dello stato attivo ──
+    // Lo stato "caldo" (contatori e blocchi attivi) è tenuto in memoria e salvato
+    // periodicamente in state/activeBlocks.json5 così da sopravvivere ai riavvii.
+    "state": {
+      // Intervallo (secondi) tra i salvataggi su disco. 0 = scrittura immediata.
+      "flushIntervalSeconds": 30,
+    },
+
+    // ── Audit log (JSONL, append-friendly) ──
+    "log": {
+      // Abilita la scrittura dell'audit log dei tentativi e dei blocchi.
+      "enabled": true,
+
+      // Ruota il file di log quando supera questa dimensione in byte (default 1 MB).
+      "rotateWhenBytes": 1048576,
+
+      // Cancella gli archivi più vecchi di questo numero di giorni.
+      "retentionDays": 30,
+    },
+
+    // ── Risposta quando un client è bloccato (usata da guardCtx) ──
+    "response": {
+      // Status HTTP restituito (429 = Too Many Requests).
+      "status": 429,
+
+      // Se true, aggiunge l'header Retry-After con i secondi residui del blocco.
+      "retryAfterHeader": true,
+    },
+
+    // ── LIVELLO 2: enforcement via middleware sulle pagine fall-through ──
+    // I middleware dei plugin girano DOPO il router: questo enforcement si applica
+    // quindi alle richieste che "cadono attraverso" il router (pagine statiche/EJS),
+    // NON alle rotte API già matchate (quelle sono coperte dal guard del Livello 1).
+    "enforcement": {
+      // Abilita il middleware di enforcement.
+      "enabled": true,
+
+      // Se true, un IP con un LONG block attivo (su qualsiasi regola) viene negato
+      // su TUTTE le pagine fall-through: è il "ban" prolungato dell'IP.
+      "globalLongBlock": true,
+
+      // Status HTTP per il diniego (403 = Forbidden, 429 = Too Many Requests).
+      "status": 429,
+
+      // Pagina verso cui redirigere invece di restituire lo status.
+      // Stringa vuota = nessun redirect (usa lo status + Retry-After).
+      "redirectTo": "",
+
+      // Percorsi SEMPRE esenti dall'enforcement (pattern PatternMatcher: * e **).
+      // Includi l'area admin (per non auto-bloccarti) e le risorse dei temi
+      // (così un'eventuale pagina di blocco può caricare CSS/JS).
+      // NOTA: adegua questi percorsi se usi un globalPrefix non vuoto.
+      "exemptPaths": [
+        "/admin/**",
+        "/public-theme-resources/**",
+        "/admin-theme-resources/**",
+      ],
+    },
+
+    // Intervallo (secondi) dello sweep periodico che rimuove dalla memoria i blocchi
+    // scaduti e le voci ormai inattive (mantiene l'uso di RAM limitato).
+    "sweepIntervalSeconds": 60,
+
+    // Logga su console ogni evento (fallimento / short block / long block / success).
+    "enableLogging": true,
+
+    // Se true, errori di validazione al boot causano il crash del server.
+    // Se false (default), generano warning e il plugin prosegue con i default.
+    "strictValidation": false,
+  },
+}

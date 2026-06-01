@@ -42,7 +42,7 @@ const referrerTo = passData.ctx.headers.referer || '/';
 
           <!-- Messaggio di errore (mostrato via query param) -->
           <div id="errorDiv" class="alert alert-danger mb-3 d-none">
-            <strong>Errore:</strong> Credenziali non valide
+            <strong>Errore:</strong> <span id="errorMessage">Credenziali non valide</span>
           </div>
 
           <!-- Form login (POST to API endpoint) -->
@@ -92,8 +92,22 @@ const referrerTo = passData.ctx.headers.referer || '/';
       // Se non valido, mantiene il valore server-side (dal Referer header, già validato)
     }
 
-    // Se esiste il parametro "error", mostra il messaggio d'errore
+    // Se esiste il parametro "error", mostra il messaggio appropriato
     if (params.has('error')) {
+      const errorType = params.get('error');
+      const messageEl = document.getElementById('errorMessage');
+      if (errorType === 'rateLimited') {
+        // Troppi tentativi: comunica il tempo di attesa stimato
+        const retryAfter = parseInt(params.get('retryAfter'), 10);
+        let wait = 'qualche minuto';
+        if (Number.isFinite(retryAfter) && retryAfter > 0) {
+          const minutes = Math.ceil(retryAfter / 60);
+          wait = minutes > 1 ? (minutes + ' minuti') : '1 minuto';
+        }
+        messageEl.textContent = 'Troppi tentativi falliti. Riprova tra ' + wait + '.';
+      } else {
+        messageEl.textContent = 'Credenziali non valide';
+      }
       document.getElementById('errorDiv').classList.remove('d-none');
     }
   });
