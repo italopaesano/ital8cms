@@ -3583,6 +3583,50 @@ A `getMiddlewareToAdd()` middleware acting on **fall-through** requests (pages, 
 
 ---
 
+### Admin Rate Limiter Plugin
+
+#### Overview
+
+The **adminRateLimiter** plugin is the **twin admin GUI** for the `rateLimiter` service (see *Twin Admin Plugin* + *The Three Views* conventions). It adds the `rateLimiterManagement` admin section to monitor blocks, act on them live, and edit the rate limiter's configuration. All routes require root/admin roles `[0, 1]`.
+
+It runs in the **same process** as `rateLimiter`, so it pulls live data/actions via the shared object (`pluginSys.getSharedObject('rateLimiter')`) and resolves the service's folder for config files via `pluginSys.getPlugin('rateLimiter').pathPluginFolder`. If the service is present but disabled (`custom.enabled=false`), the GUI shows a "disabled" banner.
+
+#### The three views (one section, three pages)
+
+| Page | View | Content |
+|------|------|---------|
+| `index.ejs` | **A — Data** | KPI cards, active-blocks table (with Unblock), manual-ban form, audit log; auto-refresh |
+| `rules.ejs` | **B — Raw JSON5 editor** | `protectedRoutes.json5` (Validate / Save) + field reference |
+| `settings.ejs` | **B — Raw JSON5 editor** | `pluginConfig.json5` → `custom` block (Validate / Save / Save & restart) |
+
+#### API endpoints (roles `[0, 1]`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/adminRateLimiter/status` | `{ enabled, stats, activeBlocks, ruleNames }` |
+| `GET` | `/api/adminRateLimiter/attempts` | Audit tail (`limit`, `clientId/ruleName/event` filters) |
+| `POST` | `/api/adminRateLimiter/unblock` | `{clientId, ruleName}` → `releaseBlock` |
+| `POST` | `/api/adminRateLimiter/ban` | `{clientId, ruleName, seconds, tier?}` → `banClient` |
+| `GET` / `POST` | `/api/adminRateLimiter/rules` | Load / save `protectedRoutes.json5` (save: validate → backup → atomic write → `reloadRules`) |
+| `POST` | `/api/adminRateLimiter/validate-rules` | Validate rules without saving |
+| `GET` / `POST` | `/api/adminRateLimiter/config` | Load / save the `custom` block (save: validate → backup → `editJson5('custom')` → `reloadConfig`) |
+| `POST` | `/api/adminRateLimiter/validate-config` | Validate config without saving |
+| `POST` | `/api/adminRateLimiter/restart` | `pluginSys.requestRestart` (active blocks persist) |
+
+#### Propagation
+
+- **Live actions** (unblock/ban) act on the in-memory engine → immediate.
+- **Rules** and **defaults/enforcement** save + `reloadRules()`/`reloadConfig()` → **hot**, no restart.
+- **Infrastructural params** (`trustProxy`, `state.flushIntervalSeconds`, `log.*`, `sweepIntervalSeconds`) are boot-time → **"Save & restart"** (`requestRestart`); safe because the rateLimiter stateStore persists blocks across restart.
+
+#### Implementation notes
+
+- Settings save uses **`core/editJson5`** to surgically replace only the `custom` block, preserving `active`/`dependency`/comments elsewhere. Rules save writes the raw editor content (comments preserved).
+- Validation is **reused** from the service via `validateRules`/`validateConfig` on the shared object. Writes are atomic (`lib/configFileManager.js`) with rotating backups (`maxBackupsPerFile`).
+- **Config:** `custom.auditLimit` (100), `custom.autoRefreshSeconds` (5), `custom.maxBackupsPerFile` (10). Dependencies: `rateLimiter ^1.0.0`, `bootstrap ^1.0.0`, `simpleI18n ^1.0.0`; node module `json5`.
+
+---
+
 ### Checking Authentication in Code
 
 ```javascript
@@ -5446,6 +5490,13 @@ const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
 - `/plugins/rateLimiter/protectedRoutes.json5` - Per-rule policy (keyed by ruleName)
 - `/plugins/rateLimiter/pluginConfig.json5` - Defaults, enforcement, logging, proxy
 
+### Admin Rate Limiter Plugin
+
+- `/plugins/adminRateLimiter/main.js` - Routes (status/attempts/unblock/ban/rules/config/restart), shared-object access
+- `/plugins/adminRateLimiter/lib/configFileManager.js` - Atomic write + rotating backups
+- `/plugins/adminRateLimiter/adminWebSections/rateLimiterManagement/` - GUI (index/rules/settings + JS/CSS)
+- `/core/admin/adminConfig.json5` - Admin section registration (rateLimiterManagement)
+
 ### Databases
 
 - `/plugins/dbApi/dbFile/mainDb.db` - Main database
@@ -5616,10 +5667,18 @@ When working on this codebase as an AI assistant:
 ---
 
 **Last Updated:** 2026-06-01
-**Version:** 2.10.0
+**Version:** 2.11.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v2.11.0 (2026-06-01): **NEW PLUGIN** - `adminRateLimiter`, the twin admin GUI for the `rateLimiter` service (Twin Admin Plugin + The Three Views conventions). Built incrementally:
+  - **rateLimiter foundations (Step 1):** engine `release` / `releaseAllForClient` / `forceBlock`; `attemptLog.readRecent`; shared-object API for admin (`releaseBlock`, `releaseAllForClient`, `banClient`, `getStats`, `getRecentAttempts`, `getConfig`, `validateRules`, `validateConfig`, `reloadRules`, `reloadConfig`); L2 enforcement middleware refactored to read `custom` LIVE (so `reloadConfig()` applies enforcement changes without restart).
+  - **adminRateLimiter (Steps 2-5):** section `rateLimiterManagement` (registered in `core/admin/adminConfig.json5` + menuOrder; symlink gitignored). Three pages: Data view (`index.ejs`: KPI + active blocks + audit, auto-refresh), Rules editor (`rules.ejs`: raw JSON5 of `protectedRoutes.json5`), Settings editor (`settings.ejs`: raw JSON5 of the `custom` block, with "Save & restart"). Routes (roles `[0,1]`): status, attempts, unblock, ban, rules + validate-rules, config + validate-config, restart.
+  - **Propagation:** live actions are immediate (in-memory engine); rules and defaults/enforcement hot-reload via `reloadRules`/`reloadConfig`; boot-time params use "Save & restart" (`pluginSys.requestRestart`) — safe since blocks persist via the stateStore.
+  - **File writes:** rules save writes raw content (comments preserved); settings save uses `core/editJson5` to replace only the `custom` block (preserving `active`/`dependency`/comments). Atomic writes + rotating backups (`lib/configFileManager.js`); validation reused from the service.
+  - **Tests:** rateLimiter +22 (99 total); adminRateLimiter 34 (routes + file manager). Filesystem-isolated via sandbox/tmpdir. Full project suite green.
+  - **Files Added:** `/plugins/adminRateLimiter/**` (main.js, pluginConfig/Description, lib/configFileManager.js, adminWebSections/rateLimiterManagement/{index,rules,settings}.ejs + {rateLimiter-admin,rules-editor,settings-editor}.js + rateLimiter-admin.css, tests/unit/{routes,configFileManager}.test.js).
+  - **Files Modified:** `/plugins/rateLimiter/**` (engine, attemptLog, main.js + tests), `/core/admin/adminConfig.json5` (section + menuOrder), `/.gitignore` (section symlink), `/CLAUDE.md`.
 - v2.10.0 (2026-06-01): **DOCS / STANDARD** - Codified admin-plugin conventions in CLAUDE.md (no code changes). Key additions (under *Admin System Architecture*):
   - **Admin Plugin Best Practice — Twin Admin Plugin (`admin<Name>`)**: a service plugin needing a config/management UI should ship its admin interface as a separate twin admin plugin (`seo`→`adminSeo`, `bootstrapNavbar`→`adminBootstrapNavbar`, `media`→`adminMedia`, `analytics`→`adminAnalytics`, `rateLimiter`→`adminRateLimiter`). Documents the division of responsibilities (service = logic + shared object + config files, headless-capable; twin = GUI, depends on the service, resolves its folder via `pluginSys.getPlugin().pathPluginFolder` and pulls its shared object) and the special cases that combine both roles (`adminUsers`, `adminAccessControl`).
   - **Admin GUI Conventions — The Three Views ("Le Tre Viste")**: a shared philosophy for admin UIs — (A) Data view (mandatory when there's runtime state/metrics; KPI + tables + charts + live actions), (B) Raw JSON5 editor (always present for config; the ground truth/fallback), (C) Structured form (optional, for rich config; coordinated with B over the same file). Includes coordination rules (single source of truth, shared server-side validation, explicit switching with unsaved-changes warning, atomic writes + backup), cross-cutting rules (i18n, responsive Bootstrap, XSS escaping, access roles, hot-reload vs "Save & restart", live actions via shared object), a decision guide, and a checklist. Derived from the existing reference implementations (`adminAnalytics`, `adminAccessControl`, `adminSeo`, `adminBootstrapNavbar`).
