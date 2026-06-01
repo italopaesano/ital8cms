@@ -1,0 +1,31 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// REGOLE DI RATE LIMIT PER ROTTA (Livello 1 — guard via oggetto condiviso)
+// ───────────────────────────────────────────────────────────────────────────
+// Ogni regola ha un "name" logico. I plugin consumer chiamano il guard passando
+// questo nome, es:
+//
+//   const rl = pluginSys.getSharedObject('rateLimiter');
+//   if (rl && rl.checkCtx(ctx, 'adminLogin').blocked) { ... }
+//   rl?.recordFailureCtx(ctx, 'adminLogin');   // su login fallito
+//   rl?.recordSuccessCtx(ctx, 'adminLogin');   // su login riuscito
+//
+// La chiave di rate limit è (IP + name): un blocco sul login NON blocca le altre
+// regole. I campi di policy sono tutti OPZIONALI: ciò che non è specificato
+// eredita da pluginConfig.json5 → custom.defaults.
+//
+// Il campo "pathPattern" è RISERVATO al Livello 2 (middleware di enforcement
+// globale dei long block sulle pagine) e per ora viene ignorato dal guard.
+{
+  "rules": [
+    {
+      "name": "adminLogin",
+      // Override espliciti (coincidono con i default, qui per documentazione):
+      "maxFailures": 5,
+      "shortBlockSeconds": 300,
+      "maxShortBlocks": 5,
+      "longBlockSeconds": 86400,
+      // "pathPattern": "/api/adminUsers/login",  // (Livello 2)
+    },
+  ],
+}
