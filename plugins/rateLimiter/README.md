@@ -18,13 +18,11 @@ In ital8cms i middleware dei plugin vengono montati **dopo** il router
 viene eseguito** e quindi non può pre-bloccarla. Il blocco va perciò invocato
 **dentro l'handler**, tramite l'oggetto condiviso (pull on-demand).
 
-- **Livello 1 (questo plugin, attuale): GUARD via oggetto condiviso.** Il
-  consumer chiama il guard nel proprio handler. È il meccanismo che protegge il
-  login.
-- **Livello 2 (in arrivo): middleware di enforcement globale.** Applicherà i
-  *long block* in modo trasversale alle pagine fall-through (difesa in
-  profondità), usando `core/patternMatcher.js` e il campo `pathPattern` delle
-  regole.
+- **Livello 1: GUARD via oggetto condiviso.** Il consumer chiama il guard nel
+  proprio handler. È il meccanismo che protegge il login.
+- **Livello 2: middleware di enforcement.** Applica i *long block* come ban
+  dell'IP sulle pagine fall-through (difesa in profondità) e può proteggere
+  percorsi specifici via `pathPattern`, usando `core/patternMatcher.js`.
 
 ---
 
@@ -91,6 +89,11 @@ if (loginOk) {
 | `log.retentionDays` | `30` | Giorni di retention degli archivi |
 | `response.status` | `429` | Status usato da `guardCtx` |
 | `response.retryAfterHeader` | `true` | Header `Retry-After` in `guardCtx` |
+| `enforcement.enabled` | `true` | Abilita il middleware di enforcement (Livello 2) |
+| `enforcement.globalLongBlock` | `true` | IP con long block attivo → negato su tutte le pagine fall-through |
+| `enforcement.status` | `429` | Status del diniego dell'enforcement |
+| `enforcement.redirectTo` | `""` | Pagina di redirect al posto dello status (vuoto = status) |
+| `enforcement.exemptPaths` | `["/admin/**", ...]` | Percorsi sempre esenti (pattern PatternMatcher) |
 | `sweepIntervalSeconds` | `60` | Pulizia periodica dei blocchi scaduti |
 | `enableLogging` | `true` | Log a console degli eventi |
 | `strictValidation` | `false` | Se `true`, errori di validazione fanno crashare il boot |
@@ -104,6 +107,33 @@ sovrascrivono i `defaults`.
 {
   "rules": [
     { "name": "adminLogin", "maxFailures": 5, "shortBlockSeconds": 300 },
+  ],
+}
+```
+
+---
+
+## Livello 2 — enforcement (middleware)
+
+Il middleware gira **dopo il router**, quindi agisce sulle richieste che cadono
+attraverso il router (pagine statiche/EJS), non sulle rotte API già matchate
+(coperte dal guard del Livello 1). Nega l'accesso quando:
+
+1. **`globalLongBlock`** — l'IP ha un *long block* attivo su una qualsiasi
+   regola: viene negato su tutte le pagine fall-through (ban prolungato dell'IP).
+2. **`pathPattern`** — una regola di `protectedRoutes.json5` dichiara un
+   `pathPattern`; se il percorso richiesto matcha (PatternMatcher: `*`/`**`/`regex:`)
+   e l'IP è bloccato per quella regola (short o long), l'accesso è negato.
+
+I percorsi in `enforcement.exemptPaths` passano sempre (di default l'area admin e
+le risorse dei temi, per evitare l'auto-blocco e permettere lo styling di
+un'eventuale pagina di blocco).
+
+```json5
+// protectedRoutes.json5 — esempio di regola protetta anche a livello di pagina
+{
+  "rules": [
+    { "name": "downloadArea", "pathPattern": "/downloads/**", "maxFailures": 10 },
   ],
 }
 ```

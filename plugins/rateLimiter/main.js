@@ -26,6 +26,7 @@
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
 const logger = require('../../core/logger');
+const PatternMatcher = require('../../core/patternMatcher');
 
 const RateLimitEngine = require('./lib/rateLimitEngine');
 const StateStore = require('./lib/stateStore');
@@ -157,6 +158,83 @@ module.exports = {
       LOG_PREFIX,
       `attivo — ${loadRules().size} regola/e protette; default: ${d.maxFailures} tentativi/${d.findWindowSeconds}s → blocco ${d.shortBlockSeconds}s, dopo ${d.maxShortBlocks} blocchi → ${d.longBlockSeconds}s`
     );
+  },
+
+  /**
+   * LIVELLO 2 — Middleware di enforcement sulle pagine fall-through.
+   *
+   * Gira DOPO il router (vedi index.js), quindi vede solo le richieste che non
+   * sono state matchate da una rotta API (tipicamente le pagine statiche/EJS).
+   * Nega l'accesso quando:
+   *   1. globalLongBlock: l'IP ha un LONG block attivo su una qualsiasi regola
+   *      (ban prolungato dell'IP su tutto il sito);
+   *   2. una regola con `pathPattern` matcha il percorso e l'IP è bloccato per
+   *      quella regola (short o long).
+   * I percorsi in `exemptPaths` sono sempre lasciati passare.
+   */
+  getMiddlewareToAdd(app) {
+    const enf = custom && custom.enforcement;
+    if (!engine || !enf || enf.enabled === false) {
+      return []; // Livello 2 disattivo (o plugin disabilitato)
+    }
+
+    const trustProxy = custom.trustProxy === true;
+    const matcher = new PatternMatcher();
+    const exemptPaths = Array.isArray(enf.exemptPaths) ? enf.exemptPaths : [];
+    const denyStatus = enf.status || 429;
+    const retryAfterHeader = !(custom.response && custom.response.retryAfterHeader === false);
+
+    return [
+      async (ctx, next) => {
+        const urlPath = ctx.path;
+
+        // Percorsi esenti (admin, risorse tema, ecc.)
+        for (const p of exemptPaths) {
+          if (matcher.matches(urlPath, p)) {
+            await next();
+            return;
+          }
+        }
+
+        const clientId = resolveClientId(ctx, { trustProxy });
+        let verdict = null;
+
+        // 1) Ban globale per LONG block
+        if (enf.globalLongBlock) {
+          const v = engine.checkClientLongBlock(clientId);
+          if (v.blocked) verdict = v;
+        }
+
+        // 2) Enforcement per pattern (regole con pathPattern)
+        if (!verdict) {
+          for (const rule of loadRules().values()) {
+            if (rule.pathPattern && matcher.matches(urlPath, rule.pathPattern)) {
+              const v = engine.check(clientId, rule.name);
+              if (v.blocked) {
+                verdict = v;
+                break;
+              }
+            }
+          }
+        }
+
+        if (verdict && verdict.blocked) {
+          if (custom.enableLogging) {
+            logger.info(LOG_PREFIX, `enforcement: negato ${clientId} su ${urlPath} (${verdict.tier}, ${verdict.retryAfterSeconds}s)`);
+          }
+          if (enf.redirectTo) {
+            ctx.redirect(enf.redirectTo);
+            return;
+          }
+          ctx.status = denyStatus;
+          if (retryAfterHeader) ctx.set('Retry-After', String(verdict.retryAfterSeconds));
+          ctx.body = { error: 'Access temporarily blocked', retryAfterSeconds: verdict.retryAfterSeconds };
+          return;
+        }
+
+        await next();
+      },
+    ];
   },
 
   /**

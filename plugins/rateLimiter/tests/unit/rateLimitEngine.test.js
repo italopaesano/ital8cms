@@ -137,6 +137,46 @@ describe('RateLimitEngine — finestra e reset escalation', () => {
   });
 });
 
+describe('RateLimitEngine — checkClientLongBlock (Livello 2)', () => {
+  /** Porta il client fino a un long block (escalation completa). */
+  function triggerLongBlock(engine, advanceSeconds) {
+    triggerShortBlock(engine);
+    advanceSeconds(POLICY.shortBlockSeconds + 1);
+    triggerShortBlock(engine);
+    advanceSeconds(POLICY.shortBlockSeconds + 1);
+    triggerShortBlock(engine); // → long block
+  }
+
+  test('uno short block NON è un long block', () => {
+    const { engine } = makeEngine();
+    triggerShortBlock(engine);
+    expect(engine.checkClientLongBlock(IP).blocked).toBe(false);
+  });
+
+  test('rileva un long block attivo per il client', () => {
+    const { engine, advanceSeconds } = makeEngine();
+    triggerLongBlock(engine, advanceSeconds);
+    const v = engine.checkClientLongBlock(IP);
+    expect(v.blocked).toBe(true);
+    expect(v.tier).toBe('long');
+    expect(v.ruleName).toBe(RULE);
+    expect(v.retryAfterSeconds).toBe(POLICY.longBlockSeconds);
+  });
+
+  test('un altro IP non è coinvolto', () => {
+    const { engine, advanceSeconds } = makeEngine();
+    triggerLongBlock(engine, advanceSeconds);
+    expect(engine.checkClientLongBlock('198.51.100.1').blocked).toBe(false);
+  });
+
+  test('alla scadenza del long block il client torna libero', () => {
+    const { engine, advanceSeconds } = makeEngine();
+    triggerLongBlock(engine, advanceSeconds);
+    advanceSeconds(POLICY.longBlockSeconds + 1);
+    expect(engine.checkClientLongBlock(IP).blocked).toBe(false);
+  });
+});
+
 describe('RateLimitEngine — success, sweep, introspezione, persistenza', () => {
   test('recordSuccess rimuove ogni stato per la chiave', () => {
     const { engine } = makeEngine();

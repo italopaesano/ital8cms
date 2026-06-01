@@ -73,6 +73,36 @@
       "retryAfterHeader": true,
     },
 
+    // ── LIVELLO 2: enforcement via middleware sulle pagine fall-through ──
+    // I middleware dei plugin girano DOPO il router: questo enforcement si applica
+    // quindi alle richieste che "cadono attraverso" il router (pagine statiche/EJS),
+    // NON alle rotte API già matchate (quelle sono coperte dal guard del Livello 1).
+    "enforcement": {
+      // Abilita il middleware di enforcement.
+      "enabled": true,
+
+      // Se true, un IP con un LONG block attivo (su qualsiasi regola) viene negato
+      // su TUTTE le pagine fall-through: è il "ban" prolungato dell'IP.
+      "globalLongBlock": true,
+
+      // Status HTTP per il diniego (403 = Forbidden, 429 = Too Many Requests).
+      "status": 429,
+
+      // Pagina verso cui redirigere invece di restituire lo status.
+      // Stringa vuota = nessun redirect (usa lo status + Retry-After).
+      "redirectTo": "",
+
+      // Percorsi SEMPRE esenti dall'enforcement (pattern PatternMatcher: * e **).
+      // Includi l'area admin (per non auto-bloccarti) e le risorse dei temi
+      // (così un'eventuale pagina di blocco può caricare CSS/JS).
+      // NOTA: adegua questi percorsi se usi un globalPrefix non vuoto.
+      "exemptPaths": [
+        "/admin/**",
+        "/public-theme-resources/**",
+        "/admin-theme-resources/**",
+      ],
+    },
+
     // Intervallo (secondi) dello sweep periodico che rimuove dalla memoria i blocchi
     // scaduti e le voci ormai inattive (mantiene l'uso di RAM limitato).
     "sweepIntervalSeconds": 60,

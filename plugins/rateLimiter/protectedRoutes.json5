@@ -14,8 +14,11 @@
 // regole. I campi di policy sono tutti OPZIONALI: ciò che non è specificato
 // eredita da pluginConfig.json5 → custom.defaults.
 //
-// Il campo "pathPattern" è RISERVATO al Livello 2 (middleware di enforcement
-// globale dei long block sulle pagine) e per ora viene ignorato dal guard.
+// Il campo opzionale "pathPattern" è usato dal Livello 2 (middleware di
+// enforcement): se il percorso richiesto matcha il pattern e l'IP è bloccato per
+// questa regola, la pagina viene negata. Per "adminLogin" NON lo impostiamo, così
+// la pagina di login resta visibile (mostra il messaggio di blocco); il ban
+// prolungato dell'IP è comunque applicato dal globalLongBlock.
 {
   "rules": [
     {

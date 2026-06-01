@@ -3396,6 +3396,114 @@ POST /api/seo/regenerate
 
 ---
 
+### Rate Limiter Plugin
+
+#### Overview
+
+The **rateLimiter** plugin protects sensitive routes (typically the login) from brute-force attacks via an **escalating block engine** (fail2ban-style): after N failed attempts within a window an IP gets a **short block** (e.g. 5 minutes); after accumulating too many short blocks it escalates to a **long block** (e.g. days). It is configurable **only via `.json5` files** — a future `adminRateLimiter` plugin will add a GUI (out of scope here).
+
+**Key Features:**
+- ✅ **Escalation:** short block → (after `maxShortBlocks`) long block
+- ✅ **Keyed by `IP + ruleName`:** a block on login does not block other rules
+- ✅ **Two enforcement layers:** guard (shared object) + middleware
+- ✅ **State survives restart:** in-memory + periodic atomic snapshot to `state/activeBlocks.json5`
+- ✅ **Audit trail:** append-only `logs/attempts.jsonl` with size rotation + retention cleanup
+- ✅ **Optional & graceful:** consumers use `if (rl)` fallback; if disabled, `getSharedObject` returns `null`
+- ✅ **Proxy-aware:** optional `trustProxy` to read `X-Forwarded-For`
+
+**Plugin Structure:**
+
+```
+plugins/rateLimiter/
+├── main.js                    # loadPlugin, getMiddlewareToAdd (L2), getObjectToShareToOthersPlugin (L1)
+├── pluginConfig.json5         # defaults, enforcement, logging, state, proxy
+├── pluginDescription.json5
+├── protectedRoutes.json5      # per-rule policy overrides (keyed by ruleName)
+├── state/                     # runtime: activeBlocks.json5 (gitignored)
+├── logs/                      # runtime: attempts.jsonl + archive/ (gitignored)
+└── lib/
+    ├── rateLimitEngine.js     # escalation engine (pure, clock-injectable)
+    ├── keyResolver.js         # client IP/key from ctx (proxy handling)
+    ├── attemptLog.js          # JSONL audit + rotation + retention
+    ├── stateStore.js          # active-state persistence (atomic write)
+    └── configValidator.js     # boot validation
+```
+
+#### ⚠️ Why a guard, not just a middleware
+
+Plugin middlewares (`getMiddlewareToAdd`) are mounted **after the router** (see `index.js`). For an already-matched API route whose handler does not call `next()` — exactly the case of `POST /api/adminUsers/login` — **the plugin middleware never runs**. So a pre-route blocking middleware **cannot** guard the login API. The block must be invoked **inside the handler**, via the shared object. (This mirrors why API routes use the `access` field while pages use the `adminAccessControl` middleware.)
+
+#### Level 1 — Guard (shared object)
+
+Consumer plugins pull the shared object on-demand and invoke the guard inside their handler. Key = `IP + ruleName`.
+
+```javascript
+const rl = pluginSys.getSharedObject('rateLimiter'); // null if plugin inactive
+if (rl) {
+  const verdict = rl.checkCtx(ctx, 'adminLogin');     // { blocked, tier, retryAfterSeconds }
+  if (verdict.blocked) { /* redirect with error=rateLimited&retryAfter=... */ return; }
+}
+// ... attempt the sensitive operation ...
+if (ok) { if (rl) rl.recordSuccessCtx(ctx, 'adminLogin'); }   // reset counters
+else    { if (rl) rl.recordFailureCtx(ctx, 'adminLogin'); }   // may trigger a block
+```
+
+**Shared object API:** `keyFromCtx(ctx)`, `checkCtx(ctx, ruleName)`, `recordFailureCtx(ctx, ruleName)`, `recordSuccessCtx(ctx, ruleName)`, `guardCtx(ctx, ruleName)` (writes 429 + `Retry-After`, returns `true` if blocked), plus key-based variants `check/recordFailure/recordSuccess(clientId, ruleName)`, `getActiveBlocks()`, `getRuleNames()`.
+
+The `adminUsers` login handler is already wired to rule `adminLogin` with the `if (rl)` fallback; `login.ejs` shows a localized "too many attempts, retry in N minutes" message on `?error=rateLimited`.
+
+#### Level 2 — Enforcement (middleware)
+
+A `getMiddlewareToAdd()` middleware acting on **fall-through** requests (pages, not matched API routes). It denies access when:
+1. `enforcement.globalLongBlock` (default `true`): the IP has an active **long block** on any rule → denied site-wide (the prolonged IP ban).
+2. a rule declares a `pathPattern` (PatternMatcher: `*`/`**`/`regex:`) that matches the request path **and** the IP is blocked for that rule (short or long).
+
+`enforcement.exemptPaths` always pass (default: `/admin/**` + theme resources, to avoid self-lockout). Response is `enforcement.status` (default `429`) + `Retry-After`, or `enforcement.redirectTo` if set.
+
+#### Configuration (`pluginConfig.json5` → `custom`)
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `enabled` | `true` | Global on/off (off → shared object is `null`) |
+| `trustProxy` | `false` | Read client IP from `X-Forwarded-For` (only behind a trusted proxy) |
+| `defaults.findWindowSeconds` | `900` | Window to accumulate failures |
+| `defaults.maxFailures` | `5` | Failures in window → short block |
+| `defaults.shortBlockSeconds` | `300` | Short block duration |
+| `defaults.maxShortBlocks` | `5` | Short blocks before escalating to long block |
+| `defaults.longBlockSeconds` | `86400` | Long block duration |
+| `defaults.escalationResetSeconds` | `86400` | Inactivity after which escalation memory resets |
+| `state.flushIntervalSeconds` | `30` | State snapshot interval (`0` = immediate) |
+| `log.enabled` / `log.rotateWhenBytes` / `log.retentionDays` | `true` / `1048576` / `30` | JSONL audit + rotation + retention |
+| `response.status` / `response.retryAfterHeader` | `429` / `true` | `guardCtx` response |
+| `enforcement.enabled` / `globalLongBlock` / `status` / `redirectTo` / `exemptPaths` | `true` / `true` / `429` / `""` / `[...]` | Level 2 middleware |
+| `sweepIntervalSeconds` | `60` | Periodic cleanup of expired blocks |
+| `enableLogging` | `true` | Console log of events |
+| `strictValidation` | `false` | Crash boot on validation errors |
+
+**`protectedRoutes.json5`** — array of rules identified by `name`; policy fields are optional and override `defaults`. Optional `pathPattern` activates Level 2 page enforcement for that rule.
+
+#### Reference Files
+
+| File | Purpose |
+|------|---------|
+| `/plugins/rateLimiter/main.js` | Entry point, Level 2 middleware, Level 1 shared object |
+| `/plugins/rateLimiter/lib/rateLimitEngine.js` | Escalation engine |
+| `/plugins/rateLimiter/lib/keyResolver.js` | Client IP/key resolution |
+| `/plugins/rateLimiter/lib/attemptLog.js` | JSONL audit + rotation + retention |
+| `/plugins/rateLimiter/lib/stateStore.js` | Active-state persistence |
+| `/plugins/rateLimiter/lib/configValidator.js` | Boot validation |
+| `/plugins/rateLimiter/protectedRoutes.json5` | Per-rule policy |
+| `/plugins/rateLimiter/tests/unit/rateLimitEngine.test.js` | Engine unit tests |
+
+#### Future Enhancements
+
+- [ ] **Plugin `adminRateLimiter`** — Admin UI to manage rules, view active blocks and the audit log
+- [ ] **Distributed state** — Shared store for multi-process (PM2 cluster) deployments (current state is in-memory, single-process)
+- [ ] **Allow/deny lists** — Per-IP/CIDR exemptions and permanent bans
+- [ ] **Per-account keying** — Optionally key by username in addition to IP
+
+---
+
 ### Checking Authentication in Code
 
 ```javascript
@@ -5248,6 +5356,17 @@ const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
 - `/plugins/seo/lib/sitemapGenerator.js` - Sitemap generation (auto-scan + extras)
 - `/plugins/seo/lib/robotsTxtGenerator.js` - robots.txt generation
 
+### Rate Limiter Plugin
+
+- `/plugins/rateLimiter/main.js` - Entry point, Level 2 middleware, Level 1 shared object
+- `/plugins/rateLimiter/lib/rateLimitEngine.js` - Escalation engine (short → long block)
+- `/plugins/rateLimiter/lib/keyResolver.js` - Client IP/key resolution (proxy handling)
+- `/plugins/rateLimiter/lib/attemptLog.js` - JSONL audit log + rotation + retention
+- `/plugins/rateLimiter/lib/stateStore.js` - Active-state persistence (survives restart)
+- `/plugins/rateLimiter/lib/configValidator.js` - Boot-time validation
+- `/plugins/rateLimiter/protectedRoutes.json5` - Per-rule policy (keyed by ruleName)
+- `/plugins/rateLimiter/pluginConfig.json5` - Defaults, enforcement, logging, proxy
+
 ### Databases
 
 - `/plugins/dbApi/dbFile/mainDb.db` - Main database
@@ -5417,11 +5536,31 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2026-04-24
-**Version:** 2.8.0
+**Last Updated:** 2026-06-01
+**Version:** 2.9.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v2.9.0 (2026-06-01): **NEW PLUGIN** - `rateLimiter`, anti brute-force / rate limiting service. Key changes:
+  - **New plugin: `rateLimiter`**
+    - Escalating block engine (fail2ban-style): N failures in a window → short block; after `maxShortBlocks` short blocks → long block (days)
+    - Keyed by `IP + ruleName` (a login block doesn't affect other rules)
+    - Configurable only via `.json5` (a future `adminRateLimiter` will add a GUI)
+  - **Architecture — two layers:**
+    - **Level 1 (guard via shared object):** consumers pull `pluginSys.getSharedObject('rateLimiter')` and call the guard inside the handler. Required because plugin middlewares run AFTER the router and cannot pre-block matched API routes like `POST /api/adminUsers/login`
+    - **Level 2 (enforcement middleware):** `getMiddlewareToAdd()` denies fall-through pages for IPs under a long block (`globalLongBlock`) and supports per-rule `pathPattern` enforcement via `core/patternMatcher.js`; `exemptPaths` (admin + theme resources) always pass
+  - **Persistence & audit:** in-memory state with periodic atomic snapshot to `state/activeBlocks.json5` (survives restart, flush on SIGTERM/SIGINT); append-only `logs/attempts.jsonl` (JSONL) with size rotation + retention cleanup. `state/` and `logs/` are gitignored (recreated at boot)
+  - **Proxy-aware:** optional `trustProxy` reads client IP from `X-Forwarded-For`
+  - **adminUsers integration:** login handler wired to rule `adminLogin` with graceful `if (rl)` fallback (block check before authenticate, `recordFailureCtx`/`recordSuccessCtx`); `login.ejs` shows a localized rate-limited message on `?error=rateLimited`
+  - **Tests:** 18 unit tests for the engine (window, escalation, expiry, sweep, persistence round-trip, `checkClientLongBlock`, events)
+  - **Files Added:**
+    - `/plugins/rateLimiter/main.js`, `pluginConfig.json5`, `pluginDescription.json5`, `protectedRoutes.json5`, `README.md`, `.gitignore`
+    - `/plugins/rateLimiter/lib/{rateLimitEngine,keyResolver,attemptLog,stateStore,configValidator}.js`
+    - `/plugins/rateLimiter/tests/unit/rateLimitEngine.test.js`
+  - **Files Modified:**
+    - `/plugins/adminUsers/main.js` — login handler wired to the rateLimiter guard (graceful fallback)
+    - `/plugins/adminUsers/webPages/login.ejs` — rate-limited error message
+    - `/CLAUDE.md` — added Rate Limiter Plugin section, Important Files entry, this changelog
 - v2.8.0 (2026-04-24): **TESTING INFRASTRUCTURE + DEPS** - Testing conventions for plugins and themes, shared test helpers, per-scope test runner, test platform upgrade, missing dependency fix. Key changes:
   - **New convention: Testing Conventions for Plugins and Themes**
     - Plugins e temi possono ora dichiarare i propri test in `plugins/<name>/tests/` e `themes/<name>/tests/`

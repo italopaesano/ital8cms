@@ -206,6 +206,30 @@ class RateLimitEngine {
   }
 
   /**
+   * Verifica se un client ha un LONG block attivo su una qualsiasi regola.
+   * Usato dal middleware di enforcement (Livello 2) per il ban globale dell'IP.
+   * Applica la scadenza come effetto collaterale (pulizia).
+   * @param {string} clientId
+   * @returns {{ blocked: boolean, tier: string, ruleName: string|null, retryAfterSeconds: number }}
+   */
+  checkClientLongBlock(clientId) {
+    const now = this.now();
+    let best = { blocked: false, tier: 'none', ruleName: null, retryAfterSeconds: 0 };
+    for (const entry of this.state.values()) {
+      if (entry.clientId !== clientId) continue;
+      const policy = this.resolvePolicy(entry.ruleName);
+      this._applyExpiry(entry, policy, now);
+      if (entry.tier === 'long' && entry.blockedUntil > now) {
+        const retry = Math.ceil((entry.blockedUntil - now) / 1000);
+        if (retry > best.retryAfterSeconds) {
+          best = { blocked: true, tier: 'long', ruleName: entry.ruleName, retryAfterSeconds: retry };
+        }
+      }
+    }
+    return best;
+  }
+
+  /**
    * Restituisce la lista dei blocchi attualmente attivi (per introspezione/admin).
    * @returns {Array<object>}
    */
