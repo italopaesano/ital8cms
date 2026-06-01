@@ -1,0 +1,172 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<link rel="stylesheet" href="/<%= passData.adminPrefix %>/rateLimiterManagement/rateLimiter-admin.css">
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
+
+<div class="container mt-4 rl-admin">
+
+  <ul class="nav nav-pills mb-3 rl-nav">
+    <li class="nav-item"><a class="nav-link active" href="/<%= passData.adminPrefix %>/rateLimiterManagement/index.ejs"><%= __({it: 'Panoramica', en: 'Overview'}, passData.ctx) %></a></li>
+    <li class="nav-item"><a class="nav-link" href="/<%= passData.adminPrefix %>/rateLimiterManagement/rules.ejs"><%= __({it: 'Regole', en: 'Rules'}, passData.ctx) %></a></li>
+    <li class="nav-item"><a class="nav-link" href="/<%= passData.adminPrefix %>/rateLimiterManagement/settings.ejs"><%= __({it: 'Impostazioni', en: 'Settings'}, passData.ctx) %></a></li>
+  </ul>
+
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <h3 class="mb-0">
+      🛡️ <%= __({it: 'Rate Limiter', en: 'Rate Limiter'}, passData.ctx) %>
+      <span id="statusBadge" class="badge bg-secondary align-middle ms-2">—</span>
+    </h3>
+    <div class="d-flex align-items-center gap-3">
+      <div class="form-check form-switch mb-0">
+        <input class="form-check-input" type="checkbox" role="switch" id="autoRefreshToggle" checked>
+        <label class="form-check-label small" for="autoRefreshToggle">
+          <%= __({it: 'Auto-aggiornamento', en: 'Auto-refresh'}, passData.ctx) %>
+        </label>
+      </div>
+      <button id="btnRefresh" class="btn btn-outline-secondary btn-sm">
+        <span id="loadingSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+        ⟳ <%= __({it: 'Aggiorna', en: 'Refresh'}, passData.ctx) %>
+      </button>
+    </div>
+  </div>
+
+  <div id="globalAlert" class="alert d-none" role="alert"></div>
+
+  <!-- Banner: servizio disattivato -->
+  <div id="disabledBanner" class="alert alert-warning d-none">
+    <%= __({
+      it: 'Il plugin rateLimiter è disattivato (custom.enabled=false). Nessun dato da mostrare.',
+      en: 'The rateLimiter plugin is disabled (custom.enabled=false). No data to show.'
+    }, passData.ctx) %>
+  </div>
+
+  <!-- KPI cards (Vista Dati) -->
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-label text-muted small"><%= __({it: 'Enforcement', en: 'Enforcement'}, passData.ctx) %></div>
+        <div class="kpi-value fs-5 fw-bold" id="kpiEnforcement">—</div>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-label text-muted small"><%= __({it: 'Blocchi attivi', en: 'Active blocks'}, passData.ctx) %></div>
+        <div class="kpi-value fs-4 fw-bold text-primary" id="kpiActive">—</div>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-label text-muted small"><%= __({it: 'Short block', en: 'Short blocks'}, passData.ctx) %></div>
+        <div class="kpi-value fs-4 fw-bold text-warning" id="kpiShort">—</div>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-label text-muted small"><%= __({it: 'Long block', en: 'Long blocks'}, passData.ctx) %></div>
+        <div class="kpi-value fs-4 fw-bold text-danger" id="kpiLong">—</div>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-label text-muted small"><%= __({it: 'Regole', en: 'Rules'}, passData.ctx) %></div>
+        <div class="kpi-value fs-4 fw-bold" id="kpiRules">—</div>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- Blocchi attivi -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header small fw-semibold">
+      <%= __({it: 'Blocchi attivi', en: 'Active blocks'}, passData.ctx) %>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 align-middle">
+          <thead>
+            <tr>
+              <th>IP</th>
+              <th><%= __({it: 'Regola', en: 'Rule'}, passData.ctx) %></th>
+              <th><%= __({it: 'Tipo', en: 'Tier'}, passData.ctx) %></th>
+              <th><%= __({it: 'Scade tra', en: 'Expires in'}, passData.ctx) %></th>
+              <th class="text-end">Short #</th>
+              <th class="text-end"><%= __({it: 'Azioni', en: 'Actions'}, passData.ctx) %></th>
+            </tr>
+          </thead>
+          <tbody id="activeBlocksBody">
+            <tr><td colspan="6" class="text-center text-muted py-3">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-footer">
+      <form id="banForm" class="row gx-2 gy-2 align-items-end">
+        <div class="col-12 col-md-4">
+          <label for="banClientId" class="form-label small mb-0"><%= __({it: 'IP', en: 'IP'}, passData.ctx) %></label>
+          <input type="text" id="banClientId" class="form-control form-control-sm" placeholder="203.0.113.5" required>
+        </div>
+        <div class="col-6 col-md-3">
+          <label for="banRule" class="form-label small mb-0"><%= __({it: 'Regola', en: 'Rule'}, passData.ctx) %></label>
+          <select id="banRule" class="form-select form-select-sm"></select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label for="banSeconds" class="form-label small mb-0"><%= __({it: 'Durata', en: 'Duration'}, passData.ctx) %></label>
+          <select id="banSeconds" class="form-select form-select-sm">
+            <option value="300">5 min</option>
+            <option value="900">15 min</option>
+            <option value="3600">1 h</option>
+            <option value="86400" selected>1 <%= __({it: 'giorno', en: 'day'}, passData.ctx) %></option>
+          </select>
+        </div>
+        <div class="col-12 col-md-2">
+          <button type="submit" class="btn btn-danger btn-sm w-100">
+            <%= __({it: 'Banna', en: 'Ban'}, passData.ctx) %>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Audit log -->
+  <div class="card shadow-sm">
+    <div class="card-header small fw-semibold d-flex justify-content-between align-items-center">
+      <span><%= __({it: 'Audit log (recenti)', en: 'Audit log (recent)'}, passData.ctx) %></span>
+      <span class="text-muted fw-normal" id="auditCount"></span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle">
+          <thead>
+            <tr>
+              <th><%= __({it: 'Quando', en: 'When'}, passData.ctx) %></th>
+              <th><%= __({it: 'Evento', en: 'Event'}, passData.ctx) %></th>
+              <th>IP</th>
+              <th><%= __({it: 'Regola', en: 'Rule'}, passData.ctx) %></th>
+            </tr>
+          </thead>
+          <tbody id="auditBody">
+            <tr><td colspan="4" class="text-center text-muted py-3">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Variabili iniettate dal server (convenzione: JS var, non hidden span)
+  const apiPrefix          = '<%= passData.apiPrefix %>';
+  const adminPrefix        = '<%= passData.adminPrefix %>';
+  const autoRefreshSeconds = <%= Number(passData.plugin.adminRateLimiter && passData.plugin.adminRateLimiter.autoRefreshSeconds) || 5 %>;
+  const auditLimit         = <%= Number(passData.plugin.adminRateLimiter && passData.plugin.adminRateLimiter.auditLimit) || 100 %>;
+  // Etichette client tradotte (i18n) — il JS lato client non può usare __()
+  const i18n = {
+    unblock:   '<%= __({it: "Sblocca", en: "Unblock"}, passData.ctx) %>',
+    unblocked: '<%= __({it: "IP sbloccato", en: "IP unblocked"}, passData.ctx) %>',
+    banned:    '<%= __({it: "IP bannato", en: "IP banned"}, passData.ctx) %>',
+    ruleWord:  '<%= __({it: "regola obbligatoria", en: "rule required"}, passData.ctx) %>',
+    noRules:   '<%= __({it: "(nessuna regola)", en: "(no rules)"}, passData.ctx) %>',
+  };
+</script>
+<script src="/<%= passData.adminPrefix %>/rateLimiterManagement/rateLimiter-admin.js"></script>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>

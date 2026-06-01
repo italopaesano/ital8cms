@@ -401,9 +401,27 @@ disattivato → i consumer saltano il guard con `if (rl)`.
 | `recordFailureCtx(ctx, ruleName)` | ctx-aware | Registra un fallimento, applica l'escalation |
 | `recordSuccessCtx(ctx, ruleName)` | ctx-aware | Azzera lo stato per la chiave |
 | `guardCtx(ctx, ruleName)` | ctx-aware | "Tutto-in-uno": se bloccato scrive `429` + `Retry-After` e ritorna `true` |
-| `check / recordFailure / recordSuccess(clientId, ruleName)` | per-chiave | Varianti con IP esplicito (utili a `adminRateLimiter`) |
+| `check / recordFailure / recordSuccess(clientId, ruleName)` | per-chiave | Varianti con IP esplicito |
 | `getActiveBlocks()` | introspezione | Lista dei blocchi attivi |
 | `getRuleNames()` | introspezione | Nomi delle regole configurate |
+
+### API per il plugin admin (`adminRateLimiter`)
+
+| Metodo | Tipo | Descrizione |
+|--------|------|-------------|
+| `releaseBlock(clientId, ruleName)` | azione live | Sblocca una chiave specifica (→ evento `release`) |
+| `releaseAllForClient(clientId)` | azione live | Rimuove tutti i blocchi di un IP (→ evento `releaseAll`) |
+| `banClient(clientId, ruleName, {tier?, seconds?})` | azione live | Ban manuale (→ evento `manualBlock`) |
+| `getStats()` | dati | `{ enabled, enforcementEnabled, activeBlocks, shortBlocks, longBlocks, ruleCount }` |
+| `getRecentAttempts({limit?, clientId?, ruleName?, event?})` | dati | Coda dell'audit log (dal più recente) |
+| `getConfig()` | dati | Copia profonda di `custom` |
+| `validateRules(rulesData)` / `validateConfig(custom)` | validazione | Riuso del `configValidator` prima del salvataggio |
+| `reloadRules()` / `reloadConfig()` | hot-reload | Ricarica regole / config (defaults + enforcement) a caldo, senza riavvio |
+
+Le azioni live agiscono sull'**engine in memoria** (effetto immediato). L'enforcement
+L2 e le policy effettive leggono `custom` in modo **live**, quindi `reloadConfig()`
+ha effetto senza riavvio (i parametri infrastrutturali — timer flush/sweep,
+rotazione/retention log — restano quelli creati al boot).
 
 > **Pull, non push.** I consumer usano `getSharedObject` (pull a runtime), non
 > l'oggetto ricevuto via `setSharedObject` al boot. Motivo: al momento del push
@@ -477,16 +495,19 @@ tentativi falliti. Riprova tra N minuti.").
 
 ## Test
 
-`tests/unit/rateLimitEngine.test.js` (18 test) copre la logica critica del
-motore con **clock iniettata** (deterministico):
-- conteggio sotto soglia, scatto dello short block e `retryAfter`;
-- nessun incremento durante il blocco; ritorno alla normalità alla scadenza;
-- escalation a long block dopo `maxShortBlocks`; reset totale a scadenza del long;
-- finestra `findtime` (fallimenti diluiti non si accumulano);
-- reset della memoria di escalation per inattività;
-- `success` rimuove lo stato; `getActiveBlocks`; `sweep`;
-- `checkClientLongBlock` (Livello 2): short ≠ long, rilevazione, isolamento per IP, scadenza;
-- round-trip `serialize`/`load`; emissione eventi `onEvent`.
+Suite completa co-locata in `tests/` (7 file, 99 test). I test che toccano il
+filesystem usano una directory temporanea (`os.tmpdir()` / sandbox): **mai** la
+cartella reale del plugin.
+
+| File | Copre |
+|------|-------|
+| `tests/unit/rateLimitEngine.test.js` | Motore con clock iniettata: soglia/short block, nessun incremento durante il blocco, scadenze, escalation a long block, `findtime`, reset escalation, `success`/`sweep`/`getActiveBlocks`, `checkClientLongBlock`, `serialize`/`load`, eventi, escalation immediata (`maxShortBlocks=0`), isolamento IP/regola, policy per-regola |
+| `tests/unit/keyResolver.test.js` | Risoluzione IP: `ctx.ip`, fallback, `trustProxy` + `X-Forwarded-For` (catena, trim, header assente/vuoto, ignorato se off) |
+| `tests/unit/configValidator.test.js` | Validazione: defaults completi/invalidi, `maxShortBlocks=0` ammesso, regole (name mancante/vuoto/duplicato, override parziali), `validatePolicy` |
+| `tests/unit/attemptLog.test.js` | JSONL: creazione dir, forma del record (`ts` ISO, niente `at`), append multipli, rotazione per dimensione, retention |
+| `tests/unit/stateStore.test.js` | Persistenza: init vuoto, load round-trip, flush atomico solo se dirty, timer (0 = assente), register/remove handler SIGTERM/SIGINT |
+| `tests/integration/pluginIntegration.test.js` | `main.js` end-to-end via sandbox: API guard (L1) + middleware enforcement (L2: globalLongBlock, exemptPaths, IP pulito, pathPattern) |
+| `tests/integration/disabledPlugin.test.js` | `enabled=false` → oggetto condiviso `null` + middleware `[]` |
 
 Esecuzione: `npm run test:plugin --plugin=rateLimiter` (oppure
 `npx jest plugins/rateLimiter`).

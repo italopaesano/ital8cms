@@ -1,0 +1,60 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<link rel="stylesheet" href="/<%= passData.adminPrefix %>/rateLimiterManagement/rateLimiter-admin.css">
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
+
+<div class="container mt-4 rl-admin">
+
+  <ul class="nav nav-pills mb-3 rl-nav">
+    <li class="nav-item"><a class="nav-link" href="/<%= passData.adminPrefix %>/rateLimiterManagement/index.ejs"><%= __({it: 'Panoramica', en: 'Overview'}, passData.ctx) %></a></li>
+    <li class="nav-item"><a class="nav-link active" href="/<%= passData.adminPrefix %>/rateLimiterManagement/rules.ejs"><%= __({it: 'Regole', en: 'Rules'}, passData.ctx) %></a></li>
+    <li class="nav-item"><a class="nav-link" href="/<%= passData.adminPrefix %>/rateLimiterManagement/settings.ejs"><%= __({it: 'Impostazioni', en: 'Settings'}, passData.ctx) %></a></li>
+  </ul>
+
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+    <h3 class="mb-0"><%= __({it: 'Regole protette', en: 'Protected rules'}, passData.ctx) %> <code class="fs-6">protectedRoutes.json5</code></h3>
+    <div class="d-flex gap-2">
+      <button id="btnValidate" class="btn btn-outline-info btn-sm">✓ <%= __({it: 'Valida', en: 'Validate'}, passData.ctx) %></button>
+      <button id="btnSave" class="btn btn-primary btn-sm">💾 <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %></button>
+    </div>
+  </div>
+
+  <div id="globalAlert" class="alert d-none" role="alert"></div>
+  <div id="disabledBanner" class="alert alert-warning d-none">
+    <%= __({
+      it: 'Il plugin rateLimiter è disattivato: puoi vedere le regole ma non validarle/salvarle.',
+      en: 'The rateLimiter plugin is disabled: you can view the rules but not validate/save them.'
+    }, passData.ctx) %>
+  </div>
+
+  <div id="messages" class="messages-area mb-2"></div>
+
+  <textarea id="rulesEditor" class="rl-editor form-control mb-3" rows="22" spellcheck="false"></textarea>
+
+  <div class="card">
+    <div class="card-header small fw-semibold"><%= __({it: 'Riferimento campi', en: 'Field reference'}, passData.ctx) %></div>
+    <div class="card-body small text-muted">
+      <p class="mb-1"><%= __({
+        it: 'Array <code>rules</code>; ogni regola ha un <code>name</code> (obbligatorio) usato dai plugin come chiave del rate limit (IP + name). I campi di policy sono opzionali ed ereditano dai defaults globali.',
+        en: 'Array <code>rules</code>; each rule has a <code>name</code> (required) used by plugins as the rate-limit key (IP + name). Policy fields are optional and inherit from the global defaults.'
+      }, passData.ctx) %></p>
+      <code>name, pathPattern, findWindowSeconds, maxFailures, shortBlockSeconds, maxShortBlocks, longBlockSeconds, escalationResetSeconds</code>
+      <p class="mb-0 mt-1"><%= __({
+        it: '<code>pathPattern</code> (opzionale) abilita l\'enforcement L2 sulle pagine (PatternMatcher: *, **, regex:).',
+        en: '<code>pathPattern</code> (optional) enables L2 page enforcement (PatternMatcher: *, **, regex:).'
+      }, passData.ctx) %></p>
+    </div>
+  </div>
+</div>
+
+<script>
+  const apiPrefix   = '<%= passData.apiPrefix %>';
+  const adminPrefix = '<%= passData.adminPrefix %>';
+  const i18n = {
+    saved:    '<%= __({it: "Regole salvate e ricaricate", en: "Rules saved and reloaded"}, passData.ctx) %>',
+    valid:    '<%= __({it: "JSON5 valido", en: "Valid JSON5"}, passData.ctx) %>',
+    rulesWord:'<%= __({it: "regola/e", en: "rule(s)"}, passData.ctx) %>',
+  };
+</script>
+<script src="/<%= passData.adminPrefix %>/rateLimiterManagement/rules-editor.js"></script>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>

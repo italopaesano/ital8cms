@@ -119,6 +119,16 @@
       "label": "Impostazioni Analytics",
       "icon": "⚙️",
       "description": "Configurazione del plugin analytics: GDPR, storage, performance, editor JSON5"
+    },
+
+    "rateLimiterManagement": {
+      "type": "plugin",
+      "plugin": "adminRateLimiter",
+      "enabled": true,
+      "required": false,
+      "label": "Rate Limiter",
+      "icon": "🛡️",
+      "description": "Monitoraggio blocchi anti brute-force, gestione regole e impostazioni del rate limiter"
     }
   },
 
@@ -135,7 +145,8 @@
     "seoManagement",
     "mediaManagement",
     "analyticsManagement",
-    "analyticsSettings"
+    "analyticsSettings",
+    "rateLimiterManagement"
   ],
 
   // Servizi forniti da plugin (backend)

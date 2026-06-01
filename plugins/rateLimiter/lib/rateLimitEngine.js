@@ -206,6 +206,79 @@ class RateLimitEngine {
   }
 
   /**
+   * Rimuove il blocco/stato per una chiave specifica (azione admin: sblocco).
+   * @returns {boolean} true se esisteva una voce
+   */
+  release(clientId, ruleName) {
+    const key = this._key(clientId, ruleName);
+    if (this.state.has(key)) {
+      this.state.delete(key);
+      this.dirty = true;
+      this.onEvent({ event: 'release', clientId, ruleName, at: this.now() });
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Rimuove tutti i blocchi/stato per un client (tutte le regole).
+   * @returns {number} numero di voci rimosse
+   */
+  releaseAllForClient(clientId) {
+    let removed = 0;
+    for (const [key, entry] of this.state) {
+      if (entry.clientId === clientId) {
+        this.state.delete(key);
+        removed += 1;
+      }
+    }
+    if (removed > 0) {
+      this.dirty = true;
+      this.onEvent({ event: 'releaseAll', clientId, count: removed, at: this.now() });
+    }
+    return removed;
+  }
+
+  /**
+   * Forza un blocco manuale (ban da admin) per (clientId, ruleName).
+   * @param {object} [opts] - { tier?: 'short'|'long' (default 'long'), seconds?: number }
+   * @returns {{ blocked: boolean, tier: string, retryAfterSeconds: number }}
+   */
+  forceBlock(clientId, ruleName, opts = {}) {
+    const now = this.now();
+    const policy = this.resolvePolicy(ruleName);
+    const tier = opts.tier === 'short' ? 'short' : 'long';
+    const seconds = (typeof opts.seconds === 'number' && opts.seconds > 0)
+      ? opts.seconds
+      : (tier === 'short' ? policy.shortBlockSeconds : policy.longBlockSeconds);
+
+    const key = this._key(clientId, ruleName);
+    let entry = this.state.get(key);
+    if (!entry) {
+      entry = this._newEntry(clientId, ruleName, now);
+      this.state.set(key, entry);
+    }
+    entry.tier = tier;
+    entry.blockedUntil = now + seconds * 1000;
+    entry.lastFailureAt = now;
+    entry.failureCount = 0;
+    entry.windowStartAt = 0;
+    this.dirty = true;
+
+    const verdict = this._verdict(entry, now);
+    this.onEvent({
+      event: 'manualBlock',
+      clientId,
+      ruleName,
+      tier,
+      blockedUntil: entry.blockedUntil,
+      retryAfterSeconds: verdict.retryAfterSeconds,
+      at: now,
+    });
+    return verdict;
+  }
+
+  /**
    * Verifica se un client ha un LONG block attivo su una qualsiasi regola.
    * Usato dal middleware di enforcement (Livello 2) per il ban globale dell'IP.
    * Applica la scadenza come effetto collaterale (pulizia).

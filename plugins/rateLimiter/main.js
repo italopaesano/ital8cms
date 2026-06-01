@@ -17,8 +17,14 @@
  *   I middleware dei plugin vengono montati DOPO il router (vedi index.js), per
  *   cui non possono pre-bloccare una rotta API già matchata come POST /login.
  *   Il blocco va quindi invocato DENTRO l'handler, tramite l'oggetto condiviso.
- *   Il LIVELLO 2 (futuro) aggiungerà un middleware che applica il long block in
- *   modo globale sulle pagine fall-through.
+ *
+ * LIVELLO 2: middleware di enforcement sulle pagine fall-through (getMiddlewareToAdd),
+ *   che legge le impostazioni di enforcement da `custom` in modo LIVE.
+ *
+ * API per il plugin admin (adminRateLimiter): l'oggetto condiviso espone azioni
+ *   live (releaseBlock/releaseAllForClient/banClient), dati (getStats/
+ *   getRecentAttempts/getConfig), validazione (validateRules/validateConfig) e
+ *   hot-reload (reloadRules/reloadConfig). Vedi EXPLAIN.md.
  */
 
 'use strict';
@@ -86,6 +92,33 @@ function resolvePolicy(ruleName) {
   };
 }
 
+/**
+ * Forza il re-read di protectedRoutes.json5 (hot-reload delle regole).
+ * Usato dal plugin admin dopo aver salvato il file.
+ */
+function reloadRules() {
+  cachedRules = null;
+  return loadRules();
+}
+
+/**
+ * Re-legge pluginConfig.json5 e aggiorna `custom` a caldo (defaults, enforcement,
+ * response, ...). Le policy effettive e l'enforcement L2 leggono `custom` live,
+ * quindi le modifiche hanno effetto senza riavvio. I parametri infrastrutturali
+ * (timer flush/sweep, rotazione/retention log) restano quelli creati al boot.
+ * @returns {object} copia di `custom` dopo il reload
+ */
+function reloadConfig() {
+  try {
+    const cfg = loadJson5(path.join(pluginFolder, 'pluginConfig.json5'));
+    custom = cfg.custom || {};
+    cachedRules = null; // le policy effettive dipendono anche dai defaults
+  } catch (err) {
+    logger.warn(LOG_PREFIX, `reloadConfig fallito: ${err.message}`);
+  }
+  return JSON.parse(JSON.stringify(custom));
+}
+
 module.exports = {
 
   async loadPlugin(pluginSys, pathPluginFolder) {
@@ -130,7 +163,8 @@ module.exports = {
           const blockInfo = ev.retryAfterSeconds
             ? ` → blocco ${ev.tier} per ${ev.retryAfterSeconds}s`
             : '';
-          logger.info(LOG_PREFIX, `${ev.event} ${ev.clientId} [${ev.ruleName}]${blockInfo}`);
+          const ruleInfo = ev.ruleName ? ` [${ev.ruleName}]` : '';
+          logger.info(LOG_PREFIX, `${ev.event} ${ev.clientId}${ruleInfo}${blockInfo}`);
         }
         if (attemptLog) attemptLog.append(ev);
       },
@@ -171,24 +205,31 @@ module.exports = {
    *   2. una regola con `pathPattern` matcha il percorso e l'IP è bloccato per
    *      quella regola (short o long).
    * I percorsi in `exemptPaths` sono sempre lasciati passare.
+   *
+   * NOTA: il middleware è registrato una volta sola (se il plugin è attivo), ma
+   * legge le impostazioni di enforcement da `custom` in modo LIVE ad ogni
+   * richiesta. Così `reloadConfig()` può attivare/disattivare/riconfigurare
+   * l'enforcement a caldo, senza riavvio.
    */
   getMiddlewareToAdd(app) {
-    const enf = custom && custom.enforcement;
-    if (!engine || !enf || enf.enabled === false) {
-      return []; // Livello 2 disattivo (o plugin disabilitato)
+    if (!engine) {
+      return []; // plugin disabilitato (custom.enabled=false): nessun middleware
     }
 
-    const trustProxy = custom.trustProxy === true;
     const matcher = new PatternMatcher();
-    const exemptPaths = Array.isArray(enf.exemptPaths) ? enf.exemptPaths : [];
-    const denyStatus = enf.status || 429;
-    const retryAfterHeader = !(custom.response && custom.response.retryAfterHeader === false);
 
     return [
       async (ctx, next) => {
+        const enf = custom && custom.enforcement;
+        if (!enf || enf.enabled === false) {
+          await next(); // enforcement disattivato (live)
+          return;
+        }
+
         const urlPath = ctx.path;
 
         // Percorsi esenti (admin, risorse tema, ecc.)
+        const exemptPaths = Array.isArray(enf.exemptPaths) ? enf.exemptPaths : [];
         for (const p of exemptPaths) {
           if (matcher.matches(urlPath, p)) {
             await next();
@@ -196,7 +237,7 @@ module.exports = {
           }
         }
 
-        const clientId = resolveClientId(ctx, { trustProxy });
+        const clientId = resolveClientId(ctx, { trustProxy: custom.trustProxy === true });
         let verdict = null;
 
         // 1) Ban globale per LONG block
@@ -226,7 +267,8 @@ module.exports = {
             ctx.redirect(enf.redirectTo);
             return;
           }
-          ctx.status = denyStatus;
+          ctx.status = enf.status || 429;
+          const retryAfterHeader = !(custom.response && custom.response.retryAfterHeader === false);
           if (retryAfterHeader) ctx.set('Retry-After', String(verdict.retryAfterSeconds));
           ctx.body = { error: 'Access temporarily blocked', retryAfterSeconds: verdict.retryAfterSeconds };
           return;
@@ -274,12 +316,47 @@ module.exports = {
         return false;
       },
 
-      // ── API basate su chiave esplicita (es. per il futuro adminRateLimiter) ──
+      // ── API basate su chiave esplicita ──
       check: (clientId, ruleName) => engine.check(clientId, ruleName),
       recordFailure: (clientId, ruleName) => engine.recordFailure(clientId, ruleName),
       recordSuccess: (clientId, ruleName) => engine.recordSuccess(clientId, ruleName),
       getActiveBlocks: () => engine.getActiveBlocks(),
       getRuleNames: () => Array.from(loadRules().keys()),
+
+      // ── API per il plugin admin (adminRateLimiter) ──
+      // Azioni live (effetto immediato sull'engine in memoria)
+      releaseBlock: (clientId, ruleName) => engine.release(clientId, ruleName),
+      releaseAllForClient: (clientId) => engine.releaseAllForClient(clientId),
+      banClient: (clientId, ruleName, opts) => engine.forceBlock(clientId, ruleName, opts),
+
+      // Dati per la Vista Dati della GUI
+      getStats: () => {
+        const active = engine.getActiveBlocks();
+        return {
+          enabled: custom.enabled !== false,
+          enforcementEnabled: !!(custom.enforcement && custom.enforcement.enabled !== false),
+          activeBlocks: active.length,
+          shortBlocks: active.filter((b) => b.tier === 'short').length,
+          longBlocks: active.filter((b) => b.tier === 'long').length,
+          ruleCount: loadRules().size,
+        };
+      },
+      getRecentAttempts: (opts) => (attemptLog ? attemptLog.readRecent(opts) : []),
+      getConfig: () => JSON.parse(JSON.stringify(custom)),
+
+      // Validazione (riuso del validator del plugin) — usata prima del salvataggio
+      validateRules: (rulesData) => validate(custom, rulesData),
+      validateConfig: (newCustom) => {
+        let rulesData = {};
+        try {
+          rulesData = loadJson5(path.join(pluginFolder, 'protectedRoutes.json5'));
+        } catch (e) { /* file assente: validazione solo del custom */ }
+        return validate(newCustom, rulesData);
+      },
+
+      // Hot-reload (dopo che adminRateLimiter ha scritto i file .json5)
+      reloadRules,
+      reloadConfig,
     };
   },
 };
