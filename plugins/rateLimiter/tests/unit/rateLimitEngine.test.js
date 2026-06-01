@@ -228,3 +228,56 @@ describe('RateLimitEngine — success, sweep, introspezione, persistenza', () =>
     expect(types).toContain('shortBlock');
   });
 });
+
+describe('RateLimitEngine — edge case e isolamento', () => {
+  test('maxShortBlocks = 0 → primo raggiungimento soglia = long block immediato', () => {
+    const clock = { now: 1_000_000 };
+    const policy = { ...POLICY, maxShortBlocks: 0 };
+    const engine = new RateLimitEngine({ resolvePolicy: () => policy, now: () => clock.now });
+
+    let verdict;
+    for (let i = 0; i < policy.maxFailures; i++) {
+      verdict = engine.recordFailure(IP, RULE);
+    }
+    expect(verdict.blocked).toBe(true);
+    expect(verdict.tier).toBe('long');
+    expect(verdict.retryAfterSeconds).toBe(policy.longBlockSeconds);
+  });
+
+  test('IP diversi sono indipendenti', () => {
+    const { engine } = makeEngine();
+    triggerShortBlock(engine); // blocca IP
+    expect(engine.check(IP, RULE).blocked).toBe(true);
+    expect(engine.check('198.51.100.99', RULE).blocked).toBe(false);
+  });
+
+  test('regole diverse per lo stesso IP sono indipendenti', () => {
+    const { engine } = makeEngine();
+    triggerShortBlock(engine); // blocca (IP, adminLogin)
+    expect(engine.check(IP, RULE).blocked).toBe(true);
+    expect(engine.check(IP, 'altraRegola').blocked).toBe(false);
+  });
+
+  test('resolvePolicy riceve il ruleName (policy per-regola)', () => {
+    const clock = { now: 1_000_000 };
+    const policies = {
+      severa: { ...POLICY, maxFailures: 2 },
+      lasca: { ...POLICY, maxFailures: 10 },
+    };
+    const seen = [];
+    const engine = new RateLimitEngine({
+      resolvePolicy: (ruleName) => { seen.push(ruleName); return policies[ruleName]; },
+      now: () => clock.now,
+    });
+
+    // 'severa' si blocca a 2 fallimenti
+    engine.recordFailure(IP, 'severa');
+    expect(engine.recordFailure(IP, 'severa').blocked).toBe(true);
+    // 'lasca' a 2 fallimenti non si blocca
+    engine.recordFailure(IP, 'lasca');
+    expect(engine.recordFailure(IP, 'lasca').blocked).toBe(false);
+
+    expect(seen).toContain('severa');
+    expect(seen).toContain('lasca');
+  });
+});
