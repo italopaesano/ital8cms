@@ -90,6 +90,23 @@ La pagina Impostazioni offre **due viste sullo stesso contenuto**, con un toggle
 La validazione e la scrittura restano quelle del server (endpoint invariati): la
 Vista C è interamente lato client (EJS + `settings-editor.js`).
 
+## Vista C — form Regole (coordinato con l'editor JSON5)
+
+La pagina Regole ha lo stesso schema (toggle Form↔JSON5, textarea = fonte inviata),
+con una differenza dovuta al fatto che `protectedRoutes.json5` è **grezzo, con commenti**:
+
+- **Il form si popola da `rules` parse-ate lato server.** `GET /rules` ritorna sia
+  `content` (grezzo) sia `rules` (array già parsato con JSON5 dal plugin admin), così
+  il browser **non deve fare JSON5.parse** del file commentato.
+- Una **card per regola**: `name`, `pathPattern` (opzionale) e i 6 override numerici;
+  un campo **vuoto = eredita** dai defaults (omesso dall'oggetto regola). Pulsanti
+  "Aggiungi regola" / "✕ rimuovi".
+- **Toggle:** Form→JSON rigenera la textarea (`JSON.stringify({rules})`); JSON→Form usa
+  `JSON.parse` — se la textarea contiene commenti/JSON5 non importabile, **avvisa e
+  resta in vista JSON5** (il form era comunque già popolato al load dai dati del server).
+- **Trade-off commenti:** salvando dal Form il file viene normalizzato (commenti persi);
+  per preservare i commenti si modifica e salva dalla **vista JSON5** (contenuto grezzo).
+
 ## Validazione
 
 La logica di validazione vive nel servizio (`rateLimiter/lib/configValidator`)

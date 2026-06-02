@@ -17,7 +17,7 @@ Sezione admin: **`rateLimiterManagement`** → `/admin/rateLimiterManagement/` (
 | Pagina | Vista | Contenuto |
 |--------|-------|-----------|
 | `index.ejs` | **A — Dati** | KPI (enforcement, blocchi short/long, regole), tabella blocchi attivi (con **Sblocca**), **ban manuale**, audit log; auto-refresh |
-| `rules.ejs` | **B — Editor JSON5** | Editor grezzo di `protectedRoutes.json5` (Valida / Salva) + riferimento campi |
+| `rules.ejs` | **B + C** | **Form** (una card per regola; campi numerici vuoti = eredita dai defaults) **e** editor JSON5 di `protectedRoutes.json5`, coordinati via toggle Form↔JSON5 (Valida / Salva) |
 | `settings.ejs` | **B + C** | **Form strutturato** (Generale/Policy/Enforcement/Logging) **e** editor JSON5 del blocco `custom`, coordinati via toggle Form↔JSON5 (Valida / Salva / **Salva e riavvia**) |
 
 Tutto passa per l'**oggetto condiviso** di `rateLimiter` (stesso processo). Se il

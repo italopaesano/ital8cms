@@ -12,7 +12,13 @@
 
   <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
     <h3 class="mb-0"><%= __({it: 'Regole protette', en: 'Protected rules'}, passData.ctx) %> <code class="fs-6">protectedRoutes.json5</code></h3>
-    <div class="d-flex gap-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <div class="btn-group btn-group-sm" role="group" aria-label="view toggle">
+        <input type="radio" class="btn-check" name="rlRulesView" id="viewForm" autocomplete="off" checked>
+        <label class="btn btn-outline-secondary" for="viewForm"><%= __({it: 'Form', en: 'Form'}, passData.ctx) %></label>
+        <input type="radio" class="btn-check" name="rlRulesView" id="viewJson" autocomplete="off">
+        <label class="btn btn-outline-secondary" for="viewJson">JSON5</label>
+      </div>
       <button id="btnValidate" class="btn btn-outline-info btn-sm">✓ <%= __({it: 'Valida', en: 'Validate'}, passData.ctx) %></button>
       <button id="btnSave" class="btn btn-primary btn-sm">💾 <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %></button>
     </div>
@@ -25,22 +31,33 @@
       en: 'The rateLimiter plugin is disabled: you can view the rules but not validate/save them.'
     }, passData.ctx) %>
   </div>
+  <div class="alert alert-info py-2 small">
+    <%= __({
+      it: 'Nei campi numerici lascia vuoto per ereditare dai defaults globali. La vista Form normalizza il JSON5 (i commenti del file non vengono preservati); per mantenere i commenti modifica e salva dalla vista JSON5.',
+      en: 'Leave numeric fields empty to inherit the global defaults. The Form view normalizes JSON5 (file comments are not preserved); to keep comments edit and save from the JSON5 view.'
+    }, passData.ctx) %>
+  </div>
 
   <div id="messages" class="messages-area mb-2"></div>
 
-  <textarea id="rulesEditor" class="rl-editor form-control mb-3" rows="22" spellcheck="false"></textarea>
+  <%# ───────────── VISTA C: FORM (card per regola) ───────────── %>
+  <div id="rulesFormView">
+    <div id="rulesContainer"></div>
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnAddRule">+ <%= __({it: 'Aggiungi regola', en: 'Add rule'}, passData.ctx) %></button>
+  </div>
 
-  <div class="card">
+  <%# ───────────── VISTA B: EDITOR JSON5 GREZZO ───────────── %>
+  <div id="rulesJsonView" class="d-none">
+    <textarea id="rulesEditor" class="rl-editor form-control mb-2" rows="22" spellcheck="false"></textarea>
+  </div>
+
+  <div class="card mt-3">
     <div class="card-header small fw-semibold"><%= __({it: 'Riferimento campi', en: 'Field reference'}, passData.ctx) %></div>
     <div class="card-body small text-muted">
-      <p class="mb-1"><%= __({
-        it: 'Array <code>rules</code>; ogni regola ha un <code>name</code> (obbligatorio) usato dai plugin come chiave del rate limit (IP + name). I campi di policy sono opzionali ed ereditano dai defaults globali.',
-        en: 'Array <code>rules</code>; each rule has a <code>name</code> (required) used by plugins as the rate-limit key (IP + name). Policy fields are optional and inherit from the global defaults.'
-      }, passData.ctx) %></p>
-      <code>name, pathPattern, findWindowSeconds, maxFailures, shortBlockSeconds, maxShortBlocks, longBlockSeconds, escalationResetSeconds</code>
+      <code>name (obbligatorio), pathPattern (opz.), findWindowSeconds, maxFailures, shortBlockSeconds, maxShortBlocks, longBlockSeconds, escalationResetSeconds</code>
       <p class="mb-0 mt-1"><%= __({
-        it: '<code>pathPattern</code> (opzionale) abilita l\'enforcement L2 sulle pagine (PatternMatcher: *, **, regex:).',
-        en: '<code>pathPattern</code> (optional) enables L2 page enforcement (PatternMatcher: *, **, regex:).'
+        it: '<code>pathPattern</code> abilita l\'enforcement L2 sulle pagine (PatternMatcher: *, **, regex:). I campi numerici vuoti ereditano dai defaults globali.',
+        en: '<code>pathPattern</code> enables L2 page enforcement (PatternMatcher: *, **, regex:). Empty numeric fields inherit the global defaults.'
       }, passData.ctx) %></p>
     </div>
   </div>
@@ -50,9 +67,11 @@
   const apiPrefix   = '<%= passData.apiPrefix %>';
   const adminPrefix = '<%= passData.adminPrefix %>';
   const i18n = {
-    saved:    '<%= __({it: "Regole salvate e ricaricate", en: "Rules saved and reloaded"}, passData.ctx) %>',
-    valid:    '<%= __({it: "JSON5 valido", en: "Valid JSON5"}, passData.ctx) %>',
-    rulesWord:'<%= __({it: "regola/e", en: "rule(s)"}, passData.ctx) %>',
+    saved:      '<%= __({it: "Regole salvate e ricaricate", en: "Rules saved and reloaded"}, passData.ctx) %>',
+    valid:      '<%= __({it: "JSON5 valido", en: "Valid JSON5"}, passData.ctx) %>',
+    parseError: '<%= __({it: "Impossibile importare nel form: il JSON5 contiene commenti o sintassi non importabile (modifica dalla vista JSON5)", en: "Cannot import into the form: the JSON5 contains comments or non-importable syntax (edit from the JSON5 view)"}, passData.ctx) %>',
+    remove:     '<%= __({it: "rimuovi", en: "remove"}, passData.ctx) %>',
+    namePlaceholder: '<%= __({it: "nome regola", en: "rule name"}, passData.ctx) %>',
   };
 </script>
 <script src="/<%= passData.adminPrefix %>/rateLimiterManagement/rules-editor.js"></script>

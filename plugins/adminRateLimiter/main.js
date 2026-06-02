@@ -186,8 +186,15 @@ module.exports = {
           } catch (e) {
             content = '';
           }
+          // Parse server-side (il file è JSON5 con commenti): la Vista C (form) si
+          // popola da `rules` senza bisogno di un parser JSON5 nel browser.
+          let rules = [];
+          try {
+            const parsed = JSON5.parse(content);
+            if (parsed && Array.isArray(parsed.rules)) rules = parsed.rules;
+          } catch (e) { /* file malformato → form vuoto, l'editor JSON5 mostra il grezzo */ }
           // enabled = servizio attivo (necessario per validare/salvare)
-          ctx.body = { enabled: !!getRateLimiter(), content };
+          ctx.body = { enabled: !!getRateLimiter(), content, rules };
         },
       },
 

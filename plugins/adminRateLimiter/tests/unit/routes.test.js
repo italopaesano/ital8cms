@@ -202,10 +202,12 @@ describe('adminRateLimiter — Regole (editor JSON5, Step 4)', () => {
     if (fs.existsSync(base)) fs.rmSync(base, { recursive: true, force: true });
   });
 
-  test('GET /rules restituisce il contenuto grezzo', async () => {
+  test('GET /rules restituisce il contenuto grezzo + le regole parse-ate', async () => {
     const ctx = await runRoute(routeOf(routes, 'GET', '/rules'), createCtxMock({ path: '/rules' }));
     expect(ctx.body.enabled).toBe(true);
     expect(ctx.body.content).toContain('"name": "adminLogin"');
+    expect(Array.isArray(ctx.body.rules)).toBe(true);
+    expect(ctx.body.rules[0].name).toBe('adminLogin');
   });
 
   test('POST /validate-rules: contenuto valido', async () => {
