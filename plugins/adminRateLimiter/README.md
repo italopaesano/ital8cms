@@ -18,7 +18,7 @@ Sezione admin: **`rateLimiterManagement`** → `/admin/rateLimiterManagement/` (
 |--------|-------|-----------|
 | `index.ejs` | **A — Dati** | KPI (enforcement, blocchi short/long, regole), tabella blocchi attivi (con **Sblocca**), **ban manuale**, audit log; auto-refresh |
 | `rules.ejs` | **B — Editor JSON5** | Editor grezzo di `protectedRoutes.json5` (Valida / Salva) + riferimento campi |
-| `settings.ejs` | **B — Editor JSON5** | Editor del blocco `custom` di `pluginConfig.json5` (Valida / Salva / **Salva e riavvia**) + riferimento campi |
+| `settings.ejs` | **B + C** | **Form strutturato** (Generale/Policy/Enforcement/Logging) **e** editor JSON5 del blocco `custom`, coordinati via toggle Form↔JSON5 (Valida / Salva / **Salva e riavvia**) |
 
 Tutto passa per l'**oggetto condiviso** di `rateLimiter` (stesso processo). Se il
 servizio è disattivato (`custom.enabled=false`), la GUI mostra un banner e

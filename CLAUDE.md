@@ -3597,7 +3597,7 @@ It runs in the **same process** as `rateLimiter`, so it pulls live data/actions 
 |------|------|---------|
 | `index.ejs` | **A — Data** | KPI cards, active-blocks table (with Unblock), manual-ban form, audit log; auto-refresh |
 | `rules.ejs` | **B — Raw JSON5 editor** | `protectedRoutes.json5` (Validate / Save) + field reference |
-| `settings.ejs` | **B — Raw JSON5 editor** | `pluginConfig.json5` → `custom` block (Validate / Save / Save & restart) |
+| `settings.ejs` | **B + C — JSON5 editor + structured form** | `pluginConfig.json5` → `custom` block; coordinated Form↔JSON5 toggle (Validate / Save / Save & restart) |
 
 #### API endpoints (roles `[0, 1]`)
 
@@ -3624,6 +3624,7 @@ It runs in the **same process** as `rateLimiter`, so it pulls live data/actions 
 - Settings save uses **`core/editJson5`** to surgically replace only the `custom` block, preserving `active`/`dependency`/comments elsewhere. Rules save writes the raw editor content (comments preserved).
 - Validation is **reused** from the service via `validateRules`/`validateConfig` on the shared object. Writes are atomic (`lib/configFileManager.js`) with rotating backups (`maxBackupsPerFile`).
 - **Config:** `custom.auditLimit` (100), `custom.autoRefreshSeconds` (5), `custom.maxBackupsPerFile` (10). Dependencies: `rateLimiter ^1.0.0`, `bootstrap ^1.0.0`, `simpleI18n ^1.0.0`; node module `json5`.
+- **Settings — View C (form) coordinated with View B (JSON5):** `settings.ejs` offers a structured form (Generale/Policy/Enforcement/Logging) and the raw JSON5 editor over the same content, with a Form↔JSON5 toggle. The **textarea is the single source of truth sent to the server**; the form regenerates it (`gatherForm()` merges into a base object, preserving unknown keys). Toggle syncs explicitly (Form→JSON via `JSON.stringify`; JSON→Form via `JSON.parse` — content is JSON since `GET /config` returns `JSON.stringify`). Dirty-tracking + `beforeunload`. **Entirely client-side** — the server endpoints are unchanged.
 
 ---
 
@@ -5666,11 +5667,12 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2026-06-01
-**Version:** 2.11.0
+**Last Updated:** 2026-06-02
+**Version:** 2.11.1
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v2.11.1 (2026-06-02): **ENHANCEMENT** - `adminRateLimiter` Settings: added **View C (structured form)** coordinated with the existing **View B (raw JSON5 editor)**, per *The Three Views* standard. `settings.ejs` now has a Form↔JSON5 toggle: the form groups all `custom` fields (General, Default policy, Enforcement, Logging/State/Response) with switches/number inputs/a list-editor for `exemptPaths` and ⟳ badges on restart-required fields. The **textarea remains the single source of truth** sent to the server; the form regenerates it (`gatherForm()` merges into a base object, preserving unknown keys); the toggle syncs explicitly (Form→JSON `JSON.stringify`, JSON→Form `JSON.parse`); dirty-tracking + `beforeunload`. **Entirely client-side** — server endpoints (`/config`, `/validate-config`, `/restart`) unchanged. Verified via JS syntax check, EJS compile + runtime render of all three section pages, plugin suite (34) and full project suite green. **Files Modified:** `/plugins/adminRateLimiter/adminWebSections/rateLimiterManagement/{settings.ejs,settings-editor.js}`, `/plugins/adminRateLimiter/{README.md,EXPLAIN.md}`, `/CLAUDE.md`.
 - v2.11.0 (2026-06-01): **NEW PLUGIN** - `adminRateLimiter`, the twin admin GUI for the `rateLimiter` service (Twin Admin Plugin + The Three Views conventions). Built incrementally:
   - **rateLimiter foundations (Step 1):** engine `release` / `releaseAllForClient` / `forceBlock`; `attemptLog.readRecent`; shared-object API for admin (`releaseBlock`, `releaseAllForClient`, `banClient`, `getStats`, `getRecentAttempts`, `getConfig`, `validateRules`, `validateConfig`, `reloadRules`, `reloadConfig`); L2 enforcement middleware refactored to read `custom` LIVE (so `reloadConfig()` applies enforcement changes without restart).
   - **adminRateLimiter (Steps 2-5):** section `rateLimiterManagement` (registered in `core/admin/adminConfig.json5` + menuOrder; symlink gitignored). Three pages: Data view (`index.ejs`: KPI + active blocks + audit, auto-refresh), Rules editor (`rules.ejs`: raw JSON5 of `protectedRoutes.json5`), Settings editor (`settings.ejs`: raw JSON5 of the `custom` block, with "Save & restart"). Routes (roles `[0,1]`): status, attempts, unblock, ban, rules + validate-rules, config + validate-config, restart.

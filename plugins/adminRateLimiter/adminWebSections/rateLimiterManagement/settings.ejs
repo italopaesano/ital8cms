@@ -12,7 +12,13 @@
 
   <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
     <h3 class="mb-0"><%= __({it: 'Impostazioni', en: 'Settings'}, passData.ctx) %> <code class="fs-6">pluginConfig.json5 → custom</code></h3>
-    <div class="d-flex gap-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <div class="btn-group btn-group-sm" role="group" aria-label="view toggle">
+        <input type="radio" class="btn-check" name="rlView" id="viewForm" autocomplete="off" checked>
+        <label class="btn btn-outline-secondary" for="viewForm"><%= __({it: 'Form', en: 'Form'}, passData.ctx) %></label>
+        <input type="radio" class="btn-check" name="rlView" id="viewJson" autocomplete="off">
+        <label class="btn btn-outline-secondary" for="viewJson">JSON5</label>
+      </div>
       <button id="btnValidate" class="btn btn-outline-info btn-sm">✓ <%= __({it: 'Valida', en: 'Validate'}, passData.ctx) %></button>
       <button id="btnSave" class="btn btn-primary btn-sm">💾 <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %></button>
       <button id="btnSaveRestart" class="btn btn-warning btn-sm">⟳ <%= __({it: 'Salva e riavvia', en: 'Save & restart'}, passData.ctx) %></button>
@@ -26,34 +32,87 @@
       en: 'The rateLimiter plugin is disabled: you can view the settings but not validate/save them.'
     }, passData.ctx) %>
   </div>
-
   <div class="alert alert-info py-2 small">
     <%= __({
-      it: 'Modifiche a defaults ed enforcement si applicano a caldo (reloadConfig). Parametri infrastrutturali (trustProxy, state.flushIntervalSeconds, log.*, sweepIntervalSeconds) richiedono il riavvio: usa "Salva e riavvia" (i blocchi attivi persistono).',
-      en: 'Changes to defaults and enforcement apply hot (reloadConfig). Infrastructural params (trustProxy, state.flushIntervalSeconds, log.*, sweepIntervalSeconds) require a restart: use "Save & restart" (active blocks persist).'
+      it: 'I campi con ⟳ richiedono il riavvio (usa "Salva e riavvia"; i blocchi attivi persistono). La vista Form normalizza il JSON5 (i commenti dentro custom non vengono preservati).',
+      en: 'Fields marked ⟳ require a restart (use "Save & restart"; active blocks persist). The Form view normalizes JSON5 (comments inside custom are not preserved).'
     }, passData.ctx) %>
   </div>
 
   <div id="messages" class="messages-area mb-2"></div>
 
-  <textarea id="configEditor" class="rl-editor form-control mb-3" rows="22" spellcheck="false"></textarea>
+  <%# ───────────── VISTA C: FORM STRUTTURATO ───────────── %>
+  <div id="formView">
 
-  <div class="card">
-    <div class="card-header small fw-semibold"><%= __({it: 'Riferimento campi', en: 'Field reference'}, passData.ctx) %></div>
-    <div class="card-body small text-muted">
-      <code>enabled, trustProxy ⟳, defaults{findWindowSeconds, maxFailures, shortBlockSeconds, maxShortBlocks, longBlockSeconds, escalationResetSeconds}, state{flushIntervalSeconds ⟳}, log{enabled ⟳, rotateWhenBytes ⟳, retentionDays ⟳}, response{status, retryAfterHeader}, enforcement{enabled, globalLongBlock, status, redirectTo, exemptPaths}, sweepIntervalSeconds ⟳, enableLogging, strictValidation</code>
-      <p class="mb-0 mt-1">⟳ = <%= __({it: 'richiede il riavvio', en: 'requires restart'}, passData.ctx) %></p>
+    <div class="card mb-2"><div class="card-header small fw-semibold"><%= __({it: 'Generale', en: 'General'}, passData.ctx) %></div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-6 col-md-3"><div class="form-check form-switch"><input class="form-check-input rl-field" type="checkbox" id="f_enabled"><label class="form-check-label small" for="f_enabled">enabled</label></div></div>
+          <div class="col-6 col-md-3"><div class="form-check form-switch"><input class="form-check-input rl-field" type="checkbox" id="f_trustProxy"><label class="form-check-label small" for="f_trustProxy">trustProxy ⟳</label></div></div>
+          <div class="col-6 col-md-3"><div class="form-check form-switch"><input class="form-check-input rl-field" type="checkbox" id="f_enableLogging"><label class="form-check-label small" for="f_enableLogging">enableLogging</label></div></div>
+          <div class="col-6 col-md-3"><div class="form-check form-switch"><input class="form-check-input rl-field" type="checkbox" id="f_strictValidation"><label class="form-check-label small" for="f_strictValidation">strictValidation</label></div></div>
+          <div class="col-6 col-md-3">
+            <label class="form-label small mb-0" for="f_sweepIntervalSeconds">sweepIntervalSeconds ⟳</label>
+            <input type="number" class="form-control form-control-sm rl-field" id="f_sweepIntervalSeconds">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-2"><div class="card-header small fw-semibold"><%= __({it: 'Policy di default', en: 'Default policy'}, passData.ctx) %></div>
+      <div class="card-body"><div class="row g-3">
+        <% const defFields = ['findWindowSeconds','maxFailures','shortBlockSeconds','maxShortBlocks','longBlockSeconds','escalationResetSeconds']; %>
+        <% defFields.forEach((name) => { %>
+          <div class="col-6 col-md-4">
+            <label class="form-label small mb-0" for="f_def_<%= name %>"><%= name %></label>
+            <input type="number" class="form-control form-control-sm rl-field" id="f_def_<%= name %>">
+          </div>
+        <% }); %>
+      </div></div>
+    </div>
+
+    <div class="card mb-2"><div class="card-header small fw-semibold"><%= __({it: 'Enforcement (Livello 2)', en: 'Enforcement (Level 2)'}, passData.ctx) %></div>
+      <div class="card-body">
+        <div class="row g-3 mb-2">
+          <div class="col-6 col-md-3"><div class="form-check form-switch"><input class="form-check-input rl-field" type="checkbox" id="f_enf_enabled"><label class="form-check-label small" for="f_enf_enabled">enabled</label></div></div>
+          <div class="col-6 col-md-3"><div class="form-check form-switch"><input class="form-check-input rl-field" type="checkbox" id="f_enf_globalLongBlock"><label class="form-check-label small" for="f_enf_globalLongBlock">globalLongBlock</label></div></div>
+          <div class="col-6 col-md-3"><label class="form-label small mb-0" for="f_enf_status">status</label><input type="number" class="form-control form-control-sm rl-field" id="f_enf_status"></div>
+          <div class="col-6 col-md-3"><label class="form-label small mb-0" for="f_enf_redirectTo">redirectTo</label><input type="text" class="form-control form-control-sm rl-field" id="f_enf_redirectTo"></div>
+        </div>
+        <label class="form-label small mb-1">exemptPaths</label>
+        <div id="exemptPathsList"></div>
+        <button type="button" class="btn btn-outline-secondary btn-sm mt-1" id="btnAddExempt">+ <%= __({it: 'aggiungi', en: 'add'}, passData.ctx) %></button>
+      </div>
+    </div>
+
+    <div class="card mb-2"><div class="card-header small fw-semibold"><%= __({it: 'Logging / Stato / Risposta', en: 'Logging / State / Response'}, passData.ctx) %></div>
+      <div class="card-body"><div class="row g-3">
+        <div class="col-6 col-md-3"><label class="form-label small mb-0" for="f_state_flushIntervalSeconds">state.flushIntervalSeconds ⟳</label><input type="number" class="form-control form-control-sm rl-field" id="f_state_flushIntervalSeconds"></div>
+        <div class="col-6 col-md-3"><div class="form-check form-switch mt-3"><input class="form-check-input rl-field" type="checkbox" id="f_log_enabled"><label class="form-check-label small" for="f_log_enabled">log.enabled ⟳</label></div></div>
+        <div class="col-6 col-md-3"><label class="form-label small mb-0" for="f_log_rotateWhenBytes">log.rotateWhenBytes ⟳</label><input type="number" class="form-control form-control-sm rl-field" id="f_log_rotateWhenBytes"></div>
+        <div class="col-6 col-md-3"><label class="form-label small mb-0" for="f_log_retentionDays">log.retentionDays ⟳</label><input type="number" class="form-control form-control-sm rl-field" id="f_log_retentionDays"></div>
+        <div class="col-6 col-md-3"><label class="form-label small mb-0" for="f_resp_status">response.status</label><input type="number" class="form-control form-control-sm rl-field" id="f_resp_status"></div>
+        <div class="col-6 col-md-3"><div class="form-check form-switch mt-3"><input class="form-check-input rl-field" type="checkbox" id="f_resp_retryAfterHeader"><label class="form-check-label small" for="f_resp_retryAfterHeader">response.retryAfterHeader</label></div></div>
+      </div></div>
     </div>
   </div>
+
+  <%# ───────────── VISTA B: EDITOR JSON5 GREZZO ───────────── %>
+  <div id="jsonView" class="d-none">
+    <textarea id="configEditor" class="rl-editor form-control mb-2" rows="22" spellcheck="false"></textarea>
+  </div>
+
 </div>
 
 <script>
   const apiPrefix   = '<%= passData.apiPrefix %>';
   const adminPrefix = '<%= passData.adminPrefix %>';
   const i18n = {
-    saved:     '<%= __({it: "Impostazioni salvate e ricaricate", en: "Settings saved and reloaded"}, passData.ctx) %>',
-    valid:     '<%= __({it: "JSON5 valido", en: "Valid JSON5"}, passData.ctx) %>',
-    restarting:'<%= __({it: "Salvato — riavvio in corso…", en: "Saved — restarting…"}, passData.ctx) %>',
+    saved:      '<%= __({it: "Impostazioni salvate e ricaricate", en: "Settings saved and reloaded"}, passData.ctx) %>',
+    valid:      '<%= __({it: "JSON5 valido", en: "Valid JSON5"}, passData.ctx) %>',
+    restarting: '<%= __({it: "Salvato — riavvio in corso…", en: "Saved — restarting…"}, passData.ctx) %>',
+    parseError: '<%= __({it: "JSON5 non valido nella vista JSON5", en: "Invalid JSON5 in the JSON5 view"}, passData.ctx) %>',
+    unsaved:    '<%= __({it: "Hai modifiche non salvate.", en: "You have unsaved changes."}, passData.ctx) %>',
   };
 </script>
 <script src="/<%= passData.adminPrefix %>/rateLimiterManagement/settings-editor.js"></script>

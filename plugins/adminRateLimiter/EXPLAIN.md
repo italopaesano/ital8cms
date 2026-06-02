@@ -59,6 +59,37 @@ Il riavvio è sicuro: i blocchi attivi vengono persistiti dallo `stateStore` di
 Tutte le scritture: **backup a rotazione** (`lib/configFileManager.js`,
 `maxBackupsPerFile`) → scrittura **atomica** (temp+rename) → `reload*()`.
 
+## Vista C — form Impostazioni (coordinato con l'editor JSON5)
+
+La pagina Impostazioni offre **due viste sullo stesso contenuto**, con un toggle:
+
+- **Form** (Vista C): campi strutturati raggruppati (Generale, Policy default,
+  Enforcement, Logging/Stato/Risposta), con switch per i booleani, number per le
+  durate, list-editor per `exemptPaths`, e badge ⟳ sui campi che richiedono il riavvio.
+- **JSON5** (Vista B): la textarea grezza (già presente).
+
+**Coordinamento (client-side, server invariato):**
+- La **textarea è la fonte inviata al server** (single source of truth). Il form la
+  rigenera; prima di Valida/Salva, se la vista attiva è il Form, si sincronizza
+  (`gatherForm()` → `JSON.stringify` → textarea) e si invia sempre il contenuto della textarea.
+- Il **toggle sincronizza esplicitamente** la vista sorgente verso quella di
+  destinazione: Form→JSON rigenera la textarea; JSON→Form fa `JSON.parse` e popola
+  i campi (se il parse fallisce, resta in vista JSON con un avviso).
+- `gatherForm()` parte da una copia di `currentCustom`, quindi **preserva le chiavi
+  non gestite dal form** (top-level e nei gruppi annidati).
+- **Dirty-tracking** + `beforeunload`: avviso se si lascia la pagina con modifiche
+  non salvate.
+
+> **Nota sul parsing client.** Il contenuto di `GET /config` è `JSON.stringify` del
+> blocco custom (quindi JSON puro): per il toggle basta `JSON.parse` (nessuna libreria
+> JSON5 nel browser). Se l'utente digita a mano feature JSON5 (commenti, trailing
+> comma) nella textarea, il toggle verso il Form avvisa; il Salva funziona comunque
+> perché il server fa `JSON5.parse`. Coerente col fatto che il salvataggio normalizza
+> il blocco custom (i commenti interni non vengono preservati).
+
+La validazione e la scrittura restano quelle del server (endpoint invariati): la
+Vista C è interamente lato client (EJS + `settings-editor.js`).
+
 ## Validazione
 
 La logica di validazione vive nel servizio (`rateLimiter/lib/configValidator`)
