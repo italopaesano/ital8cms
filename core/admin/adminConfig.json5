@@ -129,6 +129,16 @@
       "label": "Rate Limiter",
       "icon": "🛡️",
       "description": "Monitoraggio blocchi anti brute-force, gestione regole e impostazioni del rate limiter"
+    },
+
+    "csrfManagement": {
+      "type": "plugin",
+      "plugin": "adminCsrfProtection",
+      "enabled": true,
+      "required": false,
+      "label": "Protezione CSRF",
+      "icon": "🔏",
+      "description": "Monitoraggio blocchi CSRF, simulatore di richiesta e impostazioni della protezione anti cross-site request forgery"
     }
   },
 
@@ -146,7 +156,8 @@
     "mediaManagement",
     "analyticsManagement",
     "analyticsSettings",
-    "rateLimiterManagement"
+    "rateLimiterManagement",
+    "csrfManagement"
   ],
 
   // Servizi forniti da plugin (backend)

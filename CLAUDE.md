@@ -3692,7 +3692,7 @@ plugins/csrfProtection/
 
 #### Shared-object API (pull via `pluginSys.getSharedObject('csrfProtection')`)
 
-`validateRequest(ctx)` → `{ ok, status?, error?, reason? }` (used by the core wrap) · `ensureToken(ctx)` · `rotateToken(ctx)` · `getToken(ctx)` · `getConfig()` · `validateConfig(newCustom)` (the last two for the future admin twin).
+`validateRequest(ctx)` → `{ ok, status?, error?, reason? }` (used by the core wrap) · `ensureToken(ctx)` · `rotateToken(ctx)` · `getToken(ctx)`. For the admin twin (`adminCsrfProtection`): `getStats()` (counters + flags), `getRecentBlocks(limit)` (in-memory audit), `simulate(input)` (CSRF tester), `getConfig()`, `validateConfig(newCustom)`, `reloadConfig()` (hot-reload after a Save).
 
 #### Template helpers
 
@@ -3733,10 +3733,51 @@ Even with token + Origin check, setting `sameSite: 'lax'` explicitly on the sess
 
 #### Future Enhancements
 
-- [ ] **Twin admin plugin `adminCsrfProtection`** — GUI to view config / blocked-attempt log / exemptions (Three Views convention)
+- [x] **Twin admin plugin `adminCsrfProtection`** — GUI (Data view + JSON5 editor) — *implemented, see below*
 - [ ] **Per-request token rotation** (currently per-session) as an opt-in stricter mode
 - [ ] **`__Host-` cookie prefix** as an opt-in for HTTPS-only deployments
 - [ ] **CSP-friendly delivery** — option to serve the interceptor as an external script (for strict `Content-Security-Policy` without inline scripts)
+
+---
+
+### Admin CSRF Protection Plugin
+
+#### Overview
+
+The **adminCsrfProtection** plugin is the **twin admin GUI** for the `csrfProtection` service (see *Twin Admin Plugin* + *The Three Views* conventions). It adds the `csrfManagement` admin section to monitor CSRF blocks, test the policy, and edit the protection settings. All routes require root/admin roles `[0, 1]`.
+
+It runs in the **same process** as `csrfProtection`, so it pulls live data/actions via the shared object (`pluginSys.getSharedObject('csrfProtection')`) and resolves the service's folder for the config file via `pluginSys.getPlugin('csrfProtection').pathPluginFolder`. If the service is present but disabled (`custom.enabled=false`), the GUI shows a "disabled" banner.
+
+#### The two views (one section, two pages)
+
+| Page | View | Content |
+|------|------|---------|
+| `index.ejs` | **A — Data** | KPI cards (origin-check, total blocks, blocks by reason, exemptions) + **recent CSRF blocks** table + **CSRF tester** (simulate a request); auto-refresh |
+| `settings.ejs` | **B — Raw JSON5 editor** | `pluginConfig.json5 → custom` (Validate / Save / Save & restart) + field reference |
+
+The **CSRF tester** (`simulate`) lets you input method + path + request Origin + token-present and see the exact verdict (`allowed` / `blocked` + reason) — instructive for understanding exemptions and the Origin layer.
+
+#### API endpoints (roles `[0, 1]`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/adminCsrfProtection/status` | `{ enabled, stats }` |
+| `GET` | `/api/adminCsrfProtection/recent` | Recent blocks (`limit` query) |
+| `POST` | `/api/adminCsrfProtection/simulate` | CSRF tester → verdict |
+| `GET` / `POST` | `/api/adminCsrfProtection/config` | Load / save the `custom` block (save: validate → backup → `editJson5('custom')` → `reloadConfig`) |
+| `POST` | `/api/adminCsrfProtection/validate-config` | Validate config without saving |
+| `POST` | `/api/adminCsrfProtection/restart` | `pluginSys.requestRestart` (for enabling the plugin from disabled) |
+
+#### Propagation
+
+- **Live data** (stats/recent/simulate) read the in-memory state of the service → immediate.
+- **Settings** save + `reloadConfig()` → **hot** for the policy (methods, originCheck, exemptPaths, failureStatus, …). The only case needing a restart is **enabling the plugin from a disabled boot** (middleware + head hook are registered once at boot) → use **"Save & restart"**.
+
+#### Implementation notes
+
+- Settings save uses **`core/editJson5`** to replace only the `custom` block (preserving `active`/`dependency`/comments). Atomic writes + rotating backups (`lib/configFileManager.js`, `maxBackupsPerFile`).
+- The admin pages' own `fetch` POSTs (validate/save/simulate) are protected by CSRF too: the **interceptor** injected by `csrfProtection` adds `X-CSRF-Token` automatically (admin pages carry the `<meta>`), so the client JS needs no token handling.
+- **Config:** `custom.auditLimit` (100), `custom.autoRefreshSeconds` (5), `custom.maxBackupsPerFile` (10). Dependencies: `csrfProtection ^1.0.0`, `bootstrap ^1.0.0`, `simpleI18n ^1.0.0`; node module `json5`.
 
 ---
 
@@ -5622,6 +5663,13 @@ const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
 - `/core/priorityMiddlewares/koaSession.json5` - `SameSite=lax` hardening
 - `/tests/e2e/csrfHelper.js` - E2E token helpers (`getCsrfToken`, `fetchCsrfToken`, `postWithCsrf`)
 
+### Admin CSRF Protection Plugin
+
+- `/plugins/adminCsrfProtection/main.js` - Routes (status/recent/simulate/config/validate-config/restart), shared-object access
+- `/plugins/adminCsrfProtection/lib/configFileManager.js` - Atomic write + rotating backups
+- `/plugins/adminCsrfProtection/adminWebSections/csrfManagement/` - GUI (index = Data view + tester, settings = JSON5 editor + JS/CSS)
+- `/core/admin/adminConfig.json5` - Admin section registration (csrfManagement)
+
 ### Databases
 
 - `/plugins/dbApi/dbFile/mainDb.db` - Main database
@@ -5792,10 +5840,17 @@ When working on this codebase as an AI assistant:
 ---
 
 **Last Updated:** 2026-06-07
-**Version:** 2.12.0
+**Version:** 2.13.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v2.13.0 (2026-06-07): **NEW PLUGIN** - `adminCsrfProtection`, the twin admin GUI for the `csrfProtection` service (Twin Admin Plugin + The Three Views conventions). Key changes:
+  - **Service additions (`csrfProtection`):** in-memory audit (counters + recent-blocks ring buffer, fed by `validateRequest`) and new shared-object API for the GUI: `getStats()`, `getRecentBlocks(limit)`, `simulate(input)` (CSRF tester — evaluates a synthetic request against the live policy), `reloadConfig()` (hot-reload of `custom`).
+  - **adminCsrfProtection:** section `csrfManagement` (registered in `core/admin/adminConfig.json5` + menuOrder; symlink gitignored). Two pages: Data view (`index.ejs`: KPI + recent CSRF blocks + request simulator, auto-refresh) and Settings editor (`settings.ejs`: raw JSON5 of the service's `custom` block, Validate / Save / Save & restart). Routes (roles `[0,1]`): status, recent, simulate, config + validate-config, restart.
+  - **Propagation:** stats/recent/simulate read in-memory state (immediate); settings save uses `core/editJson5` to replace only `custom` (atomic write + rotating backups via `lib/configFileManager.js`) then `reloadConfig()` → hot. Enabling the plugin from a disabled boot needs "Save & restart" (middleware + head hook are boot-time). The GUI's own `fetch` POSTs are covered by the CSRF interceptor automatically (no client token handling).
+  - **Tests:** +30 (csrfProtection audit/stats/simulate; adminCsrfProtection routes + configFileManager), filesystem-isolated via `os.tmpdir()` sandbox. Full jest suite green (79 suites, 2238 tests). Boot verified: plugin loads, section symlink created, `/api/adminCsrfProtection/status` returns 401 unauthenticated.
+  - **Files Added:** `/plugins/adminCsrfProtection/**` (main.js, pluginConfig/Description, lib/configFileManager.js, adminWebSections/csrfManagement/{index,settings}.ejs + {csrf-admin,settings-editor}.js + csrf-admin.css, tests/unit/{routes,configFileManager}.test.js), `/plugins/csrfProtection/tests/unit/audit.test.js`.
+  - **Files Modified:** `/plugins/csrfProtection/main.js` (audit + getStats/getRecentBlocks/simulate/reloadConfig), `/core/admin/adminConfig.json5` (section + menuOrder), `/.gitignore` (section symlink), `/CLAUDE.md`.
 - v2.12.0 (2026-06-07): **NEW PLUGIN** - `csrfProtection`, anti Cross-Site Request Forgery (synchronizer token + Origin check), enforced centrally in the core route-wrap. Key changes:
   - **New plugin: `csrfProtection`**
     - Synchronizer token per-session in `ctx.session.csrfToken` (signed cookie → not forgeable / not readable cross-origin), **rotated on login** (`adminUsers` handler: `if (csrf) csrf.rotateToken(ctx)`, graceful optional pattern)
