@@ -139,6 +139,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
             email: userData.email, // Email
             roleIds: userData.roleIds || [] // Array di ruoli (con fallback per compatibilità)
           };
+
+          // Ruota il token CSRF al cambio di privilegi (login): impedisce il riuso
+          // di un token emesso nella sessione anonima. Plugin csrfProtection opzionale
+          // (se assente/disattivo getSharedObject ritorna null → nessuna rotazione).
+          const csrf = myPluginSys && myPluginSys.getSharedObject('csrfProtection');
+          if (csrf) csrf.rotateToken(ctx);
+
           if(pluginConfig.custom.redirectToHttpReferer){// se è impostata questa variabile la redirezione avverrà nella pagina dalla quale è partita il click per l appagina di login
             ctx.redirect(getSafeRedirectUrl(referrerTo));
           }else{// altrimenti rediriggo la pagina in un url di default definito nella configurazione

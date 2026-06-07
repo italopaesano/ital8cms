@@ -198,6 +198,19 @@
       "description": "Translation function for internationalization",
       "required": true
     },
+    // CSRF: stampa il campo hidden con il token da inserire nei form classici.
+    // required:false → se csrfProtection è disattivo, fallback che ritorna '' (nessun campo).
+    "csrfField": {
+      "plugin": "csrfProtection",
+      "description": "Stampa <input type=hidden name=_csrf> con il token CSRF per i form",
+      "required": false
+    },
+    // CSRF: ritorna il token grezzo (per uso manuale: meta custom, header in JS, ecc.)
+    "csrfToken": {
+      "plugin": "csrfProtection",
+      "description": "Ritorna il token CSRF della sessione corrente",
+      "required": false
+    },
     // Aggiungi altre funzioni globali qui quando necessario
     // Esempio:
     // "formatDate": {

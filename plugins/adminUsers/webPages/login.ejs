@@ -50,6 +50,9 @@ const referrerTo = passData.ctx.headers.referer || '/';
             <!-- Campo hidden per redirect dopo login -->
             <input type="hidden" id="referrerTo" name="referrerTo" value="<%= referrerTo %>">
 
+            <!-- Token CSRF (anti cross-site request forgery) -->
+            <%- csrfField(passData) %>
+
             <!-- Username -->
             <div class="mb-3">
               <label for="username" class="form-label">Username</label>

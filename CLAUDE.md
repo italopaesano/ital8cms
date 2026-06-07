@@ -3627,6 +3627,119 @@ It runs in the **same process** as `rateLimiter`, so it pulls live data/actions 
 
 ---
 
+### CSRF Protection Plugin
+
+#### Overview
+
+The **csrfProtection** plugin defends against **Cross-Site Request Forgery** on every state-changing route (POST/PUT/DELETE/PATCH), the login included. It implements **defense in depth** with two independent layers and enforces them **centrally in the core route-wrap** (not per-handler), so coverage is transparent across all `/api/*` routes.
+
+**Why CSRF is a real risk here:** authorization for every API route is established solely by the session cookie (`pluginSys.#wrapHandlerWithAccessCheck` checks `ctx.session`). With no server-side token or Origin check, the app relied entirely on the browser's implicit `SameSite=Lax` default — which (a) is a client-side mitigation, not an app control, and (b) does **not** cover the same-site sub-domain vector. This plugin closes that gap.
+
+**Key Features:**
+- ✅ **Synchronizer token (per-session):** random 256-bit token in `ctx.session.csrfToken` (signed cookie → not forgeable, not readable cross-origin), **rotated on login**
+- ✅ **Origin/Referer check:** dynamic same-origin (rebuilt from request Host, proxy-aware), with optional allowlist; **token-fallback** when both headers are absent
+- ✅ **Central enforcement:** validated inside the core route-wrap, **before** the auth check → covers public mutating routes like `POST /login`
+- ✅ **Transparent client integration:** a page-hook injects a `<meta>` token + an interceptor that patches **both `fetch` and `XMLHttpRequest`** to add `X-CSRF-Token` on same-origin mutating requests; global helpers `csrfField()`/`csrfToken()` for classic forms
+- ✅ **Optional & graceful:** if disabled, the shared object returns `null` and the core wrap skips validation
+- ✅ **Exemptions:** `exemptPaths` (pattern via `core/patternMatcher.js`) for future webhooks / server-to-server APIs
+
+**Plugin Structure:**
+
+```
+plugins/csrfProtection/
+├── main.js                    # lifecycle, middleware (ensure token), head hook, shared object, global helpers
+├── pluginConfig.json5         # custom config (all toggleable)
+├── pluginDescription.json5
+└── lib/
+    ├── tokenManager.js        # generateToken (base64url 256-bit) + safeEqual (constant-time)
+    ├── originValidator.js     # expected origin (proxy-aware) + Origin/Referer validation
+    ├── requestGuard.js        # evaluate(ctx, custom, matcher) — pure validation logic
+    ├── configValidator.js     # boot-time config validation
+    └── clientInterceptor.js   # inline <script> that patches fetch + XMLHttpRequest
+```
+
+#### Architecture & token lifecycle
+
+```
+1. GENERATE  → plugin middleware (runs before page render): ensures ctx.session.csrfToken
+2. DELIVER   → getHooksPage('head'): <meta name="csrf-token"> + fetch/XHR interceptor;
+               csrfField()/csrfToken() global helpers for classic forms
+3. VALIDATE  → core: pluginSys.#wrapHandlerWithAccessCheck pulls the shared object and
+               calls csrf.validateRequest(ctx) on mutating methods, BEFORE the auth check
+4. ROTATE    → adminUsers login handler: if (csrf) csrf.rotateToken(ctx) after success
+```
+
+**Why a core hook and not (only) a middleware:** plugin middlewares are mounted **after** the router (see `index.js`), so they cannot pre-block an already-matched API route like `POST /login`. Validation must run inside the route-wrap (which executes within the router). The plugin middleware only generates the token for page rendering. *(Same architectural lesson as `rateLimiter`.)*
+
+**Request token source:** header `X-CSRF-Token` (fetch/XHR/multipart upload) **or** body `_csrf` (classic urlencoded forms, parsed by bodyParser before the router). For multipart uploads the body isn't parsed at wrap-time, so the token must arrive via the header (the interceptor handles this).
+
+#### Configuration (`pluginConfig.json5` → `custom`)
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `enabled` | `true` | Off → shared object is `null`, core wrap skips validation |
+| `protectedMethods` | `["POST","PUT","DELETE","PATCH"]` | Mutating methods to protect (`DEL`≡`DELETE`) |
+| `tokenHeaderName` | `"X-CSRF-Token"` | Header used by fetch/XHR |
+| `tokenFieldName` | `"_csrf"` | Hidden field used by classic forms |
+| `metaName` | `"csrf-token"` | `<meta>` name the interceptor reads |
+| `trustProxy` | `false` | Read `X-Forwarded-Host/Proto` (only behind a trusted proxy) |
+| `originCheck.enabled` | `true` | Enable the Origin/Referer layer |
+| `originCheck.allowedOrigins` | `[]` | Extra allowed origins beyond same-origin |
+| `exemptPaths` | `[]` | Patterns exempt from protection (`core/patternMatcher`) |
+| `failureStatus` | `403` | HTTP status on validation failure |
+| `enableLogging` | `true` | Console-log blocked requests |
+| `strictValidation` | `false` | Crash boot on config validation errors |
+
+#### Shared-object API (pull via `pluginSys.getSharedObject('csrfProtection')`)
+
+`validateRequest(ctx)` → `{ ok, status?, error?, reason? }` (used by the core wrap) · `ensureToken(ctx)` · `rotateToken(ctx)` · `getToken(ctx)` · `getConfig()` · `validateConfig(newCustom)` (the last two for the future admin twin).
+
+#### Template helpers
+
+```ejs
+<%# Classic form — hidden input with the token %>
+<form method="POST" action="/api/adminUsers/login">
+  <%- csrfField(passData) %>
+  ...
+</form>
+
+<%# Raw token (for custom JS / meta) %>
+<script>const token = '<%= csrfToken(passData) %>';</script>
+```
+
+Both are whitelisted in `ital8Config.json5 → globalFunctionsWhitelist` (`required: false` → if the plugin is off, the fallback renders `''`). Fetch/XHR need **no** code change: the injected interceptor adds the header automatically.
+
+#### Why the related `SameSite=lax` hardening is necessary
+
+Even with token + Origin check, setting `sameSite: 'lax'` explicitly on the session cookie (`core/priorityMiddlewares/koaSession.json5`) adds value:
+1. **Defense in depth, zero cost:** a second, independent barrier. If a route ever bypassed the wrap or the interceptor regressed, Lax still reduces cookie attachment on cross-**site** POSTs.
+2. **Determinism:** removes reliance on the browser's implicit "Lax-by-default", which varies by browser/version. The behavior is now explicit and documented in the cookie itself.
+3. **Covers methods the token doesn't:** the token guards only mutating methods; any future GET-based sensitive action would be unprotected by the token → there SameSite is the only barrier.
+
+⚠️ **Precise scope:** `SameSite=lax` does **not** stop the *same-site sub-domain* vector (Lax cookies are sent to same-site origins) — that is covered by the **token**. The `__Host-` prefix (which would block sub-domain cookie-tossing) is **not** applied because it requires Secure + `path=/` and would break plain-HTTP (port 3000) and local dev; consider it in HTTPS-only deployments.
+
+#### Reference Files
+
+| File | Purpose |
+|------|---------|
+| `/plugins/csrfProtection/main.js` | Lifecycle, middleware, head hook, shared object, global helpers |
+| `/plugins/csrfProtection/lib/tokenManager.js` | Token generation + constant-time compare |
+| `/plugins/csrfProtection/lib/originValidator.js` | Origin/Referer validation (proxy-aware) |
+| `/plugins/csrfProtection/lib/requestGuard.js` | Pure request-validation logic |
+| `/plugins/csrfProtection/lib/clientInterceptor.js` | fetch/XHR interceptor script |
+| `/core/pluginSys.js` | Enforcement hook in `#wrapHandlerWithAccessCheck` |
+| `/core/priorityMiddlewares/koaSession.json5` | `SameSite=lax` hardening |
+| `/tests/e2e/csrfHelper.js` | E2E helpers (token extraction + `postWithCsrf`) |
+
+#### Future Enhancements
+
+- [ ] **Twin admin plugin `adminCsrfProtection`** — GUI to view config / blocked-attempt log / exemptions (Three Views convention)
+- [ ] **Per-request token rotation** (currently per-session) as an opt-in stricter mode
+- [ ] **`__Host-` cookie prefix** as an opt-in for HTTPS-only deployments
+- [ ] **CSP-friendly delivery** — option to serve the interceptor as an external script (for strict `Content-Security-Policy` without inline scripts)
+
+---
+
 ### Checking Authentication in Code
 
 ```javascript
@@ -5497,6 +5610,18 @@ const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
 - `/plugins/adminRateLimiter/adminWebSections/rateLimiterManagement/` - GUI (index/rules/settings + JS/CSS)
 - `/core/admin/adminConfig.json5` - Admin section registration (rateLimiterManagement)
 
+### CSRF Protection Plugin
+
+- `/plugins/csrfProtection/main.js` - Lifecycle, ensure-token middleware, head hook (meta + interceptor), shared object, global helpers
+- `/plugins/csrfProtection/lib/tokenManager.js` - Token generation (base64url) + constant-time compare
+- `/plugins/csrfProtection/lib/originValidator.js` - Origin/Referer validation (Host dynamic, proxy-aware)
+- `/plugins/csrfProtection/lib/requestGuard.js` - Pure `evaluate(ctx, custom, matcher)` validation logic
+- `/plugins/csrfProtection/lib/clientInterceptor.js` - Inline fetch/XHR interceptor script
+- `/plugins/csrfProtection/pluginConfig.json5` - Feature configuration
+- `/core/pluginSys.js` - Enforcement hook inside `#wrapHandlerWithAccessCheck`
+- `/core/priorityMiddlewares/koaSession.json5` - `SameSite=lax` hardening
+- `/tests/e2e/csrfHelper.js` - E2E token helpers (`getCsrfToken`, `fetchCsrfToken`, `postWithCsrf`)
+
 ### Databases
 
 - `/plugins/dbApi/dbFile/mainDb.db` - Main database
@@ -5666,11 +5791,22 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2026-06-01
-**Version:** 2.11.0
+**Last Updated:** 2026-06-07
+**Version:** 2.12.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v2.12.0 (2026-06-07): **NEW PLUGIN** - `csrfProtection`, anti Cross-Site Request Forgery (synchronizer token + Origin check), enforced centrally in the core route-wrap. Key changes:
+  - **New plugin: `csrfProtection`**
+    - Synchronizer token per-session in `ctx.session.csrfToken` (signed cookie → not forgeable / not readable cross-origin), **rotated on login** (`adminUsers` handler: `if (csrf) csrf.rotateToken(ctx)`, graceful optional pattern)
+    - Origin/Referer check as a second layer: expected origin rebuilt dynamically from the request Host (proxy-aware via `trustProxy` + `X-Forwarded-Host/Proto`), optional `allowedOrigins`; **token-fallback** when both headers are absent
+    - Pure validation in `lib/requestGuard.js` (`evaluate(ctx, custom, matcher)`); token in `lib/tokenManager.js` (base64url 256-bit + `timingSafeEqual`)
+  - **Central enforcement (core touchpoint):** `pluginSys.#wrapHandlerWithAccessCheck` pulls `getSharedObject('csrfProtection')` and calls `validateRequest(ctx)` on mutating methods **before** the auth check → covers public mutating routes (e.g. `POST /login`). Optional/graceful: disabled → `null` → validation skipped. *(Same "guard not middleware" lesson as `rateLimiter`: plugin middlewares run after the router.)*
+  - **Client integration (enforce direct):** `getHooksPage('head')` injects `<meta name="csrf-token">` + an interceptor that patches **both `window.fetch` and `XMLHttpRequest`** to add `X-CSRF-Token` on same-origin mutating requests (covers `adminMedia`'s XHR upload). Global helpers `csrfField()` / `csrfToken()` (whitelisted in `ital8Config.json5`, `required:false`) for classic forms — `login.ejs` / `logout.ejs` updated.
+  - **Hardening:** explicit `sameSite: 'lax'` on the session cookie (`koaSession.json5`) as an independent, deterministic second barrier (does NOT cover the same-site sub-domain vector — that's the token's job; `__Host-` intentionally not applied due to the HTTP+HTTPS dual setup).
+  - **Tests:** 73 unit (tokenManager, originValidator, configValidator, requestGuard, clientInterceptor, main integration) + E2E helper (`tests/e2e/csrfHelper.js`) and spec updates (accessControl test-access POSTs, api/globalPrefix login POSTs, auth logout) to carry the token under enforce. Full jest suite green (76 suites, 2208 tests). End-to-end behavior verified via curl: POST without token → 403, cross-origin POST with token → 403, same-origin POST with token (body or header) → passes.
+  - **Files Added:** `/plugins/csrfProtection/**` (main.js, pluginConfig/Description, lib/{tokenManager,originValidator,requestGuard,configValidator,clientInterceptor}.js, tests/unit/*.test.js), `/tests/e2e/csrfHelper.js`.
+  - **Files Modified:** `/core/pluginSys.js` (enforcement hook), `/core/priorityMiddlewares/koaSession.json5` (SameSite), `/ital8Config.json5` (whitelist csrfField/csrfToken), `/plugins/adminUsers/main.js` (rotate on login), `/plugins/adminUsers/webPages/{login,logout}.ejs` (csrfField), `/tests/e2e/{accessControl,api,auth,globalPrefix}.spec.js`, `/CLAUDE.md`.
 - v2.11.0 (2026-06-01): **NEW PLUGIN** - `adminRateLimiter`, the twin admin GUI for the `rateLimiter` service (Twin Admin Plugin + The Three Views conventions). Built incrementally:
   - **rateLimiter foundations (Step 1):** engine `release` / `releaseAllForClient` / `forceBlock`; `attemptLog.readRecent`; shared-object API for admin (`releaseBlock`, `releaseAllForClient`, `banClient`, `getStats`, `getRecentAttempts`, `getConfig`, `validateRules`, `validateConfig`, `reloadRules`, `reloadConfig`); L2 enforcement middleware refactored to read `custom` LIVE (so `reloadConfig()` applies enforcement changes without restart).
   - **adminRateLimiter (Steps 2-5):** section `rateLimiterManagement` (registered in `core/admin/adminConfig.json5` + menuOrder; symlink gitignored). Three pages: Data view (`index.ejs`: KPI + active blocks + audit, auto-refresh), Rules editor (`rules.ejs`: raw JSON5 of `protectedRoutes.json5`), Settings editor (`settings.ejs`: raw JSON5 of the `custom` block, with "Save & restart"). Routes (roles `[0,1]`): status, attempts, unblock, ban, rules + validate-rules, config + validate-config, restart.
