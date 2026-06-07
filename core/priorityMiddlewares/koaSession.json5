@@ -9,6 +9,16 @@
         "httpOnly": true,
         "signed": true,
         "rolling": false,
-        "renew": false
+        "renew": false,
+        // SameSite=lax: difesa in profondità anti-CSRF (oltre al plugin csrfProtection).
+        // Rende esplicito e deterministico il comportamento del cookie (niente più
+        // affidamento al "Lax-by-default" implicito, variabile per browser/versione).
+        // 'lax' (non 'strict') così i link top-level cross-site verso il sito continuano
+        // a inviare il cookie (UX dei link esterni preservata).
+        // NOTA: 'lax' NON copre il vettore same-site sotto-dominio — quello lo copre il
+        // token sincronizzatore del plugin csrfProtection. I due layer sono complementari.
+        // __Host- prefix NON applicato: richiede Secure+path=/ e romperebbe l'HTTP puro
+        // (porta 3000) e lo sviluppo locale; valutarlo in deployment solo-HTTPS.
+        "sameSite": "lax"
       }
 }

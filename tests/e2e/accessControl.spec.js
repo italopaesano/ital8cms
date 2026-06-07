@@ -1,6 +1,7 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
 const { TEST_PASSWORD, TEST_USERS, URLS } = require('./testConstants');
+const { postWithCsrf } = require('./csrfHelper');
 
 /**
  * E2E Tests: Access Control System
@@ -171,7 +172,7 @@ test.describe('Access Control API - Admin Only', () => {
   test('test-access API should work for admin', async ({ page }) => {
     await loginAs(page, TEST_USERS.admin.username, TEST_PASSWORD);
 
-    const response = await page.request.post('/api/adminAccessControl/test-access', {
+    const response = await postWithCsrf(page, '/api/adminAccessControl/test-access', {
       data: {
         url: '/admin/dashboard',
         roleIds: [2] // editor role
@@ -189,7 +190,7 @@ test.describe('Access Control API - Admin Only', () => {
   test('test-access should confirm admin role is allowed', async ({ page }) => {
     await loginAs(page, TEST_USERS.admin.username, TEST_PASSWORD);
 
-    const response = await page.request.post('/api/adminAccessControl/test-access', {
+    const response = await postWithCsrf(page, '/api/adminAccessControl/test-access', {
       data: {
         url: '/admin/dashboard',
         roleIds: [1] // admin role
@@ -211,7 +212,7 @@ test.describe('Role Verification via Test-Access API', () => {
   });
 
   test('root role (0) should be allowed to admin', async ({ page }) => {
-    const response = await page.request.post('/api/adminAccessControl/test-access', {
+    const response = await postWithCsrf(page, '/api/adminAccessControl/test-access', {
       data: { url: '/admin/', roleIds: [0] }
     });
     const data = await response.json();
@@ -219,7 +220,7 @@ test.describe('Role Verification via Test-Access API', () => {
   });
 
   test('editor role (2) should be denied from admin', async ({ page }) => {
-    const response = await page.request.post('/api/adminAccessControl/test-access', {
+    const response = await postWithCsrf(page, '/api/adminAccessControl/test-access', {
       data: { url: '/admin/', roleIds: [2] }
     });
     const data = await response.json();
@@ -227,7 +228,7 @@ test.describe('Role Verification via Test-Access API', () => {
   });
 
   test('selfEditor role (3) should be denied from admin', async ({ page }) => {
-    const response = await page.request.post('/api/adminAccessControl/test-access', {
+    const response = await postWithCsrf(page, '/api/adminAccessControl/test-access', {
       data: { url: '/admin/', roleIds: [3] }
     });
     const data = await response.json();
@@ -235,7 +236,7 @@ test.describe('Role Verification via Test-Access API', () => {
   });
 
   test('user profile should be accessible by any authenticated user', async ({ page }) => {
-    const response = await page.request.post('/api/adminAccessControl/test-access', {
+    const response = await postWithCsrf(page, '/api/adminAccessControl/test-access', {
       data: { url: '/pluginPages/adminUsers/userProfile.ejs', roleIds: [3] }
     });
     const data = await response.json();
@@ -243,7 +244,7 @@ test.describe('Role Verification via Test-Access API', () => {
   });
 
   test('public page should be accessible by unauthenticated user', async ({ page }) => {
-    const response = await page.request.post('/api/adminAccessControl/test-access', {
+    const response = await postWithCsrf(page, '/api/adminAccessControl/test-access', {
       data: { url: '/some-public-page.ejs', roleIds: [] }
     });
     const data = await response.json();

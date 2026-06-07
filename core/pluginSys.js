@@ -573,6 +573,22 @@ class pluginSys{
    */
   #wrapHandlerWithAccessCheck(originalHandler, access) {
     return async (ctx) => {
+      // ── Protezione CSRF (anti cross-site request forgery) ──
+      // Eseguita PRIMA del controllo auth così copre anche le rotte pubbliche
+      // mutanti (es. POST /login). Il plugin csrfProtection è OPZIONALE: se
+      // assente/disattivo getSharedObject ritorna null e la validazione viene
+      // saltata (degradazione graziosa). La logica (metodi mutanti, esenzioni,
+      // token, Origin) è interamente nel plugin: qui rispettiamo solo il verdetto.
+      const csrf = this.getSharedObject('csrfProtection');
+      if (csrf && typeof csrf.validateRequest === 'function') {
+        const verdict = csrf.validateRequest(ctx);
+        if (verdict && verdict.ok === false) {
+          ctx.status = verdict.status || 403;
+          ctx.body = { error: verdict.error || 'CSRF validation failed' };
+          return;
+        }
+      }
+
       if (access.requiresAuth) {
         // Verifica autenticazione
         if (!ctx.session || !ctx.session.authenticated) {

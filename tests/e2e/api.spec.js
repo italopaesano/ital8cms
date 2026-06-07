@@ -1,5 +1,6 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
+const { fetchCsrfToken } = require('./csrfHelper');
 
 test.describe('API Endpoints', () => {
   test('should serve Bootstrap CSS', async ({ request }) => {
@@ -14,9 +15,12 @@ test.describe('API Endpoints', () => {
   });
 
   test('should have adminUsers login endpoint (POST only)', async ({ request }) => {
-    // Login is a POST-only endpoint; GET returns 405 Method Not Allowed
+    // Login is a POST-only endpoint; GET returns 405 Method Not Allowed.
+    // Con csrfProtection attivo serve il token: lo otteniamo dalla pagina di login
+    // (che imposta anche il cookie di sessione nello stesso request context).
+    const csrfToken = await fetchCsrfToken(request);
     const response = await request.post('/api/adminUsers/login', {
-      form: { username: 'nonexistent', password: 'test' }
+      form: { username: 'nonexistent', password: 'test', _csrf: csrfToken }
     });
     // POST should return a redirect (302) or error, not 405
     expect([302, 200]).toContain(response.status());

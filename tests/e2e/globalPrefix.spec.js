@@ -2,6 +2,7 @@
 const { test, expect } = require('@playwright/test');
 const loadJson5 = require('../../core/loadJson5');
 const path = require('path');
+const { fetchCsrfToken } = require('./csrfHelper');
 
 /**
  * E2E Tests per globalPrefix
@@ -73,9 +74,15 @@ test.describe('GlobalPrefix - API Routes', () => {
       ? '/api/adminUsers/login'
       : `${globalPrefix}/api/adminUsers/login`;
 
-    // Login is POST-only; verify POST works (returns redirect on invalid credentials)
+    // Login is POST-only; verify POST works (returns redirect on invalid credentials).
+    // Con csrfProtection attivo serve il token: lo leggiamo dalla pagina di login
+    // (rispettando il globalPrefix), che imposta anche il cookie di sessione.
+    const loginPagePath = globalPrefix === ''
+      ? '/pluginPages/adminUsers/login.ejs'
+      : `${globalPrefix}/pluginPages/adminUsers/login.ejs`;
+    const csrfToken = await fetchCsrfToken(request, loginPagePath);
     const response = await request.post(loginPath, {
-      form: { username: 'nonexistent', password: 'test' }
+      form: { username: 'nonexistent', password: 'test', _csrf: csrfToken }
     });
     expect([302, 200]).toContain(response.status());
   });

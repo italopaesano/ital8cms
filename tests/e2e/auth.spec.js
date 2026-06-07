@@ -1,6 +1,7 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
 const { TEST_PASSWORD, TEST_USERS, URLS } = require('./testConstants');
+const { postWithCsrf } = require('./csrfHelper');
 
 /**
  * E2E Tests: Authentication System
@@ -158,8 +159,8 @@ test.describe('Logout', () => {
       await logoutForm.locator('button[type="submit"], input[type="submit"]').first().click();
       await page.waitForLoadState('networkidle');
     } else {
-      // If no form, use API directly
-      await page.request.post(URLS.logoutApi, {
+      // If no form, use API directly (con token CSRF letto dal <meta> della pagina)
+      await postWithCsrf(page, URLS.logoutApi, {
         form: { referrerTo: '/' }
       });
     }

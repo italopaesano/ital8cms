@@ -1,0 +1,9 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "name": "csrfProtection",
+  "version": "1.0.0",
+  "description": "Anti-CSRF: token sincronizzatore per-sessione + validazione Origin/Referer, applicati centralmente nel route-wrap del core. Inietta meta token + interceptor fetch/XHR via page hooks.",
+  "author": "Italo Paesano",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC"
+}

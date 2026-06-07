@@ -41,6 +41,9 @@ const referrerTo = passData.ctx.headers.referer || '/';
     <!-- Il form invia una richiesta POST all'endpoint API -->
     <form method="POST" action="/<%= passData.apiPrefix %>/adminUsers/logout">
       <input type="hidden" id="referrerTo" name="referrerTo" value="<%= referrerTo %>">
+
+      <!-- Token CSRF (anti cross-site request forgery) -->
+      <%- csrfField(passData) %>
       <button type="submit" class="btn btn-danger w-100">Conferma Logout</button>
       <a href="javascript:history.back()" class="btn btn-secondary w-100 mt-2">Annulla</a>
     </form>
