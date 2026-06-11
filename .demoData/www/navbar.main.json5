@@ -1,0 +1,39 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+// Navbar configuration: main horizontal navbar
+{
+  "settings": {
+    "type": "horizontal",
+    "colorScheme": "dark",
+    "bgClass": "bg-primary",
+    "expandAt": "lg",
+    "containerClass": "container-fluid",
+    "autoActive": true,
+    "id": "navbarMain",
+  },
+
+  "sections": {
+    "left": [
+      { "label": "Home", "href": "/", "icon": "<i class='bi bi-house'></i>" },
+      { "label": "Bootstrap Test", "href": "/test_bootstrap.ejs", "icon": "<i class='bi bi-bootstrap'></i>" },
+      {
+        "type": "dropdown",
+        "label": "Pages",
+        "icon": "<i class='bi bi-file-earmark'></i>",
+        "items": [
+          { "label": "Hello World", "href": "/hello_word.ejs" },
+          { "label": "i18n Test", "href": "/i18n-test.ejs" },
+          { "type": "divider" },
+          { "label": "Theme Test", "href": "/prova_thema.ejs" },
+        ],
+      },
+      { "type": "separator" },
+      { "label": "Admin", "href": "/admin", "icon": "<i class='bi bi-gear'></i>", "requiresAuth": true, "allowedRoles": [0, 1] },
+    ],
+
+    "right": [
+      { "label": "Login", "href": "/pluginPages/adminUsers/login.ejs", "icon": "<i class='bi bi-box-arrow-in-right'></i>", "showWhen": "unauthenticated" },
+      { "label": "Profile", "href": "/pluginPages/adminUsers/userProfile.ejs", "icon": "<i class='bi bi-person-circle'></i>", "showWhen": "authenticated" },
+      { "label": "Logout", "href": "/pluginPages/adminUsers/logout.ejs", "icon": "<i class='bi bi-box-arrow-right'></i>", "showWhen": "authenticated" },
+    ],
+  },
+}

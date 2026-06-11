@@ -1,0 +1,66 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// EXAMPLE: Offcanvas navbar with offcanvasAlways: true
+// Demonstrates: hamburger menu ALWAYS visible (never expands to inline navbar),
+//               offcanvas from end (right side), custom id
+//
+{
+  "settings": {
+    "type": "offcanvas",
+    "colorScheme": "dark",
+    "bgClass": "bg-dark",
+    "expandAt": "lg",              // ignored when offcanvasAlways: true
+    "containerClass": "container-fluid",
+    "autoActive": true,
+    "offcanvasAlways": true,       // hamburger always visible, never inline
+    "position": "end",             // offcanvas slides from right
+    "id": "navbarOffcanvasAlways",
+  },
+
+  "sections": {
+    "left": [
+      {
+        "label": "Home",
+        "href": "/navbarExamples/offcanvasAlways.ejs",
+        "icon": "<i class='bi bi-house'></i>",
+      },
+      {
+        "label": "Gallery",
+        "href": "#gallery",
+        "icon": "<i class='bi bi-images'></i>",
+      },
+      {
+        "label": "Blog",
+        "href": "#blog",
+        "icon": "<i class='bi bi-journal-richtext'></i>",
+      },
+      {
+        "type": "dropdown",
+        "label": "More",
+        "icon": "<i class='bi bi-three-dots'></i>",
+        "items": [
+          { "label": "About Us", "href": "#about" },
+          { "label": "Team", "href": "#team" },
+          { "label": "FAQ", "href": "#faq" },
+          { "type": "divider" },
+          { "label": "Contact", "href": "#contact" },
+        ],
+      },
+    ],
+
+    "right": [
+      {
+        "label": "Login",
+        "href": "/pluginPages/adminUsers/login.ejs",
+        "icon": "<i class='bi bi-box-arrow-in-right'></i>",
+        "showWhen": "unauthenticated",
+      },
+      {
+        "label": "Logout",
+        "href": "/pluginPages/adminUsers/logout.ejs",
+        "icon": "<i class='bi bi-box-arrow-right'></i>",
+        "showWhen": "authenticated",
+      },
+    ],
+  },
+}

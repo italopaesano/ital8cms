@@ -1,0 +1,38 @@
+<%#
+  ital8cms Page Metadata
+  Theme: placeholderExample
+  Template: templates/minimal.template.ejs
+  Created: 2025-12-10T21:35:53.592Z
+  Last modified: 2025-12-10T21:35:53.592Z
+%>
+<%#
+================================================================================
+TEMPLATE: Minimal - Simple Template with Title and Body
+================================================================================
+Minimal template with only two placeholders: title and body
+================================================================================
+%>
+
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs' ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs' ) ) %>
+
+<%# Page Container %>
+<div class="container my-5">
+    <div class="row">
+        <div class="col-lg-10 mx-auto">
+
+            <%# Page Title - PLACEHOLDER TEXT %>
+            <%# PLACEHOLDER name:pageTitle type:text maxlength:200 required:true label:"Titolo Pagina" description:"Titolo principale della pagina" %>
+titolo prova 2
+<%# /PLACEHOLDER %>
+
+            <%# Page Body - PLACEHOLDER HTML %>
+            <%# PLACEHOLDER name:pageBody type:html editor:wysiwyg label:"Contenuto Pagina" description:"Contenuto principale della pagina" required:true %>
+contenuto , prova2 minial
+<%# /PLACEHOLDER %>
+
+        </div>
+    </div>
+</div>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs' ) ) %>
