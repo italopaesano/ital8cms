@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="<%= passData.ctx.state.lang %>">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <%# NUOVA SINTASSI GLOBALE: usa __() direttamente (consigliata) %>
+  <title><%- __({
+    key: "page_title",
+    it: "Test Internazionalizzazione",
+    en: "Internationalization Test",
+    es: "Prueba de Internacionalización",
+    fr: "Test d'Internationalisation",
+    de: "Internationalisierungstest"
+  }, passData.ctx) %></title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      border-bottom: 3px solid #007bff;
+      padding-bottom: 10px;
+    }
+    .lang-switcher {
+      display: flex;
+      gap: 10px;
+      margin: 20px 0;
+      flex-wrap: wrap;
+    }
+    .lang-switcher a {
+      padding: 8px 16px;
+      background: #007bff;
+      color: white;
+      text-decoration: none;
+      border-radius: 4px;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    .lang-switcher a:hover {
+      background: #0056b3;
+    }
+    .lang-switcher a.active {
+      background: #28a745;
+    }
+    .example {
+      margin: 20px 0;
+      padding: 15px;
+      background: #f8f9fa;
+      border-left: 4px solid #007bff;
+    }
+    .info {
+      background: #e7f3ff;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 20px 0;
+    }
+    code {
+      background: #f4f4f4;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+    }
+    .syntax-comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin: 20px 0;
+    }
+    .syntax-box {
+      padding: 15px;
+      border-radius: 4px;
+      border: 2px solid #ddd;
+    }
+    .syntax-box.global {
+      border-color: #28a745;
+      background: #f0fff4;
+    }
+    .syntax-box.local {
+      border-color: #007bff;
+      background: #e7f3ff;
+    }
+    .syntax-box h4 {
+      margin-top: 0;
+      font-size: 16px;
+    }
+    .syntax-box pre {
+      background: #f8f9fa;
+      padding: 10px;
+      border-radius: 3px;
+      overflow-x: auto;
+      font-size: 12px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 3px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+    .badge.new {
+      background: #28a745;
+      color: white;
+    }
+    .badge.legacy {
+      background: #007bff;
+      color: white;
+    }
+    @media (max-width: 768px) {
+      .syntax-comparison {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <%# NUOVA SINTASSI GLOBALE %>
+    <h1><%- __({
+      key: "welcome",
+      it: "Benvenuto nel Test i18n",
+      en: "Welcome to i18n Test",
+      es: "Bienvenido a la Prueba i18n",
+      fr: "Bienvenue au Test i18n",
+      de: "Willkommen beim i18n-Test"
+    }, passData.ctx) %></h1>
+
+    <div class="info">
+      <strong><%- passData.plugin.simpleI18n.__({
+        key: "current_lang",
+        it: "Lingua corrente:",
+        en: "Current language:",
+        es: "Idioma actual:",
+        fr: "Langue actuelle:",
+        de: "Aktuelle Sprache:"
+      }, passData.ctx) %></strong>
+      <code><%= passData.ctx.state.lang.toUpperCase() %></code>
+    </div>
+
+    <h2><%- passData.plugin.simpleI18n.__({
+      key: "switch_lang",
+      it: "Cambia Lingua",
+      en: "Switch Language",
+      es: "Cambiar Idioma",
+      fr: "Changer de Langue",
+      de: "Sprache Wechseln"
+    }, passData.ctx) %></h2>
+
+    <div class="lang-switcher">
+      <a href="?lang=en" class="<%= passData.ctx.state.lang === 'en' ? 'active' : '' %>">🇬🇧 English</a>
+      <a href="?lang=it" class="<%= passData.ctx.state.lang === 'it' ? 'active' : '' %>">🇮🇹 Italiano</a>
+      <a href="?lang=es" class="<%= passData.ctx.state.lang === 'es' ? 'active' : '' %>">🇪🇸 Español</a>
+      <a href="?lang=fr" class="<%= passData.ctx.state.lang === 'fr' ? 'active' : '' %>">🇫🇷 Français</a>
+      <a href="?lang=de" class="<%= passData.ctx.state.lang === 'de' ? 'active' : '' %>">🇩🇪 Deutsch</a>
+    </div>
+
+    <%# SEZIONE COMPARAZIONE SINTASSI %>
+    <h2>📝 <%- __({
+      key: "syntax_comparison_title",
+      it: "Confronto Sintassi",
+      en: "Syntax Comparison",
+      es: "Comparación de Sintaxis",
+      fr: "Comparaison de Syntaxe",
+      de: "Syntaxvergleich"
+    }, passData.ctx) %></h2>
+
+    <div class="info">
+      <p><strong><%- __({
+        key: "syntax_info",
+        it: "A partire da questa versione, la funzione di traduzione __() è disponibile in DUE modalità:",
+        en: "Starting from this version, the translation function __() is available in TWO ways:",
+        es: "A partir de esta versión, la función de traducción __() está disponible en DOS formas:",
+        fr: "À partir de cette version, la fonction de traduction __() est disponible de DEUX manières:",
+        de: "Ab dieser Version ist die Übersetzungsfunktion __() in ZWEI Arten verfügbar:"
+      }, passData.ctx) %></strong></p>
+    </div>
+
+    <div class="syntax-comparison">
+      <div class="syntax-box global">
+        <h4>✨ <%- __({
+          key: "global_syntax",
+          it: "Sintassi Globale",
+          en: "Global Syntax",
+          es: "Sintaxis Global",
+          fr: "Syntaxe Globale",
+          de: "Globale Syntax"
+        }, passData.ctx) %> <span class="badge new"><%- __({
+          key: "recommended",
+          it: "CONSIGLIATA",
+          en: "RECOMMENDED",
+          es: "RECOMENDADA",
+          fr: "RECOMMANDÉE",
+          de: "EMPFOHLEN"
+        }, passData.ctx) %></span></h4>
+        <p><%- __({
+          key: "global_description",
+          it: "Usa direttamente __() senza prefisso",
+          en: "Use __() directly without prefix",
+          es: "Usa __() directamente sin prefijo",
+          fr: "Utilisez __() directement sans préfixe",
+          de: "Verwenden Sie __() direkt ohne Präfix"
+        }, passData.ctx) %></p>
+        <pre>&lt;%- __({
+  it: "Ciao Mondo",
+  en: "Hello World"
+}, passData.ctx) %&gt;</pre>
+        <p><strong><%- __({
+          key: "result",
+          it: "Risultato:",
+          en: "Result:",
+          es: "Resultado:",
+          fr: "Résultat:",
+          de: "Ergebnis:"
+        }, passData.ctx) %></strong> <%- __({
+          key: "global_example",
+          it: "Ciao Mondo",
+          en: "Hello World",
+          es: "Hola Mundo",
+          fr: "Bonjour le Monde",
+          de: "Hallo Welt"
+        }, passData.ctx) %></p>
+      </div>
+
+      <div class="syntax-box local">
+        <h4>🔧 <%- __({
+          key: "local_syntax",
+          it: "Sintassi Locale",
+          en: "Local Syntax",
+          es: "Sintaxis Local",
+          fr: "Syntaxe Locale",
+          de: "Lokale Syntax"
+        }, passData.ctx) %> <span class="badge legacy"><%- __({
+          key: "legacy",
+          it: "LEGACY",
+          en: "LEGACY",
+          es: "LEGACY",
+          fr: "LEGACY",
+          de: "LEGACY"
+        }, passData.ctx) %></span></h4>
+        <p><%- __({
+          key: "local_description",
+          it: "Usa il percorso completo del plugin",
+          en: "Use the full plugin path",
+          es: "Usa la ruta completa del plugin",
+          fr: "Utilisez le chemin complet du plugin",
+          de: "Verwenden Sie den vollständigen Plugin-Pfad"
+        }, passData.ctx) %></p>
+        <pre>&lt;%- passData.plugin.simpleI18n.__({
+  it: "Ciao Mondo",
+  en: "Hello World"
+}, passData.ctx) %&gt;</pre>
+        <p><strong><%- __({
+          key: "result",
+          it: "Risultato:",
+          en: "Result:",
+          es: "Resultado:",
+          fr: "Résultat:",
+          de: "Ergebnis:"
+        }, passData.ctx) %></strong> <%- passData.plugin.simpleI18n.__({
+          key: "local_example",
+          it: "Ciao Mondo",
+          en: "Hello World",
+          es: "Hola Mundo",
+          fr: "Bonjour le Monde",
+          de: "Hallo Welt"
+        }, passData.ctx) %></p>
+      </div>
+    </div>
+
+    <div class="info">
+      <p><strong>⚠️ <%- __({
+        key: "important_note",
+        it: "Nota Importante:",
+        en: "Important Note:",
+        es: "Nota Importante:",
+        fr: "Note Importante:",
+        de: "Wichtiger Hinweis:"
+      }, passData.ctx) %></strong></p>
+      <p><%- __({
+        key: "both_work",
+        it: "Entrambe le sintassi funzionano perfettamente! La versione locale (passData.plugin.simpleI18n.__) rimarrà SEMPRE disponibile per garantire la compatibilità con il codice esistente.",
+        en: "Both syntaxes work perfectly! The local version (passData.plugin.simpleI18n.__) will ALWAYS remain available to ensure compatibility with existing code.",
+        es: "¡Ambas sintaxis funcionan perfectamente! La versión local (passData.plugin.simpleI18n.__) permanecerá SIEMPRE disponible para garantizar la compatibilidad con el código existente.",
+        fr: "Les deux syntaxes fonctionnent parfaitement! La version locale (passData.plugin.simpleI18n.__) restera TOUJOURS disponible pour garantir la compatibilité avec le code existant.",
+        de: "Beide Syntaxen funktionieren perfekt! Die lokale Version (passData.plugin.simpleI18n.__) wird IMMER verfügbar bleiben, um die Kompatibilität mit vorhandenem Code sicherzustellen."
+      }, passData.ctx) %></p>
+    </div>
+
+    <h2><%- __({
+      key: "examples_title",
+      it: "Esempi di Traduzione",
+      en: "Translation Examples",
+      es: "Ejemplos de Traducción",
+      fr: "Exemples de Traduction",
+      de: "Übersetzungsbeispiele"
+    }, passData.ctx) %></h2>
+
+    <div class="example">
+      <%# ESEMPIO CON SINTASSI GLOBALE (NUOVA) %>
+      <h3>✨ <%- __({
+        key: "example1_title",
+        it: "1. Traduzione Semplice (sintassi globale)",
+        en: "1. Simple Translation (global syntax)",
+        es: "1. Traducción Simple (sintaxis global)",
+        fr: "1. Traduction Simple (syntaxe globale)",
+        de: "1. Einfache Übersetzung (globale Syntax)"
+      }, passData.ctx) %></h3>
+      <p><%- __({
+        key: "example1_text",
+        it: "Questa è una traduzione semplice senza variabili.",
+        en: "This is a simple translation without variables.",
+        es: "Esta es una traducción simple sin variables.",
+        fr: "Ceci est une traduction simple sans variables.",
+        de: "Dies ist eine einfache Übersetzung ohne Variablen."
+      }, passData.ctx) %></p>
+    </div>
+
+    <div class="example">
+      <%# ESEMPIO CON SINTASSI LOCALE (LEGACY) - Dimostra che entrambe le sintassi funzionano %>
+      <h3>🔧 <%- passData.plugin.simpleI18n.__({
+        key: "example2_title",
+        it: "2. Traduzione con Variabili (sintassi locale)",
+        en: "2. Translation with Variables (local syntax)",
+        es: "2. Traducción con Variables (sintaxis local)",
+        fr: "2. Traduction avec Variables (syntaxe locale)",
+        de: "2. Übersetzung mit Variablen (lokale Syntax)"
+      }, passData.ctx) %></h3>
+      <p><%- passData.plugin.simpleI18n.__({
+        key: "example2_text",
+        var: {
+          name: "Mario Rossi",
+          count: 42,
+          city: "Roma"
+        },
+        it: "Ciao {{name}}! Hai {{count}} nuovi messaggi da {{city}}.",
+        en: "Hello {{name}}! You have {{count}} new messages from {{city}}.",
+        es: "¡Hola {{name}}! Tienes {{count}} mensajes nuevos de {{city}}.",
+        fr: "Bonjour {{name}}! Vous avez {{count}} nouveaux messages de {{city}}.",
+        de: "Hallo {{name}}! Sie haben {{count}} neue Nachrichten aus {{city}}."
+      }, passData.ctx) %></p>
+    </div>
+
+    <div class="example">
+      <%# ESEMPIO CON SINTASSI GLOBALE (NUOVA) - Mostra anche variabili con sintassi globale %>
+      <h3>✨ <%- __({
+        key: "example3_title",
+        it: "3. Numeri e Pluralizzazione (sintassi globale)",
+        en: "3. Numbers and Pluralization (global syntax)",
+        es: "3. Números y Pluralización (sintaxis global)",
+        fr: "3. Nombres et Pluralisation (syntaxe globale)",
+        de: "3. Zahlen und Pluralisierung (globale Syntax)"
+      }, passData.ctx) %></h3>
+      <p><%- __({
+        key: "example3_text",
+        var: {
+          items: 3,
+          price: 19.99
+        },
+        it: "Hai {{items}} articoli nel carrello per un totale di €{{price}}.",
+        en: "You have {{items}} items in your cart for a total of ${{price}}.",
+        es: "Tienes {{items}} artículos en tu carrito por un total de €{{price}}.",
+        fr: "Vous avez {{items}} articles dans votre panier pour un total de {{price}}€.",
+        de: "Sie haben {{items}} Artikel in Ihrem Warenkorb für insgesamt {{price}}€."
+      }, passData.ctx) %></p>
+    </div>
+
+    <div class="info">
+      <h3>ℹ️ <%- passData.plugin.simpleI18n.__({
+        key: "info_title",
+        it: "Come Funziona",
+        en: "How It Works",
+        es: "Cómo Funciona",
+        fr: "Comment Ça Marche",
+        de: "Wie Es Funktioniert"
+      }, passData.ctx) %></h3>
+      <ul>
+        <li><%- passData.plugin.simpleI18n.__({
+          key: "info1",
+          it: "Il plugin rileva la lingua dal parametro query string (es. ?lang=it)",
+          en: "The plugin detects language from query string parameter (e.g. ?lang=en)",
+          es: "El plugin detecta el idioma desde el parámetro de query string (ej. ?lang=es)",
+          fr: "Le plugin détecte la langue depuis le paramètre de query string (ex. ?lang=fr)",
+          de: "Das Plugin erkennt die Sprache aus dem Query-String-Parameter (z.B. ?lang=de)"
+        }, passData.ctx) %></li>
+        <li><%- passData.plugin.simpleI18n.__({
+          key: "info2",
+          it: "Se manca il parametro lang, usa le preferenze del browser",
+          en: "If lang parameter is missing, uses browser preferences",
+          es: "Si falta el parámetro lang, usa las preferencias del navegador",
+          fr: "Si le paramètre lang est manquant, utilise les préférences du navigateur",
+          de: "Wenn der lang-Parameter fehlt, verwendet Browser-Einstellungen"
+        }, passData.ctx) %></li>
+        <li><%- passData.plugin.simpleI18n.__({
+          key: "info3",
+          var: { lang: passData.plugin.simpleI18n.getConfig().defaultLang },
+          it: "Lingua predefinita di fallback: {{lang}}",
+          en: "Default fallback language: {{lang}}",
+          es: "Idioma predeterminado de respaldo: {{lang}}",
+          fr: "Langue de secours par défaut: {{lang}}",
+          de: "Standard-Fallback-Sprache: {{lang}}"
+        }, passData.ctx) %></li>
+      </ul>
+    </div>
+
+    <hr style="margin: 30px 0;">
+
+    <p style="text-align: center; color: #666;">
+      <%- passData.plugin.simpleI18n.__({
+        key: "footer",
+        it: "Plugin simpleI18n per ital8cms",
+        en: "simpleI18n plugin for ital8cms",
+        es: "Plugin simpleI18n para ital8cms",
+        fr: "Plugin simpleI18n pour ital8cms",
+        de: "simpleI18n-Plugin für ital8cms"
+      }, passData.ctx) %>
+    </p>
+  </div>
+</body>
+</html>

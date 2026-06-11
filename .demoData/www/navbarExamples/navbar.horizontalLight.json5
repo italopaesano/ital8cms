@@ -1,0 +1,61 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// EXAMPLE: Horizontal navbar with light color scheme
+// Demonstrates: light theme, bg-body-tertiary, all expandAt breakpoints, icons, dropdowns
+//
+{
+  "settings": {
+    "type": "horizontal",
+    "colorScheme": "light",
+    "bgClass": "bg-body-tertiary",
+    "expandAt": "md",
+    "containerClass": "container",
+    "autoActive": true,
+    "id": "navbarHorizontalLight",
+  },
+
+  "sections": {
+    "left": [
+      {
+        "label": "Home",
+        "href": "/navbarExamples/horizontal.ejs",
+        "icon": "<i class='bi bi-house-door-fill'></i>",
+      },
+      {
+        "label": "About",
+        "href": "/navbarExamples/about.ejs",
+        "icon": "<i class='bi bi-info-circle'></i>",
+      },
+      {
+        "type": "dropdown",
+        "label": "Services",
+        "icon": "<i class='bi bi-briefcase'></i>",
+        "items": [
+          { "label": "Web Development", "href": "#web-dev", "icon": "<i class='bi bi-code-slash'></i>" },
+          { "label": "Design", "href": "#design", "icon": "<i class='bi bi-palette'></i>" },
+          { "type": "divider" },
+          { "label": "Consulting", "href": "#consulting", "icon": "<i class='bi bi-chat-dots'></i>" },
+        ],
+      },
+      { "type": "separator" },
+      {
+        "label": "Contact",
+        "href": "#contact",
+        "icon": "<i class='bi bi-envelope'></i>",
+      },
+    ],
+
+    "right": [
+      {
+        "type": "dropdown",
+        "label": "Language",
+        "icon": "<i class='bi bi-globe'></i>",
+        "items": [
+          { "label": "Italiano", "href": "?lang=it" },
+          { "label": "English", "href": "?lang=en" },
+          { "label": "Español", "href": "?lang=es" },
+        ],
+      },
+    ],
+  },
+}

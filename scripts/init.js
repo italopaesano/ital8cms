@@ -117,6 +117,34 @@ async function handleReinit(stateManager, logger) {
 }
 
 /**
+ * Scelta del profilo di installazione.
+ *   - production: flusso standard (utente root creato da terminale, www vuota)
+ *   - demo:       CMS pre-popolato con utenti/contenuti di esempio (solo per provare)
+ * @returns {Promise<'production'|'demo'>}
+ */
+async function askInstallProfile() {
+  const { profile } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'profile',
+      message: 'Quale profilo di installazione vuoi?',
+      choices: [
+        { name: 'Production — installazione pulita (utente root da terminale, www vuota)', value: 'production' },
+        { name: 'Demo — CMS pre-popolato per provare il sistema (utenti e www di esempio)', value: 'demo' }
+      ],
+      default: 'production'
+    }
+  ])
+
+  if (profile === 'demo') {
+    console.log('\n⚠️  PROFILO DEMO — solo esplorazione/sviluppo, NON usare in produzione.')
+    console.log('   Utenti di esempio con password condivisa e nota: "demomode".\n')
+  }
+
+  return profile
+}
+
+/**
  * Funzione principale
  */
 async function main() {
@@ -126,6 +154,9 @@ async function main() {
 
   // Mostra banner
   showWelcomeBanner()
+
+  // Scelta profilo di installazione (production | demo)
+  const installProfile = await askInstallProfile()
 
   // Inizializza manager
   const stateManager = new StateManager(logger)
@@ -176,6 +207,38 @@ async function main() {
       })
 
       logger.success('Configurazione globale completata')
+    }
+
+    // ─── RAMO DEMO ──────────────────────────────────────────────────────────
+    // Profilo demo: NIENTE init di produzione (niente root da terminale).
+    // Copia i file seed (*.demo.json5 + .demoData/) e invoca gli hook seedDemo(),
+    // poi attiva il flag demo in ital8Config.json5.
+    if (installProfile === 'demo') {
+      logger.separator()
+      console.log('\n🌱 FASE 2 (demo): seeding contenuti di esempio\n')
+
+      const DemoSeeder = require('./lib/demoSeeder')
+      const demoSeeder = new DemoSeeder(logger)
+      await demoSeeder.run()
+
+      try {
+        const editJson5 = require('../core/editJson5')
+        await editJson5(path.join(__dirname, '../ital8Config.json5'), 'demo', true)
+        logger.success('Profilo demo attivato: demo=true in ital8Config.json5')
+      } catch (e) {
+        logger.warning(`Impossibile impostare demo=true: ${e.message}`)
+      }
+    }
+
+    // ─── RAMO PRODUCTION ────────────────────────────────────────────────────
+    // Flusso standard: inizializzazione interattiva dei plugin (es. root da terminale).
+    if (installProfile !== 'demo') {
+    // Assicura che il flag demo sia spento in un'installazione di produzione
+    try {
+      const editJson5 = require('../core/editJson5')
+      await editJson5(path.join(__dirname, '../ital8Config.json5'), 'demo', false)
+    } catch (e) {
+      logger.warning(`Impossibile impostare demo=false: ${e.message}`)
     }
 
     // FASE 2: Inizializzazione plugin
@@ -285,6 +348,8 @@ async function main() {
       }
     }
 
+    } // fine RAMO PRODUCTION (installProfile !== 'demo')
+
     // FASE 3: Riepilogo finale
     logger.separator()
     console.log('\n🎉 Inizializzazione Completata!\n')
@@ -319,7 +384,12 @@ async function main() {
     console.log('  2. Accedi al pannello admin:')
     console.log(`     http://localhost:${finalConfig?.httpPort || 3000}/admin\n`)
 
-    if (state.plugins && state.plugins.adminUsers && state.plugins.adminUsers.completed) {
+    if (installProfile === 'demo') {
+      console.log('  3. Login con un utente demo (password unica: "demomode"):')
+      console.log('     demoRoot · demoAdmin · demoEditor · demoSelfEditor')
+      console.log('     demoContentModerator · demoNewsletterEditor\n')
+      console.log('  ⚠️  Profilo DEMO attivo — NON usare in produzione.\n')
+    } else if (state.plugins && state.plugins.adminUsers && state.plugins.adminUsers.completed) {
       console.log('  3. Login con le credenziali create\n')
     }
 

@@ -1,0 +1,41 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// PROFILO DEMO — utenti di esempio con password CONDIVISA e NOTA: "demomode".
+// Questo file viene copiato su userAccount.json5 SOLO durante un'installazione demo
+// (npm run start-configure → profilo "Demo"). NON usare in produzione.
+// Un utente per ogni ruolo standard (0-3) + un utente per ogni ruolo custom di esempio (100, 101).
+// Tutti gli hash corrispondono alla password "demomode" (bcrypt, cost 10).
+{
+  "users": {
+    "demoRoot": {
+      "email": "demoroot@demo.ital8cms.local",
+      "hashPassword": "$2b$10$lcT2HhmUDy4mK/CoykT/LuyB1GFmKsppellHUMlmVOtXlwA7OvMu6",
+      "roleIds": [0]
+    },
+    "demoAdmin": {
+      "email": "demoadmin@demo.ital8cms.local",
+      "hashPassword": "$2b$10$lcT2HhmUDy4mK/CoykT/LuyB1GFmKsppellHUMlmVOtXlwA7OvMu6",
+      "roleIds": [1]
+    },
+    "demoEditor": {
+      "email": "demoeditor@demo.ital8cms.local",
+      "hashPassword": "$2b$10$lcT2HhmUDy4mK/CoykT/LuyB1GFmKsppellHUMlmVOtXlwA7OvMu6",
+      "roleIds": [2]
+    },
+    "demoSelfEditor": {
+      "email": "demoselfeditor@demo.ital8cms.local",
+      "hashPassword": "$2b$10$lcT2HhmUDy4mK/CoykT/LuyB1GFmKsppellHUMlmVOtXlwA7OvMu6",
+      "roleIds": [3]
+    },
+    "demoContentModerator": {
+      "email": "democontentmoderator@demo.ital8cms.local",
+      "hashPassword": "$2b$10$lcT2HhmUDy4mK/CoykT/LuyB1GFmKsppellHUMlmVOtXlwA7OvMu6",
+      "roleIds": [100]
+    },
+    "demoNewsletterEditor": {
+      "email": "demonewslettereditor@demo.ital8cms.local",
+      "hashPassword": "$2b$10$lcT2HhmUDy4mK/CoykT/LuyB1GFmKsppellHUMlmVOtXlwA7OvMu6",
+      "roleIds": [101]
+    }
+  }
+}

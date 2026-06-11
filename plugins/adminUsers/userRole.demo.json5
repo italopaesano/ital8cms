@@ -1,0 +1,41 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// PROFILO DEMO — ruoli di esempio. Copiato su userRole.json5 solo durante un'installazione demo.
+// 4 ruoli hardcoded di sistema (0-3) + 2 ruoli custom di esempio (100, 101) usati dagli utenti demo.
+{
+  "roles": {
+    // RUOLI HARDCODED DEL SISTEMA (ID 0-99)
+    "0": {
+      "name": "root",
+      "description": "Accesso completo al sistema, incluse operazioni critiche di sistema",
+      "isHardcoded": true
+    },
+    "1": {
+      "name": "admin",
+      "description": "Accesso completo all'area di amministrazione e gestione contenuti",
+      "isHardcoded": true
+    },
+    "2": {
+      "name": "editor",
+      "description": "Può creare, modificare ed eliminare tutti i contenuti, inclusi quelli di altri utenti",
+      "isHardcoded": true
+    },
+    "3": {
+      "name": "selfEditor",
+      "description": "Può creare, modificare ed eliminare solo i propri contenuti",
+      "isHardcoded": true
+    },
+
+    // RUOLI CUSTOM DI ESEMPIO (ID >= 100) — solo per il profilo demo
+    "100": {
+      "name": "contentModerator",
+      "description": "Ruolo demo: modera commenti e contenuti segnalati",
+      "isHardcoded": false
+    },
+    "101": {
+      "name": "newsletterEditor",
+      "description": "Ruolo demo: gestisce e invia newsletter",
+      "isHardcoded": false
+    }
+  }
+}
