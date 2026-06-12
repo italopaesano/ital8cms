@@ -1,6 +1,8 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-    "keys": ["key.segretussimmmmmm" , "fbtgnrnyrmnytmtymyt", "brtnrynynyny"],
+    // ⚠ CAMBIARE IN PRODUZIONE: genera chiavi robuste e segrete (es. `openssl rand -hex 32`),
+    // idealmente caricate da variabili d'ambiente e MAI committate nel repository.
+    "keys": ["CHANGE_ME_session_key_1", "CHANGE_ME_session_key_2", "CHANGE_ME_session_key_3"],
     "CONFIG" : {
         "key": "koa:sess",
         "maxAge": 86400000,

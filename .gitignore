@@ -24,6 +24,10 @@ node_modules/
 /plugins/analytics/data/
 /plugins/admin/themeInstallLog.json5
 
+# dbApi: file di database SQLite generati a runtime (plugin opzionale, disattivo di default)
+/plugins/dbApi/dbFile/*.db
+/plugins/dbApi/dbFile/pluginsDb/*.db
+
 # SEO plugin generated files (recreated at startup)
 /www/sitemap.xml
 /www/robots.txt

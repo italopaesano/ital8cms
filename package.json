@@ -1,7 +1,7 @@
 {
   "name": "ital8cms",
   "version": "0.0.1-alpha.3",
-  "description": "",
+  "description": "Modular, plugin-based CMS built on Node.js and Koa.js (file-based storage, zero database by default)",
   "main": "index.js",
   "bin": {
     "ital8cms-cli": "./bin/ital8cms-cli.js"
@@ -26,7 +26,7 @@
     "test:e2e:report": "npx playwright show-report",
     "test:all": "npm run test && npm run test:e2e && npm run test:e2e:prefix"
   },
-  "author": "“Italo <“italopaesano@protonmail.com”> (https://github.com/italopaesano)",
+  "author": "Italo Paesano <italopaesano@protonmail.com> (https://github.com/italopaesano)",
   "license": "ISC",
   "dependencies": {
     "@koa/multer": "^4.0.0",
