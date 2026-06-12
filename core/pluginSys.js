@@ -6,6 +6,7 @@ const logger = require('./logger');
 const loadJson5 = require('./loadJson5');
 const saveJson5 = require('./saveJson5');
 const editJson5 = require('./editJson5');
+const demoNotice = require('./demoNotice');
 
 class pluginSys{
 
@@ -639,6 +640,13 @@ class pluginSys{
         stingToReturn += fnToExc(passData);// viene ottenuta la funzione che avrà come argomento (passData) e il cui valore sarà concatenato alla stringa
         stingToReturn += ` <!-- \n END ${nomePlugin} part --> \n ` ;
       }
+    }
+
+    // PROFILO DEMO: badge "DEMO" iniettato una sola volta nell'header delle pagine
+    // admin quando demo === true. Theme-agnostic (qualunque tema admin che chiama
+    // hookPage('header') lo mostra). Puramente segnaletico, nessun effetto sulle richieste.
+    if (hook === 'header' && this.#ital8Conf && this.#ital8Conf.demo && passData && passData.isAdminContext) {
+      stingToReturn += demoNotice.getDemoBadgeHtml();
     }
 
     return stingToReturn;

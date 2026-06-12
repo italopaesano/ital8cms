@@ -5490,6 +5490,94 @@ Il file `tests/jest.config.js` legge all'avvio tutti i `pluginConfig.json5` e `t
 | `/scripts/testRunner.js` | Wrapper per `test:core`, `test:plugin`, `test:themes` |
 | `/tests/jest.config.js` | Config Jest con filtro plugin/temi inattivi |
 
+## Demo Install Profile
+
+### Overview
+
+ital8cms supporta due **profili di installazione**, scelti **una-tantum** all'avvio del wizard (`npm run start-configure`). La scelta non è commutabile a runtime: per cambiare profilo si reinstalla da capo.
+
+| Profilo | Utente root | Directory `www/` | Flag `demo` |
+|---------|-------------|------------------|-------------|
+| **Production** (default) | creato interattivamente da terminale | vuota (l'utente la popola) | `false` |
+| **Demo** | seed automatico (`demoRoot`) | popolata con contenuti di esempio | `true` |
+
+Il profilo **demo** serve a **provare il sistema** con un CMS già pre-popolato: utenti di esempio (uno per ruolo), contenuti `www/` di esempio, password unica e nota. **Non è una base di produzione.**
+
+> ⚠️ **Sicurezza:** un'installazione demo ha utenti noti con password condivisa (`demomode`). Non esporla mai in produzione.
+
+### Il flag `demo` (runtime)
+
+`ital8Config.json5 → demo` (boolean, default `false`). È **puramente segnaletico**: non altera il comportamento delle richieste, non blocca l'avvio, non cambia la sicurezza. Quando `true`:
+
+- **Avviso al boot** — box ASCII allo startup (`core/demoNotice.js → printDemoBootWarning()`), chiamato da `index.js` solo se `demo === true` (footprint zero altrimenti).
+- **Badge admin** — pill discreto "DEMO" in basso a destra nelle pagine admin, iniettato **theme-agnostic** dentro `pluginSys.hookPage('header')` (gated `this.#ital8Conf.demo && passData.isAdminContext`), via `core/demoNotice.js → getDemoBadgeHtml()`. Nessun tema da modificare.
+- `passData.demo` è esposto nei tre builder di `index.js` (public, pluginPages, admin) per uso nei template.
+
+### Seeding: due convenzioni (copia-file)
+
+Il seeding demo è **install-time only** (`scripts/lib/demoSeeder.js`, invocato dal ramo demo del wizard). Mai caricato dal runtime del server → impatto sul codice di produzione nullo. Usa **due convenzioni complementari di copia-file** (merge + overwrite, con backup dei file sovrascritti in `backups/demo-<timestamp>/<relpath>`):
+
+**(A) File co-locato `*.demo.json5`** — override di un singolo file dati di un plugin/core:
+
+```
+plugins/<p>/userAccount.demo.json5  →  copiato su  plugins/<p>/userAccount.json5
+```
+
+Regola: ogni `X.demo.json5` trovato sotto `plugins/` (scan ricorsivo, esclusi `node_modules`, `tests`, `scripts`, dir nascoste) viene copiato sul gemello `X.json5`. Esempio di riferimento: `plugins/adminUsers/userAccount.demo.json5` e `userRole.demo.json5`.
+
+**(B) Mirror `.demoData/`** — contenuti bulk senza un singolo file-target (pagine, immagini, fixture multi-file):
+
+```
+.demoData/www/...      →  www/...
+.demoData/plugins/<p>/ →  plugins/<p>/...
+.demoData/themes/<t>/  →  themes/<t>/...
+```
+
+Solo i top-level `www`, `plugins`, `themes` vengono copiati. `.demoData/` è **contenuto spedito** (committato in git, NON gitignorato).
+
+### Hook opzionale `seedDemo(context)`
+
+Per plugin che richiedono seeding **programmatico** (es. INSERT in un DB invece di copiare un JSON), si espone una funzione **opzionale** in `plugins/<p>/scripts/init.js` (l'area install-time, **non** `main.js`):
+
+```javascript
+// plugins/<p>/scripts/init.js
+module.exports = {
+  getQuestions, run,                 // flusso production (esistente)
+
+  // OPZIONALE: seeding programmatico per il profilo demo
+  async seedDemo(context) {
+    const { pathPluginFolder, logger, projectRoot } = context;
+    // ... crea dati di esempio ...
+    return { success: true, message: 'Seed demo creato' };
+  }
+};
+```
+
+Il `demoSeeder` invoca `seedDemo()` su ogni plugin che lo espone. Un errore nell'hook viene loggato come warning e **non** interrompe il seeding.
+
+### Best practice per autori di plugin/temi
+
+Per rendere un plugin/tema "demo-ready":
+- **File dati** (un override puntuale) → spedisci `<file>.demo.json5` accanto al file reale (convenzione A).
+- **Contenuti multipli** (pagine, asset) → mettili sotto `.demoData/plugins/<tuoPlugin>/` o `.demoData/themes/<tuoTema>/` (convenzione B).
+- **Logica di seeding** (DB, generazione dinamica) → implementa `seedDemo(context)` in `scripts/init.js`.
+- ⚠️ Il seeding demo **sovrascrive** i file reali (con backup): pensa il contenuto demo come usa-e-getta.
+
+### Reference Files
+
+| File | Scopo |
+|------|-------|
+| `/ital8Config.json5` | Flag `demo` (default `false`) |
+| `/core/demoNotice.js` | Avviso al boot + HTML del badge admin |
+| `/core/pluginSys.js` | Iniezione del badge in `hookPage('header')` |
+| `/index.js` | `passData.demo` (3 builder) + avviso al boot |
+| `/scripts/init.js` | Domanda profilo + ramo demo del wizard |
+| `/scripts/lib/demoSeeder.js` | Motore di seeding (convenzioni A + B + hook) |
+| `/plugins/adminUsers/userAccount.demo.json5` | Utenti demo di esempio (password `demomode`) |
+| `/plugins/adminUsers/userRole.demo.json5` | Ruoli demo (4 hardcoded + 2 custom) |
+| `/.demoData/www/` | Contenuti `www/` di esempio (convenzione B) |
+| `/tests/unit/demoSeeder.test.js` | Unit test del seeder (12 test, filesystem isolato) |
+
 ## Deployment Guidelines
 
 ### Pre-Production Checklist
@@ -5839,18 +5927,33 @@ When working on this codebase as an AI assistant:
 
 ---
 
-**Last Updated:** 2026-06-07
-**Version:** 2.13.0
+**Last Updated:** 2026-06-12
+**Version:** 2.14.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
-- v2.13.0 (2026-06-07): **NEW PLUGIN** - `adminCsrfProtection`, the twin admin GUI for the `csrfProtection` service (Twin Admin Plugin + The Three Views conventions). Key changes:
+- v2.14.0 (2026-06-12): **NEW PLUGIN** - `adminCsrfProtection`, the twin admin GUI for the `csrfProtection` service (Twin Admin Plugin + The Three Views conventions). Key changes:
   - **Service additions (`csrfProtection`):** in-memory audit (counters + recent-blocks ring buffer, fed by `validateRequest`) and new shared-object API for the GUI: `getStats()`, `getRecentBlocks(limit)`, `simulate(input)` (CSRF tester — evaluates a synthetic request against the live policy), `reloadConfig()` (hot-reload of `custom`).
   - **adminCsrfProtection:** section `csrfManagement` (registered in `core/admin/adminConfig.json5` + menuOrder; symlink gitignored). Two pages: Data view (`index.ejs`: KPI + recent CSRF blocks + request simulator, auto-refresh) and Settings editor (`settings.ejs`: raw JSON5 of the service's `custom` block, Validate / Save / Save & restart). Routes (roles `[0,1]`): status, recent, simulate, config + validate-config, restart.
   - **Propagation:** stats/recent/simulate read in-memory state (immediate); settings save uses `core/editJson5` to replace only `custom` (atomic write + rotating backups via `lib/configFileManager.js`) then `reloadConfig()` → hot. Enabling the plugin from a disabled boot needs "Save & restart" (middleware + head hook are boot-time). The GUI's own `fetch` POSTs are covered by the CSRF interceptor automatically (no client token handling).
   - **Tests:** +30 (csrfProtection audit/stats/simulate; adminCsrfProtection routes + configFileManager), filesystem-isolated via `os.tmpdir()` sandbox. Full jest suite green (79 suites, 2238 tests). Boot verified: plugin loads, section symlink created, `/api/adminCsrfProtection/status` returns 401 unauthenticated.
   - **Files Added:** `/plugins/adminCsrfProtection/**` (main.js, pluginConfig/Description, lib/configFileManager.js, adminWebSections/csrfManagement/{index,settings}.ejs + {csrf-admin,settings-editor}.js + csrf-admin.css, tests/unit/{routes,configFileManager}.test.js), `/plugins/csrfProtection/tests/unit/audit.test.js`.
   - **Files Modified:** `/plugins/csrfProtection/main.js` (audit + getStats/getRecentBlocks/simulate/reloadConfig), `/core/admin/adminConfig.json5` (section + menuOrder), `/.gitignore` (section symlink), `/CLAUDE.md`.
+- v2.13.0 (2026-06-11): **NEW FEATURE** - Profilo di installazione "demo". Aggiunto un secondo profilo di install (oltre a production) che pre-popola il CMS con utenti e contenuti di esempio per provare il sistema. Key changes:
+  - **Flag `demo` in `ital8Config.json5`** (boolean, default `false`, commento su singola riga). Puramente segnaletico a runtime: non altera il comportamento delle richieste, non blocca l'avvio, non cambia la sicurezza.
+  - **Guardrail minimale (advisory):**
+    - Avviso al boot (box ASCII) via `core/demoNotice.js → printDemoBootWarning()`, chiamato da `index.js` solo se `demo === true` (footprint zero altrimenti).
+    - Badge "DEMO" discreto nelle pagine admin, iniettato **theme-agnostic** dentro `pluginSys.hookPage('header')` (gated `this.#ital8Conf.demo && passData.isAdminContext`), via `getDemoBadgeHtml()`. Nessun tema modificato.
+    - `passData.demo` esposto nei 3 builder di `index.js` (public, pluginPages, admin).
+  - **Wizard (`scripts/init.js`):** domanda iniziale del profilo (production | demo). Il ramo demo **salta** l'init di produzione (niente root da terminale): copia i file seed e attiva `demo: true`. Il ramo production assicura `demo: false`. La Fase 1 (config globale) è riusata in entrambi.
+  - **Seeding install-time (`scripts/lib/demoSeeder.js`)** — due convenzioni di copia-file (merge + overwrite, backup in `backups/demo-<ts>/`):
+    - **(A)** co-locata: `plugins/<p>/<file>.demo.json5` → `<file>.json5` (scan ricorsivo, esclusi node_modules/tests/scripts/dot-dir).
+    - **(B)** mirror: `.demoData/{www,plugins,themes}/` → path corrispondenti nella root.
+    - Hook **opzionale** `seedDemo(context)` in `plugins/<p>/scripts/init.js` per seeding programmatico. `projectRoot` iniettabile per i test.
+  - **Contenuti demo (committati, statici):** `plugins/adminUsers/userAccount.demo.json5` (6 utenti: `demoRoot`/`demoAdmin`/`demoEditor`/`demoSelfEditor` + `demoContentModerator`/`demoNewsletterEditor`, password unica `demomode`), `userRole.demo.json5` (4 ruoli hardcoded + 2 custom 100/101), `.demoData/www/` (copia degli attuali `/www/` con `__index.ejs`→`index.ejs`).
+  - **Test:** `tests/unit/demoSeeder.test.js` (12 test, filesystem isolato in `os.tmpdir()`): convenzione A (copia, backup, skip dir), convenzione B (mirror, backup, top-level filtrati), hook `seedDemo`.
+  - **Files Added:** `/core/demoNotice.js`, `/scripts/lib/demoSeeder.js`, `/plugins/adminUsers/userAccount.demo.json5`, `/plugins/adminUsers/userRole.demo.json5`, `/.demoData/www/**`, `/tests/unit/demoSeeder.test.js`.
+  - **Files Modified:** `/ital8Config.json5` (flag `demo`), `/index.js` (passData.demo + avviso boot), `/core/pluginSys.js` (badge in hookPage), `/scripts/init.js` (profilo + ramo demo), `/CLAUDE.md` (sezione "Demo Install Profile" + changelog).
 - v2.12.0 (2026-06-07): **NEW PLUGIN** - `csrfProtection`, anti Cross-Site Request Forgery (synchronizer token + Origin check), enforced centrally in the core route-wrap. Key changes:
   - **New plugin: `csrfProtection`**
     - Synchronizer token per-session in `ctx.session.csrfToken` (signed cookie → not forgeable / not readable cross-origin), **rotated on login** (`adminUsers` handler: `if (csrf) csrf.rotateToken(ctx)`, graceful optional pattern)
