@@ -4184,14 +4184,11 @@ Accesso: `https://localhost:3443` (browser mostrerà warning per self-signed, no
 
 ### Session Configuration: core/priorityMiddlewares/koaSession.json5
 
-**IMPORTANT:** Change session keys in production!
+**IMPORTANT:** Le chiavi (`keys`) firmano i cookie di sessione (`signed: true`). I valori committed nel repo sono **placeholder condivisi**: chiunque cloni il progetto li conosce e potrebbe forgiare cookie di sessione validi (impersonazione). **Vanno sostituiti con chiavi casuali in produzione.**
 
-```json
+```json5
 {
-  "keys": [
-    "key.segretussimmmmmm",           // PRIMARY: Change this!
-    "key.secondaryKey123"             // SECONDARY: Change this!
-  ],
+  "keys": [ /* placeholder committati — sostituire con chiavi casuali */ ],
   "CONFIG": {
     "key": "koa:sess",
     "maxAge": 86400000,               // 24 hours
@@ -4200,10 +4197,27 @@ Accesso: `https://localhost:3443` (browser mostrerà warning per self-signed, no
     "httpOnly": true,
     "signed": true,
     "rolling": false,
-    "renew": false
+    "renew": false,
+    "sameSite": "lax"                 // difesa in profondità anti-CSRF
   }
 }
 ```
+
+#### Rotazione automatica delle chiavi (install + boot)
+
+Due meccanismi coordinati gestiscono la sicurezza delle chiavi:
+
+**1. Wizard d'installazione (`npm run start-configure`)** — In FASE 1 (configurazione globale) il wizard propone uno step dedicato alle chiavi di sessione (`scripts/lib/sessionKeyManager.js`):
+
+- Menu a tre voci: **Genera nuove chiavi casuali** / **Inserisci chiavi personalizzate** / **Mantieni le chiavi correnti**.
+- **Default adattivo:** "Genera" se le chiavi correnti sono i placeholder, "Mantieni" se già personalizzate (evita di invalidare sessioni esistenti in una re-init).
+- Generazione: **3 chiavi** `crypto.randomBytes(32).toString('base64url')` (256-bit, URL-safe).
+- Scrittura tramite `core/editJson5` (sostituisce **solo** il campo `keys`, preservando tutti i commenti) con backup preventivo via `BackupManager`. I valori delle chiavi **non** vengono mai loggati.
+- Gira sia per il profilo `production` sia `demo`; saltato solo nella re-init `plugins`.
+
+**2. Avviso al boot (`core/sessionSecurity.js → checkSessionKeys()`)** — All'avvio del server (`index.js`), se la sessione è attiva e le chiavi sono ancora placeholder, viene emesso un box ASCII di warning (stile `httpsManager.warnMissingCertificates()`). Il server parte comunque (non bloccante). Salta da sé se la sessione è disabilitata.
+
+**Fonte unica della logica di rilevamento** (`core/sessionSecurity.js`): la denylist `PLACEHOLDER_SESSION_KEYS` e il predicato `keysAreInsecure(keys)` sono condivisi tra il wizard (install-time) e il warning al boot (runtime), mantenendo la direzione di dipendenza corretta (tooling → core).
 
 ### Plugin-Specific Configuration
 
@@ -5582,7 +5596,7 @@ Per rendere un plugin/tema "demo-ready":
 
 ### Pre-Production Checklist
 
-- [ ] Change session keys in `core/priorityMiddlewares/koaSession.json5`
+- [ ] Change session keys in `core/priorityMiddlewares/koaSession.json5` (il wizard `npm run start-configure` le genera casuali; un warning al boot avvisa se restano i placeholder)
 - [ ] Set appropriate `httpPort` or enable HTTPS
 - [ ] Review and secure admin path (`adminPrefix`)
 - [ ] Enable authentication for admin routes
@@ -5665,6 +5679,8 @@ const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
 - `/core/loadJson5.js` - JSON5 file loader utility
 - `/core/servingRootResolver.js` - Serving root path isolation utility
 - `/core/patternMatcher.js` - URL pattern matching utility (exact, wildcard, regex) — shared by adminAccessControl and seo plugins
+- `/core/sessionSecurity.js` - Session key security: placeholder denylist, `keysAreInsecure()`, boot warning `checkSessionKeys()` (single source of truth)
+- `/scripts/lib/sessionKeyManager.js` - Install-time session key tooling: `generateSessionKeys()` + interactive wizard step `configureSessionKeys()`
 
 ### Admin System
 
@@ -5928,10 +5944,17 @@ When working on this codebase as an AI assistant:
 ---
 
 **Last Updated:** 2026-06-12
-**Version:** 2.14.0
+**Version:** 2.15.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 
 **Changelog:**
+- v2.15.0 (2026-06-12): **SECURITY** - Rotazione delle chiavi di sessione in fase d'installazione + avviso al boot. Le `keys` di `core/priorityMiddlewares/koaSession.json5` (firma dei cookie koa-session) erano placeholder committati e condivisi: chiunque cloni il repo poteva forgiare cookie validi. Ora il wizard le genera casuali e un warning segnala se restano i placeholder. Key changes:
+  - **Wizard d'installazione (`scripts/lib/sessionKeyManager.js`):** nuovo step in FASE 1 (`scripts/init.js`) con menu a tre voci (Genera / Inserisci personalizzate / Mantieni) e **default adattivo** (Genera se placeholder, Mantieni se già custom). `generateSessionKeys()` produce **3 chiavi** `crypto.randomBytes(32).toString('base64url')`. Scrittura via `core/editJson5` (sostituisce solo `keys`, preserva i commenti) con backup `BackupManager`. I valori delle chiavi non vengono mai loggati. Gira per `production` e `demo`; saltato nella re-init `plugins`.
+  - **Warning al boot (`core/sessionSecurity.js → checkSessionKeys()`):** chiamato da `index.js` allo startup; box ASCII (stile `httpsManager.warnMissingCertificates()`) se la sessione è attiva e le chiavi sono ancora placeholder. Non bloccante; salta se la sessione è disabilitata.
+  - **Fonte unica (`core/sessionSecurity.js`):** denylist `PLACEHOLDER_SESSION_KEYS` (3 valori del file + 1 storico della doc) e predicato `keysAreInsecure(keys)`, condivisi tra tooling install-time e runtime (dipendenza tooling → core, non viceversa). `generateSessionKeys()` resta nel tooling.
+  - **Tests:** +19 unit — `tests/unit/core/sessionSecurity.test.js` (denylist, `keysAreInsecure`, `checkSessionKeys` con config iniettata) e `tests/unit/sessionKeyManager.test.js` (`generateSessionKeys`: count/encoding base64url/lunghezza/unicità). Suite unit completa verde (71 suite, 2080 test prima → con i nuovi). Smoke verificato: warning al boot sul file reale, write path via `editJson5` su copia temporanea (chiavi sostituite, commenti e `CONFIG` intatti).
+  - **Files Added:** `/core/sessionSecurity.js`, `/scripts/lib/sessionKeyManager.js`, `/tests/unit/core/sessionSecurity.test.js`, `/tests/unit/sessionKeyManager.test.js`.
+  - **Files Modified:** `/scripts/init.js` (step in FASE 1), `/index.js` (`checkSessionKeys` al boot), `/CLAUDE.md` (sezione Session Configuration, checklist, Important Files, changelog).
 - v2.14.0 (2026-06-12): **NEW PLUGIN** - `adminCsrfProtection`, the twin admin GUI for the `csrfProtection` service (Twin Admin Plugin + The Three Views conventions). Key changes:
   - **Service additions (`csrfProtection`):** in-memory audit (counters + recent-blocks ring buffer, fed by `validateRequest`) and new shared-object API for the GUI: `getStats()`, `getRecentBlocks(limit)`, `simulate(input)` (CSRF tester — evaluates a synthetic request against the live policy), `reloadConfig()` (hot-reload of `custom`).
   - **adminCsrfProtection:** section `csrfManagement` (registered in `core/admin/adminConfig.json5` + menuOrder; symlink gitignored). Two pages: Data view (`index.ejs`: KPI + recent CSRF blocks + request simulator, auto-refresh) and Settings editor (`settings.ejs`: raw JSON5 of the service's `custom` block, Validate / Save / Save & restart). Routes (roles `[0,1]`): status, recent, simulate, config + validate-config, restart.
