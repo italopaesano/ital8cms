@@ -26,7 +26,7 @@
   // Profilo demo: CMS pre-popolato con utenti/contenuti di esempio (password note "demomode") — NON usare in produzione
   "demo": false,
 
-  "debugMode": 1,
+  "debugMode": 0,
   "httpPort": 3000,
   "shutdownTimeout": 10000, // Timeout in ms per il graceful shutdown dei server HTTP/HTTPS (default 10s, dopo scatta process.exit forzato)
 
@@ -55,7 +55,7 @@
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   "https": {
-    "enabled": true,                          // true = abilita HTTPS
+    "enabled": false,                         // true = abilita HTTPS (default false: avvio HTTP pulito, nessun warning certificati)
     "port": 3443,                             // Porta HTTPS (default 443)
     "AutoRedirectHttpPortToHttpsPort": false,  // true = redirect 301 HTTP→HTTPS
     "certFile": "./certs/fullchain.pem",      // Percorso certificato server
