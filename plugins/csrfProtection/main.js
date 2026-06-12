@@ -47,6 +47,15 @@ const pluginName = path.basename(__dirname);
 let custom = null;      // blocco `custom` di pluginConfig.json5
 let matcher = null;     // istanza PatternMatcher (per exemptPaths)
 let sharedApi = null;   // singleton dell'oggetto condiviso (evita riallocazioni per-richiesta)
+let pluginFolderRef = __dirname; // cartella del plugin (per reloadConfig)
+
+// ── Audit in memoria (per la GUI del twin adminCsrfProtection) ──
+// Ring-buffer leggero dei blocchi recenti + contatori. Non persistente (si
+// azzera al riavvio): serve a vedere a colpo d'occhio attacchi / misconfig.
+const MAX_RECENT_BLOCKS = 200;
+let recentBlocks = [];
+let totalBlocks = 0;
+let blocksByReason = { missing_or_invalid_token: 0, origin_mismatch: 0 };
 
 // ── Gestione token in sessione ───────────────────────────────────────────
 
@@ -72,11 +81,97 @@ function rotateToken(ctx) {
  */
 function validateRequest(ctx) {
   const verdict = requestGuard.evaluate(ctx, custom, matcher);
-  if (!verdict.ok && custom && custom.enableLogging) {
-    const client = (ctx && ctx.ip) || 'unknown';
-    logger.warn(LOG_PREFIX, `BLOCCATA ${ctx.method} ${ctx.path} da ${client} — ${verdict.reason}`);
+  if (!verdict.ok) {
+    recordBlock(ctx, verdict);
+    if (custom && custom.enableLogging) {
+      const client = (ctx && ctx.ip) || 'unknown';
+      logger.warn(LOG_PREFIX, `BLOCCATA ${ctx.method} ${ctx.path} da ${client} — ${verdict.reason}`);
+    }
   }
   return verdict;
+}
+
+/** Registra un blocco nell'audit in memoria (contatori + ring-buffer). */
+function recordBlock(ctx, verdict) {
+  totalBlocks += 1;
+  const reasonKey = (verdict.reason && verdict.reason.startsWith('origin_mismatch'))
+    ? 'origin_mismatch'
+    : 'missing_or_invalid_token';
+  blocksByReason[reasonKey] = (blocksByReason[reasonKey] || 0) + 1;
+  recentBlocks.push({
+    ts: new Date().toISOString(),
+    method: ctx && ctx.method,
+    path: ctx && ctx.path,
+    reason: verdict.reason,
+    ip: (ctx && ctx.ip) || 'unknown',
+  });
+  if (recentBlocks.length > MAX_RECENT_BLOCKS) {
+    recentBlocks = recentBlocks.slice(-MAX_RECENT_BLOCKS);
+  }
+}
+
+/** Statistiche per la Vista Dati della GUI. */
+function getStats() {
+  return {
+    enabled: custom ? custom.enabled !== false : false,
+    originCheckEnabled: !!(custom && custom.originCheck && custom.originCheck.enabled !== false),
+    protectedMethods: (custom && custom.protectedMethods) || requestGuard.DEFAULT_METHODS,
+    exemptCount: (custom && Array.isArray(custom.exemptPaths)) ? custom.exemptPaths.length : 0,
+    totalBlocks,
+    blocksByReason: { ...blocksByReason },
+  };
+}
+
+/** Blocchi recenti (più recente prima), opzionalmente limitati. */
+function getRecentBlocks(limit) {
+  const n = (Number.isFinite(limit) && limit > 0) ? limit : 100;
+  return recentBlocks.slice(-n).reverse();
+}
+
+/** Re-legge pluginConfig.json5 e aggiorna `custom` a caldo (hot-reload). */
+function reloadConfig() {
+  try {
+    const cfg = loadJson5(path.join(pluginFolderRef, 'pluginConfig.json5'));
+    custom = cfg.custom || {};
+    matcher = new PatternMatcher();
+  } catch (err) {
+    logger.warn(LOG_PREFIX, `reloadConfig fallito: ${err.message}`);
+  }
+  return JSON.parse(JSON.stringify(custom));
+}
+
+/**
+ * "CSRF tester": valuta una richiesta sintetica contro la policy corrente.
+ * Utile nella GUI per capire come metodo/path/origin/token si combinano.
+ * @param {object} input - { method, path, siteOrigin, requestOrigin, tokenProvided }
+ * @returns {{ ok, skipped?, reason?, status? }}
+ */
+function simulate(input = {}) {
+  const method = String(input.method || 'POST');
+  const reqPath = String(input.path || '/');
+  let protocol = 'http';
+  let host = 'localhost:3000';
+  try {
+    const u = new URL(String(input.siteOrigin || 'http://localhost:3000'));
+    protocol = u.protocol.replace(':', '');
+    host = u.host;
+  } catch { /* siteOrigin non valido: usa i default */ }
+
+  const headers = {};
+  if (input.requestOrigin) headers.origin = String(input.requestOrigin);
+  const sessionToken = 'SIMULATED_TOKEN';
+  if (input.tokenProvided) headers['x-csrf-token'] = sessionToken;
+
+  const fakeCtx = {
+    method,
+    path: reqPath,
+    protocol,
+    host,
+    session: { csrfToken: sessionToken },
+    request: { body: {} },
+    get: (name) => headers[String(name).toLowerCase()],
+  };
+  return requestGuard.evaluate(fakeCtx, custom, matcher);
 }
 
 // ── Markup helpers per i template ─────────────────────────────────────────
@@ -107,9 +202,13 @@ function buildSharedApi() {
     ensureToken,
     rotateToken,
     getToken: (ctx) => ensureToken(ctx),
-    // API per il futuro plugin admin (adminCsrfProtection)
+    // API per il plugin admin gemello (adminCsrfProtection)
+    getStats,                                        // KPI + contatori blocchi
+    getRecentBlocks,                                 // audit dei blocchi recenti
+    simulate,                                        // CSRF tester
     getConfig: () => JSON.parse(JSON.stringify(custom || {})),
     validateConfig: (newCustom) => validateConfig(newCustom),
+    reloadConfig,                                    // hot-reload dopo Save dell'editor
   };
   return sharedApi;
 }
@@ -118,6 +217,7 @@ module.exports = {
   pluginName,
 
   async loadPlugin(pluginSys, pathPluginFolder) {
+    pluginFolderRef = pathPluginFolder;
     const cfg = loadJson5(path.join(pathPluginFolder, 'pluginConfig.json5'));
     custom = cfg.custom || {};
     matcher = new PatternMatcher();
@@ -208,11 +308,19 @@ module.exports = {
     rotateToken,
     csrfFieldFor,
     buildSharedApi,
+    getStats,
+    getRecentBlocks,
+    simulate,
+    reloadConfig,
     /** Inietta una config custom senza passare da loadPlugin (solo per i test). */
     _setConfigForTest(testCustom) {
       custom = testCustom;
       matcher = new PatternMatcher();
       sharedApi = null;
+      // Azzera l'audit in memoria per test deterministici
+      recentBlocks = [];
+      totalBlocks = 0;
+      blocksByReason = { missing_or_invalid_token: 0, origin_mismatch: 0 };
     },
   },
 };

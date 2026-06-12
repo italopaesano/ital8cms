@@ -1,0 +1,155 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<link rel="stylesheet" href="/<%= passData.adminPrefix %>/csrfManagement/csrf-admin.css">
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
+
+<div class="container mt-4 csrf-admin">
+
+  <ul class="nav nav-pills mb-3 csrf-nav">
+    <li class="nav-item"><a class="nav-link active" href="/<%= passData.adminPrefix %>/csrfManagement/index.ejs"><%= __({it: 'Panoramica', en: 'Overview'}, passData.ctx) %></a></li>
+    <li class="nav-item"><a class="nav-link" href="/<%= passData.adminPrefix %>/csrfManagement/settings.ejs"><%= __({it: 'Impostazioni', en: 'Settings'}, passData.ctx) %></a></li>
+  </ul>
+
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <h3 class="mb-0">
+      🛡️ <%= __({it: 'Protezione CSRF', en: 'CSRF Protection'}, passData.ctx) %>
+      <span id="statusBadge" class="badge bg-secondary align-middle ms-2">—</span>
+    </h3>
+    <div class="d-flex align-items-center gap-3">
+      <div class="form-check form-switch mb-0">
+        <input class="form-check-input" type="checkbox" role="switch" id="autoRefreshToggle" checked>
+        <label class="form-check-label small" for="autoRefreshToggle">
+          <%= __({it: 'Auto-aggiornamento', en: 'Auto-refresh'}, passData.ctx) %>
+        </label>
+      </div>
+      <button id="btnRefresh" class="btn btn-outline-secondary btn-sm">
+        <span id="loadingSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+        ⟳ <%= __({it: 'Aggiorna', en: 'Refresh'}, passData.ctx) %>
+      </button>
+    </div>
+  </div>
+
+  <div id="globalAlert" class="alert d-none" role="alert"></div>
+
+  <!-- Banner: servizio disattivato -->
+  <div id="disabledBanner" class="alert alert-warning d-none">
+    <%= __({
+      it: 'Il plugin csrfProtection è disattivato (custom.enabled=false). Le richieste mutanti NON sono protette.',
+      en: 'The csrfProtection plugin is disabled (custom.enabled=false). Mutating requests are NOT protected.'
+    }, passData.ctx) %>
+  </div>
+
+  <!-- KPI cards (Vista Dati) -->
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-label text-muted small"><%= __({it: 'Origin check', en: 'Origin check'}, passData.ctx) %></div>
+        <div class="kpi-value fs-5 fw-bold" id="kpiOriginCheck">—</div>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-label text-muted small"><%= __({it: 'Blocchi totali', en: 'Total blocks'}, passData.ctx) %></div>
+        <div class="kpi-value fs-4 fw-bold text-primary" id="kpiTotal">—</div>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-3">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-label text-muted small"><%= __({it: 'Token mancante/errato', en: 'Missing/invalid token'}, passData.ctx) %></div>
+        <div class="kpi-value fs-4 fw-bold text-warning" id="kpiToken">—</div>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-3">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-label text-muted small"><%= __({it: 'Origin non valido', en: 'Origin mismatch'}, passData.ctx) %></div>
+        <div class="kpi-value fs-4 fw-bold text-danger" id="kpiOrigin">—</div>
+      </div></div>
+    </div>
+    <div class="col-12 col-xl-2">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-label text-muted small"><%= __({it: 'Esenzioni', en: 'Exemptions'}, passData.ctx) %></div>
+        <div class="kpi-value fs-4 fw-bold" id="kpiExempt">—</div>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- CSRF tester -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-header small fw-semibold">
+      🧪 <%= __({it: 'Simulatore di richiesta (CSRF tester)', en: 'Request simulator (CSRF tester)'}, passData.ctx) %>
+    </div>
+    <div class="card-body">
+      <form id="simForm" class="row gx-2 gy-2 align-items-end">
+        <div class="col-6 col-md-2">
+          <label for="simMethod" class="form-label small mb-0"><%= __({it: 'Metodo', en: 'Method'}, passData.ctx) %></label>
+          <select id="simMethod" class="form-select form-select-sm">
+            <option>POST</option><option>PUT</option><option>DELETE</option><option>PATCH</option><option>GET</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label for="simPath" class="form-label small mb-0">Path</label>
+          <input type="text" id="simPath" class="form-control form-control-sm" value="/api/adminUsers/usertUser">
+        </div>
+        <div class="col-6 col-md-3">
+          <label for="simReqOrigin" class="form-label small mb-0"><%= __({it: 'Origin richiesta', en: 'Request Origin'}, passData.ctx) %></label>
+          <input type="text" id="simReqOrigin" class="form-control form-control-sm" placeholder="https://evil.com">
+        </div>
+        <div class="col-6 col-md-2">
+          <div class="form-check mt-3">
+            <input class="form-check-input" type="checkbox" id="simToken" checked>
+            <label class="form-check-label small" for="simToken"><%= __({it: 'Token valido', en: 'Valid token'}, passData.ctx) %></label>
+          </div>
+        </div>
+        <div class="col-12 col-md-2">
+          <button type="submit" class="btn btn-info btn-sm w-100"><%= __({it: 'Simula', en: 'Simulate'}, passData.ctx) %></button>
+        </div>
+      </form>
+      <div id="simResult" class="mt-2"></div>
+      <input type="hidden" id="simSiteOrigin">
+    </div>
+  </div>
+
+  <!-- Blocchi recenti -->
+  <div class="card shadow-sm">
+    <div class="card-header small fw-semibold d-flex justify-content-between align-items-center">
+      <span><%= __({it: 'Blocchi CSRF recenti', en: 'Recent CSRF blocks'}, passData.ctx) %></span>
+      <span class="text-muted fw-normal" id="recentCount"></span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle">
+          <thead>
+            <tr>
+              <th><%= __({it: 'Quando', en: 'When'}, passData.ctx) %></th>
+              <th><%= __({it: 'Metodo', en: 'Method'}, passData.ctx) %></th>
+              <th>Path</th>
+              <th><%= __({it: 'Motivo', en: 'Reason'}, passData.ctx) %></th>
+              <th>IP</th>
+            </tr>
+          </thead>
+          <tbody id="recentBody">
+            <tr><td colspan="5" class="text-center text-muted py-3">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Variabili iniettate dal server (convenzione: JS var, non hidden span)
+  const apiPrefix          = '<%= passData.apiPrefix %>';
+  const adminPrefix        = '<%= passData.adminPrefix %>';
+  const autoRefreshSeconds = <%= Number(passData.plugin.adminCsrfProtection && passData.plugin.adminCsrfProtection.autoRefreshSeconds) || 5 %>;
+  const auditLimit         = <%= Number(passData.plugin.adminCsrfProtection && passData.plugin.adminCsrfProtection.auditLimit) || 100 %>;
+  // Etichette client tradotte (i18n) — il JS lato client non può usare __()
+  const i18n = {
+    pass:      '<%= __({it: "Consentita", en: "Allowed"}, passData.ctx) %>',
+    blocked:   '<%= __({it: "Bloccata", en: "Blocked"}, passData.ctx) %>',
+    skipped:   '<%= __({it: "Non controllata", en: "Not checked"}, passData.ctx) %>',
+    noBlocks:  '<%= __({it: "Nessun blocco registrato", en: "No blocks recorded"}, passData.ctx) %>',
+  };
+</script>
+<script src="/<%= passData.adminPrefix %>/csrfManagement/csrf-admin.js"></script>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>

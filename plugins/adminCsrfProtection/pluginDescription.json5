@@ -1,0 +1,9 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "name": "adminCsrfProtection",
+  "version": "1.0.0",
+  "description": "Admin GUI (twin plugin) for the csrfProtection service: monitor recent CSRF blocks, run a request simulator, and edit the protection settings.",
+  "author": "Italo Paesano",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC",
+}

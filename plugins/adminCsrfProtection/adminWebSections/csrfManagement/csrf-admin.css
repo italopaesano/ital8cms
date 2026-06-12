@@ -1,0 +1,40 @@
+/* adminCsrfProtection — stili della dashboard (Vista Dati + Editor) */
+
+.csrf-admin .kpi-card {
+  border: 1px solid var(--bs-border-color, #dee2e6);
+}
+
+.csrf-admin .kpi-label {
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.csrf-admin .kpi-value {
+  line-height: 1.2;
+}
+
+.csrf-admin code {
+  font-size: 0.85em;
+}
+
+.csrf-admin table th {
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+/* Editor JSON5 (tab Impostazioni) */
+.csrf-admin .csrf-editor {
+  font-family: var(--bs-font-monospace, monospace);
+  font-size: 0.85rem;
+  white-space: pre;
+  tab-size: 2;
+}
+
+.csrf-admin .csrf-nav .nav-link {
+  padding: 0.25rem 0.75rem;
+}
+
+.csrf-admin .messages-area ul {
+  padding-left: 1.1rem;
+  margin-bottom: 0;
+}
