@@ -196,6 +196,13 @@ async function main() {
       // Esegui wizard configurazione
       finalConfig = await configWizard.run()
 
+      // Gestione chiavi di sessione (sicurezza: firma dei cookie koa-session).
+      // Step indipendente dalla domanda "vuoi modificare le impostazioni?":
+      // i placeholder committati nel repo vanno sempre proposti per la rotazione.
+      const sessionKeyManager = require('./lib/sessionKeyManager')
+      const koaSessionPath = path.join(__dirname, '../core/priorityMiddlewares/koaSession.json5')
+      await sessionKeyManager.configureSessionKeys({ logger, backupManager, configPath: koaSessionPath })
+
       // Aggiorna stato globale
       stateManager.updateGlobalState({
         initialized: true,

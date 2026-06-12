@@ -324,6 +324,10 @@ if (ital8Conf.demo) {
   require('./core/demoNotice').printDemoBootWarning();
 }
 
+// Avviso chiavi di sessione insicure (placeholder di default): puramente
+// segnaletico, non blocca l'avvio. Salta da sé se la sessione è disabilitata.
+require('./core/sessionSecurity').checkSessionKeys(ital8Conf);
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // END HTTP/HTTPS SERVER SETUP
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
