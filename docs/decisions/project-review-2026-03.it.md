@@ -1,3 +1,4 @@
+<!-- ital8doc v1-1 · tipo: decision · lang: it · ref -->
 # Piano d'Azione — Revisione Progetto ital8cms
 
 **Data revisione:** 2026-03-21

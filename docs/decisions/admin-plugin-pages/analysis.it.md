@@ -1,3 +1,4 @@
+<!-- ital8doc v1-1 · tipo: reference · lang: it · ref -->
 # Analisi: Standard Admin Plugin Pages
 
 ## 📋 Situazione Attuale

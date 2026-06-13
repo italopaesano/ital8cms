@@ -1,3 +1,4 @@
+<!-- ital8doc v1-1 · tipo: reference · lang: it · ref -->
 # Esempi Pratici: Admin Plugin Pages Standard
 
 Questo documento mostra esempi concreti di come apparirebbe il codice con le diverse alternative proposte.

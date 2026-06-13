@@ -48,7 +48,7 @@ Server runs on: `http://localhost:3000`
 
 ### Project Documentation
 
-- **[EXPLAIN.md](./EXPLAIN.md)** - General project documentation (Italian)
+- **[Panoramica documentazione](./docs/archive/documentation-overview.it.md)** - panoramica storica (archiviata; vedi CLAUDE.md e `docs/`)
 
 ## Technology Stack
 
