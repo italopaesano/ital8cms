@@ -196,353 +196,82 @@ Understanding the initialization sequence is critical:
 
 ## Plugin System Architecture
 
-The plugin system is the heart of ital8cms. Understanding it is essential.
+Il sistema plugin è il cuore di ital8cms. Deep-dive completo (meccanica interna, esempi, validazione dipendenze, logging): [`core/EXPLAIN-pluginsSys.md`](./core/EXPLAIN-pluginsSys.md).
 
-### Plugin Structure
+### Struttura plugin
 
-**Minimum Required Structure:**
+Minima (obbligatoria): `main.js`, `pluginConfig.json5`, `pluginDescription.json5`. Convenzione **fortemente raccomandata** per plugin che servono pagine HTML: directory `webPages/` (separa logica e template, come nel plugin di riferimento `adminUsers`). Plugin solo-API (es. `bootstrap`, `simpleI18n`) non ne hanno bisogno.
 
-Every plugin must have these files:
-
-```
-plugins/myPlugin/
-├── main.js                    # Plugin logic (required)
-├── pluginConfig.json5          # Configuration (required)
-└── pluginDescription.json5     # Metadata (required)
-```
-
-**Recommended Structure for Plugins Serving Web Pages:**
-
-If your plugin serves HTML pages via EJS templates, use this **strongly recommended** structure:
-
-```
-plugins/myPlugin/
-├── main.js                    # Plugin logic (required)
-├── pluginConfig.json5          # Configuration (required)
-├── pluginDescription.json5     # Metadata (required)
-└── webPages/                  # ⭐ STRONGLY RECOMMENDED for EJS templates
-    ├── login.ejs
-    ├── profile.ejs
-    └── settings.ejs
-```
-
-**Why `webPages/` is recommended:**
-- ✅ **Clear organization** - Separates template files from logic
-- ✅ **Consistency** - Follows pattern used in `adminUsers` (reference plugin)
-- ✅ **Maintainability** - Easy to locate and manage templates
-- ✅ **Scalability** - Better structure as plugin grows
-
-**Note:** The `webPages/` directory is a **convention, not a requirement**. Plugins serving only JSON APIs (like `bootstrap`, `simpleI18n`) don't need it. You can organize your plugin differently if needed, but this structure is recommended for consistency across the project.
-
-### Plugin main.js Exports
-
-A plugin's `main.js` can export these functions:
+### Export di `main.js`
 
 ```javascript
 module.exports = {
-  // Lifecycle hooks
+  // ciclo di vita
   async loadPlugin(pluginSys, pathPluginFolder) {},
   async installPlugin(pluginSys, pathPluginFolder) {},
   async uninstallPlugin(pluginSys, pathPluginFolder) {},
   async upgradePlugin(pluginSys, pathPluginFolder, oldVersion, newVersion) {},
-
-  // Route registration (called without arguments by pluginSys)
-  getRouteArray() { return [] },
-
-  // Middleware registration
-  getMiddlewareToAdd(pluginSys, pathPluginFolder) { return [] },
-
-  // Object sharing
-  getObjectToShareToOthersPlugin(forPlugin, pluginSys, pathPluginFolder) { return {} },
-  setSharedObject(fromPlugin, sharedObject) {},
-
-  // Template functions (local - always available)
-  getObjectToShareToWebPages() { return {} },
-
-  // Template functions (global - requires whitelist authorization)
-  getGlobalFunctionsForTemplates() { return {} },
-
-  // Page hooks
-  getHooksPage(section, passData, pluginSys, pathPluginFolder) { return "" }
+  getRouteArray() { return [] },                                   // rotte API
+  getMiddlewareToAdd(pluginSys, pathPluginFolder) { return [] },   // middleware
+  getObjectToShareToOthersPlugin(forPlugin, pluginSys, pathPluginFolder) { return {} }, // condividi → plugin
+  setSharedObject(fromPlugin, sharedObject) {},                    // ricevi condivisione
+  getObjectToShareToWebPages() { return {} },                     // funzioni template LOCALI
+  getGlobalFunctionsForTemplates() { return {} },                 // funzioni template GLOBALI (whitelist)
+  getHooksPage(section, passData, pluginSys, pathPluginFolder) { return "" } // hook di pagina
 }
 ```
 
-### pluginConfig.json5
+### Config del plugin
 
-```json
-{
-  "active": 1,                    // 0=disabled, 1=enabled
-  "isInstalled": 1,               // Installation status
-  "weight": 0,                    // Load priority (lower = earlier)
-  "dependency": {                 // Plugin dependencies
-    "pluginName": "^1.0.0"       // Semantic versioning
-  },
-  "nodeModuleDependency": {       // NPM dependencies
-    "package": "^1.0.0"
-  },
-  "custom": {                     // Plugin-specific settings
-    "setting1": "value1"
-  }
-}
-```
+- `pluginConfig.json5`: `active` (0/1), `isInstalled`, `weight` (priorità, minore = caricato prima), `dependency` (semver), `nodeModuleDependency`, `custom` (impostazioni specifiche).
+- `pluginDescription.json5`: `name`, `version`, `description`, `author`, `email`, `license`.
 
-### pluginDescription.json5
+### Ordine di caricamento
 
-```json
-{
-  "name": "myPlugin",
-  "version": "1.0.0",
-  "description": "Plugin description",
-  "author": "Your Name",
-  "email": "email@example.com",
-  "license": "MIT"
-}
-```
+1. **weight** crescente → 2. **risoluzione dipendenze** (prima le dipendenze) → 3. **alfabetico** (a parità di weight). I plugin caricati dopo dispongono di quelli caricati prima.
 
-### Plugin Loading Order
+### Comunicazione tra plugin
 
-Plugins are loaded by:
-1. **Weight** (ascending: 0, 1, 2...)
-2. **Dependency resolution** (dependencies loaded first)
-3. **Alphabetical** (if weight is equal)
+- **Pull (runtime, on-demand):** `pluginSys.getSharedObject(providerPluginName, callerName?)` → l'oggetto condiviso, o `null` se il provider non è attivo / non implementa `getObjectToShareToOthersPlugin()`. `callerName` opzionale → il provider può personalizzare la risposta per consumer. Ideale in route handler/middleware/framework.
+- **Push (al boot):** `setSharedObject(fromPlugin, sharedObject)`, automatico e per-consumer. Ideale per dipendenze plugin-to-plugin.
 
-### Inter-Plugin Communication
+### Rotte API dei plugin
 
-Plugins share objects via:
+Pattern: `/${apiPrefix}/${pluginName}/${path}` (default `/api/{pluginName}/...`).
 
-```javascript
-// In providing plugin (e.g., dbApi)
-getObjectToShareToOthersPlugin(forPlugin, pluginSys, pathPluginFolder) {
-  // Can customize what to share per requesting plugin
-  if (forPlugin === 'adminUsers') {
-    return { db: this.userDb }
-  }
-  return { db: this.sharedDb }
-}
+**⚠️ CONTRATTO CRITICO dell'oggetto rotta** — ogni rotta DEVE avere:
 
-// In receiving plugin
-setSharedObject(fromPlugin, sharedObject) {
-  if (fromPlugin === 'dbApi') {
-    this.db = sharedObject.db
-  }
-}
+| Proprietà | Obbligo | Note |
+|-----------|---------|------|
+| `method` | sì | **MAIUSCOLO**: `'GET'`, `'POST'`, `'PUT'`, `'DEL'`, `'ALL'` |
+| `path` | sì | es. `'/hello'` |
+| `handler` | sì | `async (ctx) => { ... }` |
+| `access` | sì | controllo accessi (vedi Access Control) |
 
-// Access shared objects via pull mechanism (on-demand)
-// Generic call (forPlugin = undefined — provider returns generic object)
-const dbApiShared = pluginSys.getSharedObject('dbApi')
-
-// Caller-specific call (provider can customize response for that consumer)
-const dbApiForMedia = pluginSys.getSharedObject('dbApi', 'media')
-```
-
-**`getSharedObject(providerPluginName, callerName)`**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `providerPluginName` | string | Yes | Plugin that exposes the shared object |
-| `callerName` | string | No | Requesting plugin name (for per-consumer customization) |
-
-Returns `null` if plugin is not active or doesn't implement `getObjectToShareToOthersPlugin()`.
-
-**Push vs Pull:**
-- **Push** (`setSharedObject`) — Automatic during init, per-consumer customized. Best for plugin-to-plugin dependencies.
-- **Pull** (`getSharedObject`) — On-demand at runtime. Best for route handlers, middleware, and framework code.
-
-### Plugin API Routes
-
-Routes follow pattern: `/${apiPrefix}/${pluginName}/${path}`
-
-**CRITICAL — Route Object Properties:**
-
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `method` | string | Yes | **MUST be UPPERCASE**: `'GET'`, `'POST'`, `'PUT'`, `'DEL'`, `'ALL'` |
-| `path` | string | Yes | Route path (e.g., `'/hello'`) |
-| `handler` | async function | Yes | Route handler: `async (ctx) => { ... }` |
-| `access` | object | Yes | Access control (see Access Control section) |
-
-**WARNING:** Using lowercase methods (e.g., `'get'` instead of `'GET'`) or `func` instead of `handler` will cause routes to be **silently ignored** by `pluginSys.loadRoutes()`. The route won't be registered and requests will fall through to the static file server, returning HTML instead of JSON.
+> **WARNING:** `method` minuscolo (`'get'`) o `func` invece di `handler` → la rotta viene **silenziosamente ignorata** da `pluginSys.loadRoutes()` e la richiesta cade sul static server (HTML invece di JSON). Il campo `access` è **obbligatorio**: la sua assenza causa **errore fatale al boot** (vedi Access Control System).
 
 ```javascript
 getRouteArray() {
-  return [
-    {
-      method: 'GET',  // MUST be uppercase: 'GET', 'POST', 'PUT', 'DEL', 'ALL'
-      path: '/hello',
-      access: { requiresAuth: false, allowedRoles: [] },
-      handler: async (ctx) => {
-        ctx.body = 'Hello World'
-      }
-    }
-  ]
+  return [{
+    method: 'GET', path: '/hello',
+    access: { requiresAuth: false, allowedRoles: [] },
+    handler: async (ctx) => { ctx.body = 'Hello World' }
+  }]
 }
 ```
 
-Accessible at: `/api/myPlugin/hello`
+### Page hooks
 
-### Page Hooks
+`getHooksPage(section, passData, ...)` restituisce HTML da iniettare nella pagina. Sezioni disponibili: `head`, `header`, `body`, `footer`, `script`.
 
-Plugins can inject content into page sections:
+### Funzioni globali nei template (whitelist)
 
-```javascript
-getHooksPage(section, passData, pluginSys, pathPluginFolder) {
-  if (section === 'head') {
-    return '<link rel="stylesheet" href="/my-styles.css">'
-  }
-  if (section === 'header') {
-    return '<div>Injected header content</div>'
-  }
-  if (section === 'script') {
-    return '<script src="/my-script.js"></script>'
-  }
-  return ''
-}
-```
+I plugin possono esporre funzioni come helper **globali** negli EJS (senza il prefisso `passData.plugin.{nome}`). Modello a **whitelist** in 3 parti:
+1. Whitelist in `ital8Config.json5 → globalFunctionsWhitelist` (per funzione: `plugin`, `description?`, `required`: `true`=fail-fast / `false`=fallback con warning).
+2. Il plugin dichiara i candidati con `getGlobalFunctionsForTemplates()`.
+3. `pluginSys.getGlobalFunctions()` valida e registra **solo** le funzioni autorizzate dalla whitelist.
 
-Available sections: `head`, `header`, `body`, `footer`, `script`
-
-### Global Functions in Templates
-
-**Feature:** Plugins can expose functions as global helpers in EJS templates, making them accessible directly without the `passData.plugin.{pluginName}` prefix.
-
-**Architecture Overview:**
-
-The system uses a **whitelist-based security model** with three components:
-1. **Whitelist** (`ital8Config.json5`) - Authorizes which functions can be global
-2. **Plugin Export** (`getGlobalFunctionsForTemplates()`) - Plugin declares global function candidates
-3. **Registration** (`pluginSys.getGlobalFunctions()`) - Validates and registers functions
-
----
-
-#### 1. Whitelist Configuration (ital8Config.json5)
-
-Global functions MUST be explicitly authorized in the central configuration:
-
-```json5
-{
-  "globalFunctionsWhitelist": {
-    "__": {
-      "plugin": "simpleI18n",
-      "description": "Translation function for internationalization",
-      "required": true  // true = fail-fast, false = graceful degradation
-    }
-    // Add more functions here as needed
-  }
-}
-```
-
-**Whitelist attributes:**
-- `plugin` (required) - Plugin that provides the function
-- `description` (optional) - Documentation for the function
-- `required` (required) - Behavior if plugin is missing:
-  - `true` → **CRASH STARTUP** (fail-fast) - System cannot run without this function
-  - `false` → **CREATE FALLBACK** (graceful degradation) - Fallback function logs WARNING when called
-
----
-
-#### 2. Plugin Standard: getGlobalFunctionsForTemplates()
-
-Plugins export global function candidates via a dedicated method:
-
-```javascript
-module.exports = {
-  // Existing standard methods...
-  getObjectToShareToWebPages() {
-    // LOCAL functions (available as passData.plugin.{pluginName}.{function})
-    return {
-      __: this.translate.bind(this),
-      getCurrentLang: (ctx) => ctx?.state?.lang,
-      getSupportedLangs: () => [...this.config.supportedLangs],
-      getConfig: () => ({ ...this.config })
-    };
-  },
-
-  // NEW: Global function candidates (must be in whitelist)
-  getGlobalFunctionsForTemplates() {
-    // GLOBAL functions (available directly in templates)
-    // Only functions listed here can be considered for global registration
-    // Final registration depends on whitelist authorization
-    return {
-      __: this.translate.bind(this)
-    };
-  }
-}
-```
-
-**Key points:**
-- ✅ **Explicit declaration:** Only functions returned here are candidates for global registration
-- ✅ **Clear separation:** `getObjectToShareToWebPages()` = local, `getGlobalFunctionsForTemplates()` = global
-- ✅ **Security:** Plugin CANNOT force global registration - must be authorized in whitelist
-- ⚠️ **WARNING:** If plugin is in whitelist but doesn't implement this method, a warning is logged
-
----
-
-#### 3. Registration System (pluginSys.js)
-
-The `pluginSys.getGlobalFunctions()` method validates and registers functions:
-
-**Flow:**
-1. Read whitelist from `ital8Config.json5`
-2. For each function in whitelist:
-   - Check if plugin is active
-   - Check if plugin implements `getGlobalFunctionsForTemplates()`
-   - Check if function exists in returned object
-   - Register function if all checks pass
-3. Return registered functions for EJS
-
-**Security features:**
-- ✅ **Whitelist enforcement:** Only authorized functions are registered
-- ✅ **Fail-fast mode:** Required functions missing = startup crash
-- ✅ **Fallback mode:** Optional functions missing = fallback created
-- ✅ **Clear warnings:** Missing implementations or misconfigurations are logged
-
----
-
-#### 4. Usage in Templates
-
-**Global syntax (recommended for whitelisted functions):**
-
-```ejs
-<%- __({
-  it: "Ciao Mondo",
-  en: "Hello World"
-}, passData.ctx) %>
-```
-
-**Local syntax (always available, backward compatible):**
-
-```ejs
-<%- passData.plugin.simpleI18n.__({
-  it: "Ciao Mondo",
-  en: "Hello World"
-}, passData.ctx) %>
-```
-
----
-
-#### Important Notes
-
-- ✅ **Both syntaxes always work:** Global is convenient, local is always available
-- ✅ **No breaking changes:** Existing code continues to work without modification
-- ✅ **Backward compatibility guaranteed:** `getObjectToShareToWebPages()` remains the standard for local functions
-- ✅ **Security first:** Whitelist prevents unauthorized global function injection
-- ✅ **Extensible:** Add new global functions by:
-  1. Implementing `getGlobalFunctionsForTemplates()` in plugin
-  2. Adding function to whitelist in `ital8Config.json5`
-
----
-
-#### Currently Supported Global Functions
-
-- `__()` - Translation function from `simpleI18n` plugin
-
----
-
-#### Example Files
-
-- **Configuration:** `/ital8Config.json5` (globalFunctionsWhitelist section)
-- **Plugin implementation:** `/plugins/simpleI18n/main.js` (getGlobalFunctionsForTemplates method)
-- **Template example:** `/www/i18n-test.ejs` (side-by-side syntax comparison)
+Entrambe le sintassi funzionano sempre: globale `<%- __(...) %>` e locale `<%- passData.plugin.simpleI18n.__(...) %>`. Esempio attuale: `__()` (traduzioni, da `simpleI18n`).
 
 ## Plugin Pages System
 
