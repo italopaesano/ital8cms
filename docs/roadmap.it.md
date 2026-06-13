@@ -6,12 +6,6 @@ Miglioramenti e lavori pianificati, raccolti dall'analisi del codebase. Non è u
 
 ## Documentazione (ital8doc)
 
-- Riscrivere secondo lo standard ital8doc, usando come spunto gli archivi in `docs/archive/`:
-  - sistema di logging (da `logging-system.it.md`)
-  - diagramma di flusso del sistema plugin (da `plugin-system-flowchart.it.md`)
-  - documentazione API (da `api-documentation.it.md`)
-  - test suite → guida `docs/testing` (da `test-suite.it.md`)
-  - coding style → CLAUDE.md (da `coding-style.it.md`)
 - Riempire gli stub `.md` inglesi (plugin, temi, core EXPLAIN) alla prima pubblicazione importante.
 
 ## Miglioramenti pianificati
