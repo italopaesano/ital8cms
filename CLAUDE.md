@@ -5594,70 +5594,7 @@ Per rendere un plugin/tema "demo-ready":
 
 ## Deployment Guidelines
 
-### Pre-Production Checklist
-
-- [ ] Change session keys in `core/priorityMiddlewares/koaSession.json5` (il wizard `npm run start-configure` le genera casuali; un warning al boot avvisa se restano i placeholder)
-- [ ] Set appropriate `httpPort` or enable HTTPS
-- [ ] Review and secure admin path (`adminPrefix`)
-- [ ] Enable authentication for admin routes
-- [ ] Set `debugMode: 0` in production
-- [ ] Review user roles and permissions
-- [ ] Backup database files
-- [ ] Set up proper logging
-- [ ] Configure reverse proxy (nginx/Apache)
-- [ ] Set up SSL certificates if using HTTPS
-
-### Production Deployment
-
-1. **Install dependencies:**
-```bash
-npm install --production
-```
-
-2. **Run application:**
-```bash
-node index.js
-```
-
-3. **Use process manager (recommended):**
-```bash
-# Install PM2
-npm install -g pm2
-
-# Start application
-pm2 start index.js --name ital8cms
-
-# Auto-restart on reboot
-pm2 startup
-pm2 save
-```
-
-4. **Reverse proxy (nginx example):**
-```nginx
-server {
-  listen 80;
-  server_name example.com;
-
-  location / {
-    proxy_pass http://localhost:3000;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection 'upgrade';
-    proxy_set_header Host $host;
-    proxy_cache_bypass $http_upgrade;
-  }
-}
-```
-
-### Environment-Based Configuration
-
-**Future Enhancement:** Consider using environment variables:
-
-```javascript
-// Load from .env file
-const httpPort = process.env.HTTP_PORT || 3000
-const debugMode = process.env.DEBUG_MODE === 'true' ? 1 : 0
-```
+Spostato in [`docs/deployment.it.md`](./docs/deployment.it.md).
 
 ## Important Files Reference
 
