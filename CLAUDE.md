@@ -65,6 +65,22 @@ const config = loadJson5('./ital8Config.json5');
 
 **Why loadJson5 naming:** The file is named `loadJson5.js` and the function is `loadJson5()` to maintain **perfect symmetry** between the module name and the exported function, making imports clear and intuitive.
 
+## AI Assistant Guidelines
+
+Lavorando su questo codebase come AI assistant — regole operative (le più critiche per prime):
+
+1. **`loadJson5()` SEMPRE** per leggere i file `.json5` (mai `require()`/`JSON.parse()`); scritture **atomiche** (temp + `rename`).
+2. **Campo `access` obbligatorio** su ogni rotta di plugin (`getRouteArray`): assenza = **errore fatale al boot**. Metodo rotta in **MAIUSCOLO**, chiave `handler` (non `func`).
+3. **Naming — OBBLIGATORIO:** prima di introdurre QUALSIASI nuovo nome (variabili, funzioni, file, directory, plugin, classi, costanti) proponi **almeno 2-3 alternative** significative (4-5+ se complesso) con breve spiegazione, e **attendi l'approvazione** del maintainer. Requisito **critico**, mai saltare.
+4. **`koa-classic-server` (dipendenza del team):** se trovi un bug **non aggirarlo** localmente — segnalalo al maintainer e aggiorna alla versione fixata (vedi *Dipendenze Mantenute dal Team*).
+5. **Sicurezza:** password con bcrypt; valida l'input; output **escapato** (XSS); redirect **validati** (open-redirect); il CSRF è gestito dal plugin `csrfProtection`.
+6. **Documentazione — standard `ital8doc` v1-1** → [`docs/ITAL8DOC-latest.md`](./docs/ITAL8DOC-latest.md). Ogni plugin/tema ha `README.it.md` (obbligatorio) + `EXPLAIN.it.md` (opzionale, se interni non banali), con stub inglese `.md`. Quando tocchi un plugin/tema/sottosistema aggiorna il **suo** doc, non CLAUDE.md.
+7. **Architettura a plugin:** la maggior parte delle feature va implementata come plugin; rispetta dipendenze e ordine di caricamento; segui i pattern esistenti (rotte, middleware, hook).
+8. **Test:** dopo le modifiche verifica che il server parta, il plugin carichi, le rotte rispondano e l'auth funzioni (vedi *Testing* → `docs/testing.it.md`).
+9. **Temi:** considera sia il tema pubblico sia quello admin.
+10. **Commenti:** l'autore usa l'italiano; per i nuovi commenti preferisci l'inglese, rispettando gli esistenti.
+11. **Progetto alpha** (v0.0.1-alpha.0): breaking changes accettabili ma documentati in `CHANGELOG.md`.
+
 ## Codebase Structure
 
 ```
@@ -1443,40 +1459,11 @@ git commit -m "message"        # Commit changes
 git push                       # Push to remote
 ```
 
-## AI Assistant Guidelines
-
-When working on this codebase as an AI assistant:
-
-1. **Understand Plugin Architecture:** This is a plugin-based system. Most features should be implemented as plugins.
-
-2. **Respect Dependencies:** Check plugin dependencies and loading order before making changes.
-
-3. **Use Existing Patterns:** Follow established patterns for routes, middleware, and hooks.
-
-4. **Security First:** Always hash passwords, validate input, use prepared statements.
-
-5. **Test Changes:** After modifications, verify:
-   - Server starts without errors
-   - Plugin loads successfully
-   - Routes are accessible
-   - Authentication still works
-
-6. **Documentation:** Update this file when adding significant features or changing architecture.
-
-7. **Italian Comments:** Author uses Italian comments. When adding comments, prefer English for international collaboration, but respect existing Italian comments.
-
-8. **Version Control:** This is an alpha project (v0.0.1-alpha.0). Breaking changes are acceptable but should be documented.
-
-9. **Configuration Changes:** When modifying configuration, update relevant JSON5 files and document changes. **ALWAYS use `loadJson5()` to read configuration files, never use `require()` or `JSON.parse()`.**
-
-10. **Theme Changes:** If modifying themes, ensure both public and admin themes are considered.
-
-11. **Naming Convention - MANDATORY:** **ALWAYS propose at least 2-3 meaningful name alternatives** (or more when appropriate) before introducing any new name (variables, functions, files, directories, plugins, classes, constants, etc.). For complex or critical naming decisions, propose 4-5+ alternatives to provide more choice. Provide a brief explanation for each option and wait for the maintainer's approval before proceeding with implementation. This is a **CRITICAL REQUIREMENT** and must never be skipped.
-
 ---
 
-**Last Updated:** 2026-06-12
+**Last Updated:** 2026-06-13
 **Version:** 2.15.0
 **Maintained By:** AI Assistant (based on codebase analysis)
+**Standard documentazione:** ital8doc v1-1 → [`docs/ITAL8DOC-latest.md`](./docs/ITAL8DOC-latest.md)
 
 **Changelog:** spostato in [`CHANGELOG.md`](./CHANGELOG.md).

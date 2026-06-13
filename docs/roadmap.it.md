@@ -12,7 +12,7 @@ Miglioramenti e lavori pianificati, raccolti dall'analisi del codebase. Non è u
   - documentazione API (da `api-documentation.it.md`)
   - test suite → guida `docs/testing` (da `test-suite.it.md`)
   - coding style → CLAUDE.md (da `coding-style.it.md`)
-- Creare `docs/README.md` (indice della documentazione, tipo `index`).
+- Migrare i `core/**` EXPLAIN allo schema bilingue ital8doc (oggi sono file unici in italiano, non suffissati: `EXPLAIN-pluginsSys.md`, `EXPLAIN-themeSys.md`, `EXPLAIN-pluginPages.md`, `core/admin/EXPLAIN.md`).
 - Riempire gli stub `.md` inglesi alla prima pubblicazione importante.
 
 ## Miglioramenti pianificati
