@@ -1,3 +1,6 @@
+<!-- ital8doc v1-1 · tipo: reference · lang: it · ref -->
+> 🗄️ ARCHIVIATO — snapshot storico di novembre 2025; non riflette lo stato attuale del progetto. Conservato per tracciabilità.
+
 # Analisi Completa del Sistema Plugin - ital8cms
 
 **Data Analisi:** 2025-11-19

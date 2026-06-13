@@ -1,3 +1,4 @@
+<!-- ital8doc v1-1 · tipo: decision · lang: it · ref -->
 # Decision Summary: Admin Plugin Pages Standard
 
 **Versione:** 1.0.0
@@ -19,8 +20,8 @@ Attualmente (v1.5.0), i plugin admin devono dichiarare le sezioni in **DUE posti
 - ❌ Menu order manuale (non scalabile)
 
 **Documentazione Completa:**
-- 📄 [`ADMIN_PLUGIN_PAGES_ANALYSIS.md`](./ADMIN_PLUGIN_PAGES_ANALYSIS.md) - Analisi dettagliata alternative
-- 📄 [`ADMIN_PLUGIN_PAGES_EXAMPLES.md`](./ADMIN_PLUGIN_PAGES_EXAMPLES.md) - Esempi pratici e confronti
+- 📄 [`analysis.it.md`](./analysis.it.md) - Analisi dettagliata alternative
+- 📄 [`examples.it.md`](./examples.it.md) - Esempi pratici e confronti
 
 ---
 
@@ -293,8 +294,8 @@ Attualmente (v1.5.0), i plugin admin devono dichiarare le sezioni in **DUE posti
 ## 📞 Next Steps
 
 1. **Review** questo documento e file correlati:
-   - [`ADMIN_PLUGIN_PAGES_ANALYSIS.md`](./ADMIN_PLUGIN_PAGES_ANALYSIS.md)
-   - [`ADMIN_PLUGIN_PAGES_EXAMPLES.md`](./ADMIN_PLUGIN_PAGES_EXAMPLES.md)
+   - [`analysis.it.md`](./analysis.it.md)
+   - [`examples.it.md`](./examples.it.md)
 
 2. **Confermare decisioni** D1-D5 (o proporre alternative)
 

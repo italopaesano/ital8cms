@@ -1,0 +1,606 @@
+<!-- ital8doc v1-1 · tipo: reference · lang: it -->
+# Changelog — ital8cms
+
+Storico delle modifiche del progetto e della documentazione (voci dalla più recente).
+
+- v2.15.0 (2026-06-12): **SECURITY** - Rotazione delle chiavi di sessione in fase d'installazione + avviso al boot. Le `keys` di `core/priorityMiddlewares/koaSession.json5` (firma dei cookie koa-session) erano placeholder committati e condivisi: chiunque cloni il repo poteva forgiare cookie validi. Ora il wizard le genera casuali e un warning segnala se restano i placeholder. Key changes:
+  - **Wizard d'installazione (`scripts/lib/sessionKeyManager.js`):** nuovo step in FASE 1 (`scripts/init.js`) con menu a tre voci (Genera / Inserisci personalizzate / Mantieni) e **default adattivo** (Genera se placeholder, Mantieni se già custom). `generateSessionKeys()` produce **3 chiavi** `crypto.randomBytes(32).toString('base64url')`. Scrittura via `core/editJson5` (sostituisce solo `keys`, preserva i commenti) con backup `BackupManager`. I valori delle chiavi non vengono mai loggati. Gira per `production` e `demo`; saltato nella re-init `plugins`.
+  - **Warning al boot (`core/sessionSecurity.js → checkSessionKeys()`):** chiamato da `index.js` allo startup; box ASCII (stile `httpsManager.warnMissingCertificates()`) se la sessione è attiva e le chiavi sono ancora placeholder. Non bloccante; salta se la sessione è disabilitata.
+  - **Fonte unica (`core/sessionSecurity.js`):** denylist `PLACEHOLDER_SESSION_KEYS` (3 valori del file + 1 storico della doc) e predicato `keysAreInsecure(keys)`, condivisi tra tooling install-time e runtime (dipendenza tooling → core, non viceversa). `generateSessionKeys()` resta nel tooling.
+  - **Tests:** +19 unit — `tests/unit/core/sessionSecurity.test.js` (denylist, `keysAreInsecure`, `checkSessionKeys` con config iniettata) e `tests/unit/sessionKeyManager.test.js` (`generateSessionKeys`: count/encoding base64url/lunghezza/unicità). Suite unit completa verde (71 suite, 2080 test prima → con i nuovi). Smoke verificato: warning al boot sul file reale, write path via `editJson5` su copia temporanea (chiavi sostituite, commenti e `CONFIG` intatti).
+  - **Files Added:** `/core/sessionSecurity.js`, `/scripts/lib/sessionKeyManager.js`, `/tests/unit/core/sessionSecurity.test.js`, `/tests/unit/sessionKeyManager.test.js`.
+  - **Files Modified:** `/scripts/init.js` (step in FASE 1), `/index.js` (`checkSessionKeys` al boot), `/CLAUDE.md` (sezione Session Configuration, checklist, Important Files, changelog).
+- v2.14.0 (2026-06-12): **NEW PLUGIN** - `adminCsrfProtection`, the twin admin GUI for the `csrfProtection` service (Twin Admin Plugin + The Three Views conventions). Key changes:
+  - **Service additions (`csrfProtection`):** in-memory audit (counters + recent-blocks ring buffer, fed by `validateRequest`) and new shared-object API for the GUI: `getStats()`, `getRecentBlocks(limit)`, `simulate(input)` (CSRF tester — evaluates a synthetic request against the live policy), `reloadConfig()` (hot-reload of `custom`).
+  - **adminCsrfProtection:** section `csrfManagement` (registered in `core/admin/adminConfig.json5` + menuOrder; symlink gitignored). Two pages: Data view (`index.ejs`: KPI + recent CSRF blocks + request simulator, auto-refresh) and Settings editor (`settings.ejs`: raw JSON5 of the service's `custom` block, Validate / Save / Save & restart). Routes (roles `[0,1]`): status, recent, simulate, config + validate-config, restart.
+  - **Propagation:** stats/recent/simulate read in-memory state (immediate); settings save uses `core/editJson5` to replace only `custom` (atomic write + rotating backups via `lib/configFileManager.js`) then `reloadConfig()` → hot. Enabling the plugin from a disabled boot needs "Save & restart" (middleware + head hook are boot-time). The GUI's own `fetch` POSTs are covered by the CSRF interceptor automatically (no client token handling).
+  - **Tests:** +30 (csrfProtection audit/stats/simulate; adminCsrfProtection routes + configFileManager), filesystem-isolated via `os.tmpdir()` sandbox. Full jest suite green (79 suites, 2238 tests). Boot verified: plugin loads, section symlink created, `/api/adminCsrfProtection/status` returns 401 unauthenticated.
+  - **Files Added:** `/plugins/adminCsrfProtection/**` (main.js, pluginConfig/Description, lib/configFileManager.js, adminWebSections/csrfManagement/{index,settings}.ejs + {csrf-admin,settings-editor}.js + csrf-admin.css, tests/unit/{routes,configFileManager}.test.js), `/plugins/csrfProtection/tests/unit/audit.test.js`.
+  - **Files Modified:** `/plugins/csrfProtection/main.js` (audit + getStats/getRecentBlocks/simulate/reloadConfig), `/core/admin/adminConfig.json5` (section + menuOrder), `/.gitignore` (section symlink), `/CLAUDE.md`.
+- v2.13.0 (2026-06-11): **NEW FEATURE** - Profilo di installazione "demo". Aggiunto un secondo profilo di install (oltre a production) che pre-popola il CMS con utenti e contenuti di esempio per provare il sistema. Key changes:
+  - **Flag `demo` in `ital8Config.json5`** (boolean, default `false`, commento su singola riga). Puramente segnaletico a runtime: non altera il comportamento delle richieste, non blocca l'avvio, non cambia la sicurezza.
+  - **Guardrail minimale (advisory):**
+    - Avviso al boot (box ASCII) via `core/demoNotice.js → printDemoBootWarning()`, chiamato da `index.js` solo se `demo === true` (footprint zero altrimenti).
+    - Badge "DEMO" discreto nelle pagine admin, iniettato **theme-agnostic** dentro `pluginSys.hookPage('header')` (gated `this.#ital8Conf.demo && passData.isAdminContext`), via `getDemoBadgeHtml()`. Nessun tema modificato.
+    - `passData.demo` esposto nei 3 builder di `index.js` (public, pluginPages, admin).
+  - **Wizard (`scripts/init.js`):** domanda iniziale del profilo (production | demo). Il ramo demo **salta** l'init di produzione (niente root da terminale): copia i file seed e attiva `demo: true`. Il ramo production assicura `demo: false`. La Fase 1 (config globale) è riusata in entrambi.
+  - **Seeding install-time (`scripts/lib/demoSeeder.js`)** — due convenzioni di copia-file (merge + overwrite, backup in `backups/demo-<ts>/`):
+    - **(A)** co-locata: `plugins/<p>/<file>.demo.json5` → `<file>.json5` (scan ricorsivo, esclusi node_modules/tests/scripts/dot-dir).
+    - **(B)** mirror: `.demoData/{www,plugins,themes}/` → path corrispondenti nella root.
+    - Hook **opzionale** `seedDemo(context)` in `plugins/<p>/scripts/init.js` per seeding programmatico. `projectRoot` iniettabile per i test.
+  - **Contenuti demo (committati, statici):** `plugins/adminUsers/userAccount.demo.json5` (6 utenti: `demoRoot`/`demoAdmin`/`demoEditor`/`demoSelfEditor` + `demoContentModerator`/`demoNewsletterEditor`, password unica `demomode`), `userRole.demo.json5` (4 ruoli hardcoded + 2 custom 100/101), `.demoData/www/` (copia degli attuali `/www/` con `__index.ejs`→`index.ejs`).
+  - **Test:** `tests/unit/demoSeeder.test.js` (12 test, filesystem isolato in `os.tmpdir()`): convenzione A (copia, backup, skip dir), convenzione B (mirror, backup, top-level filtrati), hook `seedDemo`.
+  - **Files Added:** `/core/demoNotice.js`, `/scripts/lib/demoSeeder.js`, `/plugins/adminUsers/userAccount.demo.json5`, `/plugins/adminUsers/userRole.demo.json5`, `/.demoData/www/**`, `/tests/unit/demoSeeder.test.js`.
+  - **Files Modified:** `/ital8Config.json5` (flag `demo`), `/index.js` (passData.demo + avviso boot), `/core/pluginSys.js` (badge in hookPage), `/scripts/init.js` (profilo + ramo demo), `/CLAUDE.md` (sezione "Demo Install Profile" + changelog).
+- v2.12.0 (2026-06-07): **NEW PLUGIN** - `csrfProtection`, anti Cross-Site Request Forgery (synchronizer token + Origin check), enforced centrally in the core route-wrap. Key changes:
+  - **New plugin: `csrfProtection`**
+    - Synchronizer token per-session in `ctx.session.csrfToken` (signed cookie → not forgeable / not readable cross-origin), **rotated on login** (`adminUsers` handler: `if (csrf) csrf.rotateToken(ctx)`, graceful optional pattern)
+    - Origin/Referer check as a second layer: expected origin rebuilt dynamically from the request Host (proxy-aware via `trustProxy` + `X-Forwarded-Host/Proto`), optional `allowedOrigins`; **token-fallback** when both headers are absent
+    - Pure validation in `lib/requestGuard.js` (`evaluate(ctx, custom, matcher)`); token in `lib/tokenManager.js` (base64url 256-bit + `timingSafeEqual`)
+  - **Central enforcement (core touchpoint):** `pluginSys.#wrapHandlerWithAccessCheck` pulls `getSharedObject('csrfProtection')` and calls `validateRequest(ctx)` on mutating methods **before** the auth check → covers public mutating routes (e.g. `POST /login`). Optional/graceful: disabled → `null` → validation skipped. *(Same "guard not middleware" lesson as `rateLimiter`: plugin middlewares run after the router.)*
+  - **Client integration (enforce direct):** `getHooksPage('head')` injects `<meta name="csrf-token">` + an interceptor that patches **both `window.fetch` and `XMLHttpRequest`** to add `X-CSRF-Token` on same-origin mutating requests (covers `adminMedia`'s XHR upload). Global helpers `csrfField()` / `csrfToken()` (whitelisted in `ital8Config.json5`, `required:false`) for classic forms — `login.ejs` / `logout.ejs` updated.
+  - **Hardening:** explicit `sameSite: 'lax'` on the session cookie (`koaSession.json5`) as an independent, deterministic second barrier (does NOT cover the same-site sub-domain vector — that's the token's job; `__Host-` intentionally not applied due to the HTTP+HTTPS dual setup).
+  - **Tests:** 73 unit (tokenManager, originValidator, configValidator, requestGuard, clientInterceptor, main integration) + E2E helper (`tests/e2e/csrfHelper.js`) and spec updates (accessControl test-access POSTs, api/globalPrefix login POSTs, auth logout) to carry the token under enforce. Full jest suite green (76 suites, 2208 tests). End-to-end behavior verified via curl: POST without token → 403, cross-origin POST with token → 403, same-origin POST with token (body or header) → passes.
+  - **Files Added:** `/plugins/csrfProtection/**` (main.js, pluginConfig/Description, lib/{tokenManager,originValidator,requestGuard,configValidator,clientInterceptor}.js, tests/unit/*.test.js), `/tests/e2e/csrfHelper.js`.
+  - **Files Modified:** `/core/pluginSys.js` (enforcement hook), `/core/priorityMiddlewares/koaSession.json5` (SameSite), `/ital8Config.json5` (whitelist csrfField/csrfToken), `/plugins/adminUsers/main.js` (rotate on login), `/plugins/adminUsers/webPages/{login,logout}.ejs` (csrfField), `/tests/e2e/{accessControl,api,auth,globalPrefix}.spec.js`, `/CLAUDE.md`.
+- v2.11.0 (2026-06-01): **NEW PLUGIN** - `adminRateLimiter`, the twin admin GUI for the `rateLimiter` service (Twin Admin Plugin + The Three Views conventions). Built incrementally:
+  - **rateLimiter foundations (Step 1):** engine `release` / `releaseAllForClient` / `forceBlock`; `attemptLog.readRecent`; shared-object API for admin (`releaseBlock`, `releaseAllForClient`, `banClient`, `getStats`, `getRecentAttempts`, `getConfig`, `validateRules`, `validateConfig`, `reloadRules`, `reloadConfig`); L2 enforcement middleware refactored to read `custom` LIVE (so `reloadConfig()` applies enforcement changes without restart).
+  - **adminRateLimiter (Steps 2-5):** section `rateLimiterManagement` (registered in `core/admin/adminConfig.json5` + menuOrder; symlink gitignored). Three pages: Data view (`index.ejs`: KPI + active blocks + audit, auto-refresh), Rules editor (`rules.ejs`: raw JSON5 of `protectedRoutes.json5`), Settings editor (`settings.ejs`: raw JSON5 of the `custom` block, with "Save & restart"). Routes (roles `[0,1]`): status, attempts, unblock, ban, rules + validate-rules, config + validate-config, restart.
+  - **Propagation:** live actions are immediate (in-memory engine); rules and defaults/enforcement hot-reload via `reloadRules`/`reloadConfig`; boot-time params use "Save & restart" (`pluginSys.requestRestart`) — safe since blocks persist via the stateStore.
+  - **File writes:** rules save writes raw content (comments preserved); settings save uses `core/editJson5` to replace only the `custom` block (preserving `active`/`dependency`/comments). Atomic writes + rotating backups (`lib/configFileManager.js`); validation reused from the service.
+  - **Tests:** rateLimiter +22 (99 total); adminRateLimiter 34 (routes + file manager). Filesystem-isolated via sandbox/tmpdir. Full project suite green.
+  - **Files Added:** `/plugins/adminRateLimiter/**` (main.js, pluginConfig/Description, lib/configFileManager.js, adminWebSections/rateLimiterManagement/{index,rules,settings}.ejs + {rateLimiter-admin,rules-editor,settings-editor}.js + rateLimiter-admin.css, tests/unit/{routes,configFileManager}.test.js).
+  - **Files Modified:** `/plugins/rateLimiter/**` (engine, attemptLog, main.js + tests), `/core/admin/adminConfig.json5` (section + menuOrder), `/.gitignore` (section symlink), `/CLAUDE.md`.
+- v2.10.0 (2026-06-01): **DOCS / STANDARD** - Codified admin-plugin conventions in CLAUDE.md (no code changes). Key additions (under *Admin System Architecture*):
+  - **Admin Plugin Best Practice — Twin Admin Plugin (`admin<Name>`)**: a service plugin needing a config/management UI should ship its admin interface as a separate twin admin plugin (`seo`→`adminSeo`, `bootstrapNavbar`→`adminBootstrapNavbar`, `media`→`adminMedia`, `analytics`→`adminAnalytics`, `rateLimiter`→`adminRateLimiter`). Documents the division of responsibilities (service = logic + shared object + config files, headless-capable; twin = GUI, depends on the service, resolves its folder via `pluginSys.getPlugin().pathPluginFolder` and pulls its shared object) and the special cases that combine both roles (`adminUsers`, `adminAccessControl`).
+  - **Admin GUI Conventions — The Three Views ("Le Tre Viste")**: a shared philosophy for admin UIs — (A) Data view (mandatory when there's runtime state/metrics; KPI + tables + charts + live actions), (B) Raw JSON5 editor (always present for config; the ground truth/fallback), (C) Structured form (optional, for rich config; coordinated with B over the same file). Includes coordination rules (single source of truth, shared server-side validation, explicit switching with unsaved-changes warning, atomic writes + backup), cross-cutting rules (i18n, responsive Bootstrap, XSS escaping, access roles, hot-reload vs "Save & restart", live actions via shared object), a decision guide, and a checklist. Derived from the existing reference implementations (`adminAnalytics`, `adminAccessControl`, `adminSeo`, `adminBootstrapNavbar`).
+  - **Files Modified:** `/CLAUDE.md` — added the two subsections above and this changelog entry.
+- v2.9.0 (2026-06-01): **NEW PLUGIN** - `rateLimiter`, anti brute-force / rate limiting service. Key changes:
+  - **New plugin: `rateLimiter`**
+    - Escalating block engine (fail2ban-style): N failures in a window → short block; after `maxShortBlocks` short blocks → long block (days)
+    - Keyed by `IP + ruleName` (a login block doesn't affect other rules)
+    - Configurable only via `.json5` (a future `adminRateLimiter` will add a GUI)
+  - **Architecture — two layers:**
+    - **Level 1 (guard via shared object):** consumers pull `pluginSys.getSharedObject('rateLimiter')` and call the guard inside the handler. Required because plugin middlewares run AFTER the router and cannot pre-block matched API routes like `POST /api/adminUsers/login`
+    - **Level 2 (enforcement middleware):** `getMiddlewareToAdd()` denies fall-through pages for IPs under a long block (`globalLongBlock`) and supports per-rule `pathPattern` enforcement via `core/patternMatcher.js`; `exemptPaths` (admin + theme resources) always pass
+  - **Persistence & audit:** in-memory state with periodic atomic snapshot to `state/activeBlocks.json5` (survives restart, flush on SIGTERM/SIGINT); append-only `logs/attempts.jsonl` (JSONL) with size rotation + retention cleanup. `state/` and `logs/` are gitignored (recreated at boot)
+  - **Proxy-aware:** optional `trustProxy` reads client IP from `X-Forwarded-For`
+  - **adminUsers integration:** login handler wired to rule `adminLogin` with graceful `if (rl)` fallback (block check before authenticate, `recordFailureCtx`/`recordSuccessCtx`); `login.ejs` shows a localized rate-limited message on `?error=rateLimited`
+  - **Tests:** comprehensive suite (7 files, 77 tests) — engine (window, escalation, expiry, sweep, persistence round-trip, `checkClientLongBlock`, events, isolation), `keyResolver`, `configValidator`, `attemptLog` (JSONL/rotation/retention), `stateStore` (atomic flush/handlers), plus integration tests of `main.js` (L1 guard API + L2 enforcement middleware) and the disabled-plugin case. Filesystem-isolated via tmpdir/sandbox
+  - **Files Added:**
+    - `/plugins/rateLimiter/main.js`, `pluginConfig.json5`, `pluginDescription.json5`, `protectedRoutes.json5`, `README.md`, `.gitignore`
+    - `/plugins/rateLimiter/lib/{rateLimitEngine,keyResolver,attemptLog,stateStore,configValidator}.js`
+    - `/plugins/rateLimiter/tests/unit/rateLimitEngine.test.js`
+  - **Files Modified:**
+    - `/plugins/adminUsers/main.js` — login handler wired to the rateLimiter guard (graceful fallback)
+    - `/plugins/adminUsers/webPages/login.ejs` — rate-limited error message
+    - `/CLAUDE.md` — added Rate Limiter Plugin section, Important Files entry, this changelog
+- v2.8.0 (2026-04-24): **TESTING INFRASTRUCTURE + DEPS** - Testing conventions for plugins and themes, shared test helpers, per-scope test runner, test platform upgrade, missing dependency fix. Key changes:
+  - **New convention: Testing Conventions for Plugins and Themes**
+    - Plugins e temi possono ora dichiarare i propri test in `plugins/<name>/tests/` e `themes/<name>/tests/`
+    - Struttura standard: `unit/`, `integration/`, `fixtures/`
+    - Scoperta automatica via pattern Jest `**/tests/**/*.test.js`
+    - Contratto di qualità in Fase 1: descrittivo (linee guida), enforcement prescrittivo rimandato alla Fase 2
+    - Sezione completa in CLAUDE.md: API helper, best practices, esempio di riferimento
+  - **Shared test helpers in `/core/testHelpers/`**
+    - Mock factories: `createPluginSysMock`, `createCtxMock`, `createThemeSysMock`, `createAdminSystemMock`
+    - Runners: `runRoute` (con validazione struttura), `runMiddleware`, `runPageHook`, `validateRoute`
+    - Utilities: `loadFixture` (per fixtures JSON5 condivise), `createPluginSandbox` (per isolamento filesystem via `os.tmpdir()`)
+    - Entry point `index.js` per import sintetico
+  - **Jest config: filter inactive plugins/themes**
+    - `tests/jest.config.js` ora legge al boot tutti i `pluginConfig.json5` e `themeConfig.json5`
+    - Aggiunge dinamicamente a `testPathIgnorePatterns` i path di plugin/temi con `active: 0`
+    - Consistente con il filtro già applicato da `pluginSys` al runtime
+  - **New script: `scripts/testRunner.js`**
+    - Wrapper Jest con flag di scope mutuamente esclusivi: `--plugin=<name>`, `--themes`, `--core`
+    - Validazione argomenti, warning se plugin senza cartella `tests/`
+    - Usa `--passWithNoTests` per `--themes` e `--plugin` (expected empty in Fase 1)
+  - **New npm scripts:**
+    - `test:core` - solo `tests/unit/` e `tests/integration/` (core del progetto)
+    - `test:plugin --plugin=<name>` - solo test di un plugin specifico
+    - `test:themes` - solo test dei temi (nessuno attualmente)
+  - **Migration: bootstrapNavbar tests (esempio di riferimento)**
+    - Spostati 5 file da `tests/unit/bootstrapNavbar/` a `plugins/bootstrapNavbar/tests/unit/`
+    - 187 test, 5 suite, 100% pass rate
+    - Aggiornati tutti i path di import (relative paths, `jest.mock`, `PROJECT_ROOT`)
+  - **Deps:**
+    - `jest` aggiornato da 30.2.0 a 30.3.0 (patch all'interno di Jest 30.x)
+    - `@playwright/test` aggiornato da 1.57.0 a 1.59.1 (minor all'interno di 1.x)
+    - `nodemailer` aggiunto come dependency (^8.0.6) — era dichiarato dal plugin `mailer` ma mai installato a livello root
+  - **Fixes:**
+    - `--testPathPattern` → `--testPathPatterns` in `test:unit` e `test:integration` (Jest 30 ha rinominato il flag)
+    - Risolto load failure in 4 suite integration che caricavano tutti i plugin (conseguenza del mancato install di nodemailer)
+  - **Files Added:**
+    - `/core/testHelpers/index.js` — Entry point, re-export helper
+    - `/core/testHelpers/pluginSysMock.js` — Factory `createPluginSysMock`
+    - `/core/testHelpers/ctxMock.js` — Factory `createCtxMock`
+    - `/core/testHelpers/themeSysMock.js` — Factory `createThemeSysMock`
+    - `/core/testHelpers/adminSystemMock.js` — Factory `createAdminSystemMock`
+    - `/core/testHelpers/routeRunner.js` — `runRoute`, `validateRoute`
+    - `/core/testHelpers/middlewareRunner.js` — `runMiddleware`
+    - `/core/testHelpers/hooksPageRunner.js` — `runPageHook`
+    - `/core/testHelpers/fixtureLoader.js` — `loadFixture`
+    - `/core/testHelpers/pluginSandbox.js` — `createPluginSandbox`
+    - `/core/testHelpers/fixtures/.gitkeep` — Placeholder per fixtures condivise
+    - `/scripts/testRunner.js` — Wrapper Jest per scope `--plugin`, `--themes`, `--core`
+    - `/plugins/bootstrapNavbar/tests/unit/*.test.js` — 5 file migrati (187 test)
+  - **Files Modified:**
+    - `/tests/jest.config.js` — Filtro dinamico per plugin/temi inattivi
+    - `/package.json` — 3 nuovi script (test:core, test:plugin, test:themes), fix --testPathPatterns, upgrade jest/playwright, aggiunta nodemailer
+    - `/CLAUDE.md` — Nuova sezione "Testing Conventions for Plugins and Themes" + 5 voci in "Future Improvements"
+  - **Files Removed:**
+    - `/tests/unit/bootstrapNavbar/` — Cartella rimossa, contenuto migrato in `plugins/bootstrapNavbar/tests/unit/`
+  - **Future Improvements aggiunti (5 voci):**
+    - Migrazione completa test plugin-specifici residui (`urlRedirect`, `adminBootstrapNavbar`)
+    - Supporto E2E/Playwright per plugin e temi
+    - Soglia minima coverage con enforcement CI
+    - Scanner prescrittivo al boot di `pluginSys` (Fase 2 del testing)
+    - Safety net filesystem nei test (Fase 2)
+  - **Verifica finale:**
+    - `npm test` (suite completa): 47 suite, 1776 test, 100% pass rate
+    - `npm run test:plugin --plugin=bootstrapNavbar`: 5 suite, 187 test, 100% pass rate
+    - `npm run test:themes`: 0 test trovati, exit 0 (expected in Fase 1)
+    - `npm run test:core`: 47 suite, 1776 test, 100% pass rate
+- v2.7.0 (2026-03-26): **NEW PLUGIN + CORE ENHANCEMENTS** - SEO plugin + core improvements. Key changes:
+  - **New plugin: `seo`**
+    - Meta tags injection via hookPage("head"): description, keywords, robots
+    - Open Graph tags (og:title, og:description, og:image, og:url, og:type, og:site_name)
+    - Twitter Cards (twitter:card, twitter:title, twitter:description, twitter:image, twitter:site)
+    - Canonical URL generation with clean URL support (removes .ejs extension)
+    - Structured data JSON-LD: Organization and WebSite schemas
+    - sitemap.xml generation: auto-scan wwwPath + manual extra pages + diff before overwrite
+    - robots.txt generation: configurable rules + auto sitemap link + diff before overwrite
+    - Per-page SEO rules in seoPages.json5 with pattern matching (exact, wildcard, regex)
+    - Every feature individually disableable via feature toggles
+    - Multilingual support (Strada B3): independent from simpleI18n, reads ctx.state.lang if available
+    - Admin pages: automatic noindex, nofollow injection
+    - Debug mode: re-reads seoPages.json5 on every request
+    - API endpoint: POST /api/seo/regenerate for on-demand file regeneration with report
+    - Boot validation: warns about invalid patterns and sitemap config (non-blocking)
+  - **Core: PatternMatcher moved to `/core/patternMatcher.js`**
+    - Extracted from adminAccessControl as shared utility module
+    - Used by both adminAccessControl and seo plugins
+    - Comprehensive JSDoc documentation with usage examples
+    - Tests updated to import from new location (41 tests passing)
+  - **Core: `indexFiles` configuration in `ital8Config.json5`**
+    - New per-instance configuration for koa-classic-server index files
+    - Three contexts: wwwPath, pluginPagesPrefix, adminPrefix
+    - Previously hardcoded `['index.ejs']`, now configurable
+    - Used by seo plugin to correctly map index files to directory URLs in sitemap
+  - **Files Added:**
+    - `/plugins/seo/main.js` — Plugin entry point
+    - `/plugins/seo/pluginConfig.json5` — Configuration + defaults + feature toggles
+    - `/plugins/seo/pluginDescription.json5` — Plugin metadata
+    - `/plugins/seo/seoPages.json5` — Per-page SEO rules (documented with examples)
+    - `/plugins/seo/lib/metaTagGenerator.js` — Meta tags, OG, Twitter, canonical
+    - `/plugins/seo/lib/structuredData.js` — JSON-LD generation
+    - `/plugins/seo/lib/sitemapGenerator.js` — Sitemap generation
+    - `/plugins/seo/lib/robotsTxtGenerator.js` — robots.txt generation
+    - `/core/patternMatcher.js` — Shared pattern matching utility (moved from adminAccessControl)
+  - **Files Modified:**
+    - `/ital8Config.json5` — Added indexFiles configuration block
+    - `/index.js` — Updated 3 koa-classic-server instances to use indexFiles config
+    - `/plugins/adminAccessControl/lib/accessManager.js` — Import patternMatcher from /core/
+    - `/plugins/adminAccessControl/lib/ruleValidator.js` — Import patternMatcher from /core/
+    - `/tests/unit/patternMatcher.test.js` — Updated import path
+    - `/CLAUDE.md` — Added SEO plugin documentation, PatternMatcher as core utility
+  - **Files Removed:**
+    - `/plugins/adminAccessControl/lib/patternMatcher.js` — Moved to `/core/patternMatcher.js`
+- v2.6.0 (2026-03-22): **PROJECT REVIEW** - Completed phases 7-9 of project review action plan. Key changes:
+  - **Plugin system robustness (Phase 7):**
+    - Directory name validation in pluginSys (defense-in-depth against path traversal) — `a512eec`
+    - Confirmed fail-fast error handling (Solution A) for plugin loading errors
+    - Added `getSharedObject(providerPluginName, callerName)` method to pluginSys — `7e6d0f3`
+      - On-demand pull mechanism (complements existing push via `setSharedObject`)
+      - Optional `callerName` for per-consumer customized objects
+      - Returns `null` for non-existent or non-sharing plugins
+  - **Test verification (Phase 8):**
+    - All 8 task areas already covered by existing tests
+    - Verified 34 test files, 1133 tests — all passing
+  - **Documentation updates (Phase 9):**
+    - Updated test listing with complete file tree (578 → 1133 tests, 34 files)
+    - Documented `getSharedObject()` API in Inter-Plugin Communication section
+    - Added XSS prevention guide for EJS templates (defense-in-depth strategy)
+    - Added Open Redirect prevention pattern
+    - Documented `escapeHtml` utilities (server-side and client-side)
+    - Documented EJS tag rules (`<%= %>` vs `<%- %>`) and JS variable pattern
+  - **Files Modified:**
+    - `/core/pluginSys.js` — Added `getSharedObject()` method
+    - `/CLAUDE.md` — Updated test counts, added security docs, updated changelog
+    - `/PROJECT_REVIEW_ACTION_PLAN.md` — Marked phases 7, 8, 9 as completed
+- v2.5.0 (2026-03-19): **DOCUMENTATION + TESTS** - adminBootstrapNavbar plugin tests and documentation. Key changes:
+  - **Unit tests added (3 files, 131 tests):**
+    - `navbarValidator.test.js` (63 tests) — JSON5 parsing, structure validation, settings, items, dropdowns, visibility, internal links, role validation
+    - `navbarFileManager.test.js` (33 tests) — Recursive scan, read, create, save with backup, soft-delete, backup management
+    - `navbarTemplates.test.js` (35 tests) — Template list, generation from templates, empty config, cross-template consistency
+  - **Internal documentation:**
+    - Added `README.md` inside plugin directory with complete API reference, configuration guide, library module docs, admin UI description
+  - **External documentation (CLAUDE.md):**
+    - Added "Admin Bootstrap Navbar Plugin" section with overview, configuration, API endpoints, library modules, admin UI pages, reference files
+    - Added plugin to "Important Files Reference" section
+    - Updated test listing and total count (355 → 578)
+  - **Files Added:**
+    - `/tests/unit/adminBootstrapNavbar/navbarValidator.test.js`
+    - `/tests/unit/adminBootstrapNavbar/navbarFileManager.test.js`
+    - `/tests/unit/adminBootstrapNavbar/navbarTemplates.test.js`
+    - `/plugins/adminBootstrapNavbar/README.md`
+  - **Files Modified:**
+    - `/CLAUDE.md` — Added adminBootstrapNavbar documentation section, updated test count
+- v2.4.0 (2026-03-19): **NEW PLUGIN** - urlRedirect plugin for URL redirects (301/302) during site migrations. Key changes:
+  - **New plugin: `urlRedirect`**
+    - Middleware-based redirect engine (no API routes, only GET requests intercepted)
+    - Three pattern types: exact, wildcard (* and **), regex with capture groups ($1-$N)
+    - First-match-wins evaluation order (user controls priority via array order)
+    - All features configurable via `pluginConfig.json5` custom section
+  - **Redirect rules in `redirectMap.json5`:**
+    - Array of objects with `from`, `to`, `type` fields
+    - `type` optional (defaults to 301)
+    - Supports internal and external redirects
+    - External redirects blocked by default (`allowExternalRedirects: false`)
+  - **Hit counter system:**
+    - Tracks `hitCount`, `firstHit`, `lastHit` per rule
+    - Periodic flush to `redirectHitCount.json5` (configurable interval)
+    - Atomic writes (temp file + rename)
+    - Graceful shutdown flush on SIGTERM/SIGINT
+  - **Boot-time validation:**
+    - Required fields, type validation, duplicate detection
+    - Regex compilation check, loop detection (A→B→A)
+    - Warnings for disabled features (skip + warn)
+    - `strictValidation` mode promotes warnings to fatal errors
+  - **Configurable features:**
+    - `preserveQueryString`, `normalizeTrailingSlash`, `caseSensitive`
+    - `enablePatternMatching`, `enableRegex`
+    - `allowExternalRedirects`, `enableLogging`, `strictValidation`
+  - **Debug/production modes:** re-read on every request (debug) vs cache (production)
+  - **Shared objects:** `getRedirectRules()`, `getHitCounts()`, `getRuleCount()` for future admin plugin
+  - **Unit tests:** 3 files, 101 tests (configValidator, redirectMatcher, hitCounter)
+  - **Documentation:** README.md in plugin folder + CLAUDE.md section
+  - **Files Added:**
+    - `/plugins/urlRedirect/main.js` — Plugin entry point, middleware
+    - `/plugins/urlRedirect/lib/redirectMatcher.js` — URL matching engine
+    - `/plugins/urlRedirect/lib/hitCounter.js` — Hit counter with periodic flush
+    - `/plugins/urlRedirect/lib/configValidator.js` — Boot-time validation
+    - `/plugins/urlRedirect/pluginConfig.json5` — Feature configuration
+    - `/plugins/urlRedirect/pluginDescription.json5` — Plugin metadata
+    - `/plugins/urlRedirect/redirectMap.json5` — Redirect rules template
+    - `/plugins/urlRedirect/README.md` — Plugin documentation
+    - `/tests/unit/urlRedirect/configValidator.test.js` — Validation tests
+    - `/tests/unit/urlRedirect/redirectMatcher.test.js` — Matching tests
+    - `/tests/unit/urlRedirect/hitCounter.test.js` — Hit counter tests
+  - **Files Modified:**
+    - `/CLAUDE.md` — Added urlRedirect documentation section, updated test count (254 → 355)
+- v2.3.0 (2026-03-06): **NEW FEATURE** - Clean URLs via hideExtension (koa-classic-server v2.6.1+). Key changes:
+  - **New `hideExtension` config block in `ital8Config.json5`:**
+    - Per-context configuration for 3 EJS-rendering instances (wwwPath, pluginPagesPrefix, adminPrefix)
+    - Each context has `enabled` (boolean) and `ext` (string with dot, e.g., ".ejs") fields
+    - Default: all disabled (backward compatible)
+    - Future-proof: supports different template engines per context
+  - **`index.js` updated:**
+    - WWW Root, Plugin Pages, and Admin Pages instances now pass `hideExtension` option to koa-classic-server
+    - Theme resource instances (public and admin) not affected
+  - **Backward compatibility:** Existing links with `.ejs` extension continue to work via automatic redirect
+  - **Files Modified:**
+    - `/ital8Config.json5` — added `hideExtension` configuration block
+    - `/index.js` — added `hideExtension` option to 3 koa-classic-server instances
+    - `/CLAUDE.md` — added "Hide Extension (Clean URLs)" documentation section
+- v2.2.0 (2026-02-28): **DEPENDENCY UPDATE + POLICY** - Aggiornamento `koa-classic-server` a 2.4.0 (fix symlink) e nuova policy per bug nelle dipendenze mantenute dal team. Key changes:
+  - **`koa-classic-server` aggiornato da 2.3.0 a 2.4.0:**
+    - La versione 2.4.0 corregge il bug in `findIndexFile()` che usava `dirent.isFile()` per rilevare i file indice
+    - `dirent.isFile()` restituisce `false` per i symlink → su NixOS con `buildFHSEnv` i file nella directory `www/` appaiono come symlink verso il Nix store, causando directory listing su `GET /` e 404 su `GET /index.ejs`
+    - La fix nel modulo risolve il problema alla radice seguendo correttamente i symlink
+  - **Rimosso il workaround da `index.js`:**
+    - Revertito il commit con il middleware esplicito per `/` e `/index.ejs` che bypassava `koa-classic-server`
+    - Il comportamento corretto è ora garantito direttamente dal modulo aggiornato
+  - **Nuova sezione in CLAUDE.md — "Dipendenze Mantenute dal Team":**
+    - Documenta che `koa-classic-server` è mantenuto dallo stesso team di ital8cms
+    - Stabilisce la policy: bug in `koa-classic-server` vanno corretti nel modulo, non aggirati in ital8cms
+    - Descrive la procedura da seguire quando viene trovato un bug nella dipendenza
+  - **Files Modified:**
+    - `/package.json` e `/package-lock.json` — versione `koa-classic-server` 2.3.0 → 2.4.0
+    - `/index.js` — rimosso middleware workaround per symlink (revert commit)
+    - `/CLAUDE.md` — aggiunta sezione "Dipendenze Mantenute dal Team" e questo changelog
+- v2.1.0 (2026-02-27): **ENHANCEMENT** - Warning visivo per certificati HTTPS mancanti + auto-generazione cert nel test diagnostico. Key changes:
+  - **`warnMissingCertificates()` in `core/httpsManager.js`:**
+    - Aggiunto controllo pre-emptivo `fs.existsSync()` prima di `readFileSync()` nel flusso di avvio HTTPS
+    - Distingue quale file è assente: annotazione `← non trovato` solo sulla riga del file mancante
+    - Titolo al singolare/plurale in base a quanti file mancano
+    - Box ASCII visivo delimitato da righe `═══` — difficile da ignorare nello scroll
+    - **Opzione A**: comando `openssl` completo con flag `-addext SAN` (DNS:localhost, IP:127.0.0.1)
+    - **Opzione B**: snippet di config per disabilitare HTTPS (`"https": { "enabled": false }`)
+    - Il server **continua ad avviarsi** in HTTP puro (fallback invariato)
+    - Errori non-ENOENT (permessi, corruzione) gestiti dal `catch` generico separato
+  - **`ensureTestCertificates()` in `tests/integration/httpsDiagnostics.test.js`:**
+    - `beforeAll()` globale che genera automaticamente cert/key con `openssl` se mancanti
+    - Include SAN (`DNS:localhost,IP:127.0.0.1`) — necessario per browser moderni
+    - Non sovrascrive certificati già presenti
+    - Se `openssl` non è nel PATH: istruzioni di installazione per Debian/Ubuntu, Fedora/RHEL, NixOS, macOS
+  - **Documentazione aggiornata in CLAUDE.md:**
+    - Scenario 4 mostra il nuovo output box ASCII
+    - Comando self-signed aggiornato con `-addext SAN` e note sui browser
+    - Implementation Notes cita `warnMissingCertificates()` e la distinzione pre-emptive vs catch
+    - Testing Strategy riscritta: Jest è configurato, lista test esistenti (254 totali), dettaglio 4 fasi di `httpsDiagnostics.test.js`, porte riservate
+  - **Files Modified:**
+    - `/core/httpsManager.js` - aggiunta `warnMissingCertificates()`, controllo pre-emptivo in `start()`
+    - `/tests/integration/httpsDiagnostics.test.js` - aggiunta `ensureTestCertificates()` + `beforeAll()`
+    - `/CLAUDE.md` - documentazione aggiornata
+- v2.0.0 (2026-02-21): **BREAKING CHANGE** - Implemented native HTTPS support with nested config block. Key changes:
+  - **BREAKING: Removed three flat config variables:**
+    - `useHttps` → rimossa
+    - `httpsPort` → rimossa
+    - `AutoRedirectHttpPortToHttpsPort` (root-level) → spostata dentro `https {}`
+  - **New `https` config block in `ital8Config.json5`:**
+    - `https.enabled` → abilita/disabilita HTTPS
+    - `https.port` → porta HTTPS (default 443)
+    - `https.AutoRedirectHttpPortToHttpsPort` → redirect 301 HTTP→HTTPS
+    - `https.certFile` → percorso certificato server (obbligatorio se enabled)
+    - `https.keyFile` → percorso chiave privata (obbligatorio se enabled)
+    - `https.caFile` → CA intermedia (opzionale, `""` = disabilitato)
+    - `https.tlsOptions` → opzioni TLS raw avanzate (opzionale, merge con priorità ai file)
+  - **4 scenari di avvio gestiti:**
+    - `enabled: false` → HTTP puro su `httpPort` (comportamento precedente invariato)
+    - `enabled: true` + cert ok + `AutoRedirect: false` → HTTP + HTTPS in parallelo
+    - `enabled: true` + cert ok + `AutoRedirect: true` → HTTP 301 redirect + HTTPS completo
+    - `enabled: true` + cert KO → `console.error` + fallback automatico a HTTP puro
+  - **Refactoring `index.js`:**
+    - Aggiunti `require('http')`, `require('https')`, `require('fs')` in cima
+    - `app.listen()` sostituito con `http.createServer(app.callback())` / `https.createServer(tlsConfig, app.callback())`
+    - Logica racchiusa tra commenti `START/END HTTP/HTTPS SERVER SETUP`
+    - Porta 443 omessa automaticamente dall'URL di redirect (standard HTTP)
+  - **Nessuna dipendenza npm aggiuntiva** (`http`, `https`, `fs` sono built-in Node.js)
+  - **Nuova sezione documentazione:** "HTTPS Configuration" in Configuration Management
+    - Fields reference table, 4 scenari comportamentali, Let's Encrypt example, self-signed example
+  - **Files Modified:**
+    - `/ital8Config.json5` - rimossi 3 flag flat, aggiunto blocco `https {}`
+    - `/index.js` - nuova logica HTTP/HTTPS server setup
+    - `/CLAUDE.md` - documentazione aggiornata
+- v1.9.0 (2026-02-21): **DOCUMENTATION** - Added comprehensive bootstrapNavbar plugin documentation to CLAUDE.md. Key changes:
+  - **New Section: Bootstrap Navbar Plugin**
+    - Complete plugin overview with feature list
+    - Usage in EJS templates (render API with parameters table)
+    - Configuration file format (navbar.{name}.json5 schema)
+    - Settings reference table (all 9 settings with types, defaults, descriptions)
+    - Settings merge priority (defaults < file < runtime)
+    - Item types documentation: regular items, dropdowns, separators, dividers
+    - Visibility filtering system (showWhen, requiresAuth, allowedRoles with priority)
+    - Auto-active page detection behavior
+    - configDir feature: cross-directory config sharing with path traversal protection
+    - Serving root resolution per context (www, pluginPages, admin)
+    - Three navbar type details with ASCII diagrams (horizontal, vertical, offcanvas)
+    - Caching behavior (debug vs production mode)
+    - Example configurations index (7 files)
+    - Complete theme integration example
+    - Exported API reference (4 functions)
+    - Troubleshooting guide
+    - Reference files table
+  - **Updated Important Files Reference**
+    - Added `/core/servingRootResolver.js` to Entry Points
+    - Added Bootstrap Navbar Plugin subsection (5 entries)
+  - **Unit Tests** (added in prior commits)
+    - 6 test files, 228 tests total (206 bootstrapNavbar + 22 servingRootResolver)
+    - Coverage: escapeHtml, isActivePage, isItemVisible, configDir, rendering pipeline, servingRootResolver
+- v1.8.0 (2026-01-28): **MAJOR FEATURE** - Implemented comprehensive access control system (adminAccessControl plugin). Key changes:
+  - **NEW PLUGIN: adminAccessControl**
+    - Pattern-based access control for all pages and routes
+    - Supports exact match, wildcards (*, **), and regex patterns
+    - Automatic priority resolution (more specific patterns win)
+    - Mandatory `access` field for all plugin routes
+  - **Architecture:**
+    - AccessManager: Core middleware for request interception
+    - PatternMatcher: Pattern matching engine with automatic priority calculation
+    - RuleValidator: Comprehensive validation (syntax, roles, conflicts, patterns)
+    - Configuration: Central JSON5 file with hardcoded and custom rules
+  - **Hybrid Access Control Model:**
+    - Pages: Managed via JSON5 configuration file
+    - Plugin Routes: Declared in code via mandatory `access` field
+    - Prevents conflicts between JSON rules and plugin routes
+  - **Admin UI:**
+    - Visual JSON5 editor at `/admin/adminAccessControl/`
+    - Real-time validation before save
+    - Hardcoded rules protected from modification
+    - Pattern syntax documentation built-in
+  - **Validation System:**
+    - Boot-time validation (fatal error if misconfigurations detected)
+    - Runtime validation (admin UI saves)
+    - Role existence checking against adminUsers
+    - Plugin route conflict detection
+  - **Pattern Matching Priority:**
+    - Exact match: 1000 (highest)
+    - Regex: 500
+    - Wildcard single level (*): 300
+    - Wildcard recursive (**): 100 (lowest)
+  - **Breaking Change: Mandatory Access Field:**
+    - ALL plugin routes MUST include `access: { requiresAuth, allowedRoles }`
+    - Missing field causes fatal boot error
+    - Ensures explicit security decision for every endpoint
+  - **Refactored All Plugins:**
+    - adminUsers: 14 routes updated
+    - bootstrap: 9 routes updated
+    - admin: All routes updated
+    - ccxt, dbApi, media, ostrukUtility: All routes updated
+  - **Custom 403 Page:**
+    - Access-denied.ejs for authenticated users without permission
+    - User-friendly error message with role information
+  - **Documentation:**
+    - Complete section added to CLAUDE.md
+    - Architecture overview, configuration guide, best practices
+    - Migration guide, testing guide, troubleshooting section
+  - **Files Added:**
+    - `/plugins/adminAccessControl/main.js` - Plugin entry point
+    - `/plugins/adminAccessControl/accessControl.json5` - Central configuration
+    - `/plugins/adminAccessControl/lib/accessManager.js` - Core logic
+    - `/plugins/adminAccessControl/lib/patternMatcher.js` - Pattern engine
+    - `/plugins/adminAccessControl/lib/ruleValidator.js` - Validation engine
+    - `/plugins/adminAccessControl/webPages/access-denied.ejs` - Custom 403 page
+    - `/plugins/adminAccessControl/adminWebSections/adminAccessControl/index.ejs` - Admin UI
+  - **Files Modified:**
+    - `/core/admin/adminConfig.json5` - Registered admin section
+    - `/plugins/adminUsers/main.js` - Added access field to 14 routes
+    - `/plugins/bootstrap/main.js` - Added access field to 9 routes
+    - `/plugins/admin/main.js` and submodules - Added access fields
+    - `/plugins/ccxt/main.js` - Added access fields
+    - `/plugins/dbApi/main.js`, `/plugins/media/main.js`, `/plugins/ostrukUtility/main.js` - Added access fields
+- v1.7.0 (2026-01-10): **NEW FEATURE** - Implemented configurable priority middlewares system. Key changes:
+  - **Priority Middlewares Architecture:**
+    - Distinction between CORE (hardcoded, always active) and OPTIONAL (configurable) middlewares
+    - CORE: bodyParser, router - always loaded, non-configurable
+    - OPTIONAL: session - configurable via `ital8Config.json5`
+  - **New Configuration Section:**
+    - Added `priorityMiddlewares` section in `ital8Config.json5`
+    - Optional middlewares can be enabled/disabled individually
+    - Default: session enabled (`"session": true`)
+  - **Loading Order (fixed, guaranteed):**
+    - 1. bodyParser (CORE)
+    - 2. session (OPTIONAL)
+    - 3. router (CORE)
+    - Order cannot be modified to ensure correct middleware execution
+  - **Implementation:**
+    - Modified `/core/priorityMiddlewares/priorityMiddlewares.js` to support conditional loading
+    - Added configuration validation and console logging
+    - Session middleware returns `null` if disabled (backward compatible)
+  - **Documentation:**
+    - Added "Priority Middlewares Configuration" section in CLAUDE.md
+    - Updated "Application Startup Flow" to reflect optional middlewares
+    - Clear warnings about consequences of disabling session
+  - **Future-Proof:**
+    - Architecture ready to support additional optional middlewares (e.g., urlRewriter)
+    - Placeholder comments in code for future extensions
+  - **Files Modified:**
+    - `/ital8Config.json5` - Added priorityMiddlewares configuration section
+    - `/core/priorityMiddlewares/priorityMiddlewares.js` - Implemented conditional loading logic
+    - `/CLAUDE.md` - Added comprehensive documentation
+- v1.6.1 (2026-01-09): **REFACTORING** - Reorganized admin plugin sections structure with `adminWebSections/` directory. Key changes:
+  - **New Directory Structure:**
+    - Admin sections now organized in `adminWebSections/` container directory
+    - Pattern: `plugins/{adminPlugin}/adminWebSections/{sectionId}/`
+    - Example: `plugins/adminUsers/adminWebSections/usersManagment/`
+  - **Benefits:**
+    - Better organization: clear separation between logic files and UI sections
+    - Consistency: mirrors `webPages/` pattern used for public plugin pages
+    - Scalability: cleaner root directory for plugins with multiple sections
+  - **Files Modified:**
+    - `core/admin/lib/symlinkManager.js` - Updated path resolution to include `adminWebSections/`
+    - `plugins/adminUsers/` - Moved sections into `adminWebSections/` directory
+    - `CLAUDE.md` - Updated all documentation and examples
+  - **Migration:**
+    - Directory structure: `usersManagment/` → `adminWebSections/usersManagment/`
+    - Symlinks automatically recreated with new paths on server restart
+    - No changes to URLs or functionality - purely organizational improvement
+- v1.6.0 (2026-01-03): **NEW FEATURE** - Implemented Global Functions system for EJS templates. Key changes:
+  - **REFACTORING (2026-01-04):** Separated local and global function exports with new plugin standard
+    - Added `getGlobalFunctionsForTemplates()` method to plugin standard
+    - Plugins now explicitly declare global function candidates via dedicated method
+    - `getObjectToShareToWebPages()` remains for local functions (backward compatible)
+    - Clear separation: local vs global function exports
+    - Implemented whitelist-based security system in `ital8Config.json5`
+    - Whitelist attributes: `plugin`, `description`, `required` (fail-fast or graceful degradation)
+    - `pluginSys.getGlobalFunctions()` now uses new method and validates against whitelist
+    - Removed `#validateWhitelistViolations()` (no longer needed)
+    - Updated `simpleI18n` plugin to implement new method
+    - Eliminated spurious warnings for functions meant only for local use
+    - **Files modified:**
+      - `core/pluginSys.js` - Refactored to use `getGlobalFunctionsForTemplates()`
+      - `plugins/simpleI18n/main.js` - Added new method
+      - `CLAUDE.md` - Complete documentation update with whitelist system
+  - **Global Functions Architecture (Initial Implementation 2026-01-03):**
+    - Added `getGlobalFunctions()` method to `pluginSys.js`
+    - Plugins can now expose functions as global helpers in templates
+    - Functions accessible directly without `passData.plugin.{pluginName}` prefix
+    - Fully backward compatible - local syntax (`passData.plugin.{pluginName}.{function}`) remains available
+  - **simpleI18n Global Function:**
+    - Translation function `__()` now available globally in all EJS templates
+    - New syntax: `<%- __({ it: "Ciao", en: "Hello" }, passData.ctx) %>`
+    - Old syntax still works: `<%- passData.plugin.simpleI18n.__({ it: "Ciao", en: "Hello" }, passData.ctx) %>`
+  - **Implementation:**
+    - Modified `index.js` to call `pluginSys.getGlobalFunctions()` and spread results into EJS locals
+    - Applied to both public and admin template rendering
+    - Updated `/www/i18n-test.ejs` with side-by-side comparison of both syntaxes
+  - **Documentation:**
+    - Added "Global Functions in Templates" section to CLAUDE.md
+    - Documented both syntaxes with examples
+    - Added notes about whitelist security system, fail-fast vs graceful degradation
+    - Complete architectural documentation with 4 subsections
+- v1.5.0 (2025-12-27): **BREAKING CHANGE** - Simplified admin plugin standard with automatic detection, multi-section support, and centralized UI metadata. Key changes:
+  - **New Admin Plugin Convention:**
+    - Admin plugins are now **automatically detected** by naming convention (name starts with "admin")
+    - Removed `pluginType.isAdminPlugin` flag - no longer needed
+    - Removed separate `adminConfig.json5` file from plugins
+    - Plugin declares only section IDs in `pluginConfig.json5` via `adminSections` array (strings, not objects)
+  - **Centralized UI Metadata:**
+    - All UI metadata (label, icon, description) moved to `/core/admin/adminConfig.json5`
+    - Better separation of concerns: plugin declares "what sections", admin config declares "how to display them"
+    - Easier to update UI labels/icons without modifying plugin files
+  - **Multi-Section Support:**
+    - Plugins can provide multiple admin sections via `adminSections` array
+    - Example: `adminUsers` provides both `usersManagment` and `rolesManagment` sections
+  - **SymlinkManager Updates:**
+    - Updated to detect admin plugins by naming convention (`pluginName.startsWith('admin')`)
+    - Processes array of strings (section IDs) instead of array of objects
+    - Creates/removes symlinks for each section automatically
+  - **Multi-Role Permission System Implementation:**
+    - Restructured role data architecture with hardcoded roles (0-99) and custom roles (100+)
+    - Users can now have multiple roles via `roleIds` array (replaced single `roleId`)
+    - Created `roleManagement.js` module with CRUD operations for custom roles
+    - Added 5 new API endpoints for role management
+    - Implemented checkbox-based multi-role selection UI in `userUpsert.ejs`
+    - Created new `rolesManagment` admin section for managing custom roles
+  - **Files Modified:**
+    - Updated `/core/admin/lib/symlinkManager.js` - multi-section support
+    - Updated `/core/admin/adminConfig.json5` - registered both admin sections
+    - Updated `/plugins/adminUsers/pluginConfig.json5` - added `adminSections` array
+    - Removed `/plugins/adminUsers/adminConfig.json5` - deprecated
+  - **Documentation:**
+    - Updated all examples to reflect new standard
+    - Updated "Creating an Admin Plugin" checklist
+    - Added clear warnings about naming convention requirement
+- v1.4.0 (2025-12-12): **MAJOR FEATURE** - Implemented modular Admin System architecture. Key changes:
+  - **New Admin System Components:**
+    - Created `/core/admin/adminSystem.js` - Central coordinator
+    - Created `/core/admin/lib/configManager.js` - Config loader & validator
+    - Created `/core/admin/lib/adminServicesManager.js` - Service discovery system
+    - Created `/core/admin/lib/symlinkManager.js` - Symlink manager for plugin sections
+    - Created `/core/admin/adminConfig.json5` - Central admin configuration
+  - **Admin Plugin Architecture:**
+    - Admin plugins MUST start with `admin` prefix (e.g., `adminUsers`, `adminMailer`)
+    - Automatic detection by naming convention
+    - Section files in plugin's `adminWebSections/` directory (e.g., `plugins/adminUsers/adminWebSections/usersManagment/`)
+  - **Symlink-Based Serving:**
+    - Plugin sections served via symlinks: `core/admin/webPages/{sectionId} → plugins/{plugin}/adminWebSections/{sectionId}/`
+    - Zero file duplication, single source of truth
+    - Automatic symlink creation during plugin initialization
+  - **Plugin Renamed:**
+    - `adminUsers` → `adminUsers` (admin plugin for user management)
+    - All API endpoints updated: `/api/adminUsers/` → `/api/adminUsers/`
+    - Files moved: `core/admin/webPages/usersManagment/` → `plugins/adminUsers/adminWebSections/usersManagment/`
+  - **2-Phase Initialization:**
+    - Dependency injection pattern to avoid circular dependencies
+    - Phase 1: Create instances | Phase 2: Link dependencies | Phase 3: Initialize
+  - **Service Discovery:**
+    - Backend services (auth, email, storage) mapped to plugin providers
+    - Configured in `adminConfig.json5` services section
+  - **Dynamic Menu Generation:**
+    - Menu sections generated from configuration at runtime
+    - Supports both plugin-based and hardcoded sections
+    - Filtered by enabled status and plugin active state
+  - **Plugin System Enhancements:**
+    - Added `pluginName` and `pathPluginFolder` metadata to plugin objects
+    - New methods: `getAllPlugins()`, `getPlugin(pluginName)`, `setAdminSystem()`
+  - **Updated Application Startup Flow:**
+    - Added Admin System initialization step (if `enableAdmin: true`)
+    - 2-phase dependency injection between PluginSys and AdminSystem
+- v1.3.0 (2025-12-11): **BREAKING CHANGE** - Converted all configuration files from `.json` to `.json5` extension. Key changes:
+  - All configuration files now use `.json5` extension to reflect JSON5 format support
+  - Updated all documentation examples to use `loadJson5()` function
+  - Added clear warnings about not using `require()` for `.json5` files
+  - Improved code examples to demonstrate proper JSON5 file loading
+  - Total of 38 configuration files converted
+  - Files excluded: `package.json`, `package-lock.json`, `.vscode/launch.json`
+- v1.2.0 (2025-11-26): **BREAKING CHANGE** - Updated naming convention from kebab-case to camelCase for all files and directories. Key changes:
+  - `ital8-conf.json` → `ital8Config.json`
+  - `config-plugin.json` → `pluginConfig.json`
+  - `description-plugin.json` → `pluginDescription.json`
+  - All file/directory examples updated to use pure camelCase
+  - Added compound file names convention (noun + descriptor pattern)
+  - Maintained PascalCase for classes and UPPER_SNAKE_CASE for constants
+- v1.1.1 (2025-11-25): Clarified that at least 2-3 alternatives should be proposed, but more (4-5+) when appropriate for complex cases
+- v1.1.0 (2025-11-25): Added mandatory naming conventions requiring proposal of meaningful alternatives before implementation
+- v1.0.0 (2025-11-19): Initial comprehensive documentation

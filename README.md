@@ -41,14 +41,14 @@ Server runs on: `http://localhost:3000`
 
 - **[CLAUDE.md](./CLAUDE.md)** - Complete guide for AI assistants and developers (root)
 
-**[CLAUDE-DOC/](./CLAUDE-DOC/)** - Additional guides:
+**[docs/archive/](./docs/archive/)** - Materiale archiviato (storico / spunto):
 
-- **[CODING_STYLE.md](./CLAUDE-DOC/CODING_STYLE.md)** - Coding style and conventions
-- **[MIGRATION_KOA_V3.md](./CLAUDE-DOC/MIGRATION_KOA_V3.md)** - Koa v3 migration guide
+- **[Coding style](./docs/archive/coding-style.it.md)** - guida allo stile (obsoleta, spunto)
+- **[Koa v3 migration](./docs/archive/koa-v3-migration.it.md)** - migrazione storica (archiviata)
 
 ### Project Documentation
 
-- **[EXPLAIN.md](./EXPLAIN.md)** - General project documentation (Italian)
+- **[Panoramica documentazione](./docs/archive/documentation-overview.it.md)** - panoramica storica (archiviata; vedi CLAUDE.md e `docs/`)
 
 ## Technology Stack
 
@@ -142,7 +142,7 @@ ital8cms/
 ├── plugins/              # Plugin modules
 ├── themes/               # Theme templates
 ├── www/                  # Public web root
-└── CLAUDE-DOC/           # Additional documentation
+└── docs/                # Documentazione (standard ital8doc, guide, archivio)
 ```
 
 ## Development

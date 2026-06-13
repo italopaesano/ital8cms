@@ -1,3 +1,5 @@
+<!-- ital8doc v1-1 · tipo: reference · lang: it · ref -->
+> ♻️ OBSOLETO — panoramica della documentazione superata da CLAUDE.md e dal futuro docs/README.md; conservata come spunto.
 
 
  ### documentazione di ital8
