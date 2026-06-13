@@ -1462,7 +1462,7 @@ git push                       # Push to remote
 ---
 
 **Last Updated:** 2026-06-13
-**Version:** 2.15.0
+**Version:** 2.16.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 **Standard documentazione:** ital8doc v1-1 → [`docs/ITAL8DOC-latest.md`](./docs/ITAL8DOC-latest.md)
 
