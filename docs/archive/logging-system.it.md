@@ -1,3 +1,6 @@
+<!-- ital8doc v1-1 · tipo: reference · lang: it · ref -->
+> ♻️ OBSOLETO — materiale di spunto per una riscrittura secondo ital8doc; non riflette lo stato attuale.
+
 # Sistema di Logging - ital8cms
 
 ## Panoramica

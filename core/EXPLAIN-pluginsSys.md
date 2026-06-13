@@ -803,10 +803,10 @@ async function loadPlugin(pluginSys, pathPluginFolder) {
 
 ## Riferimenti
 
-- **Diagramma di flusso completo**: `CLAUDE-DOC/PLUGIN_SYSTEM_FLOWCHART.md`
-- **Documentazione API**: `CLAUDE-DOC/API_DOCUMENTATION.md`
-- **Sistema di logging**: `CLAUDE-DOC/LOGGING_SYSTEM.md`
-- **Test suite**: `CLAUDE-DOC/TEST_SUITE.md`
+- **Diagramma di flusso (obsoleto, spunto)**: `../docs/archive/plugin-system-flowchart.it.md`
+- **Documentazione API (obsoleto, spunto)**: `../docs/archive/api-documentation.it.md`
+- **Sistema di logging (obsoleto, spunto)**: `../docs/archive/logging-system.it.md`
+- **Test suite (obsoleto, spunto)**: `../docs/archive/test-suite.it.md`
 - **Plugin di esempio**: `plugins/exampleComplete/`
 
 ---
