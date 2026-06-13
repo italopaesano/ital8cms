@@ -44,7 +44,7 @@ Server runs on: `http://localhost:3000`
 **[CLAUDE-DOC/](./CLAUDE-DOC/)** - Additional guides:
 
 - **[CODING_STYLE.md](./CLAUDE-DOC/CODING_STYLE.md)** - Coding style and conventions
-- **[MIGRATION_KOA_V3.md](./CLAUDE-DOC/MIGRATION_KOA_V3.md)** - Koa v3 migration guide
+- **[Koa v3 migration](./docs/archive/koa-v3-migration.it.md)** - migrazione storica (archiviata)
 
 ### Project Documentation
 

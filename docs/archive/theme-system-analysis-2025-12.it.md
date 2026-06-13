@@ -1,3 +1,6 @@
+<!-- ital8doc v1-1 · tipo: reference · lang: it · ref -->
+> 🗄️ ARCHIVIATO — snapshot storico di dicembre 2025; non riflette lo stato attuale del progetto. Conservato per tracciabilità.
+
 # Analisi Sistema dei Temi - ital8cms
 
 **Data Ultimo Aggiornamento:** 2025-12-06

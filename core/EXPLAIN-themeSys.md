@@ -30,7 +30,7 @@ Questo documento descrive il funzionamento tecnico interno del sistema dei temi 
 
 - **[themes/EXPLAIN.md](../themes/EXPLAIN.md):** Guida utente per creare temi
 - **Questo documento:** Funzionamento tecnico interno (per sviluppatori avanzati)
-- **[CLAUDE-DOC/THEME_SYSTEM_ANALYSIS.md](../CLAUDE-DOC/THEME_SYSTEM_ANALYSIS.md):** Stato implementazione e TODO
+- **[Analisi storica sistema temi](../docs/archive/theme-system-analysis-2025-12.it.md):** snapshot dic 2025 (archiviato)
 
 ### Scopo
 
@@ -1116,7 +1116,7 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
 ## Link Utili
 
 - **Guida Utente:** [themes/EXPLAIN.md](../themes/EXPLAIN.md)
-- **Stato Implementazione:** [CLAUDE-DOC/THEME_SYSTEM_ANALYSIS.md](../CLAUDE-DOC/THEME_SYSTEM_ANALYSIS.md)
+- **Analisi storica (archiviata):** [theme-system-analysis](../docs/archive/theme-system-analysis-2025-12.it.md)
 - **File Sorgente:** `core/themeSys.js`
 - **Temi Esempio:** `themes/default/` e `themes/baseExampleTheme/`
 
