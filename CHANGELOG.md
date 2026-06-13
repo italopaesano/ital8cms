@@ -3,6 +3,13 @@
 
 Storico delle modifiche del progetto e della documentazione (voci dalla più recente).
 
+- v2.16.0 (2026-06-13): **DOCS** - Grande riorganizzazione della documentazione secondo il nuovo standard **ital8doc** (`docs/ITAL8DOC-latest.md`). `CLAUDE.md` ridotto da 6551 a ~1470 righe (−78%): da documentazione monolitica a guida operativa con le AI Guidelines in cima + puntatori. Nessuna modifica al codice. Modifiche principali:
+  - **Standard ital8doc v1-1:** marker di conformità in riga 1, versionamento `-latest`/`-v<x-y>`, schema multilingua (`.md` stub inglese / `.it.md` riferimento italiano), litmus README ("come si usa") vs EXPLAIN ("perché è fatto così / come si regola").
+  - **`CLAUDE-DOC/` dissolta:** 10 file spostati in `docs/archive/` (snapshot storici + materiale obsoleto conservato come spunto), riferimenti in entrata sistemati.
+  - **Estrazioni in `docs/`:** changelog → `CHANGELOG.md`; guide `roadmap`/`deployment`/`https`/`demo-profile`/`testing` (it + stub en, tradotte); decision record in `docs/decisions/`; indice `docs/README.md`.
+  - **Sottosistemi core** condensati in `CLAUDE.md` (contratto + puntatore) verso i `core/**` EXPLAIN; creato `core/EXPLAIN-pluginPages.md`; i core EXPLAIN migrati allo schema bilingue.
+  - **Doc dei plugin:** plugin con doc → puntatori; creati i doc mancanti (`csrfProtection`, `adminCsrfProtection`, `adminAccessControl`).
+
 - v2.15.0 (2026-06-12): **SECURITY** - Rotazione delle chiavi di sessione in fase d'installazione + avviso al boot. Le `keys` di `core/priorityMiddlewares/koaSession.json5` (firma dei cookie koa-session) erano placeholder committati e condivisi: chiunque cloni il repo poteva forgiare cookie validi. Ora il wizard le genera casuali e un warning segnala se restano i placeholder. Key changes:
   - **Wizard d'installazione (`scripts/lib/sessionKeyManager.js`):** nuovo step in FASE 1 (`scripts/init.js`) con menu a tre voci (Genera / Inserisci personalizzate / Mantieni) e **default adattivo** (Genera se placeholder, Mantieni se già custom). `generateSessionKeys()` produce **3 chiavi** `crypto.randomBytes(32).toString('base64url')`. Scrittura via `core/editJson5` (sostituisce solo `keys`, preserva i commenti) con backup `BackupManager`. I valori delle chiavi non vengono mai loggati. Gira per `production` e `demo`; saltato nella re-init `plugins`.
   - **Warning al boot (`core/sessionSecurity.js → checkSessionKeys()`):** chiamato da `index.js` allo startup; box ASCII (stile `httpsManager.warnMissingCertificates()`) se la sessione è attiva e le chiavi sono ancora placeholder. Non bloccante; salta se la sessione è disabilitata.

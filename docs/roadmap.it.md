@@ -12,8 +12,7 @@ Miglioramenti e lavori pianificati, raccolti dall'analisi del codebase. Non è u
   - documentazione API (da `api-documentation.it.md`)
   - test suite → guida `docs/testing` (da `test-suite.it.md`)
   - coding style → CLAUDE.md (da `coding-style.it.md`)
-- Creare `docs/README.md` (indice della documentazione, tipo `index`).
-- Riempire gli stub `.md` inglesi alla prima pubblicazione importante.
+- Riempire gli stub `.md` inglesi (plugin, temi, core EXPLAIN) alla prima pubblicazione importante.
 
 ## Miglioramenti pianificati
 

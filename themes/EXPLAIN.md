@@ -27,7 +27,7 @@ Il sistema dei temi di **ital8cms** separa la presentazione dalla logica applica
 ### Collegamenti alla Documentazione
 
 - **Questa guida:** Come creare un tema (guida utente)
-- **[core/EXPLAIN-themeSys.md](../core/EXPLAIN-themeSys.md):** Funzionamento tecnico del sistema (per sviluppatori avanzati)
+- **[core/EXPLAIN-themeSys.it.md](../core/EXPLAIN-themeSys.it.md):** Funzionamento tecnico del sistema (per sviluppatori avanzati)
 - **[Analisi storica sistema temi](../docs/archive/theme-system-analysis-2025-12.it.md):** snapshot dic 2025 (archiviato)
 
 ### Caratteristiche Principali
@@ -1061,7 +1061,7 @@ themes/shop/
 
 ## Link Utili
 
-- **Documentazione Tecnica:** [core/EXPLAIN-themeSys.md](../core/EXPLAIN-themeSys.md)
+- **Documentazione Tecnica:** [core/EXPLAIN-themeSys.it.md](../core/EXPLAIN-themeSys.it.md)
 - **Analisi storica (archiviata):** [theme-system-analysis](../docs/archive/theme-system-analysis-2025-12.it.md)
 - **Tema Esempio:** `themes/default/` e `themes/baseExampleTheme/`
 
