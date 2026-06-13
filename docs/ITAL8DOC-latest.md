@@ -20,10 +20,11 @@ La lingua di riferimento è quella in cui si scrive **per prima** e che è
 
 ## 0. In breve (TL;DR)
 
-- **Riga 1 di ogni file di doc** = marker di conformità: `<!-- ital8doc vX-Y · tipo: TIPO · lang: LL [· rev: N | · tracks: ll@N] [· ref] -->`
-- **Riga 2 dei doc bilingui** = nota umana **in inglese** che indica qual è il file di riferimento sempre aggiornato.
+- **Riga 1 di ogni file di doc** = marker: `<!-- ital8doc vX-Y · tipo: TIPO · lang: LL [· rev: N | · tracks: ll@N | · stub] [· ref] -->`
+- **Riga 2 dei doc bilingui** = nota umana **in inglese** che indica dov'è il file di riferimento sempre aggiornato.
 - **README** = *"come lo USO?"* — **EXPLAIN** = *"1) PERCHÉ è fatto così? 2) come lo modifico / regolo al meglio?"*
-- **Multilingua (§4):** i doc *pubblicabili come repo* (README/EXPLAIN di plugin/temi, README di root) sono **bilingui** → `nome.md` = **inglese** (faccia pubblica), `nome.it.md` = **italiano** (riferimento). I doc **interni** restano in **italiano** sul nome senza suffisso.
+- **Multilingua uniforme (§4):** ogni doc = `nome.md` (slot inglese, **stub** finché non si traduce) + `nome.it.md` (**italiano, riferimento, dove si lavora**). Si predispone così la struttura bilingue da subito.
+- **Eccezioni** (file caricati per nome da tool/convenzione → restano **unici in italiano**): `CLAUDE.md`, `CHANGELOG.md`, lo standard `ITAL8DOC-*.md`.
 - **README** obbligatorio per plugin/tema; **EXPLAIN** opzionale. EXPLAIN vuoto = vietato.
 
 ---
@@ -42,8 +43,8 @@ Dove **"altre cartelle"** = directory generiche di orientamento (`tests/`,
 `scripts/`, `www/`, i contenitori `plugins/` e `themes/`, `docs/`); non avendo
 interni da spiegare a fondo, restano fuori dallo scope EXPLAIN.
 
-**Documenti speciali** riconosciuti ma **non** rimodellati (convenzioni proprie):
-`CLAUDE.md` e `CHANGELOG.md`. Portano comunque il marker.
+**Documenti speciali** (esenti dallo schema bilingue, vedi §4.3 — restano file
+unici in italiano): `CLAUDE.md`, `CHANGELOG.md` e questo standard.
 
 ---
 
@@ -52,7 +53,7 @@ interni da spiegare a fondo, restano fuori dallo scope EXPLAIN.
 **Riga 1 — marker macchina** (commento HTML, invisibile nel rendering):
 
 ```
-<!-- ital8doc vX-Y · tipo: TIPO · lang: LL [· rev: N | · tracks: ll@N] [· ref] -->
+<!-- ital8doc vX-Y · tipo: TIPO · lang: LL [· rev: N | · tracks: ll@N | · stub] [· ref] -->
 ```
 
 | Campo | Su quali file | Significato |
@@ -61,25 +62,22 @@ interni da spiegare a fondo, restano fuori dallo scope EXPLAIN.
 | `tipo` | tutti | `README` \| `EXPLAIN` \| `guide` \| `decision` \| `index` \| `reference` |
 | `lang` | tutti | lingua del file (`it`, `en`, …) |
 | `rev` | file di **riferimento** | revisione del documento (intero, bump solo a modifica **sostanziale**) |
-| `tracks` | file **tradotto** | `ll@N` = la `rev` del riferimento da cui è stato sincronizzato |
+| `tracks` | file **tradotto** | `ll@N` = la `rev` del riferimento da cui è sincronizzato |
+| `stub` | file `.md` **non ancora tradotto** | segnaposto: slot inglese riservato, contenuto solo nel `.it.md` |
 | `ref` | file di **riferimento** | flag: questo è il file fonte di verità |
 
-**Riga 2 — nota umana in inglese** (solo nei doc **bilingui**, vedi §4). È un
-blockquote `>` → si vede in cima su GitHub e spiega a chiunque dove sta la
-versione viva:
+**Riga 2 — nota umana in inglese** (nei doc bilingui). Blockquote `>` → visibile
+in cima su GitHub, spiega a chiunque dov'è la versione viva:
 
 ```markdown
-<!-- ital8doc v1-1 · tipo: README · lang: en · tracks: it@4 -->
-> 🌐 The authoritative, always-current version is the Italian one → `README.it.md`. This English edition is synced at releases and may lag.
-# myPlugin
+<!-- ital8doc v1-1 · tipo: README · lang: en · stub -->
+> 🌐 Documentation is currently maintained in Italian → see `README.it.md`. The English edition will be filled in at release.
 ```
 ```markdown
 <!-- ital8doc v1-1 · tipo: README · lang: it · rev: 4 · ref -->
-> 🌐 Italian reference edition (always up to date). The English `README.md` is a translation synced at releases.
+> 🌐 Italian reference edition (always up to date). The English `README.md` is a stub until release.
 # myPlugin
 ```
-
-I **doc interni** (non bilingui, §4.3) portano solo la riga 1 (niente riga 2).
 
 **Regola di risoluzione dello standard:** leggi `vX-Y` nel marker → se coincide
 con la corrente (in `CLAUDE.md`) leggi `ITAL8DOC-latest.md`; altrimenti l'archivio
@@ -95,14 +93,10 @@ con la corrente (in `CLAUDE.md`) leggi `ITAL8DOC-latest.md`; altrimenti l'archiv
 | `docs/ITAL8DOC-v<x-y>.md` | versione **passata**, archiviata |
 
 **Numero corrente:** dichiarato nel titolo di questo file **e** in una riga di
-`CLAUDE.md` (puntatore rapido).
-
-**Bump:** 1) copia `-latest.md` in `ITAL8DOC-v<vecchia>.md`; 2) riscrivi
-`-latest.md` con nuovo contenuto e numero (titolo + marker); 3) aggiorna la riga
-in `CLAUDE.md`.
-
-**Semver:** MAJOR = sezione obbligatoria aggiunta/rimossa/rinominata; MINOR =
-tipo/sezione/campo **opzionale** o chiarimento retrocompatibile; PATCH = refuso.
+`CLAUDE.md`. **Bump:** 1) copia `-latest.md` in `ITAL8DOC-v<vecchia>.md`; 2)
+riscrivi `-latest.md` con nuovo contenuto e numero; 3) aggiorna `CLAUDE.md`.
+**Semver:** MAJOR = sezione obbligatoria aggiunta/rimossa; MINOR = tipo/sezione/
+campo opzionale o chiarimento; PATCH = refuso.
 
 ---
 
@@ -110,75 +104,80 @@ tipo/sezione/campo **opzionale** o chiarimento retrocompatibile; PATCH = refuso.
 
 ### 4.1 Lingua di riferimento
 
-È quella in cui si scrive per prima ed è sempre aggiornata (vedi selettore in
-testa). Attuale: **italiano**. Il file il cui `lang` coincide con la lingua di
-riferimento è la **fonte di verità**, a prescindere da quale porti il nome senza
-suffisso.
+È quella in cui si scrive per prima ed è sempre aggiornata (selettore in testa).
+Attuale: **italiano**. Il file il cui `lang` coincide con la lingua di riferimento
+è la **fonte di verità**.
 
-### 4.2 Naming dei doc bilingui
+### 4.2 Naming uniforme: `.md` (slot inglese) + `.it.md` (riferimento)
 
 | File | Lingua | Ruolo |
 |------|--------|-------|
-| `nome.md` | inglese | **faccia pubblica** (nome canonico, mostrato da GitHub) |
-| `nome.it.md` | italiano | **riferimento** (fonte di verità, sempre aggiornata) |
+| `nome.md` | inglese | **slot pubblico / faccia GitHub.** Finché non è tradotto è uno **stub**: marker + rimando al `.it.md`, nessun contenuto. |
+| `nome.it.md` | italiano | **riferimento**: dove si lavora, sempre aggiornato. |
 
-Vale per `README` ed `EXPLAIN`. Il nome senza suffisso è **sempre inglese**
-perché è ciò che GitHub mostra come faccia di un repository.
+Il nome senza suffisso è riservato all'inglese perché è ciò che GitHub mostra
+come faccia di un repository. **Si lavora sempre sul `.it.md`.**
 
-### 4.3 A quali documenti si applica il bilingue
+### 4.3 Regola uniforme e sue eccezioni
 
-| Documento | Schema lingua |
-|-----------|---------------|
-| README/EXPLAIN di **plugin** e **temi** | **bilingue** (`.md`=en faccia, `.it.md`=it riferimento) |
-| README di **root** del repo principale | **bilingue** (`.md`=en) |
-| `docs/` (guide, decision, **questo standard**), `core/**` EXPLAIN, CLAUDE.md, CHANGELOG | **solo italiano** sul nome senza suffisso; traduzione non richiesta |
+**Regola uniforme:** ogni documento — README, EXPLAIN, guide, decision, core
+EXPLAIN — esiste come coppia `nome.md` (stub inglese) + `nome.it.md` (contenuto
+italiano). La struttura bilingue è predisposta **da subito**: a maturità si
+riempiono gli stub `.md` con la traduzione inglese, **senza ristrutturare nulla**.
+Fino ad allora il `.md` è poco più di un segnaposto.
 
-**Razionale:** lo schema bilingue serve a chi **può diventare un repo a sé** (i
-plugin/temi sono sviluppabili e importabili come repository separati → hanno una
-faccia GitHub propria). I doc interni non lo diventano mai → restano in lingua di
-riferimento, senza il costo di una traduzione.
+**Eccezioni — file unici in italiano** (no stub, no split), perché caricati per
+nome esatto da tool/convenzione:
+
+| File | Perché esente |
+|------|---------------|
+| `CLAUDE.md` | Caricato da Claude Code per nome esatto: uno stub farebbe perdere all'AI tutta la guida |
+| `CHANGELOG.md` | Convenzione/tooling di release |
+| `ITAL8DOC-*.md` | È lo standard stesso, auto-referenziale |
+
+> Nota: lo stub `.md` rende la faccia GitHub **mai vuota** anche in sviluppo —
+> mostra un rimando *in inglese* all'italiano, non un muro di testo italiano.
 
 ### 4.4 Versionamento dei doc e rilevamento dello stantio
 
 - Il **riferimento** (`.it.md`) porta `rev: N`, incrementato **solo a modifica
-  sostanziale** (non per refusi).
-- La **traduzione** (`.md`) porta `tracks: it@N` = la `rev` da cui è sincronizzata.
-- **Stantio = `rev`(riferimento) − `tracks`(traduzione) > 0**, leggibile a colpo
-  d'occhio.
+  sostanziale**.
+- La **traduzione** (`.md`, una volta riempita) porta `tracks: it@N` = la `rev`
+  da cui è sincronizzata. (Da stub, porta `stub`.)
+- **Stantio = `rev`(riferimento) − `tracks`(traduzione) > 0**.
 
-Il `rev` manuale esprime l'**intenzione** ("questa modifica va ritradotta") che
-git non sa dedurre. Un check CI git-based (riferimento più recente della `rev`
-tracciata) è la rete di sicurezza — **rimandato**, per ora vale il `rev` manuale.
+Il `rev` manuale esprime l'**intenzione** ("va ritradotto") che git non deduce.
+Un check CI git-based è la rete di sicurezza — **rimandato**; per ora vale il
+`rev` manuale.
 
-### 4.5 Quando l'inglese è obbligatorio
+### 4.5 Riempimento dell'inglese a maturità
 
-- **Dentro il monorepo** (sottocartella): `.it.md` obbligatorio (riferimento);
-  l'inglese `.md` può mancare (è interno).
-- **Pubblicato come repo a sé:** `README.md` inglese **obbligatorio e
-  sincronizzato** (è la faccia). È il momento "lo aggiorno per una pubblicazione
-  importante".
-- Opzionale: lo scaffolder può emettere da subito uno **stub inglese** (titolo +
-  nota riga 2) così la faccia non è mai vuota.
+- Lo **stub `.md`** esiste da subito (uniforme), così la faccia non è mai vuota.
+- Il **contenuto inglese** si scrive a maturità / pubblicazione importante:
+  si traduce dal `.it.md` corrente e si sostituisce `stub` con `tracks: it@N`.
+- Opzionale: lo scaffolder genera in automatico lo stub.
 
 ### 4.6 Cambio di lingua di riferimento (end-state)
 
-L'inversione "faccia inglese ma riferimento italiano" è una condizione di
-sviluppo. Spostando il selettore **reference → en**: l'inglese `.md` diventa
-*insieme* faccia **e** riferimento (inversione risolta), e l'`.it.md` diventa la
-traduzione con `tracks: en@N`. Stessa macchina, ruoli scambiati.
+Spostando il selettore **reference → en**: l'inglese `.md` diventa *insieme*
+faccia **e** riferimento (inversione risolta), e l'`.it.md` diventa la traduzione
+con `tracks: en@N`. Stessa macchina, ruoli scambiati.
 
 ---
 
 ## 5. Tipi di documento
 
+Gli scheletri descrivono il **file di riferimento `.it.md`** (dove si lavora).
+Lo `nome.md` corrispondente è lo **stub** di §4.2.
+
 ### 5.1 README — *"come lo USO?"*  (obbligatorio per plugin/tema)
 
 ```
 <!-- ital8doc v1-1 · tipo: README · lang: it · rev: 1 · ref -->
-> 🌐 Italian reference edition (always up to date). English `README.md` is synced at releases.
+> 🌐 Italian reference edition (always up to date). English `README.md` is a stub until release.
 # <nome>
 <1 paragrafo: cos'è, quale problema risolve>            ← OBBLIGATORIO
-> 📖 Deep-dive tecnico: vedi EXPLAIN(.it).md            ← solo se EXPLAIN esiste
+> 📖 Deep-dive tecnico: vedi EXPLAIN.it.md              ← solo se EXPLAIN esiste
 ## Cosa fa            — elenco funzionalità
 ## Uso / Quick start  — esempio minimo funzionante
 ## API / Contratto    — rotte, oggetto condiviso, funzioni template
@@ -193,9 +192,9 @@ Obbligatori: marker, H1, paragrafo introduttivo. Le altre sezioni "se applicabil
 
 ```
 <!-- ital8doc v1-1 · tipo: EXPLAIN · lang: it · rev: 1 · ref -->
-> 🌐 Italian reference edition (always up to date). English `EXPLAIN.md` is synced at releases.
+> 🌐 Italian reference edition (always up to date). English `EXPLAIN.md` is a stub until release.
 # <nome> — Deep-dive tecnico
-> Guida d'uso: vedi README(.it).md
+> Guida d'uso: vedi README.it.md
 ## Perché è fatto così        — filosofia + vincolo architetturale portante   ← IL CUORE
 ## Architettura               — componenti, modello dati, macchine a stati
 ## Flussi                     — diagrammi ASCII
@@ -209,23 +208,23 @@ Obbligatori: marker, H1, paragrafo introduttivo. Le altre sezioni "se applicabil
 
 Si scrive **solo** se gli interni sono non banali. Vuoto o ridondante col README = vietato.
 
-### 5.3 Guide (`docs/`) — tipo `guide` (interno, italiano)
+### 5.3 Guide (`docs/`) — tipo `guide`
 
 ```
-<!-- ital8doc v1-1 · tipo: guide · lang: it -->
+<!-- ital8doc v1-1 · tipo: guide · lang: it · rev: 1 · ref -->
 # <Titolo della guida>
 ## Scopo · ## Prerequisiti · ## Procedura · ## Riferimenti
 ```
 
-### 5.4 Decision record (`docs/decisions/`) — tipo `decision` (interno, italiano)
+### 5.4 Decision record (`docs/decisions/`) — tipo `decision`
 
 ```
-<!-- ital8doc v1-1 · tipo: decision · lang: it -->
+<!-- ital8doc v1-1 · tipo: decision · lang: it · rev: 1 · ref -->
 # <NNN> — <Titolo della decisione>
 ## Contesto · ## Decisione · ## Alternative · ## Conseguenze
 ```
 
-### 5.5 Indice docs (`docs/README.md`) — tipo `index` (interno, italiano)
+### 5.5 Indice docs (`docs/README.md`) — tipo `index`
 
 Tabella "cosa sta dove": guide, decision record, puntatori ai README/EXPLAIN dei
 sottosistemi. Solo navigazione, niente contenuto duplicato.
@@ -234,9 +233,10 @@ sottosistemi. Solo navigazione, niente contenuto duplicato.
 
 ## 6. Regole di redazione (tutti i tipi)
 
-1. **Lingua:** vedi §4. Riferimento attuale = italiano. Doc bilingui: `.md`
-   inglese / `.it.md` italiano. Doc interni: italiano. Identificatori, keyword,
-   nomi di file/funzione/variabile **sempre in inglese**.
+1. **Lingua:** vedi §4. Si lavora sul `.it.md` (italiano, riferimento); il `.md`
+   è lo stub inglese finché non si traduce. Eccezioni unico-italiano: `CLAUDE.md`,
+   `CHANGELOG.md`, lo standard. Identificatori, keyword, nomi di file/funzione
+   **sempre in inglese**.
 2. **Rimando incrociato.** Se esistono entrambi, README ed EXPLAIN si linkano a
    vicenda con un box in testa.
 3. **Fonte unica per le tabelle di config/API.** Il riferimento canonico è nel
@@ -260,7 +260,8 @@ sottosistemi. Solo navigazione, niente contenuto duplicato.
 | Altre cartelle (es. `tests/`, `scripts/`) | opzionale (orientamento) | n/a |
 | Guida / decision record in `docs/` | n/a (sono `guide`/`decision`) | n/a |
 
-EXPLAIN **vuoto** = vietato (si cancella).
+EXPLAIN **vuoto** = vietato (si cancella). Ogni file (tranne le eccezioni §4.3)
+implica la coppia `.md`(stub) + `.it.md`(contenuto).
 
 ---
 
@@ -270,22 +271,23 @@ EXPLAIN **vuoto** = vietato (si cancella).
   file; nei bilingui aggiungi la riga 2 inglese.
 - **Drift dello standard:** i doc col vecchio numero restano validi finché non
   li revisioni; aggiorna il marker quando li adegui.
-- **Drift di traduzione:** mantieni `rev`/`tracks` allineati; al rilascio
-  sincronizza l'inglese alla `rev` italiana corrente.
-- **Checklist nuovo plugin/tema:** `README.it.md` (riferimento, con marker+riga 2)
-  → litmus rispettato → tabella config canonica → `README.md` inglese (almeno
-  stub) → EXPLAIN solo se serve, mai vuoto.
+- **Drift di traduzione:** al rilascio sincronizza l'inglese alla `rev` italiana
+  corrente e sostituisci `stub` con `tracks: it@N`.
+- **Checklist nuovo plugin/tema:** `README.it.md` (riferimento, marker + riga 2)
+  → litmus rispettato → tabella config canonica → `README.md` (stub) → EXPLAIN
+  solo se serve, mai vuoto.
 
 ---
 
 ## 9. Changelog dello standard
 
-- **v1-1** — Aggiunto il supporto **multilingua**: selettore della lingua di
-  riferimento, naming bilingue `.md`(en)/`.it.md`(it) per i doc pubblicabili come
-  repo, campi marker `lang`/`rev`/`tracks`/`ref`, nota umana in riga 2,
-  versionamento dei doc con rilevamento dello stantio, regola di applicabilità
-  (bilingue vs interni) e cambio di lingua di riferimento. Bump MINOR
-  (retrocompatibile: i campi nuovi sono opzionali).
+- **v1-1** — Supporto **multilingua uniforme**: selettore della lingua di
+  riferimento; ogni doc è una coppia `nome.md` (stub inglese) + `nome.it.md`
+  (italiano, riferimento), tranne i file caricati per nome (`CLAUDE.md`,
+  `CHANGELOG.md`, lo standard) che restano unici in italiano; campi marker
+  `lang`/`rev`/`tracks`/`stub`/`ref`; nota umana in riga 2; versionamento dei doc
+  con rilevamento dello stantio; cambio di lingua di riferimento. Bump MINOR
+  (campi nuovi opzionali, retrocompatibile).
 - **v1-0** — Prima edizione. Marker di conformità, schema di versionamento
   `-latest`/`-v<x-y>`, tipi README/EXPLAIN/guide/decision/index/reference con
   scheletri, regole di redazione, matrice di obbligatorietà.
