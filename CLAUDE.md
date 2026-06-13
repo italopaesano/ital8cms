@@ -1099,130 +1099,24 @@ curl http://localhost:3000/pluginPages/myPlugin/mypage.ejs
 
 ## Theme System
 
-### Theme Structure
+Struttura tema: `views/` (partial `head`/`header`/`nav`/`main`/`aside`/`footer`), `templates/`, `themeResources/` (css/js/img), `themeConfig.json5` (flag `isAdminTheme`), `themeDescription.json5`.
 
-```
-themes/myTheme/
-├── views/                    # Reusable partials
-│   ├── head.ejs             # HTML head section
-│   ├── header.ejs           # Page header
-│   ├── nav.ejs              # Navigation
-│   ├── main.ejs             # Main content
-│   ├── aside.ejs            # Sidebar
-│   └── footer.ejs           # Footer + closing tags
-├── templates/               # Complete page templates
-│   └── page.ejs
-├── themeResources/          # Static assets (CSS, JS, images, fonts)
-│   ├── css/
-│   │   └── theme.css
-│   └── js/
-│       └── theme.js
-├── themeConfig.json5         # Theme configuration (including isAdminTheme flag)
-└── themeDescription.json5    # Theme metadata
-```
+**Configurazione** (`ital8Config.json5`): `activeTheme` (sito pubblico), `adminActiveTheme` (admin, richiede `isAdminTheme: true`), `publicThemeResourcesPrefix`, `adminThemeResourcesPrefix`.
 
-### Theme Configuration
-
-#### In `ital8Config.json5`:
-
-```json
-{
-  "activeTheme": "placeholderExample",        // Public site theme
-  "adminActiveTheme": "defaultAdminTheme",    // Admin panel theme (must have isAdminTheme: true)
-  "baseThemePath": "../",                     // Relative path base
-
-  // Theme resources URL prefixes
-  "publicThemeResourcesPrefix": "public-theme-resources",
-  "adminThemeResourcesPrefix": "admin-theme-resources"
-}
-```
-
-#### In `themes/myTheme/themeConfig.json5`:
-
-```json
-{
-  "active": 1,
-  "isInstalled": 1,
-  "weight": 0,
-
-  // IMPORTANT: Specifies if this is an admin theme
-  // Public themes: isAdminTheme: false
-  // Admin themes: isAdminTheme: true
-  "isAdminTheme": false,  // or true for admin themes
-
-  "pluginDependency": {
-    "bootstrap": "^1.0.0"
-  }
-}
-```
-
-#### ⚠️ Stato attuale dei campi `active` / `isInstalled` (da decidere)
-
-I campi `active` e `isInstalled` in `themeConfig.json5` sono attualmente **solo cosmetici**: vengono mostrati nei badge della UI admin (`themesManagment/index.ejs`, `themeView.ejs`) ma **non guidano alcuna logica**. Il tema effettivamente attivo è determinato unicamente da `ital8Config.json5` (`activeTheme`, `adminActiveTheme`).
-
-**Convenzione attuale (cleanup 2026-05-26):**
-- `active: 1` → **solo** sul tema corrispondente a `ital8Config.json5.activeTheme` o `adminActiveTheme`
-- `active: 0` → su tutti gli altri temi bundled
-- `isInstalled: 1` → su tutti i temi bundled (sono installati per definizione)
-- `themesInstall.js` (installazione da repo Git) forza `active: 0, isInstalled: 0` sui temi clonati
-
-**Decisione architetturale aperta — da approfondire:**
-
-Tre opzioni sul tavolo:
-
-1. **Mantenere lo stato attuale come cosmetico** — `active` e `isInstalled` restano metadata visualizzati ma non funzionali. Va documentato chiaramente che la fonte di verità è `ital8Config.json5`.
-
-2. **Allineare al flusso install** — `setActiveTheme` mantiene l'invariante: deattiva il flag nel vecchio tema, attiva nel nuovo. Aggiunge complessità (due scritture atomiche per cambio tema) ma rende i flag funzionali e coerenti.
-
-3. **Eliminare i campi** — rimuovere `active` e `isInstalled` da `themeConfig.json5` e dalla UI. La fonte di verità diventa solo `ital8Config.json5`, eliminando ogni ambiguità.
-
-**Vincolo:** `themesInstall.js` attualmente forza entrambi a 0 dopo il clone. Qualsiasi decisione deve essere coerente con questo flusso o modificarlo.
-
-Per ora `setActiveTheme()` **non** tocca i flag nei `themeConfig.json5`: aggiorna solo `ital8Config.json5`. La decisione su quale opzione adottare è rimandata.
-
-### Using Theme Partials in EJS
-
-**Unified API - works for both public and admin contexts:**
+**API unificata** — lo stesso codice funziona in contesto pubblico e admin (il sistema sceglie il tema da `passData.isAdminContext`):
 
 ```ejs
-<%- include(passData.themeSys.getThemePartPath('head.ejs', passData)) %>
-<%- include(passData.themeSys.getThemePartPath('header.ejs', passData)) %>
-<%- include(passData.themeSys.getThemePartPath('nav.ejs', passData)) %>
-<%- include(passData.themeSys.getThemePartPath('main.ejs', passData)) %>
-<%- include(passData.themeSys.getThemePartPath('aside.ejs', passData)) %>
-<%- include(passData.themeSys.getThemePartPath('footer.ejs', passData)) %>
-```
-
-**The same code works in both public and admin templates!** The system automatically:
-- Uses `activeTheme` (public) when `passData.isAdminContext === false`
-- Uses `adminActiveTheme` (admin) when `passData.isAdminContext === true`
-
-### Theme Resources (CSS, JS, Images)
-
-```ejs
-<!-- Unified API - works for both public and admin contexts -->
-<link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/theme.css', passData) %>">
-<script src="<%= passData.themeSys.getThemeResourceUrl('js/theme.js', passData) %>"></script>
-```
-
-**Automatic URL generation:**
-- Public context: `/public-theme-resources/css/theme.css`
-- Admin context: `/admin-theme-resources/css/theme.css`
-
-### Plugin Hook Integration
-
-Themes call `pluginSys.hookPage()` to allow plugins to inject content:
-
-```ejs
-<!-- In head.ejs -->
+<%- include(passData.themeSys.getThemePartPath('head.ejs')) %>
+<link rel="stylesheet" href="<%= passData.themeSys.getThemeResourceUrl('css/theme.css') %>">
 <%- await pluginSys.hookPage("head", passData) %>
-
-<!-- In header.ejs -->
-<%- await pluginSys.hookPage("header", passData) %>
-
-<!-- In footer.ejs -->
-<%- await pluginSys.hookPage("script", passData) %>
 ```
+
+- `getThemePartPath(part)` → path del partial del tema attivo
+- `getThemeResourceUrl(resource)` → URL risorsa (`/public-theme-resources/...` o `/admin-theme-resources/...`)
+- `pluginSys.hookPage(section, passData)` → punti di hook dei plugin (`head`, `header`, `script`, …)
+
+> 📖 Deep-dive (validazione, dipendenze, asset, personalizzazione endpoint plugin, API completa): [`core/EXPLAIN-themeSys.md`](./core/EXPLAIN-themeSys.md).
+> ⚠️ Decisione aperta sui campi `active`/`isInstalled`: [`docs/decisions/theme-active-isinstalled.it.md`](./docs/decisions/theme-active-isinstalled.it.md).
 
 ## Bootstrap Navbar Plugin
 
