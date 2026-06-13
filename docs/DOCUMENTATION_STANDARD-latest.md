@@ -1,16 +1,16 @@
-<!-- ital8doc v1.0 · tipo: reference -->
-# Standard di Documentazione ital8cms — v1.0
+<!-- ital8doc v1-0 · tipo: reference -->
+# Standard di Documentazione ital8cms — v1-0
 
 > **Stato: CORRENTE.** Questo file (`DOCUMENTATION_STANDARD-latest.md`) è sempre
 > la versione corrente dello standard. Le versioni passate sono archiviate come
-> `DOCUMENTATION_STANDARD-V<x.y>.md`. La versione corrente è citata anche in
+> `DOCUMENTATION_STANDARD-v<x-y>.md`. La versione corrente è citata anche in
 > `CLAUDE.md` (fonte di verità rapida per "qual è l'attuale").
 
 ---
 
 ## 0. In breve (TL;DR)
 
-- **Riga 1 di ogni file di doc** = marker di conformità: `<!-- ital8doc vX.Y · tipo: TIPO -->`
+- **Riga 1 di ogni file di doc** = marker di conformità: `<!-- ital8doc vX-Y · tipo: TIPO -->`
 - **README** risponde a *"come lo USO?"* — **EXPLAIN** risponde a *"1) PERCHÉ è fatto così? 2) come ne modifico il comportamento / lo regolo al meglio?"*
 - **README** è obbligatorio per ogni plugin e tema; **EXPLAIN** è opzionale (solo se ci sono interni non banali). Un EXPLAIN vuoto è vietato.
 - **Lingua: italiano.** Identificatori, keyword, nomi di file/funzione restano in inglese (stanno nel codice).
@@ -39,20 +39,21 @@ Questo standard governa **tutta** la documentazione versionabile del progetto:
 Ogni file di documentazione **inizia** con un commento HTML in riga 1:
 
 ```
-<!-- ital8doc vX.Y · tipo: TIPO -->
+<!-- ital8doc vX-Y · tipo: TIPO -->
 ```
 
 - È un commento HTML → **invisibile nel rendering**, visibile nel sorgente
   (l'equivalente markdown del commento `//` in testa ai file `.json5`).
-- `vX.Y` = la versione dello standard **sulla cui base il file è stato scritto**
-  (stamp di conformità, non necessariamente l'ultima esistente).
+- `vX-Y` = la versione dello standard **sulla cui base il file è stato scritto**
+  (stamp di conformità, non necessariamente l'ultima esistente). Formato:
+  `v<major>-<minor>`, es. `v1-0`, `v1-2`, `v2-0`.
 - `TIPO` ∈ { `README`, `EXPLAIN`, `guide`, `decision`, `index`, `reference` }.
   Dichiara quale contratto di sezioni segue il file.
 
 **Regola di risoluzione** (come trovare il testo dello standard a cui un file
-si conforma): leggi `vX.Y` nel marker → se coincide con la versione corrente
+si conforma): leggi `vX-Y` nel marker → se coincide con la versione corrente
 (dichiarata in `CLAUDE.md`) leggi `DOCUMENTATION_STANDARD-latest.md`; altrimenti
-leggi l'archivio `DOCUMENTATION_STANDARD-VX.Y.md`.
+leggi l'archivio `DOCUMENTATION_STANDARD-vX-Y.md`.
 
 ---
 
@@ -63,14 +64,14 @@ leggi l'archivio `DOCUMENTATION_STANDARD-VX.Y.md`.
 | File | Ruolo |
 |------|-------|
 | `docs/DOCUMENTATION_STANDARD-latest.md` | La versione **corrente** (questo file) |
-| `docs/DOCUMENTATION_STANDARD-V<x.y>.md` | Una versione **passata**, archiviata |
+| `docs/DOCUMENTATION_STANDARD-v<x-y>.md` | Una versione **passata**, archiviata |
 
 **Dove vive il numero corrente:** è dichiarato (a) nel titolo di questo file e
 (b) in una riga di `CLAUDE.md`. `CLAUDE.md` è il puntatore rapido; questo file è
 il testo autorevole.
 
 **Processo di avanzamento (bump):**
-1. Copia il `-latest.md` attuale in `DOCUMENTATION_STANDARD-V<vecchia>.md` (archivio).
+1. Copia il `-latest.md` attuale in `DOCUMENTATION_STANDARD-v<vecchia>.md` (archivio).
 2. Riscrivi `-latest.md` con il nuovo contenuto e il nuovo numero in titolo + marker.
 3. Aggiorna la riga della versione corrente in `CLAUDE.md`.
 
@@ -80,7 +81,7 @@ il testo autorevole.
 - **MINOR** — nuovo tipo o sezione **opzionale**, oppure chiarimento retrocompatibile.
 - **PATCH** — refuso o riformulazione senza impatto sulle regole.
 
-**Drift detection:** se un doc dichiara `v1.0` ma il corrente è `v1.2`, il doc
+**Drift detection:** se un doc dichiara `v1-0` ma il corrente è `v1-2`, il doc
 è candidato a revisione. Lo stamp per-file rende questo controllo immediato.
 
 ---
@@ -93,7 +94,7 @@ Lettore: chi vuole **usare** l'unità (installarla, chiamarne l'API, configurarl
 senza sapere come funziona dentro.
 
 ```
-<!-- ital8doc v1.0 · tipo: README -->
+<!-- ital8doc v1-0 · tipo: README -->
 # <nome>
 <1 paragrafo: cos'è, quale problema risolve>            ← OBBLIGATORIO
 > 📖 Deep-dive tecnico: vedi EXPLAIN.md                  ← solo se EXPLAIN esiste
@@ -115,7 +116,7 @@ studiarla come pattern di riferimento. Si scrive **solo** se gli interni sono no
 banali. Un EXPLAIN vuoto o ridondante col README è vietato.
 
 ```
-<!-- ital8doc v1.0 · tipo: EXPLAIN -->
+<!-- ital8doc v1-0 · tipo: EXPLAIN -->
 # <nome> — Deep-dive tecnico
 > Guida d'uso: vedi README.md
 ## Perché è fatto così        — filosofia + vincolo architetturale portante   ← IL CUORE
@@ -137,7 +138,7 @@ modificarlo/regolarlo** (azione consapevole). Entrambi discendono dagli interni.
 Per topic operativi trasversali (deploy, testing, HTTPS, profilo demo).
 
 ```
-<!-- ital8doc v1.0 · tipo: guide -->
+<!-- ital8doc v1-0 · tipo: guide -->
 # <Titolo della guida>
 ## Scopo            — cosa copre, per chi
 ## Prerequisiti
@@ -150,7 +151,7 @@ Per topic operativi trasversali (deploy, testing, HTTPS, profilo demo).
 Registro immutabile di una scelta architetturale (stile ADR).
 
 ```
-<!-- ital8doc v1.0 · tipo: decision -->
+<!-- ital8doc v1-0 · tipo: decision -->
 # <NNN> — <Titolo della decisione>
 ## Contesto         — il problema, i vincoli
 ## Decisione        — cosa si è scelto
@@ -210,7 +211,7 @@ EXPLAIN **vuoto** = vietato (si cancella, non si riempie per forza).
 
 ## 8. Changelog dello standard
 
-- **v1.0** — Prima edizione. Definisce marker di conformità, schema di
-  versionamento `-latest`/`-V<x.y>`, i tipi README/EXPLAIN/guide/decision/index/
+- **v1-0** — Prima edizione. Definisce marker di conformità, schema di
+  versionamento `-latest`/`-v<x-y>`, i tipi README/EXPLAIN/guide/decision/index/
   reference con i rispettivi scheletri, le regole di redazione e la matrice di
   obbligatorietà.
