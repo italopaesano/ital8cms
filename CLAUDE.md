@@ -212,7 +212,7 @@ Understanding the initialization sequence is critical:
 
 ## Plugin System Architecture
 
-Il sistema plugin è il cuore di ital8cms. Deep-dive completo (meccanica interna, esempi, validazione dipendenze, logging): [`core/EXPLAIN-pluginsSys.md`](./core/EXPLAIN-pluginsSys.md).
+Il sistema plugin è il cuore di ital8cms. Deep-dive completo (meccanica interna, esempi, validazione dipendenze, logging): [`core/EXPLAIN-pluginsSys.it.md`](./core/EXPLAIN-pluginsSys.it.md).
 
 ### Struttura plugin
 
@@ -302,7 +302,7 @@ Nel template si usano i partial del tema + i metodi di iniezione (senza parametr
 
 Le personalizzazioni del tema vivono in `themes/{tema}/pluginsEndpointsMarkup/{plugin}/{pagina}/` (`style.css`, `script.js`, `before-content.html`, `after-content.html`). **GET** servite automaticamente dal sistema; **POST** restano in `getRouteArray()` (`/api/{plugin}/...`).
 
-> 📖 Deep-dive completo (architettura symlink, API `PluginPagesSystem`, auto-cleanup al boot, passData, init flow, debugging): [`core/EXPLAIN-pluginPages.md`](./core/EXPLAIN-pluginPages.md).
+> 📖 Deep-dive completo (architettura symlink, API `PluginPagesSystem`, auto-cleanup al boot, passData, init flow, debugging): [`core/EXPLAIN-pluginPages.it.md`](./core/EXPLAIN-pluginPages.it.md).
 
 ## Theme System
 
@@ -322,7 +322,7 @@ Struttura tema: `views/` (partial `head`/`header`/`nav`/`main`/`aside`/`footer`)
 - `getThemeResourceUrl(resource)` → URL risorsa (`/public-theme-resources/...` o `/admin-theme-resources/...`)
 - `pluginSys.hookPage(section, passData)` → punti di hook dei plugin (`head`, `header`, `script`, …)
 
-> 📖 Deep-dive (validazione, dipendenze, asset, personalizzazione endpoint plugin, API completa): [`core/EXPLAIN-themeSys.md`](./core/EXPLAIN-themeSys.md).
+> 📖 Deep-dive (validazione, dipendenze, asset, personalizzazione endpoint plugin, API completa): [`core/EXPLAIN-themeSys.it.md`](./core/EXPLAIN-themeSys.it.md).
 > ⚠️ Decisione aperta sui campi `active`/`isInstalled`: [`docs/decisions/theme-active-isinstalled.it.md`](./docs/decisions/theme-active-isinstalled.it.md).
 
 ## Bootstrap Navbar / URL Redirect / Admin Bootstrap Navbar
@@ -337,7 +337,7 @@ Plugin documentati nei rispettivi doc (uso, configurazione, API, esempi):
 
 ## Admin System Architecture
 
-Architettura modulare che permette ai plugin di fornire funzionalità admin tramite un'interfaccia unificata (sezioni dinamiche via symlink + sezioni hardcoded). Deep-dive completo (symlink, service discovery, init 2-fasi, menu dinamico, API, troubleshooting): [`core/admin/EXPLAIN.md`](./core/admin/EXPLAIN.md).
+Architettura modulare che permette ai plugin di fornire funzionalità admin tramite un'interfaccia unificata (sezioni dinamiche via symlink + sezioni hardcoded). Deep-dive completo (symlink, service discovery, init 2-fasi, menu dinamico, API, troubleshooting): [`core/admin/EXPLAIN.it.md`](./core/admin/EXPLAIN.it.md).
 
 ### Contratti essenziali
 
@@ -1004,8 +1004,8 @@ Server su `http://localhost:3000`.
 
 ### Creare plugin / temi (usa le skill di scaffolding)
 
-- **Plugin:** skill `ital8cms-plugin-creator` (minimal / con webPages / admin / con funzioni globali). Riferimento completo: `plugins/exampleComplete/` + `core/EXPLAIN-pluginsSys.md`. Struttura minima: `main.js` + `pluginConfig.json5` + `pluginDescription.json5`; aggiungi `webPages/` per le pagine HTML (vedi *Plugin Pages System*).
-- **Tema:** skill `ital8cms-theme-creator`. Deep-dive: `core/EXPLAIN-themeSys.md`. Attivazione: `activeTheme`/`adminActiveTheme` in `ital8Config.json5`.
+- **Plugin:** skill `ital8cms-plugin-creator` (minimal / con webPages / admin / con funzioni globali). Riferimento completo: `plugins/exampleComplete/` + `core/EXPLAIN-pluginsSys.it.md`. Struttura minima: `main.js` + `pluginConfig.json5` + `pluginDescription.json5`; aggiungi `webPages/` per le pagine HTML (vedi *Plugin Pages System*).
+- **Tema:** skill `ital8cms-theme-creator`. Deep-dive: `core/EXPLAIN-themeSys.it.md`. Attivazione: `activeTheme`/`adminActiveTheme` in `ital8Config.json5`.
 - **Altre skill:** `ital8cms-bootstrapNavbar-creator` (navbar), `ital8cms-simpleI18n-integrator` (i18n), `ital8cms-website-builder` (sito completo).
 
 ### Pagine admin
@@ -1287,7 +1287,7 @@ function getSafeRedirectUrl(url) {
 
 ## Common Tasks
 
-Ricette pratiche — aggiungere una rotta API, un page hook (`getHooksPage`), un middleware (`getMiddlewareToAdd`), condividere oggetti tra plugin (`getObjectToShareToOthersPlugin`/`getSharedObject`), inizializzare lo storage dati: i **contratti** sono nella sezione *Plugin System Architecture* (sopra); l'**esempio completo di riferimento** è il plugin `plugins/exampleComplete/` che dimostra tutti i metodi del sistema plugin; il deep-dive è in `core/EXPLAIN-pluginsSys.md`.
+Ricette pratiche — aggiungere una rotta API, un page hook (`getHooksPage`), un middleware (`getMiddlewareToAdd`), condividere oggetti tra plugin (`getObjectToShareToOthersPlugin`/`getSharedObject`), inizializzare lo storage dati: i **contratti** sono nella sezione *Plugin System Architecture* (sopra); l'**esempio completo di riferimento** è il plugin `plugins/exampleComplete/` che dimostra tutti i metodi del sistema plugin; il deep-dive è in `core/EXPLAIN-pluginsSys.it.md`.
 
 Per lo storage JSON5: leggere con `loadJson5()`, scrivere in modo **atomico** (temp + `rename`) — vedi *Data Storage Strategy*.
 

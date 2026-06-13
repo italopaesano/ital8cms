@@ -1,4 +1,5 @@
+<!-- ital8doc v1-1 · tipo: index · lang: en · stub -->
+> 🌐 This document is maintained in Italian → see `EXPLAIN.it.md`. The English edition will be filled in at release.
+# core/ — Subsystems technical documentation
 
-/core/core/EXPLAIN-pluginsSys.md --> descrive il funzionamento del sistema di plugin
-/core/core/EXPLAIN-themeSys.md --> descrive il funzionamento del sistema dei temi 
-/core/admin/EXPLAIN.md --> panoramica su come funziona l'amministrazione di ital8
+> English translation pending. Authoritative version: [`EXPLAIN.it.md`](./EXPLAIN.it.md).

@@ -26,10 +26,10 @@ Indice della documentazione. La guida operativa per l'AI e l'architettura in sin
 
 ## Sottosistemi core (deep-dive)
 
-- [`../core/EXPLAIN-pluginsSys.md`](../core/EXPLAIN-pluginsSys.md) — sistema plugin
-- [`../core/EXPLAIN-themeSys.md`](../core/EXPLAIN-themeSys.md) — sistema temi
-- [`../core/EXPLAIN-pluginPages.md`](../core/EXPLAIN-pluginPages.md) — Plugin Pages System
-- [`../core/admin/EXPLAIN.md`](../core/admin/EXPLAIN.md) — sistema admin
+- [`../core/EXPLAIN-pluginsSys.it.md`](../core/EXPLAIN-pluginsSys.it.md) — sistema plugin
+- [`../core/EXPLAIN-themeSys.it.md`](../core/EXPLAIN-themeSys.it.md) — sistema temi
+- [`../core/EXPLAIN-pluginPages.it.md`](../core/EXPLAIN-pluginPages.it.md) — Plugin Pages System
+- [`../core/admin/EXPLAIN.it.md`](../core/admin/EXPLAIN.it.md) — sistema admin
 
 ## Plugin
 

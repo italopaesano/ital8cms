@@ -2,7 +2,7 @@
 
 > **⚠️ NOTA:** Questa è una guida base introduttiva. Per la documentazione completa e aggiornata, consulta:
 > - `/CLAUDE.md` - Documentazione completa del progetto
-> - `/core/EXPLAIN-pluginsSys.md` - Guida dettagliata del sistema plugin
+> - `/core/EXPLAIN-pluginsSys.it.md` - Guida dettagliata del sistema plugin
 > - `/plugins/exampleComplete/` - Plugin di esempio completo con tutti i metodi
 
 > **🆕 NUOVO STANDARD (2026-01-04):** È stato aggiunto il metodo `getGlobalFunctionsForTemplates()` per esportare funzioni globali nei template EJS. Vedi documentazione completa in `/CLAUDE.md` sezione "Global Functions in Templates".
