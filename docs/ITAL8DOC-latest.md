@@ -1,10 +1,10 @@
 <!-- ital8doc v1-0 · tipo: reference -->
-# Standard di Documentazione ital8cms — v1-0
+# ital8doc — Standard di Documentazione (v1-0)
 
-> **Stato: CORRENTE.** Questo file (`DOCUMENTATION_STANDARD-latest.md`) è sempre
-> la versione corrente dello standard. Le versioni passate sono archiviate come
-> `DOCUMENTATION_STANDARD-v<x-y>.md`. La versione corrente è citata anche in
-> `CLAUDE.md` (fonte di verità rapida per "qual è l'attuale").
+> **Stato: CORRENTE.** Questo file (`ITAL8DOC-latest.md`) è sempre la versione
+> corrente dello standard. Le versioni passate sono archiviate come
+> `ITAL8DOC-v<x-y>.md`. La versione corrente è citata anche in `CLAUDE.md`
+> (fonte di verità rapida per "qual è l'attuale").
 
 ---
 
@@ -20,13 +20,19 @@
 
 ## 1. Scopo e ambito
 
-Questo standard governa **tutta** la documentazione versionabile del progetto:
+Questo standard governa **tutta** la documentazione versionabile del progetto.
+Ambito dei due tipi principali:
 
-- `README.md` (plugin, tema, cartelle, root)
-- `EXPLAIN.md` (plugin, tema, sottosistemi core)
-- Guide operative in `docs/` (es. `deployment.md`, `testing.md`)
-- Decision record in `docs/decisions/`
-- L'indice `docs/README.md`
+- **README.md** → plugin, tema, sottosistemi core, **altre cartelle**, root
+- **EXPLAIN.md** → plugin, tema, sottosistemi core
+
+Dove **"altre cartelle"** = directory generiche che non sono un plugin, un tema,
+un sottosistema core o la root, ma che meritano un README di orientamento (es.
+`tests/`, `scripts/`, `www/`, i contenitori `plugins/` e `themes/`, `docs/`).
+Non avendo interni da spiegare a fondo, **non** rientrano nello scope EXPLAIN.
+
+Lo standard governa inoltre: le **guide** operative in `docs/`, i **decision
+record** in `docs/decisions/`, e l'**indice** `docs/README.md`.
 
 **Documenti speciali** riconosciuti ma **non** rimodellati da questo standard
 (seguono convenzioni proprie): `CLAUDE.md` (guida operativa per l'AI) e
@@ -52,8 +58,8 @@ Ogni file di documentazione **inizia** con un commento HTML in riga 1:
 
 **Regola di risoluzione** (come trovare il testo dello standard a cui un file
 si conforma): leggi `vX-Y` nel marker → se coincide con la versione corrente
-(dichiarata in `CLAUDE.md`) leggi `DOCUMENTATION_STANDARD-latest.md`; altrimenti
-leggi l'archivio `DOCUMENTATION_STANDARD-vX-Y.md`.
+(dichiarata in `CLAUDE.md`) leggi `ITAL8DOC-latest.md`; altrimenti leggi
+l'archivio `ITAL8DOC-vX-Y.md`.
 
 ---
 
@@ -63,15 +69,15 @@ leggi l'archivio `DOCUMENTATION_STANDARD-vX-Y.md`.
 
 | File | Ruolo |
 |------|-------|
-| `docs/DOCUMENTATION_STANDARD-latest.md` | La versione **corrente** (questo file) |
-| `docs/DOCUMENTATION_STANDARD-v<x-y>.md` | Una versione **passata**, archiviata |
+| `docs/ITAL8DOC-latest.md` | La versione **corrente** (questo file) |
+| `docs/ITAL8DOC-v<x-y>.md` | Una versione **passata**, archiviata |
 
 **Dove vive il numero corrente:** è dichiarato (a) nel titolo di questo file e
 (b) in una riga di `CLAUDE.md`. `CLAUDE.md` è il puntatore rapido; questo file è
 il testo autorevole.
 
 **Processo di avanzamento (bump):**
-1. Copia il `-latest.md` attuale in `DOCUMENTATION_STANDARD-v<vecchia>.md` (archivio).
+1. Copia il `-latest.md` attuale in `ITAL8DOC-v<vecchia>.md` (archivio).
 2. Riscrivi `-latest.md` con il nuovo contenuto e il nuovo numero in titolo + marker.
 3. Aggiorna la riga della versione corrente in `CLAUDE.md`.
 
@@ -192,6 +198,7 @@ EXPLAIN dei sottosistemi. Niente contenuto duplicato, solo navigazione.
 | Plugin | **obbligatorio** | opzionale (se interni non banali) |
 | Tema | **obbligatorio** | opzionale |
 | Sottosistema core (es. `core/admin/`) | consigliato | consigliato |
+| Altre cartelle (es. `tests/`, `scripts/`) | opzionale (orientamento) | n/a |
 | Guida / decision record in `docs/` | n/a (sono `guide`/`decision`) | n/a |
 
 EXPLAIN **vuoto** = vietato (si cancella, non si riempie per forza).
