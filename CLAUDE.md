@@ -1,34 +1,34 @@
-# CLAUDE.md - AI Assistant Guide for ital8cms
+# CLAUDE.md — Guida per assistenti AI di ital8cms
 
-## Project Overview
+## Panoramica del progetto
 
-**ital8cms** is a modular, plugin-based Content Management System built on Node.js and Koa.js. The architecture emphasizes extensibility through a sophisticated plugin system that supports dynamic loading, dependency resolution, and inter-plugin communication.
+**ital8cms** è un Content Management System modulare, basato su plugin, costruito su Node.js e Koa.js. L'architettura punta sull'estensibilità tramite un sofisticato sistema di plugin che supporta caricamento dinamico, risoluzione delle dipendenze e comunicazione tra plugin.
 
-- **Version:** 0.0.1-alpha.0 (Early Alpha)
-- **Author:** Italo Paesano (italopaesano@protonmail.com)
-- **License:** ISC
-- **Primary Language:** JavaScript (CommonJS)
-- **Code Comments:** Mix of Italian and English (author is Italian)
+- **Versione:** 0.0.1-alpha.0 (Early Alpha)
+- **Autore:** Italo Paesano (italopaesano@protonmail.com)
+- **Licenza:** ISC
+- **Linguaggio principale:** JavaScript (CommonJS)
+- **Commenti nel codice:** Mix di italiano e inglese (l'autore è italiano)
 
-### Core Philosophy
+### Filosofia di base
 
-**Zero Database Dependency:** ital8cms does not require any DBMS by default. The core system and plugins use **JSON files** for structured data storage (user accounts, roles, configurations) and **file-based storage** for web pages. Database systems like SQLite are **optional** and can be added through plugins when needed for specific use cases.
+**Zero dipendenza da database:** ital8cms non richiede alcun DBMS per default. Il sistema core e i plugin usano **file JSON** per l'archiviazione di dati strutturati (account utente, ruoli, configurazioni) e **archiviazione su file** per le pagine web. Sistemi di database come SQLite sono **opzionali** e possono essere aggiunti tramite plugin quando servono per casi d'uso specifici.
 
-**Developer-First Approach:** ital8cms rejects the "zero-knowledge" approach of many modern CMS platforms. This is a tool **for developers, by developers**:
+**Approccio Developer-First:** ital8cms rifiuta l'approccio "zero-knowledge" di molte piattaforme CMS moderne. Questo è uno strumento **per sviluppatori, fatto da sviluppatori**:
 
-- **Themes require:** HTML, CSS, JavaScript, and EJS templating knowledge
-- **Plugins require:** Node.js/JavaScript programming skills, understanding of Koa.js middleware
-- **Configuration requires:** Manual creation and editing of JSON/JSON5 files
-- **No drag-and-drop:** All customization is done through code and file manipulation
+- **I temi richiedono:** conoscenza di HTML, CSS, JavaScript e templating EJS
+- **I plugin richiedono:** competenze di programmazione Node.js/JavaScript, comprensione del middleware Koa.js
+- **La configurazione richiede:** creazione e modifica manuale di file JSON/JSON5
+- **Nessun drag-and-drop:** tutta la personalizzazione avviene tramite codice e manipolazione di file
 
-**Why this approach?**
-- ✅ **Full control:** No abstractions hiding the underlying technology
-- ✅ **Flexibility:** Create exactly what you need without platform limitations
-- ✅ **Performance:** No overhead from visual builders or abstraction layers
-- ✅ **Learning:** Understand exactly how your CMS works
-- ✅ **Debugging:** Easier to trace issues in plain code vs. generated configurations
+**Perché questo approccio?**
+- ✅ **Controllo completo:** nessuna astrazione che nasconde la tecnologia sottostante
+- ✅ **Flessibilità:** crei esattamente ciò di cui hai bisogno senza limitazioni della piattaforma
+- ✅ **Performance:** nessun overhead da visual builder o layer di astrazione
+- ✅ **Apprendimento:** capisci esattamente come funziona il tuo CMS
+- ✅ **Debugging:** più facile tracciare i problemi in codice semplice rispetto a configurazioni generate
 
-**Target audience:** Web developers comfortable with Node.js, HTML/CSS, and server-side templating. Not suitable for non-technical users looking for a WYSIWYG editor.
+**Pubblico di riferimento:** sviluppatori web a proprio agio con Node.js, HTML/CSS e templating lato server. Non adatto a utenti non tecnici in cerca di un editor WYSIWYG.
 
 ### Dipendenze Mantenute dal Team
 
@@ -48,24 +48,24 @@ Il progetto ital8cms è anche manutentore del modulo npm **`koa-classic-server`*
 3. Aggiornare la versione in `package.json` con `npm install koa-classic-server@x.y.z`
 4. Verificare che il comportamento sia corretto senza workaround nel codice ital8cms
 
-**JSON5 Configuration Files:** All configuration files (with .json5 extension) in the project (except `package.json` and `package-lock.json`) are processed with JSON5 and support comments, trailing commas, and other JSON5 features. Each file must have a comment on the first line:
+**File di configurazione JSON5:** Tutti i file di configurazione (con estensione .json5) nel progetto (eccetto `package.json` e `package-lock.json`) sono processati con JSON5 e supportano commenti, virgole finali e altre funzionalità JSON5. Ogni file deve avere un commento sulla prima riga:
 
 ```javascript
 // This file follows the JSON5 standard - comments and trailing commas are supported
 ```
 
-**Loading JSON Files:** All JSON files must be loaded using the centralized `core/loadJson5.js` module (all config files now use .json5 extension):
+**Caricamento dei file JSON:** Tutti i file JSON devono essere caricati usando il modulo centralizzato `core/loadJson5.js` (tutti i file di configurazione ora usano l'estensione .json5):
 
 ```javascript
 const loadJson5 = require('./core/loadJson5');
 const config = loadJson5('./ital8Config.json5');
 ```
 
-**DO NOT** use `require()` directly for `.json5` configuration files as it doesn't support JSON5 comments. **ALWAYS** use the `loadJson5()` function for loading all configuration files.
+**NON** usare `require()` direttamente per i file di configurazione `.json5` perché non supporta i commenti JSON5. Usa **SEMPRE** la funzione `loadJson5()` per caricare tutti i file di configurazione.
 
-**Why loadJson5 naming:** The file is named `loadJson5.js` and the function is `loadJson5()` to maintain **perfect symmetry** between the module name and the exported function, making imports clear and intuitive.
+**Perché il nome loadJson5:** Il file si chiama `loadJson5.js` e la funzione è `loadJson5()` per mantenere una **simmetria perfetta** tra il nome del modulo e la funzione esportata, rendendo gli import chiari e intuitivi.
 
-## AI Assistant Guidelines
+## Linee guida per l'assistente AI
 
 Lavorando su questo codebase come AI assistant — regole operative (le più critiche per prime):
 
@@ -81,136 +81,136 @@ Lavorando su questo codebase come AI assistant — regole operative (le più cri
 10. **Commenti:** l'autore usa l'italiano; per i nuovi commenti preferisci l'inglese, rispettando gli esistenti.
 11. **Progetto alpha** (v0.0.1-alpha.0): breaking changes accettabili ma documentati in `CHANGELOG.md`.
 
-## Codebase Structure
+## Struttura del codebase
 
 ```
 /home/user/ital8cms/
-├── index.js                      # Main application entry point
-├── ital8Config.json5              # Central configuration file
-├── package.json                 # Node.js dependencies
+├── index.js                      # Punto di ingresso principale dell'applicazione
+├── ital8Config.json5              # File di configurazione centrale
+├── package.json                 # Dipendenze Node.js
 │
-├── core/                        # Core CMS functionality
-│   ├── admin/                   # Admin System (modular architecture)
-│   │   ├── adminConfig.json5    # Central admin configuration
-│   │   ├── adminSystem.js       # Admin coordinator
-│   │   ├── lib/                 # Admin subsystems
-│   │   │   ├── configManager.js # Config loader & validator
+├── core/                        # Funzionalità core del CMS
+│   ├── admin/                   # Admin System (architettura modulare)
+│   │   ├── adminConfig.json5    # Configurazione admin centrale
+│   │   ├── adminSystem.js       # Coordinatore admin
+│   │   ├── lib/                 # Sottosistemi admin
+│   │   │   ├── configManager.js # Caricamento e validazione config
 │   │   │   ├── adminServicesManager.js # Service discovery
-│   │   │   └── symlinkManager.js # Symlink manager for plugin sections
-│   │   └── webPages/           # Admin EJS templates
-│   │       ├── index.ejs       # Admin dashboard (dynamic menu)
-│   │       ├── systemSettings/  # Hardcoded admin sections
+│   │   │   └── symlinkManager.js # Gestore symlink per le sezioni dei plugin
+│   │   └── webPages/           # Template EJS admin
+│   │       ├── index.ejs       # Dashboard admin (menu dinamico)
+│   │       ├── systemSettings/  # Sezioni admin hardcoded
 │   │       └── usersManagment/  # SYMLINK → plugins/adminUsers/adminWebSections/usersManagment/
-│   ├── priorityMiddlewares/    # Critical middleware configs
-│   │   └── koaSession.json5     # Session configuration
-│   ├── pluginSys.js            # Plugin system manager
-│   ├── themeSys.js             # Theme system manager
-│   └── loadJson5.js            # JSON5 file loader utility
+│   ├── priorityMiddlewares/    # Config dei middleware critici
+│   │   └── koaSession.json5     # Configurazione della sessione
+│   ├── pluginSys.js            # Gestore del sistema plugin
+│   ├── themeSys.js             # Gestore del sistema temi
+│   └── loadJson5.js            # Utility di caricamento file JSON5
 │
-├── plugins/                     # Plugin modules (each self-contained)
-│   ├── dbApi/                  # Database API plugin
-│   │   ├── main.js             # Plugin logic
-│   │   ├── pluginConfig.json5   # Plugin configuration
-│   │   ├── pluginDescription.json5 # Plugin metadata
-│   │   └── dbFile/             # SQLite database files
-│   ├── adminUsers/             # Admin plugin: User & Role management
-│   │   ├── main.js             # Plugin logic
-│   │   ├── pluginConfig.json5   # Plugin config (with adminSections array)
-│   │   ├── pluginDescription.json5 # Plugin metadata
-│   │   ├── adminWebSections/   # Admin sections container directory
-│   │   │   ├── usersManagment/ # Admin section files (served via symlink)
-│   │   │   │   ├── index.ejs   # User list page
-│   │   │   │   ├── userView.ejs # View user details
-│   │   │   │   ├── userUpsert.ejs # Create/edit user
-│   │   │   │   └── userDelete.ejs # Delete user
-│   │   │   └── rolesManagment/ # Role management section
-│   │   │       └── index.ejs   # Role management page
-│   │   ├── userAccount.json5    # User credentials (bcrypt hashed)
-│   │   ├── userRole.json5       # Role definitions
-│   │   ├── userManagement.js   # User management logic
-│   │   └── roleManagement.js   # Role management logic
-│   ├── admin/                  # Admin core functionality plugin
-│   ├── bootstrap/              # Bootstrap CSS/JS integration
-│   ├── media/                  # Media management
-│   ├── ccxt/                   # Cryptocurrency exchange API
-│   └── ostrukUtility/          # Utility functions
+├── plugins/                     # Moduli plugin (ciascuno autoconsistente)
+│   ├── dbApi/                  # Plugin Database API
+│   │   ├── main.js             # Logica del plugin
+│   │   ├── pluginConfig.json5   # Configurazione del plugin
+│   │   ├── pluginDescription.json5 # Metadata del plugin
+│   │   └── dbFile/             # File del database SQLite
+│   ├── adminUsers/             # Plugin admin: gestione utenti e ruoli
+│   │   ├── main.js             # Logica del plugin
+│   │   ├── pluginConfig.json5   # Config del plugin (con array adminSections)
+│   │   ├── pluginDescription.json5 # Metadata del plugin
+│   │   ├── adminWebSections/   # Directory contenitore delle sezioni admin
+│   │   │   ├── usersManagment/ # File della sezione admin (serviti via symlink)
+│   │   │   │   ├── index.ejs   # Pagina lista utenti
+│   │   │   │   ├── userView.ejs # Visualizza dettagli utente
+│   │   │   │   ├── userUpsert.ejs # Crea/modifica utente
+│   │   │   │   └── userDelete.ejs # Elimina utente
+│   │   │   └── rolesManagment/ # Sezione gestione ruoli
+│   │   │       └── index.ejs   # Pagina gestione ruoli
+│   │   ├── userAccount.json5    # Credenziali utente (hashate con bcrypt)
+│   │   ├── userRole.json5       # Definizioni dei ruoli
+│   │   ├── userManagement.js   # Logica gestione utenti
+│   │   └── roleManagement.js   # Logica gestione ruoli
+│   ├── admin/                  # Plugin funzionalità core admin
+│   ├── bootstrap/              # Integrazione CSS/JS di Bootstrap
+│   ├── media/                  # Gestione media
+│   ├── ccxt/                   # API exchange di criptovalute
+│   └── ostrukUtility/          # Funzioni di utilità
 │
-├── themes/                      # Theme templates
-│   ├── default/                # Default theme
-│   │   ├── views/              # Theme partials
-│   │   │   ├── head.ejs        # HTML head
-│   │   │   ├── header.ejs      # Header section
-│   │   │   ├── nav.ejs         # Navigation
-│   │   │   ├── main.ejs        # Main content area
+├── themes/                      # Template dei temi
+│   ├── default/                # Tema di default
+│   │   ├── views/              # Partial del tema
+│   │   │   ├── head.ejs        # Head HTML
+│   │   │   ├── header.ejs      # Sezione header
+│   │   │   ├── nav.ejs         # Navigazione
+│   │   │   ├── main.ejs        # Area contenuto principale
 │   │   │   ├── aside.ejs       # Sidebar
-│   │   │   └── footer.ejs      # Footer + scripts
-│   │   └── templates/          # Full page templates
-│   └── baseExampleTheme/       # Example theme
+│   │   │   └── footer.ejs      # Footer + script
+│   │   └── templates/          # Template di pagina completi
+│   └── baseExampleTheme/       # Tema di esempio
 │
-└── www/                         # Public web root
-    └── index.ejs               # Public homepage
+└── www/                         # Web root pubblica
+    └── index.ejs               # Homepage pubblica
 ```
 
-## Technology Stack
+## Stack tecnologico
 
 ### Backend
-- **Framework:** Koa.js v3.1.1 (async/await-based web framework)
+- **Framework:** Koa.js v3.1.1 (web framework basato su async/await)
 - **Routing:** @koa/router v12.0.1
 - **Middleware:** koa-bodyparser, koa-session, koa-classic-server v2.1.2
-- **Data Storage:** JSON files (no database required)
-- **Authentication:** bcryptjs v3.0.2 (password hashing)
+- **Archiviazione dati:** file JSON (nessun database richiesto)
+- **Autenticazione:** bcryptjs v3.0.2 (hashing delle password)
 - **Template Engine:** EJS v3.1.9
-- **Utilities:** semver v7.5.4 (dependency versioning)
+- **Utilità:** semver v7.5.4 (versioning delle dipendenze)
 
 ### Frontend
 - **UI Framework:** Bootstrap v5.3.2
-- **Templating:** Server-side EJS rendering
+- **Templating:** rendering EJS lato server
 
-### Development
+### Sviluppo
 - **Auto-reload:** nodemon v3.0.1
-- **Version Control:** Git
+- **Controllo versione:** Git
 
-### Optional Plugin Dependencies
-- **better-sqlite3:** SQLite database (via dbApi plugin - currently disabled)
-- **ccxt v4.1.70:** Cryptocurrency exchange integration (via ccxt plugin)
+### Dipendenze opzionali dei plugin
+- **better-sqlite3:** database SQLite (via plugin dbApi - attualmente disabilitato)
+- **ccxt v4.1.70:** integrazione exchange di criptovalute (via plugin ccxt)
 
-## Application Startup Flow
+## Flusso di avvio dell'applicazione
 
-Understanding the initialization sequence is critical:
+Comprendere la sequenza di inizializzazione è fondamentale:
 
-1. **Load Koa Application** (`index.js`)
-2. **Initialize Priority Middlewares:**
-   - Body parser (request parsing) - **CORE** (always active)
-   - Sessions (authentication state) - **OPTIONAL** (configurable in `ital8Config.json5`)
-   - Router (URL routing) - **CORE** (always active)
-   - Order is fixed and guaranteed: bodyParser → session → router
-3. **Initialize Plugin System** (`pluginSys`)
-4. **Load Active Plugins:**
-   - Resolve dependencies
-   - Load in dependency order
-   - Call `loadPlugin()` on each
-   - Add metadata to plugin objects (`pluginName`, `pathPluginFolder`)
-   - Share objects between plugins
-5. **Register Plugin Routes:**
-   - Prefix: `/${apiPrefix}/${pluginName}`
+1. **Carica l'applicazione Koa** (`index.js`)
+2. **Inizializza i Priority Middleware:**
+   - Body parser (parsing delle richieste) - **CORE** (sempre attivo)
+   - Sessioni (stato di autenticazione) - **OPZIONALE** (configurabile in `ital8Config.json5`)
+   - Router (routing degli URL) - **CORE** (sempre attivo)
+   - L'ordine è fisso e garantito: bodyParser → session → router
+3. **Inizializza il sistema plugin** (`pluginSys`)
+4. **Carica i plugin attivi:**
+   - Risolve le dipendenze
+   - Carica nell'ordine delle dipendenze
+   - Chiama `loadPlugin()` su ciascuno
+   - Aggiunge i metadata agli oggetti plugin (`pluginName`, `pathPluginFolder`)
+   - Condivide oggetti tra i plugin
+5. **Registra le rotte dei plugin:**
+   - Prefisso: `/${apiPrefix}/${pluginName}`
    - Default: `/api/{pluginName}/...`
-6. **Load Plugin Middlewares**
-7. **Initialize Theme System** (`themeSys`)
-8. **Initialize Admin System** (if `enableAdmin: true`):
-   - **Phase 1:** Create AdminSystem instance
-   - **Phase 2:** Link dependencies (2-way injection to avoid circular refs)
+6. **Carica i middleware dei plugin**
+7. **Inizializza il sistema temi** (`themeSys`)
+8. **Inizializza l'Admin System** (se `enableAdmin: true`):
+   - **Fase 1:** Crea l'istanza AdminSystem
+   - **Fase 2:** Collega le dipendenze (injection bidirezionale per evitare riferimenti circolari)
      - `adminSystem.setPluginSys(pluginSys)`
      - `pluginSys.setAdminSystem(adminSystem)`
-   - **Phase 3:** Initialize AdminSystem
-     - Validate existing symlinks
-     - Process admin plugins (create symlinks for sections)
-     - Load services from configuration
-9. **Setup Static Servers:**
-   - Public site: `/www` directory → `/`
-   - Admin panel: `/core/admin/webPages` → `/admin`
-10. **Start HTTP Server** (port 3000 by default)
+   - **Fase 3:** Inizializza AdminSystem
+     - Valida i symlink esistenti
+     - Processa i plugin admin (crea i symlink per le sezioni)
+     - Carica i servizi dalla configurazione
+9. **Configura gli static server:**
+   - Sito pubblico: directory `/www` → `/`
+   - Pannello admin: `/core/admin/webPages` → `/admin`
+10. **Avvia il server HTTP** (porta 3000 di default)
 
-## Plugin System Architecture
+## Architettura del sistema plugin
 
 Il sistema plugin è il cuore di ital8cms. Deep-dive completo (meccanica interna, esempi, validazione dipendenze, logging): [`core/EXPLAIN-pluginsSys.it.md`](./core/EXPLAIN-pluginsSys.it.md).
 
@@ -262,9 +262,9 @@ Pattern: `/${apiPrefix}/${pluginName}/${path}` (default `/api/{pluginName}/...`)
 | `method` | sì | **MAIUSCOLO**: `'GET'`, `'POST'`, `'PUT'`, `'DEL'`, `'ALL'` |
 | `path` | sì | es. `'/hello'` |
 | `handler` | sì | `async (ctx) => { ... }` |
-| `access` | sì | controllo accessi (vedi Access Control) |
+| `access` | sì | controllo accessi (vedi Sistema di controllo accessi) |
 
-> **WARNING:** `method` minuscolo (`'get'`) o `func` invece di `handler` → la rotta viene **silenziosamente ignorata** da `pluginSys.loadRoutes()` e la richiesta cade sul static server (HTML invece di JSON). Il campo `access` è **obbligatorio**: la sua assenza causa **errore fatale al boot** (vedi Access Control System).
+> **WARNING:** `method` minuscolo (`'get'`) o `func` invece di `handler` → la rotta viene **silenziosamente ignorata** da `pluginSys.loadRoutes()` e la richiesta cade sul static server (HTML invece di JSON). Il campo `access` è **obbligatorio**: la sua assenza causa **errore fatale al boot** (vedi Sistema di controllo accessi).
 
 ```javascript
 getRouteArray() {
@@ -289,7 +289,7 @@ I plugin possono esporre funzioni come helper **globali** negli EJS (senza il pr
 
 Entrambe le sintassi funzionano sempre: globale `<%- __(...) %>` e locale `<%- passData.plugin.simpleI18n.__(...) %>`. Esempio attuale: `__()` (traduzioni, da `simpleI18n`).
 
-## Plugin Pages System
+## Sistema Plugin Pages
 
 I plugin servono pagine pubbliche **senza definire endpoint** in `getRouteArray()`: basta creare una directory `webPages/`. Il sistema (`core/pluginPagesSystem.js`) la auto-rileva e crea un **symlink** `/pluginPages/{plugin}/` → `/plugins/{plugin}/webPages/` (zero duplicazione). URL pubblico: `/pluginPages/{pluginName}/{file.ejs}` (prefisso `pluginPagesPrefix`).
 
@@ -304,7 +304,7 @@ Le personalizzazioni del tema vivono in `themes/{tema}/pluginsEndpointsMarkup/{p
 
 > 📖 Deep-dive completo (architettura symlink, API `PluginPagesSystem`, auto-cleanup al boot, passData, init flow, debugging): [`core/EXPLAIN-pluginPages.it.md`](./core/EXPLAIN-pluginPages.it.md).
 
-## Theme System
+## Sistema dei temi
 
 Struttura tema: `views/` (partial `head`/`header`/`nav`/`main`/`aside`/`footer`), `templates/`, `themeResources/` (css/js/img), `themeConfig.json5` (flag `isAdminTheme`), `themeDescription.json5`.
 
@@ -335,7 +335,7 @@ Plugin documentati nei rispettivi doc (uso, configurazione, API, esempi):
 
 > Scaffolding rapido di una navbar: skill `ital8cms-bootstrapNavbar-creator`.
 
-## Admin System Architecture
+## Architettura del sistema admin
 
 Architettura modulare che permette ai plugin di fornire funzionalità admin tramite un'interfaccia unificata (sezioni dinamiche via symlink + sezioni hardcoded). Deep-dive completo (symlink, service discovery, init 2-fasi, menu dinamico, API, troubleshooting): [`core/admin/EXPLAIN.it.md`](./core/admin/EXPLAIN.it.md).
 
@@ -364,11 +364,11 @@ I plugin forniscono servizi backend (auth, email, storage…) dichiarati in `adm
 PluginSys e AdminSystem si collegano via dependency injection: `adminSystem.setPluginSys()` / `pluginSys.setAdminSystem()` → poi `adminSystem.initialize()` (valida symlink, processa i plugin admin, carica i servizi).
 
 
-### Admin Plugin Best Practice — Twin Admin Plugin (`admin<Name>`)
+### Best Practice per i plugin admin — Twin Admin Plugin (`admin<Name>`)
 
-A **service plugin** that needs a configuration/management UI **SHOULD ship its admin interface as a separate "twin" admin plugin**, named `admin` + the service plugin name with a capitalized first letter (camelCase preserved). The service plugin stays lean (logic only); the admin twin owns the GUI.
+Un **service plugin** che necessita di una UI di configurazione/gestione **DOVREBBE distribuire la propria interfaccia admin come plugin admin "twin" separato**, denominato `admin` + il nome del service plugin con la prima lettera maiuscola (camelCase preservato). Il service plugin resta snello (solo logica); il twin admin possiede la GUI.
 
-**Established pairs:**
+**Coppie consolidate:**
 
 | Service plugin | Twin admin plugin |
 |----------------|-------------------|
@@ -378,118 +378,118 @@ A **service plugin** that needs a configuration/management UI **SHOULD ship its 
 | `analytics` | `adminAnalytics` |
 | `rateLimiter` | `adminRateLimiter` |
 
-**Division of responsibilities:**
+**Divisione delle responsabilità:**
 
-- **Service plugin** — domain logic, runtime state, the shared-object API, and its own `.json5` config files (e.g. `protectedRoutes.json5`). **No admin UI.**
-- **Twin admin plugin** — the admin section(s) (GUI). It depends on the service plugin (`dependency: { "<service>": "^x.y.z" }`), resolves the service's folder via `pluginSys.getPlugin('<service>').pathPluginFolder` to read/write its config files, and pulls its shared object via `pluginSys.getSharedObject('<service>')` for live data and actions.
+- **Service plugin** — logica di dominio, stato runtime, l'API a oggetto condiviso e i propri file di configurazione `.json5` (es. `protectedRoutes.json5`). **Nessuna UI admin.**
+- **Twin admin plugin** — la/le sezione/i admin (GUI). Dipende dal service plugin (`dependency: { "<service>": "^x.y.z" }`), risolve la cartella del service via `pluginSys.getPlugin('<service>').pathPluginFolder` per leggere/scrivere i suoi file di configurazione, e recupera il suo oggetto condiviso via `pluginSys.getSharedObject('<service>')` per dati live e azioni.
 
-**Why split:**
-- ✅ The service stays usable **headless** — installable/runnable without the admin twin (no GUI weight, no admin dependencies).
-- ✅ Clear separation of concerns — the admin twin can be disabled or removed independently.
-- ✅ Consistent discovery — admin plugins are auto-detected by the `admin` prefix and serve sections via symlink.
+**Perché separare:**
+- ✅ Il service resta utilizzabile **headless** — installabile/eseguibile senza il twin admin (nessun peso della GUI, nessuna dipendenza admin).
+- ✅ Chiara separazione delle responsabilità — il twin admin può essere disabilitato o rimosso in modo indipendente.
+- ✅ Discovery coerente — i plugin admin sono auto-rilevati dal prefisso `admin` e servono le sezioni via symlink.
 
-**Special cases:** a few early plugins combine service + admin in a single admin-named plugin (`adminUsers`, `adminAccessControl`) because their domain is itself admin-centric. For **new** service plugins, prefer the twin split.
+**Casi speciali:** alcuni plugin iniziali combinano service + admin in un unico plugin con nome admin (`adminUsers`, `adminAccessControl`) perché il loro dominio è esso stesso admin-centrico. Per i **nuovi** service plugin, preferisci la separazione in twin.
 
-### Admin GUI Conventions — The Three Views ("Le Tre Viste")
+### Convenzioni Admin GUI — Le Tre Viste
 
-Admin plugins that provide a UI should follow a shared philosophy so the panel stays consistent and every plugin remains both power-user-friendly and approachable. The principle: **an admin section exposes up to three coordinated "views" over the same underlying state/file**, added as needed.
+I plugin admin che forniscono una UI dovrebbero seguire una filosofia condivisa così che il pannello resti coerente e ogni plugin rimanga sia adatto ai power-user sia accessibile. Il principio: **una sezione admin espone fino a tre "viste" coordinate sullo stesso stato/file sottostante**, aggiunte secondo necessità.
 
-#### The three views
+#### Le tre viste
 
-| View | Purpose | When | Reference implementation |
+| Vista | Scopo | Quando | Implementazione di riferimento |
 |------|---------|------|--------------------------|
-| **A. Data view** | Visualize state/metrics (read-mostly) + live actions | **Mandatory** whenever the plugin has runtime state or statistics | `adminAnalytics/analyticsManagement` (KPI cards + Chart.js + auto-refresh) |
-| **B. Raw JSON5 editor** | Edit the real `.json5` file directly | **Always present for configuration** | `adminAccessControl` (pure); `adminSeo/pageRules` (editor + snippets + reference table + unsaved modal) |
-| **C. Structured form** | Guided, validated, field-by-field editing | Optional; recommended for rich/complex config | `adminSeo/globalSettings` (tabbed form + JSON5 toolbar + feature-status badges) |
+| **A. Data view** | Visualizzare stato/metriche (per lo più in lettura) + azioni live | **Obbligatoria** ogniqualvolta il plugin ha stato runtime o statistiche | `adminAnalytics/analyticsManagement` (card KPI + Chart.js + auto-refresh) |
+| **B. Editor JSON5 raw** | Modificare direttamente il vero file `.json5` | **Sempre presente per la configurazione** | `adminAccessControl` (puro); `adminSeo/pageRules` (editor + snippet + tabella di riferimento + modal modifiche non salvate) |
+| **C. Form strutturato** | Editing guidato, validato, campo per campo | Opzionale; raccomandato per config ricche/complesse | `adminSeo/globalSettings` (form a tab + toolbar JSON5 + badge di stato feature) |
 
-- **A** is non-negotiable when there is data to show: never force an admin to read raw files to understand live state.
-- **B** is the ground truth and the fallback: always available for config, so a power user — or a field the form doesn't cover yet — is never blocked.
-- **C** is sugar on top of B for complex configs; it never replaces B.
+- **A** è irrinunciabile quando ci sono dati da mostrare: non costringere mai un admin a leggere file raw per capire lo stato live.
+- **B** è la verità di base e il fallback: sempre disponibile per la config, così un power user — o un campo che il form non copre ancora — non è mai bloccato.
+- **C** è zucchero sopra B per config complesse; non sostituisce mai B.
 
-#### Coordination rules (B ↔ C)
+#### Regole di coordinamento (B ↔ C)
 
-When both the form (C) and the raw editor (B) are present, they edit the **same file**:
-1. **Single source of truth** = the `.json5` file on disk.
-2. **Shared validation**, always **server-side** before any save (reuse the service plugin's own validator).
-3. **Explicit switching** between views ("load form from JSON5" / "regenerate JSON5 from form") with an **unsaved-changes warning** (modal), as in `adminSeo/pageRules`.
-4. **Atomic writes** (temp + rename) + backups where it makes sense (as in `adminBootstrapNavbar`).
+Quando sia il form (C) sia l'editor raw (B) sono presenti, modificano lo **stesso file**:
+1. **Fonte di verità unica** = il file `.json5` su disco.
+2. **Validazione condivisa**, sempre **lato server** prima di qualsiasi salvataggio (riusa il validatore del service plugin stesso).
+3. **Switch esplicito** tra le viste ("carica form da JSON5" / "rigenera JSON5 dal form") con un **avviso modifiche non salvate** (modal), come in `adminSeo/pageRules`.
+4. **Scritture atomiche** (temp + rename) + backup dove ha senso (come in `adminBootstrapNavbar`).
 
-#### Cross-cutting rules (always)
+#### Regole trasversali (sempre)
 
-- **i18n** via the `__()` global helper (it/en).
-- **Bootstrap 5, responsive** — tabs collapse to a `<select>` on mobile (see `adminSeo/globalSettings`).
-- **XSS-escaped** dynamic output, especially user-controlled data (IPs, URLs) — use `escapeHtml`.
-- **Access control**: routes declare `access` with the right roles; sensitive config → `[0, 1]` (root/admin).
-- **Propagation**: prefer **hot-reload** (the service plugin exposes `reload*()` on its shared object); for settings created once at boot, offer **"Save & restart"** (`pluginSys.requestRestart`) — safe when the plugin persists its state across restart.
-- **Live actions** (if the plugin has runtime state) go through the **shared object** (same process) for immediate effect — no file round-trip.
+- **i18n** tramite l'helper globale `__()` (it/en).
+- **Bootstrap 5, responsive** — i tab collassano in un `<select>` su mobile (vedi `adminSeo/globalSettings`).
+- **Output XSS-escaped** per il contenuto dinamico, specialmente i dati controllati dall'utente (IP, URL) — usa `escapeHtml`.
+- **Controllo accessi**: le rotte dichiarano `access` con i ruoli corretti; config sensibile → `[0, 1]` (root/admin).
+- **Propagazione**: preferisci l'**hot-reload** (il service plugin espone `reload*()` sul suo oggetto condiviso); per le impostazioni create una sola volta al boot, offri **"Salva e riavvia"** (`pluginSys.requestRestart`) — sicuro quando il plugin persiste il suo stato tra i riavvii.
+- **Azioni live** (se il plugin ha stato runtime) passano per l'**oggetto condiviso** (stesso processo) per effetto immediato — nessun round-trip su file.
 
-#### Decision guide
+#### Guida alle decisioni
 
-| The section manages… | Provide views |
+| La sezione gestisce… | Fornisci le viste |
 |----------------------|---------------|
-| Only data/metrics | A |
-| Simple, tabular config | B (+ assists) |
-| Rich/complex config | B + C (coordinated) |
-| Data **and** config | A + B (+ C), as section tabs |
+| Solo dati/metriche | A |
+| Config semplice, tabellare | B (+ assistenze) |
+| Config ricca/complessa | B + C (coordinate) |
+| Dati **e** config | A + B (+ C), come tab della sezione |
 
-#### Checklist for a new admin GUI
+#### Checklist per una nuova admin GUI
 
-- [ ] Twin admin plugin named `admin<Service>`, depending on the service plugin
-- [ ] Data view with live refresh if there is runtime state/metrics
-- [ ] Raw JSON5 editor for every editable config file (Validate + Save)
-- [ ] Optional structured form coordinated with the JSON5 editor (shared validator)
-- [ ] Server-side validation + atomic write (+ backup) on every save
-- [ ] i18n labels, responsive tabs, escaped output
-- [ ] Correct `access` roles on all routes
-- [ ] Hot-reload via shared object, or "Save & restart" for boot-time settings
+- [ ] Twin admin plugin denominato `admin<Service>`, dipendente dal service plugin
+- [ ] Data view con refresh live se c'è stato runtime/metriche
+- [ ] Editor JSON5 raw per ogni file di configurazione modificabile (Valida + Salva)
+- [ ] Form strutturato opzionale coordinato con l'editor JSON5 (validatore condiviso)
+- [ ] Validazione lato server + scrittura atomica (+ backup) ad ogni salvataggio
+- [ ] Label i18n, tab responsive, output escapato
+- [ ] Ruoli `access` corretti su tutte le rotte
+- [ ] Hot-reload via oggetto condiviso, oppure "Salva e riavvia" per le impostazioni al boot
 
-## Data Storage Strategy
+## Strategia di archiviazione dati
 
-### Core Philosophy: File-Based, Database-Free
+### Filosofia di base: basata su file, senza database
 
-**ital8cms does NOT require any database management system (DBMS) to function.** The core system is designed to work entirely with JSON files for structured data and file-based storage for content.
+**ital8cms NON richiede alcun sistema di gestione database (DBMS) per funzionare.** Il sistema core è progettato per funzionare interamente con file JSON per i dati strutturati e archiviazione su file per i contenuti.
 
-### Primary Storage: JSON Files
+### Archiviazione primaria: file JSON
 
-**Structured Data Storage:**
-- **User accounts:** `/plugins/adminUsers/userAccount.json5`
-- **User roles:** `/plugins/adminUsers/userRole.json5`
-- **Plugin configurations:** Each plugin has `pluginConfig.json5`
-- **Application settings:** `ital8Config.json5`
-- **Admin configuration:** `/core/admin/adminConfig.json5`
+**Archiviazione dati strutturati:**
+- **Account utente:** `/plugins/adminUsers/userAccount.json5`
+- **Ruoli utente:** `/plugins/adminUsers/userRole.json5`
+- **Configurazioni dei plugin:** ogni plugin ha `pluginConfig.json5`
+- **Impostazioni dell'applicazione:** `ital8Config.json5`
+- **Configurazione admin:** `/core/admin/adminConfig.json5`
 
-**Why JSON?**
-- ✅ Zero dependencies - no database installation required
-- ✅ Simple deployment - just copy files
-- ✅ Easy backup - standard file system operations
-- ✅ Human-readable - can be edited manually if needed
-- ✅ Version control friendly - Git can track changes
-- ✅ Perfect for small to medium data sets
+**Perché JSON?**
+- ✅ Zero dipendenze - nessuna installazione di database richiesta
+- ✅ Deploy semplice - basta copiare i file
+- ✅ Backup facile - operazioni standard del file system
+- ✅ Leggibile dall'uomo - può essere modificato manualmente se necessario
+- ✅ Compatibile col controllo versione - Git può tracciare le modifiche
+- ✅ Perfetto per dataset piccoli e medi
 
-### Content Storage: File-Based
+### Archiviazione dei contenuti: basata su file
 
-**Web Pages:**
-- **Templates:** EJS files in `/www` and `/themes`
-- **Static content:** HTML, CSS, JavaScript served directly
-- **Admin pages:** EJS files in `/core/admin/webPages`
+**Pagine web:**
+- **Template:** file EJS in `/www` e `/themes`
+- **Contenuto statico:** HTML, CSS, JavaScript serviti direttamente
+- **Pagine admin:** file EJS in `/core/admin/webPages`
 
-**Media Files:**
-- Managed by media plugin
-- Stored as files in plugin-specific directories
+**File media:**
+- Gestiti dal plugin media
+- Archiviati come file in directory specifiche del plugin
 
-### Optional: Database via Plugins
+### Opzionale: database via plugin
 
-**When you need a database:**
-Databases like SQLite can be added through plugins when you need:
-- Complex queries with JOINs
-- Full-text search
-- Relational data with many relationships
-- Large datasets requiring indexing
-- ACID transactions
+**Quando serve un database:**
+Database come SQLite possono essere aggiunti tramite plugin quando hai bisogno di:
+- Query complesse con JOIN
+- Ricerca full-text
+- Dati relazionali con molte relazioni
+- Dataset di grandi dimensioni che richiedono indicizzazione
+- Transazioni ACID
 
-**dbApi Plugin (currently disabled):**
+**Plugin dbApi (attualmente disabilitato):**
 
-The `dbApi` plugin provides SQLite integration:
+Il plugin `dbApi` fornisce l'integrazione SQLite:
 
 ```javascript
 // Enable in plugins/dbApi/pluginConfig.json5
@@ -501,23 +501,23 @@ The `dbApi` plugin provides SQLite integration:
 }
 ```
 
-Then install the dependency:
+Poi installa la dipendenza:
 ```bash
 npm install better-sqlite3
 ```
 
-**Database location when enabled:**
+**Posizione del database quando abilitato:**
 ```
 plugins/dbApi/dbFile/
-├── mainDb.db              # Main application database
-├── webDb.db               # Web-shared data (available in templates)
-└── pluginsDb/             # Per-plugin databases
+├── mainDb.db              # Database principale dell'applicazione
+├── webDb.db               # Dati condivisi col web (disponibili nei template)
+└── pluginsDb/             # Database per-plugin
     ├── admin.db
     ├── media.db
     └── ...
 ```
 
-**Accessing database in plugins (when dbApi is active):**
+**Accesso al database nei plugin (quando dbApi è attivo):**
 
 ```javascript
 async loadPlugin(pluginSys, pathPluginFolder) {
@@ -528,11 +528,11 @@ async loadPlugin(pluginSys, pathPluginFolder) {
 }
 ```
 
-### JSON5 File Operations
+### Operazioni sui file JSON5
 
-**IMPORTANT:** All configuration files use the `.json5` extension and **MUST** be loaded using the `loadJson5()` function, not `require()` or `JSON.parse()`.
+**IMPORTANTE:** Tutti i file di configurazione usano l'estensione `.json5` e **DEVONO** essere caricati usando la funzione `loadJson5()`, non `require()` o `JSON.parse()`.
 
-**Reading JSON5 data:**
+**Lettura dei dati JSON5:**
 ```javascript
 const path = require('path')
 const loadJson5 = require('../../core/loadJson5')
@@ -542,7 +542,7 @@ const userAccountPath = path.join(pathPluginFolder, 'userAccount.json5')
 const users = loadJson5(userAccountPath)
 ```
 
-**Writing JSON5 data:**
+**Scrittura dei dati JSON5:**
 ```javascript
 const fs = require('fs')
 
@@ -554,7 +554,7 @@ fs.writeFileSync(
 )
 ```
 
-**Atomic writes (safer):**
+**Scritture atomiche (più sicure):**
 ```javascript
 // Write to temp file first, then rename (atomic operation)
 const tempPath = userAccountPath + '.tmp'
@@ -562,47 +562,47 @@ fs.writeFileSync(tempPath, JSON.stringify(users, null, 2), 'utf8')
 fs.renameSync(tempPath, userAccountPath)
 ```
 
-## Authentication & Authorization
+## Autenticazione e autorizzazione
 
-### Authentication System (adminUsers plugin)
+### Sistema di autenticazione (plugin adminUsers)
 
-**Login Flow:**
-1. User submits username/password to `/api/adminUsers/login` (POST)
-2. Plugin validates credentials against `userAccount.json5`
-3. Password verified with bcryptjs
-4. Session created: `ctx.session.authenticated = true`, `ctx.session.user = userData`
-5. Session cookie sent to client
+**Flusso di login:**
+1. L'utente invia username/password a `/api/adminUsers/login` (POST)
+2. Il plugin valida le credenziali rispetto a `userAccount.json5`
+3. La password è verificata con bcryptjs
+4. Sessione creata: `ctx.session.authenticated = true`, `ctx.session.user = userData`
+5. Il cookie di sessione viene inviato al client
 
-**Logout Flow:**
-1. User accesses `/api/adminUsers/logout` (POST)
-2. Session destroyed: `ctx.session = null`
+**Flusso di logout:**
+1. L'utente accede a `/api/adminUsers/logout` (POST)
+2. Sessione distrutta: `ctx.session = null`
 
-**Session Management:**
-- Signed cookies with secret keys
-- Max age: 24 hours (86400000ms)
-- Configuration: `/core/priorityMiddlewares/koaSession.json5`
+**Gestione della sessione:**
+- Cookie firmati con chiavi segrete
+- Durata massima: 24 ore (86400000ms)
+- Configurazione: `/core/priorityMiddlewares/koaSession.json5`
 
-### Authorization System (Multi-Role RBAC)
+### Sistema di autorizzazione (RBAC multi-ruolo)
 
-**Multi-Role Architecture:**
-- Users can have **multiple roles** simultaneously via `roleIds` array
-- Roles are checked using `roleIds.includes(roleId)` logic
-- Example: A user can be both `admin` (1) and have custom roles
+**Architettura multi-ruolo:**
+- Gli utenti possono avere **più ruoli** simultaneamente tramite l'array `roleIds`
+- I ruoli sono controllati con la logica `roleIds.includes(roleId)`
+- Esempio: un utente può essere sia `admin` (1) sia avere ruoli custom
 
-**Hardcoded System Roles (0-99):**
-- **0 (root):** Full system access, including critical operations
-- **1 (admin):** Full access to all admin resources
-- **2 (editor):** Create, read, update, delete ALL content (including other users' content)
-- **3 (selfEditor):** Create, read, update, delete ONLY OWN content
+**Ruoli di sistema hardcoded (0-99):**
+- **0 (root):** accesso completo al sistema, incluse le operazioni critiche
+- **1 (admin):** accesso completo a tutte le risorse admin
+- **2 (editor):** crea, legge, aggiorna, elimina TUTTI i contenuti (compresi quelli di altri utenti)
+- **3 (selfEditor):** crea, legge, aggiorna, elimina SOLO i PROPRI contenuti
 
-**Custom Roles (100+):**
-- User-defined roles created through admin panel
-- Managed via `/admin/rolesManagment/`
-- Auto-increment ID starting at 100
-- Can be assigned/removed from users dynamically
+**Ruoli custom (100+):**
+- Ruoli definiti dall'utente creati tramite il pannello admin
+- Gestiti via `/admin/rolesManagment/`
+- ID auto-incrementale a partire da 100
+- Possono essere assegnati/rimossi dagli utenti dinamicamente
 
-**Role Data Structure:**
-Located in `/plugins/adminUsers/userRole.json5`
+**Struttura dati dei ruoli:**
+Situata in `/plugins/adminUsers/userRole.json5`
 ```json5
 {
   "roles": {
@@ -613,8 +613,8 @@ Located in `/plugins/adminUsers/userRole.json5`
 }
 ```
 
-**User Data Structure:**
-Located in `/plugins/adminUsers/userAccount.json5`
+**Struttura dati dell'utente:**
+Situata in `/plugins/adminUsers/userAccount.json5`
 ```json5
 {
   "username": {
@@ -625,7 +625,7 @@ Located in `/plugins/adminUsers/userAccount.json5`
 }
 ```
 
-### Access Control System (adminAccessControl)
+### Sistema di controllo accessi (adminAccessControl)
 
 Controllo accessi basato su pattern (esatto / wildcard `*`,`**` / `regex:`) con **priorità automatica** (il più specifico vince), regole **hardcoded immutabili** + **custom** in `accessControl.json5`, e campo **`access` obbligatorio** su ogni rotta di plugin (la sua assenza causa errore fatale al boot). Admin UI con editor JSON5 e validazione (sintassi, ruoli, conflitti, immutabilità hardcoded). → [`plugins/adminAccessControl/README.it.md`](./plugins/adminAccessControl/README.it.md) · [`EXPLAIN.it.md`](./plugins/adminAccessControl/EXPLAIN.it.md)
 
@@ -646,7 +646,7 @@ Protezione CSRF (difesa in profondità: token sincronizzatore per-sessione + con
 
 > Hardening correlato (difesa in profondità): `SameSite=lax` sul cookie di sessione in `core/priorityMiddlewares/koaSession.json5`.
 
-### Checking Authentication in Code
+### Controllo dell'autenticazione nel codice
 
 ```javascript
 // In route handler
@@ -673,7 +673,7 @@ if (roleIds.includes(1)) {
 const hasAdminAccess = roleIds.some(id => [0, 1].includes(id))
 ```
 
-### Checking Authentication in Templates
+### Controllo dell'autenticazione nei template
 
 ```ejs
 <% if (passData.ctx.session.authenticated) { %>
@@ -683,15 +683,15 @@ const hasAdminAccess = roleIds.some(id => [0, 1].includes(id))
 <% } %>
 ```
 
-## API Route Patterns
+## Pattern delle rotte API
 
-### Standard API Routes
+### Rotte API standard
 
-All plugin routes are prefixed: `/api/{pluginName}/...`
+Tutte le rotte dei plugin hanno il prefisso: `/api/{pluginName}/...`
 
-### AdminUsers Plugin Routes
+### Rotte del plugin AdminUsers
 
-**Authentication:**
+**Autenticazione:**
 ```
 GET  /api/adminUsers/login         # Display login form
 POST /api/adminUsers/login         # Authenticate user
@@ -700,14 +700,14 @@ POST /api/adminUsers/logout        # End session
 GET  /api/adminUsers/logged        # Check login status (JSON)
 ```
 
-**User Management:**
+**Gestione utenti:**
 ```
 GET  /api/adminUsers/userList      # List all users (protected)
 GET  /api/adminUsers/userInfo      # Get user details (protected)
 POST /api/adminUsers/usertUser     # Create/update user (protected)
 ```
 
-**Role Management:**
+**Gestione ruoli:**
 ```
 GET  /api/adminUsers/roleList           # List all roles (hardcoded + custom)
 GET  /api/adminUsers/customRoleList     # List only custom roles
@@ -717,7 +717,7 @@ POST /api/adminUsers/updateCustomRole   # Update existing custom role
 POST /api/adminUsers/deleteCustomRole   # Delete custom role (removes from users)
 ```
 
-### Bootstrap Plugin Routes
+### Rotte del plugin Bootstrap
 
 ```
 GET /api/bootstrap/css/bootstrap.min.css
@@ -726,9 +726,9 @@ GET /api/bootstrap/js/bootstrap.bundle.min.js
 GET /api/bootstrap/js/bootstrap.bundle.min.js.map
 ```
 
-### Creating New Routes
+### Creazione di nuove rotte
 
-1. Add route definition in plugin's `getRouteArray()`:
+1. Aggiungi la definizione della rotta nel `getRouteArray()` del plugin:
 
 ```javascript
 getRouteArray(router, pluginSys, pathPluginFolder) {
@@ -753,11 +753,11 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
 }
 ```
 
-2. Route becomes available at: `/api/yourPlugin/my-endpoint`
+2. La rotta diventa disponibile su: `/api/yourPlugin/my-endpoint`
 
-## Configuration Management
+## Gestione della configurazione
 
-### Main Configuration: ital8Config.json5
+### Configurazione principale: ital8Config.json5
 
 ```json
 {
@@ -799,9 +799,9 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
 
 ### Hide Extension (Clean URLs)
 
-The `hideExtension` feature leverages `koa-classic-server` v2.6.1+ to serve pages without the file extension in the URL. Each of the three EJS-rendering koa-classic-server instances can be configured independently.
+La funzionalità `hideExtension` sfrutta `koa-classic-server` v2.6.1+ per servire le pagine senza l'estensione del file nell'URL. Ciascuna delle tre istanze koa-classic-server che renderizzano EJS può essere configurata in modo indipendente.
 
-**Configuration in `ital8Config.json5`:**
+**Configurazione in `ital8Config.json5`:**
 
 ```json5
 {
@@ -813,32 +813,32 @@ The `hideExtension` feature leverages `koa-classic-server` v2.6.1+ to serve page
 }
 ```
 
-**Fields:**
+**Campi:**
 
-| Field | Type | Description |
+| Campo | Tipo | Descrizione |
 |-------|------|-------------|
-| `enabled` | boolean | `true` = hide extension, `false` = show extension (default) |
-| `ext` | string | Extension to hide, including the dot (e.g., `".ejs"`, `".pug"`) |
+| `enabled` | boolean | `true` = nasconde l'estensione, `false` = mostra l'estensione (default) |
+| `ext` | string | Estensione da nascondere, incluso il punto (es. `".ejs"`, `".pug"`) |
 
-**Contexts:**
+**Contesti:**
 
-| Key | koa-classic-server Instance | URL Example (enabled) |
+| Chiave | Istanza koa-classic-server | Esempio URL (abilitato) |
 |-----|----------------------------|----------------------|
-| `wwwPath` | Public pages (`/www`) | `/about` instead of `/about.ejs` |
-| `pluginPagesPrefix` | Plugin pages (`/pluginPages/`) | `/pluginPages/adminUsers/login` instead of `/pluginPages/adminUsers/login.ejs` |
-| `adminPrefix` | Admin pages (`/admin/`) | `/admin/usersManagment/index` instead of `/admin/usersManagment/index.ejs` |
+| `wwwPath` | Pagine pubbliche (`/www`) | `/about` invece di `/about.ejs` |
+| `pluginPagesPrefix` | Pagine dei plugin (`/pluginPages/`) | `/pluginPages/adminUsers/login` invece di `/pluginPages/adminUsers/login.ejs` |
+| `adminPrefix` | Pagine admin (`/admin/`) | `/admin/usersManagment/index` invece di `/admin/usersManagment/index.ejs` |
 
-**Backward compatibility:** When enabled, existing links with the extension (e.g., `/about.ejs`) continue to work via automatic redirect provided by `koa-classic-server`.
+**Retrocompatibilità:** Quando abilitata, i link esistenti con l'estensione (es. `/about.ejs`) continuano a funzionare tramite redirect automatico fornito da `koa-classic-server`.
 
-**Not applied to:** Theme resource instances (public and admin) since they serve static assets (CSS, JS, images) whose extensions should remain visible.
+**Non applicata a:** le istanze delle risorse del tema (pubblico e admin) poiché servono asset statici (CSS, JS, immagini) le cui estensioni dovrebbero restare visibili.
 
-**Future use:** The per-context `ext` field allows different template engines per context (e.g., `wwwPath` using `".pug"` while `adminPrefix` uses `".ejs"`).
+**Uso futuro:** Il campo `ext` per-contesto permette template engine diversi per contesto (es. `wwwPath` che usa `".pug"` mentre `adminPrefix` usa `".ejs"`).
 
-### Priority Middlewares Configuration
+### Configurazione dei Priority Middleware
 
-Priority middlewares are loaded **before everything else** in a fixed, guaranteed order. They provide foundational infrastructure for the entire application.
+I priority middleware vengono caricati **prima di ogni altra cosa** in un ordine fisso e garantito. Forniscono l'infrastruttura di base per l'intera applicazione.
 
-**Configuration in `ital8Config.json5`:**
+**Configurazione in `ital8Config.json5`:**
 
 ```json5
 {
@@ -848,27 +848,27 @@ Priority middlewares are loaded **before everything else** in a fixed, guarantee
 }
 ```
 
-**Middleware Types:**
+**Tipi di middleware:**
 
-| Middleware | Type | Default | Description |
+| Middleware | Tipo | Default | Descrizione |
 |-----------|------|---------|-------------|
-| `bodyParser` | **CORE** | Always active | Parses request bodies (JSON, form data). **Hardcoded, non-configurable**. |
-| `session` | **OPTIONAL** | `true` | Manages user sessions (koa-session). Required for authentication. |
-| `router` | **CORE** | Always active | Main routing system (@koa/router). **Hardcoded, non-configurable**. |
+| `bodyParser` | **CORE** | Sempre attivo | Effettua il parsing del corpo delle richieste (JSON, form data). **Hardcoded, non configurabile**. |
+| `session` | **OPZIONALE** | `true` | Gestisce le sessioni utente (koa-session). Richiesto per l'autenticazione. |
+| `router` | **CORE** | Sempre attivo | Sistema di routing principale (@koa/router). **Hardcoded, non configurabile**. |
 
-**Loading Order (fixed, non-modifiable):**
+**Ordine di caricamento (fisso, non modificabile):**
 ```
 1. bodyParser  → Parse request body
 2. session     → Initialize ctx.session (if enabled)
 3. router      → Route matching and handler execution
 ```
 
-**Why This Order:**
-- `bodyParser` MUST be first → Otherwise `ctx.request.body` is undefined in route handlers
-- `session` MUST be before `router` → Otherwise `ctx.session` is undefined in route handlers
-- `router` MUST be last → Can safely use body and session in all route handlers
+**Perché questo ordine:**
+- `bodyParser` DEVE essere primo → altrimenti `ctx.request.body` è undefined nei route handler
+- `session` DEVE precedere `router` → altrimenti `ctx.session` è undefined nei route handler
+- `router` DEVE essere ultimo → può usare body e sessione in sicurezza in tutti i route handler
 
-**Disabling Optional Middlewares:**
+**Disabilitare i middleware opzionali:**
 
 ```json5
 {
@@ -878,20 +878,20 @@ Priority middlewares are loaded **before everything else** in a fixed, guarantee
 }
 ```
 
-⚠️ **Warning:** Disabling `session` will cause:
-- `ctx.session` to be `undefined` in all code
-- Authentication plugins (like `adminUsers`) to fail
-- Admin panel login to stop working
+⚠️ **Attenzione:** Disabilitare `session` comporterà:
+- `ctx.session` `undefined` in tutto il codice
+- Il fallimento dei plugin di autenticazione (come `adminUsers`)
+- Il login del pannello admin smetterà di funzionare
 
-**Only disable if:** Your application doesn't need user authentication at all.
+**Disabilitare solo se:** la tua applicazione non necessita affatto di autenticazione utente.
 
-### HTTPS Configuration
+### Configurazione HTTPS
 
 Configurazione completa spostata in [`docs/https.it.md`](./docs/https.it.md).
 
-### Session Configuration: core/priorityMiddlewares/koaSession.json5
+### Configurazione della sessione: core/priorityMiddlewares/koaSession.json5
 
-**IMPORTANT:** Le chiavi (`keys`) firmano i cookie di sessione (`signed: true`). I valori committed nel repo sono **placeholder condivisi**: chiunque cloni il progetto li conosce e potrebbe forgiare cookie di sessione validi (impersonazione). **Vanno sostituiti con chiavi casuali in produzione.**
+**IMPORTANTE:** Le chiavi (`keys`) firmano i cookie di sessione (`signed: true`). I valori committed nel repo sono **placeholder condivisi**: chiunque cloni il progetto li conosce e potrebbe forgiare cookie di sessione validi (impersonazione). **Vanno sostituiti con chiavi casuali in produzione.**
 
 ```json5
 {
@@ -926,9 +926,9 @@ Due meccanismi coordinati gestiscono la sicurezza delle chiavi:
 
 **Fonte unica della logica di rilevamento** (`core/sessionSecurity.js`): la denylist `PLACEHOLDER_SESSION_KEYS` e il predicato `keysAreInsecure(keys)` sono condivisi tra il wizard (install-time) e il warning al boot (runtime), mantenendo la direzione di dipendenza corretta (tooling → core).
 
-### Plugin-Specific Configuration
+### Configurazione specifica del plugin
 
-Each plugin's `pluginConfig.json5`:
+Il `pluginConfig.json5` di ogni plugin:
 
 ```json
 {
@@ -940,7 +940,7 @@ Each plugin's `pluginConfig.json5`:
 }
 ```
 
-Access in code:
+Accesso nel codice:
 
 ```javascript
 const loadJson5 = require('../../core/loadJson5')
@@ -949,9 +949,9 @@ const config = loadJson5(path.join(__dirname, 'pluginConfig.json5'))
 const mySetting = config.custom.myPluginSetting
 ```
 
-## passData Object Reference
+## Riferimento dell'oggetto passData
 
-The `passData` object is available in all EJS templates and contains:
+L'oggetto `passData` è disponibile in tutti i template EJS e contiene:
 
 ```javascript
 {
@@ -971,7 +971,7 @@ The `passData` object is available in all EJS templates and contains:
 }
 ```
 
-### Common passData Usage
+### Uso comune di passData
 
 ```ejs
 <!-- Access plugin shared objects -->
@@ -992,7 +992,7 @@ The `passData` object is available in all EJS templates and contains:
 <%- await passData.pluginSys.hookPage('header', passData) %>
 ```
 
-## Development Workflows
+## Flussi di sviluppo
 
 ### Avvio
 
@@ -1004,13 +1004,13 @@ Server su `http://localhost:3000`.
 
 ### Creare plugin / temi (usa le skill di scaffolding)
 
-- **Plugin:** skill `ital8cms-plugin-creator` (minimal / con webPages / admin / con funzioni globali). Riferimento completo: `plugins/exampleComplete/` + `core/EXPLAIN-pluginsSys.it.md`. Struttura minima: `main.js` + `pluginConfig.json5` + `pluginDescription.json5`; aggiungi `webPages/` per le pagine HTML (vedi *Plugin Pages System*).
+- **Plugin:** skill `ital8cms-plugin-creator` (minimal / con webPages / admin / con funzioni globali). Riferimento completo: `plugins/exampleComplete/` + `core/EXPLAIN-pluginsSys.it.md`. Struttura minima: `main.js` + `pluginConfig.json5` + `pluginDescription.json5`; aggiungi `webPages/` per le pagine HTML (vedi *Sistema Plugin Pages*).
 - **Tema:** skill `ital8cms-theme-creator`. Deep-dive: `core/EXPLAIN-themeSys.it.md`. Attivazione: `activeTheme`/`adminActiveTheme` in `ital8Config.json5`.
 - **Altre skill:** `ital8cms-bootstrapNavbar-creator` (navbar), `ital8cms-simpleI18n-integrator` (i18n), `ital8cms-website-builder` (sito completo).
 
 ### Pagine admin
 
-Crea `core/admin/webPages/{sezione}/index.ejs` (per i plugin admin: via `adminWebSections/` + symlink, vedi *Admin System Architecture*). Usa gli stessi partial del tema (`getThemePartPath`): con `passData.isAdminContext === true` viene caricato automaticamente il tema admin.
+Crea `core/admin/webPages/{sezione}/index.ejs` (per i plugin admin: via `adminWebSections/` + symlink, vedi *Architettura del sistema admin*). Usa gli stessi partial del tema (`getThemePartPath`): con `passData.isAdminContext === true` viene caricato automaticamente il tema admin.
 
 ### Gestione utenti
 
@@ -1025,24 +1025,24 @@ const data = loadJson5(path.join(pathPluginFolder, 'data.json5'))
 fs.writeFileSync(dataPath + '.tmp', JSON.stringify(data, null, 2), 'utf8')
 fs.renameSync(dataPath + '.tmp', dataPath)
 ```
-Database opzionale via plugin `dbApi` (vedi *Data Storage Strategy*).
+Database opzionale via plugin `dbApi` (vedi *Strategia di archiviazione dati*).
 
-## Code Conventions & Best Practices
+## Convenzioni di codice e best practice
 
-### Naming Conventions
+### Convenzioni di naming
 
-- **Variables/Functions:** camelCase (`myVariable`, `myFunction`)
-- **Classes:** PascalCase (`PluginSystem`, `ThemeSystem`)
-- **Files/Directories:** camelCase (`myPlugin`, `userManagement`)
-- **Constants:** UPPER_SNAKE_CASE (`MAX_ITEMS`, `API_PREFIX`)
+- **Variabili/Funzioni:** camelCase (`myVariable`, `myFunction`)
+- **Classi:** PascalCase (`PluginSystem`, `ThemeSystem`)
+- **File/Directory:** camelCase (`myPlugin`, `userManagement`)
+- **Costanti:** UPPER_SNAKE_CASE (`MAX_ITEMS`, `API_PREFIX`)
 
-#### Compound File Names Convention
+#### Convenzione per i nomi di file composti
 
-For files with multiple semantic parts, follow the **natural English word order** (noun + descriptor):
+Per i file con più parti semantiche, segui l'**ordine naturale delle parole inglesi** (sostantivo + descrittore):
 
 **Pattern:** `{primaryNoun}{descriptor}.{extension}`
 
-**Examples:**
+**Esempi:**
 ```
 ✅ CORRECT:
 pluginConfig.json5          // "plugin configuration" - natural order
@@ -1058,28 +1058,28 @@ accountUser.json           // "account user" - unnatural
 managerSession.js          // "manager session" - unnatural
 ```
 
-**Why this convention:**
-- ✅ Follows natural English semantics ("plugin config" not "config plugin")
-- ✅ Groups related files alphabetically (all plugin files together)
-- ✅ Matches modern JavaScript naming patterns (`package.json`, `tsconfig.json`)
-- ✅ More readable and intuitive for developers
+**Perché questa convenzione:**
+- ✅ Segue la semantica naturale dell'inglese ("plugin config" non "config plugin")
+- ✅ Raggruppa alfabeticamente i file correlati (tutti i file del plugin insieme)
+- ✅ Corrisponde ai pattern di naming moderni di JavaScript (`package.json`, `tsconfig.json`)
+- ✅ Più leggibile e intuitiva per gli sviluppatori
 
-#### Meaningful and Intuitive Names
+#### Nomi significativi e intuitivi
 
-**CRITICAL REQUIREMENT:** Every name in the codebase (variables, functions, files, directories, classes, constants, etc.) MUST be chosen with care and have a symbolic meaning that is as intuitive as possible.
+**REQUISITO CRITICO:** Ogni nome nel codebase (variabili, funzioni, file, directory, classi, costanti, ecc.) DEVE essere scelto con cura e avere un significato simbolico il più intuitivo possibile.
 
-**Process for Adding New Names:**
+**Processo per aggiungere nuovi nomi:**
 
-1. **Never use placeholder names** like `temp`, `data`, `obj`, `thing`, etc. unless they truly represent temporary or generic concepts
-2. **Always propose alternatives** before implementing:
-   - When you need to introduce a new name, **ALWAYS propose at least 2-3 meaningful alternatives** (or more when appropriate) to the project maintainer
-   - For simple cases: 2-3 alternatives are usually sufficient
-   - For complex or critical naming: propose 4-5+ alternatives to provide more choice
-   - Provide a brief explanation of what each alternative represents
-   - Wait for the maintainer's choice before proceeding with implementation
-3. **Only after approval** should you continue writing the code with the chosen name
+1. **Non usare mai nomi placeholder** come `temp`, `data`, `obj`, `thing`, ecc. a meno che non rappresentino davvero concetti temporanei o generici
+2. **Proponi sempre alternative** prima di implementare:
+   - Quando devi introdurre un nuovo nome, **proponi SEMPRE almeno 2-3 alternative** significative (o più quando appropriato) al maintainer del progetto
+   - Per i casi semplici: 2-3 alternative sono di solito sufficienti
+   - Per naming complessi o critici: proponi 4-5+ alternative per offrire più scelta
+   - Fornisci una breve spiegazione di cosa rappresenta ciascuna alternativa
+   - Attendi la scelta del maintainer prima di procedere con l'implementazione
+3. **Solo dopo l'approvazione** dovresti continuare a scrivere il codice con il nome scelto
 
-**Examples:**
+**Esempi:**
 
 ```javascript
 // ❌ BAD - Generic, unclear names
@@ -1093,24 +1093,24 @@ function validateUserCredentials(credentials) { ... }
 const monthlyRevenue = calculateValue()
 ```
 
-**Why this matters:**
-- ✅ **Readability:** Code becomes self-documenting
-- ✅ **Maintainability:** Easier to understand intent months later
-- ✅ **Collaboration:** Other developers immediately understand purpose
-- ✅ **Debugging:** Clear names make tracing issues much easier
-- ✅ **Searchability:** Meaningful names are easier to find in the codebase
+**Perché è importante:**
+- ✅ **Leggibilità:** il codice diventa autodocumentante
+- ✅ **Manutenibilità:** più facile capire l'intento a distanza di mesi
+- ✅ **Collaborazione:** altri sviluppatori capiscono immediatamente lo scopo
+- ✅ **Debugging:** nomi chiari rendono molto più facile tracciare i problemi
+- ✅ **Ricercabilità:** nomi significativi sono più facili da trovare nel codebase
 
-**When proposing alternatives:**
+**Quando proponi alternative:**
 
-Before creating:
-- A new plugin: propose plugin names (e.g., `userAuth`, `simpleLogin`, `accessControl`)
-- A new variable: propose variable names (e.g., `userSession`, `activeUser`, `currentAccount`)
-- A new file: propose file names (e.g., `sessionManager.js`, `authHandler.js`, `userValidator.js`)
-- A new function: propose function names (e.g., `validateUserEmail()`, `checkEmailFormat()`, `verifyEmailAddress()`)
+Prima di creare:
+- Un nuovo plugin: proponi nomi di plugin (es. `userAuth`, `simpleLogin`, `accessControl`)
+- Una nuova variabile: proponi nomi di variabili (es. `userSession`, `activeUser`, `currentAccount`)
+- Un nuovo file: proponi nomi di file (es. `sessionManager.js`, `authHandler.js`, `userValidator.js`)
+- Una nuova funzione: proponi nomi di funzioni (es. `validateUserEmail()`, `checkEmailFormat()`, `verifyEmailAddress()`)
 
-**Format for proposals:**
+**Formato per le proposte:**
 
-When proposing names to the maintainer, use this format:
+Quando proponi nomi al maintainer, usa questo formato:
 
 ```
 I need to create [what you're naming]. Here are my suggestions:
@@ -1123,27 +1123,27 @@ Option 3: [name3] - [brief explanation]
 Which would you prefer, or would you like to suggest a different name?
 ```
 
-### JavaScript Patterns
+### Pattern JavaScript
 
-- **Module System:** CommonJS (`require`, `module.exports`)
-- **Async:** Always use `async/await`, never callbacks
+- **Sistema di moduli:** CommonJS (`require`, `module.exports`)
+- **Async:** Usa sempre `async/await`, mai callback
 - **Middleware:** `async (ctx, next) => { await next() }`
 
-### File Organization
+### Organizzazione dei file
 
-- **Core logic:** `/core` directory
-- **Extensions:** `/plugins` directory (self-contained)
-- **UI:** `/themes` directory (composable)
-- **Public:** `/www` directory (static + EJS)
+- **Logica core:** directory `/core`
+- **Estensioni:** directory `/plugins` (autoconsistenti)
+- **UI:** directory `/themes` (componibili)
+- **Pubblico:** directory `/www` (statico + EJS)
 
-### Comments
+### Commenti
 
-- Many comments are in Italian (author's native language)
-- API and variable names are in English
-- When adding comments, prefer English for international collaboration
-- Document complex logic thoroughly
+- Molti commenti sono in italiano (lingua madre dell'autore)
+- I nomi di API e variabili sono in inglese
+- Quando aggiungi commenti, preferisci l'inglese per la collaborazione internazionale
+- Documenta accuratamente la logica complessa
 
-### Error Handling
+### Gestione degli errori
 
 ```javascript
 // Good: Try-catch for database operations
@@ -1164,18 +1164,18 @@ if (!username || !password) {
 }
 ```
 
-### Security Best Practices
+### Best practice di sicurezza
 
-1. **Passwords:** Always use bcrypt hashing
+1. **Password:** Usa sempre l'hashing bcrypt
 ```javascript
 const bcrypt = require('bcryptjs')
 const hashedPassword = await bcrypt.hash(password, 10)
 const isValid = await bcrypt.compare(password, hashedPassword)
 ```
 
-2. **Sessions:** Change default session keys in production
+2. **Sessioni:** Cambia le chiavi di sessione di default in produzione
 
-3. **Input Validation:** Validate all user input
+3. **Validazione dell'input:** Valida tutto l'input dell'utente
 ```javascript
 // Email validation
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -1189,7 +1189,7 @@ if (!/^[a-zA-Z0-9_-]{3,}$/.test(username)) {
 }
 ```
 
-4. **SQL Injection:** Use prepared statements
+4. **SQL Injection:** Usa prepared statement
 ```javascript
 // Good
 const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId)
@@ -1198,7 +1198,7 @@ const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId)
 const user = db.prepare(`SELECT * FROM users WHERE id = ${userId}`).get()
 ```
 
-5. **Protected Routes:** Check authentication
+5. **Rotte protette:** Controlla l'autenticazione
 ```javascript
 if (!ctx.session.authenticated) {
   ctx.status = 401
@@ -1207,13 +1207,13 @@ if (!ctx.session.authenticated) {
 }
 ```
 
-6. **XSS Prevention in EJS Templates**
+6. **Prevenzione XSS nei template EJS**
 
-The project uses a **defense-in-depth** strategy with two layers:
+Il progetto usa una strategia di **difesa in profondità** con due livelli:
 
-**Layer 1 — Server-side sanitization (primary defense):**
+**Livello 1 — Sanitizzazione lato server (difesa primaria):**
 
-All API endpoints that return user-controlled data MUST escape HTML before sending to templates:
+Tutti gli endpoint API che restituiscono dati controllati dall'utente DEVONO effettuare l'escape dell'HTML prima di inviarli ai template:
 
 ```javascript
 const escapeHtml = require('../../core/escapeHtml');
@@ -1225,21 +1225,21 @@ ctx.body = {
 };
 ```
 
-**Layer 2 — Client-side sanitization (defense-in-depth):**
+**Livello 2 — Sanitizzazione lato client (difesa in profondità):**
 
-Admin theme includes `escapeHtml.js` globally via `head.ejs`. Use it when inserting dynamic content via `innerHTML`:
+Il tema admin include `escapeHtml.js` globalmente via `head.ejs`. Usalo quando inserisci contenuto dinamico tramite `innerHTML`:
 
 ```javascript
 // Client-side — always escape before innerHTML
 element.innerHTML = `<td>${escapeHtml(userData.username)}</td>`;
 ```
 
-**EJS Tag Rules:**
+**Regole dei tag EJS:**
 
-| Tag | Usage | XSS Safe? |
+| Tag | Uso | Sicuro da XSS? |
 |-----|-------|-----------|
-| `<%= value %>` | Output with HTML escaping | ✅ Yes |
-| `<%- value %>` | Output raw HTML (no escaping) | ❌ No — use only for trusted HTML (theme includes, plugin hooks) |
+| `<%= value %>` | Output con escape HTML | ✅ Sì |
+| `<%- value %>` | Output HTML raw (senza escape) | ❌ No — usalo solo per HTML fidato (include del tema, hook dei plugin) |
 
 ```ejs
 <%# SAFE — escaped output %>
@@ -1252,7 +1252,7 @@ element.innerHTML = `<td>${escapeHtml(userData.username)}</td>`;
 <%# <%- userInput %> → XSS vulnerability! %>
 ```
 
-**Passing config to client JS — use JS variables, NOT hidden spans:**
+**Passaggio della config al JS client — usa variabili JS, NON span nascosti:**
 
 ```ejs
 <%# CORRECT — JS variable with escaped output %>
@@ -1264,13 +1264,13 @@ element.innerHTML = `<td>${escapeHtml(userData.username)}</td>`;
 <%# <span id="apiPrefix" style="display:none"><%= passData.apiPrefix %></span> %>
 ```
 
-**Utility files:**
-- Server-side: `/core/escapeHtml.js`
-- Client-side: `/themes/defaultAdminTheme/themeResources/js/escapeHtml.js`
+**File di utilità:**
+- Lato server: `/core/escapeHtml.js`
+- Lato client: `/themes/defaultAdminTheme/themeResources/js/escapeHtml.js`
 
-7. **Open Redirect Prevention**
+7. **Prevenzione Open Redirect**
 
-All redirect URLs from user input MUST be validated:
+Tutti gli URL di redirect provenienti dall'input dell'utente DEVONO essere validati:
 
 ```javascript
 // Use getSafeRedirectUrl() from adminUsers plugin
@@ -1285,79 +1285,79 @@ function getSafeRedirectUrl(url) {
 }
 ```
 
-## Common Tasks
+## Attività comuni
 
-Ricette pratiche — aggiungere una rotta API, un page hook (`getHooksPage`), un middleware (`getMiddlewareToAdd`), condividere oggetti tra plugin (`getObjectToShareToOthersPlugin`/`getSharedObject`), inizializzare lo storage dati: i **contratti** sono nella sezione *Plugin System Architecture* (sopra); l'**esempio completo di riferimento** è il plugin `plugins/exampleComplete/` che dimostra tutti i metodi del sistema plugin; il deep-dive è in `core/EXPLAIN-pluginsSys.it.md`.
+Ricette pratiche — aggiungere una rotta API, un page hook (`getHooksPage`), un middleware (`getMiddlewareToAdd`), condividere oggetti tra plugin (`getObjectToShareToOthersPlugin`/`getSharedObject`), inizializzare lo storage dati: i **contratti** sono nella sezione *Architettura del sistema plugin* (sopra); l'**esempio completo di riferimento** è il plugin `plugins/exampleComplete/` che dimostra tutti i metodi del sistema plugin; il deep-dive è in `core/EXPLAIN-pluginsSys.it.md`.
 
-Per lo storage JSON5: leggere con `loadJson5()`, scrivere in modo **atomico** (temp + `rename`) — vedi *Data Storage Strategy*.
+Per lo storage JSON5: leggere con `loadJson5()`, scrivere in modo **atomico** (temp + `rename`) — vedi *Strategia di archiviazione dati*.
 
 ## Testing
 
 Strategia, convenzioni, helper e isolamento dei test: spostato in [`docs/testing.it.md`](./docs/testing.it.md).
 
-## Demo Install Profile
+## Profilo di installazione demo
 
 Spostato in [`docs/demo-profile.it.md`](./docs/demo-profile.it.md).
 
-## Deployment Guidelines
+## Linee guida per il deployment
 
 Spostato in [`docs/deployment.it.md`](./docs/deployment.it.md).
 
-## Important Files Reference
+## Riferimento ai file importanti
 
-### Configuration Files
+### File di configurazione
 
-- `/ital8Config.json5` - Main application configuration
-- `/core/admin/adminConfig.json5` - Admin system configuration
-- `/core/priorityMiddlewares/koaSession.json5` - Session configuration
-- `/plugins/*/pluginConfig.json5` - Per-plugin configuration
-- `/plugins/*/pluginDescription.json5` - Plugin metadata
-- `/plugins/*/adminConfig.json5` - Admin plugin section metadata (for admin plugins)
+- `/ital8Config.json5` - Configurazione principale dell'applicazione
+- `/core/admin/adminConfig.json5` - Configurazione del sistema admin
+- `/core/priorityMiddlewares/koaSession.json5` - Configurazione della sessione
+- `/plugins/*/pluginConfig.json5` - Configurazione per-plugin
+- `/plugins/*/pluginDescription.json5` - Metadata del plugin
+- `/plugins/*/adminConfig.json5` - Metadata della sezione del plugin admin (per i plugin admin)
 
-### Entry Points
+### Punti di ingresso
 
-- `/index.js` - Application bootstrap
-- `/core/pluginSys.js` - Plugin system manager
-- `/core/themeSys.js` - Theme system manager
-- `/core/admin/adminSystem.js` - Admin system coordinator
-- `/core/loadJson5.js` - JSON5 file loader utility
-- `/core/servingRootResolver.js` - Serving root path isolation utility
-- `/core/patternMatcher.js` - URL pattern matching utility (exact, wildcard, regex) — shared by adminAccessControl and seo plugins
-- `/core/sessionSecurity.js` - Session key security: placeholder denylist, `keysAreInsecure()`, boot warning `checkSessionKeys()` (single source of truth)
-- `/scripts/lib/sessionKeyManager.js` - Install-time session key tooling: `generateSessionKeys()` + interactive wizard step `configureSessionKeys()`
+- `/index.js` - Bootstrap dell'applicazione
+- `/core/pluginSys.js` - Gestore del sistema plugin
+- `/core/themeSys.js` - Gestore del sistema temi
+- `/core/admin/adminSystem.js` - Coordinatore del sistema admin
+- `/core/loadJson5.js` - Utility di caricamento file JSON5
+- `/core/servingRootResolver.js` - Utility di isolamento del path di serving
+- `/core/patternMatcher.js` - Utility di pattern matching degli URL (esatto, wildcard, regex) — condivisa dai plugin adminAccessControl e seo
+- `/core/sessionSecurity.js` - Sicurezza delle chiavi di sessione: denylist dei placeholder, `keysAreInsecure()`, warning al boot `checkSessionKeys()` (fonte di verità unica)
+- `/scripts/lib/sessionKeyManager.js` - Tooling install-time per le chiavi di sessione: `generateSessionKeys()` + step interattivo del wizard `configureSessionKeys()`
 
-### Admin System
+### Sistema admin
 
-- `/core/admin/adminConfig.json5` - Central admin configuration
-- `/core/admin/adminSystem.js` - Admin coordinator
-- `/core/admin/lib/configManager.js` - Config loader & validator
+- `/core/admin/adminConfig.json5` - Configurazione admin centrale
+- `/core/admin/adminSystem.js` - Coordinatore admin
+- `/core/admin/lib/configManager.js` - Caricamento e validazione config
 - `/core/admin/lib/adminServicesManager.js` - Service discovery
-- `/core/admin/lib/symlinkManager.js` - Symlink manager
-- `/core/admin/webPages/index.ejs` - Admin dashboard (dynamic menu)
-- `/core/admin/webPages/systemSettings/` - System settings UI
+- `/core/admin/lib/symlinkManager.js` - Gestore symlink
+- `/core/admin/webPages/index.ejs` - Dashboard admin (menu dinamico)
+- `/core/admin/webPages/systemSettings/` - UI impostazioni di sistema
 - `/core/admin/webPages/usersManagment/` - Symlink → plugins/adminUsers/adminWebSections/usersManagment/
 
-### Authentication & User Management
+### Autenticazione e gestione utenti
 
-- `/plugins/adminUsers/userAccount.json5` - User credentials
-- `/plugins/adminUsers/userRole.json5` - Role definitions
-- `/plugins/adminUsers/main.js` - Authentication logic
-- `/plugins/adminUsers/adminWebSections/usersManagment/` - User management UI files
-- `/plugins/adminUsers/adminWebSections/rolesManagment/` - Role management UI files
+- `/plugins/adminUsers/userAccount.json5` - Credenziali utente
+- `/plugins/adminUsers/userRole.json5` - Definizioni dei ruoli
+- `/plugins/adminUsers/main.js` - Logica di autenticazione
+- `/plugins/adminUsers/adminWebSections/usersManagment/` - File UI gestione utenti
+- `/plugins/adminUsers/adminWebSections/rolesManagment/` - File UI gestione ruoli
 
 ### File dei plugin
 
 Ogni plugin documenta i propri file nel rispettivo `README.it.md`/`EXPLAIN.it.md` (vedi i puntatori nelle sezioni dei plugin sopra). Utility core trasversali: `core/patternMatcher.js` (pattern matching condiviso), `core/servingRootResolver.js` (isolamento path), `core/editJson5.js` (modifica chirurgica di chiavi JSON5), `core/loadJson5.js`, `core/logger.js`, `core/escapeHtml.js`, `core/sessionSecurity.js`.
 
-### Databases
+### Database
 
-- `/plugins/dbApi/dbFile/mainDb.db` - Main database
-- `/plugins/dbApi/dbFile/webDb.db` - Web-shared database
-- `/plugins/dbApi/dbFile/pluginsDb/*.db` - Per-plugin databases
+- `/plugins/dbApi/dbFile/mainDb.db` - Database principale
+- `/plugins/dbApi/dbFile/webDb.db` - Database condiviso col web
+- `/plugins/dbApi/dbFile/pluginsDb/*.db` - Database per-plugin
 
-## Debugging & Troubleshooting
+## Debugging e troubleshooting
 
-### Enable Debug Mode
+### Abilitare la modalità debug
 
 In `ital8Config.json5`:
 ```json
@@ -1366,9 +1366,9 @@ In `ital8Config.json5`:
 }
 ```
 
-### Check Plugin Loading
+### Verificare il caricamento dei plugin
 
-Plugins log during load:
+I plugin loggano durante il caricamento:
 ```
 Loading plugin: admin
 Loading plugin: adminUsers
@@ -1378,41 +1378,41 @@ Plugin loaded: adminUsers
 Plugin loaded: bootstrap
 ```
 
-### Common Issues
+### Problemi comuni
 
-**Plugin not loading:**
-- Check `pluginConfig.json5` has `"active": 1`
-- Verify `pluginDescription.json5` exists
-- Check dependencies are satisfied
-- Look for syntax errors in `main.js`
+**Plugin che non si carica:**
+- Verifica che `pluginConfig.json5` abbia `"active": 1`
+- Verifica che `pluginDescription.json5` esista
+- Controlla che le dipendenze siano soddisfatte
+- Cerca errori di sintassi in `main.js`
 
-**Routes not working:**
-- Verify plugin is active and loaded
-- Check route path in `getRouteArray()`
-- Access at `/api/{pluginName}/{path}`
-- Check middleware isn't blocking request
+**Rotte che non funzionano:**
+- Verifica che il plugin sia attivo e caricato
+- Controlla il path della rotta in `getRouteArray()`
+- Accedi su `/api/{pluginName}/{path}`
+- Verifica che un middleware non stia bloccando la richiesta
 
-**Database errors:**
-- Ensure dbApi plugin is active
-- Check database file permissions
-- Verify table exists before querying
-- Use try-catch for database operations
+**Errori del database:**
+- Assicurati che il plugin dbApi sia attivo
+- Controlla i permessi del file del database
+- Verifica che la tabella esista prima di interrogarla
+- Usa try-catch per le operazioni sul database
 
-**Authentication issues:**
-- Verify session keys are set
-- Check user exists in `userAccount.json5`
-- Ensure password is bcrypt hashed
-- Check session cookie is being sent
+**Problemi di autenticazione:**
+- Verifica che le chiavi di sessione siano impostate
+- Controlla che l'utente esista in `userAccount.json5`
+- Assicurati che la password sia hashata con bcrypt
+- Verifica che il cookie di sessione venga inviato
 
-**Theme not rendering:**
-- Verify theme exists in `/themes` directory
-- Check `activeTheme` in `ital8Config.json5`
-- Ensure all required partials exist
-- Look for EJS syntax errors
+**Tema che non si renderizza:**
+- Verifica che il tema esista nella directory `/themes`
+- Controlla `activeTheme` in `ital8Config.json5`
+- Assicurati che tutti i partial richiesti esistano
+- Cerca errori di sintassi EJS
 
-### VSCode Debugging
+### Debugging con VSCode
 
-Launch configuration (`.vscode/launch.json`):
+Configurazione di launch (`.vscode/launch.json`):
 ```json
 {
   "version": "0.2.0",
@@ -1431,11 +1431,11 @@ Launch configuration (`.vscode/launch.json`):
 }
 ```
 
-## Future Improvements
+## Miglioramenti futuri
 
 Spostato in [`docs/roadmap.it.md`](./docs/roadmap.it.md).
 
-## Quick Reference Commands
+## Comandi di riferimento rapido
 
 ```bash
 # Development
