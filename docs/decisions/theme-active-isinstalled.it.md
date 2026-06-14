@@ -1,30 +1,30 @@
 <!-- ital8doc v1-1 · tipo: decision · lang: it · ref -->
-# Decisione aperta: campi `active` / `isInstalled` in `themeConfig.json5`
+# Decisione: campi `active` / `isInstalled` in `themeConfig.json5`
 
-> **Stato: APERTA** (da decidere). Estratta da CLAUDE.md durante il riordino della documentazione.
+> **Stato: RISOLTA** (2026-06-14).
 
 ## Contesto
 
-I campi `active` e `isInstalled` in `themeConfig.json5` sono attualmente **solo cosmetici**: vengono mostrati nei badge della UI admin (`themesManagment/index.ejs`, `themeView.ejs`) ma **non guidano alcuna logica**. Il tema effettivamente attivo è determinato unicamente da `ital8Config.json5` (`activeTheme`, `adminActiveTheme`).
+I campi `active` e `isInstalled` in `themeConfig.json5` erano **cosmetici**: mostrati nei badge della UI admin ma non guidavano alcuna logica. Il tema effettivamente attivo è determinato unicamente da `ital8Config.json5` (`activeTheme`, `adminActiveTheme`). Questo creava, per `active`, un **doppio source-of-truth** ambiguo (un tema poteva avere `active: 1` senza essere quello attivo, e viceversa).
 
-**Convenzione attuale (cleanup 2026-05-26):**
-- `active: 1` → **solo** sul tema corrispondente a `ital8Config.json5.activeTheme` o `adminActiveTheme`
-- `active: 0` → su tutti gli altri temi bundled
-- `isInstalled: 1` → su tutti i temi bundled (sono installati per definizione)
-- `themesInstall.js` (installazione da repo Git) forza `active: 0, isInstalled: 0` sui temi clonati
+## Decisione
 
-## Alternative
+1. **`active` — RIMOSSO** dallo schema dei temi. La fonte di verità del tema attivo è **solo** `ital8Config.json5`. È un refactor a basso rischio (nessuna logica runtime dipendeva da `themeConfig.active`: `themeSys` usa già `ital8Config.activeTheme`).
+2. **`isInstalled` — MANTENUTO.** Significato (di principio, da affinare in seguito): il tema è **pronto per l'attivazione**, cioè ha tutte le dipendenze e tutti i file presenti (alcuni potrebbero dover essere scaricati). `true` = pronto per essere attivato.
 
-1. **Mantenere lo stato attuale come cosmetico** — `active` e `isInstalled` restano metadata visualizzati ma non funzionali. Va documentato chiaramente che la fonte di verità è `ital8Config.json5`.
+## Cosa è stato modificato
 
-2. **Allineare al flusso install** — `setActiveTheme` mantiene l'invariante: deattiva il flag nel vecchio tema, attiva nel nuovo. Aggiunge complessità (due scritture atomiche per cambio tema) ma rende i flag funzionali e coerenti.
+- `themes/*/themeConfig.json5`: rimossa la chiave `active` (7 temi).
+- `plugins/admin/themesInstall.js`: rimossa la lettura/scrittura/report di `active`; in fase di finalize ora **elimina** l'eventuale `active` legacy dai temi clonati e mantiene `isInstalled: 0`.
+- UI admin (`themesManagment/themeView.ejs`, `install.ejs`): rimossi i badge/righe relativi ad `active`.
+- Test (`themesInstall.realRepo.test.js`, `themeSysCheckDependencies.test.js`): aggiornati (asseriscono che `active` non esista più).
+- Documentazione (`themes/EXPLAIN.md`, `core/EXPLAIN-themeSys.it.md`, `CLAUDE.md`): esempi e tabelle aggiornati.
 
-3. **Eliminare i campi** — rimuovere `active` e `isInstalled` da `themeConfig.json5` e dalla UI. La fonte di verità diventa solo `ital8Config.json5`, eliminando ogni ambiguità.
+## Conseguenze
 
-## Vincoli
+- Niente più ambiguità su "qual è il tema attivo": una sola fonte (`ital8Config.json5`).
+- La semantica operativa di `isInstalled` (cosa lo rende `true`, chi lo imposta, eventuale download dei file mancanti) sarà definita meglio in un secondo momento.
 
-`themesInstall.js` attualmente forza entrambi a 0 dopo il clone. Qualsiasi decisione deve essere coerente con questo flusso o modificarlo.
+## Storia
 
-## Stato attuale
-
-Per ora `setActiveTheme()` **non** tocca i flag nei `themeConfig.json5`: aggiorna solo `ital8Config.json5`. La decisione su quale opzione adottare è rimandata.
+La discussione originale (stato cosmetico, convenzione 2026-05-26, le tre opzioni keep / rendi-funzionale / elimina) è confluita qui: **elimina** per `active`, **mantieni** per `isInstalled`.

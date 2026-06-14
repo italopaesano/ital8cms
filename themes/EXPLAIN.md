@@ -95,7 +95,6 @@ File di configurazione del tema.
 ```json
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "active": 1,
   "isInstalled": 1,
   "weight": 0,
 
@@ -121,8 +120,7 @@ File di configurazione del tema.
 
 | Campo | Tipo | Descrizione |
 |-------|------|-------------|
-| `active` | number | 1 = attivo, 0 = disattivo |
-| `isInstalled` | number | Stato installazione |
+| `isInstalled` | number | Stato installazione (tema pronto per l'attivazione: dipendenze e file presenti) |
 | `weight` | number | Priorità caricamento (più basso = prima) |
 | `followsGlobalStandard` | string/boolean | Versione standard rispettato (`"1.0"`) o `false` |
 | `wwwCustomPath` | number | 0 = pagine in `/www/`, 1 = pagine in `themes/tema/www/` |
@@ -723,7 +721,6 @@ nano themeConfig.json5
 ```json
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "active": 1,
   "isInstalled": 1,
   "weight": 0,
   "followsGlobalStandard": "1.0",

@@ -14,9 +14,9 @@
  *   "ital8cms-theme-my-cool-theme"  -> dir themes/myCoolTheme/
  *   "ital8cms-theme-admin-foo"      -> dir themes/adminFoo/
  *
- * Post-installazione il tema viene SEMPRE lasciato disattivato e marcato come
- * non installato (`active: 0`, `isInstalled: 0`). L'attivazione manuale è
- * responsabilità dell'amministratore tramite la pagina di gestione temi.
+ * Post-installazione il tema viene SEMPRE marcato come non installato
+ * (`isInstalled: 0`). L'attivazione manuale è responsabilità dell'amministratore
+ * tramite la pagina di gestione temi.
  *
  * Collisione su `themes/<nome>/` esistente:
  *   - default: 409 con `{conflict: true, existingTheme: {...}}`, nessun job.
@@ -29,7 +29,7 @@
  *   2. Check destinazione (con eventuale overwrite previa conferma)
  *   3. Clone via `git clone`
  *   4. Validazione file richiesti, parsing JSON5, lettura `isAdminTheme`
- *   5. Forzatura `active: 0`, `isInstalled: 0`, scrittura `themeConfig.json5`
+ *   5. Forzatura `isInstalled: 0` (e rimozione legacy `active`), scrittura `themeConfig.json5`
  *   6. Audit log
  *
  * Su QUALUNQUE fallimento dopo lo step 3 (clone riuscito) la cartella appena
@@ -306,7 +306,6 @@ function readExistingThemeMetadata(themeName) {
         author: description.author || null,
         license: description.license || null,
         isAdminTheme: typeof config.isAdminTheme === 'boolean' ? config.isAdminTheme : null,
-        active: config.active === 1,
         isInstalled: config.isInstalled === 1,
     };
 }
@@ -516,11 +515,12 @@ function validateClonedTheme(themeDir, expectedThemeName) {
 
 // ----- WRITE FINAL CONFIG ----------------------------------------------------
 
-// Forza il tema a stato disattivato e non-installato, indipendentemente da
+// Forza il tema a stato non-installato (isInstalled: 0), indipendentemente da
 // quanto dichiarato nel repo. L'attivazione è responsabilità dell'admin.
+// Il campo legacy 'active' viene rimosso (non fa più parte dello schema dei temi).
 function finalizeThemeConfig({ configPath, config }) {
     const updated = Object.assign({}, config);
-    updated.active = 0;
+    delete updated.active;
     updated.isInstalled = 0;
     writeJson5Atomic(configPath, updated);
     return updated;
@@ -653,7 +653,7 @@ async function runInstall(job, installConfig) {
             configPath: valRes.value.configPath,
             config: valRes.value.config,
         });
-        pushPhase(job, 'finalizeConfig', true, `active=${finalConfig.active}, isInstalled=${finalConfig.isInstalled}`);
+        pushPhase(job, 'finalizeConfig', true, `isInstalled=${finalConfig.isInstalled}`);
 
         // SUCCESS
         job.status = JOB_STATUS.SUCCESS;
@@ -662,7 +662,6 @@ async function runInstall(job, installConfig) {
             themeName: job.themeName,
             themePath: targetThemeDir(job.themeName),
             isAdminTheme: job.isAdminTheme,
-            active: finalConfig.active === 1,
             isInstalled: finalConfig.isInstalled === 1,
             overwritten: !!job.confirmOverwrite,
             description: {
@@ -831,7 +830,7 @@ function runDryRunInstall(job, installConfig) {
             await sleep(tailMs / 3);
             pushPhase(job, 'validate', true, 'DRY-RUN: isAdminTheme=false');
             await sleep(tailMs / 3);
-            pushPhase(job, 'finalizeConfig', true, 'DRY-RUN: active=0, isInstalled=0');
+            pushPhase(job, 'finalizeConfig', true, 'DRY-RUN: isInstalled=0');
             await sleep(tailMs / 3);
 
             job.status = JOB_STATUS.SUCCESS;

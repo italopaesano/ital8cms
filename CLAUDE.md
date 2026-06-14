@@ -323,7 +323,7 @@ Struttura tema: `views/` (partial `head`/`header`/`nav`/`main`/`aside`/`footer`)
 - `pluginSys.hookPage(section, passData)` → punti di hook dei plugin (`head`, `header`, `script`, …)
 
 > 📖 Deep-dive (validazione, dipendenze, asset, personalizzazione endpoint plugin, API completa): [`core/EXPLAIN-themeSys.it.md`](./core/EXPLAIN-themeSys.it.md).
-> ⚠️ Decisione aperta sui campi `active`/`isInstalled`: [`docs/decisions/theme-active-isinstalled.it.md`](./docs/decisions/theme-active-isinstalled.it.md).
+> Nota: il campo tema `active` è stato **rimosso** (la fonte di verità è `ital8Config.json5`); `isInstalled` resta e indica "tema pronto per l'attivazione". Decisione: [`docs/decisions/theme-active-isinstalled.it.md`](./docs/decisions/theme-active-isinstalled.it.md).
 
 ## Bootstrap Navbar / URL Redirect / Admin Bootstrap Navbar
 

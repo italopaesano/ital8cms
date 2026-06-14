@@ -895,7 +895,6 @@ fs.mkdirSync(`${themePath}/templates`);
 
 // 2. Crea file obbligatori
 fs.writeFileSync(`${themePath}/themeConfig.json5`, JSON.stringify({
-  active: 1,
   isInstalled: 1,
   weight: 0,
   followsGlobalStandard: "1.0",
