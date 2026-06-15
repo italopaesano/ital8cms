@@ -159,7 +159,7 @@ Lavorando su questo codebase come AI assistant — regole operative (le più cri
 - **Middleware:** koa-bodyparser, koa-session, koa-classic-server v2.1.2
 - **Archiviazione dati:** file JSON (nessun database richiesto)
 - **Autenticazione:** bcryptjs v3.0.2 (hashing delle password)
-- **Template Engine:** EJS v3.1.9
+- **Template Engine:** EJS v6.0.1
 - **Utilità:** semver v7.5.4 (versioning delle dipendenze)
 
 ### Frontend

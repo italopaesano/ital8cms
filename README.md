@@ -54,7 +54,7 @@ Server runs on: `http://localhost:3000`
 
 **Backend:**
 - Koa.js v3.1.1 (web framework)
-- EJS v3.1.9 (templating)
+- EJS v6.0.1 (templating)
 - JSON5 v2.2.3 (config with comments)
 - bcryptjs v3.0.2 (authentication)
 - Bootstrap v5.3.2 (UI)

@@ -88,7 +88,7 @@ se l'utente insrisce correttamente i dati al primo colpo , allora l'url di redir
   "nodeModuleDependency": {
     "bcryptjs": "^3.0.2",
     "koa-session": "^7.0.2",
-    "ejs": "^3.1.9"
+    "ejs": ">=3.1.9"
   },
   "custom": {
     "loggedReservedPrefix": ["/reserved", "/private", "/lib"],// prfix nei quali sarà automaticamente richiesta di essere logati 

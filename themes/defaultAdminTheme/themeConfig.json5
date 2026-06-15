@@ -18,6 +18,6 @@
     "admin": "^1.0.0"
   },
   "nodeModuleDependency": {
-    "ejs": "^5.0.0"
+    "ejs": ">=5.0.0"
   }
 }
