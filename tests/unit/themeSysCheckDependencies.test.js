@@ -98,7 +98,7 @@ describe('themeSys.checkDependencies — risoluzione versione moduli NPM', () =>
 
       fs.writeFileSync(
         path.join(tempThemePath, 'themeConfig.json5'),
-        '// test\n{\n  "active": 0,\n  "isInstalled": 0,\n  "isAdminTheme": false,\n  "nodeModuleDependency": { "ejs": "^99.0.0" }\n}\n',
+        '// test\n{\n  "isInstalled": 0,\n  "isAdminTheme": false,\n  "nodeModuleDependency": { "ejs": "^99.0.0" }\n}\n',
         'utf8'
       );
 
@@ -124,7 +124,7 @@ describe('themeSys.checkDependencies — risoluzione versione moduli NPM', () =>
       });
       fs.writeFileSync(
         path.join(tempThemePath, 'themeConfig.json5'),
-        '// test\n{\n  "active": 0,\n  "isInstalled": 0,\n  "isAdminTheme": false,\n  "nodeModuleDependency": { "moduloInesistente_xyz_123": "^1.0.0" }\n}\n',
+        '// test\n{\n  "isInstalled": 0,\n  "isAdminTheme": false,\n  "nodeModuleDependency": { "moduloInesistente_xyz_123": "^1.0.0" }\n}\n',
         'utf8'
       );
 

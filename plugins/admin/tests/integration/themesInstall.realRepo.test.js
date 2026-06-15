@@ -187,7 +187,6 @@ describe('themesInstall — integration vs real GitHub repos', () => {
       // result: il tema viene sempre installato disattivato
       expect(job.result.themeName).toBe(PUBLIC_THEME_NAME);
       expect(job.result.isAdminTheme).toBe(false);
-      expect(job.result.active).toBe(false);
       expect(job.result.isInstalled).toBe(false);
       expect(job.result.description.name).toBe(PUBLIC_THEME_NAME);
       expect(job.result.description.version).toBeTruthy();
@@ -201,9 +200,9 @@ describe('themesInstall — integration vs real GitHub repos', () => {
       expect(fs.existsSync(path.join(dir, 'views', 'head.ejs'))).toBe(true);
       expect(fs.existsSync(path.join(dir, 'views', 'footer.ejs'))).toBe(true);
 
-      // Config finale: active/isInstalled forzati a 0 dal finalize
+      // Config finale: isInstalled forzato a 0 dal finalize; legacy 'active' rimosso
       const cfg = loadJson5(path.join(dir, 'themeConfig.json5'));
-      expect(cfg.active).toBe(0);
+      expect(cfg.active).toBeUndefined();
       expect(cfg.isInstalled).toBe(0);
       expect(cfg.isAdminTheme).toBe(false);
     }, TEST_TIMEOUT_MS);
@@ -249,7 +248,7 @@ describe('themesInstall — integration vs real GitHub repos', () => {
       const dir = path.join(THEMES_DIR, ADMIN_THEME_NAME);
       const cfg = loadJson5(path.join(dir, 'themeConfig.json5'));
       expect(cfg.isAdminTheme).toBe(true);
-      expect(cfg.active).toBe(0);
+      expect(cfg.active).toBeUndefined();
       expect(cfg.isInstalled).toBe(0);
 
       // Anche il themeDescription deve coincidere col nome

@@ -265,30 +265,23 @@ describe('themesManagment', () => {
     });
   });
 
-  // ─── Invariante flag active nei temi bundled ────────────────────────────────
-  // Vedi CLAUDE.md > Theme System > "Stato attuale dei campi active / isInstalled"
-  // Convenzione 2026-05-26: solo i temi attivi in ital8Config.json5 hanno active: 1
-  describe('invariante flag active nei themeConfig.json5 bundled', () => {
+  // ─── themeConfig.json5 bundled: isInstalled e assenza di active ─────────────
+  // Il campo 'active' è stato RIMOSSO dallo schema dei temi
+  // (docs/decisions/theme-active-isinstalled.it.md): la fonte di verità del tema
+  // attivo è solo ital8Config.json5 (activeTheme / adminActiveTheme).
+  describe('themeConfig.json5 bundled: isInstalled e assenza di active', () => {
     function listBundledThemes() {
       return fs.readdirSync(THEMES_DIR, { withFileTypes: true })
         .filter(e => e.isDirectory())
         .map(e => e.name);
     }
 
-    test('solo i temi attivi in ital8Config.json5 hanno active: 1', () => {
-      const ital8Config = loadJson5(ITAL8_CONFIG_PATH);
-      const activeNames = new Set([ital8Config.activeTheme, ital8Config.adminActiveTheme]);
-
+    test('nessun tema bundled ha più il campo active (rimosso dallo schema)', () => {
       for (const themeName of listBundledThemes()) {
         const cfgPath = path.join(THEMES_DIR, themeName, 'themeConfig.json5');
         if (!fs.existsSync(cfgPath)) continue;
         const cfg = loadJson5(cfgPath);
-
-        if (activeNames.has(themeName)) {
-          expect(cfg.active).toBe(1);
-        } else {
-          expect(cfg.active).toBe(0);
-        }
+        expect(cfg.active).toBeUndefined();
       }
     });
 

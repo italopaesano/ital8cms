@@ -92,8 +92,8 @@
 
         <div class="alert alert-warning small mb-3">
           <i class="bi bi-info-circle"></i>
-          <strong>Nota:</strong> il tema viene installato sempre <strong>disattivato</strong>
-          (<code>active: 0</code>, <code>isInstalled: 0</code>). Per renderlo disponibile devi attivarlo
+          <strong>Nota:</strong> il tema viene installato come <strong>non pronto</strong>
+          (<code>isInstalled: 0</code>). Per renderlo disponibile devi attivarlo
           manualmente dalla pagina di gestione temi; le modifiche all'attivazione richiedono il riavvio
           del server.
         </div>
@@ -279,12 +279,9 @@ function showOverwritePrompt(conflictResponse) {
       : existing.isAdminTheme === false
         ? '<span class="badge bg-light text-dark border">public</span>'
         : '<span class="badge bg-secondary">tipo sconosciuto</span>';
-    const activeBadge = existing.active
-      ? '<span class="badge bg-success">attivo</span>'
-      : '<span class="badge bg-secondary">disattivato</span>';
     detailsEl.innerHTML = `
       <ul class="list-unstyled mb-0">
-        <li><strong>Nome dichiarato:</strong> ${escapeHtml(existing.name || themeName)} ${typeBadge} ${activeBadge}</li>
+        <li><strong>Nome dichiarato:</strong> ${escapeHtml(existing.name || themeName)} ${typeBadge}</li>
         ${existing.version ? `<li><strong>Versione:</strong> ${escapeHtml(existing.version)}</li>` : ''}
         ${existing.author ? `<li><strong>Autore:</strong> ${escapeHtml(existing.author)}</li>` : ''}
         ${existing.license ? `<li><strong>Licenza:</strong> ${escapeHtml(existing.license)}</li>` : ''}
