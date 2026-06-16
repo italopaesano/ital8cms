@@ -7,6 +7,7 @@
 const path = require('path');
 const fs = require('fs');
 const loadJson5 = require('../../core/loadJson5');
+const semver = require('semver');
 
 // Mock di ital8Conf per i test
 const mockItal8Conf = {
@@ -205,13 +206,13 @@ describe('Theme System', () => {
     test('verifica formato versioni delle dipendenze', () => {
       const deps = getThemeDependencies('default');
 
-      // Verifica che le versioni siano in formato valido (^x.y.z o ~x.y.z)
+      // Verifica che le versioni siano range semver validi (es. ^x.y.z, ~x.y.z, >=x.y.z)
       for (const [name, version] of Object.entries(deps.plugins)) {
-        expect(version).toMatch(/^[\^~]?\d+\.\d+\.\d+/);
+        expect(semver.validRange(version)).not.toBeNull();
       }
 
       for (const [name, version] of Object.entries(deps.nodeModules)) {
-        expect(version).toMatch(/^[\^~]?\d+\.\d+\.\d+/);
+        expect(semver.validRange(version)).not.toBeNull();
       }
     });
   });

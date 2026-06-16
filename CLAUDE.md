@@ -80,6 +80,7 @@ Lavorando su questo codebase come AI assistant — regole operative (le più cri
 9. **Temi:** considera sia il tema pubblico sia quello admin.
 10. **Commenti:** l'autore usa l'italiano; per i nuovi commenti preferisci l'inglese, rispettando gli esistenti.
 11. **Progetto alpha** (v0.0.1-alpha.0): breaking changes accettabili ma documentati in `CHANGELOG.md`.
+12. **Dipendenze escluse dagli update di routine:** `ccxt` (npm + plugin `ccxt`) e `dbApi`/`better-sqlite3` (plugin `dbApi`) **non** vanno aggiornati negli aggiornamenti di routine delle dipendenze — toccarli solo in un **intervento dedicato e pianificato** (motivi: ccxt ha release molto frequenti legate alle API degli exchange; `better-sqlite3` ha build nativa e il plugin `dbApi` è disabilitato).
 
 ## Struttura del codebase
 
@@ -154,20 +155,20 @@ Lavorando su questo codebase come AI assistant — regole operative (le più cri
 ## Stack tecnologico
 
 ### Backend
-- **Framework:** Koa.js v3.1.1 (web framework basato su async/await)
-- **Routing:** @koa/router v12.0.1
-- **Middleware:** koa-bodyparser, koa-session, koa-classic-server v2.1.2
+- **Framework:** Koa.js v3.2.0 (web framework basato su async/await)
+- **Routing:** @koa/router v15.5.0
+- **Middleware:** koa-bodyparser, koa-session, koa-classic-server v3.0.0
 - **Archiviazione dati:** file JSON (nessun database richiesto)
-- **Autenticazione:** bcryptjs v3.0.2 (hashing delle password)
+- **Autenticazione:** bcryptjs v3.0.3 (hashing delle password)
 - **Template Engine:** EJS v6.0.1
-- **Utilità:** semver v7.5.4 (versioning delle dipendenze)
+- **Utilità:** semver v7.8.0 (versioning delle dipendenze)
 
 ### Frontend
-- **UI Framework:** Bootstrap v5.3.2
+- **UI Framework:** Bootstrap v5.3.8
 - **Templating:** rendering EJS lato server
 
 ### Sviluppo
-- **Auto-reload:** nodemon v3.0.1
+- **Auto-reload:** nodemon v3.1.14
 - **Controllo versione:** Git
 
 ### Dipendenze opzionali dei plugin

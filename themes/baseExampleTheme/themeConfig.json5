@@ -15,6 +15,6 @@
 
   "pluginDependency": {},
   "nodeModuleDependency": {
-    "ejs": "^6.0.0"
+    "ejs": ">=6.0.0"
   }
 }

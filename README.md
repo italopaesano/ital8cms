@@ -19,7 +19,7 @@
 - **File-based storage** - no database installation required
 - **JSON5 configuration** with comments and trailing commas support
 - **Modular theme system** with EJS templates and automatic customization injection
-- **Modern stack** - Koa v3.1.1, Node.js >=22.12
+- **Modern stack** - Koa v3.2.0, Node.js >=22.12
 - **Session-based authentication** with RBAC
 - **Bootstrap 5.3** integration
 
@@ -53,11 +53,11 @@ Server runs on: `http://localhost:3000`
 ## Technology Stack
 
 **Backend:**
-- Koa.js v3.1.1 (web framework)
+- Koa.js v3.2.0 (web framework)
 - EJS v6.0.1 (templating)
 - JSON5 v2.2.3 (config with comments)
-- bcryptjs v3.0.2 (authentication)
-- Bootstrap v5.3.2 (UI)
+- bcryptjs v3.0.3 (authentication)
+- Bootstrap v5.3.8 (UI)
 
 **Optional:**
 - better-sqlite3 (SQLite database via dbApi plugin)
