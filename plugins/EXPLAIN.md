@@ -115,7 +115,7 @@ analiziamo le seguenti parti:
                 Es:
 ```js
                 "nodeModuleDependency": {
-                        "ejs": "^3.1.9",
+                        "ejs": ">=3.1.9",
                         "fs": "^0.0.1-security",
                         "path": "^0.12.7"
                 }

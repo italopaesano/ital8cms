@@ -6,7 +6,7 @@
  * Wizard interattivo per configurazione iniziale e setup plugin
  */
 
-const inquirer = require('inquirer')
+const inquirer = require('inquirer').default
 const path = require('path')
 
 // Import moduli
@@ -71,7 +71,7 @@ async function handleReinit(stateManager, logger) {
 
   const { action } = await inquirer.prompt([
     {
-      type: 'list',
+      type: 'select',
       name: 'action',
       message: 'Cosa vuoi fare?',
       choices: [
@@ -96,7 +96,7 @@ async function handleReinit(stateManager, logger) {
 
     const { confirm } = await inquirer.prompt([
       {
-        type: 'list',
+        type: 'select',
         name: 'confirm',
         message: 'Sei sicuro di voler procedere?',
         choices: [
@@ -125,7 +125,7 @@ async function handleReinit(stateManager, logger) {
 async function askInstallProfile() {
   const { profile } = await inquirer.prompt([
     {
-      type: 'list',
+      type: 'select',
       name: 'profile',
       message: 'Quale profilo di installazione vuoi?',
       choices: [
@@ -298,7 +298,7 @@ async function main() {
         // Prima inizializzazione o re-init completo
         const { initChoice } = await inquirer.prompt([
           {
-            type: 'list',
+            type: 'select',
             name: 'initChoice',
             message: 'Vuoi procedere con l\'inizializzazione dei plugin?',
             choices: [

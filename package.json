@@ -36,22 +36,22 @@
     "bootstrap-icons": "^1.13.1",
     "ccxt": "^4.1.70",
     "chart.js": "^4.5.1",
-    "commander": "^14.0.3",
-    "ejs": "^5.0.2",
+    "commander": "^15.0.0",
+    "ejs": "^6.0.1",
     "handlebars": "^4.7.9",
-    "inquirer": "^8.2.7",
+    "inquirer": "^14.0.2",
     "json5": "^2.2.3",
     "koa": "^3.2.0",
     "koa-bodyparser": "^4.4.1",
     "koa-classic-server": "^3.0.0",
     "koa-session": "^7.0.2",
     "multer": "^2.1.1",
-    "nodemailer": "^8.0.7",
+    "nodemailer": "^9.0.0",
     "nodemon": "^3.1.14",
     "semver": "^7.8.0"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.13.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",

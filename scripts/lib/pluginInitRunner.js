@@ -1,5 +1,5 @@
 // Questo file segue lo standard del progetto ital8cms
-const inquirer = require('inquirer')
+const inquirer = require('inquirer').default
 
 /**
  * Esecuzione script di inizializzazione plugin
@@ -37,7 +37,7 @@ class PluginInitRunner {
     if (initModule.getDescription && typeof initModule.getDescription === 'function') {
       const { showDetails } = await inquirer.prompt([
         {
-          type: 'list',
+          type: 'select',
           name: 'showDetails',
           message: 'Vuoi vedere una descrizione dettagliata?',
           choices: [

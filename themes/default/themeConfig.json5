@@ -17,6 +17,6 @@
     "bootstrap": "^1.0.0"
   },
   "nodeModuleDependency": {
-    "ejs": "^5.0.0"
+    "ejs": ">=6.0.0"
   }
 }

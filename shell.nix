@@ -3,7 +3,7 @@
 (pkgs.buildFHSEnv {
   name = "playwright-env";
   targetPkgs = pkgs: with pkgs; [
-    nodejs_20
+    nodejs_22
 
     # Playwright browser dependencies
     glib

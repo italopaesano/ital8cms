@@ -1,5 +1,5 @@
 // Questo file segue lo standard del progetto ital8cms
-const inquirer = require('inquirer')
+const inquirer = require('inquirer').default
 const fs = require('fs')
 const path = require('path')
 const loadJson5 = require('../../core/loadJson5')
@@ -67,7 +67,7 @@ ${JSON.stringify(config, null, 2)}`
 
     const { shouldModify } = await inquirer.prompt([
       {
-        type: 'list',
+        type: 'select',
         name: 'shouldModify',
         message: 'Vuoi modificare qualche impostazione?',
         choices: [
@@ -151,7 +151,7 @@ ${JSON.stringify(config, null, 2)}`
 
     if (fieldsToModify.includes('debugMode')) {
       questions.push({
-        type: 'list',
+        type: 'select',
         name: 'debugMode',
         message: 'Modalità debug:',
         choices: [
