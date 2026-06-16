@@ -287,7 +287,7 @@ I temi possono dichiarare dipendenze di due tipi:
 ```json
 {
   "nodeModuleDependency": {
-    "ejs": "^3.0.0",
+    "ejs": "^6.0.0",
     "bootstrap": "^5.3.0"
   }
 }

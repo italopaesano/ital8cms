@@ -83,7 +83,7 @@ Substitute placeholders: `{{themeName}}`, `{{description}}`, `{{author}}`, `{{em
     bootstrap: "^1.0.0",
   },
   nodeModuleDependency: {
-    ejs: "^3.0.0",
+    ejs: "^6.0.0",
   },
 }
 ```

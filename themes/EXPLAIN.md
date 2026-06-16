@@ -111,7 +111,7 @@ File di configurazione del tema.
 
   // Dipendenze moduli NPM
   "nodeModuleDependency": {
-    "ejs": "^3.0.0"
+    "ejs": "^6.0.0"
   }
 }
 ```
@@ -729,7 +729,7 @@ nano themeConfig.json5
     "bootstrap": "^1.0.0"
   },
   "nodeModuleDependency": {
-    "ejs": "^3.0.0"
+    "ejs": "^6.0.0"
   }
 }
 ```
