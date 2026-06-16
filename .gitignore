@@ -45,5 +45,8 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 
+# Jest coverage output
+/coverage/
+
 # CLI control plane unix socket (created at startup, removed on shutdown)
 *.sock
