@@ -65,7 +65,7 @@ function generateSessionKeys(count = DEFAULT_KEY_COUNT, bytes = DEFAULT_KEY_BYTE
  * @returns {Promise<{action: 'generate'|'custom'|'keep'|'skip', changed: boolean}>}
  */
 async function configureSessionKeys(context) {
-  const inquirer = require('inquirer');
+  const inquirer = require('inquirer').default;
   const { logger, backupManager, configPath } = context;
 
   logger.separator();
@@ -93,7 +93,7 @@ async function configureSessionKeys(context) {
 
   const { action } = await inquirer.prompt([
     {
-      type: 'list',
+      type: 'select',
       name: 'action',
       message: 'Come vuoi gestire le chiavi di sessione?',
       choices: [
