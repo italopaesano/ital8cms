@@ -3,6 +3,11 @@
 
 Storico delle modifiche del progetto e della documentazione (voci dalla più recente).
 
+- v2.19.0 (2026-06-16): **DEPS / BREAKING (env)** - Aggiornato commander da `^14.0.3` a `^15.0.0`. commander 15 è **ESM-only** (consumato da CommonJS via `require(esm)` di Node) e richiede **Node `>=22.12.0`**: di conseguenza il floor Node del progetto sale da `>=20.0.0` a **`>=22.12.0`** (⚠️ **breaking ambientale**: Node 20/21 LTS non più supportati — deciso col maintainer). **Nessuna modifica al codice**: `bin/ital8cms-cli.js` continua a usare `require('commander')` (funziona via require(esm) su Node ≥22.12). Modifiche:
+  - `package.json`: `commander ^15.0.0` + `engines.node >=22.12.0`.
+  - `shell.nix`: `nodejs_20` → `nodejs_22` (dev/test shell allineata; commander 15 non si carica su Node 20).
+  - `README.md`: requisito Node aggiornato (`>=18` → `>=22.12`).
+  - **Verifica:** `npm install` OK; CLI smoke (`--version` → `0.0.1-alpha.3`, `--help`, help dei subcomandi) verde su Node 22.22 via require(esm); suite Jest completa verde (82 suite, 2269 test).
 - v2.18.0 (2026-06-15): **DEPS** - Aggiornato nodemailer da `^8.0.7` a `^9.0.0`. nodemailer 9 resta **CommonJS** (nessun cambio di packaging per `require('nodemailer')`); unica breaking change v9 = validazione TLS più severa **solo nel fetch di contenuti remoti** (URL di allegati remoti, endpoint OAuth2, proxy HTTP/HTTPS CONNECT). Il plugin `mailer` usa solo SMTP puro (`createTransport({host,port,secure,auth})` in `plugins/mailer/lib/transports/smtpTransport.js`), senza allegati remoti/OAuth2/proxy → **nessun impatto** (anzi, hardening allineato all'ethos di sicurezza del progetto). Modifiche correlate:
   - **Range del plugin allargato:** `plugins/mailer/pluginConfig.json5` dichiarava `nodeModuleDependency.nodemailer: "^8.0.5"` (cap `<9.0.0`); con nodemailer 9 installato `pluginSys` falliva il controllo dipendenze con **errore fatale al boot** (a differenza dei temi, che emettono solo `console.warn`). Portato a `>=8.0.5` (coerente con lo stile open-ended dello stesso file, es. `ejs: >=3.1.9`).
   - **Verifica:** `npm install` pulito (nodemailer 9.0.0, 0 vulnerabilità, diff lockfile circoscritto); test unit `mailer` 6 suite / 129 test verdi; boot completo OK (mailer caricato, `/`→200, login→200, `/admin/`→302, nessun errore).

@@ -19,7 +19,7 @@
 - **File-based storage** - no database installation required
 - **JSON5 configuration** with comments and trailing commas support
 - **Modular theme system** with EJS templates and automatic customization injection
-- **Modern stack** - Koa v3.1.1, Node.js >=18
+- **Modern stack** - Koa v3.1.1, Node.js >=22.12
 - **Session-based authentication** with RBAC
 - **Bootstrap 5.3** integration
 
