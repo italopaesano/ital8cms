@@ -1,1 +1,0 @@
-../.claude/skills/ital8cms-plugin-creator/SKILL.md

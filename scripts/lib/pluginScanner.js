@@ -30,8 +30,13 @@ class PluginScanner {
     for (const pluginName of pluginDirs) {
       const pluginPath = path.join(this.pluginsDir, pluginName)
 
-      // Salta se non è directory
-      if (!fs.statSync(pluginPath).isDirectory()) {
+      // Salta se non è una directory reale. throwIfNoEntry:false fa restituire
+      // undefined invece di lanciare ENOENT quando l'entry è un symlink rotto
+      // (statSync segue il link verso un target mancante). Così sia i file
+      // regolari (es. plugins/EXPLAIN.md) sia i symlink rotti vengono ignorati
+      // senza far crashare il wizard di inizializzazione.
+      const stats = fs.statSync(pluginPath, { throwIfNoEntry: false })
+      if (!stats || !stats.isDirectory()) {
         continue
       }
 
