@@ -131,7 +131,9 @@ class DemoSeeder {
     if (!fs.existsSync(this.pluginsDir)) return;
     for (const pluginName of fs.readdirSync(this.pluginsDir).sort()) {
       const pluginPath = path.join(this.pluginsDir, pluginName);
-      if (!fs.statSync(pluginPath).isDirectory()) continue;
+      // throwIfNoEntry:false: ignora i symlink rotti in plugins/ senza crash ENOENT
+      const stats = fs.statSync(pluginPath, { throwIfNoEntry: false });
+      if (!stats || !stats.isDirectory()) continue;
       const initScript = path.join(pluginPath, 'scripts', 'init.js');
       if (!fs.existsSync(initScript)) continue;
 

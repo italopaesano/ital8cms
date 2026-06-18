@@ -165,7 +165,14 @@ class pluginSys{
     // adesso leggo tutti i file della cartella plugins e ciclo per attivari e caricare quelli per essere caricati
     const baseDir =  path.join(__dirname, '..', 'plugins' ) ;//ottengo ilpercorso della directory plugins
     let Afiles = fs.readdirSync( baseDir );// gli dico di leggere il contenuto della directori plugins e metterloin un arra ps linux non distingue fra file e directori sono tutti fil eper lui
-    Afiles = Afiles.filter(file => fs.statSync(path.join(baseDir, file)).isDirectory())// prendo solo i "file" che in realtà sono directory
+    // Tengo solo le directory reali. throwIfNoEntry:false evita un crash ENOENT
+    // al boot su symlink rotti dentro plugins/ (es. un SKILL.md che punta a un
+    // target assente): statSync segue il link e restituisce undefined invece di
+    // lanciare, e l'entry non-directory viene scartata.
+    Afiles = Afiles.filter(file => {
+      const stats = fs.statSync(path.join(baseDir, file), { throwIfNoEntry: false })
+      return stats && stats.isDirectory()
+    })// prendo solo i "file" che in realtà sono directory
 
     // Validazione nomi directory plugin (defense-in-depth)
     // I nomi provengono da readdirSync quindi sono directory reali, ma per sicurezza

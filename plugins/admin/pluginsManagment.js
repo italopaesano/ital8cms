@@ -89,9 +89,10 @@ function getPluginsList() {
 
         pluginDirs.forEach(pluginName => {
             const pluginDir = path.join(PLUGINS_PATH, pluginName);
-            const stat = fs.statSync(pluginDir);
+            // throwIfNoEntry:false: ignora i symlink rotti in plugins/ senza crash ENOENT
+            const stat = fs.statSync(pluginDir, { throwIfNoEntry: false });
 
-            if (stat.isDirectory()) {
+            if (stat && stat.isDirectory()) {
                 const configPath = path.join(pluginDir, 'pluginConfig.json5');
                 const descriptionPath = path.join(pluginDir, 'pluginDescription.json5');
                 const mainPath = path.join(pluginDir, 'main.js');
