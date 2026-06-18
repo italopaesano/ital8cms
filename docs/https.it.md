@@ -103,6 +103,48 @@ httpPort:3000 → App Koa completa (HTTP - fallback)
 - Se mancano **entrambi** → entrambe le righe annotate, titolo al plurale
 - Errori di altro tipo (permessi, file corrotto) → `console.error` generico (catch separato)
 
+**Scenario 5: errore di bind della porta (porta privilegiata o già in uso)**
+
+Quando un server (HTTP o HTTPS) non riesce a mettersi in ascolto, l'evento `'error'`
+emesso da `listen()` viene intercettato e tradotto in un **box diagnostico chiaro**
+seguito da un'**uscita pulita** (`process.exit(1)`). A differenza dei certificati
+mancanti, qui **non** c'è fallback: senza il bind della porta il server non può servire.
+
+Il caso più comune è la **porta privilegiata** (`< 1024`, es. `80`/`443`) avviata da
+un utente non-root → errore di sistema `EACCES`:
+
+```
+[SERVER] ══════════════════════════════════════════════════════════
+[SERVER]  🔴  Impossibile avviare il server HTTP: porta 80 riservata
+[SERVER] ══════════════════════════════════════════════════════════
+[SERVER]    La porta 80 è privilegiata (< 1024): il sistema operativo
+[SERVER]    ne consente il bind solo a processi con privilegi elevati (root)
+[SERVER]    o con la capability CAP_NET_BIND_SERVICE.
+[SERVER]    Errore di sistema: EACCES (permission denied).
+[SERVER]
+[SERVER]  Opzione A — usa una porta ≥ 1024 + reverse proxy (consigliato):
+[SERVER]    in ital8Config.json5:  "httpPort": 3000
+[SERVER]    poi metti nginx/Caddy davanti a servire su 80/443.
+[SERVER]
+[SERVER]  Opzione B — concedi a Node il bind sulle porte basse (Linux):
+[SERVER]    sudo setcap 'cap_net_bind_service=+ep' $(which node)
+[SERVER]
+[SERVER]  Opzione C — avvia con privilegi elevati (sconsigliato in produzione):
+[SERVER]    sudo npm start
+[SERVER]
+[SERVER]  ▶ Avvio interrotto (impossibile servire senza il bind della porta).
+[SERVER] ══════════════════════════════════════════════════════════
+```
+
+**Codici di errore gestiti:**
+- `EACCES` (porta privilegiata senza permessi) → box con le opzioni A/B/C sopra
+- `EADDRINUSE` (porta già occupata da un altro processo) → box conciso con `lsof -i :<porta>`
+- altri codici di `listen` → messaggio `console.error` di una riga con il codice di sistema
+
+In tutti i casi l'uscita è **pulita** (`exit 1`), **non** uno stack trace da eccezione non
+catturata. La gestione si applica a **tutti** i server avviati (HTTP puro, HTTPS, HTTP di
+redirect 301, HTTP in parallelo all'HTTPS, e i fallback HTTP).
+
 ## Setup Let's Encrypt (esempio pratico)
 
 ```json5
@@ -159,3 +201,8 @@ Accesso: `https://localhost:3443` (il browser mostrerà un warning per il self-s
   - Include il comando `openssl` esatto con SAN e lo snippet per disabilitare HTTPS
   - Il server **continua ad avviarsi** in HTTP puro (fallback — comportamento invariato)
   - Errori diversi da "file not found" (permessi, corruzione) passano al `catch` generico separato
+- **Gestione errori di bind** (`onListenError` + `warnPrivilegedPort()` in `httpsManager.js`):
+  - Ogni server creato in `start()` registra un handler `server.on('error', …)` **prima** di `listen()`. Senza, un fallimento di `listen()` verrebbe rilanciato da Node come **eccezione non catturata** → crash con stack trace grezzo.
+  - `onListenError(err, port, role)` smista per `err.code`: `EACCES` → `warnPrivilegedPort()` (box porta privilegiata, opzioni A/B/C); `EADDRINUSE` → box conciso (porta occupata, hint `lsof`); altri codici → `console.error` di una riga. In tutti i casi **`process.exit(1)`** pulito.
+  - Nessun fallback: a differenza dei certificati mancanti, un bind fallito non ha alternativa sensata (senza porta non si può servire), quindi si esce invece di proseguire in uno stato non funzionante.
+  - `role` identifica il server nel messaggio (`'HTTP'`, `'HTTPS'`, `'HTTP (redirect 301)'`) per diagnosi immediata quando più server sono attivi.
