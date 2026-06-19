@@ -343,6 +343,57 @@ function warnPrivilegedPort(port, role) {
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ERRORE DI BIND — PORTA GIÀ OCCUPATA (EADDRINUSE)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * Emette un box ASCII prominente quando un server non riesce a mettersi in
+ * ascolto perché la porta è già occupata da un altro processo (errore di
+ * sistema EADDRINUSE). Gemella di warnPrivilegedPort(): stessa filosofia,
+ * prominente e actionable.
+ *
+ * Mostra come individuare il processo che occupa la porta (lsof/ss/fuser),
+ * come liberarla, e come cambiare porta in ital8Config.json5. Come per la
+ * porta privilegiata, NON esiste fallback: la decisione di terminare il
+ * processo (process.exit) spetta al chiamante (onListenError in start()).
+ *
+ * @param {number} port - Porta su cui il bind è fallito (già in uso)
+ * @param {string} role - Ruolo del server, per il messaggio (es. 'HTTP', 'HTTPS')
+ */
+function warnPortInUse(port, role) {
+  const line = '[SERVER] ' + '═'.repeat(58);
+  const lines = [
+    '',
+    line,
+    `[SERVER]  🔴  Impossibile avviare il server ${role}: porta ${port} già in uso`,
+    line,
+    `[SERVER]    Un altro processo è già in ascolto sulla porta ${port}. Due strade:`,
+    '[SERVER]    liberare quella porta, oppure avviare ital8cms su una porta diversa.',
+    '[SERVER]',
+    '[SERVER]  Opzione A — scopri quale processo occupa la porta (Linux/macOS):',
+    '[SERVER]',
+    `[SERVER]    sudo lsof -i :${port}`,
+    `[SERVER]    sudo ss -ltnp 'sport = :${port}'`,
+    `[SERVER]    sudo fuser ${port}/tcp`,
+    '[SERVER]',
+    '[SERVER]  Opzione B — libera la porta terminando quel processo:',
+    '[SERVER]',
+    `[SERVER]    sudo fuser -k ${port}/tcp        # oppure: kill <PID> trovato sopra`,
+    '[SERVER]    (verifica prima che non sia un\'altra istanza di ital8cms da fermare)',
+    '[SERVER]',
+    '[SERVER]  Opzione C — usa un\'altra porta in ital8Config.json5:',
+    '[SERVER]',
+    '[SERVER]    "httpPort": 3001            // oppure  "https": { "port": ... }',
+    '[SERVER]',
+    '[SERVER]  ▶ Avvio interrotto (porta non disponibile).',
+    line,
+    '',
+  ];
+  console.error(lines.join('\n'));
+}
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // FUNZIONE PRINCIPALE
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -383,19 +434,7 @@ function start(app, router, ital8Conf) {
     if (err && err.code === 'EACCES') {
       warnPrivilegedPort(port, role);
     } else if (err && err.code === 'EADDRINUSE') {
-      const line = '[SERVER] ' + '═'.repeat(58);
-      console.error([
-        '',
-        line,
-        `[SERVER]  🔴  Porta ${port} già in uso — server ${role} non avviato`,
-        line,
-        `[SERVER]    Un altro processo è già in ascolto sulla porta ${port}. Libera`,
-        '[SERVER]    la porta oppure cambia "httpPort"/"https.port" in ital8Config.json5.',
-        `[SERVER]    Per scoprire chi la occupa:  sudo lsof -i :${port}`,
-        '[SERVER]  ▶ Avvio interrotto.',
-        line,
-        '',
-      ].join('\n'));
+      warnPortInUse(port, role);
     } else {
       console.error(`[SERVER] 🔴 Server ${role}: impossibile mettersi in ascolto sulla porta ${port} — ${(err && (err.code || err.message)) || 'errore sconosciuto'}`);
     }

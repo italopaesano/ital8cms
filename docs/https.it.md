@@ -136,9 +136,34 @@ un utente non-root → errore di sistema `EACCES`:
 [SERVER] ══════════════════════════════════════════════════════════
 ```
 
+Se invece la porta è **già occupata** da un altro processo → errore di sistema
+`EADDRINUSE`:
+
+```
+[SERVER] ══════════════════════════════════════════════════════════
+[SERVER]  🔴  Impossibile avviare il server HTTP: porta 3000 già in uso
+[SERVER] ══════════════════════════════════════════════════════════
+[SERVER]    Un altro processo è già in ascolto sulla porta 3000. Due strade:
+[SERVER]    liberare quella porta, oppure avviare ital8cms su una porta diversa.
+[SERVER]
+[SERVER]  Opzione A — scopri quale processo occupa la porta (Linux/macOS):
+[SERVER]    sudo lsof -i :3000
+[SERVER]    sudo ss -ltnp 'sport = :3000'
+[SERVER]    sudo fuser 3000/tcp
+[SERVER]
+[SERVER]  Opzione B — libera la porta terminando quel processo:
+[SERVER]    sudo fuser -k 3000/tcp        # oppure: kill <PID> trovato sopra
+[SERVER]
+[SERVER]  Opzione C — usa un'altra porta in ital8Config.json5:
+[SERVER]    "httpPort": 3001            // oppure  "https": { "port": ... }
+[SERVER]
+[SERVER]  ▶ Avvio interrotto (porta non disponibile).
+[SERVER] ══════════════════════════════════════════════════════════
+```
+
 **Codici di errore gestiti:**
-- `EACCES` (porta privilegiata senza permessi) → box con le opzioni A/B/C sopra
-- `EADDRINUSE` (porta già occupata da un altro processo) → box conciso con `lsof -i :<porta>`
+- `EACCES` (porta privilegiata senza permessi) → `warnPrivilegedPort()`: box con le opzioni A/B/C (porta ≥ 1024 + reverse proxy / `setcap` / privilegi elevati)
+- `EADDRINUSE` (porta già occupata da un altro processo) → `warnPortInUse()`: box dedicato con opzioni A/B/C (individua con `lsof`/`ss`/`fuser`, libera la porta, o cambia porta)
 - altri codici di `listen` → messaggio `console.error` di una riga con il codice di sistema
 
 In tutti i casi l'uscita è **pulita** (`exit 1`), **non** uno stack trace da eccezione non
@@ -201,8 +226,8 @@ Accesso: `https://localhost:3443` (il browser mostrerà un warning per il self-s
   - Include il comando `openssl` esatto con SAN e lo snippet per disabilitare HTTPS
   - Il server **continua ad avviarsi** in HTTP puro (fallback — comportamento invariato)
   - Errori diversi da "file not found" (permessi, corruzione) passano al `catch` generico separato
-- **Gestione errori di bind** (`onListenError` + `warnPrivilegedPort()` in `httpsManager.js`):
+- **Gestione errori di bind** (`onListenError` + `warnPrivilegedPort()` + `warnPortInUse()` in `httpsManager.js`):
   - Ogni server creato in `start()` registra un handler `server.on('error', …)` **prima** di `listen()`. Senza, un fallimento di `listen()` verrebbe rilanciato da Node come **eccezione non catturata** → crash con stack trace grezzo.
-  - `onListenError(err, port, role)` smista per `err.code`: `EACCES` → `warnPrivilegedPort()` (box porta privilegiata, opzioni A/B/C); `EADDRINUSE` → box conciso (porta occupata, hint `lsof`); altri codici → `console.error` di una riga. In tutti i casi **`process.exit(1)`** pulito.
+  - `onListenError(err, port, role)` smista per `err.code`: `EACCES` → `warnPrivilegedPort()` (box porta privilegiata, opzioni A/B/C); `EADDRINUSE` → `warnPortInUse()` (box dedicato porta occupata, opzioni A/B/C: individua con `lsof`/`ss`/`fuser`, libera, o cambia porta); altri codici → `console.error` di una riga. In tutti i casi **`process.exit(1)`** pulito.
   - Nessun fallback: a differenza dei certificati mancanti, un bind fallito non ha alternativa sensata (senza porta non si può servire), quindi si esce invece di proseguire in uno stato non funzionante.
   - `role` identifica il server nel messaggio (`'HTTP'`, `'HTTPS'`, `'HTTP (redirect 301)'`) per diagnosi immediata quando più server sono attivi.
