@@ -4,6 +4,27 @@ const app = new koa();
 const koaClassicServer = require("koa-classic-server");
 const ejs = require("ejs");
 const loadJson5 = require('./core/loadJson5');
+
+// ━━━ Rete di sicurezza a livello di processo (vedi core/processSafetyNet.js) ━━━
+// Registrata SUBITO — prima del caricamento della config e di tutto il boot —
+// così da catturare anche gli errori della fase di avvio. Trasforma
+// uncaughtException e unhandledRejection in un box chiaro + chiusura ordinata +
+// exit 1, invece di uno stack trace grezzo.
+// NB: gracefulShutdown è una function declaration (hoisted) → referenziabile qui.
+const { installProcessSafetyNet } = require('./core/processSafetyNet');
+let serversStarted = false; // diventa true quando i server HTTP/HTTPS sono avviati
+installProcessSafetyNet({
+  onFatal: () => {
+    if (serversStarted) {
+      gracefulShutdown('fatal-error', { respawn: false, exitCode: 1 });
+    } else {
+      // Errore fatale durante il boot, prima che i server siano su: non c'è nulla
+      // da chiudere, esci subito (il box diagnostico è già stato stampato).
+      process.exit(1);
+    }
+  },
+});
+
 const ital8Conf = loadJson5('./ital8Config.json5');
 const path = require('path');
 const httpsManager = require('./core/httpsManager');
@@ -317,6 +338,7 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 const servers = httpsManager.start(app, router, ital8Conf);
+serversStarted = true; // da ora gracefulShutdown può chiudere ordinatamente i server
 
 // Avviso profilo demo (puramente segnaletico): emesso dopo l'avvio dei server.
 // Caricato solo quando demo === true → footprint zero in produzione.
@@ -352,6 +374,9 @@ function gracefulShutdown(signal, opts = {}) {
   if (shuttingDown) return;
   shuttingDown = true;
   const respawn = opts.respawn === true;
+  // Codice di uscita per la chiusura "riuscita": default 0 (shutdown normale);
+  // la rete di sicurezza (processSafetyNet) passa 1 (chiusura post errore fatale).
+  const normalExitCode = typeof opts.exitCode === 'number' ? opts.exitCode : 0;
   console.log(`[Shutdown] ${signal} ricevuto, chiusura server in corso${respawn ? ' (con self-respawn)' : ''}...`);
 
   // Chiusura del CLI bridge in parallelo con i server HTTP/HTTPS (non blocca).
@@ -379,7 +404,7 @@ function gracefulShutdown(signal, opts = {}) {
   if (total === 0) {
     console.log('[Shutdown] Nessun server attivo, uscita immediata');
     clearTimeout(forceExit);
-    finalize(0);
+    finalize(normalExitCode);
     return;
   }
 
@@ -389,7 +414,7 @@ function gracefulShutdown(signal, opts = {}) {
       if (closed >= total) {
         console.log('[Shutdown] Tutti i server chiusi correttamente');
         clearTimeout(forceExit);
-        finalize(0);
+        finalize(normalExitCode);
       }
     });
   }
