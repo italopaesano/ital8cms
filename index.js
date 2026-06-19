@@ -25,7 +25,17 @@ installProcessSafetyNet({
   },
 });
 
-const ital8Conf = loadJson5('./ital8Config.json5');
+// Caricamento della configurazione principale. Un errore qui (file mancante o
+// sintassi JSON5 errata) è fatale: box [CONFIG] chiaro e azionabile + exit 1,
+// invece di delegarlo alla rete processSafetyNet (che darebbe un messaggio meno
+// specifico). La rete resta installata sopra come backstop per tutto il resto.
+let ital8Conf;
+try {
+  ital8Conf = loadJson5('./ital8Config.json5');
+} catch (configError) {
+  loadJson5.warnConfigError('ital8Config.json5', configError);
+  process.exit(1);
+}
 const path = require('path');
 const httpsManager = require('./core/httpsManager');
 

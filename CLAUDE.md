@@ -1321,7 +1321,7 @@ Spostato in [`docs/deployment.it.md`](./docs/deployment.it.md).
 - `/core/pluginSys.js` - Gestore del sistema plugin
 - `/core/themeSys.js` - Gestore del sistema temi
 - `/core/admin/adminSystem.js` - Coordinatore del sistema admin
-- `/core/loadJson5.js` - Utility di caricamento file JSON5
+- `/core/loadJson5.js` - Utility di caricamento file JSON5 (throw-only: messaggi chiari che distinguono "file non trovato"/"sintassi JSON5 non valida"; `warnConfigError()` per il box `[CONFIG]` al boot)
 - `/core/servingRootResolver.js` - Utility di isolamento del path di serving
 - `/core/patternMatcher.js` - Utility di pattern matching degli URL (esatto, wildcard, regex) — condivisa dai plugin adminAccessControl e seo
 - `/core/sessionSecurity.js` - Sicurezza delle chiavi di sessione: denylist dei placeholder, `keysAreInsecure()`, warning al boot `checkSessionKeys()` (fonte di verità unica)
