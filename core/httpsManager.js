@@ -129,8 +129,17 @@ function setupHotReload(httpsServer, certPath, keyPath, caPath, ital8Conf) {
     }, debounceMs);
   };
 
-  fs.watch(certPath, reloadCerts);
-  if (caPath) fs.watch(caPath, reloadCerts);
+  // Aggancia un handler 'error' a ogni watcher PRIMA che possa emetterlo: senza,
+  // un errore dell'FSWatcher (file rimosso/rinominato, limite inotify raggiunto,
+  // ecc.) verrebbe rilanciato da Node come eccezione non catturata. L'hot reload
+  // che fallisce NON è fatale — il server continua a servire col certificato già
+  // caricato — quindi qui ci si limita a loggare un warning (no process.exit).
+  const certWatcher = fs.watch(certPath, reloadCerts);
+  certWatcher.on('error', (err) => console.warn(`[HTTPS] ⚠  Watcher certificato in errore (hot reload sospeso): ${err.message}`));
+  if (caPath) {
+    const caWatcher = fs.watch(caPath, reloadCerts);
+    caWatcher.on('error', (err) => console.warn(`[HTTPS] ⚠  Watcher CA in errore (hot reload sospeso): ${err.message}`));
+  }
 
   console.log(`[HTTPS] Hot reload attivo — debounce: ${debounceMs}ms`);
 }
