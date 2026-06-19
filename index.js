@@ -71,244 +71,131 @@ let servers = [];
 // un suo fallimento → messaggio [BOOT] + exit 1.
 async function startApp() {
 
-const pluginSys = new ( require("./core/pluginSys") )(ital8Conf); // carico il sistema di plugin e passo la configurazione per whitelist
+  const pluginSys = new ( require("./core/pluginSys") )(ital8Conf); // carico il sistema di plugin e passo la configurazione per whitelist
 
-// Carica/installa/aggiorna i plugin risolvendo le dipendenze. await: i lifecycle hook
-// dei plugin (loadPlugin/installPlugin/upgradePlugin) possono essere async → questo
-// elimina alla radice la classe di unhandledRejection da caricamento plugin.
-await pluginSys.initialize();
+  // Carica/installa/aggiorna i plugin risolvendo le dipendenze. await: i lifecycle hook
+  // dei plugin (loadPlugin/installPlugin/upgradePlugin) possono essere async → questo
+  // elimina alla radice la classe di unhandledRejection da caricamento plugin.
+  await pluginSys.initialize();
 
-// Inietta il callback di restart nel pluginSys: i plugin potranno chiamare
-// pluginSys.requestRestart({reason}) per richiedere un riavvio pulito di ital8cms
-// (es. dopo cambio tema). Riusa l'infrastruttura già esistente di gracefulShutdown
-// + selfRespawn/detectSupervisor del cliBridge.
-pluginSys.setRequestRestart(({ reason } = {}) => {
-  console.log(`[restart] richiesta da plugin: ${reason || 'no-reason'}`);
-  gracefulShutdown(reason || 'plugin-restart-request', { respawn: true });
-});
-
-// carico le rotte di tutti i plugin
-pluginSys.loadRoutes( router , `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`);// il secondo paramentro è il primo prefix
-const getObjectsToShareInWebPages = pluginSys.getObjectsToShareInWebPages();
-
-// Ottieni le funzioni globali da esportare nei template EJS
-// Queste funzioni saranno disponibili direttamente nei template senza dover accedere a passData.plugin.{pluginName}
-// IMPORTANTE: Le versioni locali (passData.plugin.{pluginName}.{function}) rimangono SEMPRE disponibili
-const globalFunctions = pluginSys.getGlobalFunctions();
-
-// adesso faccio in modo di caricare tutti i vari midlware dei vari pugin
-const middlewaresToLoad = pluginSys.getMiddlewaresToLoad();// questi midlware andranno caricati nell'app koa.js const app = new koa();
-middlewaresToLoad.forEach( (midlwareFn) => {
-  const middlewareArrey = midlwareFn(app);// questa funzione restituirà un array i midlware che poi dovranno essere agiunti singolarmente , ogni plugin quindi restituirà il suo array di midlway da aggiungere
-  middlewareArrey.forEach( (middleware) =>{
-    app.use(  middleware );
+  // Inietta il callback di restart nel pluginSys: i plugin potranno chiamare
+  // pluginSys.requestRestart({reason}) per richiedere un riavvio pulito di ital8cms
+  // (es. dopo cambio tema). Riusa l'infrastruttura già esistente di gracefulShutdown
+  // + selfRespawn/detectSupervisor del cliBridge.
+  pluginSys.setRequestRestart(({ reason } = {}) => {
+    console.log(`[restart] richiesta da plugin: ${reason || 'no-reason'}`);
+    gracefulShutdown(reason || 'plugin-restart-request', { respawn: true });
   });
-});
-//console.log( "--------app.middleware ----------" , app.middleware);// visualizza quali midlware sono caricati 
-//console.log( 'getObjectsToShareInWebPages', getObjectsToShareInWebPages);
 
-// carico il themesys (passo anche pluginSys per il controllo delle dipendenze)
-const themeSys = new ( require('./core/themeSys') ) ( ital8Conf, pluginSys );
+  // carico le rotte di tutti i plugin
+  pluginSys.loadRoutes( router , `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`);// il secondo paramentro è il primo prefix
+  const getObjectsToShareInWebPages = pluginSys.getObjectsToShareInWebPages();
 
-// Imposta il riferimento a themeSys in pluginSys per permettere ai plugin di accedervi
-pluginSys.setThemeSys(themeSys);
+  // Ottieni le funzioni globali da esportare nei template EJS
+  // Queste funzioni saranno disponibili direttamente nei template senza dover accedere a passData.plugin.{pluginName}
+  // IMPORTANTE: Le versioni locali (passData.plugin.{pluginName}.{function}) rimangono SEMPRE disponibili
+  const globalFunctions = pluginSys.getGlobalFunctions();
 
-// Inizializza Admin System (se abilitato)
-let adminSystem = null;
-if (ital8Conf.enableAdmin) {
-  const AdminSystem = require('./core/admin/adminSystem');
-  adminSystem = new AdminSystem(themeSys, ital8Conf);
+  // adesso faccio in modo di caricare tutti i vari midlware dei vari pugin
+  const middlewaresToLoad = pluginSys.getMiddlewaresToLoad();// questi midlware andranno caricati nell'app koa.js const app = new koa();
+  middlewaresToLoad.forEach( (midlwareFn) => {
+    const middlewareArrey = midlwareFn(app);// questa funzione restituirà un array i midlware che poi dovranno essere agiunti singolarmente , ogni plugin quindi restituirà il suo array di midlway da aggiungere
+    middlewareArrey.forEach( (middleware) =>{
+      app.use(  middleware );
+    });
+  });
+  //console.log( "--------app.middleware ----------" , app.middleware);// visualizza quali midlware sono caricati 
+  //console.log( 'getObjectsToShareInWebPages', getObjectsToShareInWebPages);
 
-  // Collega PluginSys ad AdminSystem (evita dipendenza circolare)
-  adminSystem.setPluginSys(pluginSys);
-  pluginSys.setAdminSystem(adminSystem);
+  // carico il themesys (passo anche pluginSys per il controllo delle dipendenze)
+  const themeSys = new ( require('./core/themeSys') ) ( ital8Conf, pluginSys );
 
-  // Inizializza admin (processa plugin admin, crea symlink, carica servizi)
-  adminSystem.initialize();
+  // Imposta il riferimento a themeSys in pluginSys per permettere ai plugin di accedervi
+  pluginSys.setThemeSys(themeSys);
 
-  console.log('✓ Admin System initialized');
-}
+  // Inizializza Admin System (se abilitato)
+  let adminSystem = null;
+  if (ital8Conf.enableAdmin) {
+    const AdminSystem = require('./core/admin/adminSystem');
+    adminSystem = new AdminSystem(themeSys, ital8Conf);
 
-// Inizializza Plugin Pages System (gestione pagine pubbliche plugin)
-const PluginPagesSystem = require('./core/pluginPagesSystem');
-const pluginPagesSystem = new PluginPagesSystem(pluginSys);
-pluginPagesSystem.initialize();
-console.log('✓ Plugin Pages System initialized');
+    // Collega PluginSys ad AdminSystem (evita dipendenza circolare)
+    adminSystem.setPluginSys(pluginSys);
+    pluginSys.setAdminSystem(adminSystem);
 
-// Funzione per creare wrapper themeSys con metodi già bound a passData
-function createThemeSysWrapper(themeSys, passData) {
-  return {
-    // Metodi esistenti (manteniamo compatibilità)
-    getThemePartPath: (partName) => themeSys.getThemePartPath(partName, passData),
-    getThemeResourceUrl: (resourcePath) => themeSys.getThemeResourceUrl(resourcePath, passData),
-    resolvePluginTemplatePath: (pluginName, endpointName, defaultPath, templateFile) =>
-      themeSys.resolvePluginTemplatePath(pluginName, endpointName, defaultPath, templateFile, passData.isAdminContext),
+    // Inizializza admin (processa plugin admin, crea symlink, carica servizi)
+    adminSystem.initialize();
 
-    // NUOVI metodi injection (NO parametri - già bound a passData)
-    injectPluginCss: () => themeSys.injectPluginCss(passData),
-    injectPluginJs: () => themeSys.injectPluginJs(passData),
-    injectPluginHtmlBefore: () => themeSys.injectPluginHtmlBefore(passData),
-    injectPluginHtmlAfter: () => themeSys.injectPluginHtmlAfter(passData),
+    console.log('✓ Admin System initialized');
+  }
 
-    // Accesso all'istanza originale per casi avanzati
-    _instance: themeSys
-  };
-}
+  // Inizializza Plugin Pages System (gestione pagine pubbliche plugin)
+  const PluginPagesSystem = require('./core/pluginPagesSystem');
+  const pluginPagesSystem = new PluginPagesSystem(pluginSys);
+  pluginPagesSystem.initialize();
+  console.log('✓ Plugin Pages System initialized');
 
-// Static server per le risorse del tema pubblico
-// Le risorse sono accessibili tramite /{publicThemeResourcesPrefix}/css/, /{publicThemeResourcesPrefix}/js/, ecc.
-// Configurazione cache controllata da browserCacheEnabled e browserCacheMaxAge in ital8Config.json5
-app.use(
-  koaClassicServer(
-    path.join(__dirname, 'themes', ital8Conf.activeTheme, 'themeResources'),
-    {
-      urlPrefix: `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`,
-      urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.pluginPagesPrefix}`], // '/admin','/api','/views','/admin-theme-resources','/pluginPages' -> questi sarebbero i percorsi di default pero adesso sono configurabili
-      dirListing: { enabled: false },
-      browserCacheEnabled: ital8Conf.browserCacheEnabled,
-      browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
-    }
-  )
-);
-console.log(`[themeSys] Risorse del tema pubblico servite da ${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}/ -> themes/${ital8Conf.activeTheme}/themeResources/`);
+  // Funzione per creare wrapper themeSys con metodi già bound a passData
+  function createThemeSysWrapper(themeSys, passData) {
+    return {
+      // Metodi esistenti (manteniamo compatibilità)
+      getThemePartPath: (partName) => themeSys.getThemePartPath(partName, passData),
+      getThemeResourceUrl: (resourcePath) => themeSys.getThemeResourceUrl(resourcePath, passData),
+      resolvePluginTemplatePath: (pluginName, endpointName, defaultPath, templateFile) =>
+        themeSys.resolvePluginTemplatePath(pluginName, endpointName, defaultPath, templateFile, passData.isAdminContext),
 
-// koa classic server
-app.use(
-  koaClassicServer(
-    __dirname + `${ital8Conf.wwwPath}`,
-    (opt = {
-      index: ital8Conf.indexFiles.wwwPath,
-      urlPrefix: `${ital8Conf.globalPrefix}`,
-      dirListing: { enabled: true },
-      urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.pluginPagesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources','/pluginPages' -> questi sarebbero i percorsi di default pero adesso sono configurabili
-      browserCacheEnabled: ital8Conf.browserCacheEnabled,
-      browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
-      hideExtension: ital8Conf.hideExtension.wwwPath.enabled ? { ext: ital8Conf.hideExtension.wwwPath.ext } : undefined,
-      template: {
-        render: async (ctx, next, filePath) => {
-          // Crea passData base
-          const passData = {
-            isAdminContext: false, // Flag per distinguere contesto pubblico da admin
-            demo: !!ital8Conf.demo, // Flag profilo demo (per badge/template); puramente segnaletico
-            globalPrefix: ital8Conf.globalPrefix,// prefisso globale per costruire URL corretti
-            apiPrefix: ital8Conf.apiPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamare in modo corretto e flessibile le api ad esempio dei vari plugin
-            //adminPrefix: ital8Conf.adminPrefix,//ATTENZIONE PER NESSUN MOTIVO DOVRÀ ESSERE PASSATO adminPrefix nelle pagine web non di amministrazione per non svelare ad utenti potenzialmente pericolosi la locazion della sezione di admin
-            pluginSys: pluginSys, // sistema dei plugin
-            plugin: getObjectsToShareInWebPages,// quicondivo gli ogetti publidi dei plugin
-            adminSystem: adminSystem, // Admin System (disponibile anche in pagine pubbliche per servizi come auth)
-            //baseThemePath: `${ital8Conf.baseThemePath}` ,OLD -> mi sa che non serve più// default -> "../themes/default" -->baseThemePath contiene il percorso di base del tema corrente
-            filePath: filePath,
-            href: ctx.href,
-            query: ctx.query,
-            ctx: ctx,// DA MIGLIORARE PER LA SICUREZZA
-            //session: ctx.session || undefined, // DA MIGLIORARE qusta variabile serve al  Plugin adminUsers per gestire la visualizazione dele sessioni nell'hook page
-          };
+      // NUOVI metodi injection (NO parametri - già bound a passData)
+      injectPluginCss: () => themeSys.injectPluginCss(passData),
+      injectPluginJs: () => themeSys.injectPluginJs(passData),
+      injectPluginHtmlBefore: () => themeSys.injectPluginHtmlBefore(passData),
+      injectPluginHtmlAfter: () => themeSys.injectPluginHtmlAfter(passData),
 
-          // Aggiungi wrapper themeSys con metodi bound
-          passData.themeSys = createThemeSysWrapper(themeSys, passData);
+      // Accesso all'istanza originale per casi avanzati
+      _instance: themeSys
+    };
+  }
 
-          ctx.body = await ejs.renderFile(filePath, {
-            passData: passData,
-            // Espandi le funzioni globali (es. __() per i18n)
-            // IMPORTANTE: Le versioni locali (passData.plugin.simpleI18n.__) rimangono disponibili
-            ...globalFunctions
-          });
-        },
-        ext: ["ejs", "EJS"], // Koa v3: sintassi moderna array literals
-      },
-    })
-  )
-);
-
-// Static server per le pagine pubbliche dei plugin (/pluginPages/)
-const pluginPagesPrefix = ital8Conf.pluginPagesPrefix || 'pluginPages';
-app.use(
-  koaClassicServer(
-    pluginPagesSystem.getPluginPagesDirectory(),
-    {
-      index: ital8Conf.indexFiles.pluginPagesPrefix,
-      urlPrefix: `${ital8Conf.globalPrefix}/${pluginPagesPrefix}`,
-      urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`],
-      dirListing: { enabled: false },
-      browserCacheEnabled: ital8Conf.browserCacheEnabled,
-      browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
-      hideExtension: ital8Conf.hideExtension.pluginPagesPrefix.enabled ? { ext: ital8Conf.hideExtension.pluginPagesPrefix.ext } : undefined,
-      template: {
-        render: async (ctx, next, filePath) => {
-          // Crea passData base per plugin pages
-          const passData = {
-            isAdminContext: false,
-            demo: !!ital8Conf.demo, // Flag profilo demo (per badge/template); puramente segnaletico
-            globalPrefix: ital8Conf.globalPrefix,
-            apiPrefix: ital8Conf.apiPrefix,
-            pluginSys: pluginSys,
-            plugin: getObjectsToShareInWebPages,
-            adminSystem: adminSystem,
-            filePath: filePath,
-            href: ctx.href,
-            query: ctx.query,
-            ctx: ctx,
-          };
-
-          // Aggiungi wrapper themeSys con metodi bound
-          passData.themeSys = createThemeSysWrapper(themeSys, passData);
-
-          ctx.body = await ejs.renderFile(filePath, {
-            passData: passData,
-            ...globalFunctions
-          });
-        },
-        ext: ["ejs", "EJS"],
-      },
-    }
-  )
-);
-console.log(`[PluginPagesSystem] Plugin pages servite da ${ital8Conf.globalPrefix}/${pluginPagesPrefix}/ -> ${pluginPagesSystem.getPluginPagesDirectory()}`);
-
-//START ADESSO CARICO LA PARTE DI ADMIN SE RICHIESTA
-if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
-
-  // Static server per le risorse del tema admin
-  // Le risorse sono accessibili tramite /{adminThemeResourcesPrefix}/css/, /{adminThemeResourcesPrefix}/js/, ecc.
+  // Static server per le risorse del tema pubblico
+  // Le risorse sono accessibili tramite /{publicThemeResourcesPrefix}/css/, /{publicThemeResourcesPrefix}/js/, ecc.
   // Configurazione cache controllata da browserCacheEnabled e browserCacheMaxAge in ital8Config.json5
   app.use(
     koaClassicServer(
-      path.join(__dirname, 'themes', ital8Conf.adminActiveTheme, 'themeResources'),
+      path.join(__dirname, 'themes', ital8Conf.activeTheme, 'themeResources'),
       {
-        urlPrefix: `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`,
-        urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
+        urlPrefix: `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`,
+        urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.pluginPagesPrefix}`], // '/admin','/api','/views','/admin-theme-resources','/pluginPages' -> questi sarebbero i percorsi di default pero adesso sono configurabili
         dirListing: { enabled: false },
         browserCacheEnabled: ital8Conf.browserCacheEnabled,
         browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
       }
     )
   );
-  console.log(`[themeSys] Risorse del tema admin servite da ${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}/ -> themes/${ital8Conf.adminActiveTheme}/themeResources/`);
+  console.log(`[themeSys] Risorse del tema pubblico servite da ${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}/ -> themes/${ital8Conf.activeTheme}/themeResources/`);
 
-  // Static server per le pagine admin complete
+  // koa classic server
   app.use(
     koaClassicServer(
-      path.join(__dirname, 'core', 'admin', 'webPages'),// punto alla cartella delle pagine di admin
+      __dirname + `${ital8Conf.wwwPath}`,
       (opt = {
-        index: ital8Conf.indexFiles.adminPrefix,
-        urlPrefix: `${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`,
+        index: ital8Conf.indexFiles.wwwPath,
+        urlPrefix: `${ital8Conf.globalPrefix}`,
         dirListing: { enabled: true },
-        urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`], // '/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
+        urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.pluginPagesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources','/pluginPages' -> questi sarebbero i percorsi di default pero adesso sono configurabili
         browserCacheEnabled: ital8Conf.browserCacheEnabled,
         browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
-        hideExtension: ital8Conf.hideExtension.adminPrefix.enabled ? { ext: ital8Conf.hideExtension.adminPrefix.ext } : undefined,
+        hideExtension: ital8Conf.hideExtension.wwwPath.enabled ? { ext: ital8Conf.hideExtension.wwwPath.ext } : undefined,
         template: {
           render: async (ctx, next, filePath) => {
-            // Crea passData base per admin
+            // Crea passData base
             const passData = {
-              isAdminContext: true, // Flag per distinguere contesto admin da pubblico
+              isAdminContext: false, // Flag per distinguere contesto pubblico da admin
               demo: !!ital8Conf.demo, // Flag profilo demo (per badge/template); puramente segnaletico
               globalPrefix: ital8Conf.globalPrefix,// prefisso globale per costruire URL corretti
               apiPrefix: ital8Conf.apiPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamare in modo corretto e flessibile le api ad esempio dei vari plugin
-              adminPrefix: ital8Conf.adminPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamamare correttamente le pagine di admin con il corretto prefix
+              //adminPrefix: ital8Conf.adminPrefix,//ATTENZIONE PER NESSUN MOTIVO DOVRÀ ESSERE PASSATO adminPrefix nelle pagine web non di amministrazione per non svelare ad utenti potenzialmente pericolosi la locazion della sezione di admin
               pluginSys: pluginSys, // sistema dei plugin
               plugin: getObjectsToShareInWebPages,// quicondivo gli ogetti publidi dei plugin
-              adminSystem: adminSystem, // Admin System con menu dinamico e servizi
+              adminSystem: adminSystem, // Admin System (disponibile anche in pagine pubbliche per servizi come auth)
               //baseThemePath: `${ital8Conf.baseThemePath}` ,OLD -> mi sa che non serve più// default -> "../themes/default" -->baseThemePath contiene il percorso di base del tema corrente
               filePath: filePath,
               href: ctx.href,
@@ -333,36 +220,149 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
     )
   );
 
-}
-//END ADESSO CARICO LA PARTE DI ADMIN SE RICHIESTA 
+  // Static server per le pagine pubbliche dei plugin (/pluginPages/)
+  const pluginPagesPrefix = ital8Conf.pluginPagesPrefix || 'pluginPages';
+  app.use(
+    koaClassicServer(
+      pluginPagesSystem.getPluginPagesDirectory(),
+      {
+        index: ital8Conf.indexFiles.pluginPagesPrefix,
+        urlPrefix: `${ital8Conf.globalPrefix}/${pluginPagesPrefix}`,
+        urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`],
+        dirListing: { enabled: false },
+        browserCacheEnabled: ital8Conf.browserCacheEnabled,
+        browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
+        hideExtension: ital8Conf.hideExtension.pluginPagesPrefix.enabled ? { ext: ital8Conf.hideExtension.pluginPagesPrefix.ext } : undefined,
+        template: {
+          render: async (ctx, next, filePath) => {
+            // Crea passData base per plugin pages
+            const passData = {
+              isAdminContext: false,
+              demo: !!ital8Conf.demo, // Flag profilo demo (per badge/template); puramente segnaletico
+              globalPrefix: ital8Conf.globalPrefix,
+              apiPrefix: ital8Conf.apiPrefix,
+              pluginSys: pluginSys,
+              plugin: getObjectsToShareInWebPages,
+              adminSystem: adminSystem,
+              filePath: filePath,
+              href: ctx.href,
+              query: ctx.query,
+              ctx: ctx,
+            };
+
+            // Aggiungi wrapper themeSys con metodi bound
+            passData.themeSys = createThemeSysWrapper(themeSys, passData);
+
+            ctx.body = await ejs.renderFile(filePath, {
+              passData: passData,
+              ...globalFunctions
+            });
+          },
+          ext: ["ejs", "EJS"],
+        },
+      }
+    )
+  );
+  console.log(`[PluginPagesSystem] Plugin pages servite da ${ital8Conf.globalPrefix}/${pluginPagesPrefix}/ -> ${pluginPagesSystem.getPluginPagesDirectory()}`);
+
+  //START ADESSO CARICO LA PARTE DI ADMIN SE RICHIESTA
+  if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
+
+    // Static server per le risorse del tema admin
+    // Le risorse sono accessibili tramite /{adminThemeResourcesPrefix}/css/, /{adminThemeResourcesPrefix}/js/, ecc.
+    // Configurazione cache controllata da browserCacheEnabled e browserCacheMaxAge in ital8Config.json5
+    app.use(
+      koaClassicServer(
+        path.join(__dirname, 'themes', ital8Conf.adminActiveTheme, 'themeResources'),
+        {
+          urlPrefix: `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`,
+          urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
+          dirListing: { enabled: false },
+          browserCacheEnabled: ital8Conf.browserCacheEnabled,
+          browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
+        }
+      )
+    );
+    console.log(`[themeSys] Risorse del tema admin servite da ${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}/ -> themes/${ital8Conf.adminActiveTheme}/themeResources/`);
+
+    // Static server per le pagine admin complete
+    app.use(
+      koaClassicServer(
+        path.join(__dirname, 'core', 'admin', 'webPages'),// punto alla cartella delle pagine di admin
+        (opt = {
+          index: ital8Conf.indexFiles.adminPrefix,
+          urlPrefix: `${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`,
+          dirListing: { enabled: true },
+          urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`], // '/api','/views','/public-theme-resources','/admin-theme-resources' -> questi sarebbero i percorsi di default pero adesso sono configurabili
+          browserCacheEnabled: ital8Conf.browserCacheEnabled,
+          browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
+          hideExtension: ital8Conf.hideExtension.adminPrefix.enabled ? { ext: ital8Conf.hideExtension.adminPrefix.ext } : undefined,
+          template: {
+            render: async (ctx, next, filePath) => {
+              // Crea passData base per admin
+              const passData = {
+                isAdminContext: true, // Flag per distinguere contesto admin da pubblico
+                demo: !!ital8Conf.demo, // Flag profilo demo (per badge/template); puramente segnaletico
+                globalPrefix: ital8Conf.globalPrefix,// prefisso globale per costruire URL corretti
+                apiPrefix: ital8Conf.apiPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamare in modo corretto e flessibile le api ad esempio dei vari plugin
+                adminPrefix: ital8Conf.adminPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamamare correttamente le pagine di admin con il corretto prefix
+                pluginSys: pluginSys, // sistema dei plugin
+                plugin: getObjectsToShareInWebPages,// quicondivo gli ogetti publidi dei plugin
+                adminSystem: adminSystem, // Admin System con menu dinamico e servizi
+                //baseThemePath: `${ital8Conf.baseThemePath}` ,OLD -> mi sa che non serve più// default -> "../themes/default" -->baseThemePath contiene il percorso di base del tema corrente
+                filePath: filePath,
+                href: ctx.href,
+                query: ctx.query,
+                ctx: ctx,// DA MIGLIORARE PER LA SICUREZZA
+                //session: ctx.session || undefined, // DA MIGLIORARE qusta variabile serve al  Plugin adminUsers per gestire la visualizazione dele sessioni nell'hook page
+              };
+
+              // Aggiungi wrapper themeSys con metodi bound
+              passData.themeSys = createThemeSysWrapper(themeSys, passData);
+
+              ctx.body = await ejs.renderFile(filePath, {
+                passData: passData,
+                // Espandi le funzioni globali (es. __() per i18n)
+                // IMPORTANTE: Le versioni locali (passData.plugin.simpleI18n.__) rimangono disponibili
+                ...globalFunctions
+              });
+            },
+            ext: ["ejs", "EJS"], // Koa v3: sintassi moderna array literals
+          },
+        })
+      )
+    );
+
+  }
+  //END ADESSO CARICO LA PARTE DI ADMIN SE RICHIESTA 
 
 
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// START HTTP/HTTPS SERVER SETUP
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Logica di avvio server in base alla configurazione ital8Conf.https.
-//
-// Scenari gestiti:
-//   1. https.enabled = false          → HTTP puro su httpPort
-//   2. https.enabled = true (ok cert) → HTTPS su https.port
-//       + AutoRedirectHttpPortToHttpsPort = true  → HTTP su httpPort redirige 301 a HTTPS
-//       + AutoRedirectHttpPortToHttpsPort = false → HTTP su httpPort serve l'app completa
-//   3. https.enabled = true (cert KO) → console.error + fallback a HTTP puro su httpPort
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // START HTTP/HTTPS SERVER SETUP
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Logica di avvio server in base alla configurazione ital8Conf.https.
+  //
+  // Scenari gestiti:
+  //   1. https.enabled = false          → HTTP puro su httpPort
+  //   2. https.enabled = true (ok cert) → HTTPS su https.port
+  //       + AutoRedirectHttpPortToHttpsPort = true  → HTTP su httpPort redirige 301 a HTTPS
+  //       + AutoRedirectHttpPortToHttpsPort = false → HTTP su httpPort serve l'app completa
+  //   3. https.enabled = true (cert KO) → console.error + fallback a HTTP puro su httpPort
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-servers = httpsManager.start(app, router, ital8Conf);
-serversStarted = true; // da ora gracefulShutdown può chiudere ordinatamente i server
+  servers = httpsManager.start(app, router, ital8Conf);
+  serversStarted = true; // da ora gracefulShutdown può chiudere ordinatamente i server
 
-// Avviso profilo demo (puramente segnaletico): emesso dopo l'avvio dei server.
-// Caricato solo quando demo === true → footprint zero in produzione.
-if (ital8Conf.demo) {
-  require('./core/demoNotice').printDemoBootWarning();
-}
+  // Avviso profilo demo (puramente segnaletico): emesso dopo l'avvio dei server.
+  // Caricato solo quando demo === true → footprint zero in produzione.
+  if (ital8Conf.demo) {
+    require('./core/demoNotice').printDemoBootWarning();
+  }
 
-// Avviso chiavi di sessione insicure (placeholder di default): puramente
-// segnaletico, non blocca l'avvio. Salta da sé se la sessione è disabilitata.
-require('./core/sessionSecurity').checkSessionKeys(ital8Conf);
+  // Avviso chiavi di sessione insicure (placeholder di default): puramente
+  // segnaletico, non blocca l'avvio. Salta da sé se la sessione è disabilitata.
+  require('./core/sessionSecurity').checkSessionKeys(ital8Conf);
 
 }// END startApp()
 
