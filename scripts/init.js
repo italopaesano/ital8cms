@@ -414,4 +414,10 @@ async function main() {
 }
 
 // Avvio script
-main()
+// .catch() di sicurezza: il try/catch interno di main() copre la FASE 1 in poi,
+// ma non la parte iniziale (askInstallProfile/handleReinit). Senza questo, una
+// loro rejection sarebbe una unhandledRejection. Qui: messaggio chiaro + exit 1.
+main().catch((error) => {
+  console.error(`[init] Errore fatale durante l'inizializzazione: ${error && error.stack ? error.stack : error}`)
+  process.exit(1)
+})

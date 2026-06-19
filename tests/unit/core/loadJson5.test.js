@@ -113,33 +113,78 @@ describe('loadJson5', () => {
     });
   });
 
-  // ─── Error handling ───────────────────────────────────────────────────────
+  // ─── Error handling (throw-only: loadJson5 NON stampa, lancia errori chiari) ──
 
   describe('error handling', () => {
     test('throws for non-existent file', () => {
-      const errorSpy = jest.spyOn(console, 'error').mockImplementation();
       expect(() => loadJson5('/nonexistent/file.json5')).toThrow();
-      errorSpy.mockRestore();
     });
 
     test('throws for invalid JSON5 syntax', () => {
       const filePath = writeFile('invalid.json5', '{invalid: json5: bad}');
-      const errorSpy = jest.spyOn(console, 'error').mockImplementation();
       expect(() => loadJson5(filePath)).toThrow();
+    });
+
+    test('file inesistente → messaggio "non trovato" + code ENOENT, nessun console.error', () => {
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      let caught;
+      try { loadJson5('/nonexistent/file.json5'); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(Error);
+      expect(caught.message).toContain('non trovato');
+      expect(caught.message).toContain('/nonexistent/file.json5');
+      expect(caught.code).toBe('ENOENT');
+      expect(errorSpy).not.toHaveBeenCalled(); // throw-only: la presentazione è del chiamante
       errorSpy.mockRestore();
     });
 
-    test('logs error details to console', () => {
-      const errorSpy = jest.spyOn(console, 'error').mockImplementation();
-      try {
-        loadJson5('/nonexistent/file.json5');
-      } catch (e) {
-        // expected
-      }
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[loadJson5]'),
-        expect.anything()
-      );
+    test('sintassi invalida → messaggio "sintassi JSON5 non valida", nessun console.error', () => {
+      const filePath = writeFile('invalid2.json5', '{invalid: json5: bad}');
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      let caught;
+      try { loadJson5(filePath); } catch (e) { caught = e; }
+      expect(caught).toBeInstanceOf(Error);
+      expect(caught.message).toContain('sintassi JSON5 non valida');
+      expect(caught.code).toBe('JSON5_PARSE_ERROR');
+      expect(errorSpy).not.toHaveBeenCalled();
+      errorSpy.mockRestore();
+    });
+
+    test('preserva l\'errore originale come cause', () => {
+      let caught;
+      try { loadJson5('/nonexistent/file.json5'); } catch (e) { caught = e; }
+      expect(caught.cause).toBeDefined();
+      expect(caught.cause.code).toBe('ENOENT');
+    });
+  });
+
+  // ─── warnConfigError (box [CONFIG] per i config critici al boot) ─────────────
+
+  describe('warnConfigError', () => {
+    test('è esportata come proprietà di loadJson5', () => {
+      expect(typeof loadJson5.warnConfigError).toBe('function');
+    });
+
+    test('stampa un box [CONFIG] con etichetta file e dettaglio (sintassi)', () => {
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const err = new Error('sintassi JSON5 non valida in foo.json5: JSON5: ... at line 2');
+      err.code = 'JSON5_PARSE_ERROR';
+      loadJson5.warnConfigError('foo.json5', err);
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const out = errorSpy.mock.calls[0][0];
+      expect(out).toContain('[CONFIG]');
+      expect(out).toContain('foo.json5');
+      expect(out).toContain('sintassi JSON5');
+      expect(out).toContain('Avvio interrotto');
+      errorSpy.mockRestore();
+    });
+
+    test('per ENOENT mostra il ramo "file non trovato"', () => {
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const err = new Error('file di configurazione non trovato: x.json5');
+      err.code = 'ENOENT';
+      loadJson5.warnConfigError('x.json5', err);
+      const out = errorSpy.mock.calls[0][0];
+      expect(out).toContain('non esiste nel percorso atteso');
       errorSpy.mockRestore();
     });
   });

@@ -488,6 +488,21 @@ module.exports = {
 
 ## 7. Ciclo di Vita Plugin
 
+> **Esecuzione asincrona (hardening boot, punto 2).** I hook di lifecycle
+> `loadPlugin()` / `installPlugin()` / `upgradePlugin()` possono essere `async` e
+> il framework li **attende (`await`)** durante l'avvio. Conseguenze per chi scrive
+> un plugin:
+> - il caricamento è **sequenziale e in ordine di dipendenza**: quando il tuo
+>   `loadPlugin()` viene eseguito, i plugin da cui dipendi sono già caricati e i
+>   loro oggetti condivisi sono disponibili (`pluginSys.getSharedObject(...)`);
+> - se il tuo hook **lancia o rigetta**, l'avvio si interrompe in modo pulito con
+>   `[BOOT] Avvio fallito: ...` ed exit 1 (errore **fatale al boot**, non più un
+>   `unhandledRejection` silenzioso): per i problemi non recuperabili, fallisci
+>   presto e con un messaggio chiaro;
+> - meccanica interna: il caricamento non avviene più nel **costruttore** di
+>   `pluginSys` ma nel metodo **`async initialize()`**, awaitato da `index.js`
+>   (`const pluginSys = new (...)(ital8Conf); await pluginSys.initialize();`).
+
 ### loadPlugin()
 
 Chiamata **ogni volta** che il server si avvia. Inizializza il plugin.

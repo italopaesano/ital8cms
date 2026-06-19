@@ -26,10 +26,22 @@ class pluginSys{
 
     this.#hooksPage = new Map();// new Map(['namelPlugin', new Map(['head', (passData) => {}],['body', ( passData ) => {} ])]);
     this.#routes = new Map();// mappa che conterrà come chiave il nome del plugin da caricare e come valore un array contenete tutti gli ogetti che rappresentano le rotte
+  }// fine costruttore — solo setup dei campi; il caricamento dei plugin è in initialize()
+
+  /**
+   * Carica, installa e aggiorna tutti i plugin attivi, risolvendo le dipendenze.
+   * Estratto dal costruttore (che non può essere async) per poter AWAITARE i
+   * lifecycle hook async dei plugin (loadPlugin/installPlugin/upgradePlugin).
+   * Va chiamato e awaitato SUBITO dopo la costruzione, prima di usare
+   * rotte/middleware/oggetti condivisi:
+   *     const pluginSys = new (require('./core/pluginSys'))(ital8Conf);
+   *     await pluginSys.initialize();
+   */
+  async initialize(){
 
     //function caricatePlugin( pluginName, pluginConfig, routes, hooksPage, objectToShareToWebPages, activePlugins ){// questa funzione caricherà e se necessario installeà il plugin passato
     // ATTENZIONE USO LA FUNZIONE FRECCIA PER MANTENERE il this locale , però la funzione freccia va dichiarata prima del suo utilizzo
-    const caricatePlugin = ( pluginName ) => { //, routes, hooksPage, objectToShareToWebPages, activePlugins ){/
+    const caricatePlugin = async ( pluginName ) => { //, routes, hooksPage, objectToShareToWebPages, activePlugins ){/
       //caricatePlugin = ( pluginName, pluginConfig, routes, hooksPage, objectToShareToWebPages, activePlugins ) => {// q
 
       // Calcola il percorso della cartella del plugin
@@ -64,7 +76,7 @@ class pluginSys{
 
         if( pluginConfig.isInstalled == 0 ){// allora il plugin è attivo ma non installto quindi bisogna istallarlo
           try {
-            plugin.installPlugin(this, pathPluginFolder);// installo il plugin passando pluginSys e path
+            await plugin.installPlugin(this, pathPluginFolder);// installo il plugin passando pluginSys e path
           } catch (installError) {
             logger.error('pluginSys', `Errore durante installazione plugin ${pluginName}`, installError);
             throw installError; // Rilancia per gestione esterna
@@ -92,7 +104,7 @@ class pluginSys{
 
           if (plugin.upgradePlugin) {
             try {
-              plugin.upgradePlugin(this, pathPluginFolder, oldVersion, newVersion);
+              await plugin.upgradePlugin(this, pathPluginFolder, oldVersion, newVersion);
               logger.info('pluginSys', `Upgrade ${pluginName} completato con successo`);
             } catch (upgradeError) {
               logger.error('pluginSys', `Errore durante upgrade plugin ${pluginName}`, upgradeError);
@@ -137,7 +149,7 @@ class pluginSys{
 
         // loadPluginn(); // viene chiamato dopo perchè durante il caricamento potrebbe acadere che abbia bisogno di librerie di altri plugin
         try {
-          plugin.loadPlugin(this, pathPluginFolder);// questo carica il plugin passando pluginSys e path
+          await plugin.loadPlugin(this, pathPluginFolder);// questo carica il plugin passando pluginSys e path
         } catch (loadError) {
           logger.error('pluginSys', `Errore durante caricamento plugin ${pluginName}`, loadError);
           throw loadError; // Rilancia per gestione esterna
@@ -269,7 +281,7 @@ class pluginSys{
         const dependencyList = new Map(Object.entries( pluginConfig.dependency ));
         if( dependencyList.size == 0  ){// allora il plugin non ha dipendenze è può essere caricato direttamente
           //console.log( dependencyList );
-          caricatePlugin( nameFile ) ; 
+          await caricatePlugin( nameFile ) ;
 
         }else{// il plugin ha dipendenze e bisogna fare in modo che queste 
 
@@ -361,15 +373,17 @@ class pluginSys{
     // this.#pluginsToActive --> plugin da attivare this.#activePlugins --> plugin attivi
 
     while( this.#pluginsToActive.size != 0 ){// finche ci sono elementi da attivare continua il ciclo
-      this.#pluginsToActive.forEach( ( dependency, nomePlugin ) => {//CONTROINTUITIVO -> valore chiave -> il valore viene primadella chiave 
+      // for...of (non forEach) per poter AWAITARE caricatePlugin in sequenza:
+      // forEach non attende le callback async e romperebbe l'ordine per dipendenze.
+      for( const [ nomePlugin, dependency ] of this.#pluginsToActive ){//CONTROINTUITIVO: il forEach originale dava (valore, chiave); qui (chiave, valore)
         //devo controllare se tutte le dipenze sono soddisfatte, cioè se tutti i moduli da cui dipende sono attivi
 
         if( isPluginDependenciesSatisfied( this.#activePlugins, dependency ) ){// se tutte le pipendenze sono presenti nei plugin gia attivi allora attiva anche questo plugin
 
-          caricatePlugin( nomePlugin ) ;// questa funzione attiverà il plugin ed aggiornerà la mappa con i plugin già attivati this.#activePlugin
+          await caricatePlugin( nomePlugin ) ;// questa funzione attiverà il plugin ed aggiornerà la mappa con i plugin già attivati this.#activePlugin
           this.#pluginsToActive.delete( nomePlugin );// dopo aver attivato il plugin lo rimuovo da gli elementi da attivare
         }
-      });
+      }
     }
 
     // controllo che le chiavi della mappa passate come dipendenze siano tutti presenti nella pluginList
@@ -391,7 +405,7 @@ class pluginSys{
 
     
 
-  }// END constructor()
+  }// END initialize()
 
   getMiddlewaresToLoad(){
     return this.#pluginsMiddlewares;

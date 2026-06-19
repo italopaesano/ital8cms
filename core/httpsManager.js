@@ -129,8 +129,17 @@ function setupHotReload(httpsServer, certPath, keyPath, caPath, ital8Conf) {
     }, debounceMs);
   };
 
-  fs.watch(certPath, reloadCerts);
-  if (caPath) fs.watch(caPath, reloadCerts);
+  // Aggancia un handler 'error' a ogni watcher PRIMA che possa emetterlo: senza,
+  // un errore dell'FSWatcher (file rimosso/rinominato, limite inotify raggiunto,
+  // ecc.) verrebbe rilanciato da Node come eccezione non catturata. L'hot reload
+  // che fallisce NON è fatale — il server continua a servire col certificato già
+  // caricato — quindi qui ci si limita a loggare un warning (no process.exit).
+  const certWatcher = fs.watch(certPath, reloadCerts);
+  certWatcher.on('error', (err) => console.warn(`[HTTPS] ⚠  Watcher certificato in errore (hot reload sospeso): ${err.message}`));
+  if (caPath) {
+    const caWatcher = fs.watch(caPath, reloadCerts);
+    caWatcher.on('error', (err) => console.warn(`[HTTPS] ⚠  Watcher CA in errore (hot reload sospeso): ${err.message}`));
+  }
 
   console.log(`[HTTPS] Hot reload attivo — debounce: ${debounceMs}ms`);
 }
@@ -291,6 +300,109 @@ function warnMissingCertificates(missingLabels, certConfPath, keyConfPath, httpP
 
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ERRORE DI BIND — PORTA PRIVILEGIATA (EACCES)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * Emette un box ASCII prominente quando un server non riesce a mettersi in
+ * ascolto perché la porta è privilegiata (< 1024) e il processo non ha i
+ * permessi necessari (errore di sistema EACCES). Stessa filosofia di
+ * warnMissingCertificates(): prominente, actionable, difficile da ignorare.
+ *
+ * A differenza del warning sui certificati (che fa fallback a HTTP), qui NON
+ * esiste un fallback sensato: se il bind fallisce il server non può servire.
+ * La funzione si limita a spiegare il problema; la decisione di terminare il
+ * processo (process.exit) spetta al chiamante (onListenError in start()).
+ *
+ * @param {number} port - Porta su cui il bind è fallito (es. 80, 443)
+ * @param {string} role - Ruolo del server, per il messaggio (es. 'HTTP', 'HTTPS')
+ */
+function warnPrivilegedPort(port, role) {
+  const line = '[SERVER] ' + '═'.repeat(58);
+  const lines = [
+    '',
+    line,
+    `[SERVER]  🔴  Impossibile avviare il server ${role}: porta ${port} riservata`,
+    line,
+    `[SERVER]    La porta ${port} è privilegiata (< 1024): il sistema operativo`,
+    '[SERVER]    ne consente il bind solo a processi con privilegi elevati (root)',
+    '[SERVER]    o con la capability CAP_NET_BIND_SERVICE.',
+    '[SERVER]    Errore di sistema: EACCES (permission denied).',
+    '[SERVER]',
+    '[SERVER]  Opzione A — usa una porta ≥ 1024 + reverse proxy (consigliato):',
+    '[SERVER]',
+    '[SERVER]    in ital8Config.json5:  "httpPort": 3000',
+    '[SERVER]    poi metti nginx/Caddy davanti a servire su 80/443.',
+    '[SERVER]',
+    '[SERVER]  Opzione B — concedi a Node il bind sulle porte basse (Linux):',
+    '[SERVER]',
+    "[SERVER]    sudo setcap 'cap_net_bind_service=+ep' $(which node)",
+    '[SERVER]    (da rieseguire dopo ogni aggiornamento di Node)',
+    '[SERVER]',
+    '[SERVER]  Opzione C — avvia con privilegi elevati (sconsigliato in produzione):',
+    '[SERVER]',
+    '[SERVER]    sudo npm start',
+    '[SERVER]',
+    '[SERVER]  ▶ Avvio interrotto (impossibile servire senza il bind della porta).',
+    line,
+    '',
+  ];
+  console.error(lines.join('\n'));
+}
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ERRORE DI BIND — PORTA GIÀ OCCUPATA (EADDRINUSE)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * Emette un box ASCII prominente quando un server non riesce a mettersi in
+ * ascolto perché la porta è già occupata da un altro processo (errore di
+ * sistema EADDRINUSE). Gemella di warnPrivilegedPort(): stessa filosofia,
+ * prominente e actionable.
+ *
+ * Mostra come individuare il processo che occupa la porta (lsof/ss/fuser),
+ * come liberarla, e come cambiare porta in ital8Config.json5. Come per la
+ * porta privilegiata, NON esiste fallback: la decisione di terminare il
+ * processo (process.exit) spetta al chiamante (onListenError in start()).
+ *
+ * @param {number} port - Porta su cui il bind è fallito (già in uso)
+ * @param {string} role - Ruolo del server, per il messaggio (es. 'HTTP', 'HTTPS')
+ */
+function warnPortInUse(port, role) {
+  const line = '[SERVER] ' + '═'.repeat(58);
+  const lines = [
+    '',
+    line,
+    `[SERVER]  🔴  Impossibile avviare il server ${role}: porta ${port} già in uso`,
+    line,
+    `[SERVER]    Un altro processo è già in ascolto sulla porta ${port}. Due strade:`,
+    '[SERVER]    liberare quella porta, oppure avviare ital8cms su una porta diversa.',
+    '[SERVER]',
+    '[SERVER]  Opzione A — scopri quale processo occupa la porta (Linux/macOS):',
+    '[SERVER]',
+    `[SERVER]    sudo lsof -i :${port}`,
+    `[SERVER]    sudo ss -ltnp 'sport = :${port}'`,
+    `[SERVER]    sudo fuser ${port}/tcp`,
+    '[SERVER]',
+    '[SERVER]  Opzione B — libera la porta terminando quel processo:',
+    '[SERVER]',
+    `[SERVER]    sudo fuser -k ${port}/tcp        # oppure: kill <PID> trovato sopra`,
+    '[SERVER]    (verifica prima che non sia un\'altra istanza di ital8cms da fermare)',
+    '[SERVER]',
+    '[SERVER]  Opzione C — usa un\'altra porta in ital8Config.json5:',
+    '[SERVER]',
+    '[SERVER]    "httpPort": 3001            // oppure  "https": { "port": ... }',
+    '[SERVER]',
+    '[SERVER]  ▶ Avvio interrotto (porta non disponibile).',
+    line,
+    '',
+  ];
+  console.error(lines.join('\n'));
+}
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // FUNZIONE PRINCIPALE
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -320,6 +432,24 @@ function start(app, router, ital8Conf) {
   // Array dei server creati, restituito al chiamante per il graceful shutdown
   const servers = [];
 
+  // ── Handler comune per gli errori di bind (evento 'error' di listen) ──────
+  // Senza un handler 'error' esplicito, un fallimento di listen() — porta
+  // privilegiata senza permessi (EACCES), porta già occupata (EADDRINUSE),
+  // indirizzo non valido, ecc. — verrebbe rilanciato da Node come eccezione
+  // NON catturata, crashando il processo con uno stack trace grezzo. Qui lo
+  // trasformiamo in un messaggio chiaro e in un'uscita pulita (process.exit(1)):
+  // un bind fallito non ha fallback sensato (senza porta non si può servire).
+  const onListenError = (err, port, role) => {
+    if (err && err.code === 'EACCES') {
+      warnPrivilegedPort(port, role);
+    } else if (err && err.code === 'EADDRINUSE') {
+      warnPortInUse(port, role);
+    } else {
+      console.error(`[SERVER] 🔴 Server ${role}: impossibile mettersi in ascolto sulla porta ${port} — ${(err && (err.code || err.message)) || 'errore sconosciuto'}`);
+    }
+    process.exit(1);
+  };
+
   // Registra la route ACME challenge nel router (prioritaria su koa-classic-server)
   setupAcmeChallengeRoute(router, ital8Conf);
 
@@ -345,6 +475,7 @@ function start(app, router, ital8Conf) {
         ital8Conf.httpPort
       );
       const httpServer = http.createServer(app.callback());
+      httpServer.on('error', (err) => onListenError(err, ital8Conf.httpPort, 'HTTP'));
       httpServer.listen(ital8Conf.httpPort, () => {
         console.log('server started on port: ' + ital8Conf.httpPort);
       });
@@ -365,6 +496,7 @@ function start(app, router, ital8Conf) {
       console.error('[HTTPS] Errore nel caricamento dei certificati: ' + certError.message);
       console.error('[HTTPS] Fallback: avvio in HTTP puro sulla porta ' + ital8Conf.httpPort);
       const httpServer = http.createServer(app.callback());
+      httpServer.on('error', (err) => onListenError(err, ital8Conf.httpPort, 'HTTP'));
       httpServer.listen(ital8Conf.httpPort, () => {
         console.log('server started on port: ' + ital8Conf.httpPort + '  (HTTP - HTTPS fallback)');
       });
@@ -377,6 +509,7 @@ function start(app, router, ital8Conf) {
 
     // ── Avvio server HTTPS ────────────────────────────────────────────────────
     const httpsServer = https.createServer(tlsConfig, app.callback());
+    httpsServer.on('error', (err) => onListenError(err, ital8Conf.https.port, 'HTTPS'));
     httpsServer.listen(ital8Conf.https.port, () => {
       console.log('server started on HTTPS port: ' + ital8Conf.https.port);
     });
@@ -391,6 +524,7 @@ function start(app, router, ital8Conf) {
     if (ital8Conf.https.AutoRedirectHttpPortToHttpsPort) {
       // Server HTTP minimale: redirect 301 → HTTPS (con gestione ACME challenge)
       const httpRedirectServer = createHttpRedirectServer(ital8Conf.https.port, ital8Conf);
+      httpRedirectServer.on('error', (err) => onListenError(err, ital8Conf.httpPort, 'HTTP (redirect 301)'));
       httpRedirectServer.listen(ital8Conf.httpPort, () => {
         console.log('HTTP port ' + ital8Conf.httpPort + ' → redirect 301 to HTTPS port ' + ital8Conf.https.port);
       });
@@ -398,6 +532,7 @@ function start(app, router, ital8Conf) {
     } else {
       // Server HTTP completo in parallelo all'HTTPS
       const httpServer = http.createServer(app.callback());
+      httpServer.on('error', (err) => onListenError(err, ital8Conf.httpPort, 'HTTP'));
       httpServer.listen(ital8Conf.httpPort, () => {
         console.log('server started on HTTP port: ' + ital8Conf.httpPort);
       });
@@ -408,6 +543,7 @@ function start(app, router, ital8Conf) {
 
     // ── HTTPS disabilitato: HTTP puro (comportamento originale) ───────────────
     const httpServer = http.createServer(app.callback());
+    httpServer.on('error', (err) => onListenError(err, ital8Conf.httpPort, 'HTTP'));
     httpServer.listen(ital8Conf.httpPort, () => {
       console.log('server started on port: ' + ital8Conf.httpPort);
     });
