@@ -62,7 +62,21 @@ cliBridge.start(ital8Conf, {
 });
 //const priorityMiddlewares(app); // carico i imidlware che vanno impostati in ordine preciso di caricamento
 
+// ── servers a livello di modulo: assegnato in startApp(), letto da gracefulShutdown() ──
+let servers = [];
+
+// L'INTERO boot vive in una funzione async: pluginSys.initialize() (caricamento dei
+// plugin) è asincrono e index.js è CommonJS (niente top-level await). startApp() è
+// invocata in fondo al file, dopo aver registrato gracefulShutdown e i signal handler;
+// un suo fallimento → messaggio [BOOT] + exit 1.
+async function startApp() {
+
 const pluginSys = new ( require("./core/pluginSys") )(ital8Conf); // carico il sistema di plugin e passo la configurazione per whitelist
+
+// Carica/installa/aggiorna i plugin risolvendo le dipendenze. await: i lifecycle hook
+// dei plugin (loadPlugin/installPlugin/upgradePlugin) possono essere async → questo
+// elimina alla radice la classe di unhandledRejection da caricamento plugin.
+await pluginSys.initialize();
 
 // Inietta il callback di restart nel pluginSys: i plugin potranno chiamare
 // pluginSys.requestRestart({reason}) per richiedere un riavvio pulito di ital8cms
@@ -337,7 +351,7 @@ if(ital8Conf.enableAdmin){// SE LA SEZIONE DI ADMIN È ABBILITATA
 //   3. https.enabled = true (cert KO) → console.error + fallback a HTTP puro su httpPort
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-const servers = httpsManager.start(app, router, ital8Conf);
+servers = httpsManager.start(app, router, ital8Conf);
 serversStarted = true; // da ora gracefulShutdown può chiudere ordinatamente i server
 
 // Avviso profilo demo (puramente segnaletico): emesso dopo l'avvio dei server.
@@ -349,6 +363,8 @@ if (ital8Conf.demo) {
 // Avviso chiavi di sessione insicure (placeholder di default): puramente
 // segnaletico, non blocca l'avvio. Salta da sé se la sessione è disabilitata.
 require('./core/sessionSecurity').checkSessionKeys(ital8Conf);
+
+}// END startApp()
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // END HTTP/HTTPS SERVER SETUP
@@ -422,3 +438,15 @@ function gracefulShutdown(signal, opts = {}) {
 
 process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// AVVIO APPLICAZIONE
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// startApp() è async: un fallimento durante il boot diventa un rigetto, qui catturato
+// per un messaggio [BOOT] chiaro + exit 1. (La rete processSafetyNet fa comunque da
+// backstop per uncaughtException/unhandledRejection non previsti.)
+startApp().catch((err) => {
+  console.error('[BOOT] Avvio fallito:', (err && err.stack) ? err.stack : err);
+  process.exit(1);
+});
