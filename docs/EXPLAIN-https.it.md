@@ -1,14 +1,16 @@
 <!-- ital8doc v1-1 · tipo: EXPLAIN · lang: it · rev: 1 · ref -->
 > 🌐 Italian reference edition (always up to date). English `EXPLAIN-https.md` is a stub until release.
-# HTTPS — Deep-dive tecnico (teoria + soluzione reverse proxy)
+# HTTPS — Deep-dive tecnico (teoria + ital8cms come terminatore TLS)
 
-> Guida operativa (configurazione, campi, scenari, Strada B): vedi [`https.it.md`](./https.it.md).
+> Guida operativa (configurazione, campi, scenari, ricette): vedi [`https.it.md`](./https.it.md).
 
-Questo documento parte dalla **teoria** — cosa sono i certificati HTTPS, come si generano e come si rinnovano periodicamente — e poi la applica alla **Strada A** (TLS terminato da un reverse proxy davanti a ital8cms), con un focus sia **generale** sia su **NixOS**. Per la configurazione pratica del blocco `https` e per la Strada B (ital8cms che termina il TLS direttamente) vedi la guida.
+Questo documento parte dalla **teoria** — cosa sono i certificati HTTPS, come si generano e come si rinnovano periodicamente — e poi la applica allo scenario **di riferimento** di ital8cms: servire un **sito web ufficiale terminando il TLS direttamente sulle porte 80 e 443** (la **Strada B**). La soluzione con **reverse proxy** (Strada A) è trattata in coda come **opzione secondaria**. Per la configurazione pratica del blocco `https` vedi la guida.
 
 ## Perché è fatto così
 
-La guida [`https.it.md`](./https.it.md) risponde a *"come configuro HTTPS?"*. Questo EXPLAIN risponde a *"perché funziona così e quale architettura conviene?"*. La Strada A (reverse proxy) è l'architettura "da manuale" del web moderno: vale la pena capirla a fondo perché separa nettamente due responsabilità — **terminare il TLS** (un problema crittografico, standardizzato, delegabile a software specializzato) e **generare la risposta HTTP** (il lavoro di ital8cms). Capire dove finisce una e inizia l'altra rende prevedibili sicurezza, rinnovo dei certificati e debugging.
+La guida [`https.it.md`](./https.it.md) risponde a *"come configuro HTTPS?"*. Questo EXPLAIN risponde a *"perché funziona così e cosa succede davvero sotto il cofano?"*.
+
+Lo scenario che privilegiamo è quello in cui **ital8cms è il web server ufficiale del sito**: ascolta direttamente su 80 e 443, presenta lui stesso il certificato e parla TLS col mondo, senza alcun componente davanti. È il caso d'uso più diretto ("installo ital8cms e servo il mio sito") ed è quello attorno a cui è progettato `core/httpsManager.js`. Capire come ital8cms **termina il TLS internamente** — i due server, l'hot reload, l'endpoint ACME, la gestione degli errori di bind — rende prevedibili sicurezza, rinnovo dei certificati e debugging.
 
 ## Teoria — cosa sono i certificati HTTPS
 
@@ -61,7 +63,7 @@ Client                                  Server
   │ ═══ dati applicativi cifrati (HTTP) ══ │
 ```
 
-Due punti chiave: **(a)** la chiave privata serve ad **autenticare** il server durante l'handshake (firma), non a cifrare i dati di massa (lo fanno chiavi di sessione simmetriche derivate al volo); **(b)** **SNI** permette a un singolo IP/porta di servire molti domini, scegliendo il certificato giusto in base al nome richiesto — è ciò che rende possibile un reverse proxy con molti virtual host.
+Due punti chiave: **(a)** la chiave privata serve ad **autenticare** il server durante l'handshake (firma), non a cifrare i dati di massa (lo fanno chiavi di sessione simmetriche derivate al volo); **(b)** **SNI** permette a un singolo IP/porta di servire molti domini, scegliendo il certificato giusto in base al nome richiesto.
 
 ### Tipi di certificato
 
@@ -91,7 +93,7 @@ Storicamente: si genera la coppia di chiavi e una **CSR** (Certificate Signing R
 | **DNS-01** | crei un record **TXT** `_acme-challenge.dominio` con un valore derivato dal token; la CA interroga il DNS | nessuna porta in ingresso; **supporta i wildcard** (`*.dominio`); richiede automazione DNS (API del provider) |
 | **TLS-ALPN-01** | validazione via TLS sulla **porta 443** con un protocollo ALPN dedicato | usata da alcuni proxy (Caddy/Traefik); niente porta 80 |
 
-ital8cms implementa il lato server di **HTTP-01** (endpoint `/.well-known/acme-challenge/:token`, vedi guida) per lo scenario in cui è esso stesso il webserver. Con un reverse proxy o con DNS-01 quell'endpoint non serve.
+ital8cms implementa il lato server di **HTTP-01** (endpoint `/.well-known/acme-challenge/:token`): è esattamente ciò che serve nella Strada B, dove ital8cms è il webserver su :80 (vedi *Moduli interni*).
 
 ### Perché il rinnovo è *periodico*
 
@@ -113,97 +115,121 @@ timer/cron  →  il client ACME controlla i giorni residui
 
 Su NixOS non si scrive un cron: `security.acme` genera un **systemd timer per dominio** che esegue lego e rinnova in automatico.
 
-## Architettura — la soluzione reverse proxy (Strada A)
+## Architettura — ital8cms come terminatore TLS (Strada B)
 
-### TLS termination
-
-Nella Strada A un **reverse proxy** (nginx, Caddy, …) si occupa di **terminare il TLS**: parla **HTTPS** verso Internet e inoltra **HTTP in chiaro** al backend su una rete locale fidata (il loopback). ital8cms non vede mai né il TLS né la chiave privata.
+Nello scenario di riferimento ital8cms **termina il TLS in proprio**: detiene il certificato e la chiave, parla HTTPS verso Internet su :443 e gestisce il redirect e le challenge ACME su :80. Non c'è alcun componente davanti.
 
 ```
-                         :443 (TLS)            :3000 (HTTP, loopback)
-   Internet  ──────────▶  reverse proxy  ──────────────────▶  ital8cms
-   (browser)   HTTPS       (nginx/Caddy)      HTTP in chiaro    (Node/Koa)
-                              │  detiene cert + chiave privata
-                              │  gestisce ACME / rinnovo
-                         :80 ─┘  redirect 301 → 443
+                 :443 (TLS)                          ital8cms (Node/Koa)
+   Internet ───────────────────▶  ┌───────────────────────────────────────┐
+   (browser)   HTTPS              │  https.Server  ← app.callback()        │  app Koa completa
+                                  │     ▲  cert + chiave private in memoria │
+                 :80 (HTTP) ─────▶│  http.Server (redirect 301 → 443)      │  + ACME challenge
+                                  │        e /.well-known/acme-challenge/   │  servito prima del 301
+                                  └───────────────────────────────────────┘
 ```
 
-### Perché conviene
+**Due server, una sola app.** Con `enabled: true` + `AutoRedirectHttpPortToHttpsPort: true`, `httpsManager.start()` crea:
 
-- **Separazione delle responsabilità:** il proxy è software **specializzato** in TLS — cifrari moderni, **TLS 1.3**, **OCSP stapling**, **HTTP/2 e HTTP/3**, ripresa di sessione. ital8cms resta concentrato sul generare HTML/JSON.
-- **Superficie ridotta e nessun privilegio:** ital8cms gira su una porta **non privilegiata** (3000) come utente normale; **non** tocca la chiave privata. Se l'app fosse compromessa, la chiave TLS resta fuori dalla sua portata.
-- **Gestione centralizzata dei certificati:** un solo punto che ottiene e rinnova i certificati di **molti** siti (virtual host via **SNI**).
-- **Funzioni extra "gratis":** caching, compressione, rate limiting/WAF, load balancing, terminazione di più protocolli.
-- **Su NixOS è dichiarativo e self-healing:** `services.nginx.enableACME` + `security.acme` ottengono il certificato, fanno il redirect 80→443 e **rinnovano ricaricando nginx** senza alcuna logica applicativa.
+- un **`https.Server` su :443** che monta l'**app Koa completa** — costruito come `https.createServer(tlsConfig, app.callback())`;
+- un **`http.Server` su :80** *minimale* (`createHttpRedirectServer`) che serve le challenge ACME e poi fa **redirect 301** verso HTTPS.
 
-### Trade-off (rispetto alla Strada B)
+L'uso di **`app.callback()`** (invece di `app.listen()`) è ciò che permette di montare la **stessa** istanza Koa sia su un server HTTP sia su uno HTTPS: l'app è disaccoppiata dal trasporto.
 
-- **Un hop in più:** trascurabile sul loopback.
-- **TLS non end-to-end fino all'app:** il tratto proxy→app è in chiaro. Sul loopback è accettabile; in reti non fidate si **ri-cifra** verso il backend (`proxy_pass https://…`).
-- **L'app deve fidarsi degli header inoltrati:** dietro un proxy, schema reale (`https`) e IP del client viaggiano in header `X-Forwarded-*` — vanno trattati con cura (vedi *Sicurezza* e *Applicazione a ital8cms*).
+**Vantaggio nativo della terminazione diretta: il client reale è visibile.** Poiché è ital8cms stesso a chiudere la connessione TCP/TLS del browser, dentro i route handler `ctx.ip` è l'**IP reale del client**, `ctx.secure` è `true` e `ctx.protocol` è `https` — **senza** bisogno di `app.proxy` né di fidarsi di header `X-Forwarded-*`. È una differenza concreta rispetto alla Strada A (dove invece quegli header diventano necessari, vedi in coda): logging, plugin che chiavano sull'IP (es. `rateLimiter`) e costruzione di URL assoluti funzionano correttamente da subito.
 
-## Applicazione a ital8cms — generale
+## Moduli interni di `httpsManager` (come funziona davvero)
 
-### Configurazione
+Tutto vive in `core/httpsManager.js`, esportato come `start(app, router, ital8Conf)` e chiamato da `index.js`.
 
-ital8cms si mette in HTTP puro e lascia tutto il TLS al proxy:
+### Avvio e caricamento certificati — `start()`
 
-```json5
-// ital8Config.json5
-"httpPort": 3000,
-"https": { "enabled": false }
+1. **Registra la route ACME** nel router Koa (`setupAcmeChallengeRoute`) **sempre e per prima**, così è prioritaria sul static server.
+2. **Risolve i percorsi** `certFile`/`keyFile`/`caFile` (assoluti o relativi alla root del progetto).
+3. **Pre-controlla l'esistenza** dei file con `fs.existsSync` *prima* di leggerli, distinguendo se manca il certificato, la chiave o entrambi → box `warnMissingCertificates` mirato.
+4. **Carica i certificati** componendo `tlsConfig` con `{ ...tlsOptions, cert, key, ca }`: lo spread di `tlsOptions` è messo **prima** di cert/key/ca, così i file hanno sempre la precedenza e non possono essere sovrascritti da opzioni avanzate.
+5. **Analizza il certificato** (`analyzeCert`): scadenza, soglie warning/critical, self-signed.
+6. **Avvia** `https.Server` (:443) e, in base ad `AutoRedirectHttpPortToHttpsPort`, il server HTTP di redirect (:80) **oppure** un secondo `http.Server` con l'app completa.
+
+**Due fallback distinti (entrambi non bloccanti):** se i file **mancano** → HTTP puro su `httpPort` (con la route ACME già attiva, così la **prima emissione** può comunque avvenire); se la **lettura** fallisce (permessi, file corrotto) → stesso fallback con messaggio dedicato. In entrambi i casi il sito resta su, in HTTP.
+
+### Hot reload senza riavvio — `setupHotReload()`
+
+Il cuore della convivenza con il rinnovo periodico. `fs.watch` osserva il `certFile` (e il `caFile` se presente); a ogni evento:
+
+- **debounce** (`hotReload.debounceMs`, default 2000 ms) — un client come certbot scrive `fullchain.pem` e `privkey.pem` in **due operazioni separate**: il debounce evita di ricaricare a metà scrittura;
+- ri-legge cert+key+ca e chiama **`httpsServer.setSecureContext(newContext)`** → il certificato viene sostituito **a caldo sul server live**: le connessioni in corso non vengono toccate, i nuovi handshake usano già il nuovo certificato. **Zero downtime, nessun riavvio.**
+
+Si osserva il `certFile` (non la chiave) perché un rinnovo riscrive **sempre** il certificato; la chiave viene comunque riletta insieme. Gli errori dell'`FSWatcher` (file rinominato/rimosso, limite inotify) sono gestiti con un handler `'error'` → **warning non-fatale**: l'hot reload si sospende ma il server continua a servire con il certificato già in memoria (mai un crash).
+
+> ⚠️ **Caveat inotify (importante su NixOS):** `fs.watch` segue l'inode del file. Se il rinnovo **sostituisce** il file con un *rename atomico* (comportamento tipico di lego/`security.acme`) anziché riscriverlo in place, il watch sull'inode vecchio può **smettere di emettere** dopo il primo rinnovo (il watcher logga il warning e **non riarma**). Conseguenza pratica: l'hot reload potrebbe funzionare una volta e poi tacere. La rete di sicurezza è un **restart pilotato dal rinnovo** (vedi *Regolazione & estensione → NixOS*).
+
+### Endpoint ACME HTTP-01 — `setupAcmeChallengeRoute()` + `createHttpRedirectServer()`
+
+Il token va servito in **entrambe** le modalità HTTP, perciò esistono due punti di servizio che leggono dalla stessa directory `{webroot}/.well-known/acme-challenge/` (`getChallengeDir`):
+
+- una **route Koa** `/.well-known/acme-challenge/:token` (rilevante quando `AutoRedirect: false`, cioè l'app completa è anche su :80);
+- un controllo **dentro il server di redirect** che, se l'URL inizia per `/.well-known/acme-challenge/`, **serve il token prima** di emettere il 301 (rilevante quando `AutoRedirect: true`).
+
+In entrambi i casi `path.basename` neutralizza i path-traversal (token tipo `../../etc/passwd`) e la directory viene auto-creata se assente. Risultato: la challenge HTTP-01 funziona **sia** con il redirect attivo **sia** con l'app completa su :80.
+
+### Errori di bind — `onListenError()`
+
+Rilevante proprio perché la Strada B usa **porte privilegiate**. Su ogni server, **prima** di `listen()`, viene agganciato un handler `'error'`: senza, un fallimento di `listen()` verrebbe rilanciato da Node come **eccezione non catturata** (crash con stack grezzo). Lo smistamento per `err.code`:
+
+- `EACCES` (porta `< 1024` senza permessi) → box `warnPrivilegedPort` (è il fallimento tipico di chi avvia su 80/443 senza la capability);
+- `EADDRINUSE` (porta occupata) → box `warnPortInUse`;
+- altro → `console.error` di una riga.
+
+In tutti i casi **uscita pulita `process.exit(1)`**, mai uno stack trace. Niente fallback: senza il bind non si può servire.
+
+## Regolazione & estensione — Strada B in produzione
+
+### Generale (certbot e affini)
+
+- **Emissione/rinnovo via HTTP-01 webroot servito da ital8cms:** `acmeChallenge: { enabled: true, webroot: "/var/www/acme" }`; `certbot certonly --webroot -w /var/www/acme -d example.com`. ital8cms serve i token su :80 anche in modalità redirect.
+- **Rinnovo:** affidato al timer/cron di certbot; con `hotReload` attivo i nuovi file vengono ricaricati senza riavvio.
+- **Ciclo di vita alla prima emissione:** al primo boot senza certificato ital8cms parte in HTTP puro **con la route ACME già attiva** → si emette il certificato → **un riavvio** porta a HTTPS+redirect+hotReload → da lì i rinnovi sono automatici.
+- **Porte privilegiate (Linux non-NixOS):** `sudo setcap 'cap_net_bind_service=+ep' $(which node)` (da rieseguire dopo ogni update di Node) — oppure si passa alla Strada A.
+
+### NixOS (focus)
+
+La ricetta completa (modulo **`ital8cms-https.nix`**, utente/gruppo/servizio `ital8cms`) è nella guida [`https.it.md`](./https.it.md). Qui il **perché** delle scelte chiave:
+
+- **Porte privilegiate → `AmbientCapabilities = [ "CAP_NET_BIND_SERVICE" ]`, non `setcap`.** Su NixOS il binario `node` vive in `/nix/store` (immutabile, e il path **cambia a ogni aggiornamento**): un `setcap` sullo store sarebbe sbagliato e non persistente. La capability va concessa **al processo del servizio** in modo dichiarativo nel unit systemd (riapplicata a ogni `nixos-rebuild`); `CapabilityBoundingSet` la restringe a quella sola.
+- **`security.acme` = lego + systemd timer per dominio:** ottenimento e **rinnovo automatico** senza cron scritto a mano.
+- **Tipo di challenge — DNS-01 consigliato in Strada B.** Con HTTP-01 webroot c'è un *chicken-and-egg*: per validare, lego ha bisogno che ital8cms sia **già in ascolto su :80**. Per i **rinnovi** è sempre vero; per la **prima emissione** su un `nixos-rebuild` pulito conviene ordinare `acme-<dominio>.service` con `after/wants = [ "ital8cms.service" ]` (se fallisce, il timer riprova). **DNS-01** (`dnsProvider`) elimina del tutto la dipendenza dalla porta 80 e supporta i wildcard → più pulito quando è ital8cms a fare da webserver.
+- **Permessi per leggere `key.pem`:** `/var/lib/acme/<dominio>/key.pem` è `640` di proprietà di `acme`; impostando `security.acme.certs.<dominio>.group = "ital8cms"` il processo ital8cms può leggerlo (stesso schema che NixOS usa per nginx). Su NixOS la chiave si chiama **`key.pem`**, non `privkey.pem`.
+- **Rinnovo → ricarica:** **hot reload** come percorso primario (zero downtime). Visto il *caveat inotify* sopra, come rete di sicurezza aggiungi `security.acme.certs.<dominio>.reloadServices = [ "ital8cms.service" ]`: NixOS esegue `try-reload-or-restart` e, non avendo ital8cms un `ExecReload`, fa un **restart breve** ma garantito. Trade-off consapevole: zero downtime (hot reload) vs ricarica garantita (restart).
+
+## Sicurezza (Strada B)
+
+Il trade-off centrale della terminazione diretta: **la chiave privata è caricata nel processo ital8cms** (letta con `fs.readFileSync` al boot e tenuta in memoria). In Strada A, invece, la chiave non è mai vista dall'app. Per la maggior parte dei siti singoli è un compromesso accettabile, ma va mitigato:
+
+- **Processo a privilegio minimo:** utente dedicato non-root, **solo** `CAP_NET_BIND_SERVICE`, e hardening systemd (`NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `ReadWritePaths` ristretto alla sola root del progetto).
+- **Permessi dei file:** chiave `640`, leggibile solo da `acme:ital8cms`; mai world-readable.
+- **Redirect 80→443:** integrato (`AutoRedirectHttpPortToHttpsPort`), nessun contenuto servito in chiaro.
+- **HSTS:** in Strada B **non c'è un proxy** che lo inietti, quindi `Strict-Transport-Security` va aggiunto da ital8cms — il modo pulito è un **middleware di plugin** (`getMiddlewareToAdd`) che setta l'header sulle risposte. Da valutare insieme a preload/`includeSubDomains`.
+- **Chiavi di sessione:** ricordarsi di sostituire i placeholder in produzione (`core/sessionSecurity.js` avvisa al boot) — vedi [`deployment.it.md`](./deployment.it.md).
+
+## Strada A (opzione secondaria) — reverse proxy
+
+Quando **non** si vuole che ital8cms tocchi il TLS — più siti sullo stesso host, requisiti TLS avanzati, o policy che impone di tenere la chiave fuori dall'app — si mette un **reverse proxy** (nginx/Caddy) davanti: il proxy termina il TLS su :443 e inoltra **HTTP in chiaro** a ital8cms su `127.0.0.1:3000` (`https.enabled: false`).
+
+```
+   Internet ──:443 TLS──▶ reverse proxy ──:3000 HTTP (loopback)──▶ ital8cms
+                          detiene cert + chiave; gestisce ACME/rinnovo
 ```
 
-Con `https.enabled: false`, `httpsManager.start()` avvia **solo** un server HTTP su `httpPort` (nessuna analisi certificato, nessun hot reload, nessun endpoint ACME: li gestisce il proxy). Idealmente fai il bind sul **loopback** (`127.0.0.1`) così l'app non è raggiungibile direttamente da Internet, ma solo tramite il proxy.
+**Quando preferirla:** separazione netta dei ruoli (la chiave non è mai nell'app), molti domini dietro un unico proxy (SNI), funzioni di edge (caching, HTTP/2-3, OCSP stapling, WAF). **Trade-off:** un hop in più (trascurabile su loopback) e l'app deve **fidarsi degli header inoltrati** per conoscere schema e IP reali.
 
-### Inoltro degli header — nota importante (`app.proxy`)
+### Nota `app.proxy` (specifica della Strada A)
 
-Il proxy inoltra l'identità della richiesta originale:
+Dietro un proxy, schema reale e IP del client viaggiano in header `X-Forwarded-*`. ⚠️ **ital8cms (in `index.js`) non imposta `app.proxy = true`**: di default Koa **non** si fida di quegli header → `ctx.protocol` resta `http`, `ctx.secure` è `false`, `ctx.ip` è l'IP del proxy (`127.0.0.1`). Per farli onorare servirebbe `app.proxy = true` (idealmente con whitelist di IP fidati) — **da abilitare solo dietro un proxy fidato**, mai su un'app esposta direttamente (gli header sarebbero falsificabili). Questo problema **non esiste in Strada B**, dove il client reale è visibile nativamente.
 
-```nginx
-proxy_set_header Host              $host;
-proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-proxy_set_header X-Forwarded-Proto $scheme;   # "https"
-```
+### NixOS — modulo `ital8cms-proxy.nix`
 
-⚠️ **ital8cms (in `index.js`) non imposta `app.proxy = true`.** Di conseguenza Koa, per default, **non si fida** degli header `X-Forwarded-*`: dietro il proxy `ctx.protocol` resta `'http'`, `ctx.secure` è `false` e `ctx.ip` è l'**IP del proxy** (`127.0.0.1`), non quello del client reale. Conseguenze da tenere presenti:
-
-- Qualsiasi logica che dipende dall'**IP del client** (logging, e plugin che chiavano sull'IP come `rateLimiter`) vedrebbe l'IP del proxy.
-- Qualsiasi logica che dipende dallo **schema** (`ctx.secure`, costruzione di URL assoluti `https`, cookie `Secure`) vedrebbe `http`.
-
-Per far sì che Koa onori gli `X-Forwarded-*` occorrerebbe abilitare `app.proxy = true` (e idealmente restringere gli IP fidati). **Questa guida non modifica il codice**: lo segnaliamo come consapevolezza architetturale e come possibile tuning futuro (vedi *Limitazioni*). Finché `app.proxy` resta `false`, abilitalo solo se davanti c'è davvero un proxy fidato — mai su un'app esposta direttamente, perché gli header sarebbero falsificabili dal client.
-
-### Esempio nginx (generale)
-
-```nginx
-# redirect tutto l'HTTP verso HTTPS
-server {
-  listen 80;
-  server_name example.com;
-  location / { return 301 https://$host$request_uri; }
-}
-
-server {
-  listen 443 ssl http2;
-  server_name example.com;
-
-  ssl_certificate     /etc/letsencrypt/live/example.com/fullchain.pem;
-  ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
-
-  location / {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_set_header Host              $host;
-    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-  }
-}
-```
-
-Il certificato e il suo rinnovo (certbot, acme.sh, …) sono **interamente fuori da ital8cms**: il client ACME rinnova e **ricarica nginx** (`nginx -s reload`).
-
-## Applicazione a ital8cms — NixOS
-
-Su NixOS la Strada A è particolarmente pulita: nginx + `security.acme` rendono ottenimento, redirect e **rinnovo automatico** completamente dichiarativi. Modulo dedicato `ital8cms-proxy.nix`, importato da `configuration.nix` (`imports = [ ./ital8cms-proxy.nix ];`):
+Su NixOS la Strada A è particolarmente pulita: nginx + `security.acme` rendono ottenimento, redirect 80→443 e **rinnovo automatico (con reload di nginx)** completamente dichiarativi. Importa il modulo da `configuration.nix` (`imports = [ ./ital8cms-proxy.nix ];`):
 
 ```nix
 # ital8cms-proxy.nix
@@ -259,38 +285,18 @@ in {
 }
 ```
 
-Punti notevoli rispetto alla Strada B:
-
-- **Niente `CAP_NET_BIND_SERVICE`:** ital8cms sta su 3000, solo nginx tocca 80/443.
-- **`recommendedProxySettings = true`** imposta automaticamente gli header `X-Forwarded-*` (resta valida la nota su `app.proxy` lato ital8cms).
-- **Rinnovo automatico:** `security.acme` installa il systemd timer; con `enableACME` NixOS **ricarica nginx** a ogni rinnovo (nessun `reloadServices` da scrivere a mano). I certificati vivono in `/var/lib/acme/<dominio>/` e il modulo aggiunge nginx al gruppo `acme` per leggerli.
-
-## Sicurezza
-
-- **Redirect 80→443** (`forceSSL` / il `server` di redirect): nessun contenuto servito in chiaro.
-- **TLS moderno:** `recommendedTlsSettings` (TLS 1.2/1.3, cifrari forti, OCSP stapling). Evita protocolli/cifrari legacy.
-- **HSTS:** aggiungi `Strict-Transport-Security` (es. via `extraConfig` del virtual host) per forzare HTTPS nei browser dopo la prima visita.
-- **Chiave privata isolata:** nella Strada A la chiave sta **solo** sul proxy; ital8cms non vi accede mai — riduzione netta della superficie d'attacco.
-- **Header inoltrati:** `app.proxy = true` (se mai abilitato) va usato **solo** dietro un proxy fidato; diversamente un client potrebbe falsificare `X-Forwarded-Proto`/`X-Forwarded-For`.
-- **Cookie:** per cookie `Secure` dietro proxy serve che l'app sappia di essere in HTTPS (di nuovo `app.proxy` + `X-Forwarded-Proto`). La sessione di ital8cms usa già `HttpOnly` e `SameSite=lax` (vedi `core/priorityMiddlewares/koaSession.json5`).
-
-## Regolazione & estensione
-
-- **Più siti:** un solo proxy con molti `virtualHosts`/`server` (SNI) può servire decine di domini, ciascuno con il proprio certificato e backend.
-- **Wildcard:** per `*.example.com` usa **DNS-01** (`security.acme.certs.<dominio>.dnsProvider`), unica challenge che li supporta.
-- **HTTP/2 e HTTP/3:** abilitabili a livello di proxy senza toccare ital8cms.
-- **Caddy come alternativa a nginx:** HTTPS automatico "out of the box" (gestisce ACME da sé), configurazione minima; stesso schema di TLS termination + `reverse_proxy 127.0.0.1:3000`.
-- **Reti non fidate proxy↔app:** ri-cifra verso il backend (`proxy_pass https://…`) se il tratto interno non è il loopback.
+Note: niente `CAP_NET_BIND_SERVICE` (solo nginx tocca 80/443); `recommendedProxySettings` imposta gli `X-Forwarded-*` (resta valida la nota su `app.proxy` lato ital8cms); con `enableACME` NixOS **ricarica nginx** a ogni rinnovo, senza `reloadServices` da scrivere a mano.
 
 ## Limitazioni & sviluppi futuri
 
-- **`app.proxy` non impostato:** dietro reverse proxy, IP client e schema non sono visti correttamente da ital8cms finché `app.proxy = true` non viene abilitato in `index.js`. Possibile evoluzione: esporlo come flag in `ital8Config.json5` (con whitelist di IP fidati). Per ora è una scelta consapevole documentata qui.
-- **Hint generici nei messaggi del core:** i box di `httpsManager` suggeriscono `certbot renew` / `setcap` (Debian-centrici); gli equivalenti NixOS sono nella guida. Allineamento dei messaggi: miglioria futura.
+- **`app.proxy` non impostato:** rilevante **solo** in Strada A; in Strada B il client reale è già visibile. Possibile evoluzione: esporre `app.proxy` come flag in `ital8Config.json5` (con whitelist di IP fidati), utile a chi sceglie il reverse proxy.
+- **HSTS non integrato:** in Strada B va aggiunto via middleware di plugin; un eventuale toggle nativo (header di sicurezza) è una miglioria futura.
+- **Hint generici nei messaggi del core:** i box di `httpsManager` suggeriscono `certbot renew` / `setcap` (Debian-centrici); gli equivalenti NixOS sono qui e nella guida. Allineamento dei messaggi: miglioria futura.
 - **Configurazione via variabili d'ambiente:** vedi la nota in [`deployment.it.md`](./deployment.it.md) (porta/HTTPS da env) — utile per containerizzazione.
 
 ## Riferimenti
 
-- Guida operativa (campi, scenari, Strada B): [`https.it.md`](./https.it.md)
+- Guida operativa (campi, scenari, ricette Strada B/A): [`https.it.md`](./https.it.md)
 - Deploy in produzione: [`deployment.it.md`](./deployment.it.md)
 - Implementazione: [`core/httpsManager.js`](../core/httpsManager.js)
 - RFC 8555 (ACME), documentazione Let's Encrypt, NixOS `security.acme` / `services.nginx`
