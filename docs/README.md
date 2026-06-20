@@ -10,7 +10,8 @@ Indice della documentazione. La guida operativa per l'AI e l'architettura in sin
 ## Guide
 
 - [`deployment.it.md`](./deployment.it.md) — deploy in produzione (checklist, PM2, reverse proxy)
-- [`https.it.md`](./https.it.md) — configurazione HTTPS (scenari, Let's Encrypt, self-signed)
+- [`https.it.md`](./https.it.md) — configurazione HTTPS (scenari, Let's Encrypt, Strada B/A, NixOS, self-signed)
+- [`EXPLAIN-https.it.md`](./EXPLAIN-https.it.md) — deep-dive HTTPS: teoria (certificati, ACME, rinnovo periodico) + soluzione reverse proxy (generale e NixOS)
 - [`testing.it.md`](./testing.it.md) — strategia e convenzioni di test
 - [`demo-profile.it.md`](./demo-profile.it.md) — profilo di installazione demo
 - [`roadmap.it.md`](./roadmap.it.md) — miglioramenti e lavori pianificati
