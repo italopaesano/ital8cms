@@ -2,9 +2,9 @@
 > 🌐 Italian reference edition (always up to date). English `EXPLAIN-https.md` is a stub until release.
 # HTTPS — Deep-dive tecnico (teoria + ital8cms come terminatore TLS)
 
-> Guida operativa (configurazione, campi, scenari, ricette): vedi [`https.it.md`](./https.it.md).
+> Guida operativa (configurazione, campi, scenari, ricette sintetiche): vedi [`https.it.md`](./https.it.md).
 
-Questo documento parte dalla **teoria** — cosa sono i certificati HTTPS, come si generano e come si rinnovano periodicamente — e poi la applica allo scenario **di riferimento** di ital8cms: servire un **sito web ufficiale terminando il TLS direttamente sulle porte 80 e 443** (la **Strada B**). La soluzione con **reverse proxy** (Strada A) è trattata in coda come **opzione secondaria**. Per la configurazione pratica del blocco `https` vedi la guida.
+Questo documento parte dalla **teoria** — cosa sono i certificati HTTPS, come si generano e come si rinnovano periodicamente — e poi la applica allo scenario **di riferimento** di ital8cms: servire un **sito web ufficiale terminando il TLS direttamente sulle porte 80 e 443** (la **Strada B**). La sezione *Messa in produzione* propone ricette NixOS **dalla più semplice** (con qualche compromesso) alla più isolata, con i file `.nix` di esempio. La soluzione con **reverse proxy** (Strada A) è trattata in coda come opzione secondaria.
 
 ## Perché è fatto così
 
@@ -93,7 +93,7 @@ Storicamente: si genera la coppia di chiavi e una **CSR** (Certificate Signing R
 | **DNS-01** | crei un record **TXT** `_acme-challenge.dominio` con un valore derivato dal token; la CA interroga il DNS | nessuna porta in ingresso; **supporta i wildcard** (`*.dominio`); richiede automazione DNS (API del provider) |
 | **TLS-ALPN-01** | validazione via TLS sulla **porta 443** con un protocollo ALPN dedicato | usata da alcuni proxy (Caddy/Traefik); niente porta 80 |
 
-ital8cms implementa il lato server di **HTTP-01** (endpoint `/.well-known/acme-challenge/:token`): è esattamente ciò che serve nella Strada B, dove ital8cms è il webserver su :80 (vedi *Moduli interni*).
+ital8cms implementa il lato server di **HTTP-01** (endpoint `/.well-known/acme-challenge/:token`): è esattamente ciò che serve quando ital8cms è il webserver su :80 (vedi *Moduli interni*).
 
 ### Perché il rinnovo è *periodico*
 
@@ -162,7 +162,7 @@ Il cuore della convivenza con il rinnovo periodico. `fs.watch` osserva il `certF
 
 Si osserva il `certFile` (non la chiave) perché un rinnovo riscrive **sempre** il certificato; la chiave viene comunque riletta insieme. Gli errori dell'`FSWatcher` (file rinominato/rimosso, limite inotify) sono gestiti con un handler `'error'` → **warning non-fatale**: l'hot reload si sospende ma il server continua a servire con il certificato già in memoria (mai un crash).
 
-> ⚠️ **Caveat inotify (importante su NixOS):** `fs.watch` segue l'inode del file. Se il rinnovo **sostituisce** il file con un *rename atomico* (comportamento tipico di lego/`security.acme`) anziché riscriverlo in place, il watch sull'inode vecchio può **smettere di emettere** dopo il primo rinnovo (il watcher logga il warning e **non riarma**). Conseguenza pratica: l'hot reload potrebbe funzionare una volta e poi tacere. La rete di sicurezza è un **restart pilotato dal rinnovo** (vedi *Regolazione & estensione → NixOS*).
+> ⚠️ **Caveat inotify (importante su NixOS):** `fs.watch` segue l'inode del file. Se il rinnovo **sostituisce** il file con un *rename atomico* (comportamento tipico di lego/`security.acme`) anziché riscriverlo in place, il watch sull'inode vecchio può **smettere di emettere** dopo il primo rinnovo (il watcher logga il warning e **non riarma**). Conseguenza pratica: l'hot reload potrebbe funzionare una volta e poi tacere. La rete di sicurezza è un **restart pilotato dal rinnovo** (`reloadServices`, vedi *Messa in produzione*).
 
 ### Endpoint ACME HTTP-01 — `setupAcmeChallengeRoute()` + `createHttpRedirectServer()`
 
@@ -183,31 +183,233 @@ Rilevante proprio perché la Strada B usa **porte privilegiate**. Su ogni server
 
 In tutti i casi **uscita pulita `process.exit(1)`**, mai uno stack trace. Niente fallback: senza il bind non si può servire.
 
-## Regolazione & estensione — Strada B in produzione
+## Messa in produzione su NixOS — ricette (dalla più semplice)
 
-### Generale (certbot e affini)
+Tre varianti, dalla più rapida alla più isolata, più una nota per la challenge senza porta 80 e una per chi non è su NixOS. In tutte, i **percorsi dei certificati** prodotti da `security.acme` sono `/var/lib/acme/<dominio>/` con la chiave chiamata **`key.pem`** (non `privkey.pem`); il **dominio**, l'**email**, l'**utente** e i **percorsi** negli esempi sono **placeholder da adattare**.
 
-- **Emissione/rinnovo via HTTP-01 webroot servito da ital8cms:** `acmeChallenge: { enabled: true, webroot: "/var/www/acme" }`; `certbot certonly --webroot -w /var/www/acme -d example.com`. ital8cms serve i token su :80 anche in modalità redirect.
-- **Rinnovo:** affidato al timer/cron di certbot; con `hotReload` attivo i nuovi file vengono ricaricati senza riavvio.
-- **Ciclo di vita alla prima emissione:** al primo boot senza certificato ital8cms parte in HTTP puro **con la route ACME già attiva** → si emette il certificato → **un riavvio** porta a HTTPS+redirect+hotReload → da lì i rinnovi sono automatici.
-- **Porte privilegiate (Linux non-NixOS):** `sudo setcap 'cap_net_bind_service=+ep' $(which node)` (da rieseguire dopo ogni update di Node) — oppure si passa alla Strada A.
+> La tabella canonica dei campi `https` di ital8cms è nella guida [`https.it.md`](./https.it.md); qui si mostrano gli esempi completi e il **perché** delle scelte.
 
-### NixOS (focus)
+> 🛠️ **Generatore:** `node scripts/nixos/httpsGenerator.js` produce automaticamente i file `.nix` + lo snippet di `ital8Config.json5` di queste ricette (con validazione degli input, output in una cartella da rivedere). Vedi [`scripts/nixos/README.it.md`](../scripts/nixos/README.it.md).
 
-La ricetta completa (modulo **`ital8cms-https.nix`**, utente/gruppo/servizio `ital8cms`) è nella guida [`https.it.md`](./https.it.md). Qui il **perché** delle scelte chiave:
+### Opzione A — servizio come utente, codice nella home (più semplice, con compromessi)
 
-- **Porte privilegiate → `AmbientCapabilities = [ "CAP_NET_BIND_SERVICE" ]`, non `setcap`.** Su NixOS il binario `node` vive in `/nix/store` (immutabile, e il path **cambia a ogni aggiornamento**): un `setcap` sullo store sarebbe sbagliato e non persistente. La capability va concessa **al processo del servizio** in modo dichiarativo nel unit systemd (riapplicata a ogni `nixos-rebuild`); `CapabilityBoundingSet` la restringe a quella sola.
+La via più rapida per mettere online un sito: il servizio gira come un **utente di login esistente** (es. `web`), direttamente dalla **sua home**, senza creare utenti o copiare il codice altrove. Challenge **HTTP-01** (nessun token DNS).
+
+**Compromessi accettati:**
+- il servizio gira come un **utente di login**, non come un utente di servizio dedicato → meno isolamento;
+- il **codice resta nella home** dell'utente, che lo possiede ed esegue (comodo: una sola copia, niente `chown`);
+- la **chiave privata TLS è leggibile** dall'utente (tramite il gruppo `acme`);
+- niente `ProtectSystem=strict`/`ProtectHome` rigidi.
+
+**Prerequisiti:** un utente di login esistente; il codice in `~/ital8cms-site` con le dipendenze installate (`npm ci --omit=dev`); il record **A** del dominio → IP statico pubblico; la **porta 80 raggiungibile** da Internet; niente altro già in ascolto su 80/443.
+
+**File 1 — `ital8cms-web.nix`** (il web server):
+
+```nix
+# ital8cms-web.nix — ital8cms come servizio systemd, gira come utente di login dalla home
+{ config, pkgs, ... }:
+{
+  systemd.services.ital8cms-web = {
+    description = "ital8cms web server";
+    after    = [ "network-online.target" ];
+    wants    = [ "network-online.target" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "simple";
+      User = "web";                                   # ⚠ il tuo utente di login
+      # Group omesso → usa il gruppo primario dell'utente
+      WorkingDirectory = "/home/web/ital8cms-site";   # ⚠ dove vive il codice
+      ExecStart = "${pkgs.nodejs_22}/bin/node /home/web/ital8cms-site/index.js";
+
+      AmbientCapabilities   = [ "CAP_NET_BIND_SERVICE" ];  # bind su 80/443 da non-root
+      CapabilityBoundingSet = [ "CAP_NET_BIND_SERVICE" ];
+      SupplementaryGroups   = [ "acme" ];                  # per leggere /var/lib/acme/<dominio>/key.pem
+
+      Restart = "always";
+      RestartSec = "10s";
+      NoNewPrivileges = true;
+      PrivateTmp = true;
+      StandardOutput = "journal";
+      StandardError  = "journal";
+    };
+  };
+
+  networking.firewall.allowedTCPPorts = [ 80 443 ];
+}
+```
+
+**File 2 — `ital8cms-https.nix`** (certificato Let's Encrypt via HTTP-01):
+
+```nix
+# ital8cms-https.nix — certificato Let's Encrypt (HTTP-01) per ital8cms-web
+{ config, pkgs, ... }:
+let
+  domain = "example.com";   # ⚠ il tuo dominio
+in {
+  # Cartella condivisa per la challenge: la SCRIVE acme, la LEGGE ital8cms.
+  # 0755 = leggibile da tutti (i token ACME sono pubblici). Pre-creata così il
+  # servizio non deve crearla.
+  systemd.tmpfiles.rules = [
+    "d /var/lib/acme-challenge 0755 acme acme - -"
+    "d /var/lib/acme-challenge/.well-known 0755 acme acme - -"
+    "d /var/lib/acme-challenge/.well-known/acme-challenge 0755 acme acme - -"
+  ];
+
+  security.acme = {
+    acceptTerms = true;
+    defaults.email = "you@example.com";              # ⚠ la tua email
+    certs.${domain} = {
+      webroot = "/var/lib/acme-challenge";           # HTTP-01: niente DNS/token
+      reloadServices = [ "ital8cms-web.service" ];    # dopo emissione/rinnovo riavvia il web server
+    };
+  };
+
+  # lego valida via HTTP → il web server dev'essere GIÀ su :80 prima della validazione
+  systemd.services."acme-${domain}" = {
+    after = [ "ital8cms-web.service" ];
+    wants = [ "ital8cms-web.service" ];
+  };
+}
+```
+
+**Porzione di `ital8Config.json5`** (nel progetto, es. `~/ital8cms-site/ital8Config.json5`):
+
+```json5
+"httpPort": 80,
+"https": {
+  "enabled": true,
+  "port": 443,
+  "AutoRedirectHttpPortToHttpsPort": true,
+  "certFile": "/var/lib/acme/example.com/fullchain.pem",
+  "keyFile":  "/var/lib/acme/example.com/key.pem",          // key.pem, non privkey.pem
+  "caFile":   "",
+  "hotReload": { "enabled": true, "debounceMs": 2000 },
+  "acmeChallenge": { "enabled": true, "webroot": "/var/lib/acme-challenge" }  // stesso path del .nix
+}
+```
+
+**Import** in `configuration.nix`:
+
+```nix
+imports = [
+  ./ital8cms-web.nix
+  ./ital8cms-https.nix
+];
+```
+
+Al primo `nixos-rebuild switch`: il web server parte (HTTP, certificato assente) e serve la challenge → `acme-<dominio>.service` emette il certificato → `reloadServices` **riavvia il web server**, che riparte in HTTPS. Senza interventi manuali.
+
+### Opzione B — utente di servizio dedicato, codice in `/var/lib` (più isolata)
+
+Produzione più "pulita": un **utente di servizio dedicato** `ital8cms` e il codice in `/var/lib/ital8cms` (separato dalla tua copia di sviluppo). Hardening pieno (`ProtectSystem=strict`, `ProtectHome=true`). Un solo file `.nix`:
+
+```nix
+# ital8cms-https.nix — variante isolata: utente dedicato, codice in /var/lib
+{ config, pkgs, ... }:
+let
+  domain      = "example.com";
+  projectRoot = "/var/lib/ital8cms";
+in {
+  users.users.ital8cms = { isSystemUser = true; group = "ital8cms"; home = projectRoot; };
+  users.groups.ital8cms = {};
+
+  systemd.tmpfiles.rules = [
+    "d /var/lib/acme-challenge 0755 acme acme - -"
+    "d /var/lib/acme-challenge/.well-known 0755 acme acme - -"
+    "d /var/lib/acme-challenge/.well-known/acme-challenge 0755 acme acme - -"
+  ];
+
+  security.acme = {
+    acceptTerms = true;
+    defaults.email = "you@example.com";
+    certs.${domain} = {
+      group = "ital8cms";                      # il servizio legge key.pem via questo gruppo
+      webroot = "/var/lib/acme-challenge";
+      reloadServices = [ "ital8cms.service" ];
+    };
+  };
+
+  systemd.services."acme-${domain}" = {
+    after = [ "ital8cms.service" ];
+    wants = [ "ital8cms.service" ];
+  };
+
+  networking.firewall.allowedTCPPorts = [ 80 443 ];
+
+  systemd.services.ital8cms = {
+    description = "ital8cms";
+    wantedBy = [ "multi-user.target" ];
+    wants    = [ "network-online.target" ];
+    after    = [ "network-online.target" ];
+    environment.NODE_ENV = "production";
+    serviceConfig = {
+      User = "ital8cms";
+      Group = "ital8cms";
+      WorkingDirectory = projectRoot;
+      ExecStart = "${pkgs.nodejs_22}/bin/node index.js";
+      Restart = "on-failure";
+      AmbientCapabilities   = [ "CAP_NET_BIND_SERVICE" ];
+      CapabilityBoundingSet = [ "CAP_NET_BIND_SERVICE" ];
+      NoNewPrivileges = true;
+      ProtectSystem = "strict";          # FS in sola-lettura...
+      ReadWritePaths = [ projectRoot ];  # ...tranne la cartella del progetto (ital8cms ci scrive)
+      ProtectHome = true;                # il codice è in /var/lib, /home resta nascosta
+    };
+  };
+}
+```
+
+**Deploy del codice** (necessario: la cartella non si popola da sola):
+
+```bash
+sudo mkdir -p /var/lib/ital8cms
+sudo cp -a /percorso/del/progetto/. /var/lib/ital8cms/   # o: git clone <repo> /var/lib/ital8cms
+cd /var/lib/ital8cms && sudo npm ci --omit=dev
+sudo chown -R ital8cms:ital8cms /var/lib/ital8cms
+```
+
+La **porzione di `ital8Config.json5` è identica** a quella dell'Opzione A (i percorsi dei certificati non dipendono da chi fa girare ital8cms). Modello mentale: `/var/lib/ital8cms` è la copia **deployata** (di proprietà del servizio), distinta dalla tua copia di **sviluppo**.
+
+### Opzione C — DNS-01: challenge senza porta 80
+
+Quando la porta 80 **non** è raggiungibile (es. linea dietro CGNAT) o serve un **wildcard** (`*.example.com`), e il DNS è su un provider **supportato da lego** (es. Cloudflare). Sostituisci nel modulo il blocco del certificato:
+
+```nix
+security.acme.certs."example.com" = {
+  group = "ital8cms";                              # o il gruppo del tuo servizio (Opzione A: ometti e usa SupplementaryGroups)
+  dnsProvider = "cloudflare";                       # ⚠ provider supportato da lego
+  environmentFile = "/var/lib/secrets/acme.env";    # contiene es. CF_DNS_API_TOKEN=...
+};
+```
+
+Crea il file delle credenziali (NixOS non lo crea):
+
+```bash
+sudo mkdir -p /var/lib/secrets
+echo 'CF_DNS_API_TOKEN=il_tuo_token' | sudo tee /var/lib/secrets/acme.env
+sudo chmod 600 /var/lib/secrets/acme.env
+```
+
+Con DNS-01 **non serve** la porta 80 per la validazione: puoi rimuovere il blocco `tmpfiles`, il `webroot`, l'ordine `acme-<dominio>.service` dopo il web server, e impostare `acmeChallenge: { enabled: false }` in `ital8Config.json5`. ⚠️ Funziona solo se il DNS del dominio è davvero gestito dal provider indicato.
+
+### Perché queste scelte (note tecniche NixOS)
+
+- **Porte privilegiate → `AmbientCapabilities = [ "CAP_NET_BIND_SERVICE" ]`, non `setcap`.** Su NixOS il binario `node` vive in `/nix/store` (immutabile, e il path **cambia a ogni aggiornamento**): un `setcap` sullo store sarebbe sbagliato e non persistente. La capability va concessa **al processo del servizio** in modo dichiarativo (riapplicata a ogni `nixos-rebuild`); `CapabilityBoundingSet` la restringe a quella sola.
 - **`security.acme` = lego + systemd timer per dominio:** ottenimento e **rinnovo automatico** senza cron scritto a mano.
-- **Tipo di challenge — DNS-01 consigliato in Strada B.** Con HTTP-01 webroot c'è un *chicken-and-egg*: per validare, lego ha bisogno che ital8cms sia **già in ascolto su :80**. Per i **rinnovi** è sempre vero; per la **prima emissione** su un `nixos-rebuild` pulito conviene ordinare `acme-<dominio>.service` con `after/wants = [ "ital8cms.service" ]` (se fallisce, il timer riprova). **DNS-01** (`dnsProvider`) elimina del tutto la dipendenza dalla porta 80 e supporta i wildcard → più pulito quando è ital8cms a fare da webserver.
-- **Permessi per leggere `key.pem`:** `/var/lib/acme/<dominio>/key.pem` è `640` di proprietà di `acme`; impostando `security.acme.certs.<dominio>.group = "ital8cms"` il processo ital8cms può leggerlo (stesso schema che NixOS usa per nginx). Su NixOS la chiave si chiama **`key.pem`**, non `privkey.pem`.
-- **Rinnovo → ricarica:** **hot reload** come percorso primario (zero downtime). Visto il *caveat inotify* sopra, come rete di sicurezza aggiungi `security.acme.certs.<dominio>.reloadServices = [ "ital8cms.service" ]`: NixOS esegue `try-reload-or-restart` e, non avendo ital8cms un `ExecReload`, fa un **restart breve** ma garantito. Trade-off consapevole: zero downtime (hot reload) vs ricarica garantita (restart).
+- **DNS-01 vs HTTP-01 (chicken-and-egg).** Con HTTP-01 webroot, per validare lego ha bisogno che il web server sia **già in ascolto su :80**: per i rinnovi è sempre vero; per la **prima emissione** conviene ordinare `acme-<dominio>.service` **dopo** il web server (`after`/`wants`), così com'è negli esempi (se la prima validazione fallisce, il timer riprova). DNS-01 elimina del tutto la dipendenza dalla porta 80.
+- **Permessi per leggere `key.pem`:** `/var/lib/acme/<dominio>/key.pem` è `640` di proprietà `acme`. Il servizio lo legge entrando nel gruppo `acme` — via `SupplementaryGroups = [ "acme" ]` (Opzione A) o impostando `certs.<dominio>.group` al gruppo del servizio (Opzione B).
+- **Rinnovo → ricarica:** **hot reload** come percorso primario (zero downtime). Visto il *caveat inotify* (vedi *Moduli interni*), `reloadServices = [ "<servizio>" ]` è la **rete di sicurezza**: NixOS esegue `try-reload-or-restart` e, non avendo ital8cms un `ExecReload`, fa un **restart breve** ma garantito a ogni emissione/rinnovo.
+
+### Fuori da NixOS (certbot) — nota breve
+
+Su altri Linux: emissione/rinnovo con `certbot certonly --webroot -w <webroot> -d example.com` (stesso `webroot` di `acmeChallenge`), rinnovo dal timer/cron di certbot, `hotReload` che ricarica i nuovi file. Porte privilegiate: `sudo setcap 'cap_net_bind_service=+ep' $(which node)` (da rieseguire dopo ogni update di Node) — oppure la Strada A. I percorsi certbot sono `/etc/letsencrypt/live/<dominio>/{fullchain.pem,privkey.pem}` (nota: `privkey.pem`).
 
 ## Sicurezza (Strada B)
 
 Il trade-off centrale della terminazione diretta: **la chiave privata è caricata nel processo ital8cms** (letta con `fs.readFileSync` al boot e tenuta in memoria). In Strada A, invece, la chiave non è mai vista dall'app. Per la maggior parte dei siti singoli è un compromesso accettabile, ma va mitigato:
 
-- **Processo a privilegio minimo:** utente dedicato non-root, **solo** `CAP_NET_BIND_SERVICE`, e hardening systemd (`NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `ReadWritePaths` ristretto alla sola root del progetto).
-- **Permessi dei file:** chiave `640`, leggibile solo da `acme:ital8cms`; mai world-readable.
+- **Processo a privilegio minimo:** utente dedicato non-root (Opzione B) o almeno non-root (Opzione A), **solo** `CAP_NET_BIND_SERVICE`, e hardening systemd (`NoNewPrivileges`, `PrivateTmp`, e dove possibile `ProtectSystem=strict`/`ProtectHome`).
+- **Permessi dei file:** chiave `640`, leggibile solo da `acme` + gruppo del servizio; mai world-readable.
 - **Redirect 80→443:** integrato (`AutoRedirectHttpPortToHttpsPort`), nessun contenuto servito in chiaro.
 - **HSTS:** in Strada B **non c'è un proxy** che lo inietti, quindi `Strict-Transport-Security` va aggiunto da ital8cms — il modo pulito è un **middleware di plugin** (`getMiddlewareToAdd`) che setta l'header sulle risposte. Da valutare insieme a preload/`includeSubDomains`.
 - **Chiavi di sessione:** ricordarsi di sostituire i placeholder in produzione (`core/sessionSecurity.js` avvisa al boot) — vedi [`deployment.it.md`](./deployment.it.md).
@@ -274,7 +476,7 @@ in {
       User = "ital8cms";
       Group = "ital8cms";
       WorkingDirectory = projectRoot;
-      ExecStart = "${pkgs.nodejs}/bin/node index.js";
+      ExecStart = "${pkgs.nodejs_22}/bin/node index.js";
       Restart = "on-failure";
       ProtectSystem = "strict";
       ReadWritePaths = [ projectRoot ];
@@ -285,7 +487,7 @@ in {
 }
 ```
 
-Note: niente `CAP_NET_BIND_SERVICE` (solo nginx tocca 80/443); `recommendedProxySettings` imposta gli `X-Forwarded-*` (resta valida la nota su `app.proxy` lato ital8cms); con `enableACME` NixOS **ricarica nginx** a ogni rinnovo, senza `reloadServices` da scrivere a mano.
+In `ital8Config.json5`: `httpPort: 3000`, `https: { "enabled": false }`. Note: niente `CAP_NET_BIND_SERVICE` (solo nginx tocca 80/443); `recommendedProxySettings` imposta gli `X-Forwarded-*` (resta valida la nota su `app.proxy`); con `enableACME` NixOS **ricarica nginx** a ogni rinnovo.
 
 ## Limitazioni & sviluppi futuri
 
@@ -296,7 +498,7 @@ Note: niente `CAP_NET_BIND_SERVICE` (solo nginx tocca 80/443); `recommendedProxy
 
 ## Riferimenti
 
-- Guida operativa (campi, scenari, ricette Strada B/A): [`https.it.md`](./https.it.md)
+- Guida operativa (campi, scenari, ricette sintetiche): [`https.it.md`](./https.it.md)
 - Deploy in produzione: [`deployment.it.md`](./deployment.it.md)
 - Implementazione: [`core/httpsManager.js`](../core/httpsManager.js)
 - RFC 8555 (ACME), documentazione Let's Encrypt, NixOS `security.acme` / `services.nginx`

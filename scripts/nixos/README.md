@@ -1,0 +1,5 @@
+<!-- ital8doc v1-1 · tipo: README · lang: en · stub -->
+> 🌐 This document is maintained in Italian → see `README.it.md`. The English edition will be filled in at release.
+# scripts/nixos — NixOS HTTPS deploy generator
+
+> English translation pending. Authoritative version: [`README.it.md`](./README.it.md).

@@ -11,7 +11,7 @@ Indice della documentazione. La guida operativa per l'AI e l'architettura in sin
 
 - [`deployment.it.md`](./deployment.it.md) — deploy in produzione (checklist, PM2, reverse proxy)
 - [`https.it.md`](./https.it.md) — configurazione HTTPS (scenari, Let's Encrypt, Strada B/A, NixOS, self-signed)
-- [`EXPLAIN-https.it.md`](./EXPLAIN-https.it.md) — deep-dive HTTPS: teoria (certificati, ACME, rinnovo periodico) + soluzione reverse proxy (generale e NixOS)
+- [`EXPLAIN-https.it.md`](./EXPLAIN-https.it.md) — deep-dive HTTPS: teoria (certificati, ACME, rinnovo periodico), ital8cms come terminatore TLS, ricette di messa in produzione NixOS (Opzione A/B/C) e reverse proxy. Generatore associato: [`scripts/nixos/httpsGenerator.js`](../scripts/nixos/httpsGenerator.js) ([README](../scripts/nixos/README.it.md))
 - [`testing.it.md`](./testing.it.md) — strategia e convenzioni di test
 - [`demo-profile.it.md`](./demo-profile.it.md) — profilo di installazione demo
 - [`roadmap.it.md`](./roadmap.it.md) — miglioramenti e lavori pianificati
