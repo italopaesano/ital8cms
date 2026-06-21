@@ -2,7 +2,7 @@
 > 🌐 Italian reference edition (always up to date). English `https.md` is a stub until release.
 # Configurazione HTTPS — ital8cms
 
-> 📖 Teoria e deep-dive (cosa sono i certificati HTTPS, come si generano e si rinnovano periodicamente con ACME/Let's Encrypt, e la soluzione **reverse proxy** spiegata da zero): vedi [`EXPLAIN-https.it.md`](./EXPLAIN-https.it.md).
+> 📖 Teoria e deep-dive (cosa sono i certificati HTTPS, come si generano e si rinnovano con ACME/Let's Encrypt, il funzionamento interno di `httpsManager`, le **ricette di messa in produzione NixOS** e la soluzione reverse proxy): vedi [`EXPLAIN-https.it.md`](./EXPLAIN-https.it.md).
 
 ## Scopo
 
@@ -184,7 +184,7 @@ server {
 
 Su **NixOS** la coppia idiomatica è `services.nginx` (con `enableACME = true; forceSSL = true;`) + `security.acme`: ottenimento, redirect 80→443 e rinnovo (con reload di nginx) sono **completamente dichiarativi**. ital8cms resta un servizio systemd su `127.0.0.1:3000` con `https.enabled: false` e **senza** `CAP_NET_BIND_SERVICE`.
 
-> 📖 Teoria completa (certificati, ACME, rinnovo periodico) e il modulo NixOS `ital8cms-proxy.nix` con tutte le note (header `X-Forwarded-*`, `app.proxy`, cookie `Secure`, HSTS): [`EXPLAIN-https.it.md`](./EXPLAIN-https.it.md).
+> 📖 Teoria completa (certificati, ACME, rinnovo periodico) e il modulo NixOS `ital8cms-proxy.nix` con le note su header `X-Forwarded-*` e `app.proxy`: [`EXPLAIN-https.it.md`](./EXPLAIN-https.it.md).
 
 ## Certificato self-signed (sviluppo locale)
 
