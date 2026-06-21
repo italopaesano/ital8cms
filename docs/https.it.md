@@ -196,6 +196,8 @@ E in `ital8Config.json5`: `certFile = "/var/lib/acme/example.com/fullchain.pem"`
 - **DNS-01 (consigliato per la Strada B):** `dnsProvider = "..."`. Nessuna dipendenza dalla porta 80, niente problemi di ordine d'avvio, supporta i wildcard. Lascia `acmeChallenge.enabled: false`.
 - **HTTP-01 via webroot:** imposta `security.acme.certs.<dominio>.webroot = "/var/lib/acme/acme-challenge"` **e** in `ital8Config.json5` `acmeChallenge: { "enabled": true, "webroot": "/var/lib/acme/acme-challenge" }` (stesso path assoluto). Per i **rinnovi** ital8cms è sempre attivo su :80 e serve i token; per la **prima emissione** conviene wirare l'ordine `acme-<dominio>.service` → `after/wants = [ "ital8cms.service" ]` (se la prima validazione fallisce, il timer riprova). Per questa frizione, **DNS-01 resta più pulito** quando è ital8cms a fare da webserver.
 
+> 📖 Ricette NixOS complete con i file `.nix` di esempio — **Opzione A** (più semplice: servizio come utente di login, codice nella home, HTTP-01), **Opzione B** (isolata: utente dedicato + `/var/lib`), **Opzione C** (DNS-01, senza porta 80): [`EXPLAIN-https.it.md`](./EXPLAIN-https.it.md) → *Messa in produzione su NixOS*.
+
 ### B.3 — Porte privilegiate
 
 Far girare Node su 80/443 come utente non-root richiede la capability `CAP_NET_BIND_SERVICE`, altrimenti scatta lo Scenario 5 (`EACCES`).
