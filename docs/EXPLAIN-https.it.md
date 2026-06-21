@@ -189,6 +189,8 @@ Tre varianti, dalla più rapida alla più isolata, più una nota per la challeng
 
 > La tabella canonica dei campi `https` di ital8cms è nella guida [`https.it.md`](./https.it.md); qui si mostrano gli esempi completi e il **perché** delle scelte.
 
+> 🛠️ **Generatore:** `node scripts/nixos/httpsGenerator.js` produce automaticamente i file `.nix` + lo snippet di `ital8Config.json5` di queste ricette (con validazione degli input, output in una cartella da rivedere). Vedi [`scripts/nixos/README.it.md`](../scripts/nixos/README.it.md).
+
 ### Opzione A — servizio come utente, codice nella home (più semplice, con compromessi)
 
 La via più rapida per mettere online un sito: il servizio gira come un **utente di login esistente** (es. `web`), direttamente dalla **sua home**, senza creare utenti o copiare il codice altrove. Challenge **HTTP-01** (nessun token DNS).
