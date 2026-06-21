@@ -150,6 +150,8 @@ Scelta della challenge:
 
 > 📖 Ricette NixOS complete con i file `.nix` di esempio — **Opzione A** (più semplice: servizio come utente di login, codice nella home, HTTP-01), **Opzione B** (isolata: utente dedicato + `/var/lib`), **Opzione C** (DNS-01, senza porta 80): [`EXPLAIN-https.it.md`](./EXPLAIN-https.it.md) → *Messa in produzione su NixOS*.
 
+> 🛠️ **Generatore:** per produrre automaticamente questi file (`.nix` + il blocco `https` di `ital8Config.json5`) con validazione e output in una cartella da rivedere: `node scripts/nixos/httpsGenerator.js` — vedi [`../scripts/nixos/README.it.md`](../scripts/nixos/README.it.md).
+
 ### B.3 — Porte privilegiate
 
 Far girare Node su 80/443 come utente non-root richiede la capability `CAP_NET_BIND_SERVICE`, altrimenti scatta lo Scenario 5 (`EACCES`).
@@ -232,7 +234,8 @@ Accesso: `https://localhost:3443` (il browser mostrerà un warning per il self-s
 
 ## Riferimenti
 
-- Teoria e deep-dive reverse proxy: [`EXPLAIN-https.it.md`](./EXPLAIN-https.it.md)
+- Teoria, deep-dive e ricette di produzione (Strada B / reverse proxy): [`EXPLAIN-https.it.md`](./EXPLAIN-https.it.md)
+- Generatore deploy NixOS: [`../scripts/nixos/httpsGenerator.js`](../scripts/nixos/httpsGenerator.js) (doc: [`../scripts/nixos/README.it.md`](../scripts/nixos/README.it.md))
 - Deploy in produzione: [`deployment.it.md`](./deployment.it.md)
 - Implementazione: [`core/httpsManager.js`](../core/httpsManager.js)
 - Configurazione: blocco `https` in [`ital8Config.json5`](../ital8Config.json5)
