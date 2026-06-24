@@ -9,6 +9,10 @@
   "activeTheme": "placeholderExample",
   "adminActiveTheme": "defaultAdminTheme",
   "wwwPath": "/www",
+  // Media directory, relative to wwwPath. Owned globally here; the `media`
+  // service plugin and its `adminMedia` twin both read this value.
+  // Result: {wwwPath}/{mediaDir}/ — e.g. /www/media/
+  "mediaDir": "media",
   // Path alla directory di serving delle plugin pages (relativo alla root del progetto)
   // Usato da servingRootResolver per determinare il root di isolamento per-plugin
   "pluginPagesPath": "/pluginPages",

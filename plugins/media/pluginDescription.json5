@@ -1,10 +1,10 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
         "name": "media",
-        "version": "1.0.0",
-        "description": " serve per caricare media file upload ed get",
+        "version": "1.1.0",
+        "description": "Media service: owns the media directory and the optimized-image variant schema. Exposes a read API to templates and other plugins (renderPicture, getMediaUrl, getMediaMetadata). The adminMedia twin handles upload and variant generation.",
         "author": "Italo Paesano",
         "email": "italopaesano@protonmail.com",
         "license": "MIT",
-        "note": "any note"
+        "note": "Twin admin plugin: adminMedia"
 }

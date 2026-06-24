@@ -123,13 +123,20 @@ plugins/adminMedia/
 
 ---
 
-## Futuro — Plugin `media` (scope non ancora definito)
+## v1.1 — Plugin `media` (FATTO) → vedi [`../media/EXPLAIN.md`](../media/EXPLAIN.md)
 
-Da approfondire e implementare in una fase successiva:
+Il plugin `media` è ora il **service** del sottosistema (read), `adminMedia` il
+**twin** (write). `adminMedia` dipende da `media` (`media: ^1.1.0`).
 
-- [ ] Metadata file: alt text, titolo, tag (con `mediaIndex.json5`)
-- [ ] API programmatica per altri plugin: `getMediaUrl()`, `getMediaMetadata()`, `searchMedia()`
-- [ ] Shared object verso altri plugin (es. plugin SEO può leggere immagini OG)
+- [x] API programmatica per template e altri plugin: `renderPicture()`,
+      `getMediaUrl()`, `getMediaMetadata()` (shared object — es. il plugin SEO
+      può leggere le immagini OG).
+- [x] Schema varianti + `mediaDir` (globale in `ital8Config.json5`) come fonte
+      di verità condivisa (`media/lib/variantResolver.js`).
+- [x] Metadata per-immagine via `manifest.json5` (dimensioni, varianti; campo
+      `alt` predisposto).
+- [ ] Editing `alt`/titolo dalla GUI (campo già nel manifest, manca l'editor).
+- [ ] `listMedia()` / `searchMedia()` per gallerie/caroselli (via `.json5`).
 
 ## Futuro — Image Picker
 
@@ -137,12 +144,21 @@ Da approfondire e implementare in una fase successiva:
 - [ ] Integrazione con sistema di creazione pagine (da studiare)
 - [ ] Inserimento URL immagine in editor testo/configurazione
 
-## Futuro — Compressione & Ottimizzazione
+## v1.1 — Compressione & Ottimizzazione (FATTO) → vedi [`../media/EXPLAIN.md`](../media/EXPLAIN.md)
 
-- [ ] Resize automatico immagini al caricamento
-- [ ] Generazione thumbnail per preview
-- [ ] Conversione formato (es. auto-convert a WebP)
-- [ ] Richiederebbe libreria esterna (es. `sharp`)
+- [x] Resize automatico al caricamento (eager), multi-width per `srcset`
+      (preset `web`: 1920/1280/768/480; `thumb`: 320). Niente upscaling.
+- [x] Generazione thumbnail (preset `thumb`).
+- [x] Conversione formato: AVIF + WebP + fallback raster (jpg, o png se alpha).
+- [x] `sharp` come dipendenza **opzionale** (require difensivo, NON in
+      `nodeModuleDependency`): senza sharp il file manager funziona, l'ottimizzazione
+      è saltata con warning. Abilita con `npm install sharp`.
+- [x] Strip EXIF (privacy + peso; orientamento applicato prima).
+- [x] Operazioni FS variant-aware (cascade delete, rename/move seguono le varianti).
+- [x] Manutenzione: rotte `regenerateVariants` / `generateMissing` + dropdown
+      "Optimize" nella GUI (sulla cartella corrente).
+- [ ] Thumbnail nella griglia admin (oggi usa l'originale rimpicciolito via CSS).
+- [ ] Multi-width responsive nel preset `thumb` (ora singolo, sufficiente).
 
 ## Futuro — Miglioramenti UI
 
