@@ -70,6 +70,47 @@ function buildEntryMeta(entryPath, name) {
   };
 }
 
+/**
+ * Removes the optimized-variant folder sitting next to a file (if any).
+ * No-op when variantResolver is absent or the folder doesn't exist.
+ * @param {string} absFilePath
+ * @param {object} [variantResolver] - media plugin's resolver
+ */
+function removeVariantFolder(absFilePath, variantResolver) {
+  if (!variantResolver) return;
+  try {
+    const vf = variantResolver.variantFolderPathAbs(absFilePath);
+    if (fs.existsSync(vf)) fs.rmSync(vf, { recursive: true, force: true });
+  } catch (_) {
+    // Best-effort cleanup: never let variant housekeeping break the main op.
+  }
+}
+
+/**
+ * Moves/renames a file's variant folder to follow the file, updating the
+ * manifest's original.file to the new basename. Used by rename and move.
+ * @param {string} oldAbsFile - previous absolute path of the original file
+ * @param {string} newAbsFile - new absolute path of the original file
+ * @param {object} [variantResolver]
+ */
+function relocateVariantFolder(oldAbsFile, newAbsFile, variantResolver) {
+  if (!variantResolver) return;
+  try {
+    const oldVF = variantResolver.variantFolderPathAbs(oldAbsFile);
+    if (!fs.existsSync(oldVF)) return;
+    const newVF = variantResolver.variantFolderPathAbs(newAbsFile);
+    if (fs.existsSync(newVF)) fs.rmSync(newVF, { recursive: true, force: true });
+    fs.renameSync(oldVF, newVF);
+    const manifest = variantResolver.readManifest(newAbsFile);
+    if (manifest && manifest.original) {
+      manifest.original.file = path.basename(newAbsFile);
+      variantResolver.writeManifest(newAbsFile, manifest);
+    }
+  } catch (_) {
+    // Best-effort: variant housekeeping must not break the main op.
+  }
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -147,7 +188,7 @@ function createFolder(mediaRoot, relPath, name) {
  * @param {string} newName   - New name (basename only, no path separators)
  * @returns {{ success: boolean, isFolder?: boolean, error?: string }}
  */
-function renameItem(mediaRoot, relPath, newName) {
+function renameItem(mediaRoot, relPath, newName, variantResolver) {
   if (!newName || typeof newName !== 'string') return { success: false, error: 'New name required' };
   if (newName.includes('/') || newName.includes('\\')) return { success: false, error: 'Name cannot contain path separators' };
 
@@ -183,6 +224,10 @@ function renameItem(mediaRoot, relPath, newName) {
   if (fs.existsSync(destAbs) && destAbs !== srcAbs) return { success: false, error: 'An item with this name already exists' };
 
   fs.renameSync(srcAbs, destAbs);
+  // For files, keep the optimized variants in sync (folder name embeds the
+  // original filename). Folders need nothing: their contents — including any
+  // nested variant folders — move with them, and inner manifests are unaffected.
+  if (!isFolder) relocateVariantFolder(srcAbs, destAbs, variantResolver);
   return { success: true, isFolder };
 }
 
@@ -195,7 +240,7 @@ function renameItem(mediaRoot, relPath, newName) {
  * @param {string} destRelPath - Destination folder (relative)
  * @returns {{ success: boolean, finalName?: string, error?: string }}
  */
-function moveFile(mediaRoot, srcRelPath, destRelPath) {
+function moveFile(mediaRoot, srcRelPath, destRelPath, variantResolver) {
   const srcAbs  = safeResolve(mediaRoot, srcRelPath);
   const destDir = safeResolve(mediaRoot, destRelPath);
 
@@ -215,6 +260,7 @@ function moveFile(mediaRoot, srcRelPath, destRelPath) {
   if (!destAbs.startsWith(rootWithSep)) return { success: false, error: 'Path traversal detected' };
 
   fs.renameSync(srcAbs, destAbs);
+  relocateVariantFolder(srcAbs, destAbs, variantResolver); // variants follow the file
   return { success: true, finalName };
 }
 
@@ -225,13 +271,14 @@ function moveFile(mediaRoot, srcRelPath, destRelPath) {
  * @param {string} relPath - File path (relative)
  * @returns {{ success: boolean, error?: string }}
  */
-function deleteFile(mediaRoot, relPath) {
+function deleteFile(mediaRoot, relPath, variantResolver) {
   const absPath = safeResolve(mediaRoot, relPath);
   if (!absPath) return { success: false, error: 'Path traversal detected' };
   if (!fs.existsSync(absPath)) return { success: false, error: 'File not found' };
   if (fs.statSync(absPath).isDirectory()) return { success: false, error: 'Path points to a directory; use deleteFolder' };
 
   fs.unlinkSync(absPath);
+  removeVariantFolder(absPath, variantResolver); // cascade: drop optimized variants
   return { success: true };
 }
 

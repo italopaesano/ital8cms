@@ -16,6 +16,25 @@
         <i class="bi bi-cloud-upload"></i> Upload Files
       </button>
       <input type="file" id="fileInput" multiple style="display:none">
+
+      <!-- Optimize: generate/regenerate image variants in the current folder -->
+      <% const optOk = passData.plugin.adminMedia.optimizationAvailable; %>
+      <div class="btn-group">
+        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button"
+                id="btnOptimize" data-bs-toggle="dropdown" aria-expanded="false"
+                <%= optOk ? '' : 'disabled' %>
+                title="<%= optOk ? 'Generate or regenerate optimized image variants in the current folder' : 'Install sharp to enable image optimization: npm install sharp' %>">
+          <i class="bi bi-stars"></i> Optimize
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li><button class="dropdown-item" type="button" id="btnGenerateMissing">
+            <i class="bi bi-magic me-2"></i>Generate missing <span class="text-muted small">(this folder)</span>
+          </button></li>
+          <li><button class="dropdown-item" type="button" id="btnRegenerate">
+            <i class="bi bi-arrow-repeat me-2"></i>Regenerate all <span class="text-muted small">(this folder)</span>
+          </button></li>
+        </ul>
+      </div>
     </div>
   </div>
 

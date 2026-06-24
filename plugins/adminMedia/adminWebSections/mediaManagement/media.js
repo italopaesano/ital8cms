@@ -648,6 +648,30 @@ async function confirmNewFolder() {
   await loadTree();
 }
 
+/* ══ Optimize (variant generation) ══════════════════════════════════════════ */
+async function runOptimize(endpoint, label) {
+  clearWarnings();
+  const folderLabel = state.currentPath ? `/${state.currentPath}` : '/ (root)';
+  showWarning(`${label} in ${folderLabel}… this may take a while.`, 'info');
+  let result;
+  try {
+    result = await apiPost(endpoint, { path: state.currentPath });
+  } catch (_) {
+    clearWarnings();
+    showWarning(`${label} failed (network error).`, 'danger');
+    return;
+  }
+  clearWarnings();
+  if (result.error) { showWarning(result.error, 'danger'); return; }
+  const s = result.summary || {};
+  showWarning(
+    `${label} done — processed ${s.processed || 0}, generated ${s.generated || 0}, ` +
+    `skipped ${s.skipped || 0}, errors ${s.errors || 0}.`,
+    'success'
+  );
+  await loadDirectory();
+}
+
 /* ══ Init & Event Wiring ════════════════════════════════════════════════════ */
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -675,6 +699,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Refresh tree
   document.getElementById('btnRefreshTree').addEventListener('click', loadTree);
+
+  // Optimize: generate-missing / regenerate variants in the current folder
+  document.getElementById('btnGenerateMissing')?.addEventListener('click', () =>
+    runOptimize('/generateMissing', 'Generate missing variants'));
+  document.getElementById('btnRegenerate')?.addEventListener('click', () =>
+    runOptimize('/regenerateVariants', 'Regenerate variants'));
 
   // View toggle
   document.getElementById('btnGrid').addEventListener('click', () => {

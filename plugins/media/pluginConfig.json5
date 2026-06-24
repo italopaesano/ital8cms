@@ -5,5 +5,49 @@
   "weight": 0,
   "dependency": {},
   "nodeModuleDependency": {},
-  "version": "1.0.0"
+
+  "custom": {
+    // NOTE: the media DIRECTORY (`mediaDir`) lives in the GLOBAL
+    // ital8Config.json5 (read by both media and adminMedia). Only the
+    // optimization SCHEMA lives here.
+
+    // ── Image optimization (variant generation) ──────────────────────────
+    // The SCHEMA lives here (media owns it). adminMedia reads it via the
+    // shared object and generates variants accordingly at upload time.
+    // Variants are stored next to each image in `.{name.ext}.media/` and
+    // declared in that folder's `manifest.json5`. The manifest — not these
+    // settings — is the source of truth at read time, so changing presets
+    // later never breaks links to already-generated variants.
+    "imageOptimization": {
+      // Each preset → the widths to generate. `thumb` is a single-width
+      // thumbnail; `web` is multi-width for true responsive srcset.
+      // No upscaling: widths larger than the source are skipped.
+      "presets": {
+        "thumb": { "widths": [320] },
+        "web":   { "widths": [1920, 1280, 768, 480] },
+      },
+
+      // Modern formats emitted as <source> (best first). A raster fallback
+      // (jpg for opaque images, png when the source has transparency) is
+      // always generated in addition to these.
+      "formats": ["avif", "webp"],
+
+      // Per-format quality (1-100; lower = smaller file).
+      "quality": { "jpeg": 80, "webp": 78, "avif": 50 },
+
+      // Source extensions eligible for optimization. gif/bmp are intentionally
+      // excluded (animated gif would lose animation) → served as-is.
+      "optimizableExtensions": ["jpg", "jpeg", "png", "webp", "avif"],
+
+      // Strip EXIF/metadata (privacy + size). EXIF orientation is applied
+      // before stripping, so images keep the correct rotation.
+      "stripMetadata": true,
+
+      // Always keep the original (it is the re-derivable source of truth).
+      // v1 keeps the original unconditionally; the flag documents intent.
+      "keepOriginal": true,
+    },
+  },
+
+  "version": "1.0.0",
 }

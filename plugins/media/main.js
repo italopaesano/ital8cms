@@ -1,84 +1,121 @@
+/**
+ * media - main.js
+ *
+ * Media SERVICE plugin. It does NOT serve bytes over HTTP — that is already
+ * handled by koa-classic-server, since the media directory lives inside wwwPath.
+ * Instead it provides the "intelligent" layer on top of the stored files:
+ *
+ *   • read API for templates (passData.plugin.media.*) and other plugins:
+ *       - renderPicture(relPath, opts)  → responsive <picture> markup
+ *       - getMediaUrl(relPath, opts)    → URL of the best variant
+ *       - getMediaMetadata(relPath)     → the image manifest (sizes, alt, variants)
+ *   • OWNS the media directory setting (mediaDir) and the variant SCHEMA
+ *     (imageOptimization), sharing both with the adminMedia twin so that the
+ *     reader (here) and the writer (adminMedia) agree on the exact layout.
+ *
+ * The actual variant generation (sharp) lives in the adminMedia twin.
+ */
+
+'use strict';
 
 const fs = require('fs');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
+const variantResolver = require('./lib/variantResolver');
+const pictureRenderer = require('./lib/pictureRenderer');
 
-let pluginConfig = loadJson5(path.join(__dirname, 'pluginConfig.json5'));// let perchè questa varibile può cambiare di valore 
-const pluginName = path.basename(  __dirname );// restituisce il nome della directory che contiene il file corrente e che è anche il nome del plugin
-const sharedObject = {};// ogetto che avrà gliogetti condiviso con gli altri plugin ES {dbApi: newdbApi} 
+const pluginName = path.basename(__dirname);
 
-function loadPlugin(){
-  //console.log( 'sharedObject: ', sharedObject );
-};
+// Resolved at MODULE LEVEL (not in loadPlugin): pluginSys calls
+// getObjectToShareToWebPages()/getObjectToShareToOthersPlugin() BEFORE
+// loadPlugin(), so the exposed API must not depend on loadPlugin state.
+const pluginConfig = loadJson5(path.join(__dirname, 'pluginConfig.json5'));
+const ital8Conf    = loadJson5(path.join(__dirname, '../../ital8Config.json5'));
 
-function installPlugin(){
+const custom             = pluginConfig.custom || {};
+const mediaDir           = ital8Conf.mediaDir || 'media'; // owned globally in ital8Config.json5
+const optimizationConfig = custom.imageOptimization || {};
 
-};
+const projectRoot      = path.join(__dirname, '..', '..');
+const mediaDirAbsolute = path.join(projectRoot, ital8Conf.wwwPath, mediaDir);
 
-function uninstallPlugin(){
-
-};
-
-function upgradePlugin(){
-
-};
-
-function getObjectToShareToWebPages(){// restituisce un ogetto che sarà condiviso con i modori di template come sotto ogetto fi PassData.plugin.['nomePlugin']
-
-  return {};
+// ── Internal: read a manifest by file path relative to the media dir ─────────
+function readManifest(relFilePath) {
+  const absFile = path.join(mediaDirAbsolute, String(relFilePath || ''));
+  return variantResolver.readManifest(absFile);
 }
 
-function getObjectToShareToOthersPlugin( pluginName ){// pluginName = nome dell'altro plugin con cui sarà condiviso questo serve a creare comportamenti personalizati in base al plugin con cui si condivi
+// ── Read API (exposed to templates and other plugins) ───────────────────────
 
-  return {};
+/** Responsive <picture> markup for an image (falls back to plain <img>). */
+function renderPicture(relFilePath, options = {}) {
+  return pictureRenderer.renderPicture({
+    manifest: readManifest(relFilePath),
+    mediaDir,
+    relFilePath,
+    options,
+  });
 }
 
-function setSharedObject( pluginName, object ){// pluginName = nome dell'altro plugin con cui sarà condiviso questo serve a creare comportamenti personalizati in base al plugin con cui si condivi
-
-  sharedObject[pluginName] = object;// creo un ogetto con otributi con ilnome del plugin
-
+/** URL of the best-matching variant (by format/width), or the original. */
+function getMediaUrl(relFilePath, options = {}) {
+  return pictureRenderer.resolveUrl({
+    manifest: readManifest(relFilePath),
+    mediaDir,
+    relFilePath,
+    options,
+  });
 }
 
-function getRouteArray(){// restituirà un array contenente tutte le rotte che poi saranno aggiunte al cms
-  
-  const routeArray = Array();
-
-  return routeArray;
+/** The image's manifest (sizes, alt, variants), or null if not generated. */
+function getMediaMetadata(relFilePath) {
+  return readManifest(relFilePath);
 }
 
-/* 
-  restituira una mappa che comechiave avrà la parte della pagina dove eseguire le funzione e come valore la funzione da eseguire 
-  la funzione da eseguire avrà come paramentro passData che è l'aogetto contenente tutto ciò che verrà passato alla pagine
- */
-
-function getHooksPage(){
-
-  const fnInPageMap = new Map();
-
-  //fnInPageMap.set( 'body', (passData) => '<h3>ciao a tutti</h3>');
-  //fnInPageMap.set('footer', (passData) => '<b>sono nel footer</b>');
-
-  return fnInPageMap;
-  
-/*   new Map(
-    ['body', function(passData) {return 'ciao a tutti';}],
-    ['footer', function(passData) {return 'sono nel footer';}]
-    ); */
-}
-
+// Object shared with EJS templates: passData.plugin.media.*
+const readApi = { renderPicture, getMediaUrl, getMediaMetadata, mediaDir };
 
 module.exports = {
 
-  loadPlugin: loadPlugin,  //questa funzione verrà richiamata per caricare il plugin ogni volta che serve ad esempio ogni volta che si riavviam 
-  installPlugin: installPlugin, // questa funzione verrà richiamata per installare il plugin
-  uninstallPlugin: uninstallPlugin, // questa funzione verrà richiamata per disinstallare il plugin
-  upgradePlugin: upgradePlugin, // questa funzione verrà richiamata quando sarà necessario aggiornare il plugin
-  getObjectToShareToWebPages: getObjectToShareToWebPages,
-  getObjectToShareToOthersPlugin: getObjectToShareToOthersPlugin,
-  setSharedObject: setSharedObject,//setterà l'ogetto che sarà condiviso con tutti i plugin
-  pluginName: pluginName,
-  getRouteArray: getRouteArray,
-  pluginConfig: pluginConfig,
-  getHooksPage: getHooksPage
+  pluginName,
+  pluginConfig,
 
-}
+  async loadPlugin(pluginSys, pathPluginFolder) {
+    // media OWNS the media directory: ensure it exists at boot.
+    if (!fs.existsSync(mediaDirAbsolute)) {
+      fs.mkdirSync(mediaDirAbsolute, { recursive: true });
+      console.log(`[${pluginName}] Media directory created: ${mediaDirAbsolute}`);
+    }
+  },
+
+  async installPlugin() {},
+  async uninstallPlugin() {},
+  async upgradePlugin() {},
+
+  getRouteArray() { return []; },
+
+  getHooksPage() { return new Map(); },
+
+  // Functions available in EJS templates as passData.plugin.media.*
+  getObjectToShareToWebPages() {
+    return readApi;
+  },
+
+  // Shared with other plugins. The adminMedia twin additionally receives the
+  // variant schema + resolver + resolved paths it needs to GENERATE variants.
+  getObjectToShareToOthersPlugin(forPlugin) {
+    if (forPlugin === 'adminMedia') {
+      return {
+        ...readApi,
+        variantResolver,
+        optimizationConfig,
+        mediaDir,
+        mediaDirAbsolute,
+      };
+    }
+    return readApi;
+  },
+
+  setSharedObject(fromPlugin, sharedObject) {},
+
+};

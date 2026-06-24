@@ -11,16 +11,23 @@
   ],
 
   "dependency": {
-    "bootstrap": "^1.0.0"
+    "bootstrap": "^1.0.0",
+    // Twin of the `media` service: adminMedia reads the media dir + variant
+    // schema from media's shared object and writes variants accordingly.
+    "media": "^1.1.0",
   },
   "nodeModuleDependency": {
     "@koa/multer": "^4.0.0",
     "multer": "^2.0.0",  // peer dependency richiesta da @koa/multer
+    // NOTE: `sharp` (image optimization) is intentionally NOT declared here.
+    // nodeModuleDependency is validated fail-fast at boot, but optimization is
+    // OPTIONAL: the file manager must keep working without sharp. It is required
+    // defensively in lib/variantGenerator.js. To enable optimization run:
+    //   npm install sharp
   },
   "custom": {
-    // Directory media relativa a wwwPath (da ital8Config.json5)
-    // Risultato: {wwwPath}/{mediaDir}/ — es. /www/media/
-    "mediaDir": "media",
+    // NOTE: `mediaDir` is owned by the `media` service plugin (single source of
+    // truth). adminMedia reads it from media — do not duplicate it here.
 
     // Limiti dimensione file per categoria (in bytes)
     "fileSizeLimits": {
