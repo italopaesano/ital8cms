@@ -32,9 +32,10 @@ node_modules/
 /plugins/dbApi/dbFile/*.db
 /plugins/dbApi/dbFile/pluginsDb/*.db
 
-# SEO plugin generated files (recreated at startup)
-/www/sitemap.xml
-/www/robots.txt
+# Public web root (user site content): keep the folder, ignore everything inside.
+# Covers site pages and runtime-generated files (e.g. SEO plugin's sitemap.xml / robots.txt).
+/www/*
+!/www/.gitkeep
 
 # Init system
 /scripts/initState.json5
