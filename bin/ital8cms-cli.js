@@ -3,8 +3,10 @@
 const net = require('net');
 const fs = require('fs');
 const path = require('path');
+const readline = require('readline');
 const { Command } = require('commander');
 const loadJson5 = require('../core/loadJson5');
+const resetConfigsToDefault = require('../core/resetConfigsToDefault');
 const pkg = require('../package.json');
 
 const DEFAULT_TIMEOUT_MS = 2000;
@@ -34,6 +36,14 @@ admin.command('stop').description('disable admin section and restart the process
 const pub = program.command('public').description('public section control (no restart, soft maintenance gate)');
 pub.command('start').description('serve public pages normally').action(() => sendCommand('public.start'));
 pub.command('stop').description('serve a "be right back" page on all public routes').action(() => sendCommand('public.stop'));
+
+program
+  .command('reset <target>')
+  .description('reset a plugin/theme config to defaults (offline: deletes live x.json5, regenerated at next boot)')
+  .option('-y, --yes', 'skip the confirmation prompt')
+  .option('--theme', 'target is a theme under themes/ (default: a plugin under plugins/)')
+  .option('--dry-run', 'show what would be removed without deleting anything')
+  .action((target, cmdOpts) => doReset(target, cmdOpts));
 
 program.parseAsync(process.argv).catch((err) => {
   bail('client_error', err.message || String(err));
@@ -277,4 +287,125 @@ function formatUptime(seconds) {
   const h = Math.floor(m / 60);
   const mr = m % 60;
   return `${h}h ${mr}m ${s}s`;
+}
+
+// ── reset (offline, filesystem) ─────────────────────────────────────────────
+// Opera direttamente sui file e funziona anche a server spento (doc §3): rimuove
+// i x.json5 vivi del plugin/tema (quelli con un x.default.json5); il prossimo
+// boot li rigenera dai default. NON passa per il socket.
+
+async function doReset(target, cmdOpts) {
+  const opts = program.opts();
+
+  // Sanitize: nome semplice, niente path traversal.
+  if (!/^[A-Za-z0-9_-]+$/.test(target)) {
+    bail('client_error', `nome target non valido: ${JSON.stringify(target)} (ammessi lettere, numeri, _ e -)`);
+  }
+
+  // projectRoot = cartella di ital8Config.json5 (NON quella di installazione del
+  // CLI): corretto anche con install globale.
+  const configPath = path.resolve(opts.config || './ital8Config.json5');
+  if (!fs.existsSync(configPath)) {
+    bail('client_error', `config non trovato: ${configPath} (esegui dalla root del progetto o usa --config <path>)`);
+  }
+  const projectRoot = path.dirname(configPath);
+
+  const base = cmdOpts.theme ? 'themes' : 'plugins';
+  const dir = path.join(projectRoot, base, target);
+
+  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+    const otherBase = cmdOpts.theme ? 'plugins' : 'themes';
+    if (fs.existsSync(path.join(projectRoot, otherBase, target))) {
+      bail('client_error', `"${target}" non è in ${base}/, ma esiste in ${otherBase}/ — ${cmdOpts.theme ? 'ometti --theme' : 'aggiungi --theme'}`);
+    }
+    bail('client_error', `target non trovato: ${base}/${target}`);
+  }
+
+  let preview;
+  try {
+    preview = await resetConfigsToDefault(dir, { dryRun: true });
+  } catch (err) {
+    bail('client_error', err.message);
+  }
+
+  if (preview.removed.length === 0) {
+    const msg = `nessun config vivo da resettare (${base}/${target} è già allo stato di default)`;
+    if (opts.json) process.stdout.write(JSON.stringify({ ok: true, action: 'reset', target, noop: true, message: msg }) + '\n');
+    else process.stdout.write(`= reset ${target}: ${msg}\n`);
+    process.exit(0);
+  }
+
+  if (cmdOpts.dryRun) {
+    if (opts.json) {
+      process.stdout.write(JSON.stringify({ ok: true, action: 'reset', target, dryRun: true, ...preview }) + '\n');
+    } else {
+      process.stdout.write(`dry-run reset ${target}: ${preview.removed.length} file verrebbero rimossi\n`);
+      for (const f of preview.removed) process.stdout.write(`  - ${f}\n`);
+    }
+    process.exit(0);
+  }
+
+  if (!cmdOpts.yes) {
+    process.stdout.write(`Reset di ${base}/${target}: verranno rimossi ${preview.removed.length} file vivi (rigenerati dai .default al prossimo boot):\n`);
+    for (const f of preview.removed) process.stdout.write(`  - ${f}\n`);
+    if (preview.userDataFiles.length) {
+      process.stdout.write(`\n⚠  ATTENZIONE: reset di DATI UTENTE (${preview.userDataFiles.join(', ')}). Dovrai ricreare gli account (wizard o a mano) — rischio lockout.\n`);
+    }
+    const ok = await confirm('\nProcedere? [y/N] ');
+    if (!ok) {
+      process.stdout.write('Reset annullato.\n');
+      process.exit(0);
+    }
+  }
+
+  let result;
+  try {
+    result = await resetConfigsToDefault(dir);
+  } catch (err) {
+    bail('client_error', err.message);
+  }
+
+  const socketPath = safeSocketPath();
+  const serverUp = !!(socketPath && fs.existsSync(socketPath));
+
+  if (opts.json) {
+    process.stdout.write(JSON.stringify({ ok: result.errors.length === 0, action: 'reset', target, ...result, serverUp }) + '\n');
+  } else {
+    process.stdout.write(`✓ reset ${target}: ${result.removed.length} file rimossi\n`);
+    for (const f of result.removed) process.stdout.write(`  - ${f}\n`);
+    if (result.errors.length) {
+      process.stdout.write(`⚠ ${result.errors.length} errori:\n`);
+      for (const e of result.errors) process.stdout.write(`  ! ${e.file}: ${e.message}\n`);
+    }
+    process.stdout.write(serverUp
+      ? `\nℹ il server sembra in esecuzione: i file saranno rigenerati al prossimo riavvio (o usa il reset online).\n`
+      : `\nℹ i file saranno rigenerati dai .default al prossimo avvio.\n`);
+  }
+  process.exit(result.errors.length ? 2 : 0);
+}
+
+function confirm(question) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(/^y(es)?$/i.test(String(answer).trim()));
+    });
+  });
+}
+
+// Risolve il socket path senza uscire dal processo (best-effort, per il solo
+// avviso "server in esecuzione"). resolveSocketPath() invece esce con bail().
+function safeSocketPath() {
+  try {
+    const opts = program.opts();
+    if (opts.socket) return path.resolve(opts.socket);
+    const configPath = path.resolve(opts.config || './ital8Config.json5');
+    if (!fs.existsSync(configPath)) return null;
+    const cfg = loadJson5(configPath);
+    const raw = (cfg && cfg.cli && cfg.cli.socketPath) || `./${DEFAULT_SOCKET_FILENAME}`;
+    return path.isAbsolute(raw) ? raw : path.resolve(path.dirname(configPath), raw);
+  } catch (_) {
+    return null;
+  }
 }
