@@ -40,6 +40,7 @@ function parseSocketMode(value, fallback = DEFAULT_SOCKET_MODE) {
 function handleConnection(socket, dispatcher) {
   let buffer = '';
   let settled = false;
+  let handled = false;
 
   const sendResponse = (obj) => {
     if (settled) return;
@@ -60,8 +61,8 @@ function handleConnection(socket, dispatcher) {
   }, REQUEST_TIMEOUT_MS);
   timeout.unref();
 
-  socket.on('data', (chunk) => {
-    if (settled) return;
+  socket.on('data', async (chunk) => {
+    if (settled || handled) return;
     buffer += chunk.toString('utf8');
     if (buffer.length > MAX_LINE_BYTES) {
       clearTimeout(timeout);
@@ -75,6 +76,7 @@ function handleConnection(socket, dispatcher) {
     const nl = buffer.indexOf(LINE_DELIMITER);
     if (nl === -1) return;
 
+    handled = true; // una sola richiesta per connessione: evita ri-dispatch durante l'await
     clearTimeout(timeout);
     const line = buffer.slice(0, nl);
     const parsed = parseRequestLine(line);
@@ -85,7 +87,11 @@ function handleConnection(socket, dispatcher) {
 
     let response;
     try {
-      response = dispatcher(parsed.value.command);
+      // Il dispatcher può essere async (es. reset). Gli handler sincroni restano
+      // compatibili: await su un valore non-promise lo restituisce invariato.
+      // Si passa l'intera richiesta così i comandi con argomenti (reset.target)
+      // possono leggerli.
+      response = await dispatcher(parsed.value.command, parsed.value);
     } catch (err) {
       response = { ok: false, error: 'internal_error', message: err.message };
     }
@@ -142,6 +148,7 @@ async function start(ital8Conf, options = {}) {
   const dispatcher = makeDispatcher({
     startTime: Date.now(),
     ital8Conf,
+    projectRoot,
     configPath: options.configPath,
     statePath: options.statePath,
     requestRestart: options.requestRestart,

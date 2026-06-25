@@ -43,7 +43,24 @@ program
   .option('-y, --yes', 'skip the confirmation prompt')
   .option('--theme', 'target is a theme under themes/ (default: a plugin under plugins/)')
   .option('--dry-run', 'show what would be removed without deleting anything')
-  .action((target, cmdOpts) => doReset(target, cmdOpts));
+  .option('--online', 'reset via the running server (hot; triggers a restart) instead of offline filesystem')
+  .action(async (target, cmdOpts) => {
+    if (cmdOpts.online) {
+      if (cmdOpts.dryRun) {
+        bail('client_error', '--dry-run non è supportato con --online (il reset online agisce sul server in esecuzione)');
+      }
+      if (!cmdOpts.yes) {
+        process.stdout.write(`Reset ONLINE di ${cmdOpts.theme ? 'themes' : 'plugins'}/${target}: rimuove i config vivi e RIAVVIA il server.\n`);
+        const ok = await confirm('Procedere? [y/N] ');
+        if (!ok) {
+          process.stdout.write('Reset annullato.\n');
+          process.exit(0);
+        }
+      }
+      return sendCommand('reset', { target, theme: !!cmdOpts.theme });
+    }
+    return doReset(target, cmdOpts);
+  });
 
 program.parseAsync(process.argv).catch((err) => {
   bail('client_error', err.message || String(err));
@@ -68,7 +85,7 @@ function resolveSocketPath() {
   return path.isAbsolute(rawSocketPath) ? rawSocketPath : path.resolve(configDir, rawSocketPath);
 }
 
-function sendCommand(command) {
+function sendCommand(command, extra = {}) {
   const opts = program.opts();
   const socketPath = resolveSocketPath();
   const timeout = parseInt(opts.timeout, 10) || DEFAULT_TIMEOUT_MS;
@@ -106,7 +123,7 @@ function sendCommand(command) {
     finish(parsed && parsed.ok ? 0 : 2, parsed);
   });
   sock.once('connect', () => {
-    sock.write(JSON.stringify({ command }) + '\n');
+    sock.write(JSON.stringify({ command, ...extra }) + '\n');
   });
   sock.connect(socketPath);
 }

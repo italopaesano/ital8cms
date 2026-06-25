@@ -55,8 +55,12 @@ function makeSandbox(adminInitial = true, publicInitial = 'running') {
   };
 }
 
+// Il dispatcher è async (supporta handler async come reset): tutti i comandi
+// vanno attesi con await, anche quelli sincroni (await su un valore lo restituisce).
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+
 describe('makeDispatcher.status', () => {
-  test('reports running/running when admin=true and public=running', () => {
+  test('reports running/running when admin=true and public=running', async () => {
     const sb = makeSandbox(true, 'running');
     try {
       const dispatch = makeDispatcher({
@@ -65,7 +69,7 @@ describe('makeDispatcher.status', () => {
         configPath: sb.configPath,
         statePath: sb.statePath,
       });
-      const res = dispatch('status');
+      const res = await dispatch('status');
       expect(res.ok).toBe(true);
       expect(res.data.admin).toEqual({ state: 'running' });
       expect(res.data.public).toEqual({ state: 'running' });
@@ -75,7 +79,7 @@ describe('makeDispatcher.status', () => {
     } finally { sb.cleanup(); }
   });
 
-  test('reports stopped/stopped when admin=false and public=stopped', () => {
+  test('reports stopped/stopped when admin=false and public=stopped', async () => {
     const sb = makeSandbox(false, 'stopped');
     try {
       const dispatch = makeDispatcher({
@@ -84,7 +88,7 @@ describe('makeDispatcher.status', () => {
         configPath: sb.configPath,
         statePath: sb.statePath,
       });
-      const res = dispatch('status');
+      const res = await dispatch('status');
       expect(res.data.admin).toEqual({ state: 'stopped' });
       expect(res.data.public).toEqual({ state: 'stopped' });
       expect(res.data.httpsEnabled).toBe(false);
@@ -92,7 +96,7 @@ describe('makeDispatcher.status', () => {
     } finally { sb.cleanup(); }
   });
 
-  test('uses getPublicState callback if provided', () => {
+  test('uses getPublicState callback if provided', async () => {
     const sb = makeSandbox(true, 'running');
     try {
       const dispatch = makeDispatcher({
@@ -102,14 +106,14 @@ describe('makeDispatcher.status', () => {
         statePath: sb.statePath,
         getPublicState: () => 'stopped',
       });
-      const res = dispatch('status');
+      const res = await dispatch('status');
       expect(res.data.public.state).toBe('stopped');
     } finally { sb.cleanup(); }
   });
 });
 
 describe('makeDispatcher.admin start/stop', () => {
-  test('admin.stop writes enableAdmin=false and schedules restart', () => {
+  test('admin.stop writes enableAdmin=false and schedules restart', async () => {
     const sb = makeSandbox(true);
     const restartCalls = [];
     try {
@@ -120,22 +124,20 @@ describe('makeDispatcher.admin start/stop', () => {
         statePath: sb.statePath,
         requestRestart: (info) => restartCalls.push(info),
       });
-      const res = dispatch('admin.stop');
+      const res = await dispatch('admin.stop');
       expect(res.ok).toBe(true);
       expect(res.action).toBe('admin.stop');
       expect(res.restart).toBe(true);
       expect(res.noop).toBeUndefined();
       expect(fs.readFileSync(sb.configPath, 'utf8')).toMatch(/"enableAdmin"\s*:\s*false/);
-      // requestRestart is called via setImmediate — flush microtasks
-      return new Promise((resolve) => setImmediate(() => {
-        expect(restartCalls.length).toBe(1);
-        expect(restartCalls[0].reason).toBe('admin.stop');
-        resolve();
-      }));
+      // requestRestart is called via setImmediate — flush macrotasks
+      await flush();
+      expect(restartCalls.length).toBe(1);
+      expect(restartCalls[0].reason).toBe('admin.stop');
     } finally { sb.cleanup(); }
   });
 
-  test('admin.start writes enableAdmin=true and schedules restart', () => {
+  test('admin.start writes enableAdmin=true and schedules restart', async () => {
     const sb = makeSandbox(false);
     try {
       const dispatch = makeDispatcher({
@@ -145,7 +147,7 @@ describe('makeDispatcher.admin start/stop', () => {
         statePath: sb.statePath,
         requestRestart: () => {},
       });
-      const res = dispatch('admin.start');
+      const res = await dispatch('admin.start');
       expect(res.ok).toBe(true);
       expect(res.action).toBe('admin.start');
       expect(res.restart).toBe(true);
@@ -153,7 +155,7 @@ describe('makeDispatcher.admin start/stop', () => {
     } finally { sb.cleanup(); }
   });
 
-  test('admin.stop is idempotent (noop) when already stopped', () => {
+  test('admin.stop is idempotent (noop) when already stopped', async () => {
     const sb = makeSandbox(false);
     const restartCalls = [];
     try {
@@ -164,32 +166,30 @@ describe('makeDispatcher.admin start/stop', () => {
         statePath: sb.statePath,
         requestRestart: (info) => restartCalls.push(info),
       });
-      const res = dispatch('admin.stop');
+      const res = await dispatch('admin.stop');
       expect(res.ok).toBe(true);
       expect(res.noop).toBe(true);
       expect(res.restart).toBe(false);
-      return new Promise((resolve) => setImmediate(() => {
-        expect(restartCalls.length).toBe(0);
-        resolve();
-      }));
+      await flush();
+      expect(restartCalls.length).toBe(0);
     } finally { sb.cleanup(); }
   });
 
-  test('admin.stop reports config_edit_failed when config missing', () => {
+  test('admin.stop reports config_edit_failed when config missing', async () => {
     const dispatch = makeDispatcher({
       startTime: Date.now(),
       ital8Conf: { httpPort: 3000 },
       configPath: '/nonexistent/path/ital8Config.json5',
       statePath: '/nonexistent/state.json5',
     });
-    const res = dispatch('admin.stop');
+    const res = await dispatch('admin.stop');
     expect(res.ok).toBe(false);
     expect(res.message).toMatch(/ENOENT|non trovato|no such file/i);
   });
 });
 
 describe('makeDispatcher.public start/stop', () => {
-  test('public.stop writes state and calls setPublicState (no restart)', () => {
+  test('public.stop writes state and calls setPublicState (no restart)', async () => {
     const sb = makeSandbox(true, 'running');
     const calls = [];
     try {
@@ -200,7 +200,7 @@ describe('makeDispatcher.public start/stop', () => {
         statePath: sb.statePath,
         setPublicState: (s) => calls.push(s),
       });
-      const res = dispatch('public.stop');
+      const res = await dispatch('public.stop');
       expect(res.ok).toBe(true);
       expect(res.action).toBe('public.stop');
       expect(res.restart).toBe(false);
@@ -210,7 +210,7 @@ describe('makeDispatcher.public start/stop', () => {
     } finally { sb.cleanup(); }
   });
 
-  test('public.start writes state running and calls setPublicState', () => {
+  test('public.start writes state running and calls setPublicState', async () => {
     const sb = makeSandbox(true, 'stopped');
     const calls = [];
     try {
@@ -221,14 +221,14 @@ describe('makeDispatcher.public start/stop', () => {
         statePath: sb.statePath,
         setPublicState: (s) => calls.push(s),
       });
-      const res = dispatch('public.start');
+      const res = await dispatch('public.start');
       expect(res.ok).toBe(true);
       expect(res.restart).toBe(false);
       expect(calls).toEqual(['running']);
     } finally { sb.cleanup(); }
   });
 
-  test('public.stop is idempotent (noop) when already stopped', () => {
+  test('public.stop is idempotent (noop) when already stopped', async () => {
     const sb = makeSandbox(true, 'stopped');
     const calls = [];
     try {
@@ -239,7 +239,7 @@ describe('makeDispatcher.public start/stop', () => {
         statePath: sb.statePath,
         setPublicState: (s) => calls.push(s),
       });
-      const res = dispatch('public.stop');
+      const res = await dispatch('public.stop');
       expect(res.noop).toBe(true);
       expect(calls).toEqual([]);
     } finally { sb.cleanup(); }
@@ -247,7 +247,7 @@ describe('makeDispatcher.public start/stop', () => {
 });
 
 describe('makeDispatcher unknown commands', () => {
-  test('returns unknown_command for garbage input', () => {
+  test('returns unknown_command for garbage input', async () => {
     const sb = makeSandbox();
     try {
       const dispatch = makeDispatcher({
@@ -256,12 +256,12 @@ describe('makeDispatcher unknown commands', () => {
         configPath: sb.configPath,
         statePath: sb.statePath,
       });
-      const res = dispatch('nonsense');
+      const res = await dispatch('nonsense');
       expect(res).toMatchObject({ ok: false, error: 'unknown_command' });
     } finally { sb.cleanup(); }
   });
 });
 
-test('KNOWN_COMMANDS lists all 5 commands', () => {
-  expect(KNOWN_COMMANDS.sort()).toEqual(['admin.start', 'admin.stop', 'public.start', 'public.stop', 'status']);
+test('KNOWN_COMMANDS lists all 6 commands', () => {
+  expect(KNOWN_COMMANDS.sort()).toEqual(['admin.start', 'admin.stop', 'public.start', 'public.stop', 'reset', 'status']);
 });
