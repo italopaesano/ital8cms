@@ -1,0 +1,9 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// Istanza di produzione: nessun utente preconfigurato.
+// Il primo utente root va creato col wizard: `npm run start-configure`.
+// (Gli utenti demo sono in userAccount.demo.json5, usati solo dal profilo demo.)
+{
+  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "users": {}
+}
