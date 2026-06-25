@@ -1,5 +1,5 @@
 /**
- * Unit Tests per core/materializeChildrenDefaults.js
+ * Unit Tests per core/materializeMissingConfigs.js
  *
  * Copre:
  * - Materializzazione su più sottocartelle (es. plugins/* simulato)
@@ -7,15 +7,15 @@
  * - Mix created/skipped (un plugin con vivo già presente)
  * - Entry-file nella radice ignorate (solo le directory contano)
  * - Degradazione graziosa: un default rotto in una sottocartella
- * - Radice senza sottocartelle / con sottocartelle senza default
- * - Errori: radice mancante, non-directory, argomenti non validi
+ * - Contenitore senza sottocartelle / con sottocartelle senza default
+ * - Errori: contenitore mancante, non-directory, argomenti non validi
  */
 
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-const materializeChildrenDefaults = require('../../../core/materializeChildrenDefaults');
+const materializeMissingConfigs = require('../../../core/materializeMissingConfigs');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -24,7 +24,7 @@ let logSpy;
 let errorSpy;
 
 beforeEach(() => {
-  rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'materializeChildrenDefaults-'));
+  rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'materializeMissingConfigs-'));
   logSpy = jest.spyOn(console, 'log').mockImplementation();
   errorSpy = jest.spyOn(console, 'error').mockImplementation();
 });
@@ -49,7 +49,7 @@ function writeIn(dir, name, content) {
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
-describe('materializeChildrenDefaults', () => {
+describe('materializeMissingConfigs', () => {
 
   describe('materialization across children', () => {
     test('materializes missing defaults in every child directory', async () => {
@@ -59,7 +59,7 @@ describe('materializeChildrenDefaults', () => {
       const bootstrap = makeChild('bootstrap');
       writeIn(bootstrap, 'pluginConfig.default.json5', VALID_DEFAULT);
 
-      const result = await materializeChildrenDefaults(rootDir);
+      const result = await materializeMissingConfigs(rootDir);
 
       expect(result.created.sort()).toEqual([
         'bootstrap/pluginConfig.json5',
@@ -76,7 +76,7 @@ describe('materializeChildrenDefaults', () => {
       const media = makeChild('media');
       writeIn(media, 'pluginConfig.default.json5', VALID_DEFAULT);
 
-      const result = await materializeChildrenDefaults(rootDir);
+      const result = await materializeMissingConfigs(rootDir);
 
       expect(result.created).toEqual(['media/pluginConfig.json5']);
     });
@@ -88,7 +88,7 @@ describe('materializeChildrenDefaults', () => {
       const b = makeChild('beta');
       writeIn(b, 'pluginConfig.default.json5', VALID_DEFAULT);
 
-      const result = await materializeChildrenDefaults(rootDir);
+      const result = await materializeMissingConfigs(rootDir);
 
       expect(result.created).toEqual(['beta/pluginConfig.json5']);
       expect(result.skipped).toEqual(['alpha/pluginConfig.json5']);
@@ -103,13 +103,13 @@ describe('materializeChildrenDefaults', () => {
       fs.writeFileSync(path.join(rootDir, 'README.md'), '# root\n', 'utf8');
       fs.writeFileSync(path.join(rootDir, 'stray.default.json5'), VALID_DEFAULT, 'utf8');
 
-      const result = await materializeChildrenDefaults(rootDir);
+      const result = await materializeMissingConfigs(rootDir);
 
       expect(result.created).toEqual(['realPlugin/pluginConfig.json5']);
     });
 
     test('returns empty summary when there are no children', async () => {
-      const result = await materializeChildrenDefaults(rootDir);
+      const result = await materializeMissingConfigs(rootDir);
       expect(result).toEqual({ created: [], skipped: [], errors: [] });
     });
 
@@ -117,7 +117,7 @@ describe('materializeChildrenDefaults', () => {
       const empty = makeChild('codeOnly');
       writeIn(empty, 'main.js', '// just code\n');
 
-      const result = await materializeChildrenDefaults(rootDir);
+      const result = await materializeMissingConfigs(rootDir);
 
       expect(result).toEqual({ created: [], skipped: [], errors: [] });
     });
@@ -130,7 +130,7 @@ describe('materializeChildrenDefaults', () => {
       const bad = makeChild('bad');
       writeIn(bad, 'pluginConfig.default.json5', '{ broken :: }');
 
-      const result = await materializeChildrenDefaults(rootDir);
+      const result = await materializeMissingConfigs(rootDir);
 
       expect(result.created).toEqual(['good/pluginConfig.json5']);
       expect(result.errors).toHaveLength(1);
@@ -139,21 +139,21 @@ describe('materializeChildrenDefaults', () => {
   });
 
   describe('error handling', () => {
-    test('throws when the root does not exist', async () => {
+    test('throws when the container does not exist', async () => {
       await expect(
-        materializeChildrenDefaults(path.join(rootDir, 'nope'))
+        materializeMissingConfigs(path.join(rootDir, 'nope'))
       ).rejects.toThrow();
     });
 
-    test('throws when the root is not a directory', async () => {
+    test('throws when the container is not a directory', async () => {
       const filePath = path.join(rootDir, 'afile');
       fs.writeFileSync(filePath, 'x', 'utf8');
-      await expect(materializeChildrenDefaults(filePath)).rejects.toThrow();
+      await expect(materializeMissingConfigs(filePath)).rejects.toThrow();
     });
 
     test('throws on invalid argument', async () => {
-      await expect(materializeChildrenDefaults('')).rejects.toThrow();
-      await expect(materializeChildrenDefaults(null)).rejects.toThrow();
+      await expect(materializeMissingConfigs('')).rejects.toThrow();
+      await expect(materializeMissingConfigs(null)).rejects.toThrow();
     });
   });
 });

@@ -37,7 +37,7 @@ try {
   process.exit(1);
 }
 const path = require('path');
-const materializeChildrenDefaults = require('./core/materializeChildrenDefaults');
+const materializeMissingConfigs = require('./core/materializeMissingConfigs');
 const httpsManager = require('./core/httpsManager');
 
 // Log discreto se la sezione admin è stata disabilitata via CLI (o a mano).
@@ -90,7 +90,7 @@ async function startApp() {
   // plugin/tema dalla GUI admin): per UN plugin/tema basta
   // materializeDirDefaults(cartella).
   for (const configRoot of ['plugins', 'themes']) {
-    const summary = await materializeChildrenDefaults(path.join(__dirname, configRoot));
+    const summary = await materializeMissingConfigs(path.join(__dirname, configRoot));
     console.log(`[materialize] ${configRoot}: ${summary.created.length} creati, ${summary.skipped.length} presenti, ${summary.errors.length} errori`);
     if (summary.created.length) {
       console.log(`[materialize]   creati: ${summary.created.join(', ')}`);

@@ -1,15 +1,16 @@
 /**
- * materializeChildrenDefaults — materializza i config vivi mancanti di OGNI
- * sottocartella diretta di una radice, dai rispettivi `*.default.json5`.
+ * materializeMissingConfigs — materializza i config vivi mancanti di un intero
+ * CONTENITORE (es. `plugins/` o `themes/`), scandendo le sue sottocartelle
+ * dirette e creando i `*.json5` mancanti dai rispettivi `*.default.json5`.
  *
- * È il livello che il boot usa su `plugins/` e `themes/`: per ogni
- * plugin/tema (una sottocartella) materializza i suoi config mancanti
- * (vedi docs/decisions/config-lifecycle.it.md §5). Costruito sopra
+ * È il livello che il boot usa su `plugins/` e `themes/`: per ogni plugin/tema
+ * (una sottocartella) materializza i suoi config mancanti (vedi
+ * docs/decisions/config-lifecycle.it.md §5). Costruito sopra
  * materializeDirDefaults (una cartella) e materializeFromDefault (una coppia).
  *
  * Riusabile fuori dal boot: l'installazione di UN singolo plugin/tema usa
- * direttamente materializeDirDefaults(quellaCartella); questo livello serve
- * quando si vuole coprire l'intero insieme (plugins/* o themes/*) in un colpo.
+ * direttamente materializeDirDefaults(quellaCartella); questo livello copre
+ * l'intero insieme (plugins/* o themes/*) in un colpo.
  *
  * Solo i FIGLI diretti (profondità 1): ogni sottocartella = un plugin/tema; i
  * config vivono nella sua radice. Le entry-file nella radice sono ignorate.
@@ -21,14 +22,14 @@
  * per restare leggibili e non collidere tra plugin diversi.
  *
  * API:
- *   materializeChildrenDefaults(rootDir) → Promise<{ created, skipped, errors }>
+ *   materializeMissingConfigs(containerDir) → Promise<{ created, skipped, errors }>
  *     - created: string[]  es. 'seo/pluginConfig.json5'
  *     - skipped: string[]  vivi già presenti (no-op)
  *     - errors:  Array<{ file, message }>
  *
  * Throws su:
- *   - argomento non valido (rootDir non stringa o vuoto);
- *   - radice inesistente / non accessibile / non directory.
+ *   - argomento non valido (containerDir non stringa o vuoto);
+ *   - contenitore inesistente / non accessibile / non directory.
  */
 
 'use strict';
@@ -38,28 +39,28 @@ const path = require('path');
 const materializeDirDefaults = require('./materializeDirDefaults');
 
 /**
- * Materializza i default mancanti di ogni sottocartella diretta di `rootDir`.
+ * Materializza i config mancanti di ogni sottocartella diretta del contenitore.
  *
- * @param {string} rootDir - Radice che contiene le cartelle plugin/tema (es. 'plugins').
+ * @param {string} containerDir - Radice che contiene le cartelle plugin/tema (es. 'plugins').
  * @returns {Promise<{created: string[], skipped: string[], errors: Array<{file: string, message: string}>}>}
- * @throws {Error} Se `rootDir` non è valido, non esiste, o non è una directory.
+ * @throws {Error} Se `containerDir` non è valido, non esiste, o non è una directory.
  */
-async function materializeChildrenDefaults(rootDir) {
-  if (typeof rootDir !== 'string' || rootDir.length === 0) {
-    throw new Error('materializeChildrenDefaults: rootDir must be a non-empty string');
+async function materializeMissingConfigs(containerDir) {
+  if (typeof containerDir !== 'string' || containerDir.length === 0) {
+    throw new Error('materializeMissingConfigs: containerDir must be a non-empty string');
   }
 
   let stat;
   try {
-    stat = await fs.stat(rootDir);
+    stat = await fs.stat(containerDir);
   } catch (err) {
-    throw new Error(`materializeChildrenDefaults: directory non accessibile: ${rootDir} (${err.message})`);
+    throw new Error(`materializeMissingConfigs: directory non accessibile: ${containerDir} (${err.message})`);
   }
   if (!stat.isDirectory()) {
-    throw new Error(`materializeChildrenDefaults: il path non è una directory: ${rootDir}`);
+    throw new Error(`materializeMissingConfigs: il path non è una directory: ${containerDir}`);
   }
 
-  const childNames = (await fs.readdir(rootDir, { withFileTypes: true }))
+  const childNames = (await fs.readdir(containerDir, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort();
@@ -69,7 +70,7 @@ async function materializeChildrenDefaults(rootDir) {
   const errors = [];
 
   for (const name of childNames) {
-    const childDir = path.join(rootDir, name);
+    const childDir = path.join(containerDir, name);
     try {
       const summary = await materializeDirDefaults(childDir);
       for (const f of summary.created) created.push(`${name}/${f}`);
@@ -84,4 +85,4 @@ async function materializeChildrenDefaults(rootDir) {
   return { created, skipped, errors };
 }
 
-module.exports = materializeChildrenDefaults;
+module.exports = materializeMissingConfigs;
