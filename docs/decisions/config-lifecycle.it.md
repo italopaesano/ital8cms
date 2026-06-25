@@ -32,6 +32,8 @@ Tre categorie di config, trattate diversamente:
 | Core/globali (sempre presenti) | `ital8Config.json5`, `koaSession.json5`, `adminConfig.json5` | solo sidecar `.default` per il factory reset; nessuna semantica "installato" |
 | Dati utente | `userAccount.json5`, `userRole.json5` | sidecar `.default` come **seed** (vedi §3) |
 
+I `*.default.json5` dei config "di contenuto" rappresentano lo stato **minimale/vergine** ("appena installato"): es. `seoPages` senza regole, `redirectMap` vuota. Gli esempi vivono altrove (profilo demo, documentazione), non nei default. I `pluginConfig.default.json5`/`themeConfig.default.json5` corrispondono invece ai valori di default attuali del descrittore.
+
 ### 2. Modello a 3 stati dei plugin
 
 Lo stato non è una seconda fonte di verità separata: è la combinazione tra **presenza del file** e flag `isInstalled`.
@@ -50,6 +52,7 @@ Lo stato non è una seconda fonte di verità separata: è la combinazione tra **
 ### 3. Operazioni
 
 - **Reset** = cancellare i `x.json5` del plugin → torna `available` → rigenerati dai `.default` al boot successivo. Il reset reimposta anche `active` al valore di default.
+- **Canale del reset:** *offline* (CLI che agisce sul filesystem, funziona anche a server spento — copre il caso "config corrotta, server non parte") come base, più una variante *online* (via socket al server in esecuzione, per il reset a caldo senza riavvio).
 - **Reset totale, nessuna eccezione:** il reset include anche i **dati utente**. Conseguenze:
   - `userRole.default.json5` contiene i 4 ruoli hardcoded (0–3); `userAccount.default.json5` è **vuoto**.
   - Resettare `adminUsers` azzera gli account → **lockout del root** finché non viene ricreato (wizard o a mano). Mitigazione: i plugin in `essentialPlugins` (§4) richiedono **conferma rafforzata** al reset via CLI.
@@ -60,8 +63,8 @@ Lo stato non è una seconda fonte di verità separata: è la combinazione tra **
 
 - I `throw` che bloccano l'avvio (`core/pluginSys.js:222, 273, 307`) diventano **skip + marcatura `isInstalled: 0` (incomplete) + warning**; il boot **completa sempre** con un **box di riepilogo** dei plugin rimasti indietro e del motivo.
 - **Propagazione a cascata:** se A dipende da B e B è `incomplete`, A viene marcato `incomplete` (non attivabile), senza interrompere il boot.
-- **Plugin critici — lista centralizzata `essentialPlugins`** in `ital8Config.json5`, con commento che ne segnala la pericolosità in caso di modifica. Doppio uso:
-  1. **Boot:** un plugin essenziale che fallisce → box `[FATAL]` + `process.exit` (un sito con auth/CSRF rotti non deve essere servito).
+- **Plugin critici — lista centralizzata `essentialPlugins`** in `ital8Config.json5`, con commento che ne segnala la pericolosità in caso di modifica. Lista iniziale: **`adminUsers`** (auth), **`adminAccessControl`** (senza, il campo `access` obbligatorio sulle rotte non è applicato), **`admin`** (core del pannello). `csrfProtection` resta **opzionale** (degrada con warning). Doppio uso:
+  1. **Boot:** un plugin essenziale che fallisce → box `[FATAL]` + `process.exit` (un sito con auth o access control rotti non deve essere servito).
   2. **Reset CLI:** il reset di un plugin essenziale richiede **conferma rafforzata**.
 - I plugin **non** essenziali degradano in modo grazioso (skip).
 
@@ -81,7 +84,9 @@ Lo stato non è una seconda fonte di verità separata: è la combinazione tra **
 - L'incremento è **delegato allo sviluppatore**, da effettuare quando cambia la **struttura** del file (aggiunta/rinomina/rimozione di chiavi) — decisione semantica che solo l'umano può qualificare.
 - **Hash del default scartato:** misurerebbe anche i *valori*, non la sola *struttura* → falsi positivi di drift.
 - Distinto da `pluginDescription.version` (versione del **codice** del plugin). `upgradePlugin(old, new)` resta il **luogo** delle migrazioni; `schemaVersion` per-file indica **quali file** sono fuori allineamento.
+- Il campo `schemaVersion` va su **tutti i config versionabili** (descrittori, core e config di contenuto), così ogni file può evolvere la propria struttura in modo indipendente.
 - In questa decisione si implementa **solo il rilevamento** del drift (confronto `schemaVersion` default↔live → warning). La migrazione vera è rimandata.
+- **Comportamento provvisorio del boot** quando un `x.json5` vivo esiste già ma il suo `.default` ha una `schemaVersion` più recente (struttura cambiata): **merge additivo** delle sole chiavi nuove del default (senza toccare i valori esistenti) **+ warning**. È una soluzione-ponte: il comportamento ideale (controllo pre-aggiornamento + scelta esplicita dell'utente su come procedere) sarà definito quando si stabiliranno le procedure di aggiornamento.
 
 ### 7. Temi
 
@@ -97,8 +102,7 @@ Stesso modello dei plugin, con una differenza: **niente `active` locale** (l'att
 | Lista plugin critici in `ital8Config.json5` | `essentialPlugins` |
 | Suffisso sidecar default | `x.default.json5` |
 | Campo versione di schema | `schemaVersion` |
-
-> Naming ancora da fissare in fase implementativa: l'utility core di materializzazione (candidati: `materializeFromDefault` · `ensureLiveConfig` · `hydrateConfig`).
+| Utility core di materializzazione | `materializeFromDefault` |
 
 ## Piano a fasi
 
