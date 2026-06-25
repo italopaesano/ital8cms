@@ -37,6 +37,7 @@ try {
   process.exit(1);
 }
 const path = require('path');
+const materializeChildrenDefaults = require('./core/materializeChildrenDefaults');
 const httpsManager = require('./core/httpsManager');
 
 // Log discreto se la sezione admin è stata disabilitata via CLI (o a mano).
@@ -80,6 +81,24 @@ let servers = [];
 // invocata in fondo al file, dopo aver registrato gracefulShutdown e i signal handler;
 // un suo fallimento → messaggio [BOOT] + exit 1.
 async function startApp() {
+
+  // ── Materializzazione dei config di plugin/temi dai loro .default ──────────
+  // Clone fresco o post-reset: i x.json5 vivi mancanti vengono rigenerati dai
+  // rispettivi x.default.json5 PRIMA che pluginSys/themeSys leggano i config
+  // (config-lifecycle §5). In sviluppo, con i vivi già presenti, è un no-op.
+  // La stessa utility è richiamabile altrove (es. installazione di un nuovo
+  // plugin/tema dalla GUI admin): per UN plugin/tema basta
+  // materializeDirDefaults(cartella).
+  for (const configRoot of ['plugins', 'themes']) {
+    const summary = await materializeChildrenDefaults(path.join(__dirname, configRoot));
+    console.log(`[materialize] ${configRoot}: ${summary.created.length} creati, ${summary.skipped.length} presenti, ${summary.errors.length} errori`);
+    if (summary.created.length) {
+      console.log(`[materialize]   creati: ${summary.created.join(', ')}`);
+    }
+    for (const failure of summary.errors) {
+      console.warn(`[materialize]   ⚠ ${failure.file}: ${failure.message}`);
+    }
+  }
 
   const pluginSys = new ( require("./core/pluginSys") )(ital8Conf); // carico il sistema di plugin e passo la configurazione per whitelist
 
