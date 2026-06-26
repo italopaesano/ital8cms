@@ -6,6 +6,8 @@ const logger = require('./logger');
 const loadJson5 = require('./loadJson5');
 const saveJson5 = require('./saveJson5');
 const editJson5 = require('./editJson5');
+const setJson5Key = require('./setJson5Key');
+const { checkNpmDeps, resolvePluginStates } = require('./pluginStateResolver');
 const demoNotice = require('./demoNotice');
 
 class pluginSys{
@@ -18,6 +20,7 @@ class pluginSys{
   #pluginsToActive = new Map();// plugin da attivare non ancora attivati perchè bisogna controllare le dipendenze
   #themeSys = null;// riferimento al sistema dei temi (impostato dopo l'inizializzazione)
   #ital8Conf = null;// configurazione principale del sistema (per whitelist funzioni globali)
+  #pluginStates = new Map();// stato runtime per plugin: 'available'|'disabled'|'incomplete'|'installed' (+ reason/detail)
 
   constructor(ital8Conf){// qui bisognerà andare nella cartelle dai plugin e caricarli uno a uno
 
@@ -74,24 +77,17 @@ class pluginSys{
           }// if(plugin0.getObjectToShareToOthersPlugin){/
         });// this.#activePlugins.forEach( ( nomePlugin0, plugin0 ) => {
 
-        if( pluginConfig.isInstalled == 0 ){// allora il plugin è attivo ma non installto quindi bisogna istallarlo
-          try {
-            await plugin.installPlugin(this, pathPluginFolder);// installo il plugin passando pluginSys e path
-          } catch (installError) {
-            logger.error('pluginSys', `Errore durante installazione plugin ${pluginName}`, installError);
-            throw installError; // Rilancia per gestione esterna
+        // Transizione di installazione: installPlugin() gira SOLO quando il plugin
+        // diventa "installed" la prima volta, cioè quando isInstalled non era già 1
+        // (clone fresco: il campo può mancare → undefined !== 1 → installa). Il flag
+        // viene poi PERSISTITO dopo loadPlugin (vedi sotto), così se l'installazione
+        // o il load falliscono non resta marcato installato.
+        const wasInstalled = pluginConfig.isInstalled === 1;
+        if( !wasInstalled ){
+          if (plugin.installPlugin) {
+            await plugin.installPlugin(this, pathPluginFolder);// può lanciare → catch graceful sotto
           }
-          pluginConfig.isInstalled = 1;//ora devo aggiornare pluginConfig.json5 settando isInstalled = 1
-          // plugin.pluginConfig è già impostato sopra (linea 43)
-
-          // Aggiorno il flag nel file via editJson5: edit-by-position chirurgico
-          // che preserva commenti, trailing comma, formattazione e tutto il
-          // resto del file (saveJson5 con un oggetto avrebbe perso i commenti).
-          editJson5(path.join(__dirname, '..', 'plugins', pluginName, 'pluginConfig.json5'), 'isInstalled', 1)
-          .catch( (error) => {
-            logger.error('pluginSys', `Errore scrittura pluginConfig.json5 per ${pluginName}`, error);
-          });
-        }// if( pluginConfig.isInstalled == 0 ){
+        }
 
         // SISTEMA DI UPGRADE: controlla se la versione del plugin è cambiata
         const pluginDescription = loadJson5(path.join(__dirname, '..', 'plugins', pluginName, 'pluginDescription.json5'));
@@ -147,27 +143,38 @@ class pluginSys{
           this.#pluginsMiddlewares.push( plugin.getMiddlewareToAdd.bind(plugin) );// sarà un array di funzioni che generano un array
         }
 
-        // loadPluginn(); // viene chiamato dopo perchè durante il caricamento potrebbe acadere che abbia bisogno di librerie di altri plugin
-        try {
-          await plugin.loadPlugin(this, pathPluginFolder);// questo carica il plugin passando pluginSys e path
-        } catch (loadError) {
-          logger.error('pluginSys', `Errore durante caricamento plugin ${pluginName}`, loadError);
-          throw loadError; // Rilancia per gestione esterna
+        // loadPlugin: può aver bisogno di librerie di altri plugin (già caricati
+        // prima per via dell'ordine di dipendenza). Può lanciare → catch graceful.
+        await plugin.loadPlugin(this, pathPluginFolder);
+
+        // Persisti isInstalled:1 nel vivo SOLO se non era già 1 (transizione a
+        // installed). setJson5Key AGGIUNGE il campo se manca (clone fresco),
+        // altrimenti lo aggiorna — preservando i commenti.
+        if( !wasInstalled ){
+          try {
+            await setJson5Key(path.join(pathPluginFolder, 'pluginConfig.json5'), 'isInstalled', 1, { afterKey: 'schemaVersion' });
+          } catch (writeErr) {
+            logger.warn('pluginSys', `isInstalled non persistito per ${pluginName}: ${writeErr.message}`);
+          }
+          pluginConfig.isInstalled = 1;
         }
 
+        this.#pluginStates.set(pluginName, { state: 'installed', reason: null });
         logger.info('pluginSys', `Plugin caricato: ${pluginName}`);
+        return true;
 
       } catch (error) {
-        logger.error('pluginSys', `Errore fatale nel plugin ${pluginName}`, error);
-
-        // Rimuovi il plugin dalla lista dei plugin attivi se era stato aggiunto
-        if (this.#activePlugins.has(pluginName)) {
-          this.#activePlugins.delete(pluginName);
-        }
-
-        // Rilancia l'errore per bloccare il sistema (comportamento critico)
-        // Per permettere al sistema di continuare, commenta la riga seguente
-        throw new Error(`Impossibile caricare il plugin ${pluginName}: ${error.message}`);
+        // BOOT GRACEFUL: un plugin che fallisce in install/upgrade/load NON
+        // interrompe più l'avvio. Viene rimosso da ciò che ha eventualmente già
+        // registrato e marcato 'incomplete'; la cascata sui dipendenti
+        // non-ancora-caricati è gestita dal chiamante (vedi initialize()).
+        logger.error('pluginSys', `Errore nel caricamento del plugin ${pluginName} — skippato (il boot prosegue)`, error);
+        this.#activePlugins.delete(pluginName);
+        this.#routes.delete(pluginName);
+        this.#hooksPage.delete(pluginName);
+        delete this.#objectToShareToWebPages[pluginName];
+        this.#pluginStates.set(pluginName, { state: 'incomplete', reason: 'load-error', detail: error && error.message });
+        return false;
       }
 
 
@@ -197,215 +204,203 @@ class pluginSys{
       return true;
     });
 
-    const pluginsVersionMap = new Map();// mappa che conter le coppie nomePlugin -> Versione di tutti i plugin caricati o meno
+    // ── RACCOLTA DEI CANDIDATI (plugin con active:1) ──────────────────────────
+    // Niente più throw qui: le precondizioni (npm + dipendenze plugin) sono
+    // valutate da pluginStateResolver, che assegna lo stato. Vedi config-lifecycle §2/§4.
+
+    // Lettura della versione npm installata (iniettata in checkNpmDeps). fs.readFileSync
+    // (non require) per i moduli con "exports" che bloccano require del package.json.
+    const resolveInstalledVersion = (moduleName) => {
+      const modulePackagePath = path.join(__dirname, '..', 'node_modules', moduleName, 'package.json');
+      if (!fs.existsSync(modulePackagePath)) return null;
+      try {
+        return JSON.parse(fs.readFileSync(modulePackagePath, 'utf8')).version || null;
+      } catch (_) {
+        return null;
+      }
+    };
+
+    const candidates = [];                 // plugin active:1 da valutare
+    const candidateConfigs = new Map();    // nome → pluginConfig (vivo)
 
     for( const nameFile of Afiles ){
-
-      const pluginConfig = loadJson5(path.join(__dirname, '..', 'plugins', nameFile, 'pluginConfig.json5'));
-
-      if( pluginConfig.active == 1 ){// il plugin è attivo quindi lo carico e dopo ( nell funzione caricate plugin controllo anche se è installato )
-
-        // VALIDAZIONE DIPENDENZE NPM (nodeModuleDependency)
-        // Controlla che tutti i moduli npm richiesti siano installati e compatibili
-        if (pluginConfig.nodeModuleDependency && Object.keys(pluginConfig.nodeModuleDependency).length > 0) {
-          const missingModules = [];
-          const incompatibleModules = [];
-
-          for (const [moduleName, requiredVersion] of Object.entries(pluginConfig.nodeModuleDependency)) {
-            try {
-              // Verifica se il modulo è installato controllando il package.json
-              // (funziona sia per moduli JS che per pacchetti di soli asset come bootstrap-icons)
-              const modulePackagePath = path.join(__dirname, '..', 'node_modules', moduleName, 'package.json');
-
-              // Verifica esistenza del file package.json
-              if (!fs.existsSync(modulePackagePath)) {
-                throw new Error('Modulo non trovato');
-              }
-
-              // Ottieni la versione installata dal package.json del modulo
-              // Usa fs.readFileSync invece di require() perché alcuni moduli (es. ejs v4+)
-              // usano il campo "exports" in package.json che blocca require('./package.json')
-              const modulePackage = JSON.parse(fs.readFileSync(modulePackagePath, 'utf8'));
-              const installedVersion = modulePackage.version;
-
-              // Verifica compatibilità versione con semver
-              if (!semver.satisfies(installedVersion, requiredVersion)) {
-                incompatibleModules.push({
-                  name: moduleName,
-                  required: requiredVersion,
-                  installed: installedVersion
-                });
-              }
-            } catch (error) {
-              // Modulo non trovato
-              missingModules.push({
-                name: moduleName,
-                required: requiredVersion
-              });
-            }
-          }
-
-          // Se ci sono moduli mancanti o incompatibili, genera errore descrittivo
-          if (missingModules.length > 0 || incompatibleModules.length > 0) {
-            let errorMessage = `[pluginSys] ERRORE: Il plugin "${nameFile}" ha dipendenze npm non soddisfatte:\n`;
-
-            if (missingModules.length > 0) {
-              errorMessage += `\nModuli mancanti:\n`;
-              missingModules.forEach(m => {
-                errorMessage += `  - ${m.name}@${m.required}\n`;
-              });
-            }
-
-            if (incompatibleModules.length > 0) {
-              errorMessage += `\nModuli con versione incompatibile:\n`;
-              incompatibleModules.forEach(m => {
-                errorMessage += `  - ${m.name}: richiesta ${m.required}, installata ${m.installed}\n`;
-              });
-            }
-
-            // Genera comando npm install per risolvere
-            const allModules = [
-              ...missingModules.map(m => `${m.name}@${m.required}`),
-              ...incompatibleModules.map(m => `${m.name}@${m.required}`)
-            ];
-            errorMessage += `\nPer risolvere, eseguire:\n  npm install ${allModules.join(' ')}\n`;
-
-            throw new Error(errorMessage);
-          }
-        }
-
-        const pluginVersion = loadJson5(path.join(__dirname, '..', 'plugins', nameFile, 'pluginDescription.json5')).version;
-        pluginsVersionMap.set( nameFile, pluginVersion);// nameFile = nome plugin , creo la mappa : nomeplugin --> versione
-
-        //const plugin = require(`../plugins/${nameFile}/main.js`);// carico il plugin
-        const dependencyList = new Map(Object.entries( pluginConfig.dependency ));
-        if( dependencyList.size == 0  ){// allora il plugin non ha dipendenze è può essere caricato direttamente
-          //console.log( dependencyList );
-          await caricatePlugin( nameFile ) ;
-
-        }else{// il plugin ha dipendenze e bisogna fare in modo che queste 
-
-          this.#pluginsToActive.set( nameFile, dependencyList );//nameFile = nome plugin , dependencyList = mappa che contiene la lista delle dipendenze
-
-        }// if else
-        
-        
-      }// if( pluginConfig.active == 1 ){
-
-    }// for( const nameFile of Afiles ){
-
-    //ATTENZIONE ADESSO POTREBBERO ESSERCI DIPENDENZE NEI PLUGIN CHE POTREBBERO NON POTER ESSERE SODDISFATTE
-    //START CONTROLLO ERRORI: SE CI SONO : 1) DIPENDENZE NON SODDISFATTE (INCLUSI ERRORI DI VERSIONE) 2)DIPENDENZE INCROCIATE 3)DIPENDENZE CON SE STESSI
-
-    //ATTENZIONE I PUNTI 2 E 3 DEVONO ANCORA ESSERE SVLUPPATI E QUESTO PUÒ PORTARE A CICLI INFINIT
-    this.#pluginsToActive.forEach( ( dependencyMap, nomePlugin ) => {
-
-      dependencyMap.forEach( ( versionRequest, dependencyPluginName ) => {
-        const pluginExists = pluginsVersionMap.has(dependencyPluginName);
-        const versionOk = pluginExists && semver.satisfies( pluginsVersionMap.get(dependencyPluginName), versionRequest );
-        if( !pluginExists || !versionOk ){
-          throw new Error(`ERRORE dipendenza non soddisfatta il plugin ${nomePlugin} a come dipendenza il plugin ${dependencyPluginName} che deve essere almeno alla versione: ${versionRequest} ed è alla versione ${pluginsVersionMap.get(dependencyPluginName)}`);
-        }
-      });
-
-    });
-
-    // CONTROLLO DIPENDENZE CIRCOLARI (Punto 2 e 3)
-    // Algoritmo DFS per rilevare cicli nel grafo delle dipendenze
-    function detectCircularDependencies(pluginsToActive) {
-      const visited = new Set();
-      const recursionStack = new Set();
-      const cyclePath = [];
-
-      function hasCycle(pluginName) {
-        visited.add(pluginName);
-        recursionStack.add(pluginName);
-        cyclePath.push(pluginName);
-
-        const dependencies = pluginsToActive.get(pluginName);
-        if (dependencies) {
-          for (const [depName] of dependencies) {
-            // Ignora dipendenze già caricate (senza dipendenze proprie)
-            if (!pluginsToActive.has(depName)) {
-              continue;
-            }
-
-            if (!visited.has(depName)) {
-              if (hasCycle(depName)) {
-                return true;
-              }
-            } else if (recursionStack.has(depName)) {
-              // Ciclo trovato! Costruisci il percorso del ciclo
-              cyclePath.push(depName);
-              return true;
-            }
-          }
-        }
-
-        cyclePath.pop();
-        recursionStack.delete(pluginName);
-        return false;
+      let pluginConfig;
+      try {
+        pluginConfig = loadJson5(path.join(baseDir, nameFile, 'pluginConfig.json5'));
+      } catch (e) {
+        // pluginConfig.json5 assente → 'available' (codice presente, mai preso in
+        // carico); illeggibile → segnalato, comunque non bloccante.
+        const reason = (e && e.code === 'ENOENT') ? 'no-config' : 'config-error';
+        if (reason === 'config-error') logger.warn('pluginSys', `pluginConfig.json5 illeggibile per "${nameFile}": ${e.message}`);
+        this.#pluginStates.set(nameFile, { state: 'available', reason, detail: e && e.message });
+        continue;
       }
 
-      for (const [pluginName] of pluginsToActive) {
-        if (!visited.has(pluginName)) {
-          if (hasCycle(pluginName)) {
-            // Trova il punto di inizio del ciclo nel path
-            const cycleStart = cyclePath.indexOf(cyclePath[cyclePath.length - 1]);
-            const cycle = cyclePath.slice(cycleStart);
-            throw new Error(
-              `ERRORE: Dipendenza circolare rilevata!\n` +
-              `Ciclo: ${cycle.join(' -> ')}\n` +
-              `I plugin non possono dipendere circolarmente l'uno dall'altro.`
-            );
-          }
+      if( pluginConfig.active != 1 ){
+        this.#pluginStates.set(nameFile, { state: 'disabled', reason: null });
+        continue;
+      }
+
+      let version = '0.0.0';
+      try { version = loadJson5(path.join(baseDir, nameFile, 'pluginDescription.json5')).version || '0.0.0'; } catch (_) {}
+
+      const npm = checkNpmDeps(pluginConfig.nodeModuleDependency, resolveInstalledVersion);
+      const pluginDeps = new Map(Object.entries(pluginConfig.dependency || {}));
+      candidates.push({ name: nameFile, version, npmOk: npm.ok, npmDetail: npm, pluginDeps });
+      candidateConfigs.set(nameFile, pluginConfig);
+    }
+
+    // ── RISOLUZIONE DEGLI STATI (npm + dipendenze plugin + cascata + cicli) ────
+    const resolvedStates = resolvePluginStates(candidates);
+    for (const [name, st] of resolvedStates) this.#pluginStates.set(name, st);
+
+    // Persisti isInstalled:0 per i plugin già 'incomplete' qui (npm/dep/cicli),
+    // solo se il file dice diverso.
+    for (const c of candidates) {
+      if (resolvedStates.get(c.name).state === 'incomplete') {
+        const cfg = candidateConfigs.get(c.name);
+        if (cfg.isInstalled !== 0) {
+          try {
+            await setJson5Key(path.join(baseDir, c.name, 'pluginConfig.json5'), 'isInstalled', 0, { afterKey: 'schemaVersion' });
+          } catch (e) { logger.warn('pluginSys', `isInstalled non persistito per ${c.name}: ${e.message}`); }
         }
       }
     }
 
-    // Esegui controllo dipendenze circolari
-    detectCircularDependencies(this.#pluginsToActive);
+    // ── CARICAMENTO DEI PLUGIN 'installed', nell'ordine delle dipendenze ──────
+    // I plugin non-'installed' (available/disabled/incomplete) NON vengono caricati.
+    const installable = candidates.filter(c => resolvedStates.get(c.name).state === 'installed');
 
-    //END CONTROLLO ERRORI
-
-
-    // adesso mi trovo due mappe una con i plugin attivati e l'altra con quelli da attivare in basee alle dipendenze
-    // this.#pluginsToActive --> plugin da attivare this.#activePlugins --> plugin attivi
-
-    while( this.#pluginsToActive.size != 0 ){// finche ci sono elementi da attivare continua il ciclo
-      // for...of (non forEach) per poter AWAITARE caricatePlugin in sequenza:
-      // forEach non attende le callback async e romperebbe l'ordine per dipendenze.
-      for( const [ nomePlugin, dependency ] of this.#pluginsToActive ){//CONTROINTUITIVO: il forEach originale dava (valore, chiave); qui (chiave, valore)
-        //devo controllare se tutte le dipenze sono soddisfatte, cioè se tutti i moduli da cui dipende sono attivi
-
-        if( isPluginDependenciesSatisfied( this.#activePlugins, dependency ) ){// se tutte le pipendenze sono presenti nei plugin gia attivi allora attiva anche questo plugin
-
-          await caricatePlugin( nomePlugin ) ;// questa funzione attiverà il plugin ed aggiornerà la mappa con i plugin già attivati this.#activePlugin
-          this.#pluginsToActive.delete( nomePlugin );// dopo aver attivato il plugin lo rimuovo da gli elementi da attivare
-        }
+    // Tutte le dipendenze (plugin) del candidato sono già tra gli attivi?
+    const dependenciesActive = (depMap) => {
+      for (const depName of depMap.keys()) {
+        if (!this.#activePlugins.has(depName)) return false;
       }
-    }
-
-    // controllo che le chiavi della mappa passate come dipendenze siano tutti presenti nella pluginList
-    function isPluginDependenciesSatisfied( pluginsListMap , dependencyMap ){// ritorna vero se i moduli già caricati posso sodisfare le dipendeze del modulo da caricare ,falso altrimenti
-      //console.log( 'dependencyMap:', dependencyMap );
-
-      // FIX: Usare for...of invece di forEach per permettere il return
-      // Il return dentro forEach non esce dalla funzione ma solo dalla callback
-      for( const [pluginName, version] of dependencyMap ){
-        if( !pluginsListMap.has( pluginName ) ){
-          return false;
-        }
-      }
-
       return true;
+    };
+
+    // Marca un plugin 'incomplete' e persiste isInstalled:0 (solo se cambia).
+    const markIncomplete = async (name, reason, detail) => {
+      this.#pluginStates.set(name, { state: 'incomplete', reason, detail });
+      const cfg = candidateConfigs.get(name);
+      if (cfg && cfg.isInstalled !== 0) {
+        try {
+          await setJson5Key(path.join(baseDir, name, 'pluginConfig.json5'), 'isInstalled', 0, { afterKey: 'schemaVersion' });
+        } catch (e) { logger.warn('pluginSys', `isInstalled non persistito per ${name}: ${e.message}`); }
+      }
+    };
+
+    // Senza dipendenze: caricabili subito. Con dipendenze: in coda.
+    for (const c of installable) {
+      if (c.pluginDeps.size === 0) {
+        const ok = await caricatePlugin(c.name);
+        if (!ok) await markIncomplete(c.name, 'load-error', null);
+      } else {
+        this.#pluginsToActive.set(c.name, c.pluginDeps);
+      }
     }
+
+    // Coda: carica chi ha le dipendenze già attive; itera finché c'è progresso.
+    // for...of (non forEach) per AWAITARE caricatePlugin in sequenza.
+    let progress = true;
+    while (this.#pluginsToActive.size > 0 && progress) {
+      progress = false;
+      for (const [name, depMap] of this.#pluginsToActive) {
+        if (dependenciesActive(depMap)) {
+          this.#pluginsToActive.delete(name);
+          const ok = await caricatePlugin(name);
+          if (!ok) await markIncomplete(name, 'load-error', null);
+          progress = true;
+        }
+      }
+    }
+    // Rimasti in coda: una dipendenza è caduta al caricamento → incomplete (cascata).
+    for (const [name] of this.#pluginsToActive) {
+      await markIncomplete(name, 'dep-incomplete', { dep: '(fallita al caricamento)' });
+    }
+    this.#pluginsToActive.clear();
+
+    // ── BOX DI RIEPILOGO degli stati non-installed ───────────────────────────
+    this.#printPluginSummary();
 
 
 
     
 
   }// END initialize()
+
+  /**
+   * Stampa un box [PLUGINS] di riepilogo dei plugin rimasti 'incomplete' (boot
+   * graceful: l'avvio prosegue, ma questi plugin non sono stati caricati).
+   * Nessun output quando sono tutti a posto.
+   * @private
+   */
+  #printPluginSummary() {
+    const incomplete = [];
+    for (const [name, st] of this.#pluginStates) {
+      if (st.state === 'incomplete') incomplete.push([name, st]);
+    }
+    if (incomplete.length === 0) return;
+
+    const line = '[PLUGINS] ' + '═'.repeat(58);
+    const out = [
+      '',
+      line,
+      `[PLUGINS]  ⚠  ${incomplete.length} plugin non caricati (incomplete) — il boot è proseguito:`,
+      '[PLUGINS]',
+    ];
+    for (const [name, st] of incomplete) {
+      out.push(`[PLUGINS]    • ${name} — ${this.#describeReason(st)}`);
+    }
+    out.push(
+      '[PLUGINS]',
+      '[PLUGINS]  Risolvi le cause sopra (es. `npm install`, ripara/attiva le',
+      '[PLUGINS]  dipendenze) e riavvia: gli incomplete passano a installed da soli.',
+      line,
+      '',
+    );
+    console.warn(out.join('\n'));
+  }
+
+  /**
+   * Traduce { reason, detail } di uno stato 'incomplete' in un messaggio leggibile.
+   * @private
+   */
+  #describeReason(st) {
+    const d = (st && typeof st.detail === 'object' && st.detail) ? st.detail : {};
+    switch (st.reason) {
+      case 'npm': {
+        const parts = [];
+        if (d.missing && d.missing.length) parts.push('mancanti: ' + d.missing.map(m => `${m.name}@${m.required}`).join(', '));
+        if (d.incompatible && d.incompatible.length) parts.push('incompatibili: ' + d.incompatible.map(m => `${m.name} (richiesto ${m.required}, presente ${m.installed})`).join(', '));
+        return 'dipendenze npm non soddisfatte — ' + (parts.join('; ') || 'vedi log');
+      }
+      case 'dep-missing': return `dipendenza plugin assente: "${d.dep}"`;
+      case 'dep-version': return `dipendenza "${d.dep}" incompatibile (richiesta ${d.range}, presente ${d.version})`;
+      case 'dep-incomplete': return `dipende da "${d.dep}" che non è disponibile`;
+      case 'circular': return 'dipendenza circolare';
+      case 'load-error': return `errore durante il caricamento: ${(st && st.detail) || 'vedi log'}`;
+      default: return st.reason || 'motivo sconosciuto';
+    }
+  }
+
+  /**
+   * Stato runtime di un plugin (ciclo di vita config, Fase 2).
+   * @param {string} pluginName
+   * @returns {{state: string, reason: (string|null), detail?: any}|null}
+   *          state ∈ 'available'|'disabled'|'incomplete'|'installed'; null se sconosciuto.
+   */
+  getPluginState(pluginName) {
+    return this.#pluginStates.get(pluginName) || null;
+  }
+
+  /**
+   * Copia della mappa degli stati di tutti i plugin (nome → { state, reason, detail }).
+   * @returns {Map<string, object>}
+   */
+  getPluginStates() {
+    return new Map(this.#pluginStates);
+  }
 
   getMiddlewaresToLoad(){
     return this.#pluginsMiddlewares;
