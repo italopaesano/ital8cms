@@ -323,6 +323,9 @@ class pluginSys{
     // ── BOX DI RIEPILOGO degli stati non-installed ───────────────────────────
     this.#printPluginSummary();
 
+    // ── PLUGIN ESSENZIALI: se uno non è caricato → box [FATAL] + exit ─────────
+    this.#enforceEssentialPlugins();
+
 
 
     
@@ -382,6 +385,42 @@ class pluginSys{
       case 'load-error': return `errore durante il caricamento: ${(st && st.detail) || 'vedi log'}`;
       default: return st.reason || 'motivo sconosciuto';
     }
+  }
+
+  /**
+   * PLUGIN ESSENZIALI (ital8Config → essentialPlugins): se uno NON è tra gli
+   * attivi alla fine del boot, stampa un box [FATAL] e termina il processo — un
+   * sito con auth/access-control non funzionanti non deve essere servito
+   * (config-lifecycle §4). No-op se la lista è vuota o tutti gli essenziali sono attivi.
+   * @private
+   */
+  #enforceEssentialPlugins() {
+    const essential = (this.#ital8Conf && Array.isArray(this.#ital8Conf.essentialPlugins))
+      ? this.#ital8Conf.essentialPlugins : [];
+    if (essential.length === 0) return;
+
+    const failed = essential.filter((name) => !this.#activePlugins.has(name));
+    if (failed.length === 0) return;
+
+    const line = '[FATAL] ' + '═'.repeat(58);
+    const out = ['', line, `[FATAL]  🔴  ${failed.length} plugin ESSENZIALE/I non caricato/i — avvio interrotto:`, '[FATAL]'];
+    for (const name of failed) {
+      const st = this.#pluginStates.get(name);
+      const why = !st ? 'assente (cartella plugin non trovata)'
+        : st.state === 'disabled' ? 'disattivato (active:0)'
+        : st.state === 'available' ? 'non installato (pluginConfig.json5 assente)'
+        : this.#describeReason(st);
+      out.push(`[FATAL]    • ${name} — ${why}`);
+    }
+    out.push(
+      '[FATAL]',
+      '[FATAL]  Dichiarati essenziali in ital8Config.json5 → essentialPlugins.',
+      '[FATAL]  Risolvi le cause (npm install, ripara/riattiva) e riavvia.',
+      line,
+      '',
+    );
+    console.error(out.join('\n'));
+    process.exit(1);
   }
 
   /**

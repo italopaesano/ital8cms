@@ -50,11 +50,21 @@ program
         bail('client_error', '--dry-run non è supportato con --online (il reset online agisce sul server in esecuzione)');
       }
       if (!cmdOpts.yes) {
-        process.stdout.write(`Reset ONLINE di ${cmdOpts.theme ? 'themes' : 'plugins'}/${target}: rimuove i config vivi e RIAVVIA il server.\n`);
-        const ok = await confirm('Procedere? [y/N] ');
-        if (!ok) {
-          process.stdout.write('Reset annullato.\n');
-          process.exit(0);
+        const onlineEssential = !cmdOpts.theme && loadEssentialPlugins().includes(target);
+        if (onlineEssential) {
+          process.stdout.write(`\n⚠  "${target}" è ESSENZIALE. Reset ONLINE: rimuove i config vivi e RIAVVIA il server.\n`);
+          const typed = await promptLine(`   Per confermare, digita il nome esatto del plugin (${target}): `);
+          if (typed.trim() !== target) {
+            process.stdout.write('Reset annullato (nome non confermato).\n');
+            process.exit(0);
+          }
+        } else {
+          process.stdout.write(`Reset ONLINE di ${cmdOpts.theme ? 'themes' : 'plugins'}/${target}: rimuove i config vivi e RIAVVIA il server.\n`);
+          const ok = await confirm('Procedere? [y/N] ');
+          if (!ok) {
+            process.stdout.write('Reset annullato.\n');
+            process.exit(0);
+          }
         }
       }
       return sendCommand('reset', { target, theme: !!cmdOpts.theme });
@@ -362,7 +372,24 @@ async function doReset(target, cmdOpts) {
     process.exit(0);
   }
 
-  if (!cmdOpts.yes) {
+  const isEssential = !cmdOpts.theme && loadEssentialPlugins().includes(target);
+
+  if (isEssential) {
+    // Conferma RAFFORZATA per i plugin essenziali (config-lifecycle §4).
+    process.stdout.write(`\n⚠  "${target}" è un plugin ESSENZIALE (essentialPlugins).\n`);
+    process.stdout.write(`   Resettarlo può rompere autenticazione/controllo accessi o causare lockout del root.\n`);
+    process.stdout.write(`   File da rimuovere (rigenerati dai .default al prossimo boot):\n`);
+    for (const f of preview.removed) process.stdout.write(`     - ${f}\n`);
+    if (cmdOpts.yes) {
+      process.stdout.write('   (--yes: confermato senza prompt)\n');
+    } else {
+      const typed = await promptLine(`   Per confermare, digita il nome esatto del plugin (${target}): `);
+      if (typed.trim() !== target) {
+        process.stdout.write('Reset annullato (nome non confermato).\n');
+        process.exit(0);
+      }
+    }
+  } else if (!cmdOpts.yes) {
     process.stdout.write(`Reset di ${base}/${target}: verranno rimossi ${preview.removed.length} file vivi (rigenerati dai .default al prossimo boot):\n`);
     for (const f of preview.removed) process.stdout.write(`  - ${f}\n`);
     if (preview.userDataFiles.length) {
@@ -409,6 +436,27 @@ function confirm(question) {
       resolve(/^y(es)?$/i.test(String(answer).trim()));
     });
   });
+}
+
+// Prompt che ritorna la riga digitata (per la conferma rafforzata: ridigitare il nome).
+function promptLine(question) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(question, (answer) => { rl.close(); resolve(String(answer)); });
+  });
+}
+
+// Lista dei plugin essenziali da ital8Config.json5 (best-effort, [] se non leggibile).
+function loadEssentialPlugins() {
+  try {
+    const opts = program.opts();
+    const configPath = path.resolve(opts.config || './ital8Config.json5');
+    if (!fs.existsSync(configPath)) return [];
+    const cfg = loadJson5(configPath);
+    return Array.isArray(cfg.essentialPlugins) ? cfg.essentialPlugins : [];
+  } catch (_) {
+    return [];
+  }
 }
 
 // Risolve il socket path senza uscire dal processo (best-effort, per il solo

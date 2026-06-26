@@ -30,6 +30,13 @@
   // Profilo demo: CMS pre-popolato con utenti/contenuti di esempio (password note "demomode") — NON usare in produzione
   "demo": false,
 
+  // ⚠ Plugin ESSENZIALI: se uno di questi NON viene caricato al boot (incomplete,
+  // disattivato o assente) l'avvio si interrompe con un box [FATAL] — un sito con
+  // autenticazione o controllo accessi rotti non deve essere servito. Il reset via
+  // CLI di un essenziale richiede conferma rafforzata. Modificare con estrema cautela.
+  // Vedi docs/decisions/config-lifecycle.it.md §4.
+  "essentialPlugins": ["adminUsers", "adminAccessControl", "admin"],
+
   "debugMode": 0,
   "httpPort": 3000,
   "shutdownTimeout": 10000, // Timeout in ms per il graceful shutdown dei server HTTP/HTTPS (default 10s, dopo scatta process.exit forzato)
