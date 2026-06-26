@@ -1,7 +1,7 @@
 <!-- ital8doc v1-1 · tipo: decision · lang: it · ref -->
 # Decisione: ciclo di vita dei file di configurazione (default, stati, reset, versionamento)
 
-> **Stato: APPROVATA** (2026-06-25) — design condiviso, **implementazione pianificata a fasi, non ancora avviata**.
+> **Stato: IN IMPLEMENTAZIONE** — design **APPROVATO** (2026-06-25), implementazione avviata (2026-06-26). **Fase 0** (parziale) e **Fase 1** completate; dettaglio in *Stato di implementazione* (in fondo).
 
 ## Contesto
 
@@ -102,7 +102,10 @@ Stesso modello dei plugin, con una differenza: **niente `active` locale** (l'att
 | Lista plugin critici in `ital8Config.json5` | `essentialPlugins` |
 | Suffisso sidecar default | `x.default.json5` |
 | Campo versione di schema | `schemaVersion` |
-| Utility core di materializzazione | `materializeFromDefault` |
+| Utility core di materializzazione (una coppia default→live) | `materializeFromDefault` |
+| Utility core di materializzazione (una cartella plugin/tema) | `materializeDirDefaults` |
+| Utility core di materializzazione (un contenitore: `plugins/`/`themes/`) | `materializeMissingConfigs` |
+| Utility core di reset (rimuove i vivi di una cartella) | `resetConfigsToDefault` |
 
 ## Piano a fasi
 
@@ -126,6 +129,39 @@ Stesso modello dei plugin, con una differenza: **niente `active` locale** (l'att
 | `CHANGELOG.md` | breaking changes (progetto alpha) |
 
 *(Riferimento quantitativo: ~73 occorrenze di `isInstalled` nel codebase al momento della decisione.)*
+
+## Stato di implementazione
+
+Aggiornato al 2026-06-26 · branch `claude/dazzling-darwin-g8wmbd` (PR #306).
+
+### Completato
+
+**Fase 0 — generazione `.default` + untrack (parziale)**
+- Generati i `*.default.json5` dai vivi attuali (descrittori: copia − `isInstalled` + `schemaVersion`; contenuto/dati: stato minimale/vergine). Tool one-shot `scripts/generateConfigDefaults.js`, con verifica `loadJson5` su ogni output. `ccxt` escluso per policy (`ccxt.json5`/`customExchangesKey.json5`).
+- Untrack (`git rm --cached`) + git-ignore dei vivi di **contenuto** (`seoPages`, `redirectMap`, `accessControl`, `protectedRoutes`) e **dati utente** (`userAccount`, `userRole`) — rigenerati al boot dai `.default`.
+- `pluginInstallLog` riclassificato come **audit log runtime** → git-ignored e `.default` rimosso (creato on-demand da `pluginsInstall.js`, come `themeInstallLog`).
+- **Ancora da fare** (dipende dalle fasi successive): untrack dei **descrittori** (`pluginConfig`/`themeConfig` → Fase 2) e dei **core** (`ital8Config`/`adminConfig`/`koaSession` → Fase 3); `.npmignore`/pacchetto vergine (a untrack completo).
+
+**Fase 1 — materializzazione + reset**
+- Materializzazione a 3 livelli: `core/materializeFromDefault.js` (coppia), `core/materializeDirDefaults.js` (una cartella), `core/materializeMissingConfigs.js` (un contenitore), agganciata al boot in `index.js` **prima** di `pluginSys.initialize()`.
+- Reset: `core/resetConfigsToDefault.js` + comando `ital8cms-cli reset <target>` **offline** (filesystem, a server spento) e **`--online`** (via socket, con restart).
+- Test unit per ogni modulo + verifica di boot e di "clone fresco" (cancellazione dei vivi → rigenerazione dai `.default`).
+
+### Decisioni emerse in implementazione (integrano il design)
+- **Reset online = reset + restart** (self-respawn/supervisor), non hot-reload "senza riavvio" puro: realizza l'intento riusando l'infrastruttura di restart esistente; l'hot-reload per-plugin resta una miglioria futura.
+- **Conferma rafforzata `essentialPlugins`**: rimandata alla Fase 2 (lì vive la lista). In Fase 1 il reset usa conferma base + **avviso lockout** quando tocca dati utente (`userAccount`/`userRole`).
+- **`pluginInstallLog`** è un log runtime, non configurazione → nessun `.default`, git-ignored come `themeInstallLog`.
+- **`accessControl.default`** conserva l'esempio `customRules.userProfile` (regola di sicurezza *funzionale*, protegge la pagina profilo): svuotarlo esporrebbe la pagina. Spostare quella protezione "dove appartiene" (è `adminUsers` a possedere la pagina) è una miglioria architetturale separata.
+
+### Mappa fasi → stato
+| Fase | Stato |
+|---|---|
+| 0 — `.default` + migrazione repo | 🟡 generazione ✅ + untrack contenuto/dati ✅ · untrack descrittori/core + `.npmignore` ⏳ |
+| 1 — materializzazione + reset | ✅ completata |
+| 2 — stati + boot graceful | ⏳ da fare |
+| 3 — gate di init | ⏳ da fare |
+| 4 — `schemaVersion` (solo detection) | ⏳ da fare |
+| 5 — allineamento temi | ⏳ da fare |
 
 ## Punti rimandati
 
