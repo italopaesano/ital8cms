@@ -1,9 +1,0 @@
-// This file follows the JSON5 standard - comments and trailing commas are supported
-// Audit log delle installazioni di plugin da repo Git remoto.
-// Ogni entry registra esito (success/failure), repo, branch/tag, plugin name,
-// utente che ha avviato l'operazione, timestamp e (in caso di errore) il messaggio.
-// Il file viene scritto in modalità append-only dal modulo pluginsInstall.js.
-{
-  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
-  "entries": []
-}

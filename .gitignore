@@ -27,6 +27,20 @@ node_modules/
 /plugins/urlRedirect/redirectHitCount.json5
 /plugins/analytics/data/
 /plugins/admin/themeInstallLog.json5
+/plugins/admin/pluginInstallLog.json5
+
+# Config-lifecycle (docs/decisions/config-lifecycle.it.md): config "vivi"
+# materializzati dai rispettivi *.default.json5 al boot (materializeMissingConfigs).
+# I .default sono committati (fonte di verità); i vivi NO — sono rigenerabili e
+# per-istanza (dati utente inclusi). NB: i descrittori (pluginConfig/themeConfig)
+# e i core (ital8Config/adminConfig/koaSession) restano tracciati per ora: il loro
+# untrack è legato alla Fase 2 (stati/isInstalled) e al gate di init (Fase 3).
+/plugins/seo/seoPages.json5
+/plugins/urlRedirect/redirectMap.json5
+/plugins/adminAccessControl/accessControl.json5
+/plugins/rateLimiter/protectedRoutes.json5
+/plugins/adminUsers/userAccount.json5
+/plugins/adminUsers/userRole.json5
 
 # dbApi: file di database SQLite generati a runtime (plugin opzionale, disattivo di default)
 /plugins/dbApi/dbFile/*.db
