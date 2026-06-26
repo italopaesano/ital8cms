@@ -41,9 +41,10 @@ node_modules/
 /plugins/rateLimiter/protectedRoutes.json5
 /plugins/adminUsers/userAccount.json5
 /plugins/adminUsers/userRole.json5
-# Descrittori vivi: generati dai .default; isInstalled (stato runtime) scritto al boot.
+# Descrittori plugin vivi: generati dai .default; isInstalled (stato runtime)
+# scritto al boot. NB: i themeConfig restano tracciati per ora — la gestione del
+# ciclo di vita dei temi (stati/isInstalled) è la Fase 5.
 /plugins/*/pluginConfig.json5
-/themes/*/themeConfig.json5
 
 # dbApi: file di database SQLite generati a runtime (plugin opzionale, disattivo di default)
 /plugins/dbApi/dbFile/*.db
