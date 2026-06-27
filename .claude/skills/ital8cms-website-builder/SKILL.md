@@ -62,9 +62,10 @@ Ask the user **one** question with two clear options:
 
 ### 2A — Use an existing theme
 
-List the available **public** themes (skip admin themes — those with `isAdminTheme: true` in `themes/<name>/themeConfig.json5`):
+List the available **public** themes (skip admin themes — those with `isAdminTheme: true`):
 
-- Read every `themes/*/themeConfig.json5` and filter where `isAdminTheme` is `false` (or absent — treat as `false`).
+- For each theme directory, read its config preferring the live `themes/<name>/themeConfig.json5`, falling back to `themes/<name>/themeConfig.default.json5` when the live is absent. Per the config lifecycle ([`docs/decisions/config-lifecycle.it.md`](../../../docs/decisions/config-lifecycle.it.md)) the live config is git-ignored and materialized at boot, so in a fresh checkout (server not yet started) only the committed `.default` exists. `isAdminTheme` is present in both.
+- Filter where `isAdminTheme` is `false` (or absent — treat as `false`).
 - For each candidate, also read `themes/<name>/themeDescription.json5` to grab the human description.
 - Present them as a numbered list with name + description.
 
@@ -94,7 +95,7 @@ Do **not** touch `adminActiveTheme` — this skill works on public themes only.
 
 ## Step 4 — Resolve the public web root
 
-Read `themes/<selectedTheme>/themeConfig.json5` and check `wwwCustomPath`:
+Read `themes/<selectedTheme>/themeConfig.json5` (falling back to `themeConfig.default.json5` if the live file is absent — see the lifecycle note in Step 2A) and check `wwwCustomPath`:
 
 - `wwwCustomPath: 0` (or absent) → pages go under the project's `wwwPath` (default `/www`, read from `ital8Config.json5`).
 - `wwwCustomPath: 1` → pages go under `themes/<selectedTheme>/www/`. Create that directory if it does not exist.

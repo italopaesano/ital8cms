@@ -22,7 +22,7 @@ Do **not** invoke for: editing an existing plugin, creating a theme, configuring
 Before writing any file, gather these inputs from the user. **Do not guess.** Always propose 2–3 alternatives for naming when the user hasn't specified one (project convention).
 
 1. **Plugin variant** — one of:
-   - `minimal` — only `main.js`, `pluginConfig.json5`, `pluginDescription.json5`
+   - `minimal` — only `main.js`, `pluginConfig.default.json5`, `pluginDescription.json5`
    - `webPages` — adds `webPages/` directory with one EJS page
    - `admin` — admin plugin (name MUST start with `admin`), adds `adminWebSections/<sectionId>/` and registers section
    - `globalFunctions` — exposes one function globally via `getGlobalFunctionsForTemplates()` (must be added to whitelist in `ital8Config.json5`)
@@ -43,6 +43,7 @@ Before writing any file, gather these inputs from the user. **Do not guess.** Al
 ## Conventions to enforce
 
 - All config files use the `.json5` extension and a comment on line 1: `// This file follows the JSON5 standard - comments and trailing commas are supported`
+- **Config lifecycle (sidecar `.default`):** the plugin descriptor is committed as `pluginConfig.default.json5` (source of truth); the live `pluginConfig.json5` is git-ignored and materialized at boot. The `.default` has `schemaVersion` as its first key and **omits** `isInstalled` (a runtime state written at boot). The static `pluginDescription.json5` has **no** `.default` (it is committed as-is). See [`docs/decisions/config-lifecycle.it.md`](../../../docs/decisions/config-lifecycle.it.md).
 - Inside an ital8cms project, configs are loaded via `loadJson5()` — never `require()`. The generated plugin code follows this rule.
 - All routes returned from `getRouteArray()` MUST include the `access` field (`requiresAuth`, `allowedRoles`). Method strings MUST be UPPERCASE (`'GET'`, `'POST'`, `'PUT'`, `'DEL'`, `'ALL'`). Handler key MUST be `handler`, not `func`.
 - Naming: camelCase for files/dirs/variables/functions, PascalCase for classes, UPPER_SNAKE_CASE for constants.
@@ -66,15 +67,27 @@ Use these as the base output. Substitute placeholders `{{pluginName}}`, `{{descr
 }
 ```
 
-### `pluginConfig.json5`
+### `pluginConfig.default.json5`
+
+**Generate the `.default` sidecar, NOT a live `pluginConfig.json5`.** Per the config
+lifecycle ([`docs/decisions/config-lifecycle.it.md`](../../../docs/decisions/config-lifecycle.it.md)),
+`pluginConfig.default.json5` is the committed source of truth; the live
+`pluginConfig.json5` is git-ignored and **materialized at boot** from the `.default`
+(`materializeMissingConfigs`). Two rules for the `.default`:
+
+- **`schemaVersion`** (integer) is the **first key** — it versions the *structure* of
+  the file (bump it when you add/rename/remove keys).
+- **Do NOT include `isInstalled`** — it is a runtime state written at boot by
+  `pluginSys` (it tracks whether preconditions/install ran), not part of the source
+  of truth.
 
 **Minimal / webPages / globalFunctions variant:**
 
 ```json5
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
+  schemaVersion: 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   active: 1,
-  isInstalled: 0,
   weight: 100,
   dependency: {},
   nodeModuleDependency: {},
@@ -87,8 +100,8 @@ Use these as the base output. Substitute placeholders `{{pluginName}}`, `{{descr
 ```json5
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
+  schemaVersion: 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   active: 1,
-  isInstalled: 0,
   weight: 100,
 
   // Plugin con nome che inizia per "admin" sono automaticamente plugin admin.
@@ -274,7 +287,7 @@ globalFunctionsWhitelist: {
 
 1. Confirm the gathered inputs back to the user as a single summary block (variant, name, output path, files to create). Wait for explicit confirmation before writing.
 2. Verify the output directory does not already exist. If it does: stop, tell the user, do not overwrite.
-3. Create the directory tree and write the files using the Write tool. Order: `pluginDescription.json5`, `pluginConfig.json5`, `main.js`, then variant-specific files.
+3. Create the directory tree and write the files using the Write tool. Order: `pluginDescription.json5`, `pluginConfig.default.json5`, `main.js`, then variant-specific files. **Do not** write a live `pluginConfig.json5` — it is materialized at boot from the `.default`.
 4. After writing, print a short summary:
    - Files created (relative paths)
    - Manual steps the user must take (admin section registration, whitelist entry, moving the folder into `plugins/` if scaffolded standalone, restarting the server)
@@ -287,7 +300,7 @@ globalFunctionsWhitelist: {
 
 If the current directory does not look like an ital8cms project, still scaffold the plugin folder (do not require any specific surrounding structure). Tell the user explicitly that they need to:
 - Copy the generated folder into the `plugins/` directory of their ital8cms installation
-- Set `active: 1` in `pluginConfig.json5` (already the default) and restart the server
+- `active: 1` is already set in `pluginConfig.default.json5`; on restart the server materializes the live `pluginConfig.json5` from it and writes `isInstalled` — no manual file step needed
 
 ## Things to avoid
 

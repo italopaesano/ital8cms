@@ -173,6 +173,8 @@ If the file is a theme `head.ejs` partial that opens `<html>`, place it there. O
 
 In `plugins/simpleI18n/pluginConfig.json5`, modify only the `custom` block. Keep `active`, `weight`, `dependency`, `nodeModuleDependency` untouched.
 
+> **Config lifecycle note.** The live `pluginConfig.json5` is git-ignored and materialized at boot from `pluginConfig.default.json5` (see [`docs/decisions/config-lifecycle.it.md`](../../../docs/decisions/config-lifecycle.it.md)). Editing the **live** file takes effect immediately for this instance, but the change is **not** committed and is **lost on a config reset** (the file regenerates from the `.default`). If the user wants the language setup to be the persistent, version-controlled baseline, mirror the **same** `custom` edit into `plugins/simpleI18n/pluginConfig.default.json5` as well. Ask the user which they want (this instance only vs. committed baseline); when in doubt, update **both**. Never add `isInstalled` to the `.default` (it is a runtime state written at boot).
+
 ```json5
 "custom": {
   "defaultLang": "en",
@@ -211,7 +213,7 @@ If it's missing or different, alert the user. Do not add/edit it without explici
 3. **Enumerate the strings to wrap.** For each target file, identify the user-facing strings and present them in a numbered list. Ask the user to provide translations for every string in every `supportedLangs` language. Do not invent translations.
 4. **Summarize the planned changes** back to the user (files to edit, switcher placement, config changes, list of strings + translations) and **wait for explicit confirmation** before writing.
 5. **Apply edits** using the `Edit` tool (never rewrite a whole file via `Write` when you're modifying an existing template — it loses formatting and surrounding code). For multiple edits in one file, prefer multiple targeted `Edit` calls over one large diff.
-6. **If editing `pluginConfig.json5`**, modify only the `custom` block. Preserve the JSON5 header comment on line 1 and the existing structure. Use `loadJson5()`-compatible syntax (comments and trailing commas allowed).
+6. **If editing `pluginConfig.json5`**, modify only the `custom` block. Preserve the JSON5 header comment on line 1 and the existing structure. Use `loadJson5()`-compatible syntax (comments and trailing commas allowed). Apply the **config lifecycle note** above: the live file is git-ignored/regenerable — mirror the change into `pluginConfig.default.json5` if the user wants a committed baseline (when in doubt, both).
 7. **Print a final summary:**
    - Files modified (absolute paths)
    - URLs to test for each language (e.g., `http://localhost:3000/about.ejs?lang=it`)
