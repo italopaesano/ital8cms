@@ -41,10 +41,11 @@ node_modules/
 /plugins/rateLimiter/protectedRoutes.json5
 /plugins/adminUsers/userAccount.json5
 /plugins/adminUsers/userRole.json5
-# Descrittori plugin vivi: generati dai .default; isInstalled (stato runtime)
-# scritto al boot. NB: i themeConfig restano tracciati per ora — la gestione del
-# ciclo di vita dei temi (stati/isInstalled) è la Fase 5.
+# Descrittori vivi (plugin + temi): generati dai .default; isInstalled (stato
+# runtime) scritto al boot — per i plugin da pluginSys, per i temi bundled da
+# ensureThemesInstalled (Fase 5). I .default restano la fonte di verità.
 /plugins/*/pluginConfig.json5
+/themes/*/themeConfig.json5
 # Config core vivi: materializzati dal wizard (npm run start-configure) dai .default.
 # Al boot, se ital8Config.json5 manca → gate [INIT] che indirizza al wizard (Fase 3).
 /ital8Config.json5

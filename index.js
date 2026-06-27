@@ -71,6 +71,7 @@ function warnInitRequired() {
 
 const materializeMissingConfigs = require('./core/materializeMissingConfigs');
 const reconcileSchemaVersions = require('./core/reconcileSchemaVersions');
+const ensureThemesInstalled = require('./core/ensureThemesInstalled');
 const httpsManager = require('./core/httpsManager');
 
 // Log discreto se la sezione admin è stata disabilitata via CLI (o a mano).
@@ -133,16 +134,30 @@ async function startApp() {
     }
   }
 
+  // ── Stato di installazione dei temi bundled ────────────────────────────────
+  // I temi bundled (con themeConfig.default.json5) sono "installati per
+  // definizione" ma il .default non porta `isInstalled` (stato runtime, come per
+  // i descrittori dei plugin). Dopo la materializzazione, un vivo da clone fresco
+  // ne è privo: questo step lo riempie con `isInstalled: 1` (solo se assente; i
+  // temi clonati via themesInstall — senza .default — restano intatti a 0). È il
+  // gemello, per i temi, della persistenza di `isInstalled` fatta da pluginSys.
+  const themeInstallSummary = await ensureThemesInstalled(path.join(__dirname, 'themes'));
+  if (themeInstallSummary.updated.length) {
+    console.log(`[themeInstall] isInstalled:1 impostato su ${themeInstallSummary.updated.length} tema/i: ${themeInstallSummary.updated.map((u) => u.theme).join(', ')}`);
+  }
+  for (const failure of themeInstallSummary.errors) {
+    console.warn(`[themeInstall]   ⚠ ${failure.theme}: ${failure.message}`);
+  }
+
   // ── Drift di schemaVersion: riconcilia i config vivi col loro .default ──────
   // Se un .default ha una schemaVersion più recente del vivo (struttura evoluta),
   // aggiunge additivamente le sole chiavi nuove (valori esistenti intatti) e
   // segnala con un box [SCHEMA]. In sviluppo (vivi allineati) è un no-op
   // silenzioso. Soluzione-ponte (config-lifecycle §6): no migrazione automatica.
-  // NB: solo `plugins/` — i config vivi di plugin e core sono git-ignored, quindi
-  // la riconciliazione additiva al boot non sporca il working tree. `themes/` è
-  // escluso finché i themeConfig restano tracciati (untrack rimandato alla Fase 5).
+  // `plugins/` + `themes/` + i 3 core: tutti config vivi git-ignored, quindi la
+  // riconciliazione additiva al boot non sporca il working tree.
   await reconcileSchemaVersions({
-    containers: [path.join(__dirname, 'plugins')],
+    containers: [path.join(__dirname, 'plugins'), path.join(__dirname, 'themes')],
     pairs: [
       { label: 'ital8Config.json5', defaultPath: path.join(__dirname, 'ital8Config.default.json5'), livePath: path.join(__dirname, 'ital8Config.json5') },
       { label: 'core/admin/adminConfig.json5', defaultPath: path.join(__dirname, 'core/admin/adminConfig.default.json5'), livePath: path.join(__dirname, 'core/admin/adminConfig.json5') },
