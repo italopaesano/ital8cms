@@ -3,6 +3,10 @@
 
 Storico delle modifiche del progetto e della documentazione (voci dalla più recente).
 
+- v2.40.0 (2026-06-27): **DOCS** - Ciclo di vita config, corsia trasversale (ultimo elemento): deep-dive negli EXPLAIN di `pluginSys` e `themeSys`. **Chiude la corsia trasversale e l'intera feature config-lifecycle.**
+  - **`core/EXPLAIN-pluginsSys.it.md`:** nuova sezione "9. Stati dei plugin e boot graceful (ciclo di vita config)" — tabella stati (`available`/`disabled`/`incomplete`/`installed`), `pluginStateResolver` (modulo puro: `checkNpmDeps` + `resolvePluginStates` con cascata a punto fisso e cicli), boot graceful + box `[PLUGINS]`, `essentialPlugins` + `[FATAL]`, `isInstalled` Variante 1 (persistito via `setJson5Key`, `installPlugin()` alla transizione non-1→1), relazione con materializzazione e `schemaVersion`. Aggiornata la sottosezione `installPlugin()` e rinumerate le sezioni successive (10–13).
+  - **`core/EXPLAIN-themeSys.it.md`:** nuova sezione "12. Ciclo di vita del themeConfig" — sidecar `themeConfig.default.json5` (senza `isInstalled`/`active`), `ensureThemesInstalled` (isInstalled:1 al boot per i bundled, non distruttivo), drift di `schemaVersion`, ordine al boot prima di `themeSys`. Indice e footer (v2.2.0) aggiornati.
+  - **Files Modified:** `/core/EXPLAIN-pluginsSys.it.md`, `/core/EXPLAIN-themeSys.it.md`, `/CHANGELOG.md`.
 - v2.39.0 (2026-06-27): **DOCS** - Ciclo di vita config, corsia trasversale: allineamento di `CLAUDE.md` al modello completato (fasi 0–5). Aggiornati:
   - **Flusso di avvio:** lo step "Materializza i config vivi" diventa "Ciclo di vita config" con gate di init `[INIT]`, materializzazione, `ensureThemesInstalled`, e drift di `schemaVersion` (`reconcileSchemaVersions` + box `[SCHEMA]`); lo step "Carica i plugin" ora descrive il **boot graceful** (stati + box `[PLUGINS]` + `essentialPlugins`/`[FATAL]`).
   - **Architettura sistema plugin:** nuova sezione *Stati dei plugin (boot graceful)* (tabella `available`/`disabled`/`incomplete`/`installed`, `pluginStateResolver`, `essentialPlugins`, Variante 1 di `isInstalled`); aggiornato il paragrafo sidecar (**tutti** i vivi git-ignored, migrazione repo completa).

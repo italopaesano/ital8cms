@@ -21,6 +21,7 @@
 9. [API Reference](#9-api-reference)
 10. [Integrazione con pluginSys](#10-integrazione-con-pluginsys)
 11. [Esempi di Utilizzo](#11-esempi-di-utilizzo)
+12. [Ciclo di vita del themeConfig](#12-ciclo-di-vita-del-themeconfig-sidecar-default--isinstalled-al-boot)
 
 ---
 
@@ -1114,6 +1115,41 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
 
 ---
 
+## 12. Ciclo di vita del `themeConfig` (sidecar `.default` + `isInstalled` al boot)
+
+Come i descrittori dei plugin, il `themeConfig.json5` segue il *ciclo di vita config* ([`docs/decisions/config-lifecycle.it.md`](../docs/decisions/config-lifecycle.it.md), Fase 5). `themeSys` **legge** il `themeConfig.json5` vivo (validazione, dipendenze, `isAdminTheme`), ma chi lo **crea** e ne gestisce lo stato di installazione è il boot, prima che `themeSys` sia istanziato.
+
+### Sidecar `themeConfig.default.json5`
+
+Ogni tema **bundled** (distribuito con ital8cms) ha una coppia:
+- **`themeConfig.default.json5`** — committato, **fonte di verità**. Prima chiave `schemaVersion`; **non** contiene `isInstalled` (stato runtime) né `active` (rimosso dallo schema — vedi [`theme-active-isinstalled.it.md`](../docs/decisions/theme-active-isinstalled.it.md)).
+- **`themeConfig.json5`** — vivo, **git-ignored**, materializzato al boot dal `.default` (`materializeMissingConfigs`).
+
+Un tema **clonato** a runtime dall'admin (`plugins/admin/themesInstall.js`) **non** ha un `.default`: il suo `themeConfig.json5` è scritto direttamente dall'installer con `isInstalled: 0` (attivazione manuale).
+
+### `isInstalled` al boot — `ensureThemesInstalled`
+
+Poiché il `.default` non porta `isInstalled`, un vivo appena materializzato (clone fresco) ne è privo. Lo step di boot [`core/ensureThemesInstalled.js`](./ensureThemesInstalled.js) riempie il gap: per ogni tema **bundled** (con `.default`) il cui vivo manca di `isInstalled`, persiste `isInstalled: 1` via `setJson5Key` ("installato per definizione"). È:
+- **non distruttivo:** imposta solo se assente — non sovrascrive un valore esistente;
+- **mirato ai bundled:** i temi clonati (senza `.default`) non vengono toccati, così il loro `isInstalled: 0` è preservato.
+
+È il gemello, per i temi, della persistenza di `isInstalled` fatta da `pluginSys` per i plugin (Variante 1), con un modello più semplice: i temi non hanno i 4 stati dei plugin; `isInstalled` è un flag **gestito** (1 per i bundled, 0→admin per i clonati), non una precondizione calcolata dalle dipendenze.
+
+### `schemaVersion` e drift
+
+Anche i `themeConfig` partecipano al rilevamento del drift di `schemaVersion`: al boot `reconcileSchemaVersions` (con `themes/` nello scope) confronta il vivo col `.default` e, se il `.default` è più avanti, fa il **merge additivo** (solo chiavi nuove) + box `[SCHEMA]`. Poiché i vivi dei temi sono git-ignored, questa scrittura al boot non sporca il working tree.
+
+### Ordine al boot (in `index.js`, prima di `themeSys`)
+
+1. `materializeMissingConfigs('themes')` — crea i `themeConfig.json5` vivi mancanti dai `.default`.
+2. `ensureThemesInstalled('themes')` — scrive `isInstalled: 1` sui bundled che ne sono privi.
+3. `reconcileSchemaVersions({ containers: [..., 'themes'] })` — allinea `schemaVersion` (merge additivo).
+4. `new themeSys(ital8Conf, pluginSys)` — a questo punto i `themeConfig.json5` esistono e sono completi.
+
+Dettaglio completo nel [decision record](../docs/decisions/config-lifecycle.it.md).
+
+---
+
 ## Link Utili
 
 - **Guida Utente:** [themes/EXPLAIN.md](../themes/EXPLAIN.md)
@@ -1125,9 +1161,12 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
 
 **Fine documentazione tecnica**
 
-**Versione:** 2.1.0
-**Data:** 2025-12-06
+**Versione:** 2.2.0
+**Data:** 2026-06-27
 **Autore:** AI Assistant per ital8cms
+
+**Changelog v2.2.0 (2026-06-27):**
+- Aggiunta sezione 12 "Ciclo di vita del themeConfig": sidecar `themeConfig.default.json5`, `isInstalled` scritto al boot da `ensureThemesInstalled` per i temi bundled, drift di `schemaVersion`, ordine al boot. Allineamento con la Fase 5 del ciclo di vita config.
 
 **Changelog v2.1.0 (2025-12-06):**
 - Semplificato sistema wwwCustomPath: rimossa variabile wwwCustomPathValue (era ridondante)

@@ -525,7 +525,7 @@ async function loadPlugin(pluginSys, pathPluginFolder) {
 
 ### installPlugin()
 
-Chiamata **una sola volta** quando `isInstalled === 0`. Esegue setup iniziale.
+Chiamata **una sola volta**, alla **transizione `isInstalled` non-1 → 1** (clone fresco, o dipendenze appena risolte che portano il plugin a `installed`). Esegue il setup iniziale. Vedi *Stati dei plugin e boot graceful* sotto per come lo stato e `isInstalled` sono calcolati e persistiti (Variante 1).
 
 ```js
 async function installPlugin(pluginSys, pathPluginFolder) {
@@ -545,8 +545,8 @@ async function installPlugin(pluginSys, pathPluginFolder) {
 
   console.log('MyPlugin installed!');
 
-  // IMPORTANTE: Aggiorna pluginConfig.json5
-  // isInstalled verrà impostato a 1 automaticamente
+  // NB: non serve scrivere isInstalled a mano — il boot lo persiste a 1 nel
+  // pluginConfig.json5 vivo via setJson5Key (vedi "Stati dei plugin" sotto).
 }
 ```
 
@@ -670,7 +670,55 @@ I plugin vengono caricati in base a:
 
 ---
 
-## 9. Sistema di Logging
+## 9. Stati dei plugin e boot graceful (ciclo di vita config)
+
+Dalla Fase 2 del *ciclo di vita config* ([`docs/decisions/config-lifecycle.it.md`](../docs/decisions/config-lifecycle.it.md)), `pluginSys.initialize()` non si limita a "caricare i plugin attivi": calcola a ogni boot uno **stato** per ciascun plugin e carica **solo** quelli pronti, senza mai bloccare l'avvio (boot **graceful**).
+
+### Gli stati
+
+| Stato | Significato | Caricato? |
+|---|---|---|
+| `available` | Nessun `pluginConfig.json5` vivo: il plugin esiste su disco ma non è mai stato "preso in carico". | No |
+| `disabled` | `active != 1` nel `pluginConfig.json5`. | No |
+| `incomplete` | Preso in carico (`active: 1`) ma con **precondizioni mancanti**: dipendenza npm assente/incompatibile, dipendenza plugin assente/incompatibile/`incomplete`, ciclo, oppure `loadPlugin()` ha lanciato. | No |
+| `installed` | Precondizioni soddisfatte → `loadPlugin()` eseguito con successo. | Sì |
+
+Getter pubblici: `getPluginState(name)` → la stringa di stato; `getPluginStates()` → la mappa completa `{ name: state }`.
+
+### `pluginStateResolver` (modulo puro)
+
+La logica di calcolo degli stati vive in [`core/pluginStateResolver.js`](./pluginStateResolver.js), un modulo **puro** (nessun I/O, nessun side effect) → testabile in isolamento. Espone:
+
+- **`checkNpmDeps(deps, resolveInstalledVersion)`** — verifica le `nodeModuleDependency` contro le versioni installate (la risoluzione della versione è **iniettata**: il modulo resta puro). Ritorna l'esito + l'elenco di mancanti/incompatibili.
+- **`resolvePluginStates(candidates)`** — dati i candidati (con `active`, deps npm già valutate, deps plugin), risolve lo stato di ciascuno con una **cascata a punto fisso**: se A dipende da B e B è `incomplete`, A diventa `incomplete`; si itera finché lo stato non si stabilizza. Include il **rilevamento dei cicli** (un ciclo → tutti i suoi membri `incomplete`). Ogni `incomplete` porta una `reason` (`npm` / `dep-missing` / `dep-version` / `dep-incomplete` / `circular`).
+
+### Boot graceful
+
+Un fallimento di un plugin **non** interrompe l'avvio:
+- il plugin che lancia / ha precondizioni mancanti è marcato `incomplete` e **saltato**;
+- i suoi dipendenti cascata a `incomplete`;
+- un box `[PLUGINS]` riepiloga a fine boot quali plugin non sono stati caricati e perché;
+- il boot **completa sempre** e il server parte.
+
+### `essentialPlugins` — l'eccezione fatale
+
+Alcuni plugin sono **essenziali**: un sito con autenticazione / controllo accessi rotti non va servito. La lista vive in `ital8Config.json5 → essentialPlugins` (default: `adminUsers`, `adminAccessControl`, `admin`). Se un essenziale **non** raggiunge lo stato `installed`, il boot emette un box `[FATAL]` e fa `process.exit` — è esattamente il caso in cui NON vogliamo servire il sito (non graceful).
+
+### `isInstalled` = "precondizioni soddisfatte" (Variante 1)
+
+`isInstalled` **non** è una scelta dell'utente: è lo **stato runtime** "precondizioni soddisfatte", persistito nel `pluginConfig.json5` vivo dal boot (Variante 1, scelta dal maintainer). Meccanica:
+- al boot, dopo aver calcolato lo stato, `pluginSys` scrive `isInstalled` nel vivo via [`core/setJson5Key.js`](./setJson5Key.js) (add-or-update preservando i commenti);
+- `installPlugin()` è agganciato alla **transizione `isInstalled` non-1 → 1**: gira quando un plugin diventa `installed` per la prima volta (clone fresco) o dopo che dipendenze appena risolte lo portano a `installed`. Così la presenza/valore di `isInstalled` traccia anche il setup one-shot, **senza un flag separato**.
+
+Il `*.default.json5` del descrittore **non** contiene `isInstalled` (è stato runtime): è scritto solo nel vivo, al boot.
+
+### Relazione con materializzazione e `schemaVersion`
+
+Prima ancora di `initialize()`, il boot (`index.js`) **materializza** i `pluginConfig.json5` vivi mancanti dai rispettivi `.default` (`materializeMissingConfigs`) e **riconcilia** gli eventuali drift di `schemaVersion` (`reconcileSchemaVersions`, merge additivo + box `[SCHEMA]`). Quindi, quando `initialize()` legge i config, questi esistono e sono strutturalmente allineati. Dettaglio completo nel [decision record](../docs/decisions/config-lifecycle.it.md).
+
+---
+
+## 10. Sistema di Logging
 
 Il plugin system usa il logger centralizzato (`core/logger.js`):
 
@@ -706,7 +754,7 @@ LOG_LEVEL=DEBUG npm start
 
 ---
 
-## 10. Accesso al Plugin System
+## 11. Accesso al Plugin System
 
 ### Nei Plugin
 
@@ -736,7 +784,7 @@ async function loadPlugin(pluginSys, pathPluginFolder) {
 
 ---
 
-## 11. Esempio Plugin Completo
+## 12. Esempio Plugin Completo
 
 Vedi `/plugins/exampleComplete/` per un esempio completo che dimostra tutte le funzionalità:
 
@@ -753,7 +801,7 @@ Per attivarlo:
 
 ---
 
-## 12. Best Practices
+## 13. Best Practices
 
 ### Sicurezza
 
