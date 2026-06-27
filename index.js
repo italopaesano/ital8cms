@@ -4,6 +4,8 @@ const app = new koa();
 const koaClassicServer = require("koa-classic-server");
 const ejs = require("ejs");
 const loadJson5 = require('./core/loadJson5');
+const fs = require('fs');
+const path = require('path');
 
 // ━━━ Rete di sicurezza a livello di processo (vedi core/processSafetyNet.js) ━━━
 // Registrata SUBITO — prima del caricamento della config e di tutto il boot —
@@ -29,14 +31,44 @@ installProcessSafetyNet({
 // sintassi JSON5 errata) è fatale: box [CONFIG] chiaro e azionabile + exit 1,
 // invece di delegarlo alla rete processSafetyNet (che darebbe un messaggio meno
 // specifico). La rete resta installata sopra come backstop per tutto il resto.
+// Gate di init: il config globale è la prima cosa di cui il boot ha bisogno (senza,
+// non si conosce nemmeno la porta). Se manca ital8Config.json5 ma esiste il suo
+// .default, il progetto non è ancora inizializzato → box [INIT] che indirizza al
+// wizard (config-lifecycle §5). NON una pagina web (non c'è ancora un server).
 let ital8Conf;
+const ital8ConfigPath = path.join(__dirname, 'ital8Config.json5');
+if (!fs.existsSync(ital8ConfigPath) && fs.existsSync(path.join(__dirname, 'ital8Config.default.json5'))) {
+  warnInitRequired();
+  process.exit(1);
+}
 try {
-  ital8Conf = loadJson5('./ital8Config.json5');
+  ital8Conf = loadJson5(ital8ConfigPath);
 } catch (configError) {
   loadJson5.warnConfigError('ital8Config.json5', configError);
   process.exit(1);
 }
-const path = require('path');
+
+// Box [INIT] (config-lifecycle §5): config globale assente, progetto non inizializzato.
+function warnInitRequired() {
+  const line = '[INIT] ' + '═'.repeat(58);
+  console.error([
+    '',
+    line,
+    '[INIT]  ⚙  ital8cms non è ancora inizializzato',
+    line,
+    '[INIT]  Manca il file di configurazione globale ital8Config.json5',
+    '[INIT]  (è presente solo il modello ital8Config.default.json5).',
+    '[INIT]',
+    '[INIT]  Esegui il wizard di inizializzazione:',
+    '[INIT]',
+    '[INIT]      npm run start-configure',
+    '[INIT]',
+    '[INIT]  Creerà i file di configurazione e guiderà la prima configurazione.',
+    line,
+    '',
+  ].join('\n'));
+}
+
 const materializeMissingConfigs = require('./core/materializeMissingConfigs');
 const httpsManager = require('./core/httpsManager');
 

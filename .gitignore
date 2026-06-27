@@ -45,6 +45,11 @@ node_modules/
 # scritto al boot. NB: i themeConfig restano tracciati per ora — la gestione del
 # ciclo di vita dei temi (stati/isInstalled) è la Fase 5.
 /plugins/*/pluginConfig.json5
+# Config core vivi: materializzati dal wizard (npm run start-configure) dai .default.
+# Al boot, se ital8Config.json5 manca → gate [INIT] che indirizza al wizard (Fase 3).
+/ital8Config.json5
+/core/admin/adminConfig.json5
+/core/priorityMiddlewares/koaSession.json5
 
 # dbApi: file di database SQLite generati a runtime (plugin opzionale, disattivo di default)
 /plugins/dbApi/dbFile/*.db

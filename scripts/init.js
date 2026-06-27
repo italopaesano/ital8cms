@@ -16,6 +16,7 @@ const PluginScanner = require('./lib/pluginScanner')
 const PluginInitRunner = require('./lib/pluginInitRunner')
 const StateManager = require('./lib/stateManager')
 const BackupManager = require('./lib/backupManager')
+const materializeFromDefault = require('../core/materializeFromDefault')
 
 /**
  * Banner di benvenuto
@@ -189,6 +190,20 @@ async function main() {
     let finalConfig = null
 
     if (shouldConfigureGlobal) {
+      // Materializza i config core mancanti dai rispettivi .default. In un clone
+      // fresco i vivi (ital8Config/koaSession/adminConfig) sono git-ignored e
+      // assenti: il wizard li crea dai default, poi li configura (config-lifecycle §5).
+      const projectRoot = path.join(__dirname, '..')
+      const coreConfigs = [
+        ['ital8Config.default.json5', 'ital8Config.json5'],
+        ['core/priorityMiddlewares/koaSession.default.json5', 'core/priorityMiddlewares/koaSession.json5'],
+        ['core/admin/adminConfig.default.json5', 'core/admin/adminConfig.json5'],
+      ]
+      for (const [def, live] of coreConfigs) {
+        const res = await materializeFromDefault(path.join(projectRoot, def), path.join(projectRoot, live))
+        if (res.created) logger.success(`Config core materializzato dal default: ${live}`)
+      }
+
       // Backup configurazione esistente
       const configPath = path.join(__dirname, '../ital8Config.json5')
       backupManager.backupGlobalFile(configPath)
