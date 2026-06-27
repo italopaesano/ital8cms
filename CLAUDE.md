@@ -185,17 +185,17 @@ Comprendere la sequenza di inizializzazione è fondamentale:
    - Sessioni (stato di autenticazione) - **OPZIONALE** (configurabile in `ital8Config.json5`)
    - Router (routing degli URL) - **CORE** (sempre attivo)
    - L'ordine è fisso e garantito: bodyParser → session → router
-3. **Materializza i config vivi mancanti** (`materializeMissingConfigs` su `plugins/` e `themes/`):
-   - Per ogni plugin/tema crea i `x.json5` mancanti copiando i rispettivi `x.default.json5` (atomico, zero interazione)
-   - Avviene **prima** del caricamento plugin, così i config esistono quando i plugin li leggono
-   - Vedi *ciclo di vita config* → [`docs/decisions/config-lifecycle.it.md`](./docs/decisions/config-lifecycle.it.md)
+3. **Ciclo di vita config** (prima del caricamento plugin/temi — vedi [`docs/decisions/config-lifecycle.it.md`](./docs/decisions/config-lifecycle.it.md)):
+   - **Gate di init:** se manca `ital8Config.json5` ma esiste il suo `.default` → box `[INIT]` che indirizza a `npm run start-configure` + `exit` (senza config globale non si conosce nemmeno la porta).
+   - **Materializza i vivi mancanti** (`materializeMissingConfigs` su `plugins/` e `themes/`): crea i `x.json5` mancanti copiando i rispettivi `x.default.json5` (atomico, zero interazione), così i config esistono quando i plugin/temi li leggono.
+   - **`isInstalled` dei temi bundled** (`ensureThemesInstalled`): i `.default` non portano `isInstalled` (stato runtime); per i temi bundled (con `.default`) il cui vivo ne è privo, persiste `isInstalled: 1`. Gemello, per i temi, della persistenza fatta da `pluginSys`.
+   - **Drift di `schemaVersion`** (`reconcileSchemaVersions` su `plugins/`, `themes/` e i 3 core): se un `.default` ha `schemaVersion` più recente del vivo, **merge additivo** (aggiunge solo le chiavi nuove, valori esistenti intatti) + box `[SCHEMA]` per i drift significativi. Soluzione-ponte: niente migrazione automatica.
 4. **Inizializza il sistema plugin** (`pluginSys`)
-5. **Carica i plugin attivi:**
-   - Risolve le dipendenze
-   - Carica nell'ordine delle dipendenze
-   - Chiama `loadPlugin()` su ciascuno
-   - Aggiunge i metadata agli oggetti plugin (`pluginName`, `pathPluginFolder`)
-   - Condivide oggetti tra i plugin
+5. **Carica i plugin attivi** (boot **graceful**, vedi *Stati dei plugin* sotto):
+   - Calcola lo **stato** di ogni plugin (`available`/`disabled`/`incomplete`/`installed`); carica solo gli `installed`
+   - Risolve le dipendenze e carica nell'ordine delle dipendenze; un fallimento (`throw`, dep mancante/incompatibile, ciclo) → skip + marcatura `incomplete` + box `[PLUGINS]`, **mai** boot bloccato — salvo gli `essentialPlugins` (un essenziale non caricato → box `[FATAL]` + exit)
+   - Persiste `isInstalled` nel `pluginConfig.json5` vivo (Variante 1); `installPlugin()` gira solo alla transizione `isInstalled` non-1→1
+   - Chiama `loadPlugin()` su ciascuno; aggiunge i metadata (`pluginName`, `pathPluginFolder`); condivide oggetti tra i plugin
 6. **Registra le rotte dei plugin:**
    - Prefisso: `/${apiPrefix}/${pluginName}`
    - Default: `/api/{pluginName}/...`
@@ -247,11 +247,26 @@ module.exports = {
 - `pluginConfig.json5`: `schemaVersion` (intero, versione della *struttura* del file), `active` (0/1), `isInstalled`, `weight` (priorità, minore = caricato prima), `dependency` (semver), `nodeModuleDependency`, `custom` (impostazioni specifiche).
 - `pluginDescription.json5`: `name`, `version`, `description`, `author`, `email`, `license`.
 
-**Sidecar `*.default.json5` (ciclo di vita dei config):** ogni file di configurazione modificabile ha un sidecar **`x.default.json5`** committato (fonte di verità) accanto al **`x.json5`** vivo. Al boot i vivi mancanti sono **materializzati** dai default (`materializeMissingConfigs`); il **reset** (`ital8cms-cli reset <plugin>`, offline o `--online`) li rimuove per farli rigenerare. Nei `*.default.json5` dei descrittori `schemaVersion` è la **prima chiave** e `isInstalled` è **assente** (è stato runtime). I vivi di *contenuto* e *dati utente* sono git-ignored (rigenerabili); i descrittori e i core restano tracciati per ora. → [`docs/decisions/config-lifecycle.it.md`](./docs/decisions/config-lifecycle.it.md).
+**Sidecar `*.default.json5` (ciclo di vita dei config):** ogni file di configurazione modificabile ha un sidecar **`x.default.json5`** committato (fonte di verità) accanto al **`x.json5`** vivo. Al boot i vivi mancanti sono **materializzati** dai default (`materializeMissingConfigs`); il **reset** (`ital8cms-cli reset <plugin>`, offline o `--online`) li rimuove per farli rigenerare. Nei `*.default.json5` dei descrittori `schemaVersion` è la **prima chiave** e `isInstalled` è **assente** (è stato runtime, scritto al boot). **Tutti i vivi sono git-ignored** (contenuto, dati utente, descrittori `pluginConfig`/`themeConfig` e core `ital8Config`/`adminConfig`/`koaSession`) — rigenerabili dai `.default` (la migrazione repo è completa, fasi 0–5). Se un `.default` evolve la struttura (bump di `schemaVersion`), al boot `reconcileSchemaVersions` fa il **merge additivo** sui vivi (solo chiavi nuove) + box `[SCHEMA]`. → [`docs/decisions/config-lifecycle.it.md`](./docs/decisions/config-lifecycle.it.md).
 
 ### Ordine di caricamento
 
 1. **weight** crescente → 2. **risoluzione dipendenze** (prima le dipendenze) → 3. **alfabetico** (a parità di weight). I plugin caricati dopo dispongono di quelli caricati prima.
+
+### Stati dei plugin (boot graceful)
+
+`pluginSys.initialize()` calcola a ogni boot lo **stato** di ciascun plugin (`pluginStateResolver` — modulo puro: `checkNpmDeps` + `resolvePluginStates` con cascata a punto fisso e rilevamento cicli). Vengono caricati **solo** i plugin `installed`. Getter: `getPluginState(name)` / `getPluginStates()`.
+
+| Stato | Significato |
+|---|---|
+| `available` | nessun `pluginConfig.json5` vivo (mai preso in carico) |
+| `disabled` | `active != 1` |
+| `incomplete` | preso in carico ma **precondizioni mancanti** (dep npm/plugin assenti o incompatibili, ciclo, errore di `loadPlugin`) |
+| `installed` | precondizioni soddisfatte → caricato |
+
+- **Boot graceful:** un fallimento (`throw`, dep mancante/incompatibile, ciclo) **non** blocca l'avvio — il plugin è marcato `incomplete`, i suoi dipendenti cascata a `incomplete`, e un box `[PLUGINS]` riepiloga. Il boot **completa sempre**.
+- **`essentialPlugins`** (lista in `ital8Config.json5`, default `adminUsers`/`adminAccessControl`/`admin`): un essenziale non caricato → box `[FATAL]` + `process.exit` (un sito con auth/access-control rotti non va servito).
+- **`isInstalled` = "precondizioni soddisfatte" (Variante 1):** persistito nel vivo via `setJson5Key` (add-or-update preservando i commenti); `installPlugin()` gira solo alla transizione `isInstalled` non-1→1 (clone fresco / dipendenze appena risolte → installazione automatica). I **temi** seguono un modello più semplice: bundled (con `.default`) = installati per definizione (`ensureThemesInstalled` scrive `isInstalled: 1` al boot).
 
 ### Comunicazione tra plugin
 
@@ -331,6 +346,7 @@ Struttura tema: `views/` (partial `head`/`header`/`nav`/`main`/`aside`/`footer`)
 
 > 📖 Deep-dive (validazione, dipendenze, asset, personalizzazione endpoint plugin, API completa): [`core/EXPLAIN-themeSys.it.md`](./core/EXPLAIN-themeSys.it.md).
 > Nota: il campo tema `active` è stato **rimosso** (la fonte di verità è `ital8Config.json5`); `isInstalled` resta e indica "tema pronto per l'attivazione". Decisione: [`docs/decisions/theme-active-isinstalled.it.md`](./docs/decisions/theme-active-isinstalled.it.md).
+> **Ciclo di vita (config-lifecycle, Fase 5):** il descrittore è committato come `themeConfig.default.json5` (senza `isInstalled` né `active`); il vivo `themeConfig.json5` è git-ignored e materializzato al boot. Per i temi **bundled** (con `.default`) `core/ensureThemesInstalled.js` scrive `isInstalled: 1` al boot ("installati per definizione"); i temi **clonati** via `themesInstall` (senza `.default`) partono a `isInstalled: 0` (attivazione manuale dell'admin).
 
 ## Bootstrap Navbar / URL Redirect / Admin Bootstrap Navbar
 
@@ -465,7 +481,7 @@ Quando sia il form (C) sia l'editor raw (B) sono presenti, modificano lo **stess
 - **Impostazioni dell'applicazione:** `ital8Config.json5`
 - **Configurazione admin:** `/core/admin/adminConfig.json5`
 
-**Default vs vivi (ciclo di vita dei config):** ogni file di configurazione modificabile esiste come coppia **`x.default.json5`** (committato, fonte di verità) + **`x.json5`** (vivo, generato dal default al boot da `materializeMissingConfigs`). I vivi di *contenuto* e *dati utente* (es. `userAccount`, `userRole`, `seoPages`, `redirectMap`) sono **git-ignored** e rigenerabili; i `.default` sono versionati. → [`docs/decisions/config-lifecycle.it.md`](./docs/decisions/config-lifecycle.it.md).
+**Default vs vivi (ciclo di vita dei config):** ogni file di configurazione modificabile esiste come coppia **`x.default.json5`** (committato, fonte di verità) + **`x.json5`** (vivo, generato dal default al boot da `materializeMissingConfigs`). **Tutti i vivi sono git-ignored** e rigenerabili — contenuto/dati utente (`userAccount`, `userRole`, `seoPages`, `redirectMap`…), descrittori (`pluginConfig`, `themeConfig`) e core (`ital8Config`, `adminConfig`, `koaSession`); solo i `.default` sono versionati (migrazione repo completa, fasi 0–5). Il pacchetto npm è "vergine" (solo `.default`): npm ricade su `.gitignore`, quindi nessun `.npmignore` necessario. → [`docs/decisions/config-lifecycle.it.md`](./docs/decisions/config-lifecycle.it.md).
 
 **Perché JSON?**
 - ✅ Zero dipendenze - nessuna installazione di database richiesta
@@ -1334,6 +1350,11 @@ Spostato in [`docs/deployment.it.md`](./docs/deployment.it.md).
 - `/core/materializeDirDefaults.js` - Materializza i config vivi mancanti di UNA cartella (plugin/tema)
 - `/core/materializeMissingConfigs.js` - Materializza i vivi mancanti di un contenitore (`plugins/`/`themes/`); invocata al boot
 - `/core/resetConfigsToDefault.js` - Reset: rimuove i vivi di una cartella (rigenerati dai default al boot); usata dal comando CLI `ital8cms-cli reset`
+- `/core/setJson5Key.js` - Ciclo di vita config: upsert (add-or-update) di una chiave top-level in un `.json5` preservando i commenti (usata dal boot per scrivere `isInstalled`); complementare a `editJson5` (che solo aggiorna)
+- `/core/pluginStateResolver.js` - Ciclo di vita config: modulo **puro** per gli stati dei plugin — `checkNpmDeps` + `resolvePluginStates` (cascata a punto fisso + rilevamento cicli); usato da `pluginSys.initialize()`
+- `/core/reconcileSchemaVersion.js` - Ciclo di vita config: drift di `schemaVersion` per UNA coppia default↔vivo + **merge additivo** (aggiunge solo le chiavi nuove, preserva i valori)
+- `/core/reconcileSchemaVersions.js` - Ciclo di vita config: scansione di contenitori/coppie + box `[SCHEMA]` anti-rumore; invocata al boot
+- `/core/ensureThemesInstalled.js` - Ciclo di vita config (Fase 5): scrive `isInstalled: 1` al boot sui temi **bundled** (con `.default`) il cui vivo ne è privo; gemello, per i temi, della persistenza fatta da `pluginSys`
 - `/core/servingRootResolver.js` - Utility di isolamento del path di serving
 - `/core/patternMatcher.js` - Utility di pattern matching degli URL (esatto, wildcard, regex) — condivisa dai plugin adminAccessControl e seo
 - `/core/sessionSecurity.js` - Sicurezza delle chiavi di sessione: denylist dei placeholder, `keysAreInsecure()`, warning al boot `checkSessionKeys()` (fonte di verità unica)
@@ -1361,7 +1382,7 @@ Spostato in [`docs/deployment.it.md`](./docs/deployment.it.md).
 
 ### File dei plugin
 
-Ogni plugin documenta i propri file nel rispettivo `README.it.md`/`EXPLAIN.it.md` (vedi i puntatori nelle sezioni dei plugin sopra). Utility core trasversali: `core/patternMatcher.js` (pattern matching condiviso), `core/servingRootResolver.js` (isolamento path), `core/editJson5.js` (modifica chirurgica di chiavi JSON5), `core/loadJson5.js`, `core/logger.js`, `core/escapeHtml.js`, `core/sessionSecurity.js`, `core/processSafetyNet.js`.
+Ogni plugin documenta i propri file nel rispettivo `README.it.md`/`EXPLAIN.it.md` (vedi i puntatori nelle sezioni dei plugin sopra). Utility core trasversali: `core/patternMatcher.js` (pattern matching condiviso), `core/servingRootResolver.js` (isolamento path), `core/editJson5.js` (modifica chirurgica di chiavi JSON5 — update-only), `core/setJson5Key.js` (upsert di una chiave top-level, preserva i commenti), `core/loadJson5.js`, `core/logger.js`, `core/escapeHtml.js`, `core/sessionSecurity.js`, `core/processSafetyNet.js`.
 
 ### Database
 
@@ -1475,8 +1496,8 @@ git push                       # Push to remote
 
 ---
 
-**Last Updated:** 2026-06-26
-**Version:** 2.17.0
+**Last Updated:** 2026-06-27
+**Version:** 2.18.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 **Standard documentazione:** ital8doc v1-1 → [`docs/ITAL8DOC-latest.md`](./docs/ITAL8DOC-latest.md)
 

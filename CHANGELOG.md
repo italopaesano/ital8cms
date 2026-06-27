@@ -3,6 +3,13 @@
 
 Storico delle modifiche del progetto e della documentazione (voci dalla più recente).
 
+- v2.39.0 (2026-06-27): **DOCS** - Ciclo di vita config, corsia trasversale: allineamento di `CLAUDE.md` al modello completato (fasi 0–5). Aggiornati:
+  - **Flusso di avvio:** lo step "Materializza i config vivi" diventa "Ciclo di vita config" con gate di init `[INIT]`, materializzazione, `ensureThemesInstalled`, e drift di `schemaVersion` (`reconcileSchemaVersions` + box `[SCHEMA]`); lo step "Carica i plugin" ora descrive il **boot graceful** (stati + box `[PLUGINS]` + `essentialPlugins`/`[FATAL]`).
+  - **Architettura sistema plugin:** nuova sezione *Stati dei plugin (boot graceful)* (tabella `available`/`disabled`/`incomplete`/`installed`, `pluginStateResolver`, `essentialPlugins`, Variante 1 di `isInstalled`); aggiornato il paragrafo sidecar (**tutti** i vivi git-ignored, migrazione repo completa).
+  - **Sistema dei temi:** nota sul ciclo di vita (`themeConfig.default.json5` senza `isInstalled`/`active`; `ensureThemesInstalled` al boot per i bundled).
+  - **Strategia di archiviazione:** "Default vs vivi" aggiornato (tutti i vivi git-ignored; pacchetto npm "vergine" senza `.npmignore`).
+  - **Riferimento file:** aggiunti `setJson5Key`, `pluginStateResolver`, `reconcileSchemaVersion(s)`, `ensureThemesInstalled`. Footer → v2.18.0.
+  - **Files Modified:** `/CLAUDE.md`, `/CHANGELOG.md`.
 - v2.38.0 (2026-06-27): **TOOLING** - Ciclo di vita config, corsia trasversale: allineamento delle skill di scaffolding al modello sidecar `.default`. Design in [`docs/decisions/config-lifecycle.it.md`](./docs/decisions/config-lifecycle.it.md).
   - **`ital8cms-plugin-creator`:** genera `pluginConfig.default.json5` (non più un vivo `pluginConfig.json5`), con `schemaVersion` come prima chiave e **senza** `isInstalled` (stato runtime scritto al boot da `pluginSys`). Aggiornati templates, sezione "Conventions", procedura di generazione e uso standalone.
   - **`ital8cms-theme-creator`:** genera `themeConfig.default.json5` con `schemaVersion` come prima chiave e **senza** `isInstalled` (scritto al boot da `ensureThemesInstalled` per i temi bundled) **né** `active` (corretto un bug preesistente: `active` era stato rimosso dallo schema dei temi). Aggiornati template, "Conventions", procedura e "Things to avoid".
