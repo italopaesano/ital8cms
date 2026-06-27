@@ -1,7 +1,7 @@
 <!-- ital8doc v1-1 · tipo: decision · lang: it · ref -->
 # Decisione: ciclo di vita dei file di configurazione (default, stati, reset, versionamento)
 
-> **Stato: IN IMPLEMENTAZIONE** — design **APPROVATO** (2026-06-25), implementazione avviata (2026-06-26). **Fasi 0** (parziale), **1**, **2**, **3** e **4** completate; resta la **Fase 5** (allineamento temi). Dettaglio in *Stato di implementazione* (in fondo).
+> **Stato: IMPLEMENTATO** — design **APPROVATO** (2026-06-25), implementazione completata (2026-06-27). **Tutte le fasi 0–5** completate (la migrazione repo è completa; resta solo la *corsia trasversale*: doc/skill/EXPLAIN). Dettaglio in *Stato di implementazione* (in fondo).
 
 ## Contesto
 
@@ -134,7 +134,7 @@ Stesso modello dei plugin, con una differenza: **niente `active` locale** (l'att
 
 ## Stato di implementazione
 
-Aggiornato al 2026-06-27 · branch `claude/dazzling-darwin-g8wmbd` (PR #306).
+Aggiornato al 2026-06-27 (Fase 5 completata) · branch `claude/dazzling-darwin-g8wmbd` (PR #306).
 
 ### Completato
 
@@ -168,25 +168,32 @@ Aggiornato al 2026-06-27 · branch `claude/dazzling-darwin-g8wmbd` (PR #306).
 - Hook al boot in `index.js` dopo la materializzazione, **scope `plugins/` + i 3 core** (tutti git-ignored → la riconciliazione additiva non sporca il working tree); `themes/` escluso finché i `themeConfig` restano tracciati (→ Fase 5).
 - Verifica: 9 + 6 nuovi test unit; boot reale (cores allineati silenziosamente, nessun box, working tree pulito); suite 82 suite / 2197 test verdi.
 
+**Fase 5 — allineamento temi**
+- `core/ensureThemesInstalled.js`: step di boot che allinea i temi al modello dei plugin. Un tema **bundled** (riconosciuto dalla presenza di `themeConfig.default.json5`) è "installato per definizione" ma il `.default` non porta `isInstalled` (stato runtime). Dopo la materializzazione, per ogni tema bundled il cui vivo ne è privo, persiste `isInstalled: 1` via `setJson5Key` (dopo `schemaVersion`, come `pluginSys`). **Non distruttivo** (solo se assente); i temi clonati via `themesInstall` (senza `.default`) restano intatti a `isInstalled: 0` (attivazione manuale dell'admin).
+- `index.js`: aggancio di `ensureThemesInstalled` dopo la materializzazione; **`themes/` aggiunto allo scope di `reconcileSchemaVersions`** (sbloccato dall'untrack: i vivi dei temi sono ora git-ignored).
+- **Untrack** (`git rm --cached`) + git-ignore di `themes/*/themeConfig.json5`; i `.default` restano committati. **Completa la migrazione repo** (descrittori plugin + temi tutti untrackati).
+- Verifica: 10 nuovi test unit (`ensureThemesInstalled`) + `themesManagment.test.js` reso robusto al clone fresco (asserzioni di base sul `.default` committato); suite 83 suite / 2207 test verdi; boot reale pulito; E2E clone-fresco temi (cancellati 2 `themeConfig` → rigenerati dai `.default` con `schemaVersion:1` + `isInstalled:1`).
+
 ### Decisioni emerse in implementazione (integrano il design)
 - **Reset online = reset + restart** (self-respawn/supervisor), non hot-reload "senza riavvio" puro: realizza l'intento riusando l'infrastruttura di restart esistente; l'hot-reload per-plugin resta una miglioria futura.
 - **Conferma rafforzata `essentialPlugins`**: rimandata alla Fase 2 (lì vive la lista). In Fase 1 il reset usa conferma base + **avviso lockout** quando tocca dati utente (`userAccount`/`userRole`).
 - **`pluginInstallLog`** è un log runtime, non configurazione → nessun `.default`, git-ignored come `themeInstallLog`.
 - **`accessControl.default`** conserva l'esempio `customRules.userProfile` (regola di sicurezza *funzionale*, protegge la pagina profilo): svuotarlo esporrebbe la pagina. Spostare quella protezione "dove appartiene" (è `adminUsers` a possedere la pagina) è una miglioria architetturale separata.
 - **`isInstalled` persistito (Variante 1, scelta dal maintainer):** lo stato vive nel file (non solo in memoria), scritto dal boot. Ha richiesto `setJson5Key` (add-or-update preservando i commenti) e l'untrack dei descrittori. `installPlugin()` è agganciato alla transizione `isInstalled` non-1→1: così la presenza/valore di `isInstalled` traccia anche il setup one-shot, senza un flag separato.
-- **Untrack dei `themeConfig` spostato alla Fase 5:** i temi non hanno ancora la gestione di `isInstalled` (è la Fase 5); untrackati ora risulterebbero senza `isInstalled` (rompe `tests/unit/admin/themesManagment.test.js`). In Fase 2 si untrackano solo i `pluginConfig`; i `themeConfig` restano tracciati con `isInstalled:1` fino alla Fase 5.
+- **Untrack dei `themeConfig` spostato alla Fase 5 → poi RISOLTO in Fase 5:** in Fase 2 i temi non avevano ancora la gestione di `isInstalled`; untrackati allora sarebbero risultati senza `isInstalled` (rompendo `tests/unit/admin/themesManagment.test.js`). Si erano quindi untrackati solo i `pluginConfig`, lasciando i `themeConfig` tracciati con `isInstalled:1`. In **Fase 5** `ensureThemesInstalled` ripristina `isInstalled:1` al boot per i temi bundled, sbloccando l'untrack dei `themeConfig` (e il test è stato reso robusto al clone fresco, asserendo sul `.default`).
+- **Tema "bundled" = ha un `.default` (Fase 5):** il criterio per distinguere un tema distribuito con ital8cms (sempre installato) da uno clonato a runtime via `themesInstall` (attivazione manuale, `isInstalled:0`) è la **presenza di `themeConfig.default.json5`**. `ensureThemesInstalled` agisce solo sui bundled, lasciando intatti i clonati — coerente con `themesInstall` che NON genera un `.default`. Non si è introdotto il modello a 4 stati dei plugin per i temi: il design (Fase 5) li vuole più semplici ("presenza = preso in carico"), e `isInstalled` dei temi è un flag gestito (1 per i bundled, 0→admin per i clonati), non una precondizione calcolata dalle dipendenze.
 - **Scope del reconcile `schemaVersion` (Fase 4) = solo config git-ignored:** il merge additivo *scrive* sul vivo, quindi al boot toccherebbe file tracciati. È limitato a `plugins/` + i 3 core (tutti git-ignored) così la riconciliazione non sporca il working tree in un checkout pulito. `themes/` entrerà nello scope in Fase 5, insieme all'untrack dei `themeConfig` — stessa motivazione del punto precedente.
 - **`schemaVersion` come merge additivo (soluzione-ponte), non migrazione vera:** la Fase 4 risolve solo le *aggiunte* di chiavi e segnala il drift; rinomine/rimozioni e la persistenza de "l'ultima versione vista" restano *Punti rimandati*. Il box `[SCHEMA]` invita esplicitamente a rivedere i valori dei campi aggiunti.
 
 ### Mappa fasi → stato
 | Fase | Stato |
 |---|---|
-| 0 — `.default` + migrazione repo | 🟡 generazione ✅ + untrack contenuto/dati ✅ + untrack `pluginConfig` ✅ + untrack core ✅ · untrack `themeConfig` (Fase 5) + `.npmignore` ⏳ |
+| 0 — `.default` + migrazione repo | ✅ generazione + untrack contenuto/dati + `pluginConfig` + core + `themeConfig` (migrazione repo completa). `.npmignore` non necessario: npm ricade su `.gitignore`, i vivi sono già esclusi dal pacchetto |
 | 1 — materializzazione + reset | ✅ completata |
 | 2 — stati + boot graceful | ✅ completata |
 | 3 — gate di init + untrack core | ✅ completata |
 | 4 — `schemaVersion` (solo detection) | ✅ completata |
-| 5 — allineamento temi | ⏳ da fare |
+| 5 — allineamento temi | ✅ completata |
 
 ## Punti rimandati
 
