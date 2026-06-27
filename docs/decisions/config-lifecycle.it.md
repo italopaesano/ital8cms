@@ -1,7 +1,7 @@
 <!-- ital8doc v1-1 · tipo: decision · lang: it · ref -->
 # Decisione: ciclo di vita dei file di configurazione (default, stati, reset, versionamento)
 
-> **Stato: IN IMPLEMENTAZIONE** — design **APPROVATO** (2026-06-25), implementazione avviata (2026-06-26). **Fase 0** (parziale) e **Fase 1** completate; dettaglio in *Stato di implementazione* (in fondo).
+> **Stato: IN IMPLEMENTAZIONE** — design **APPROVATO** (2026-06-25), implementazione avviata (2026-06-26). **Fasi 0** (parziale), **1** e **2** completate; dettaglio in *Stato di implementazione* (in fondo).
 
 ## Contesto
 
@@ -106,6 +106,8 @@ Stesso modello dei plugin, con una differenza: **niente `active` locale** (l'att
 | Utility core di materializzazione (una cartella plugin/tema) | `materializeDirDefaults` |
 | Utility core di materializzazione (un contenitore: `plugins/`/`themes/`) | `materializeMissingConfigs` |
 | Utility core di reset (rimuove i vivi di una cartella) | `resetConfigsToDefault` |
+| Utility core upsert di una chiave JSON5 (add-or-update, preserva i commenti) | `setJson5Key` |
+| Modulo puro: precondizioni + stati + cascata | `pluginStateResolver` (`checkNpmDeps`, `resolvePluginStates`) |
 
 ## Piano a fasi
 
@@ -147,18 +149,27 @@ Aggiornato al 2026-06-26 · branch `claude/dazzling-darwin-g8wmbd` (PR #306).
 - Reset: `core/resetConfigsToDefault.js` + comando `ital8cms-cli reset <target>` **offline** (filesystem, a server spento) e **`--online`** (via socket, con restart).
 - Test unit per ogni modulo + verifica di boot e di "clone fresco" (cancellazione dei vivi → rigenerazione dai `.default`).
 
+**Fase 2 — stati + boot graceful**
+- `core/setJson5Key.js` (upsert di una chiave top-level, preserva i commenti) e `core/pluginStateResolver.js` (puro: `checkNpmDeps` + `resolvePluginStates` con cascata e rilevamento cicli).
+- Refactor di `pluginSys.initialize()`: stati `available`/`disabled`/`incomplete`/`installed`; i `throw` (npm/dipendenze/cicli/load-error) → skip + marcatura + box `[PLUGINS]`; cascata sui dipendenti; il boot **completa sempre**. Nuovi getter `getPluginState()`/`getPluginStates()`.
+- `isInstalled` (Variante 1): "precondizioni ok", **persistito** via `setJson5Key`; `installPlugin()` solo alla transizione `isInstalled` non-1→1 (clone fresco / dipendenze appena risolte).
+- `essentialPlugins` in `ital8Config.json5`: un essenziale non caricato → box `[FATAL]` + exit; reset CLI con **conferma rafforzata** (offline e `--online`).
+- Untrack dei **`pluginConfig`** vivi (i `.default` restano fonte di verità; `isInstalled` scritto al boot). Clone-fresco completo verificato (rigenerazione + installazione + `isInstalled` persistito); suite 80 suite / 2182 test verdi.
+
 ### Decisioni emerse in implementazione (integrano il design)
 - **Reset online = reset + restart** (self-respawn/supervisor), non hot-reload "senza riavvio" puro: realizza l'intento riusando l'infrastruttura di restart esistente; l'hot-reload per-plugin resta una miglioria futura.
 - **Conferma rafforzata `essentialPlugins`**: rimandata alla Fase 2 (lì vive la lista). In Fase 1 il reset usa conferma base + **avviso lockout** quando tocca dati utente (`userAccount`/`userRole`).
 - **`pluginInstallLog`** è un log runtime, non configurazione → nessun `.default`, git-ignored come `themeInstallLog`.
 - **`accessControl.default`** conserva l'esempio `customRules.userProfile` (regola di sicurezza *funzionale*, protegge la pagina profilo): svuotarlo esporrebbe la pagina. Spostare quella protezione "dove appartiene" (è `adminUsers` a possedere la pagina) è una miglioria architetturale separata.
+- **`isInstalled` persistito (Variante 1, scelta dal maintainer):** lo stato vive nel file (non solo in memoria), scritto dal boot. Ha richiesto `setJson5Key` (add-or-update preservando i commenti) e l'untrack dei descrittori. `installPlugin()` è agganciato alla transizione `isInstalled` non-1→1: così la presenza/valore di `isInstalled` traccia anche il setup one-shot, senza un flag separato.
+- **Untrack dei `themeConfig` spostato alla Fase 5:** i temi non hanno ancora la gestione di `isInstalled` (è la Fase 5); untrackati ora risulterebbero senza `isInstalled` (rompe `tests/unit/admin/themesManagment.test.js`). In Fase 2 si untrackano solo i `pluginConfig`; i `themeConfig` restano tracciati con `isInstalled:1` fino alla Fase 5.
 
 ### Mappa fasi → stato
 | Fase | Stato |
 |---|---|
-| 0 — `.default` + migrazione repo | 🟡 generazione ✅ + untrack contenuto/dati ✅ · untrack descrittori/core + `.npmignore` ⏳ |
+| 0 — `.default` + migrazione repo | 🟡 generazione ✅ + untrack contenuto/dati ✅ + untrack `pluginConfig` ✅ · untrack core + `themeConfig` (Fase 5) + `.npmignore` ⏳ |
 | 1 — materializzazione + reset | ✅ completata |
-| 2 — stati + boot graceful | ⏳ da fare |
+| 2 — stati + boot graceful | ✅ completata |
 | 3 — gate di init | ⏳ da fare |
 | 4 — `schemaVersion` (solo detection) | ⏳ da fare |
 | 5 — allineamento temi | ⏳ da fare |
