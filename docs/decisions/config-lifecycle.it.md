@@ -1,7 +1,7 @@
 <!-- ital8doc v1-1 · tipo: decision · lang: it · ref -->
 # Decisione: ciclo di vita dei file di configurazione (default, stati, reset, versionamento)
 
-> **Stato: IN IMPLEMENTAZIONE** — design **APPROVATO** (2026-06-25), implementazione avviata (2026-06-26). **Fasi 0** (parziale), **1** e **2** completate; dettaglio in *Stato di implementazione* (in fondo).
+> **Stato: IN IMPLEMENTAZIONE** — design **APPROVATO** (2026-06-25), implementazione avviata (2026-06-26). **Fasi 0** (parziale), **1**, **2**, **3** e **4** completate; resta la **Fase 5** (allineamento temi). Dettaglio in *Stato di implementazione* (in fondo).
 
 ## Contesto
 
@@ -134,7 +134,7 @@ Stesso modello dei plugin, con una differenza: **niente `active` locale** (l'att
 
 ## Stato di implementazione
 
-Aggiornato al 2026-06-26 · branch `claude/dazzling-darwin-g8wmbd` (PR #306).
+Aggiornato al 2026-06-27 · branch `claude/dazzling-darwin-g8wmbd` (PR #306).
 
 ### Completato
 
@@ -156,6 +156,18 @@ Aggiornato al 2026-06-26 · branch `claude/dazzling-darwin-g8wmbd` (PR #306).
 - `essentialPlugins` in `ital8Config.json5`: un essenziale non caricato → box `[FATAL]` + exit; reset CLI con **conferma rafforzata** (offline e `--online`).
 - Untrack dei **`pluginConfig`** vivi (i `.default` restano fonte di verità; `isInstalled` scritto al boot). Clone-fresco completo verificato (rigenerazione + installazione + `isInstalled` persistito); suite 80 suite / 2182 test verdi.
 
+**Fase 3 — gate di init + untrack dei core**
+- **Gate di init** in `index.js`: se manca `ital8Config.json5` ma esiste il suo `.default` → box `[INIT]` che indirizza a `npm run start-configure` + `exit` (nessuna pagina web: senza config globale non si conosce nemmeno la porta).
+- Il wizard (`scripts/init.js`, FASE 1) **materializza** i core mancanti dai `.default` (`ital8Config`, `koaSession`, `adminConfig`) prima di configurarli.
+- Untrack (`git rm --cached`) + git-ignore dei **core** (`ital8Config.json5`, `adminConfig.json5`, `koaSession.json5`); i rispettivi `.default` restano la fonte di verità. Niente `.npmignore`: npm ricade su `.gitignore`, quindi i vivi sono già esclusi dal pacchetto.
+- Verifica: gate (`ital8Config` rinominato → box `[INIT]` + exit 1); clone-fresco dei core (cancellati i 3 → boot mostra `[INIT]`; wizard simulato li materializza → boot up, 20 plugin); suite 80 suite / 2182 test verdi.
+
+**Fase 4 — `schemaVersion` (solo rilevamento) + merge additivo (soluzione-ponte)**
+- `core/reconcileSchemaVersion.js` (coppia singola): confronta `schemaVersion` default↔vivo; se il default è più avanti, **merge additivo** (aggiunge solo le chiavi top-level nuove, preserva i valori esistenti) e allinea `schemaVersion`. Stati: `aligned` / `merged` / `live-ahead` (anomalo) / `no-live` / `no-default-version`. Volutamente parziale: rinomine/rimozioni richiedono migrazione vera (rimandata).
+- `core/reconcileSchemaVersions.js` (scansione + boot): applica il reconcile ai contenitori e alle coppie esplicite dei core, e riepiloga in un box `[SCHEMA]` **anti-rumore** (solo drift significativi con chiavi nuove + casi `live-ahead`; il semplice bump di `schemaVersion` su un vivo pre-versionamento resta silenzioso). Non lancia sui singoli errori (raccolti in `errors`): il boot non si ferma.
+- Hook al boot in `index.js` dopo la materializzazione, **scope `plugins/` + i 3 core** (tutti git-ignored → la riconciliazione additiva non sporca il working tree); `themes/` escluso finché i `themeConfig` restano tracciati (→ Fase 5).
+- Verifica: 9 + 6 nuovi test unit; boot reale (cores allineati silenziosamente, nessun box, working tree pulito); suite 82 suite / 2197 test verdi.
+
 ### Decisioni emerse in implementazione (integrano il design)
 - **Reset online = reset + restart** (self-respawn/supervisor), non hot-reload "senza riavvio" puro: realizza l'intento riusando l'infrastruttura di restart esistente; l'hot-reload per-plugin resta una miglioria futura.
 - **Conferma rafforzata `essentialPlugins`**: rimandata alla Fase 2 (lì vive la lista). In Fase 1 il reset usa conferma base + **avviso lockout** quando tocca dati utente (`userAccount`/`userRole`).
@@ -163,15 +175,17 @@ Aggiornato al 2026-06-26 · branch `claude/dazzling-darwin-g8wmbd` (PR #306).
 - **`accessControl.default`** conserva l'esempio `customRules.userProfile` (regola di sicurezza *funzionale*, protegge la pagina profilo): svuotarlo esporrebbe la pagina. Spostare quella protezione "dove appartiene" (è `adminUsers` a possedere la pagina) è una miglioria architetturale separata.
 - **`isInstalled` persistito (Variante 1, scelta dal maintainer):** lo stato vive nel file (non solo in memoria), scritto dal boot. Ha richiesto `setJson5Key` (add-or-update preservando i commenti) e l'untrack dei descrittori. `installPlugin()` è agganciato alla transizione `isInstalled` non-1→1: così la presenza/valore di `isInstalled` traccia anche il setup one-shot, senza un flag separato.
 - **Untrack dei `themeConfig` spostato alla Fase 5:** i temi non hanno ancora la gestione di `isInstalled` (è la Fase 5); untrackati ora risulterebbero senza `isInstalled` (rompe `tests/unit/admin/themesManagment.test.js`). In Fase 2 si untrackano solo i `pluginConfig`; i `themeConfig` restano tracciati con `isInstalled:1` fino alla Fase 5.
+- **Scope del reconcile `schemaVersion` (Fase 4) = solo config git-ignored:** il merge additivo *scrive* sul vivo, quindi al boot toccherebbe file tracciati. È limitato a `plugins/` + i 3 core (tutti git-ignored) così la riconciliazione non sporca il working tree in un checkout pulito. `themes/` entrerà nello scope in Fase 5, insieme all'untrack dei `themeConfig` — stessa motivazione del punto precedente.
+- **`schemaVersion` come merge additivo (soluzione-ponte), non migrazione vera:** la Fase 4 risolve solo le *aggiunte* di chiavi e segnala il drift; rinomine/rimozioni e la persistenza de "l'ultima versione vista" restano *Punti rimandati*. Il box `[SCHEMA]` invita esplicitamente a rivedere i valori dei campi aggiunti.
 
 ### Mappa fasi → stato
 | Fase | Stato |
 |---|---|
-| 0 — `.default` + migrazione repo | 🟡 generazione ✅ + untrack contenuto/dati ✅ + untrack `pluginConfig` ✅ · untrack core + `themeConfig` (Fase 5) + `.npmignore` ⏳ |
+| 0 — `.default` + migrazione repo | 🟡 generazione ✅ + untrack contenuto/dati ✅ + untrack `pluginConfig` ✅ + untrack core ✅ · untrack `themeConfig` (Fase 5) + `.npmignore` ⏳ |
 | 1 — materializzazione + reset | ✅ completata |
 | 2 — stati + boot graceful | ✅ completata |
-| 3 — gate di init | ⏳ da fare |
-| 4 — `schemaVersion` (solo detection) | ⏳ da fare |
+| 3 — gate di init + untrack core | ✅ completata |
+| 4 — `schemaVersion` (solo detection) | ✅ completata |
 | 5 — allineamento temi | ⏳ da fare |
 
 ## Punti rimandati
