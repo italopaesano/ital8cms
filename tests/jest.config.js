@@ -24,11 +24,21 @@ function getInactivePaths(parentDir, configFileName) {
   const absoluteParent = path.join(PROJECT_ROOT, parentDir);
   if (!fs.existsSync(absoluteParent)) return [];
 
+  // Questa scansione gira alla VALUTAZIONE della config jest, cioè PRIMA del
+  // globalSetup che materializza i vivi. In un clone fresco i config vivi
+  // (git-ignored) non esistono ancora, quindi si ricade sul `.default` committato
+  // per leggere `active` (presente sia nel vivo sia nel default). Vedi
+  // docs/decisions/config-lifecycle.it.md.
+  const defaultFileName = configFileName.replace(/\.json5$/, '.default.json5');
+
   const inactive = [];
   for (const entry of fs.readdirSync(absoluteParent, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
-    const configPath = path.join(absoluteParent, entry.name, configFileName);
-    if (!fs.existsSync(configPath)) continue;
+    let configPath = path.join(absoluteParent, entry.name, configFileName);
+    if (!fs.existsSync(configPath)) {
+      configPath = path.join(absoluteParent, entry.name, defaultFileName);
+      if (!fs.existsSync(configPath)) continue;
+    }
     try {
       const config = loadJson5(configPath);
       if (!config || config.active === 0) {
@@ -77,6 +87,12 @@ module.exports = {
 
   // Timeout per test (10 secondi)
   testTimeout: 10000,
+
+  // Materializzazione dei config vivi dai .default, una sola volta prima della
+  // suite (replica il boot di index.js) → la suite è "fresh-clone safe": i test
+  // che leggono i config vivi reali (ital8Config, themeConfig, ...) li trovano
+  // anche in un checkout pulito dove i vivi git-ignored non esistono ancora.
+  globalSetup: '<rootDir>/tests/globalSetup.js',
 
   // Setup file
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
