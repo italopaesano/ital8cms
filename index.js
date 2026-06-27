@@ -70,6 +70,7 @@ function warnInitRequired() {
 }
 
 const materializeMissingConfigs = require('./core/materializeMissingConfigs');
+const reconcileSchemaVersions = require('./core/reconcileSchemaVersions');
 const httpsManager = require('./core/httpsManager');
 
 // Log discreto se la sezione admin è stata disabilitata via CLI (o a mano).
@@ -131,6 +132,23 @@ async function startApp() {
       console.warn(`[materialize]   ⚠ ${failure.file}: ${failure.message}`);
     }
   }
+
+  // ── Drift di schemaVersion: riconcilia i config vivi col loro .default ──────
+  // Se un .default ha una schemaVersion più recente del vivo (struttura evoluta),
+  // aggiunge additivamente le sole chiavi nuove (valori esistenti intatti) e
+  // segnala con un box [SCHEMA]. In sviluppo (vivi allineati) è un no-op
+  // silenzioso. Soluzione-ponte (config-lifecycle §6): no migrazione automatica.
+  // NB: solo `plugins/` — i config vivi di plugin e core sono git-ignored, quindi
+  // la riconciliazione additiva al boot non sporca il working tree. `themes/` è
+  // escluso finché i themeConfig restano tracciati (untrack rimandato alla Fase 5).
+  await reconcileSchemaVersions({
+    containers: [path.join(__dirname, 'plugins')],
+    pairs: [
+      { label: 'ital8Config.json5', defaultPath: path.join(__dirname, 'ital8Config.default.json5'), livePath: path.join(__dirname, 'ital8Config.json5') },
+      { label: 'core/admin/adminConfig.json5', defaultPath: path.join(__dirname, 'core/admin/adminConfig.default.json5'), livePath: path.join(__dirname, 'core/admin/adminConfig.json5') },
+      { label: 'core/priorityMiddlewares/koaSession.json5', defaultPath: path.join(__dirname, 'core/priorityMiddlewares/koaSession.default.json5'), livePath: path.join(__dirname, 'core/priorityMiddlewares/koaSession.json5') },
+    ],
+  });
 
   const pluginSys = new ( require("./core/pluginSys") )(ital8Conf); // carico il sistema di plugin e passo la configurazione per whitelist
 
