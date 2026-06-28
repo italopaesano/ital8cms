@@ -118,7 +118,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         if (rl) {
           const verdict = rl.checkCtx(ctx, 'adminLogin');
           if (verdict.blocked) {// IP attualmente bloccato: non processare il login
-            ctx.redirect(`/${ital8Conf.pluginPagesPrefix}/${pluginName}/login.ejs?error=rateLimited&retryAfter=${verdict.retryAfterSeconds}&referrerTo=${encodeURIComponent(getSafeRedirectUrl(referrerTo))}`);
+            ctx.redirect(`${ital8Conf.globalPrefix}/${ital8Conf.pluginPagesPrefix}/${pluginName}/login.ejs?error=rateLimited&retryAfter=${verdict.retryAfterSeconds}&referrerTo=${encodeURIComponent(getSafeRedirectUrl(referrerTo))}`);
             return;
           }
         }
@@ -159,7 +159,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
           // Login fallito: registra il tentativo (può far scattare uno short/long block)
           if (rl) rl.recordFailureCtx(ctx, 'adminLogin');
 
-          ctx.redirect(`/${ital8Conf.pluginPagesPrefix}/${pluginName}/login.ejs?error=invalid&referrerTo=${encodeURIComponent(getSafeRedirectUrl(referrerTo))}`);// se il login fallissce si viene reindirizzati nella pagina di login
+          ctx.redirect(`${ital8Conf.globalPrefix}/${ital8Conf.pluginPagesPrefix}/${pluginName}/login.ejs?error=invalid&referrerTo=${encodeURIComponent(getSafeRedirectUrl(referrerTo))}`);// se il login fallissce si viene reindirizzati nella pagina di login
           return;
 
         }

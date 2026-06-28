@@ -274,7 +274,12 @@ async function startApp() {
         index: ital8Conf.indexFiles.wwwPath,
         urlPrefix: `${ital8Conf.globalPrefix}`,
         dirListing: { enabled: true },
-        urlsReserved: [`${ital8Conf.globalPrefix}/${ital8Conf.adminPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.viewsPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.publicThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.adminThemeResourcesPrefix}`, `${ital8Conf.globalPrefix}/${ital8Conf.pluginPagesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources','/pluginPages' -> questi sarebbero i percorsi di default pero adesso sono configurabili
+        // urlsReserved è RELATIVO a urlPrefix: koa-classic-server toglie prima urlPrefix
+        // dalla richiesta, poi confronta il PRIMO segmento rimanente con questi valori.
+        // Quindi NON includere globalPrefix qui (urlPrefix lo contiene già): se i reserved
+        // fossero assoluti (es. "/<globalPrefix>/admin") il match fallirebbe e i sottopath
+        // riservati (admin, pluginPages, ...) non verrebbero ceduti → 404 sotto globalPrefix.
+        urlsReserved: [`/${ital8Conf.adminPrefix}`, `/${ital8Conf.apiPrefix}`, `/${ital8Conf.viewsPrefix}`, `/${ital8Conf.publicThemeResourcesPrefix}`, `/${ital8Conf.adminThemeResourcesPrefix}`, `/${ital8Conf.pluginPagesPrefix}`], // '/admin','/api','/views','/public-theme-resources','/admin-theme-resources','/pluginPages'
         browserCacheEnabled: ital8Conf.browserCacheEnabled,
         browserCacheMaxAge: ital8Conf.browserCacheMaxAge,
         hideExtension: ital8Conf.hideExtension.wwwPath.enabled ? { ext: ital8Conf.hideExtension.wwwPath.ext } : undefined,

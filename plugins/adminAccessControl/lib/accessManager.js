@@ -25,6 +25,16 @@ class AccessManager {
     this.rules = null;
     this.defaultPolicy = null;
 
+    // globalPrefix (deploy-wide path prefix): serve per (a) normalizzare il path da
+    // confrontare con i pattern — che sono logici, SENZA prefix — e (b) prefissare i
+    // redirect verso pagine interne. Letto una volta (non cambia a runtime); default
+    // "" se il config non è leggibile.
+    this.globalPrefix = '';
+    try {
+      const ital8Conf = loadJson5(path.join(pathPluginFolder, '..', '..', 'ital8Config.json5'));
+      this.globalPrefix = ital8Conf.globalPrefix || '';
+    } catch (_) { /* default "" */ }
+
     // Carica regole all'inizializzazione
     this.loadRules();
   }
@@ -175,7 +185,14 @@ class AccessManager {
    */
   createMiddleware() {
     return async (ctx, next) => {
-      const url = ctx.path;
+      // Normalizza il path togliendo il globalPrefix prima del match: i pattern in
+      // accessControl.json5 sono logici (senza prefix), così funzionano identici con
+      // o senza deploy-prefix. Senza globalPrefix è un no-op.
+      const gp = this.globalPrefix;
+      let url = ctx.path;
+      if (gp && (url === gp || url.startsWith(gp + '/'))) {
+        url = url.slice(gp.length) || '/';
+      }
       const user = ctx.session?.user || null;
 
       // Verifica accesso
@@ -185,11 +202,12 @@ class AccessManager {
         // Accesso negato
 
         // Log per debugging
-        console.log(`[AccessControl] Access denied: ${url} - ${accessResult.reason}`);
+        console.log(`[AccessControl] Access denied: ${ctx.path} - ${accessResult.reason}`);
 
-        // Redirect (per utenti non autenticati)
+        // Redirect (per utenti non autenticati) — prefissato col globalPrefix
+        // perché punta a una pagina interna (es. login).
         if (accessResult.redirect) {
-          ctx.redirect(accessResult.redirect);
+          ctx.redirect((this.globalPrefix || '') + accessResult.redirect);
           return;
         }
 
@@ -217,9 +235,9 @@ class AccessManager {
   checkInTemplate(ctx, requirements) {
     const user = ctx.session?.user || null;
 
-    // Verifica autenticazione
+    // Verifica autenticazione (redirect prefissato col globalPrefix)
     if (requirements.requiresAuth && !user) {
-      ctx.redirect(this.defaultPolicy.redirectOnDenied);
+      ctx.redirect((this.globalPrefix || '') + this.defaultPolicy.redirectOnDenied);
       return;
     }
 
@@ -231,7 +249,7 @@ class AccessManager {
       const hasRequiredRole = userRoles.some(roleId => requirements.allowedRoles.includes(roleId));
 
       if (!hasRequiredRole) {
-        ctx.redirect('/pluginPages/adminAccessControl/access-denied.ejs');
+        ctx.redirect((this.globalPrefix || '') + '/pluginPages/adminAccessControl/access-denied.ejs');
         return;
       }
     }

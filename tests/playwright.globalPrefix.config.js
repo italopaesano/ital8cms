@@ -7,6 +7,12 @@ const { GLOBAL_PREFIX_TEST } = require('./e2e/testConstants');
 // Root del progetto (una directory sopra rispetto a questo file in tests/)
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 
+// Opt-in: punta a un binario Chromium disponibile se quello bundled di Playwright
+// non è al path atteso (vedi tests/playwright.config.js). Non impostato → default.
+const launchOptions = process.env.PW_EXECUTABLE_PATH
+  ? { executablePath: process.env.PW_EXECUTABLE_PATH }
+  : undefined;
+
 /**
  * Playwright configuration for globalPrefix E2E tests
  *
@@ -28,8 +34,9 @@ module.exports = defineConfig({
   testDir: './e2e',
   testMatch: 'globalPrefix.spec.js',
 
-  /* Dedicated setup/teardown for globalPrefix testing */
-  globalSetup: './e2e/globalPrefixSetup.js',
+  /* Il setup è invocato dal launcher del webServer (E2E_MODE=prefix), NON da
+   * globalSetup: Playwright attende l'url del webServer prima di globalSetup,
+   * quindi la config va applicata prima del boot. Vedi tests/e2e/startWebServer.js. */
   globalTeardown: './e2e/globalPrefixTeardown.js',
 
   /* Run tests in files in parallel */
@@ -63,6 +70,9 @@ module.exports = defineConfig({
 
     /* Take screenshot on failure */
     screenshot: 'only-on-failure',
+
+    /* Override opt-in del binario browser (vedi launchOptions sopra) */
+    launchOptions,
   },
 
   /* Single project: chromium with globalPrefix */
@@ -73,9 +83,11 @@ module.exports = defineConfig({
     },
   ],
 
-  /* Start server with modified config (globalPrefixSetup.js runs BEFORE this) */
+  /* Il launcher applica la config di test (E2E_MODE=prefix) PRIMA di avviare il
+   * server, così l'url col prefix è disponibile quando Playwright lo attende. */
   webServer: {
-    command: 'node index.js',
+    command: 'node tests/e2e/startWebServer.js',
+    env: { E2E_MODE: 'prefix' },
     cwd: PROJECT_ROOT,
     url: `http://localhost:${httpPort}${prefix}/`,
     ignoreHTTPSErrors: true,
