@@ -43,15 +43,19 @@ module.exports = async function globalPrefixSetup() {
   // leaf inside the https block surgically, leaving the block's inner comments
   // intact.
   await editJson5(CONFIG_PATH, 'globalPrefix', prefix);
-  await editJson5(CONFIG_PATH, 'httpPort', httpPort);
   await editJson5(CONFIG_PATH, 'wwwPath', TEST_WWW_PATH);
 
   const currentConfig = json5.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   if (currentConfig.https && Object.prototype.hasOwnProperty.call(currentConfig.https, 'enabled')) {
     await editJson5(CONFIG_PATH, ['https', 'enabled'], false);
   }
-  console.log(`[Prefix Setup] Config modified: globalPrefix="${prefix}", httpPort=${httpPort}, https=disabled, wwwPath=${TEST_WWW_PATH}`);
 
-  // 3. Add test users (reuse existing globalSetup logic)
+  // 3. Add test users + temi/wwwPath standard (reuse existing globalSetup logic).
   await defaultGlobalSetup();
+
+  // 4. defaultGlobalSetup() imposta httpPort = E2E_TEST_HTTP_PORT (19400): la porta
+  //    dedicata al prefix va RIAPPLICATA DOPO, altrimenti verrebbe sovrascritta e il
+  //    webServer Playwright (in attesa su questa porta) andrebbe in timeout.
+  await editJson5(CONFIG_PATH, 'httpPort', httpPort);
+  console.log(`[Prefix Setup] Config modified: globalPrefix="${prefix}", httpPort=${httpPort}, https=disabled, wwwPath=${TEST_WWW_PATH}`);
 };

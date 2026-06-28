@@ -15,11 +15,13 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
  * www di test, i temi di test, e disabilita HTTPS — garantendo isolamento completo
  * dal server di sviluppo (che gira sulla porta 3000).
  *
- * Flusso:
- *   1. globalSetup.js modifica ital8Config.json5 (porta, wwwPath, temi, HTTPS off)
- *   2. Playwright avvia il server: `node index.js` (legge la config modificata)
- *   3. Test E2E eseguiti sulla porta dedicata
- *   4. globalTeardown.js ripristina ital8Config.json5 dall'originale
+ * Flusso (vedi tests/e2e/startWebServer.js per il "perché" dell'ordine):
+ *   1. Playwright avvia il webServer: `node tests/e2e/startWebServer.js`, che
+ *      applica la config di test (porta, wwwPath, temi, HTTPS off, utenti) PRIMA
+ *      di caricare index.js — necessario perché Playwright attende l'url del
+ *      webServer PRIMA di globalSetup (che quindi non può patchare la porta in tempo).
+ *   2. Test E2E eseguiti sulla porta dedicata
+ *   3. globalTeardown.js ripristina ital8Config.json5 / userAccount.json5 dai backup
  *
  * @see https://playwright.dev/docs/test-configuration
  */
@@ -27,8 +29,9 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 module.exports = defineConfig({
   testDir: './e2e',
 
-  /* Global setup and teardown for test users and config override */
-  globalSetup: './e2e/globalSetup.js',
+  /* Il setup della config di test è invocato dal launcher del webServer
+   * (tests/e2e/startWebServer.js), NON da globalSetup: Playwright attende l'url del
+   * webServer prima di globalSetup, quindi la config va applicata prima del boot. */
   globalTeardown: './e2e/globalTeardown.js',
 
   /* Run tests in files in parallel */
@@ -87,7 +90,7 @@ module.exports = defineConfig({
    * reuseExistingServer: false — forza sempre l'avvio di un server nuovo
    * per garantire che usi la config modificata dal globalSetup. */
   webServer: {
-    command: 'node index.js',
+    command: 'node tests/e2e/startWebServer.js',
     cwd: PROJECT_ROOT,
     url: `http://localhost:${E2E_TEST_HTTP_PORT}`,
     ignoreHTTPSErrors: true,
