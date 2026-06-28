@@ -7,6 +7,12 @@ const { GLOBAL_PREFIX_TEST } = require('./e2e/testConstants');
 // Root del progetto (una directory sopra rispetto a questo file in tests/)
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 
+// Opt-in: punta a un binario Chromium disponibile se quello bundled di Playwright
+// non è al path atteso (vedi tests/playwright.config.js). Non impostato → default.
+const launchOptions = process.env.PW_EXECUTABLE_PATH
+  ? { executablePath: process.env.PW_EXECUTABLE_PATH }
+  : undefined;
+
 /**
  * Playwright configuration for globalPrefix E2E tests
  *
@@ -64,6 +70,9 @@ module.exports = defineConfig({
 
     /* Take screenshot on failure */
     screenshot: 'only-on-failure',
+
+    /* Override opt-in del binario browser (vedi launchOptions sopra) */
+    launchOptions,
   },
 
   /* Single project: chromium with globalPrefix */

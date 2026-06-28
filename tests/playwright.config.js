@@ -7,6 +7,15 @@ const { E2E_TEST_HTTP_PORT } = require('./e2e/testConstants');
 // Root del progetto (una directory sopra rispetto a questo file in tests/)
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 
+// Opt-in: in ambienti dove il browser bundled di Playwright non è al path atteso
+// (es. sandbox con un build diverso da quello richiesto dalla versione di Playwright),
+// impostare PW_EXECUTABLE_PATH per puntare a un binario Chromium disponibile, es.
+//   PW_EXECUTABLE_PATH=/opt/pw-browsers/chromium npx playwright test ...
+// Non impostato → risoluzione standard di Playwright (CI e dev non impattati).
+const launchOptions = process.env.PW_EXECUTABLE_PATH
+  ? { executablePath: process.env.PW_EXECUTABLE_PATH }
+  : undefined;
+
 /**
  * Playwright configuration for ital8cms
  *
@@ -65,6 +74,9 @@ module.exports = defineConfig({
 
     /* Take screenshot on failure */
     screenshot: 'only-on-failure',
+
+    /* Override opt-in del binario browser (vedi launchOptions sopra) */
+    launchOptions,
   },
 
   /* Configure projects for major browsers */
