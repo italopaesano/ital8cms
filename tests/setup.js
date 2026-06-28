@@ -20,29 +20,29 @@ jest.setTimeout(10000);
 // e lo ripristina alla fine, prevenendo corruzioni a catena tra run successivi.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const { execSync } = require('child_process');
+const loadJson5 = require('../core/loadJson5');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONFIG_PATH = path.join(PROJECT_ROOT, 'ital8Config.json5');
+const CONFIG_DEFAULT_PATH = path.join(PROJECT_ROOT, 'ital8Config.default.json5');
 let savedConfigRaw = null;
 
 beforeAll(() => {
+  // ital8Config.json5 è un config VIVO git-ignored (materializzato dal globalSetup
+  // dal suo .default). Snapshotta il vivo per poterlo ripristinare in afterAll,
+  // così le mutazioni dei test di integrazione (httpsServer/hideExtension/...) non
+  // persistono tra le suite.
+  // Nota (config-lifecycle): il riferimento canonico NON è più `git show HEAD`
+  // (il file è untracked) ma il `.default` committato, usato come recovery se il
+  // vivo manca o è corrotto (run precedente crashato senza ripristino).
   try {
-    // Use the git-committed version as the canonical reference.
-    // This prevents cascading corruption when a previous test run
-    // crashed without restoring the config file.
-    savedConfigRaw = execSync('git show HEAD:ital8Config.json5', {
-      cwd: PROJECT_ROOT,
-      encoding: 'utf8',
-    });
     const currentRaw = fs.readFileSync(CONFIG_PATH, 'utf8');
-    if (currentRaw !== savedConfigRaw) {
-      fs.writeFileSync(CONFIG_PATH, savedConfigRaw, 'utf8');
-    }
+    loadJson5(CONFIG_PATH); // valida: se non parsa come JSON5 → catch (recovery dal default)
+    savedConfigRaw = currentRaw;
   } catch (_) {
-    // Fallback if git is unavailable: save current file contents
     try {
-      savedConfigRaw = fs.readFileSync(CONFIG_PATH, 'utf8');
+      savedConfigRaw = fs.readFileSync(CONFIG_DEFAULT_PATH, 'utf8');
+      fs.writeFileSync(CONFIG_PATH, savedConfigRaw, 'utf8');
     } catch (__) {
       savedConfigRaw = null;
     }

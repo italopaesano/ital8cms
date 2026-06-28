@@ -4,6 +4,8 @@ const app = new koa();
 const koaClassicServer = require("koa-classic-server");
 const ejs = require("ejs");
 const loadJson5 = require('./core/loadJson5');
+const fs = require('fs');
+const path = require('path');
 
 // ━━━ Rete di sicurezza a livello di processo (vedi core/processSafetyNet.js) ━━━
 // Registrata SUBITO — prima del caricamento della config e di tutto il boot —
@@ -29,14 +31,47 @@ installProcessSafetyNet({
 // sintassi JSON5 errata) è fatale: box [CONFIG] chiaro e azionabile + exit 1,
 // invece di delegarlo alla rete processSafetyNet (che darebbe un messaggio meno
 // specifico). La rete resta installata sopra come backstop per tutto il resto.
+// Gate di init: il config globale è la prima cosa di cui il boot ha bisogno (senza,
+// non si conosce nemmeno la porta). Se manca ital8Config.json5 ma esiste il suo
+// .default, il progetto non è ancora inizializzato → box [INIT] che indirizza al
+// wizard (config-lifecycle §5). NON una pagina web (non c'è ancora un server).
 let ital8Conf;
+const ital8ConfigPath = path.join(__dirname, 'ital8Config.json5');
+if (!fs.existsSync(ital8ConfigPath) && fs.existsSync(path.join(__dirname, 'ital8Config.default.json5'))) {
+  warnInitRequired();
+  process.exit(1);
+}
 try {
-  ital8Conf = loadJson5('./ital8Config.json5');
+  ital8Conf = loadJson5(ital8ConfigPath);
 } catch (configError) {
   loadJson5.warnConfigError('ital8Config.json5', configError);
   process.exit(1);
 }
-const path = require('path');
+
+// Box [INIT] (config-lifecycle §5): config globale assente, progetto non inizializzato.
+function warnInitRequired() {
+  const line = '[INIT] ' + '═'.repeat(58);
+  console.error([
+    '',
+    line,
+    '[INIT]  ⚙  ital8cms non è ancora inizializzato',
+    line,
+    '[INIT]  Manca il file di configurazione globale ital8Config.json5',
+    '[INIT]  (è presente solo il modello ital8Config.default.json5).',
+    '[INIT]',
+    '[INIT]  Esegui il wizard di inizializzazione:',
+    '[INIT]',
+    '[INIT]      npm run start-configure',
+    '[INIT]',
+    '[INIT]  Creerà i file di configurazione e guiderà la prima configurazione.',
+    line,
+    '',
+  ].join('\n'));
+}
+
+const materializeMissingConfigs = require('./core/materializeMissingConfigs');
+const reconcileSchemaVersions = require('./core/reconcileSchemaVersions');
+const ensureThemesInstalled = require('./core/ensureThemesInstalled');
 const httpsManager = require('./core/httpsManager');
 
 // Log discreto se la sezione admin è stata disabilitata via CLI (o a mano).
@@ -80,6 +115,55 @@ let servers = [];
 // invocata in fondo al file, dopo aver registrato gracefulShutdown e i signal handler;
 // un suo fallimento → messaggio [BOOT] + exit 1.
 async function startApp() {
+
+  // ── Materializzazione dei config di plugin/temi dai loro .default ──────────
+  // Clone fresco o post-reset: i x.json5 vivi mancanti vengono rigenerati dai
+  // rispettivi x.default.json5 PRIMA che pluginSys/themeSys leggano i config
+  // (config-lifecycle §5). In sviluppo, con i vivi già presenti, è un no-op.
+  // La stessa utility è richiamabile altrove (es. installazione di un nuovo
+  // plugin/tema dalla GUI admin): per UN plugin/tema basta
+  // materializeDirDefaults(cartella).
+  for (const configRoot of ['plugins', 'themes']) {
+    const summary = await materializeMissingConfigs(path.join(__dirname, configRoot));
+    console.log(`[materialize] ${configRoot}: ${summary.created.length} creati, ${summary.skipped.length} presenti, ${summary.errors.length} errori`);
+    if (summary.created.length) {
+      console.log(`[materialize]   creati: ${summary.created.join(', ')}`);
+    }
+    for (const failure of summary.errors) {
+      console.warn(`[materialize]   ⚠ ${failure.file}: ${failure.message}`);
+    }
+  }
+
+  // ── Stato di installazione dei temi bundled ────────────────────────────────
+  // I temi bundled (con themeConfig.default.json5) sono "installati per
+  // definizione" ma il .default non porta `isInstalled` (stato runtime, come per
+  // i descrittori dei plugin). Dopo la materializzazione, un vivo da clone fresco
+  // ne è privo: questo step lo riempie con `isInstalled: 1` (solo se assente; i
+  // temi clonati via themesInstall — senza .default — restano intatti a 0). È il
+  // gemello, per i temi, della persistenza di `isInstalled` fatta da pluginSys.
+  const themeInstallSummary = await ensureThemesInstalled(path.join(__dirname, 'themes'));
+  if (themeInstallSummary.updated.length) {
+    console.log(`[themeInstall] isInstalled:1 impostato su ${themeInstallSummary.updated.length} tema/i: ${themeInstallSummary.updated.map((u) => u.theme).join(', ')}`);
+  }
+  for (const failure of themeInstallSummary.errors) {
+    console.warn(`[themeInstall]   ⚠ ${failure.theme}: ${failure.message}`);
+  }
+
+  // ── Drift di schemaVersion: riconcilia i config vivi col loro .default ──────
+  // Se un .default ha una schemaVersion più recente del vivo (struttura evoluta),
+  // aggiunge additivamente le sole chiavi nuove (valori esistenti intatti) e
+  // segnala con un box [SCHEMA]. In sviluppo (vivi allineati) è un no-op
+  // silenzioso. Soluzione-ponte (config-lifecycle §6): no migrazione automatica.
+  // `plugins/` + `themes/` + i 3 core: tutti config vivi git-ignored, quindi la
+  // riconciliazione additiva al boot non sporca il working tree.
+  await reconcileSchemaVersions({
+    containers: [path.join(__dirname, 'plugins'), path.join(__dirname, 'themes')],
+    pairs: [
+      { label: 'ital8Config.json5', defaultPath: path.join(__dirname, 'ital8Config.default.json5'), livePath: path.join(__dirname, 'ital8Config.json5') },
+      { label: 'core/admin/adminConfig.json5', defaultPath: path.join(__dirname, 'core/admin/adminConfig.default.json5'), livePath: path.join(__dirname, 'core/admin/adminConfig.json5') },
+      { label: 'core/priorityMiddlewares/koaSession.json5', defaultPath: path.join(__dirname, 'core/priorityMiddlewares/koaSession.default.json5'), livePath: path.join(__dirname, 'core/priorityMiddlewares/koaSession.json5') },
+    ],
+  });
 
   const pluginSys = new ( require("./core/pluginSys") )(ital8Conf); // carico il sistema di plugin e passo la configurazione per whitelist
 

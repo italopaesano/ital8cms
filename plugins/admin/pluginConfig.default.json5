@@ -1,0 +1,48 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "active": 1,
+  "weight": 0,
+  "dependency": {},
+  "nodeModuleDependency": {},
+  "nodeModuleDependencyPriority": {},
+  "custom": {
+    // Configurazione del modulo di installazione plugin da repo remoto.
+    "install": {
+      // Prefisso obbligatorio dei nomi repo Git accettati. Il nome del plugin
+      // viene estratto da quanto segue questo prefisso.
+      // Esempio: "ital8cms-plugin-mailerSimple" -> plugin name "mailerSimple"
+      "repoPrefix": "ital8cms-plugin-",
+      // Timeout per l'operazione di clone (millisecondi). Oltre questo limite
+      // il processo git viene interrotto e l'installazione fallisce.
+      "cloneTimeoutMs": 120000,
+      // Numero massimo di job di installazione completati da mantenere in memoria
+      // (la map di stato). Job più vecchi vengono espulsi in ordine FIFO.
+      "maxJobHistory": 50,
+      // Se true mostra all'utente l'output stderr di git in caso di errore di
+      // clone. Utile in sviluppo, valutare di disabilitare in produzione per
+      // evitare leak di informazioni sensibili (es. path locali).
+      "exposeGitErrors": true
+    },
+    // Configurazione del modulo di installazione tema da repo remoto.
+    // Mirror funzionale di "install" ma per i temi. Il tipo di tema (public
+    // vs admin) è determinato esclusivamente dal campo isAdminTheme dichiarato
+    // nel themeConfig.json5 del repo clonato — il nome del repo segue sempre
+    // lo stesso prefisso indipendentemente dal tipo.
+    "themesInstall": {
+      // Prefisso obbligatorio dei nomi repo Git accettati. Il nome del tema
+      // viene estratto da quanto segue questo prefisso (convertito kebab->camel).
+      // Esempio: "ital8cms-theme-myCool"        -> tema "myCool"
+      // Esempio: "ital8cms-theme-my-cool-site"  -> tema "myCoolSite"
+      "repoPrefix": "ital8cms-theme-",
+      // Timeout per l'operazione di clone (millisecondi).
+      "cloneTimeoutMs": 120000,
+      // Numero massimo di job di installazione tema completati da mantenere
+      // in memoria (FIFO).
+      "maxJobHistory": 50,
+      // Se true mostra all'utente l'output stderr di git in caso di errore.
+      "exposeGitErrors": true
+    }
+  },
+  "version": "1.0.0"
+}

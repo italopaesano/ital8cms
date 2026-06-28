@@ -25,7 +25,7 @@ Do **not** invoke for: editing an existing theme, creating a plugin (use `ital8c
 Before writing any file, gather these inputs from the user. **Do not guess.** Always propose 2–3 alternatives for naming when the user hasn't specified one (project convention).
 
 1. **Theme variant** — one of:
-   - `minimal` — only required files: `themeConfig.json5`, `themeDescription.json5`, `views/{head,header,footer}.ejs`, `templates/page.template.ejs`
+   - `minimal` — only required files: `themeConfig.default.json5`, `themeDescription.json5`, `views/{head,header,footer}.ejs`, `templates/page.template.ejs`
    - `standard` — adds optional partials (`nav.ejs`, `main.ejs`, `aside.ejs`), `themeResources/css/theme.css`, `themeResources/js/theme.js`, `README.md`
    - `complete` — full placeholderExample-style: 4 templates (page, blog-post, landing, minimal), partials with PLACEHOLDER content blocks, `pluginsEndpointsMarkup/adminUsers/login/style.css`, themeResources, README
    - `admin` — admin theme (`isAdminTheme: true`), defaultAdminTheme-style: views with admin layout (sidebar, dashboard hooks), themeResources/js/escapeHtml.js placeholder, no `templates/` (admin themes don't have user-creatable pages)
@@ -44,6 +44,7 @@ Before writing any file, gather these inputs from the user. **Do not guess.** Al
 ## Conventions to enforce
 
 - All config files use the `.json5` extension and a comment on line 1: `// This file follows the JSON5 standard - comments and trailing commas are supported`
+- **Config lifecycle (sidecar `.default`):** the theme descriptor is committed as `themeConfig.default.json5` (source of truth); the live `themeConfig.json5` is git-ignored and materialized at boot. The `.default` has `schemaVersion` as its first key and **omits** both `isInstalled` (written at boot by `ensureThemesInstalled` for bundled themes) and `active` (removed from the schema). The static `themeDescription.json5` has **no** `.default`. See [`docs/decisions/config-lifecycle.it.md`](../../../docs/decisions/config-lifecycle.it.md).
 - Inside an ital8cms project, configs are loaded via `loadJson5()` — never `require()`. Themes themselves do not load config files at runtime, but follow the same JSON5 conventions.
 - Naming: camelCase for theme name, files, and directories. Templates use compound names with `.template.ejs` suffix (e.g., `page.template.ejs`, `blog-post.template.ejs` is the documented exception — kebab is allowed in template basenames since the standard doc shows it).
 - **PLACEHOLDER standard v1.0** (only for `complete` variant): content blocks are wrapped in EJS comment markers:
@@ -60,13 +61,28 @@ Before writing any file, gather these inputs from the user. **Do not guess.** Al
 
 Substitute placeholders: `{{themeName}}`, `{{description}}`, `{{author}}`, `{{email}}`, `{{license}}`, `{{isAdminTheme}}` (boolean, lowercase).
 
-### `themeConfig.json5` (all variants)
+### `themeConfig.default.json5` (all variants)
+
+**Generate the `.default` sidecar, NOT a live `themeConfig.json5`.** Per the config
+lifecycle ([`docs/decisions/config-lifecycle.it.md`](../../../docs/decisions/config-lifecycle.it.md)),
+`themeConfig.default.json5` is the committed source of truth; the live
+`themeConfig.json5` is git-ignored and **materialized at boot** from the `.default`
+(`materializeMissingConfigs`). Rules for the `.default`:
+
+- **`schemaVersion`** (integer) is the **first key** — it versions the *structure* of
+  the file (bump it when you add/rename/remove keys).
+- **Do NOT include `isInstalled`** — it is a runtime state. For bundled themes (those
+  with a `.default`) the boot step `ensureThemesInstalled` writes `isInstalled: 1`
+  into the live file ("installed by definition").
+- **Do NOT include `active`** — it was **removed** from the theme schema
+  ([`theme-active-isinstalled.it.md`](../../../docs/decisions/theme-active-isinstalled.it.md)).
+  The active theme is determined solely by `activeTheme`/`adminActiveTheme` in
+  `ital8Config.json5`.
 
 ```json5
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  active: 1,
-  isInstalled: 1,
+  schemaVersion: 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   weight: 100,
 
   // Custom www path configuration
@@ -336,7 +352,7 @@ Tell the user (in the post-generation summary) that other endpoints can be custo
 2. Verify the output directory does not already exist. If it does: stop, tell the user, do not overwrite.
 3. Create the directory tree and write the files using the Write tool. Order:
    - `themeDescription.json5`
-   - `themeConfig.json5`
+   - `themeConfig.default.json5` (NOT a live `themeConfig.json5` — it is materialized at boot)
    - `views/head.ejs`, `views/header.ejs`, `views/footer.ejs` (always)
    - `views/nav.ejs`, `views/main.ejs`, `views/aside.ejs` (standard, complete, admin)
    - `templates/*` (minimal: page only; standard: page only; complete: 1–4 templates per user choice; admin: skip)
@@ -368,5 +384,6 @@ If the current directory does not look like an ital8cms project (no `ital8Config
 - Don't generate a `templates/` directory for the `admin` variant.
 - Don't generate `pluginsEndpointsMarkup/` for `minimal` or `standard` variants.
 - Don't omit the JSON5 header comment on the first line of any `.json5` file.
+- Don't add `active` (removed from the theme schema) or `isInstalled` (runtime state, written at boot) to `themeConfig.default.json5`; don't write a live `themeConfig.json5` (it is materialized at boot).
 - Don't rename or restructure partials — the names `head.ejs`, `header.ejs`, `footer.ejs`, `nav.ejs`, `main.ejs`, `aside.ejs` are required by the theme system.
 - Don't modify `ital8Config.json5` automatically — always show the user the snippet to add manually.

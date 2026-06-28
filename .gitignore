@@ -27,6 +27,30 @@ node_modules/
 /plugins/urlRedirect/redirectHitCount.json5
 /plugins/analytics/data/
 /plugins/admin/themeInstallLog.json5
+/plugins/admin/pluginInstallLog.json5
+
+# Config-lifecycle (docs/decisions/config-lifecycle.it.md): config "vivi"
+# materializzati dai rispettivi *.default.json5 al boot (materializeMissingConfigs).
+# I .default sono committati (fonte di verità); i vivi NO — sono rigenerabili e
+# per-istanza (dati utente inclusi). Il boot scrive isInstalled nei descrittori
+# vivi (Fase 2), perciò anch'essi NON sono committati. Restano tracciati solo i
+# config core (ital8Config/adminConfig/koaSession), legati al gate di init (Fase 3).
+/plugins/seo/seoPages.json5
+/plugins/urlRedirect/redirectMap.json5
+/plugins/adminAccessControl/accessControl.json5
+/plugins/rateLimiter/protectedRoutes.json5
+/plugins/adminUsers/userAccount.json5
+/plugins/adminUsers/userRole.json5
+# Descrittori vivi (plugin + temi): generati dai .default; isInstalled (stato
+# runtime) scritto al boot — per i plugin da pluginSys, per i temi bundled da
+# ensureThemesInstalled (Fase 5). I .default restano la fonte di verità.
+/plugins/*/pluginConfig.json5
+/themes/*/themeConfig.json5
+# Config core vivi: materializzati dal wizard (npm run start-configure) dai .default.
+# Al boot, se ital8Config.json5 manca → gate [INIT] che indirizza al wizard (Fase 3).
+/ital8Config.json5
+/core/admin/adminConfig.json5
+/core/priorityMiddlewares/koaSession.json5
 
 # dbApi: file di database SQLite generati a runtime (plugin opzionale, disattivo di default)
 /plugins/dbApi/dbFile/*.db

@@ -1,0 +1,12 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "active": 0,
+  "weight": 0,
+  "dependency": {
+    "dbApi": "^1"
+  },
+  "nodeModuleDependency": {
+    "path": "^0.12.7"
+  }
+}

@@ -1,0 +1,27 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+    // ⚠ CAMBIARE IN PRODUZIONE: genera chiavi robuste e segrete (es. `openssl rand -hex 32`),
+    // idealmente caricate da variabili d'ambiente e MAI committate nel repository.
+    "keys": ["CHANGE_ME_session_key_1", "CHANGE_ME_session_key_2", "CHANGE_ME_session_key_3"],
+    "CONFIG" : {
+        "key": "koa:sess",
+        "maxAge": 86400000,
+        "autoCommit": true,
+        "overwrite": true,
+        "httpOnly": true,
+        "signed": true,
+        "rolling": false,
+        "renew": false,
+        // SameSite=lax: difesa in profondità anti-CSRF (oltre al plugin csrfProtection).
+        // Rende esplicito e deterministico il comportamento del cookie (niente più
+        // affidamento al "Lax-by-default" implicito, variabile per browser/versione).
+        // 'lax' (non 'strict') così i link top-level cross-site verso il sito continuano
+        // a inviare il cookie (UX dei link esterni preservata).
+        // NOTA: 'lax' NON copre il vettore same-site sotto-dominio — quello lo copre il
+        // token sincronizzatore del plugin csrfProtection. I due layer sono complementari.
+        // __Host- prefix NON applicato: richiede Secure+path=/ e romperebbe l'HTTP puro
+        // (porta 3000) e lo sviluppo locale; valutarlo in deployment solo-HTTPS.
+        "sameSite": "lax"
+      }
+}

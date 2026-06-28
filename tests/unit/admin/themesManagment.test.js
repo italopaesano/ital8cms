@@ -265,32 +265,47 @@ describe('themesManagment', () => {
     });
   });
 
-  // ─── themeConfig.json5 bundled: isInstalled e assenza di active ─────────────
-  // Il campo 'active' è stato RIMOSSO dallo schema dei temi
-  // (docs/decisions/theme-active-isinstalled.it.md): la fonte di verità del tema
-  // attivo è solo ital8Config.json5 (activeTheme / adminActiveTheme).
-  describe('themeConfig.json5 bundled: isInstalled e assenza di active', () => {
+  // ─── themeConfig bundled: contratto .default + stato vivo (config-lifecycle Fase 5) ─
+  // Un tema "bundled" è riconoscibile dalla presenza di themeConfig.default.json5
+  // (fonte di verità committata). Il vivo themeConfig.json5 è git-ignored e
+  // rigenerato al boot (può mancare in un clone fresco): per questo le asserzioni
+  // di base sono sul .default. Il campo 'active' è stato RIMOSSO dallo schema dei
+  // temi (docs/decisions/theme-active-isinstalled.it.md): la fonte di verità del
+  // tema attivo è solo ital8Config.json5 (activeTheme / adminActiveTheme).
+  describe('themeConfig bundled: contratto .default + stato vivo', () => {
     function listBundledThemes() {
       return fs.readdirSync(THEMES_DIR, { withFileTypes: true })
         .filter(e => e.isDirectory())
+        .filter(e => fs.existsSync(path.join(THEMES_DIR, e.name, 'themeConfig.default.json5')))
         .map(e => e.name);
     }
 
-    test('nessun tema bundled ha più il campo active (rimosso dallo schema)', () => {
+    test('esiste almeno un tema bundled con themeConfig.default.json5', () => {
+      expect(listBundledThemes().length).toBeGreaterThan(0);
+    });
+
+    test('ogni .default ha schemaVersion (intero) e NON ha isInstalled né active', () => {
+      // isInstalled è stato runtime (scritto al boot da ensureThemesInstalled),
+      // quindi NON deve comparire nel .default; active è rimosso dallo schema.
       for (const themeName of listBundledThemes()) {
-        const cfgPath = path.join(THEMES_DIR, themeName, 'themeConfig.json5');
-        if (!fs.existsSync(cfgPath)) continue;
-        const cfg = loadJson5(cfgPath);
-        expect(cfg.active).toBeUndefined();
+        const defPath = path.join(THEMES_DIR, themeName, 'themeConfig.default.json5');
+        const def = loadJson5(defPath);
+        expect(Number.isInteger(def.schemaVersion)).toBe(true);
+        expect(def.isInstalled).toBeUndefined();
+        expect(def.active).toBeUndefined();
       }
     });
 
-    test('tutti i temi bundled hanno isInstalled: 1 (sono installati per definizione)', () => {
+    test('il vivo, quando presente, ha isInstalled: 1 e niente active', () => {
+      // I temi bundled sono "installati per definizione": il boot persiste
+      // isInstalled: 1 nel vivo. Se il vivo non esiste (clone fresco senza boot)
+      // l'asserzione viene saltata — il contratto di base è sul .default sopra.
       for (const themeName of listBundledThemes()) {
         const cfgPath = path.join(THEMES_DIR, themeName, 'themeConfig.json5');
         if (!fs.existsSync(cfgPath)) continue;
         const cfg = loadJson5(cfgPath);
         expect(cfg.isInstalled).toBe(1);
+        expect(cfg.active).toBeUndefined();
       }
     });
   });

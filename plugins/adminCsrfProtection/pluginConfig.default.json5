@@ -1,0 +1,32 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "active": 1,
+  "weight": 7,
+
+  // Plugin admin — rilevato automaticamente dal prefisso "admin".
+  // Sezione gestita (metadata UI in /core/admin/adminConfig.json5).
+  "adminSections": [
+    "csrfManagement",
+  ],
+
+  // Plugin gemello di csrfProtection: dipende dal servizio (per dati/azioni e
+  // validazione), da bootstrap (UI) e simpleI18n (helper __() nei template).
+  "dependency": {
+    "csrfProtection": "^1.0.0",
+    "bootstrap": "^1.0.0",
+    "simpleI18n": "^1.0.0",
+  },
+  "nodeModuleDependency": {
+    // Per il parsing JSON5 della stringa dall'editor delle Impostazioni
+    "json5": "^2.2.3",
+  },
+  "custom": {
+    // Quanti blocchi recenti mostrare nella Vista Dati (default).
+    "auditLimit": 100,
+    // Intervallo (secondi) dell'auto-refresh della dashboard.
+    "autoRefreshSeconds": 5,
+    // Numero massimo di backup mantenuti per file di configurazione modificato.
+    "maxBackupsPerFile": 10,
+  },
+}

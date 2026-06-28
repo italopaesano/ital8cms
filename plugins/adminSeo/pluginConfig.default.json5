@@ -1,0 +1,25 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "active": 1,
+  "weight": 6,
+
+  // Plugin admin — detected automatically by "admin" prefix
+  // Section IDs managed by this plugin (UI metadata in /core/admin/adminConfig.json5)
+  "adminSections": [
+    "seoManagement"
+  ],
+
+  "dependency": {
+    "seo": "^1.0.0",
+    "bootstrap": "^1.0.0",
+    "simpleI18n": "^1.0.0",
+  },
+  "nodeModuleDependency": {
+    "json5": "^2.2.3",
+  },
+  "custom": {
+    // Maximum backup files kept per config file
+    "maxBackupsPerFile": 10,
+  }
+}

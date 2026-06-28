@@ -45,8 +45,12 @@ describe('Plugin Loading Integration', () => {
         const configPath = path.join(pluginsDir, pluginName, 'pluginConfig.json5');
         const config = loadJson5(configPath);
 
+        // Campi del descrittore (fonte di verità nel .default). NB: `isInstalled`
+        // NON è obbligatorio qui — è uno stato RUNTIME scritto al boot da pluginSys
+        // (assente nel .default; non scritto per i plugin disabilitati). Vedi
+        // docs/decisions/config-lifecycle.it.md.
+        expect(config).toHaveProperty('schemaVersion');
         expect(config).toHaveProperty('active');
-        expect(config).toHaveProperty('isInstalled');
         expect(config).toHaveProperty('weight');
         expect(config).toHaveProperty('dependency');
       });
