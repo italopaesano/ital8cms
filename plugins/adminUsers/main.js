@@ -22,16 +22,21 @@ let myPluginSys = null;// riferimento al sistema dei plugin per accedere a theme
 /**
  * Validates that a redirect URL is a safe internal path.
  * Prevents Open Redirect attacks by ensuring the URL is relative to the same origin.
+ * Per URL non sicuri/assenti il fallback è la radice PREFISSATA col globalPrefix
+ * (es. "/<globalPrefix>/"), non la radice nuda "/" — che sotto globalPrefix non è
+ * servita; senza globalPrefix il fallback resta "/". I path validi sono lasciati
+ * intatti (includono già il prefix se provengono da una navigazione reale).
  * @param {string} url - The URL to validate
- * @returns {string} The original URL if safe, or '/' as fallback
+ * @returns {string} The original URL if safe, or the (prefixed) root as fallback
  */
 function getSafeRedirectUrl(url) {
-  if (!url || typeof url !== 'string') return '/';
+  const fallback = ital8Conf.globalPrefix ? `${ital8Conf.globalPrefix}/` : '/';
+  if (!url || typeof url !== 'string') return fallback;
   const trimmed = url.trim();
   // Must be a relative path starting with /
-  if (!trimmed.startsWith('/')) return '/';
+  if (!trimmed.startsWith('/')) return fallback;
   // Block protocol-relative URLs (//evil.com) and backslash variants (/\evil.com)
-  if (trimmed.startsWith('//') || trimmed.startsWith('/\\')) return '/';
+  if (trimmed.startsWith('//') || trimmed.startsWith('/\\')) return fallback;
   return trimmed;
 }
 
@@ -149,7 +154,10 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
           if(pluginConfig.custom.redirectToHttpReferer){// se è impostata questa variabile la redirezione avverrà nella pagina dalla quale è partita il click per l appagina di login
             ctx.redirect(getSafeRedirectUrl(referrerTo));
           }else{// altrimenti rediriggo la pagina in un url di default definito nella configurazione
-            ctx.redirect(pluginConfig.custom.defaultLoginRedirectURL);
+            // Prefissa col globalPrefix se è un path interno (inizia con "/"); un
+            // eventuale URL assoluto/esterno configurato è lasciato intatto.
+            const defaultDest = pluginConfig.custom.defaultLoginRedirectURL;
+            ctx.redirect(defaultDest.startsWith('/') ? `${ital8Conf.globalPrefix}${defaultDest}` : defaultDest);
           }
           return;
 
