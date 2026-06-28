@@ -73,6 +73,12 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 
+# Backup dei config creati dai setup e2e (globalSetup/globalPrefixSetup) e
+# ripristinati dal teardown; restano su disco solo se un run crasha prima del
+# teardown — non vanno mai committati.
+*.test-bak
+*.prefix-bak
+
 # Jest coverage output
 /coverage/
 

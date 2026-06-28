@@ -3,6 +3,7 @@
 
 Storico delle modifiche del progetto e della documentazione (voci dalla più recente).
 
+- v2.47.0 (2026-06-28): **CHORE (test)** - `.gitignore`: aggiunti `*.test-bak` e `*.prefix-bak` (backup dei config creati dai setup e2e `globalSetup`/`globalPrefixSetup`, ripristinati dal teardown; restano su disco solo se un run crasha prima del teardown). Evita che finiscano per errore tra i file untracked/committati. **Files Modified:** `/.gitignore`, `/CHANGELOG.md`.
 - v2.46.0 (2026-06-28): **FIX / SECURITY (globalPrefix)** - Access control e redirect del login resi `globalPrefix`-aware. Completa la correzione del routing sotto `globalPrefix` (con v2.45.0). **Chiude i 2 finding e2e prefix.**
   - **Access control (`adminAccessControl/lib/accessManager.js`):** il middleware confrontava `ctx.path` **grezzo** (con prefix) coi pattern di `accessControl.json5` (logici, **senza** prefix). Sotto `globalPrefix` ciò lasciava il path reale `/{prefix}/admin/**` **non protetto** (buco di sicurezza) e proteggeva il path fantasma `/admin/**`. Ora il middleware **toglie il `globalPrefix`** dal path prima del match (i pattern restano logici) e **prefissa** i redirect verso pagine interne (login / access-denied) col `globalPrefix`. Stessa cosa in `checkInTemplate` (helper EJS).
   - **Login (`adminUsers/main.js`):** i redirect alla pagina di login (credenziali invalide, rate-limited) puntavano a `/{pluginPagesPrefix}/…` **senza** `globalPrefix` → sotto prefix il browser/Playwright atterrava su un path inesistente (404). Ora includono `globalPrefix`.
