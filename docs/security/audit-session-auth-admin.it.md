@@ -24,8 +24,8 @@ La procedura operativa per affrontarle una a una è in fondo.
 | 5 | 🟡 Bassa | [Cookie di sessione senza flag `Secure`](#5--cookie-di-sessione-senza-flag-secure) | - [ ] |
 | 6 | 🟡 Bassa | [Endpoint di debug `GET /api/adminUsers/logged`](#6--endpoint-di-debug-get-apiadminuserslogged) | - [ ] |
 | 7 | ℹ️ Info | [Chiavi di sessione placeholder](#7--chiavi-di-sessione-placeholder) | - [ ] |
-| 8 | 🟡 Bassa | [`seo`: route POST con `method` minuscolo → ignorata](#8--seo-route-post-con-method-minuscolo--ignorata) | - [ ] |
-| 9 | ℹ️ Info | [`adminBootstrapNavbar`: endpoint admin aperti al ruolo 2 (editor)](#9--adminbootstrapnavbar-endpoint-admin-aperti-al-ruolo-2-editor) | - [ ] |
+| 8 | 🟡 Bassa | [`seo`: route POST con `method` minuscolo → ignorata](#8--seo-route-post-con-method-minuscolo--ignorata) | - [x] ✅ corretto |
+| 9 | ℹ️ Info | [`adminBootstrapNavbar`: endpoint admin aperti al ruolo 2 (editor)](#9--adminbootstrapnavbar-endpoint-admin-aperti-al-ruolo-2-editor) | ✔️ intenzionale (won't fix) |
 
 Legenda severità: 🔴 Alta · 🟠 Media · 🟡 Bassa · ℹ️ Informativa.
 
@@ -216,27 +216,34 @@ committate. Documentato qui solo per completezza della checklist.
 
 ## 8. 🟡 `seo`: route POST con `method` minuscolo → ignorata
 
-**Stato:** - [ ] da affrontare · **Severità:** Bassa · **Tipo:** Correttezza (contratto rotte)
+**Stato:** - [x] ✅ **CORRETTO** (2026-07-03) · **Severità:** Bassa · **Tipo:** Correttezza (contratto rotte)
 
 ### Descrizione
-`plugins/seo/main.js:121` dichiara `method: 'post'` (**minuscolo**). Il loader
-(`core/pluginSys.js` → `loadRoutes`) confronta con `'POST'` maiuscolo, quindi la
-route viene **silenziosamente ignorata** (comportamento documentato in `CLAUDE.md`).
-`GET/POST /api/seo/regenerate` risulta di fatto assente e la richiesta cade sul
-static server. Non è un buco di sicurezza (la funzione equivalente esiste come
-`POST /api/adminSeo/regenerate`, correttamente maiuscola e protetta `[0,1]`), ma è
-un endpoint morto/duplicato.
+`plugins/seo/main.js:121` dichiarava `method: 'post'` (**minuscolo**) **e**
+`func:` invece di `handler:` — due violazioni del contratto rotte di `CLAUDE.md`.
+Il loader (`core/pluginSys.js` → `loadRoutes`) confronta con `'POST'` maiuscolo,
+quindi la route veniva **silenziosamente ignorata** e la richiesta cadeva sul
+static server. Non era un buco di sicurezza (la funzione equivalente esiste come
+`POST /api/adminSeo/regenerate`, correttamente maiuscola e protetta `[0,1]`), ma
+un endpoint morto.
 
-### Rimedio proposto
-Correggere in `method: 'POST'` **oppure** rimuovere la route duplicata se
-`adminSeo/regenerate` la sostituisce. Valutare un check al boot che segnali i
-`method` non-maiuscoli invece di ignorarli in silenzio.
+### Fix applicata
+`method: 'post'` → `method: 'POST'` e `func:` → `handler:` in
+`plugins/seo/main.js`. **Verificato dal vivo:** `POST /api/seo/regenerate` risponde
+ora `403` (CSRF/auth attivi) invece di `404` — la route è registrata e protetta.
+
+> Miglioria futura (fuori ambito di questa fix): un check al boot che segnali i
+> `method` non-maiuscoli / la chiave `func` invece di ignorarli in silenzio.
 
 ---
 
 ## 9. ℹ️ `adminBootstrapNavbar`: endpoint admin aperti al ruolo 2 (editor)
 
-**Stato:** - [ ] da affrontare · **Severità:** Informativa · **Tipo:** Superficie di autorizzazione
+**Stato:** ✔️ **INTENZIONALE — won't fix** (decisione maintainer, 2026-07-03) · **Severità:** Informativa · **Tipo:** Superficie di autorizzazione
+
+> **Decisione:** comportamento voluto — l'editor (ruolo 2) cura navigazione/contenuti
+> e deve poter gestire le navbar. Nessuna modifica al codice. Voce mantenuta a
+> documentazione della scelta.
 
 ### Descrizione
 `plugins/adminBootstrapNavbar/main.js:31-32` dichiara `allowedRoles: [0, 1, 2]`

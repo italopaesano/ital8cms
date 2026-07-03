@@ -118,13 +118,13 @@ module.exports = {
   getRouteArray(router, pluginSys, pathPluginFolder) {
     return [
       {
-        method: 'post',
+        method: 'POST',
         path: '/regenerate',
         access: {
           requiresAuth: true,
           allowedRoles: [0, 1] // Solo root e admin
         },
-        func: async (ctx) => {
+        handler: async (ctx) => {
           // Rileggi configurazione e regole
           const pluginConfigPath = path.join(this.pathPluginFolder, 'pluginConfig.json5');
           this.config = loadJson5(pluginConfigPath).custom;
