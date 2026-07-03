@@ -1,0 +1,249 @@
+# Audit di sicurezza — Sessione, Autenticazione, Area Admin
+
+> **Data audit:** 2026-07-03
+> **Ambito:** meccanismi di sessione, autenticazione utente, controllo accessi
+> all'area di amministrazione ed endpoint riservati.
+> **Escluso:** modulo `koa-classic-server` (analizzato separatamente).
+> **Metodo:** revisione del codice + verifica empirica con server avviato
+> (le voci marcate ✅ CONFERMATO sono state riprodotte dal vivo).
+
+Questo documento è un **piano di lavoro tracciabile**: l'indice ha una checkbox
+per ogni voce. Spuntala (`[x]`) quando la voce è **risolta e verificata**.
+La procedura operativa per affrontarle una a una è in fondo.
+
+---
+
+## Indice / Stato di avanzamento
+
+| # | Sev. | Vulnerabilità | Stato |
+|---|------|---------------|-------|
+| 1 | 🔴 Alta | [Bypass del controllo accessi admin via path non canonico](#1--bypass-del-controllo-accessi-admin-via-path-non-canonico) | - [ ] |
+| 2 | 🟠 Media | [`defaultPolicy: "allow"` — postura deny-list fragile](#2--defaultpolicy-allow--postura-deny-list-fragile) | - [ ] |
+| 3 | 🟠 Media | [Scritture non atomiche sullo store di autenticazione](#3--scritture-non-atomiche-sullo-store-di-autenticazione) | - [ ] |
+| 4 | 🟠 Media | [Un admin (ruolo 1) può impossessarsi del root (ruolo 0)](#4--un-admin-ruolo-1-può-impossessarsi-del-root-ruolo-0) | - [ ] |
+| 5 | 🟡 Bassa | [Cookie di sessione senza flag `Secure`](#5--cookie-di-sessione-senza-flag-secure) | - [ ] |
+| 6 | 🟡 Bassa | [Endpoint di debug `GET /api/adminUsers/logged`](#6--endpoint-di-debug-get-apiadminuserslogged) | - [ ] |
+| 7 | ℹ️ Info | [Chiavi di sessione placeholder](#7--chiavi-di-sessione-placeholder) | - [ ] |
+
+Legenda severità: 🔴 Alta · 🟠 Media · 🟡 Bassa · ℹ️ Informativa.
+
+---
+
+## 1. 🔴 Bypass del controllo accessi admin via path non canonico
+
+**Stato:** - [ ] da affrontare · **Severità:** Alta · **Tipo:** Broken Access Control / Auth bypass · ✅ **CONFERMATO dal vivo**
+
+### Descrizione
+Le pagine admin sono servite come **file statici** da `koa-classic-server`. La loro
+protezione dipende **interamente** dal middleware globale di `adminAccessControl`,
+che confronta `ctx.path` — **grezzo, non normalizzato** — contro il pattern
+`/admin/**`. Il file server statico invece **normalizza** il path (`/./`, `/x/../`)
+prima di risolvere il file su disco. Questa discrepanza di normalizzazione annulla
+il controllo di accesso.
+
+Poiché `defaultPolicy` è `"allow"`, ogni path che non matcha una regola esplicita
+è pubblico: `/./admin/...` non matcha `^/admin/.*$` → "allow" → file servito.
+
+### Prova di concetto (nessuna autenticazione)
+
+| Richiesta | Risultato osservato |
+|---|---|
+| `GET /admin/usersManagment/index.ejs` | `302` → redirect al login ✅ (protetto) |
+| `GET /./admin/usersManagment/index.ejs` | **`200` — pagina admin servita** ❌ |
+| `GET /x/../admin/usersManagment/index.ejs` | **`200` — pagina admin servita** ❌ |
+| `GET /./admin/rolesManagment` | **`200`** (gestione ruoli) ❌ |
+| `GET /./admin/adminAccessControl` | **`200`** (editor delle regole di accesso) ❌ |
+| `GET /./admin/index.ejs` | **`200`** (dashboard admin) ❌ |
+
+```bash
+# Riproduzione
+curl -s -o /dev/null -w "%{http_code}\n" --path-as-is http://localhost:3000/admin/usersManagment/index.ejs      # 302 (ok)
+curl -s -o /dev/null -w "%{http_code}\n" --path-as-is http://localhost:3000/./admin/usersManagment/index.ejs    # 200 (BYPASS)
+curl -s -o /dev/null -w "%{http_code}\n" --path-as-is http://localhost:3000/x/../admin/usersManagment/index.ejs # 200 (BYPASS)
+```
+
+### Impatto
+- Esposizione dell'intera UI admin a utenti **anonimi** (struttura sezioni, JS
+  interno, percorsi endpoint, la pagina che mostra `accessControl.json5`).
+- I **dati** restano protetti perché caricati via API `/api/...` (gestite dal
+  router `@koa/router`, matching diverso; `/./api/...` → 404, e ogni route ha il
+  proprio `access`). Ma il gate di autenticazione **sulle pagine** è aggirato, e
+  qualunque pagina admin che renderizzi dati sensibili server-side li leakerebbe.
+
+### Causa radice (lato ital8cms — NON koa-classic-server)
+`plugins/adminAccessControl/lib/accessManager.js` → `createMiddleware()`: usa
+`ctx.path` senza canonicalizzarlo prima del pattern-matching.
+
+### Rimedio proposto
+1. **Canonicalizzare il path prima del match**: risolvere `.`/`..`, collassare gli
+   slash multipli, decodificare in modo coerente col file server; in alternativa
+   **rifiutare con `400`** i path non canonici.
+2. Invertire la postura di default (vedi voce #2): `deny`/`requireAuth`.
+3. Aggiungere test di regressione con i vettori `/./admin/...`, `/x/../admin/...`,
+   `//admin/...`, `/%61dmin/...`, `/ADMIN/...`.
+
+---
+
+## 2. 🟠 `defaultPolicy: "allow"` — postura deny-list fragile
+
+**Stato:** - [ ] da affrontare · **Severità:** Media · **Tipo:** Insecure default
+
+### Descrizione
+`plugins/adminAccessControl/accessControl.default.json5` → `defaultPolicy.action`
+è `"allow"`. Il modello è **deny-list**: tutto è pubblico tranne ciò che una regola
+esplicita protegge. È la precondizione che rende sfruttabile la voce #1 e, in
+generale, ogni area riservata aggiunta senza una regola dedicata è pubblica.
+
+### Impatto
+Fragilità sistemica: una dimenticanza (nuovo prefisso admin, nuova sezione,
+refuso in un pattern) apre un buco silenzioso.
+
+### Rimedio proposto
+Passare a postura **allow-list**: default `requireAuth` o `deny`, con whitelist
+esplicita delle aree pubbliche (`/`, `/pluginPages/adminUsers/login.ejs`, risorse
+del tema pubblico, ecc.). Da coordinare con la fix #1.
+
+---
+
+## 3. 🟠 Scritture non atomiche sullo store di autenticazione
+
+**Stato:** - [ ] da affrontare · **Severità:** Media · **Tipo:** Data integrity / DoS
+
+### Descrizione
+`CLAUDE.md` impone scritture **atomiche** (temp + `rename`), ma lo store
+utenti/ruoli usa `fs.writeFileSync` diretto:
+
+- `plugins/adminUsers/userManagement.js:87` (`userUsert`)
+- `plugins/adminUsers/main.js:581` (`updateUserProfile`)
+- `plugins/adminUsers/roleManagement.js:67, 117, 151, 168`
+
+### Impatto
+Una scrittura interrotta (crash/kill) o concorrente può **corrompere**
+`userAccount.json5` / `userRole.json5` → lockout dell'autenticazione / DoS,
+perdita di account.
+
+### Rimedio proposto
+Applicare ovunque il pattern atomico già usato altrove nel progetto:
+```js
+fs.writeFileSync(file + '.tmp', JSON.stringify(data, null, 2), 'utf8');
+fs.renameSync(file + '.tmp', file);
+```
+Valutare un helper condiviso (`core/saveJson5` esiste già) per uniformare.
+
+---
+
+## 4. 🟠 Un admin (ruolo 1) può impossessarsi del root (ruolo 0)
+
+**Stato:** - [ ] da affrontare · **Severità:** Media · **Tipo:** Privilege escalation
+
+### Descrizione
+`POST /api/adminUsers/usertUser` (`plugins/adminUsers/main.js` → `userManagement.userUsert`)
+accetta `isNewUser` e `roleIds` dal body **senza proteggere gli account root**.
+Un utente con ruolo `1` (admin) può:
+- inviare `isNewUser:false` con lo username del **root** e una nuova password →
+  **reset delle credenziali root** (takeover);
+- assegnare `roleIds:[0]` a sé stesso o ad altri → auto-promozione a root.
+
+Nel modello RBAC il ruolo `0` (root) è **sopra** l'admin (`1`): questa è
+un'escalation admin→root non prevista.
+
+### Impatto
+In installazioni multi-admin, qualsiasi admin può scavalcare il confine root.
+
+### Rimedio proposto
+Nell'handler / in `userUsert`:
+- vietare la modifica di account che possiedono il ruolo `0` se il chiamante non è root;
+- vietare l'assegnazione del ruolo `0` (in create e update) se il chiamante non è root.
+Il ruolo del chiamante è in `ctx.session.user.roleIds`.
+
+---
+
+## 5. 🟡 Cookie di sessione senza flag `Secure`
+
+**Stato:** - [ ] da affrontare · **Severità:** Bassa · **Tipo:** Hardening / session
+
+### Descrizione
+`core/priorityMiddlewares/koaSession.default.json5 → CONFIG` imposta `httpOnly` e
+`sameSite:"lax"` ma **non** `secure`. Anche con HTTPS attivo il cookie non è marcato
+`Secure` → potenziale leak su downgrade / mixed-content.
+
+> Nota positiva: il token CSRF **viene ruotato** al login (`main.js:151`) — buona pratica già presente.
+
+### Rimedio proposto
+Impostare `secure: true` **in modo condizionale** quando `https.enabled` è vero
+(il CMS supporta anche HTTP puro sulla 3000, quindi non può essere sempre `true`).
+Valutare il prefisso `__Host-` in deployment solo-HTTPS.
+
+---
+
+## 6. 🟡 Endpoint di debug `GET /api/adminUsers/logged`
+
+**Stato:** - [ ] da affrontare · **Severità:** Bassa · **Tipo:** Information disclosure
+
+### Descrizione
+`plugins/adminUsers/main.js:178` restituisce in chiaro `JSON.stringify(ctx.session)`
+(contenuto della propria sessione). È un endpoint di test lasciato accessibile.
+
+### Rimedio proposto
+Rimuoverlo, oppure limitarlo alla modalità debug / proteggerlo con `access`
+appropriato e non serializzare l'intera sessione.
+
+---
+
+## 7. ℹ️ Chiavi di sessione placeholder
+
+**Stato:** - [ ] da affrontare · **Severità:** Informativa · **Tipo:** Promemoria operativo
+
+### Descrizione
+`koaSession.default.json5` usa `["CHANGE_ME_session_key_1", ...]`: firmano i cookie,
+quindi se non ruotate sono **forgiabili** (impersonazione). Il progetto **già emette
+un warning al boot** (`core/sessionSecurity.js`) e il wizard le rigenera.
+
+### Rimedio proposto
+Nessuna modifica di codice necessaria: garantire in fase di deploy che le chiavi
+siano rigenerate (`npm run start-configure` o `openssl rand -hex 32`) e mai
+committate. Documentato qui solo per completezza della checklist.
+
+---
+
+## Procedura operativa (affrontare i punti uno a uno)
+
+Regole di ingaggio, valide per **ogni** voce dell'indice:
+
+1. **Un branch/una voce per volta.** Non accorpare fix eterogenee: ogni voce ha il
+   suo commit isolato e verificabile.
+2. **Prima il test che dimostra il bug** (red), poi la fix (green). Per la voce #1
+   il test di regressione con i vettori di path elencati è obbligatorio.
+3. **Naming:** per qualsiasi nuovo nome (funzione/variabile/file) proporre 2-3
+   alternative e attendere l'ok del maintainer (regola `CLAUDE.md`).
+4. **Verifica dal vivo** dopo la fix: avviare il server e ri-eseguire la PoC; il
+   comportamento atteso deve cambiare da vulnerabile a sicuro.
+5. **Spuntare la checkbox** nell'indice e nel titolo della sezione solo quando la
+   fix è **implementata + verificata**; annotare nel commit il numero della voce.
+6. **`CHANGELOG.md`**: registrare ogni fix (progetto alpha, breaking changes ammessi
+   ma documentati).
+
+### Ordine di lavorazione consigliato
+
+| Passo | Voce | Perché in questo ordine |
+|-------|------|--------------------------|
+| 1 | **#1** + **#2** (insieme) | Auth bypass confermato e a exploit banale — massima priorità. La canonicalizzazione del path (#1) e la postura allow-list (#2) sono complementari e vanno progettate insieme. |
+| 2 | **#3** | Integrità dello store credenziali: rischio corruzione/lockout. Fix meccanica e a basso rischio. |
+| 3 | **#4** | Chiude l'escalation admin→root. Richiede logica sul ruolo del chiamante. |
+| 4 | **#5** | Hardening cookie; condizionale su HTTPS. |
+| 5 | **#6** | Rimozione/protezione endpoint di debug. Rapido. |
+| 6 | **#7** | Nessun codice: checklist di deploy. |
+
+### Definition of Done (per voce)
+
+- [ ] Causa radice compresa e circoscritta al file/funzione indicati.
+- [ ] Test di regressione aggiunto (dove applicabile) e rosso→verde.
+- [ ] Fix implementata rispettando i pattern del progetto (atomicità, `loadJson5`, `access`, escaping).
+- [ ] Verifica manuale dal vivo (PoC non più sfruttabile).
+- [ ] Checkbox spuntata nell'indice + voce annotata in `CHANGELOG.md`.
+- [ ] Nessuna regressione su login/logout, sessione, accesso admin legittimo.
+
+---
+
+*Documento generato durante l'audit del 2026-07-03. Aggiornare gli stati man mano
+che le voci vengono chiuse.*
