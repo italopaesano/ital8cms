@@ -30,8 +30,7 @@
 const path = require('path');
 
 // Caratteri di controllo (NUL 0x00 .. 0x1f + DEL 0x7f): mai legittimi in un path.
-// Costruito da String.fromCharCode per evitare byte letterali nel sorgente.
-const CONTROL_CHARS = new RegExp('[' + '\\x00-\\x1f\\x7f' + ']');
+const CONTROL_CHARS = /[\x00-\x1f\x7f]/;
 
 /**
  * Restituisce la forma canonica di un path URL: collassa gli slash duplicati e
