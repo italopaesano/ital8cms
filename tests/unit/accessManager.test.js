@@ -253,6 +253,53 @@ describe('AccessManager', () => {
   });
 
   // ========================================================================
+  // LAYER A — canonicalizzazione del path nella guardia (audit #1)
+  // Prova che la guardia chiude il bypass da SOLA (senza il gate globale B):
+  // path non canonici che risolvono a /admin devono comunque matchare la
+  // regola /admin/** e NON cadere sulla defaultPolicy "allow".
+  // ========================================================================
+  describe('createMiddleware - path non canonici (Layer A)', () => {
+    const nonCanonicalAdminPaths = [
+      '/./admin/usersManagment/index.ejs',
+      '/x/../admin/usersManagment/index.ejs',
+      '//admin/usersManagment/index.ejs',
+      '/admin/./usersManagment/index.ejs',
+    ];
+
+    test.each(nonCanonicalAdminPaths)(
+      'anonimo su %j → bloccato (redirect al login), NON allow',
+      async (p) => {
+        const middleware = accessManager.createMiddleware();
+        const ctx = { path: p, session: null, redirect: jest.fn() };
+        const next = jest.fn();
+        await middleware(ctx, next);
+        expect(next).not.toHaveBeenCalled();
+        expect(ctx.redirect).toHaveBeenCalledWith('/pluginPages/adminUsers/login.ejs');
+      }
+    );
+
+    test.each(nonCanonicalAdminPaths)(
+      'ruolo insufficiente [2] su %j → access-denied, NON allow',
+      async (p) => {
+        const middleware = accessManager.createMiddleware();
+        const ctx = { path: p, session: { user: { roleIds: [2] } }, redirect: jest.fn() };
+        const next = jest.fn();
+        await middleware(ctx, next);
+        expect(next).not.toHaveBeenCalled();
+        expect(ctx.redirect).toHaveBeenCalledWith('/pluginPages/adminAccessControl/access-denied.ejs');
+      }
+    );
+
+    test('ruolo corretto [1] su path non canonico → consentito', async () => {
+      const middleware = accessManager.createMiddleware();
+      const ctx = { path: '/./admin/dashboard', session: { user: { roleIds: [1] } } };
+      const next = jest.fn();
+      await middleware(ctx, next);
+      expect(next).toHaveBeenCalled();
+    });
+  });
+
+  // ========================================================================
   // Backward compatibility (roleId singolo)
   // ========================================================================
   describe('backward compatibility - single roleId', () => {

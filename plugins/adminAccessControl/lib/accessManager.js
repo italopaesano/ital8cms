@@ -13,6 +13,7 @@
 
 const PatternMatcher = require('../../../core/patternMatcher');
 const loadJson5 = require('../../../core/loadJson5');
+const { canonicalizePath } = require('../../../core/pathCanonicalizer');
 const path = require('path');
 
 class AccessManager {
@@ -185,11 +186,17 @@ class AccessManager {
    */
   createMiddleware() {
     return async (ctx, next) => {
+      // LAYER A (OBBLIGATORIO) — canonicalizza il path PRIMA del match, così la
+      // guardia decide sulla stessa forma con cui il file server statico risolve
+      // il file. Chiude il bypass via path non canonico (`/./admin/...`,
+      // `/x/../admin/...`, `//admin/...`) indipendentemente dal gate opzionale B
+      // (rejectNonCanonicalPaths). Vedi core/pathCanonicalizer.js.
+      let url = canonicalizePath(ctx.path);
+
       // Normalizza il path togliendo il globalPrefix prima del match: i pattern in
       // accessControl.json5 sono logici (senza prefix), così funzionano identici con
       // o senza deploy-prefix. Senza globalPrefix è un no-op.
       const gp = this.globalPrefix;
-      let url = ctx.path;
       if (gp && (url === gp || url.startsWith(gp + '/'))) {
         url = url.slice(gp.length) || '/';
       }

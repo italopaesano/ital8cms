@@ -17,7 +17,7 @@ La procedura operativa per affrontarle una a una è in fondo.
 
 | # | Sev. | Vulnerabilità | Stato |
 |---|------|---------------|-------|
-| 1 | 🔴 Alta | [Bypass del controllo accessi admin via path non canonico](#1--bypass-del-controllo-accessi-admin-via-path-non-canonico) | - [ ] |
+| 1 | 🔴 Alta | [Bypass del controllo accessi admin via path non canonico](#1--bypass-del-controllo-accessi-admin-via-path-non-canonico) | - [x] ✅ corretto |
 | 2 | 🟠 Media | [`defaultPolicy: "allow"` — postura deny-list fragile](#2--defaultpolicy-allow--postura-deny-list-fragile) | - [ ] |
 | 3 | 🟠 Media | [Scritture non atomiche sullo store di autenticazione](#3--scritture-non-atomiche-sullo-store-di-autenticazione) | - [ ] |
 | 4 | 🟠 Media | [Un admin (ruolo 1) può impossessarsi del root (ruolo 0)](#4--un-admin-ruolo-1-può-impossessarsi-del-root-ruolo-0) | - [ ] |
@@ -39,7 +39,38 @@ Legenda severità: 🔴 Alta · 🟠 Media · 🟡 Bassa · ℹ️ Informativa.
 
 ## 1. 🔴 Bypass del controllo accessi admin via path non canonico
 
-**Stato:** - [ ] da affrontare · **Severità:** Alta · **Tipo:** Broken Access Control / Auth bypass · ✅ **CONFERMATO dal vivo**
+**Stato:** - [x] ✅ **CORRETTO** (2026-07-03) · **Severità:** Alta · **Tipo:** Broken Access Control / Auth bypass · ✅ **CONFERMATO dal vivo**
+
+> ### ✅ Fix applicata — architettura a due layer (A obbligatoria + B opzionale)
+>
+> **Modulo condiviso** `core/pathCanonicalizer.js` (fonte unica): `canonicalizePath()`
+> (risolve dot-segment e slash doppi, senza decodificare) + `isCanonicalPath()`
+> (predicato per il gate B).
+>
+> - **Layer A — OBBLIGATORIO** (`plugins/adminAccessControl/lib/accessManager.js` →
+>   `createMiddleware`): la guardia canonicalizza `ctx.path` **prima** del match, così
+>   la regola `/admin/**` matcha anche i path non puliti. Chiude il bypass **da sola**,
+>   sempre attiva. Neutralizza sia l'anonimo sia l'utente autenticato a basso privilegio
+>   (la regola con ruoli `[0,1]` viene applicata correttamente).
+> - **Layer B — OPZIONALE, default on** (`core/priorityMiddlewares/priorityMiddlewares.js`,
+>   primissimo middleware): gate globale che risponde **400** ai path non canonici,
+>   controllato da `ital8Config.json5 → rejectNonCanonicalPaths` (bump `schemaVersion` 1→2).
+>   Difesa in profondità su TUTTA l'app.
+>
+> **INVARIANTE:** A è sempre attiva e chiude #1 da sola; disattivare B **non** riapre la
+> vulnerabilità (rimuove solo un layer globale). Commento esplicito nel `.default`.
+>
+> **Verifica (test automatici, tutti verdi):**
+> - `tests/unit/core/pathCanonicalizer.test.js` — logica di canonicalizzazione/predicato.
+> - `tests/unit/accessManager.test.js` (esteso) — **prova di A**: path non canonici verso
+>   `/admin` bloccati (redirect login / access-denied) anche senza B.
+> - `tests/integration/rejectNonCanonicalPaths.test.js` — end-to-end: **B on** → 400;
+>   **B off** → 302 login (mai 200), a dimostrazione che A chiude il bypass da sola.
+> - Suite completa: **2451 test, 0 regressioni**.
+>
+> Nota: la voce **#2** (`defaultPolicy: allow`) resta aperta come hardening di postura
+> separato — non era un prerequisito per chiudere #1 (A riconduce il path alla regola
+> specifica, senza dipendere dal default).
 
 ### Descrizione
 Le pagine admin sono servite come **file statici** da `koa-classic-server`. La loro
