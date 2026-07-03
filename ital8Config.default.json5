@@ -1,9 +1,23 @@
 {
-  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 2,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   "globalPrefix": "",
   "apiPrefix": "api",
   "adminPrefix": "admin",
   "enableAdmin": true,
+
+  // ━━━ SICUREZZA: Reject Non-Canonical Paths (gate globale) ━━━━━━━━━━━━━━━━━━━━
+  // true  = rifiuta con 400 le richieste il cui path NON è già canonico
+  //         (dot-segment /./ e /../, slash doppi //, backslash, %2e/%2f/%5c/%00,
+  //         caratteri di controllo). Difesa in profondità contro il path/URL
+  //         normalization mismatch (bypass del controllo accessi).
+  // false = disattiva il gate globale.
+  //
+  // ⚠ NOTA: disattivarlo NON riapre il bypass — la guardia di adminAccessControl
+  // canonicalizza comunque il path prima del controllo accessi (layer sempre
+  // attivo). Questo flag è un ulteriore strato su TUTTA l'app. FORTEMENTE
+  // RACCOMANDATO lasciarlo a true. Vedi core/pathCanonicalizer.js.
+  "rejectNonCanonicalPaths": true,
+
   "pluginPagesPrefix": "pluginPages",
   "viewsPrefix": "views",
   "baseThemePath": "../",

@@ -37,6 +37,33 @@ function priorityMiddleware(app, ital8Conf, options = {}){
     const config = ital8Conf.priorityMiddlewares || {};
     const projectRoot = options.projectRoot || process.cwd();
 
+    // ========== GATE B: REJECT NON-CANONICAL PATHS (opzionale, default on) ==========
+    // Layer B della difesa contro il path/URL normalization mismatch (audit #1).
+    // Rifiuta con 400 le richieste il cui path non è già canonico (dot-segment,
+    // slash doppi, backslash, %2e/%2f/%5c/%00, control char). Registrato per PRIMO,
+    // prima ancora di bodyParser/session: è un controllo puramente sintattico sul
+    // path e non necessita di body né sessione.
+    //
+    // INVARIANTE: la canonicalizzazione nella guardia di adminAccessControl (Layer A)
+    // è sempre attiva e chiude il bypass da sola; questo gate è difesa in profondità
+    // aggiuntiva su TUTTA l'app. Disattivarlo (rejectNonCanonicalPaths:false) NON
+    // riapre la vulnerabilità — fortemente raccomandato tenerlo attivo.
+    // Default fail-safe: attivo salvo esplicito `false`.
+    if (ital8Conf.rejectNonCanonicalPaths !== false) {
+        const { isCanonicalPath } = require('../pathCanonicalizer');
+        app.use(async (ctx, next) => {
+            if (!isCanonicalPath(ctx.path)) {
+                ctx.status = 400;
+                ctx.body = 'Bad Request';
+                return;
+            }
+            await next();
+        });
+        console.log('[PriorityMiddleware] ✓ rejectNonCanonicalPaths gate loaded (enabled)');
+    } else {
+        console.log('[PriorityMiddleware] ✗ rejectNonCanonicalPaths gate SKIPPED (disabled in config)');
+    }
+
     // ========== CORE MIDDLEWARE 1: BODY PARSER (sempre attivo) ==========
     const bodyParser = require('koa-bodyparser');
     app.use(bodyParser());
