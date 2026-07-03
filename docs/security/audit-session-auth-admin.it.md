@@ -61,12 +61,33 @@ Legenda severità: 🔴 Alta · 🟠 Media · 🟡 Bassa · ℹ️ Informativa.
 > vulnerabilità (rimuove solo un layer globale). Commento esplicito nel `.default`.
 >
 > **Verifica (test automatici, tutti verdi):**
-> - `tests/unit/core/pathCanonicalizer.test.js` — logica di canonicalizzazione/predicato.
+> - `tests/unit/core/pathCanonicalizer.test.js` — logica di canonicalizzazione/predicato
+>   + **regressione falsi positivi** (vedi sotto).
 > - `tests/unit/accessManager.test.js` (esteso) — **prova di A**: path non canonici verso
 >   `/admin` bloccati (redirect login / access-denied) anche senza B.
 > - `tests/integration/rejectNonCanonicalPaths.test.js` — end-to-end: **B on** → 400;
->   **B off** → 302 login (mai 200), a dimostrazione che A chiude il bypass da sola.
+>   **B off** → 302 login (mai 200), a dimostrazione che A chiude il bypass da sola;
+>   + regressione query-string-con-slash e ACME.
 > - Suite completa: **2451 test, 0 regressioni**.
+>
+> ### 🔒 Regressione — path legittimi che NON devono mai essere rifiutati
+> Blindati da test dopo verifica dal vivo (per evitare falsi positivi del gate B):
+> - **`/.well-known/acme-challenge/...`** (Let's Encrypt ACME) → passa.
+> - **Spazi** — sia `%20` sia letterali, sia nei nomi di **FILE** sia di **CARTELLA**
+>   (es. `/my folder/report final.pdf`) → passano (lo spazio 0x20 è fuori dal range
+>   dei control char rifiutati).
+> - Doppio punto **nel nome** file (`my..file.txt`, non dot-segment), hidden file
+>   (`.gitignore`), unicode → passano.
+> - **Query string** con slash/dot-segment (`?redir=/x/../y`) → passa: il gate opera su
+>   `ctx.path`, non su `ctx.url`.
+>
+> ### 🔍 Revisione (code-review, 8 angoli, high effort)
+> Eseguita sul diff: **0 bug di correttezza**. Verificati globalPrefix (nessuna
+> regressione, anzi migliora `//app/admin`), `path.posix.normalize` (corretto anche su
+> Windows), `checkInTemplate` (non usa il path per il match → nessun gap), doppia-encoding
+> e overlong (coperti da B / non serviti dal file server). Unico rilievo (cosmetico):
+> commento fuorviante + costruzione contorta della regex control-char → **corretto**
+> (regex literal `/[\x00-\x1f\x7f]/`), test verdi.
 >
 > Nota: la voce **#2** (`defaultPolicy: allow`) resta aperta come hardening di postura
 > separato — non era un prerequisito per chiudere #1 (A riconduce il path alla regola
