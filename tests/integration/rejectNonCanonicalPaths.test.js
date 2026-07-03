@@ -165,6 +165,24 @@ describe('rejectNonCanonicalPaths — Fase 1: B ABILITATO (gate globale)', () =>
     const res = await httpGet('/pluginPages/adminUsers/login.ejs', PORT_B_ON);
     expect(res.status).not.toBe(400);
   });
+
+  // REGRESSIONE: il gate opera su ctx.path, NON su ctx.url. Slash/dot-segment
+  // nella QUERY STRING non devono far scattare il 400 (altrimenti si romperebbe
+  // ogni redirect/parametro con slash, es. ?referrerTo=/x/../y).
+  test.each([
+    '/pluginPages/adminUsers/login.ejs?foo=a//b&x=./y',
+    '/pluginPages/adminUsers/login.ejs?referrerTo=/x/../y',
+  ])('query string con slash %j → NON 400', async (p) => {
+    const res = await httpGet(p, PORT_B_ON);
+    expect(res.status).not.toBe(400);
+  });
+
+  // REGRESSIONE: /.well-known/ (Let's Encrypt ACME) non deve essere rifiutato dal
+  // gate. 404 è accettabile (non configurato nel test); l'importante è NON 400.
+  test('/.well-known/acme-challenge/... → NON 400 (ACME safe)', async () => {
+    const res = await httpGet('/.well-known/acme-challenge/testtoken', PORT_B_ON);
+    expect(res.status).not.toBe(400);
+  });
 });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -56,6 +56,43 @@ describe('pathCanonicalizer.isCanonicalPath', () => {
     });
   });
 
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSIONE — falsi positivi da NON rifiutare mai.
+  // Blinda i casi legittimi che "sembrano" sospetti ma sono validi, così una
+  // futura modifica troppo severa del gate B viene subito colta.
+  // ────────────────────────────────────────────────────────────────────────
+  describe('regressione — path legittimi mai rifiutati', () => {
+    test.each([
+      // Let's Encrypt / ACME HTTP-01 challenge (ital8Config → https.acmeChallenge)
+      ['/.well-known/acme-challenge/tokenABC123', 'ACME challenge'],
+
+      // Spazi: devono passare sia nei FILE sia nelle CARTELLE, encoded e letterali.
+      ['/file with space.ejs', 'spazio letterale nel FILE'],
+      ['/file%20with%20space.ejs', 'spazio %20 nel FILE'],
+      ['/my folder/page.ejs', 'spazio letterale nella CARTELLA'],
+      ['/my%20folder/report final.pdf', 'spazio nella cartella (%20) e nel file'],
+      ['/a b/c d/e f.ejs', 'spazi in più cartelle e file'],
+      ['/images/photo (1).jpg', 'spazio + parentesi nel FILE'],
+
+      // Punti nel NOME (non dot-segment): mai toccati.
+      ['/downloads/my..file.txt', 'doppio punto nel nome file'],
+      ['/archive..tar.gz', 'doppio punto nel nome file'],
+      ['/v1.2.3/release.zip', 'punti singoli in cartella'],
+      ['/a.b.c/page.ejs', 'punti multipli in cartella'],
+
+      // Hidden / leading-dot: segmento che inizia per '.' ma non è '.'/'..'.
+      ['/.gitignore', 'hidden file'],
+      ['/.env.example', 'leading dot'],
+
+      // Unicode.
+      ['/résumé.pdf', 'unicode'],
+      ['/文档/página.ejs', 'unicode in cartella e file'],
+    ])('%j (%s) → isCanonicalPath true e canonicalizePath invariato', (p) => {
+      expect(isCanonicalPath(p)).toBe(true);
+      expect(canonicalizePath(p)).toBe(p);
+    });
+  });
+
   describe('path non canonici / pericolosi → false', () => {
     test.each([
       ['/./admin/x', 'dot-segment'],

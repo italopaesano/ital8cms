@@ -88,6 +88,11 @@ function isCanonicalPath(p) {
   if (/%2e|%2f|%5c|%00/i.test(p)) return false;
 
   // Caratteri di controllo (incluso NUL e DEL): mai legittimi in un path.
+  // NOTA: lo spazio (0x20) è FUORI da questo range e quindi PASSA — sia
+  // percent-encoded (%20) sia letterale, sia nei nomi di FILE sia nei nomi di
+  // CARTELLA (es. "/my folder/report final.pdf"). I file/cartelle con spazi non
+  // vanno mai rifiutati. Anche la query string non è coinvolta: il gate opera su
+  // ctx.path, non su ctx.url.
   if (CONTROL_CHARS.test(p)) return false;
 
   // Dot-segment e slash doppi: se la forma canonica differisce, il path non era
