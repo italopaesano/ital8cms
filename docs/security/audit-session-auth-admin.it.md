@@ -24,8 +24,16 @@ La procedura operativa per affrontarle una a una è in fondo.
 | 5 | 🟡 Bassa | [Cookie di sessione senza flag `Secure`](#5--cookie-di-sessione-senza-flag-secure) | - [ ] |
 | 6 | 🟡 Bassa | [Endpoint di debug `GET /api/adminUsers/logged`](#6--endpoint-di-debug-get-apiadminuserslogged) | - [ ] |
 | 7 | ℹ️ Info | [Chiavi di sessione placeholder](#7--chiavi-di-sessione-placeholder) | - [ ] |
+| 8 | 🟡 Bassa | [`seo`: route POST con `method` minuscolo → ignorata](#8--seo-route-post-con-method-minuscolo--ignorata) | - [ ] |
+| 9 | ℹ️ Info | [`adminBootstrapNavbar`: endpoint admin aperti al ruolo 2 (editor)](#9--adminbootstrapnavbar-endpoint-admin-aperti-al-ruolo-2-editor) | - [ ] |
 
 Legenda severità: 🔴 Alta · 🟠 Media · 🟡 Bassa · ℹ️ Informativa.
+
+> ✅ **Esito verifica endpoint API sensibili** — vedi
+> [Appendice A](#appendice-a--verifica-degli-endpoint-api-sensibili): il layer
+> di autorizzazione delle **API** (`/api/...`) è risultato **solido** in test dal
+> vivo. Il bypass della voce #1 riguarda **solo** le pagine admin statiche, non
+> gli endpoint API.
 
 ---
 
@@ -206,6 +214,46 @@ committate. Documentato qui solo per completezza della checklist.
 
 ---
 
+## 8. 🟡 `seo`: route POST con `method` minuscolo → ignorata
+
+**Stato:** - [ ] da affrontare · **Severità:** Bassa · **Tipo:** Correttezza (contratto rotte)
+
+### Descrizione
+`plugins/seo/main.js:121` dichiara `method: 'post'` (**minuscolo**). Il loader
+(`core/pluginSys.js` → `loadRoutes`) confronta con `'POST'` maiuscolo, quindi la
+route viene **silenziosamente ignorata** (comportamento documentato in `CLAUDE.md`).
+`GET/POST /api/seo/regenerate` risulta di fatto assente e la richiesta cade sul
+static server. Non è un buco di sicurezza (la funzione equivalente esiste come
+`POST /api/adminSeo/regenerate`, correttamente maiuscola e protetta `[0,1]`), ma è
+un endpoint morto/duplicato.
+
+### Rimedio proposto
+Correggere in `method: 'POST'` **oppure** rimuovere la route duplicata se
+`adminSeo/regenerate` la sostituisce. Valutare un check al boot che segnali i
+`method` non-maiuscoli invece di ignorarli in silenzio.
+
+---
+
+## 9. ℹ️ `adminBootstrapNavbar`: endpoint admin aperti al ruolo 2 (editor)
+
+**Stato:** - [ ] da affrontare · **Severità:** Informativa · **Tipo:** Superficie di autorizzazione
+
+### Descrizione
+`plugins/adminBootstrapNavbar/main.js:31-32` dichiara `allowedRoles: [0, 1, 2]`
+per le proprie rotte admin (creazione/modifica/eliminazione dei file navbar),
+mentre tutti gli altri plugin admin usano `[0, 1]`. Significa che un **editor**
+(ruolo 2) può gestire le navbar del sito.
+
+### Impatto
+Potenzialmente intenzionale (l'editor cura i contenuti/navigazione). Da confermare:
+se non voluto, un editor ha una capacità di configurazione sito non prevista.
+
+### Rimedio proposto
+Decisione del maintainer: se non intenzionale, allineare a `[0, 1]`; se
+intenzionale, documentarlo esplicitamente nel README del plugin.
+
+---
+
 ## Procedura operativa (affrontare i punti uno a uno)
 
 Regole di ingaggio, valide per **ogni** voce dell'indice:
@@ -242,6 +290,56 @@ Regole di ingaggio, valide per **ogni** voce dell'indice:
 - [ ] Verifica manuale dal vivo (PoC non più sfruttabile).
 - [ ] Checkbox spuntata nell'indice + voce annotata in `CHANGELOG.md`.
 - [ ] Nessuna regressione su login/logout, sessione, accesso admin legittimo.
+
+---
+
+## Appendice A — Verifica degli endpoint API sensibili
+
+Oltre alle pagine web, ho testato **dal vivo** l'accesso agli **endpoint API**
+riservati, che è il layer dove risiedono le azioni vere (lettura utenti, CRUD
+ruoli, salvataggio regole di accesso, restart). Setup: 3 utenti reali —
+`root` (ruolo 0), `editor3` (ruolo 3, basso privilegio), `custom100` (ruolo custom
+100) — login effettivo con CSRF+Origin.
+
+### Matrice GET (endpoint sensibili, attesi `[0,1]`)
+
+| Endpoint | anon | ruolo 3 | ruolo 100 | root |
+|---|---|---|---|---|
+| `/api/adminUsers/userList` | 401 | 403 | 403 | 200 |
+| `/api/adminUsers/roleList` | 401 | 403 | 403 | 200 |
+| `/api/adminUsers/customRoleList` | 401 | 403 | 403 | 200 |
+| `/api/adminUsers/hardcodedRoleList` | 401 | 403 | 403 | 200 |
+| `/api/adminAccessControl/rules` | 401 | 403 | 403 | 200 |
+| `/api/adminAccessControl/rules-json` | 401 | 403 | 403 | 200 |
+| `/api/adminUsers/userInfo?username=root` | 401 | 403 | 403 | 200 |
+| `/api/adminUsers/getCurrentUser` | 401 | 200 | 200 | 200 |
+
+(`getCurrentUser` è `allowedRoles:[]` = qualsiasi autenticato → 200 per ruolo 3/100 è corretto.)
+
+### Matrice POST mutanti (attesi `[0,1]`)
+
+| Endpoint | ruolo 3 | ruolo 100 | root (token valido) |
+|---|---|---|---|
+| `/api/adminUsers/usertUser` | 403 | 403 | 200 |
+| `/api/adminUsers/createCustomRole` | 403 | 403 | success |
+| `/api/adminUsers/deleteCustomRole` | 403 | 403 | 200 |
+| `/api/adminAccessControl/rules` | 403 | 403 | 200 |
+| `/api/admin/restart` | 403 | 403 | (non eseguito) |
+
+### Controlli aggiuntivi
+- **Bypass di path sulle API:** `/./api/...` e `/x/../api/...` → **404** (il bypass
+  della voce #1 **non** si applica alle API: le gestisce `@koa/router`, non il file
+  server statico).
+- **CSRF realmente applicato:** root POST **senza token** → 403; **con Origin
+  esterno** → 403.
+- **Ruolo indipendente dal CSRF:** `editor3` con un **token CSRF valido rubato** a
+  root → comunque **403** sui ruoli (il controllo di ruolo non è aggirabile col token).
+
+### Conclusione
+Il layer di autorizzazione degli **endpoint API riservati funziona correttamente**
+per tutti i vettori testati (anonimo, autenticato a basso privilegio, ruolo custom,
+CSRF). La vulnerabilità #1 resta circoscritta al **serving statico delle pagine
+admin**, non agli endpoint API.
 
 ---
 
