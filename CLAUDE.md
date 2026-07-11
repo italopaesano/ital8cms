@@ -157,7 +157,7 @@ Lavorando su questo codebase come AI assistant — regole operative (le più cri
 ### Backend
 - **Framework:** Koa.js v3.2.0 (web framework basato su async/await)
 - **Routing:** @koa/router v15.5.0
-- **Middleware:** koa-bodyparser, koa-session, koa-classic-server v3.0.0
+- **Middleware:** koa-bodyparser, koa-session, koa-classic-server v4.0.0
 - **Archiviazione dati:** file JSON (nessun database richiesto)
 - **Autenticazione:** bcryptjs v3.0.3 (hashing delle password)
 - **Template Engine:** EJS v6.0.1
@@ -1496,8 +1496,8 @@ git push                       # Push to remote
 
 ---
 
-**Last Updated:** 2026-06-27
-**Version:** 2.18.0
+**Last Updated:** 2026-07-11
+**Version:** 2.18.1
 **Maintained By:** AI Assistant (based on codebase analysis)
 **Standard documentazione:** ital8doc v1-1 → [`docs/ITAL8DOC-latest.md`](./docs/ITAL8DOC-latest.md)
 
