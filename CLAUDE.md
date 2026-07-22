@@ -157,7 +157,7 @@ Lavorando su questo codebase come AI assistant — regole operative (le più cri
 ### Backend
 - **Framework:** Koa.js v3.2.0 (web framework basato su async/await)
 - **Routing:** @koa/router v15.5.0
-- **Middleware:** koa-bodyparser, koa-session, koa-classic-server v3.0.0
+- **Middleware:** koa-bodyparser, koa-session, koa-classic-server v5.1.0
 - **Archiviazione dati:** file JSON (nessun database richiesto)
 - **Autenticazione:** bcryptjs v3.0.3 (hashing delle password)
 - **Template Engine:** EJS v6.0.1
