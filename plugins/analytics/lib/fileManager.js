@@ -33,6 +33,20 @@ const path = require('path');
 const LOG_PREFIX = '[analytics]';
 
 /**
+ * Latch "log-once" per i fallimenti di scrittura degli analytics.
+ *
+ * Su un filesystem non scrivibile (dir dati mancante e non creabile, oppure
+ * file/dir in read-only o con permessi negati) il flush gira di continuo — dal
+ * timer periodico (~2s) o a ogni richiesta in modalità flush immediato: senza
+ * throttling lo stesso errore inonderebbe il journal. Questo flag fa loggare
+ * l'errore UNA sola volta finché il problema persiste; una scrittura riuscita
+ * lo resetta, così un guasto successivo viene di nuovo segnalato.
+ *
+ * @type {boolean}
+ */
+let dataDirWriteFailureLogged = false;
+
+/**
  * Calcola il numero ISO della settimana per una data.
  * Segue lo standard ISO 8601 (settimana 1 = settimana con il primo giovedì dell'anno).
  *
@@ -77,11 +91,31 @@ function getFileName(rotationMode, date = new Date()) {
 /**
  * Assicura che la directory dati esista, creandola ricorsivamente se necessario.
  *
+ * FAIL-SOFT: se la creazione fallisce (filesystem read-only, permessi negati,
+ * sandbox systemd senza la dir in ReadWritePaths, ...) NON solleva l'eccezione.
+ * La scrittura degli analytics è un effetto collaterale non critico e non deve
+ * mai far crashare né una richiesta (500 sulla dashboard) né il processo
+ * (un throw nel timer di flush diventerebbe un uncaughtException → exit). Logga
+ * una volta sola (vedi dataDirWriteFailureLogged) e ritorna false, così il
+ * chiamante salta la scrittura in modo pulito.
+ *
  * @param {string} dataDir - Path assoluto alla directory dati
+ * @returns {boolean} true se la dir esiste o è stata creata, false se non creabile
  */
 function ensureDataDir(dataDir) {
-  if (!fs.existsSync(dataDir)) {
+  if (fs.existsSync(dataDir)) return true;
+  try {
     fs.mkdirSync(dataDir, { recursive: true });
+    return true;
+  } catch (err) {
+    if (!dataDirWriteFailureLogged) {
+      console.error(
+        `${LOG_PREFIX} ERROR: impossibile creare la directory dati ${dataDir}: ` +
+        `${err.message} — scritture analytics sospese finché il problema persiste`
+      );
+      dataDirWriteFailureLogged = true;
+    }
+    return false;
   }
 }
 
@@ -97,7 +131,9 @@ function ensureDataDir(dataDir) {
 function writeEvents(dataDir, rotationMode, events) {
   if (!events || events.length === 0) return;
 
-  ensureDataDir(dataDir);
+  // Fail-soft: se la dir dati non esiste e non è creabile, salta la scrittura
+  // senza propagare l'eccezione (l'errore è già stato loggato una volta sola).
+  if (!ensureDataDir(dataDir)) return;
 
   const fileName = getFileName(rotationMode);
   const filePath = path.join(dataDir, fileName);
@@ -107,8 +143,15 @@ function writeEvents(dataDir, rotationMode, events) {
 
   try {
     fs.appendFileSync(filePath, lines, 'utf8');
+    dataDirWriteFailureLogged = false; // scrittura riuscita → riabilita il log su futuri guasti
   } catch (err) {
-    console.error(`${LOG_PREFIX} ERROR: impossibile scrivere su ${filePath}: ${err.message}`);
+    if (!dataDirWriteFailureLogged) {
+      console.error(
+        `${LOG_PREFIX} ERROR: impossibile scrivere su ${filePath}: ${err.message} — ` +
+        `scritture analytics sospese finché il problema persiste`
+      );
+      dataDirWriteFailureLogged = true;
+    }
   }
 }
 
