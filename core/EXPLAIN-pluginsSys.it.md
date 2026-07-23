@@ -24,6 +24,7 @@ Ogni plugin può esportare le seguenti funzioni in `main.js`:
 - `getRouteArray(router, pluginSys, pathPluginFolder)` - Definisce route API
 - `getHooksPage(section, passData, pluginSys, pathPluginFolder)` - Inietta contenuti nelle pagine
 - `getMiddlewareToAdd(pluginSys, pathPluginFolder)` - Aggiunge middleware Koa
+- `getWritablePaths(pluginSys, pathPluginFolder)` - Dichiara le data dir che il plugin deve poter scrivere a runtime → `Array<{ path, purpose }>`. Il preflight di boot (`core/storageWritabilityCheck.js`, invocato dopo `pluginSys.initialize()`) le sonda con una scrittura effettiva (crea la dir + write/delete di un file temporaneo): se una non è scrivibile stampa un box `[STORAGE]` azionabile e **interrompe l'avvio** (`process.exit`), invece di far emergere il problema al primo write. La sonda pre-crea anche le dir mancanti. Opzionale.
 
 ### Funzioni di Condivisione
 - `getObjectToShareToOthersPlugin(forPlugin, pluginSys, pathPluginFolder)` - Espone oggetti ad altri plugin

@@ -152,6 +152,21 @@ module.exports = {
   },
 
   /**
+   * Dichiara le directory che il plugin deve poter scrivere a runtime.
+   *
+   * Usata dal preflight di boot (core/storageWritabilityCheck.js): al boot la
+   * data dir viene sondata e, se non scrivibile, l'avvio si interrompe con un
+   * box [STORAGE] azionabile invece di far emergere il problema solo al primo
+   * flush degli eventi. La sonda pre-crea anche la dir se manca.
+   *
+   * @returns {Array<{path: string, purpose: string}>}
+   */
+  getWritablePaths() {
+    if (!dataDir) return [];
+    return [{ path: dataDir, purpose: 'analytics event storage (JSONL)' }];
+  },
+
+  /**
    * Espone l'API analytics agli altri plugin (principalmente adminAnalytics).
    *
    * Utilizzo:
