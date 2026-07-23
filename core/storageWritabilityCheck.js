@@ -98,9 +98,12 @@ function nearestExistingAncestor(dir) {
 function describeFailure(dir, error) {
   const code = (error && error.code) ? error.code : 'ERRORE';
   const message = (error && error.message) ? error.message : String(error);
+  // I messaggi degli errori fs di Node includono già il code (es. "EEXIST: ...");
+  // non lo ripetiamo per evitare "EEXIST: EEXIST: ...".
+  const detail = message.startsWith(code) ? message : `${code}: ${message}`;
   const lines = [
     `${LOG_PREFIX}    • ${dir}`,
-    `${LOG_PREFIX}        ${code}: ${message}`,
+    `${LOG_PREFIX}        ${detail}`,
   ];
 
   try {
@@ -251,23 +254,27 @@ function checkStorageWritability(pluginSys, options = {}) {
 }
 
 /**
- * Advisory NON bloccante di scrivibilità per UN singolo plugin. Pensato per
- * l'install-time (pluginSys, dopo installPlugin+loadPlugin) e per il wizard.
+ * Gate di scrivibilità BLOCCANTE per l'INSTALLAZIONE di UN plugin.
  *
- * Logga un box [STORAGE] di AVVISO se una data dir dichiarata non è scrivibile
- * nel contesto CORRENTE, ma NON interrompe: il contesto d'installazione/wizard
- * (utente, sandbox) può differire da quello del servizio a runtime, quindi non
- * deve dare falsa sicurezza né bloccare a torto. Il gate autorevole e bloccante
- * resta il preflight di boot (checkStorageWritability).
+ * Sonda le data dir dichiarate da getWritablePaths() del plugin (i path sono
+ * risolti offline dal config, così funziona anche prima di loadPlugin). Se una
+ * non è scrivibile: stampa un box [STORAGE] chiaro ("installazione annullata")
+ * e LANCIA — in pluginSys il throw è gestito dal catch graceful, che marca il
+ * plugin 'incomplete' e NON persiste isInstalled: il plugin resta NON installato
+ * (il boot prosegue, salvo essentialPlugins). Se tutto è scrivibile, la sonda
+ * pre-crea anche le dir mancanti.
  *
  * @param {object} plugin    - Oggetto plugin (con pluginName, pathPluginFolder)
  * @param {object} pluginSys - Istanza del sistema plugin
  * @param {object} [options]
- * @param {(...a:any)=>void} [options.warn] - override di console.warn (test)
- * @returns {boolean} true se tutto scrivibile (o nulla dichiarato), false se ci sono avvisi
+ * @param {(...a:any)=>void} [options.error] - override di console.error (test)
+ * @param {(...a:any)=>void} [options.warn]  - override di console.warn (test)
+ * @returns {boolean} true se tutto scrivibile (o nulla dichiarato)
+ * @throws {Error} con code 'STORAGE_NOT_WRITABLE' se una data dir non è scrivibile
  */
-function advisePluginWritability(plugin, pluginSys, options = {}) {
-  const warn = options.warn || console.warn.bind(console);
+function assertPluginWritableOrThrow(plugin, pluginSys, options = {}) {
+  const error = options.error || console.error.bind(console);
+  const warn  = options.warn  || console.warn.bind(console);
 
   const declaredDirs = resolveDeclaredDirs(plugin, pluginSys, warn);
   if (declaredDirs.length === 0) return true;
@@ -275,16 +282,26 @@ function advisePluginWritability(plugin, pluginSys, options = {}) {
   const failures = probeFailures(declaredDirs);
   if (failures.length === 0) return true;
 
-  warn(formatFailuresBox(
-    `${LOG_PREFIX}  ⚠  Directory dati non scrivibili nel contesto attuale (plugin ${plugin.pluginName}):`,
+  error(formatFailuresBox(
+    `${LOG_PREFIX}  🔴  Installazione del plugin ${plugin.pluginName} ANNULLATA — data dir non scrivibile:`,
     failures,
-    [...advisoryFooter(), ...remedyLines()],
+    [
+      `${LOG_PREFIX}  Il plugin NON viene installato (resta 'incomplete'). Risolvi e riavvia.`,
+      LOG_PREFIX,
+      ...remedyLines(),
+    ],
   ));
-  return false;
+
+  const summary = failures
+    .map((f) => `${f.dir} (${(f.error && f.error.code) || 'errore'})`)
+    .join('; ');
+  const err = new Error(`data dir non scrivibile — installazione annullata: ${summary}`);
+  err.code = 'STORAGE_NOT_WRITABLE';
+  throw err;
 }
 
 /**
- * Righe finali comuni agli avvisi non bloccanti (install-time e wizard).
+ * Righe finali comuni agli avvisi non bloccanti (wizard/offline).
  * @returns {string[]}
  */
 function advisoryFooter() {
@@ -361,7 +378,7 @@ function adviseWritabilityForPluginsDir(pluginsDir, options = {}) {
 
 module.exports = {
   checkStorageWritability,
-  advisePluginWritability,
+  assertPluginWritableOrThrow,
   adviseWritabilityForPluginsDir,
   probeWritable,
 };

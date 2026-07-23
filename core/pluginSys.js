@@ -84,6 +84,17 @@ class pluginSys{
         // o il load falliscono non resta marcato installato.
         const wasInstalled = pluginConfig.isInstalled === 1;
         if( !wasInstalled ){
+          // GATE DI SCRIVIBILITÀ DELL'INSTALLAZIONE (bloccante per QUESTO plugin):
+          // se una data dir dichiarata via getWritablePaths() non è scrivibile,
+          // l'installazione FALLISCE — lancia, così il catch graceful sotto marca
+          // il plugin 'incomplete', lo rimuove dagli attivi e NON persiste
+          // isInstalled: il plugin resta NON installato, con un box [STORAGE]
+          // chiaro. Gira PRIMA di installPlugin()/loadPlugin(), così nessun
+          // side-effect d'installazione parte se la dir non è pronta;
+          // getWritablePaths() risolve i path offline dal config (loadPlugin non
+          // è ancora girato). Il boot NON si interrompe (salvo essentialPlugins).
+          require('./storageWritabilityCheck').assertPluginWritableOrThrow(plugin, this);
+
           if (plugin.installPlugin) {
             await plugin.installPlugin(this, pathPluginFolder);// può lanciare → catch graceful sotto
           }
@@ -157,19 +168,6 @@ class pluginSys{
             logger.warn('pluginSys', `isInstalled non persistito per ${pluginName}: ${writeErr.message}`);
           }
           pluginConfig.isInstalled = 1;
-
-          // Advisory (NON bloccante) di scrivibilità delle data dir alla prima
-          // installazione del plugin. Gira DOPO loadPlugin() così i path (es. la
-          // dataDir di analytics, risolta in loadPlugin) sono già disponibili.
-          // Usa la stessa dichiarazione getWritablePaths(); logga un box [STORAGE]
-          // se qualcosa non è scrivibile nel contesto attuale, ma non blocca —
-          // il contesto d'installazione può differire da quello del servizio a
-          // runtime; il gate autorevole e bloccante resta il preflight di boot.
-          try {
-            require('./storageWritabilityCheck').advisePluginWritability(plugin, this);
-          } catch (adviseErr) {
-            logger.warn('pluginSys', `advisory scrivibilità per ${pluginName}: ${adviseErr.message}`);
-          }
         }
 
         this.#pluginStates.set(pluginName, { state: 'installed', reason: null });

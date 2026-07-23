@@ -23,7 +23,7 @@ const path = require('path');
 
 const {
   checkStorageWritability,
-  advisePluginWritability,
+  assertPluginWritableOrThrow,
   adviseWritabilityForPluginsDir,
   probeWritable,
 } = require('../../../core/storageWritabilityCheck');
@@ -220,36 +220,45 @@ describe('probeWritable()', () => {
   });
 });
 
-describe('advisePluginWritability() — advisory install-time (non bloccante)', () => {
-  test('dir scrivibile → true, nessun warning', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sw-adv-'));
+describe('assertPluginWritableOrThrow() — gate bloccante d\'installazione', () => {
+  test('dir scrivibile → true, nessun errore, dir pre-creata', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sw-gate-'));
+    const dir = path.join(base, 'data');
     try {
-      const warn = jest.fn();
-      const plugin = { pluginName: 'analytics', pathPluginFolder: dir, getWritablePaths: () => [{ path: dir, purpose: 'x' }] };
+      const error = jest.fn();
+      const plugin = { pluginName: 'analytics', pathPluginFolder: base, getWritablePaths: () => [{ path: dir, purpose: 'x' }] };
 
-      expect(advisePluginWritability(plugin, null, { warn })).toBe(true);
-      expect(warn).not.toHaveBeenCalled();
+      expect(assertPluginWritableOrThrow(plugin, null, { error })).toBe(true);
+      expect(error).not.toHaveBeenCalled();
+      expect(fs.existsSync(dir)).toBe(true); // pre-creata
     } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(base, { recursive: true, force: true });
     }
   });
 
-  test('dir non scrivibile → false + box di AVVISO, ma NON esce (nessun blocco)', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sw-adv-'));
+  test('dir non scrivibile → LANCIA (code STORAGE_NOT_WRITABLE) + box "ANNULLATA"', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sw-gate-'));
     try {
       jest.spyOn(fs, 'writeFileSync').mockImplementation(() => {
         throw fsError('EACCES', 'permission denied, open');
       });
-      const warn = jest.fn();
+      const error = jest.fn();
       const plugin = { pluginName: 'analytics', pathPluginFolder: dir, getWritablePaths: () => [{ path: dir, purpose: 'analytics event storage' }] };
 
-      const result = advisePluginWritability(plugin, null, { warn });
+      let thrown;
+      try {
+        assertPluginWritableOrThrow(plugin, null, { error });
+      } catch (e) {
+        thrown = e;
+      }
 
-      expect(result).toBe(false);
-      expect(warn).toHaveBeenCalledTimes(1);
-      const box = warn.mock.calls[0][0];
+      expect(thrown).toBeInstanceOf(Error);
+      expect(thrown.code).toBe('STORAGE_NOT_WRITABLE');
+      expect(error).toHaveBeenCalledTimes(1);
+      const box = error.mock.calls[0][0];
       expect(box).toContain('[STORAGE]');
-      expect(box).toContain('AVVISO non bloccante');
+      expect(box).toContain('ANNULLATA');
+      expect(box).toContain('NON viene installato');
       expect(box).toContain('analytics');
       expect(box).toContain('EACCES');
     } finally {
@@ -258,10 +267,10 @@ describe('advisePluginWritability() — advisory install-time (non bloccante)', 
     }
   });
 
-  test('plugin senza getWritablePaths → true, nessun warning', () => {
-    const warn = jest.fn();
-    expect(advisePluginWritability({ pluginName: 'bootstrap' }, null, { warn })).toBe(true);
-    expect(warn).not.toHaveBeenCalled();
+  test('plugin senza getWritablePaths → true, nessun errore (nessun gate)', () => {
+    const error = jest.fn();
+    expect(assertPluginWritableOrThrow({ pluginName: 'bootstrap' }, null, { error })).toBe(true);
+    expect(error).not.toHaveBeenCalled();
   });
 });
 
