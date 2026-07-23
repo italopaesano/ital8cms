@@ -540,6 +540,44 @@ function getGlobalFunctionsForTemplates() {
   };
 }
 
+/**
+ * getWritablePaths() - Dichiara le data dir che il plugin deve poter scrivere.
+ *
+ * Da implementare SOLO se il plugin scrive dati propri su disco a runtime (log
+ * JSONL, file di stato, cache, store JSON per-plugin, ...). Un plugin solo-API o
+ * middleware puro NON deve implementarla.
+ *
+ * COME VIENE USATA: al boot, pluginSys chiama questa funzione mentre carica il
+ * plugin e sonda ogni path con una scrittura EFFETTIVA (crea la dir + scrive e
+ * cancella un file temporaneo), pre-creando la dir. Se non è scrivibile (FS
+ * read-only, sandbox systemd senza ReadWritePaths=, permessi/owner errati, disco
+ * pieno) QUESTO plugin viene saltato in modo GRACEFUL (box [STORAGE], il boot
+ * prosegue). Vedi core/storageWritabilityCheck.js.
+ *
+ * DUE REGOLE:
+ *  1) Risolvi i path OFFLINE dal config (custom.dataPath): la funzione gira PRIMA
+ *     di loadPlugin() e il wizard introspeziona i plugin senza caricarli, quindi
+ *     NON affidarti a stato impostato in loadPlugin().
+ *  2) Le scritture a runtime devono essere FAIL-SOFT (scrittura atomica temp +
+ *     rename, in try/catch che logga e salta — mai lanciare), così un guasto
+ *     successivo degrada in silenzio invece di far crashare il server.
+ *
+ * @param {object} pluginSys        - Sistema plugin (non usato qui)
+ * @param {string} pathPluginFolder - Cartella del plugin (per la risoluzione offline)
+ * @returns {Array<{path: string, purpose: string}>}
+ */
+function getWritablePaths(pluginSys, pathPluginFolder) {
+  const folder = pathPluginFolder || __dirname;
+  let dataPath;
+  try {
+    const custom = loadJson5(path.join(folder, 'pluginConfig.json5')).custom || {};
+    dataPath = custom.dataPath || './data';
+  } catch (_) {
+    return [];
+  }
+  return [{ path: path.resolve(folder, dataPath), purpose: 'exampleComplete data storage' }];
+}
+
 // ============================================================================
 // EXPORT
 // ============================================================================
@@ -561,6 +599,9 @@ module.exports = {
   setSharedObject,
   getObjectToShareToWebPages,
   getGlobalFunctionsForTemplates,  // NUOVO: funzioni candidate per uso globale
+
+  // Data dir scrivibili (solo se il plugin scrive dati propri su disco)
+  getWritablePaths,
 
   // Configurazione (opzionale)
   pluginConfig
