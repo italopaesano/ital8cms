@@ -1,0 +1,58 @@
+const { versionFromTag, selectLatest } = require('../../../scripts/lib/updateEngine');
+
+describe('versionFromTag', () => {
+  test.each([
+    ['v0.0.1-alpha.4', '0.0.1-alpha.4'],
+    ['0.0.1-alpha.4', '0.0.1-alpha.4'],
+    ['v1.2.3', '1.2.3'],
+    // normalizzazione convenzione prerelease "parola-numero" → "parola.numero"
+    ['v0.0.1-beta-3', '0.0.1-beta.3'],
+    ['v2.0.0-rc-1', '2.0.0-rc.1'],
+  ])('%s → %s', (tag, expected) => {
+    expect(versionFromTag(tag)).toBe(expected);
+  });
+
+  test('non-semver → null', () => {
+    expect(versionFromTag('release-latest')).toBeNull();
+    expect(versionFromTag('v')).toBeNull();
+  });
+});
+
+describe('selectLatest', () => {
+  test('picks the highest semver tag', () => {
+    const r = selectLatest(['v1.0.0', 'v1.2.0', 'v1.1.0'], '1.0.0');
+    expect(r.target).toEqual({ tag: 'v1.2.0', version: '1.2.0' });
+    expect(r.isNewer).toBe(true);
+  });
+
+  test('not newer when current already latest', () => {
+    const r = selectLatest(['v1.0.0', 'v1.1.0'], '1.1.0');
+    expect(r.target.version).toBe('1.1.0');
+    expect(r.isNewer).toBe(false);
+  });
+
+  test('prerelease ordering: beta-3 (hyphen) vs beta.4 (dot) normalize consistently', () => {
+    // Senza normalizzazione "beta-3" ordinerebbe SOPRA "beta.4" (ASCII).
+    const r = selectLatest(['v0.0.1-beta-3', 'v0.0.1-beta.4'], '0.0.1-alpha.3');
+    expect(r.target.tag).toBe('v0.0.1-beta.4');
+    expect(r.isNewer).toBe(true);
+  });
+
+  test('alpha < beta ordering', () => {
+    const r = selectLatest(['v0.0.1-alpha.4', 'v0.0.1-beta-1'], '0.0.1-alpha.3');
+    expect(r.target.tag).toBe('v0.0.1-beta-1'); // beta > alpha
+    expect(r.target.version).toBe('0.0.1-beta.1');
+  });
+
+  test('reports and skips non-semver tags', () => {
+    const r = selectLatest(['v1.0.0', 'nightly', 'latest'], '0.9.0');
+    expect(r.target.version).toBe('1.0.0');
+    expect(r.skipped.sort()).toEqual(['latest', 'nightly']);
+  });
+
+  test('no valid tags → no target', () => {
+    const r = selectLatest(['nightly', 'latest'], '1.0.0');
+    expect(r.target).toBeNull();
+    expect(r.isNewer).toBe(false);
+  });
+});

@@ -82,6 +82,28 @@ function listRemoteTags(projectRoot) {
 }
 
 /**
+ * Logica PURA di selezione (testabile senza git): dalla lista dei tag e dalla
+ * versione corrente calcola la release target semver più recente.
+ * @param {string[]} allTags
+ * @param {string|null} current
+ * @returns {{target:({tag,version}|null), isNewer:boolean, skipped:string[]}}
+ */
+function selectLatest(allTags, current) {
+  const valid = [];
+  const skipped = [];
+  for (const t of allTags) {
+    const v = versionFromTag(t);
+    if (v) valid.push({ tag: t, version: v });
+    else skipped.push(t);
+  }
+  if (valid.length === 0) return { target: null, isNewer: false, skipped };
+  valid.sort((a, b) => semver.rcompare(a.version, b.version));
+  const latest = valid[0];
+  const isNewer = current ? semver.gt(latest.version, current) : true;
+  return { target: latest, isNewer, skipped };
+}
+
+/**
  * Discovery: confronta la versione corrente con la latest semver disponibile.
  * @returns {{current, target:({tag,version}|null), isNewer:boolean, skipped:string[], allTags:string[]}}
  */
@@ -96,20 +118,8 @@ function discover(projectRoot, opts = {}) {
     return { current, target: { tag, version: versionFromTag(tag) }, isNewer: true, explicit: true, exists, skipped: [], allTags };
   }
 
-  const valid = [];
-  const skipped = [];
-  for (const t of allTags) {
-    const v = versionFromTag(t);
-    if (v) valid.push({ tag: t, version: v });
-    else skipped.push(t);
-  }
-  if (valid.length === 0) {
-    return { current, target: null, isNewer: false, skipped, allTags };
-  }
-  valid.sort((a, b) => semver.rcompare(a.version, b.version));
-  const latest = valid[0];
-  const isNewer = current ? semver.gt(latest.version, current) : true;
-  return { current, target: latest, isNewer, skipped, allTags };
+  const sel = selectLatest(allTags, current);
+  return { current, target: sel.target, isNewer: sel.isNewer, skipped: sel.skipped, allTags };
 }
 
 /** Stato dei file TRACCIATI: pulito o con modifiche locali (gli untracked NON contano). */
@@ -143,6 +153,7 @@ module.exports = {
   currentVersion,
   versionFromTag,
   listRemoteTags,
+  selectLatest,
   discover,
   trackedTreeStatus,
   currentRef,
