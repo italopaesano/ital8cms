@@ -172,12 +172,11 @@ async function startApp() {
   // elimina alla radice la classe di unhandledRejection da caricamento plugin.
   await pluginSys.initialize();
 
-  // Preflight di scrivibilità delle data dir dichiarate dai plugin
-  // (core/storageWritabilityCheck.js), dopo initialize() quando i path sono
-  // risolti. BLOCCANTE: una dir dichiarata non scrivibile interrompe l'avvio
-  // con un box [STORAGE] azionabile — meglio fallire-forte al boot che scoprirlo
-  // al primo write runtime. Pre-crea anche le data dir mancanti.
-  require('./core/storageWritabilityCheck').checkStorageWritability(pluginSys);
+  // NB: la scrivibilità delle data dir dei plugin è verificata durante il
+  // caricamento di ciascun plugin (gate graceful in pluginSys, via
+  // getWritablePaths + core/storageWritabilityCheck.assertPluginWritableOrThrow):
+  // un plugin con dir non scrivibile è saltato ('incomplete'), il boot prosegue.
+  // Non serve un preflight fatale separato qui.
 
   // Inietta il callback di restart nel pluginSys: i plugin potranno chiamare
   // pluginSys.requestRestart({reason}) per richiedere un riavvio pulito di ital8cms

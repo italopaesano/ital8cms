@@ -15,31 +15,34 @@
  * DISCOVERY (plugin-declared):
  *   Ogni plugin può esporre in main.js:
  *     getWritablePaths(pluginSys, pathPluginFolder) → Array<{ path, purpose }>
- *   Il preflight itera i plugin ATTIVI, raccoglie le dichiarazioni e sonda ogni
- *   path. I plugin che non dichiarano nulla sono semplicemente saltati.
+ *   che risolve i suoi path anche OFFLINE dal config (serve prima di loadPlugin).
+ *   I plugin che non dichiarano nulla sono semplicemente saltati.
  *
  * SONDA (effettiva, non basata sui soli permessi):
  *   fs.accessSync(dir, W_OK) sarebbe la via Unix "canonica", ma (a) fallisce con
  *   ENOENT se la dir non esiste ancora — proprio il caso del deploy fresco — e
  *   (b) verifica il permesso, non l'esito reale (ENOSPC, chattr +i, quote, alcuni
- *   FS di rete possono mentire). Per un check BLOCCANTE un falso "non scrivibile"
- *   abortirebbe il boot a torto. Perciò usiamo la sonda EFFETTIVA (probeWritable):
- *   crea la dir (recursive), scrive un file temporaneo e lo cancella. Non mente
- *   (esercita gli stessi syscall del plugin) e pre-crea la data dir, così il
- *   primo uso parte già liscio. I metadati Unix (code dell'errore, owner/mode
- *   dell'antenato esistente, uid/gid del processo) servono solo ad ARRICCHIRE il
- *   messaggio d'errore quando la sonda fallisce.
+ *   FS di rete possono mentire). Un falso "non scrivibile" salterebbe un plugin a
+ *   torto. Perciò usiamo la sonda EFFETTIVA (probeWritable): crea la dir
+ *   (recursive), scrive un file temporaneo e lo cancella. Non mente (esercita gli
+ *   stessi syscall del plugin) e pre-crea la data dir, così il primo uso parte già
+ *   liscio. I metadati Unix (code dell'errore, owner/mode dell'antenato esistente,
+ *   uid/gid del processo) arricchiscono il messaggio d'errore quando fallisce.
  *
- * SEVERITÀ (bloccante):
- *   Una directory dichiarata non scrivibile interrompe l'avvio con un box
- *   [STORAGE] + process.exit(1), come per gli essentialPlugins non caricati:
- *   meglio fallire-forte-e-chiaro al boot che scoprirlo runtime. Complementa la
- *   resilienza fail-soft già presente nelle scritture (che a runtime non crasha
- *   mai): boot = preflight strict, runtime = resiliente.
+ * AGGANCI (due funzioni, filosofie diverse):
+ *   - assertPluginWritableOrThrow(plugin, pluginSys): GATE GRACEFUL usato da
+ *     pluginSys durante il CARICAMENTO di ogni plugin (prima di installPlugin/
+ *     loadPlugin). Dir non scrivibile → box [STORAGE] + throw → catch graceful:
+ *     il plugin è marcato 'incomplete' e SALTATO, ma il boot PROSEGUE (un
+ *     essenziale non caricato resta fatale via #enforceEssentialPlugins). Copre
+ *     sia la prima installazione sia i plugin già installati la cui dir regredisce.
+ *   - adviseWritabilityForPluginsDir(pluginsDir): ADVISORY NON bloccante usato dal
+ *     wizard (scripts/init.js) come avviso precoce; introspeziona i plugin senza
+ *     caricarli. Non blocca perché il contesto del wizard può differire da quello
+ *     del servizio a runtime.
  *
- * AGGANCIO:
- *   Invocato da index.js DOPO pluginSys.initialize() (i path assoluti derivano
- *   da loadPlugin, quindi devono essere già risolti).
+ * Complementa la resilienza fail-soft delle scritture (che a runtime non crasha
+ * mai): caricamento = gate graceful, runtime = resiliente.
  */
 
 'use strict';
@@ -213,56 +216,17 @@ function probeFailures(declaredDirs) {
 }
 
 /**
- * Preflight BLOCCANTE di scrivibilità delle data dir dichiarate dai plugin.
- * Invocato da index.js dopo pluginSys.initialize(). Una dir non scrivibile →
- * box [STORAGE] + process.exit(1).
- *
- * @param {object} pluginSys - Istanza del sistema plugin (già inizializzata)
- * @param {object} [options]
- * @param {(code:number)=>void} [options.exit]  - override di process.exit (test)
- * @param {(...a:any)=>void}    [options.error] - override di console.error (test)
- * @param {(...a:any)=>void}    [options.warn]  - override di console.warn (test)
- * @returns {{checked: number, ok: number}} Riepilogo (per i test, quando non esce)
- */
-function checkStorageWritability(pluginSys, options = {}) {
-  const exit  = options.exit  || ((code) => process.exit(code));
-  const error = options.error || console.error.bind(console);
-  const warn  = options.warn  || console.warn.bind(console);
-
-  if (!pluginSys || typeof pluginSys.getActivePluginNames !== 'function') {
-    return { checked: 0, ok: 0 };
-  }
-
-  const declaredDirs = [];
-  for (const pluginName of pluginSys.getActivePluginNames()) {
-    declaredDirs.push(...resolveDeclaredDirs(pluginSys.getPlugin(pluginName), pluginSys, warn));
-  }
-  if (declaredDirs.length === 0) return { checked: 0, ok: 0 };
-
-  const failures = probeFailures(declaredDirs);
-  if (failures.length === 0) {
-    return { checked: declaredDirs.length, ok: declaredDirs.length };
-  }
-
-  error(formatFailuresBox(
-    `${LOG_PREFIX}  🔴  ${failures.length} directory dati NON scrivibile/i — avvio interrotto:`,
-    failures,
-    remedyLines(),
-  ));
-  exit(1);
-  return { checked: declaredDirs.length, ok: declaredDirs.length - failures.length };
-}
-
-/**
- * Gate di scrivibilità BLOCCANTE per l'INSTALLAZIONE di UN plugin.
+ * Gate di scrivibilità delle data dir per il caricamento di UN plugin (graceful).
  *
  * Sonda le data dir dichiarate da getWritablePaths() del plugin (i path sono
  * risolti offline dal config, così funziona anche prima di loadPlugin). Se una
- * non è scrivibile: stampa un box [STORAGE] chiaro ("installazione annullata")
- * e LANCIA — in pluginSys il throw è gestito dal catch graceful, che marca il
- * plugin 'incomplete' e NON persiste isInstalled: il plugin resta NON installato
- * (il boot prosegue, salvo essentialPlugins). Se tutto è scrivibile, la sonda
- * pre-crea anche le dir mancanti.
+ * non è scrivibile: stampa un box [STORAGE] chiaro e LANCIA — in pluginSys il
+ * throw è gestito dal catch graceful, che marca il plugin 'incomplete', lo
+ * rimuove dagli attivi e NON persiste isInstalled: il plugin è saltato ma il
+ * boot PROSEGUE (un essenziale non caricato resta fatale via
+ * #enforceEssentialPlugins). Copre sia la prima installazione sia i plugin già
+ * installati la cui dir regredisce a non scrivibile. Se tutto è scrivibile, la
+ * sonda pre-crea anche le dir mancanti.
  *
  * @param {object} plugin    - Oggetto plugin (con pluginName, pathPluginFolder)
  * @param {object} pluginSys - Istanza del sistema plugin
@@ -283,10 +247,10 @@ function assertPluginWritableOrThrow(plugin, pluginSys, options = {}) {
   if (failures.length === 0) return true;
 
   error(formatFailuresBox(
-    `${LOG_PREFIX}  🔴  Installazione del plugin ${plugin.pluginName} ANNULLATA — data dir non scrivibile:`,
+    `${LOG_PREFIX}  🔴  Plugin ${plugin.pluginName} NON caricato — data dir non scrivibile:`,
     failures,
     [
-      `${LOG_PREFIX}  Il plugin NON viene installato (resta 'incomplete'). Risolvi e riavvia.`,
+      `${LOG_PREFIX}  Il plugin è saltato (resta 'incomplete', il boot prosegue). Risolvi e riavvia.`,
       LOG_PREFIX,
       ...remedyLines(),
     ],
@@ -377,7 +341,6 @@ function adviseWritabilityForPluginsDir(pluginsDir, options = {}) {
 }
 
 module.exports = {
-  checkStorageWritability,
   assertPluginWritableOrThrow,
   adviseWritabilityForPluginsDir,
   probeWritable,

@@ -82,19 +82,21 @@ class pluginSys{
         // (clone fresco: il campo può mancare → undefined !== 1 → installa). Il flag
         // viene poi PERSISTITO dopo loadPlugin (vedi sotto), così se l'installazione
         // o il load falliscono non resta marcato installato.
+        // GATE DI SCRIVIBILITÀ DELLE DATA DIR (graceful, per OGNI plugin):
+        // se una data dir dichiarata via getWritablePaths() non è scrivibile, il
+        // caricamento del plugin FALLISCE — lancia, così il catch graceful sotto
+        // marca il plugin 'incomplete', lo rimuove dagli attivi (routes/hook/
+        // middleware non ancora registrati) e NON persiste isInstalled: il plugin
+        // è saltato ma il boot PROSEGUE (un essenziale non caricato resta fatale
+        // via #enforceEssentialPlugins). Gira PRIMA di installPlugin()/loadPlugin(),
+        // così nessun side-effect parte se la dir non è pronta; getWritablePaths()
+        // risolve i path offline dal config (loadPlugin non è ancora girato).
+        // Copre sia la prima installazione sia i plugin già installati la cui dir
+        // regredisce a non scrivibile (nessun preflight fatale separato).
+        require('./storageWritabilityCheck').assertPluginWritableOrThrow(plugin, this);
+
         const wasInstalled = pluginConfig.isInstalled === 1;
         if( !wasInstalled ){
-          // GATE DI SCRIVIBILITÀ DELL'INSTALLAZIONE (bloccante per QUESTO plugin):
-          // se una data dir dichiarata via getWritablePaths() non è scrivibile,
-          // l'installazione FALLISCE — lancia, così il catch graceful sotto marca
-          // il plugin 'incomplete', lo rimuove dagli attivi e NON persiste
-          // isInstalled: il plugin resta NON installato, con un box [STORAGE]
-          // chiaro. Gira PRIMA di installPlugin()/loadPlugin(), così nessun
-          // side-effect d'installazione parte se la dir non è pronta;
-          // getWritablePaths() risolve i path offline dal config (loadPlugin non
-          // è ancora girato). Il boot NON si interrompe (salvo essentialPlugins).
-          require('./storageWritabilityCheck').assertPluginWritableOrThrow(plugin, this);
-
           if (plugin.installPlugin) {
             await plugin.installPlugin(this, pathPluginFolder);// può lanciare → catch graceful sotto
           }
