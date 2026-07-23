@@ -172,6 +172,12 @@ async function startApp() {
   // elimina alla radice la classe di unhandledRejection da caricamento plugin.
   await pluginSys.initialize();
 
+  // NB: la scrivibilità delle data dir dei plugin è verificata durante il
+  // caricamento di ciascun plugin (gate graceful in pluginSys, via
+  // getWritablePaths + core/storageWritabilityCheck.assertPluginWritableOrThrow):
+  // un plugin con dir non scrivibile è saltato ('incomplete'), il boot prosegue.
+  // Non serve un preflight fatale separato qui.
+
   // Inietta il callback di restart nel pluginSys: i plugin potranno chiamare
   // pluginSys.requestRestart({reason}) per richiedere un riavvio pulito di ital8cms
   // (es. dopo cambio tema). Riusa l'infrastruttura già esistente di gracefulShutdown
