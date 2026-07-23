@@ -1,0 +1,52 @@
+# CI workflow — runs the full test suite (Jest unit + integration, Playwright E2E)
+# on every pull request, across the two active Node.js LTS lines (22 "Jod", 24 "Krypton").
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+# Cancel superseded runs on the same ref (e.g. new pushes to a PR) to save CI minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test on Node.js ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      # Run every Node.js version even if one fails, so we get full feedback.
+      fail-fast: false
+      matrix:
+        node-version:
+          - 22.x
+          - 24.x
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The `npm test` script also runs the Playwright E2E suite, which needs a
+      # browser binary plus its OS-level libraries — installed here with --with-deps.
+      - name: Install Playwright browser (Chromium)
+        run: npx playwright install --with-deps chromium
+
+      # Runs scripts/checkNixShell.js (no-op on non-Nix CI) → Jest → Playwright.
+      - name: Run test suite
+        run: npm test
