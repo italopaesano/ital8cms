@@ -157,6 +157,19 @@ class pluginSys{
             logger.warn('pluginSys', `isInstalled non persistito per ${pluginName}: ${writeErr.message}`);
           }
           pluginConfig.isInstalled = 1;
+
+          // Advisory (NON bloccante) di scrivibilità delle data dir alla prima
+          // installazione del plugin. Gira DOPO loadPlugin() così i path (es. la
+          // dataDir di analytics, risolta in loadPlugin) sono già disponibili.
+          // Usa la stessa dichiarazione getWritablePaths(); logga un box [STORAGE]
+          // se qualcosa non è scrivibile nel contesto attuale, ma non blocca —
+          // il contesto d'installazione può differire da quello del servizio a
+          // runtime; il gate autorevole e bloccante resta il preflight di boot.
+          try {
+            require('./storageWritabilityCheck').advisePluginWritability(plugin, this);
+          } catch (adviseErr) {
+            logger.warn('pluginSys', `advisory scrivibilità per ${pluginName}: ${adviseErr.message}`);
+          }
         }
 
         this.#pluginStates.set(pluginName, { state: 'installed', reason: null });

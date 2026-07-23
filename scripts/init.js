@@ -372,6 +372,18 @@ async function main() {
 
     } // fine RAMO PRODUCTION (installProfile !== 'demo')
 
+    // Advisory (NON bloccante) di scrivibilità delle data dir dichiarate dai
+    // plugin, nel contesto del setup. È solo un AVVISO: l'utente/sandbox del
+    // wizard può differire da quelli del servizio a runtime, quindi non blocca
+    // e non dà falsa sicurezza. Il controllo autorevole e bloccante avviene al
+    // boot del server (core/storageWritabilityCheck.js).
+    try {
+      require('../core/storageWritabilityCheck')
+        .adviseWritabilityForPluginsDir(path.join(__dirname, '..', 'plugins'))
+    } catch (e) {
+      logger.warning(`Advisory scrivibilità data dir non eseguito: ${e.message}`)
+    }
+
     // FASE 3: Riepilogo finale
     logger.separator()
     console.log('\n🎉 Inizializzazione Completata!\n')

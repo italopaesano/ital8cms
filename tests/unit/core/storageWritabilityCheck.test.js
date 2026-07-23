@@ -21,7 +21,12 @@ const fs   = require('fs');
 const os   = require('os');
 const path = require('path');
 
-const { checkStorageWritability, probeWritable } = require('../../../core/storageWritabilityCheck');
+const {
+  checkStorageWritability,
+  advisePluginWritability,
+  adviseWritabilityForPluginsDir,
+  probeWritable,
+} = require('../../../core/storageWritabilityCheck');
 
 /** Stub minimale di pluginSys: mappa nome→oggetto plugin. */
 function makePluginSys(pluginsMap) {
@@ -212,5 +217,137 @@ describe('probeWritable()', () => {
 
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('EROFS');
+  });
+});
+
+describe('advisePluginWritability() — advisory install-time (non bloccante)', () => {
+  test('dir scrivibile → true, nessun warning', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sw-adv-'));
+    try {
+      const warn = jest.fn();
+      const plugin = { pluginName: 'analytics', pathPluginFolder: dir, getWritablePaths: () => [{ path: dir, purpose: 'x' }] };
+
+      expect(advisePluginWritability(plugin, null, { warn })).toBe(true);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('dir non scrivibile → false + box di AVVISO, ma NON esce (nessun blocco)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sw-adv-'));
+    try {
+      jest.spyOn(fs, 'writeFileSync').mockImplementation(() => {
+        throw fsError('EACCES', 'permission denied, open');
+      });
+      const warn = jest.fn();
+      const plugin = { pluginName: 'analytics', pathPluginFolder: dir, getWritablePaths: () => [{ path: dir, purpose: 'analytics event storage' }] };
+
+      const result = advisePluginWritability(plugin, null, { warn });
+
+      expect(result).toBe(false);
+      expect(warn).toHaveBeenCalledTimes(1);
+      const box = warn.mock.calls[0][0];
+      expect(box).toContain('[STORAGE]');
+      expect(box).toContain('AVVISO non bloccante');
+      expect(box).toContain('analytics');
+      expect(box).toContain('EACCES');
+    } finally {
+      jest.restoreAllMocks();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('plugin senza getWritablePaths → true, nessun warning', () => {
+    const warn = jest.fn();
+    expect(advisePluginWritability({ pluginName: 'bootstrap' }, null, { warn })).toBe(true);
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('adviseWritabilityForPluginsDir() — advisory wizard/offline', () => {
+  // Costruisce una finta cartella plugins/ con un plugin attivo che dichiara una
+  // data dir via getWritablePaths (main.js reale, richiesto in modo difensivo).
+  function scaffoldPlugin(pluginsDir, name, { active = 1, dataSubdir = 'data' } = {}) {
+    const dir = path.join(pluginsDir, name);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'pluginConfig.json5'),
+      `// test\n{ active: ${active}, custom: { dataPath: './${dataSubdir}' } }\n`,
+      'utf8'
+    );
+    fs.writeFileSync(
+      path.join(dir, 'main.js'),
+      `const path = require('path');\n` +
+      `module.exports = {\n` +
+      `  getWritablePaths(pluginSys, pathPluginFolder) {\n` +
+      `    return [{ path: path.join(pathPluginFolder || __dirname, '${dataSubdir}'), purpose: '${name} store' }];\n` +
+      `  }\n` +
+      `};\n`,
+      'utf8'
+    );
+    return dir;
+  }
+
+  test('tutte scrivibili → true, nessun warning, data dir pre-creata', () => {
+    const pluginsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sw-wiz-'));
+    try {
+      scaffoldPlugin(pluginsDir, 'analytics');
+      const warn = jest.fn();
+
+      expect(adviseWritabilityForPluginsDir(pluginsDir, { warn })).toBe(true);
+      expect(warn).not.toHaveBeenCalled();
+      expect(fs.existsSync(path.join(pluginsDir, 'analytics', 'data'))).toBe(true);
+    } finally {
+      fs.rmSync(pluginsDir, { recursive: true, force: true });
+    }
+  });
+
+  test('plugin disattivo (active:0) → ignorato', () => {
+    const pluginsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sw-wiz-'));
+    try {
+      scaffoldPlugin(pluginsDir, 'analytics', { active: 0 });
+      const warn = jest.fn();
+
+      expect(adviseWritabilityForPluginsDir(pluginsDir, { warn })).toBe(true);
+      expect(warn).not.toHaveBeenCalled();
+      // active:0 → nemmeno introspezionato, quindi la dir NON viene pre-creata
+      expect(fs.existsSync(path.join(pluginsDir, 'analytics', 'data'))).toBe(false);
+    } finally {
+      fs.rmSync(pluginsDir, { recursive: true, force: true });
+    }
+  });
+
+  test('dir non scrivibile → false + box consolidato di AVVISO (non blocca)', () => {
+    const pluginsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sw-wiz-'));
+    try {
+      scaffoldPlugin(pluginsDir, 'analytics');
+      jest.spyOn(fs, 'writeFileSync').mockImplementation(function (file, ...args) {
+        // fallisce solo la sonda (probe file), non la scaffoldatura già avvenuta
+        if (String(file).includes('.ital8-writecheck-')) {
+          throw fsError('EROFS', 'read-only file system, open');
+        }
+        return fs.constants ? undefined : undefined;
+      });
+      const warn = jest.fn();
+
+      const result = adviseWritabilityForPluginsDir(pluginsDir, { warn });
+
+      expect(result).toBe(false);
+      const box = warn.mock.calls[0][0];
+      expect(box).toContain('[STORAGE]');
+      expect(box).toContain('setup');
+      expect(box).toContain('analytics');
+      expect(box).toContain('EROFS');
+    } finally {
+      jest.restoreAllMocks();
+      fs.rmSync(pluginsDir, { recursive: true, force: true });
+    }
+  });
+
+  test('cartella plugins/ inesistente → true, no-op sicuro', () => {
+    const warn = jest.fn();
+    expect(adviseWritabilityForPluginsDir('/does/not/exist', { warn })).toBe(true);
+    expect(warn).not.toHaveBeenCalled();
   });
 });

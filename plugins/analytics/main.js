@@ -159,11 +159,25 @@ module.exports = {
    * box [STORAGE] azionabile invece di far emergere il problema solo al primo
    * flush degli eventi. La sonda pre-crea anche la dir se manca.
    *
+   * @param {object} [pluginSys]
+   * @param {string} [pathPluginFolder] - Passato dal preflight/advisory; usato
+   *   per risolvere la dataDir dal config quando loadPlugin non è ancora girato.
    * @returns {Array<{path: string, purpose: string}>}
    */
-  getWritablePaths() {
-    if (!dataDir) return [];
-    return [{ path: dataDir, purpose: 'analytics event storage (JSONL)' }];
+  getWritablePaths(pluginSys, pathPluginFolder) {
+    // A runtime la dataDir è già risolta in loadPlugin. Per usi OFFLINE (wizard,
+    // dove loadPlugin non gira) la ricaviamo dal config del plugin.
+    let dir = dataDir;
+    if (!dir) {
+      const folder = pathPluginFolder || __dirname;
+      try {
+        const custom = loadJson5(path.join(folder, 'pluginConfig.json5')).custom || {};
+        dir = path.resolve(folder, custom.dataPath || './data');
+      } catch (_) {
+        return [];
+      }
+    }
+    return [{ path: dir, purpose: 'analytics event storage (JSONL)' }];
   },
 
   /**

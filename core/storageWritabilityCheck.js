@@ -46,6 +46,7 @@
 
 const fs   = require('fs');
 const path = require('path');
+const loadJson5 = require('./loadJson5');
 
 const LOG_PREFIX = '[STORAGE]';
 const TAG_LINE   = LOG_PREFIX + ' ' + '═'.repeat(58);
@@ -118,7 +119,100 @@ function describeFailure(dir, error) {
 }
 
 /**
- * Preflight di scrivibilità delle data dir dichiarate dai plugin.
+ * Righe azionabili sui rimedi tipici (condivise da box bloccante e advisory).
+ * @returns {string[]}
+ */
+function remedyLines() {
+  return [
+    `${LOG_PREFIX}  Rimedi tipici:`,
+    `${LOG_PREFIX}    • permessi/owner:   chown -R <utente-servizio> <dir>  |  chmod u+rwx <dir>`,
+    `${LOG_PREFIX}    • systemd sandbox:  aggiungi la dir a ReadWritePaths= (o usa StateDirectory=)`,
+    `${LOG_PREFIX}    • root read-only:   sposta la data dir su un percorso scrivibile (config del plugin)`,
+    `${LOG_PREFIX}    • disco pieno:      libera spazio (ENOSPC)`,
+  ];
+}
+
+/**
+ * Compone il box [STORAGE] a partire dai fallimenti (condiviso da preflight
+ * bloccante e advisory).
+ *
+ * @param {string} headerLine - Riga di intestazione (già con LOG_PREFIX)
+ * @param {Array<{plugin, dir, purpose, error}>} failures
+ * @param {string[]} footerLines - Righe finali (nota + rimedi)
+ * @returns {string}
+ */
+function formatFailuresBox(headerLine, failures, footerLines) {
+  const out = ['', TAG_LINE, headerLine, LOG_PREFIX];
+  for (const f of failures) {
+    const purpose = f.purpose ? ` (${f.purpose})` : '';
+    out.push(`${LOG_PREFIX}  plugin ${f.plugin}${purpose}:`);
+    out.push(...describeFailure(f.dir, f.error));
+    out.push(LOG_PREFIX);
+  }
+  out.push(...footerLines, TAG_LINE, '');
+  return out.join('\n');
+}
+
+/**
+ * Raccoglie e valida le data dir dichiarate da UN plugin via getWritablePaths().
+ * Non sonda, non lancia: risolve i path (assoluti o relativi a pathPluginFolder)
+ * e scarta le voci malformate con un warning. Condivisa dal preflight bloccante
+ * e dall'advisory d'installazione.
+ *
+ * @param {object} plugin    - Oggetto plugin (con pluginName, pathPluginFolder)
+ * @param {object} pluginSys - Istanza del sistema plugin
+ * @param {(...a:any)=>void} warn
+ * @returns {Array<{plugin: string, dir: string, purpose: string}>}
+ */
+function resolveDeclaredDirs(plugin, pluginSys, warn) {
+  if (!plugin || typeof plugin.getWritablePaths !== 'function') return [];
+
+  let entries;
+  try {
+    entries = plugin.getWritablePaths(pluginSys, plugin.pathPluginFolder);
+  } catch (e) {
+    warn(`${LOG_PREFIX} ⚠  ${plugin.pluginName}.getWritablePaths() ha lanciato: ${e.message} — dichiarazione ignorata`);
+    return [];
+  }
+  if (!Array.isArray(entries)) return [];
+
+  const dirs = [];
+  for (const entry of entries) {
+    const rawPath = entry && entry.path;
+    if (typeof rawPath !== 'string' || rawPath.trim() === '') {
+      warn(`${LOG_PREFIX} ⚠  ${plugin.pluginName}: voce writable-path priva di "path" valido — ignorata`);
+      continue;
+    }
+    const dir = path.isAbsolute(rawPath)
+      ? rawPath
+      : path.resolve(plugin.pathPluginFolder || process.cwd(), rawPath);
+    dirs.push({
+      plugin: plugin.pluginName,
+      dir,
+      purpose: (entry && typeof entry.purpose === 'string') ? entry.purpose : '',
+    });
+  }
+  return dirs;
+}
+
+/**
+ * Sonda un elenco di directory dichiarate e ritorna quelle NON scrivibili.
+ * @param {Array<{plugin, dir, purpose}>} declaredDirs
+ * @returns {Array<{plugin, dir, purpose, error: Error}>}
+ */
+function probeFailures(declaredDirs) {
+  const failures = [];
+  for (const decl of declaredDirs) {
+    const result = probeWritable(decl.dir);
+    if (!result.ok) failures.push({ ...decl, error: result.error });
+  }
+  return failures;
+}
+
+/**
+ * Preflight BLOCCANTE di scrivibilità delle data dir dichiarate dai plugin.
+ * Invocato da index.js dopo pluginSys.initialize(). Una dir non scrivibile →
+ * box [STORAGE] + process.exit(1).
  *
  * @param {object} pluginSys - Istanza del sistema plugin (già inizializzata)
  * @param {object} [options]
@@ -136,76 +230,138 @@ function checkStorageWritability(pluginSys, options = {}) {
     return { checked: 0, ok: 0 };
   }
 
-  // ── 1. Raccogli le dichiarazioni dai plugin attivi ──
-  const declarations = []; // { plugin, dir, purpose }
+  const declaredDirs = [];
   for (const pluginName of pluginSys.getActivePluginNames()) {
-    const plugin = pluginSys.getPlugin(pluginName);
-    if (!plugin || typeof plugin.getWritablePaths !== 'function') continue;
-
-    let entries;
-    try {
-      entries = plugin.getWritablePaths(pluginSys, plugin.pathPluginFolder);
-    } catch (e) {
-      warn(`${LOG_PREFIX} ⚠  ${pluginName}.getWritablePaths() ha lanciato: ${e.message} — dichiarazione ignorata`);
-      continue;
-    }
-    if (!Array.isArray(entries)) continue;
-
-    for (const entry of entries) {
-      const rawPath = entry && entry.path;
-      if (typeof rawPath !== 'string' || rawPath.trim() === '') {
-        warn(`${LOG_PREFIX} ⚠  ${pluginName}: voce writable-path priva di "path" valido — ignorata`);
-        continue;
-      }
-      const dir = path.isAbsolute(rawPath)
-        ? rawPath
-        : path.resolve(plugin.pathPluginFolder || process.cwd(), rawPath);
-      declarations.push({
-        plugin: pluginName,
-        dir,
-        purpose: (entry && typeof entry.purpose === 'string') ? entry.purpose : '',
-      });
-    }
+    declaredDirs.push(...resolveDeclaredDirs(pluginSys.getPlugin(pluginName), pluginSys, warn));
   }
+  if (declaredDirs.length === 0) return { checked: 0, ok: 0 };
 
-  if (declarations.length === 0) return { checked: 0, ok: 0 };
-
-  // ── 2. Sonda ogni directory dichiarata ──
-  const failures = [];
-  for (const decl of declarations) {
-    const result = probeWritable(decl.dir);
-    if (!result.ok) failures.push({ ...decl, error: result.error });
-  }
-
-  // ── 3. Esito ──
+  const failures = probeFailures(declaredDirs);
   if (failures.length === 0) {
-    return { checked: declarations.length, ok: declarations.length };
+    return { checked: declaredDirs.length, ok: declaredDirs.length };
   }
 
-  const out = [
-    '',
-    TAG_LINE,
+  error(formatFailuresBox(
     `${LOG_PREFIX}  🔴  ${failures.length} directory dati NON scrivibile/i — avvio interrotto:`,
-    LOG_PREFIX,
-  ];
-  for (const f of failures) {
-    const purpose = f.purpose ? ` (${f.purpose})` : '';
-    out.push(`${LOG_PREFIX}  plugin ${f.plugin}${purpose}:`);
-    out.push(...describeFailure(f.dir, f.error));
-    out.push(LOG_PREFIX);
-  }
-  out.push(
-    `${LOG_PREFIX}  Rimedi tipici:`,
-    `${LOG_PREFIX}    • permessi/owner:   chown -R <utente-servizio> <dir>  |  chmod u+rwx <dir>`,
-    `${LOG_PREFIX}    • systemd sandbox:  aggiungi la dir a ReadWritePaths= (o usa StateDirectory=)`,
-    `${LOG_PREFIX}    • root read-only:   sposta la data dir su un percorso scrivibile (config del plugin)`,
-    `${LOG_PREFIX}    • disco pieno:      libera spazio (ENOSPC)`,
-    TAG_LINE,
-    '',
-  );
-  error(out.join('\n'));
+    failures,
+    remedyLines(),
+  ));
   exit(1);
-  return { checked: declarations.length, ok: declarations.length - failures.length };
+  return { checked: declaredDirs.length, ok: declaredDirs.length - failures.length };
 }
 
-module.exports = { checkStorageWritability, probeWritable };
+/**
+ * Advisory NON bloccante di scrivibilità per UN singolo plugin. Pensato per
+ * l'install-time (pluginSys, dopo installPlugin+loadPlugin) e per il wizard.
+ *
+ * Logga un box [STORAGE] di AVVISO se una data dir dichiarata non è scrivibile
+ * nel contesto CORRENTE, ma NON interrompe: il contesto d'installazione/wizard
+ * (utente, sandbox) può differire da quello del servizio a runtime, quindi non
+ * deve dare falsa sicurezza né bloccare a torto. Il gate autorevole e bloccante
+ * resta il preflight di boot (checkStorageWritability).
+ *
+ * @param {object} plugin    - Oggetto plugin (con pluginName, pathPluginFolder)
+ * @param {object} pluginSys - Istanza del sistema plugin
+ * @param {object} [options]
+ * @param {(...a:any)=>void} [options.warn] - override di console.warn (test)
+ * @returns {boolean} true se tutto scrivibile (o nulla dichiarato), false se ci sono avvisi
+ */
+function advisePluginWritability(plugin, pluginSys, options = {}) {
+  const warn = options.warn || console.warn.bind(console);
+
+  const declaredDirs = resolveDeclaredDirs(plugin, pluginSys, warn);
+  if (declaredDirs.length === 0) return true;
+
+  const failures = probeFailures(declaredDirs);
+  if (failures.length === 0) return true;
+
+  warn(formatFailuresBox(
+    `${LOG_PREFIX}  ⚠  Directory dati non scrivibili nel contesto attuale (plugin ${plugin.pluginName}):`,
+    failures,
+    [...advisoryFooter(), ...remedyLines()],
+  ));
+  return false;
+}
+
+/**
+ * Righe finali comuni agli avvisi non bloccanti (install-time e wizard).
+ * @returns {string[]}
+ */
+function advisoryFooter() {
+  return [
+    `${LOG_PREFIX}  AVVISO non bloccante: il contesto d'installazione/wizard può differire`,
+    `${LOG_PREFIX}  da quello del servizio a runtime. Il controllo autorevole e bloccante`,
+    `${LOG_PREFIX}  avviene al boot del server.`,
+    LOG_PREFIX,
+  ];
+}
+
+/**
+ * Advisory NON bloccante per il WIZARD / uso OFFLINE (nessun pluginSys, i plugin
+ * non sono caricati). Scansiona una directory di plugin, e per ogni plugin
+ * ATTIVO (active:1) che espone getWritablePaths(), lo introspeziona in modo
+ * difensivo (require in try/catch), risolve le sue data dir dal config e le
+ * sonda. Stampa UN box [STORAGE] consolidato di avviso se qualcosa non è
+ * scrivibile. Non lancia mai e non blocca.
+ *
+ * @param {string} pluginsDir - Path assoluto alla cartella plugins/
+ * @param {object} [options]
+ * @param {(...a:any)=>void} [options.warn] - override di console.warn (test)
+ * @returns {boolean} true se tutto scrivibile (o nulla dichiarato), false se ci sono avvisi
+ */
+function adviseWritabilityForPluginsDir(pluginsDir, options = {}) {
+  const warn = options.warn || console.warn.bind(console);
+
+  let entries;
+  try {
+    entries = fs.readdirSync(pluginsDir, { withFileTypes: true });
+  } catch (_) {
+    return true; // cartella plugins/ non leggibile → niente da fare
+  }
+
+  const failures = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const pluginFolder = path.join(pluginsDir, entry.name);
+
+    // Solo plugin ATTIVI (active:1), come al boot; salta disabilitati/non installati.
+    try {
+      const cfg = loadJson5(path.join(pluginFolder, 'pluginConfig.json5'));
+      if (!cfg || cfg.active !== 1) continue;
+    } catch (_) {
+      continue; // config vivo assente → plugin non ancora installato: salta
+    }
+
+    const mainPath = path.join(pluginFolder, 'main.js');
+    let mod;
+    try {
+      mod = require(mainPath);
+    } catch (_) {
+      continue; // require fallito (dep mancante, ecc.) → salta senza rumore
+    }
+    if (!mod || typeof mod.getWritablePaths !== 'function') continue;
+
+    const pluginObj = {
+      pluginName: entry.name,
+      pathPluginFolder: pluginFolder,
+      getWritablePaths: mod.getWritablePaths,
+    };
+    failures.push(...probeFailures(resolveDeclaredDirs(pluginObj, null, warn)));
+  }
+
+  if (failures.length === 0) return true;
+
+  warn(formatFailuresBox(
+    `${LOG_PREFIX}  ⚠  Directory dati non scrivibili nel contesto attuale (setup):`,
+    failures,
+    [...advisoryFooter(), ...remedyLines()],
+  ));
+  return false;
+}
+
+module.exports = {
+  checkStorageWritability,
+  advisePluginWritability,
+  adviseWritabilityForPluginsDir,
+  probeWritable,
+};
