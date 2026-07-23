@@ -15,6 +15,8 @@
     "backup-list": "node scripts/backupList.js",
     "backup-manager": "node scripts/backupManager.js",
     "restore": "node scripts/restore.js",
+    "deps-sync": "node scripts/depsSync.js",
+    "postinstall": "node scripts/depsSync.js --postinstall",
     "test": "node scripts/checkNixShell.js && jest --config=tests/jest.config.js && npx playwright test --config=tests/playwright.config.js",
     "test:watch": "jest --config=tests/jest.config.js --watch",
     "test:coverage": "jest --config=tests/jest.config.js --coverage",
