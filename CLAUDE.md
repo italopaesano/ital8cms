@@ -238,9 +238,12 @@ module.exports = {
   setSharedObject(fromPlugin, sharedObject) {},                    // ricevi condivisione
   getObjectToShareToWebPages() { return {} },                     // funzioni template LOCALI
   getGlobalFunctionsForTemplates() { return {} },                 // funzioni template GLOBALI (whitelist)
-  getHooksPage(section, passData, pluginSys, pathPluginFolder) { return "" } // hook di pagina
+  getHooksPage(section, passData, pluginSys, pathPluginFolder) { return "" }, // hook di pagina
+  getWritablePaths(pluginSys, pathPluginFolder) { return [] }     // data dir scrivibili (gate di boot, vedi sotto)
 }
 ```
+
+**Data dir scrivibili (`getWritablePaths`):** un plugin che scrive dati propri su disco a runtime (data dir che crea pigramente e su cui scrive) **deve** dichiararla con `getWritablePaths(pluginSys, pathPluginFolder) → Array<{ path, purpose }>`. Al boot `pluginSys` la sonda con una scrittura **effettiva** (crea la dir + write/delete di un file temporaneo, pre-creandola); se una dir dichiarata **non** è scrivibile (FS read-only, sandbox systemd senza `ReadWritePaths=`, permessi/owner errati, disco pieno) quel plugin è **saltato in modo graceful** (box `[STORAGE]`, il boot prosegue; un `essentialPlugin` resta fatale). Il path va risolto **offline dal config** (`custom.dataPath`), perché il gate gira **prima** di `loadPlugin` e il wizard introspeziona i plugin senza caricarli; le scritture a runtime devono essere **fail-soft** (atomiche + try/catch, mai lanciare). Modulo: `core/storageWritabilityCheck.js`; riferimento reale: plugin `analytics`; esempio didattico: `plugins/exampleComplete/`.
 
 ### Config del plugin
 

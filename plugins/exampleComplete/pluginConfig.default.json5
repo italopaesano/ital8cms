@@ -1,6 +1,6 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 2,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   "active": 0,
   "weight": 100,
   "installedVersion": "0.0.0",
@@ -14,6 +14,10 @@
   "custom": {
     "showBanner": true,
     "maxItems": 100,
-    "welcomeMessage": "Benvenuto nel plugin di esempio!"
+    "welcomeMessage": "Benvenuto nel plugin di esempio!",
+    // Directory (relativa alla cartella del plugin) dove il plugin scriverebbe i
+    // propri dati a runtime. Dichiarata via getWritablePaths(): al boot viene
+    // sondata e pre-creata; se non scrivibile il plugin è saltato (box [STORAGE]).
+    "dataPath": "./data"
   }
 }

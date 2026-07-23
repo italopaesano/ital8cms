@@ -59,6 +59,19 @@ exampleComplete/
 - `setSharedObject()` - Riceve da altri plugin
 - `getObjectToShareToWebPages()` - Dati per template
 
+### 6. Data dir scrivibili (`getWritablePaths`)
+
+- `getWritablePaths(pluginSys, pathPluginFolder)` - Dichiara le directory che il
+  plugin deve poter scrivere a runtime (`custom.dataPath`, default `./data`).
+- Al boot `pluginSys` la sonda con una scrittura effettiva (crea la dir + write/
+  delete di un file temporaneo) e la **pre-crea**; se non è scrivibile, il plugin
+  è saltato in modo **graceful** con un box `[STORAGE]` e il boot prosegue (un
+  essenziale resta fatale). Vedi `core/storageWritabilityCheck.js`.
+- Da implementare **solo** se il plugin scrive dati propri su disco. Il path va
+  risolto **offline dal config** (gira prima di `loadPlugin` e nel wizard) e le
+  scritture a runtime devono essere **fail-soft** (atomiche + try/catch, mai
+  lanciare). Riferimento reale: plugin `analytics`.
+
 ## Attivazione
 
 1. In `pluginConfig.json5` imposta `"active": 1`
