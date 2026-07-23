@@ -1,5 +1,9 @@
-# CI workflow — runs the full test suite (Jest unit + integration, Playwright E2E)
-# on every pull request, across the two active Node.js LTS lines (22 "Jod", 24 "Krypton").
+# CI workflow — two responsibilities:
+#   1. `test`  — full test suite (Jest unit + integration, Playwright E2E) on every
+#                pull request and push to main, across the active Node.js LTS lines
+#                (22 "Jod", 24 "Krypton").
+#   2. `audit` — dependency vulnerability audit (npm audit), also on a weekly cron so
+#                newly disclosed advisories on already-installed deps are surfaced.
 name: CI
 
 on:
@@ -9,6 +13,11 @@ on:
   push:
     branches:
       - main
+  schedule:
+    # Weekly dependency audit — Mondays 06:00 UTC. Catches advisories disclosed
+    # against dependencies that are already pinned in the lockfile (a PR-only run
+    # would miss those). On schedule events only the `audit` job runs.
+    - cron: '0 6 * * 1'
 
 # Cancel superseded runs on the same ref (e.g. new pushes to a PR) to save CI minutes.
 concurrency:
@@ -18,6 +27,8 @@ concurrency:
 jobs:
   test:
     name: Test on Node.js ${{ matrix.node-version }}
+    # The scheduled cron run only needs the audit job, not the full test matrix.
+    if: ${{ github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -50,3 +61,29 @@ jobs:
       # Runs scripts/checkNixShell.js (no-op on non-Nix CI) → Jest → Playwright.
       - name: Run test suite
         run: npm test
+
+  audit:
+    name: Dependency vulnerability audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Report-only (continue-on-error): surfaces known advisories in the job log
+      # without failing the check, so pull requests on this alpha project are never
+      # blocked by a dependency finding. The real-time notification path is
+      # Dependabot alerts (enabled in the repo's Settings → Code security).
+      - name: Audit dependencies (report only)
+        continue-on-error: true
+        run: npm audit

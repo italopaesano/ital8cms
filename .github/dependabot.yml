@@ -1,0 +1,46 @@
+# Dependabot configuration — keeps dependencies patched and turns security
+# advisories into automated pull requests. Note: Dependabot *alerts* (the real-time
+# notifications) are toggled in the repo's Settings → Code security, not here; this
+# file governs the automated version/security *update PRs* and their scheduling.
+# Docs: https://docs.github.com/code-security/dependabot
+version: 2
+
+updates:
+  # ── npm dependencies (root package.json / package-lock.json) ──────────────
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+    commit-message:
+      prefix: deps
+      prefix-development: deps-dev
+    # Per CLAUDE.md rule #12: ccxt and better-sqlite3 are excluded from routine
+    # dependency updates (ccxt ships very frequent exchange-API releases;
+    # better-sqlite3 has a native build and its dbApi plugin is disabled). They are
+    # to be touched only in a dedicated, planned intervention. Ignoring them here
+    # suppresses the automatic *update PRs*; Dependabot *alerts* still fire, so a
+    # security advisory on either is still notified and can be handled deliberately.
+    ignore:
+      - dependency-name: ccxt
+      - dependency-name: better-sqlite3
+
+  # ── GitHub Actions used by the workflows ──────────────────────────────────
+  # Keeps actions/checkout, actions/setup-node, ... current (and patched).
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: ci
