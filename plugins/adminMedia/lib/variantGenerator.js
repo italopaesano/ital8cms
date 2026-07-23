@@ -5,10 +5,12 @@
  * variants + manifest for an image, following the naming/layout convention
  * owned by the `media` plugin (passed in as `variantResolver`).
  *
- * `sharp` is an OPTIONAL dependency: it is intentionally NOT declared in
- * adminMedia's `nodeModuleDependency` (which is fail-fast at boot). Instead we
- * require it defensively here, so the file manager keeps working without it —
- * uploads simply skip optimization until `npm install sharp` is run.
+ * `sharp` is an OPTIONAL dependency. adminMedia is a self-contained plugin: its
+ * npm deps live in plugins/adminMedia/package.json, where sharp sits under
+ * `optionalDependencies` (so `npm install` inside this folder never fails if the
+ * native build is unavailable). We still require it defensively here, so the file
+ * manager keeps working without it — uploads simply skip optimization until sharp
+ * is present (re-run `npm install` inside plugins/adminMedia to restore it).
  */
 
 'use strict';

@@ -1,6 +1,6 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 2,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   "active": 1,
   "weight": 0,
 
@@ -16,15 +16,15 @@
     // schema from media's shared object and writes variants accordingly.
     "media": "^1.1.0",
   },
-  "nodeModuleDependency": {
-    "@koa/multer": "^4.0.0",
-    "multer": "^2.0.0",  // peer dependency richiesta da @koa/multer
-    // NOTE: `sharp` (image optimization) is intentionally NOT declared here.
-    // nodeModuleDependency is validated fail-fast at boot, but optimization is
-    // OPTIONAL: the file manager must keep working without sharp. It is required
-    // defensively in lib/variantGenerator.js. To enable optimization run:
-    //   npm install sharp
-  },
+  // Self-contained plugin (per-plugin node_modules model): the npm dependencies
+  // are declared in this plugin's own package.json — @koa/multer + multer as
+  // `dependencies`, sharp as an `optionalDependencies` (image optimization stays
+  // optional: the file manager keeps working without it, required defensively in
+  // lib/variantGenerator.js). They install into plugins/adminMedia/node_modules
+  // via `npm install` inside this folder; Node resolves them plugin-local first.
+  // nodeModuleDependency is intentionally EMPTY: the root-model boot gate must
+  // not check deps that live plugin-local. See docs/decisions/config-lifecycle.it.md
+  "nodeModuleDependency": {},
   "custom": {
     // NOTE: `mediaDir` is owned by the `media` service plugin (single source of
     // truth). adminMedia reads it from media — do not duplicate it here.
