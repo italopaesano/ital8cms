@@ -75,6 +75,16 @@ describe('assertPluginWritableOrThrow() — risoluzione path e discovery', () =>
         if (String(file).includes('ko-data')) throw fsError('EROFS', 'read-only file system, open');
         return realWriteFileSync(file, ...args);
       });
+      // Neutralizza la mkdir della dir "ko" (path di sistema tipo /var): senza
+      // privilegi la mkdirSync reale fallirebbe con EACCES PRIMA della
+      // writeFileSync, rendendo l'esito dipendente dall'utente (root vs non-root).
+      // Simulandola come no-op la sonda arriva SEMPRE alla writeFileSync, che
+      // inietta EROFS in modo deterministico. I path sani delegano al reale.
+      const realMkdirSync = fs.mkdirSync;
+      jest.spyOn(fs, 'mkdirSync').mockImplementation((dir, ...args) => {
+        if (String(dir).includes('ko-data')) return undefined;
+        return realMkdirSync(dir, ...args);
+      });
       const error = jest.fn();
       const plugin = {
         pluginName: 'rateLimiter',
