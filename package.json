@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start-configure": "node scripts/init.js",
-    "start": "nodemon index.js",
+    "start": "node index.js",
+    "dev": "nodemon index.js",
     "cli": "node bin/ital8cms-cli.js",
     "test": "node scripts/checkNixShell.js && jest --config=tests/jest.config.js && npx playwright test --config=tests/playwright.config.js",
     "test:watch": "jest --config=tests/jest.config.js --watch",
