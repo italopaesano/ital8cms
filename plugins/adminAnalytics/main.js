@@ -140,7 +140,12 @@ function loadEventsForRange(fromDate, toDate) {
   const relevantFiles = selectFilesForRange(allFiles, fromDate, toDate);
   const events        = [];
   for (const filePath of relevantFiles) {
-    events.push(...analyticsApi.readEventsFromFile(filePath));
+    // NB: iterazione esplicita invece di `events.push(...array)`.
+    // Lo spread passa ogni evento come argomento separato a push(): con file
+    // JSONL grandi (decine di migliaia di righe) si supera il limite di
+    // argomenti del motore JS → RangeError: Maximum call stack size exceeded.
+    const eventsFromFile = analyticsApi.readEventsFromFile(filePath);
+    for (const singleEvent of eventsFromFile) events.push(singleEvent);
   }
   return events;
 }
