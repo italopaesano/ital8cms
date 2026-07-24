@@ -1,6 +1,6 @@
 ---
 name: ital8cms-plugin-creator
-description: Scaffold a new ital8cms plugin. Use when the user asks to create, scaffold, or generate an ital8cms plugin (minimal, with webPages, admin, or with global template functions). Works both inside an ital8cms repository and standalone (outputs a self-contained plugin folder ready to be dropped into `plugins/`).
+description: Scaffold a new ital8cms plugin. Use when the user asks to create, scaffold, or generate an ital8cms plugin (minimal, with webPages, admin, or with global template functions). Also scaffolds the mandatory ital8doc documentation (README.it.md + English stub, optional EXPLAIN) and supports the self-contained per-plugin npm dependency model (own package.json). Works both inside an ital8cms repository and standalone (outputs a self-contained plugin folder ready to be dropped into `plugins/`).
 ---
 
 # ital8cms Plugin Creator
@@ -43,6 +43,11 @@ Before writing any file, gather these inputs from the user. **Do not guess.** Al
    - Gather the default `dataPath` (relative to the plugin folder, default `./data`).
    - The generated plugin MUST declare that directory via `getWritablePaths()` (see the "Writable data directory" template below) so the boot gate verifies/pre-creates it.
    - If **no** (API-only, pure middleware, no disk writes of its own): omit `getWritablePaths()` and `custom.dataPath` entirely.
+8. **npm dependency model** (optional, applies to **any** variant) — ask: *does the plugin need npm packages?* If **yes**, ask which model (the project uses a hybrid per-plugin model — see [`docs/self-update.it.md`](../../../docs/self-update.it.md)):
+   - **self-contained** (recommended for new plugins) — the plugin ships its own `package.json`; the packages install into `plugins/<name>/node_modules` (git-ignored, preserved across updates, resolved plugin-local first by Node). `nodeModuleDependency` in `pluginConfig.default.json5` stays **empty**. Pilot: `adminMedia`.
+   - **legacy** (root `node_modules`) — no `package.json`; declare the packages in `nodeModuleDependency` (name → semver range); they install into the **root** `node_modules`.
+   - Gather the package name(s) and semver range(s). Ask whether any should be **optional** (graceful degradation if absent, e.g. native modules like `sharp`) → `optionalDependencies` in the self-contained model.
+   If **no** npm deps (only other-plugin deps or none): keep `nodeModuleDependency: {}` and don't create a `package.json`.
 
 ## Conventions to enforce
 
@@ -51,12 +56,15 @@ Before writing any file, gather these inputs from the user. **Do not guess.** Al
 - Inside an ital8cms project, configs are loaded via `loadJson5()` — never `require()`. The generated plugin code follows this rule.
 - All routes returned from `getRouteArray()` MUST include the `access` field (`requiresAuth`, `allowedRoles`). Method strings MUST be UPPERCASE (`'GET'`, `'POST'`, `'PUT'`, `'DEL'`, `'ALL'`). Handler key MUST be `handler`, not `func`.
 - Naming: camelCase for files/dirs/variables/functions, PascalCase for classes, UPPER_SNAKE_CASE for constants.
+- **Documentation (ital8doc v1-1, MANDATORY).** Every plugin ships `README.it.md` — the Italian **reference** ("how do I USE it?") — plus an English `README.md` **stub**. Add `EXPLAIN.it.md` (+ its `EXPLAIN.md` stub) — "why is it built this way + how do I tune it?" — **only** when the plugin has non-trivial internals worth a deep-dive; an empty or README-duplicating EXPLAIN is **forbidden**. Line 1 of each doc is the ital8doc marker, line 2 the English pointer note. See [`docs/ITAL8DOC-latest.md`](../../../docs/ITAL8DOC-latest.md).
+- **npm dependencies — hybrid per-plugin model.** For new plugins prefer **self-contained** (own `package.json` → `plugins/<name>/node_modules`, git-ignored) and keep `nodeModuleDependency` **empty**; the **legacy** model (declared in `nodeModuleDependency`, installed at root) still works. A plugin-local dependency MUST be `require`d **from inside the plugin** (`main.js` / its `lib/*.js`), never delegated to a `core/*` file, and plugins MUST NOT bundle the framework (`koa`, `@koa/router`) nor enable npm `workspaces`. See [`docs/self-update.it.md`](../../../docs/self-update.it.md).
+- **Admin GUI (admin variant): prefer the twin pattern + follow the Three Views.** A service plugin that needs a management UI should ship it as a separate twin named `admin<Service>`; an admin section exposes up to three coordinated views (Data view / raw JSON5 editor / structured form) on the same file/state. See CLAUDE.md → *Twin Admin Plugin* and *Le Tre Viste* (details in the admin-variant template below).
 - **Writable data directories → declare them with `getWritablePaths()`.** Any plugin that writes its own data to disk at runtime (a data dir it creates lazily and writes to) MUST expose `getWritablePaths(pluginSys, pathPluginFolder) → Array<{ path, purpose }>`. At boot, `pluginSys` calls it while loading the plugin (via `core/storageWritabilityCheck.js`) and probes each path with a **real** write (creates the dir + writes/deletes a temp file). If a declared dir is **not** writable (read-only FS, systemd sandbox without `ReadWritePaths=`, wrong owner/permissions, full disk), that plugin is **skipped gracefully** with a clear `[STORAGE]` box and the boot proceeds (an *essential* plugin still aborts the boot). If writable, the probe **pre-creates** the dir so the first write is smooth. Two rules: (1) `getWritablePaths()` MUST resolve its paths **offline from config** (read `pluginConfig.json5 → custom.dataPath`), because the gate runs *before* `loadPlugin()` and the setup wizard introspects plugins without loading them — do **not** rely on state set inside `loadPlugin()`; (2) runtime writes to that dir MUST be **fail-soft** (atomic temp+rename, wrapped in try/catch that logs and skips — never throw), so a later write failure degrades quietly instead of crashing the server.
 - Don't add error handling, validation, or comments beyond what the variant strictly needs.
 
 ## File templates
 
-Use these as the base output. Substitute placeholders `{{pluginName}}`, `{{description}}`, `{{author}}`, `{{email}}`, `{{license}}`, `{{sectionId}}`, `{{pageName}}`, `{{functionName}}`.
+Use these as the base output. Substitute placeholders `{{pluginName}}`, `{{pluginNameLower}}` (the plugin name lowercased, for the npm `name` field), `{{description}}`, `{{author}}`, `{{email}}`, `{{license}}`, `{{sectionId}}`, `{{pageName}}`, `{{functionName}}`, `{{npmPackage}}`, `{{npmRange}}`.
 
 ### `pluginDescription.json5` (all variants)
 
@@ -184,6 +192,32 @@ module.exports = {
 ```
 
 ### `main.js` — admin variant
+
+> **Twin admin pattern (recommended).** If this admin GUI is the management face of a
+> separate **service** plugin (domain logic, runtime state, its own `.json5` files, a
+> shared object), scaffold it as a twin named `admin<Service>` (service `seo` → twin
+> `adminSeo`; `media` → `adminMedia`). The twin **depends on** the service
+> (`dependency: { "<service>": "^x.y.z" }`), resolves the service folder via
+> `pluginSys.getPlugin('<service>').pathPluginFolder` to read/write its config files, and
+> pulls its shared object via `pluginSys.getSharedObject('<service>')` for live data and
+> actions. Keep the service plugin **headless** (no admin UI). Combine service + admin in a
+> single `admin*` plugin **only** when the domain is itself admin-centric (like `adminUsers`,
+> `adminAccessControl`). See CLAUDE.md → *Best Practice per i plugin admin — Twin Admin Plugin*.
+>
+> **The Three Views (admin GUI convention).** A section exposes up to three coordinated
+> views on the same underlying `.json5`/state, added as needed:
+> **A. Data view** — live state/metrics + live actions (**mandatory** if the plugin has
+> runtime state/stats);
+> **B. raw JSON5 editor** — edits the real `.json5` file (**always present for config** — the
+> single source of truth and the power-user fallback);
+> **C. structured form** — optional guided editing for rich config, coordinated with B via a
+> **shared server-side validator** (explicit "load form ↔ regenerate JSON5" switch with an
+> unsaved-changes warning).
+> Cross-cutting, always: i18n via the global `__()` helper, Bootstrap-5 responsive (tabs
+> collapse to a `<select>` on mobile), **XSS-escaped** output for dynamic/user data, correct
+> `access` roles (sensitive config → `[0, 1]`), atomic writes (temp + rename) + backup where it
+> makes sense, and hot-reload via the shared object (or "Save & restart" for boot-time settings).
+> See CLAUDE.md → *Convenzioni Admin GUI — Le Tre Viste*.
 
 For each `sectionId` declared in `adminSections`, create `adminWebSections/<sectionId>/index.ejs`. The admin system creates the symlink at boot.
 
@@ -333,14 +367,145 @@ const loadJson5 = require('../../core/loadJson5');
 
 **Runtime writes must be fail-soft.** Whenever the plugin actually writes into that dir, use atomic writes (temp + `rename`) wrapped in `try/catch` that logs and skips — never let a write error propagate (it would 500 a request or crash the process). Reference: the `analytics` plugin (`plugins/analytics/lib/fileManager.js` + `getWritablePaths` in its `main.js`).
 
+### Documentation (ital8doc) — README mandatory, EXPLAIN optional
+
+Per the **ital8doc v1-1** standard ([`docs/ITAL8DOC-latest.md`](../../../docs/ITAL8DOC-latest.md)),
+**always** generate the Italian reference `README.it.md` **and** its English `README.md`
+stub. Generate `EXPLAIN.it.md` (+ `EXPLAIN.md` stub) **only** when the plugin has
+non-trivial internals worth explaining — never an empty or README-duplicating EXPLAIN.
+
+`README.it.md` (reference — where you write; fill the TODOs from the actual plugin):
+
+```markdown
+<!-- ital8doc v1-1 · tipo: README · lang: it · rev: 1 · ref -->
+> 🌐 Italian reference edition (always up to date). English `README.md` is a stub until release.
+# {{pluginName}}
+
+{{description}}
+
+## Cosa fa
+
+- TODO: elenco funzionalità
+
+## Uso / Quick start
+
+TODO: esempio minimo funzionante (URL della rotta / pagina).
+
+## API / Contratto
+
+TODO: rotte (`/api/{{pluginName}}/...`), oggetto condiviso, funzioni template.
+
+## Configurazione
+
+TODO: tabella dei campi `custom` di `pluginConfig.json5` (riferimento canonico).
+
+## File
+
+TODO: mappa sintetica dei file del plugin.
+
+## Dipendenze
+
+TODO: dipendenze verso altri plugin (`dependency`) e npm (self-contained `package.json` oppure `nodeModuleDependency`).
+```
+
+`README.md` (English stub — the GitHub face; never left empty):
+
+```markdown
+<!-- ital8doc v1-1 · tipo: README · lang: en · stub -->
+> 🌐 This document is maintained in Italian → see `README.it.md`. The English edition will be filled in at release.
+# {{pluginName}}
+
+> English translation pending. Authoritative version: [`README.it.md`](./README.it.md).
+```
+
+`EXPLAIN.it.md` (**only** for non-trivial internals):
+
+```markdown
+<!-- ital8doc v1-1 · tipo: EXPLAIN · lang: it · rev: 1 · ref -->
+> 🌐 Italian reference edition (always up to date). English `EXPLAIN.md` is a stub until release.
+# {{pluginName}} — Deep-dive tecnico
+> Guida d'uso: vedi README.it.md
+
+## Perché è fatto così
+
+TODO: filosofia + vincolo architetturale portante (il cuore dell'EXPLAIN).
+
+## Architettura
+
+TODO: componenti, modello dati, macchine a stati.
+
+## Regolazione & estensione
+
+TODO: tuning consapevole (conseguenze delle scelte di config), trade-off, come estenderlo.
+```
+
+`EXPLAIN.md` (English stub, paired with the above):
+
+```markdown
+<!-- ital8doc v1-1 · tipo: EXPLAIN · lang: en · stub -->
+> 🌐 This document is maintained in Italian → see `EXPLAIN.it.md`. The English edition will be filled in at release.
+# {{pluginName}} — Technical deep-dive
+
+> English translation pending. Authoritative version: [`EXPLAIN.it.md`](./EXPLAIN.it.md).
+```
+
+### Self-contained npm dependencies (`package.json`) — optional add-on
+
+Apply **only** when the user chose the **self-contained** npm model (input #8) — the
+plugin needs npm packages and should carry them plugin-local. Composes with **any**
+variant. Two parts:
+
+**1. Create `package.json` in the plugin folder.** The packages install into
+`plugins/{{pluginName}}/node_modules` via `npm install` run **inside** the folder, and
+Node resolves them plugin-local first:
+
+```json
+{
+  "name": "ital8cms-plugin-{{pluginNameLower}}",
+  "version": "0.0.1",
+  "description": "{{description}}",
+  "private": true,
+  "license": "{{license}}",
+  "author": "{{author}} <{{email}}>",
+  "dependencies": {
+    "{{npmPackage}}": "{{npmRange}}"
+  }
+}
+```
+
+Put in `optionalDependencies` (instead of `dependencies`) any package whose absence
+should degrade gracefully rather than block the plugin (native modules like `sharp`);
+the plugin code must guard the `require`. Reference: `adminMedia`.
+
+**2. Keep `nodeModuleDependency` EMPTY in `pluginConfig.default.json5`:**
+
+```json5
+  // Self-contained: le dipendenze npm sono in package.json (→ plugins/{{pluginName}}/node_modules).
+  // nodeModuleDependency resta VUOTO: il boot gate del modello-root non deve controllare deps plugin-local.
+  nodeModuleDependency: {},
+```
+
+The `require` MUST happen from inside the plugin (`main.js` or its `lib/*.js`), never from
+a `core/*` file; don't bundle the framework (`koa`, `@koa/router`) — use it from root.
+
+For the **legacy** model instead, skip the `package.json` and declare the packages in
+`nodeModuleDependency` (they install into the **root** `node_modules`):
+
+```json5
+  nodeModuleDependency: {
+    "{{npmPackage}}": "{{npmRange}}",
+  },
+```
+
 ## Generation procedure
 
 1. Confirm the gathered inputs back to the user as a single summary block (variant, name, output path, files to create). Wait for explicit confirmation before writing.
 2. Verify the output directory does not already exist. If it does: stop, tell the user, do not overwrite.
-3. Create the directory tree and write the files using the Write tool. Order: `pluginDescription.json5`, `pluginConfig.default.json5`, `main.js`, then variant-specific files. If the user confirmed a writable data directory (input #7), apply the "Writable data directory" add-on (`custom.dataPath` + `getWritablePaths()`). **Do not** create the data directory yourself — the boot gate pre-creates it. **Do not** write a live `pluginConfig.json5` — it is materialized at boot from the `.default`.
+3. Create the directory tree and write the files using the Write tool. Order: `pluginDescription.json5`, `pluginConfig.default.json5`, `main.js`, then variant-specific files, then the **documentation** — `README.it.md` + `README.md` stub (always), plus `EXPLAIN.it.md` + `EXPLAIN.md` stub **only** if the plugin has non-trivial internals. If the user chose the self-contained npm model (input #8), also write `package.json` (and keep `nodeModuleDependency` empty). If the user confirmed a writable data directory (input #7), apply the "Writable data directory" add-on (`custom.dataPath` + `getWritablePaths()`). **Do not** create the data directory yourself — the boot gate pre-creates it. **Do not** write a live `pluginConfig.json5` — it is materialized at boot from the `.default`.
 4. After writing, print a short summary:
-   - Files created (relative paths)
-   - Manual steps the user must take (admin section registration, whitelist entry, moving the folder into `plugins/` if scaffolded standalone, restarting the server)
+   - Files created (relative paths), including the docs (`README.it.md` + stub, and EXPLAIN pair if generated) and `package.json` if self-contained
+   - Manual steps the user must take (admin section registration, whitelist entry, moving the folder into `plugins/` if scaffolded standalone, restarting the server; **for the self-contained model: run `npm install` inside the plugin folder** so its `node_modules` is populated, or run root `npm install` / `npm run deps-sync` which reconciles active plugins)
+   - Reminder to fill the `README.it.md` TODOs (and EXPLAIN, if generated) — a shipped-but-empty README is out of ital8doc spec
    - If a writable data directory was declared: note that it is created/verified automatically at boot, and that on a read-only/sandboxed host the plugin will be skipped with a `[STORAGE]` message until the directory is made writable
    - URL where the new plugin will be reachable, computed from variant:
      - minimal/admin: `/api/{{pluginName}}/...` (and `/admin/{{sectionId}}/index.ejs` for admin)
@@ -352,10 +517,14 @@ const loadJson5 = require('../../core/loadJson5');
 If the current directory does not look like an ital8cms project, still scaffold the plugin folder (do not require any specific surrounding structure). Tell the user explicitly that they need to:
 - Copy the generated folder into the `plugins/` directory of their ital8cms installation
 - `active: 1` is already set in `pluginConfig.default.json5`; on restart the server materializes the live `pluginConfig.json5` from it and writes `isInstalled` — no manual file step needed
+- If the plugin is **self-contained** (has its own `package.json`), run `npm install` inside the plugin folder (or root `npm install` / `npm run deps-sync`) so its `node_modules` is populated before the plugin loads
 
 ## Things to avoid
 
-- Don't create `README.md`, `CHANGELOG.md`, or other docs unless the user asks.
+- Do generate the ital8doc docs: `README.it.md` + its `README.md` stub are **mandatory**; add `EXPLAIN.it.md` (+ stub) **only** for non-trivial internals (empty/redundant EXPLAIN is forbidden). Don't create `CHANGELOG.md` or other docs unless the user asks.
+- Don't ship an English `README.md`/`EXPLAIN.md` with real content — it's a **stub** (marker + pointer to the `.it.md`); the reference is always the `.it.md`.
+- Don't fill `nodeModuleDependency` when using the self-contained model — keep it empty (the deps live in the plugin's `package.json`). Conversely, don't create a `package.json` for the legacy model.
+- Don't `require()` a plugin-local dependency from a `core/*` file, don't bundle the framework (`koa`, `@koa/router`), and don't enable npm `workspaces` — all three break Node's plugin-local resolution.
 - Don't add tests unless the user asks (the project has a `plugins/<name>/tests/` convention, but generating empty test scaffolding is out of scope here).
 - Don't add a `webPages/` directory to the minimal/admin/globalFunctions variants.
 - Don't omit the `access` field from any route — the ital8cms boot validation will fail.
