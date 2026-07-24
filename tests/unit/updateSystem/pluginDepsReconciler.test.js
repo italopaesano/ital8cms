@@ -1,6 +1,26 @@
+/**
+ * Test per scripts/lib/pluginDepsReconciler.js (deps-sync).
+ *
+ * Due gruppi di verifiche complementari:
+ *   1. BRANCHING / REPORT in dry-run (nessun npm eseguito): rami self-contained /
+ *      legacy / disabled / themes, validazione dep-spec (sicurezza) e realign del
+ *      vivo dal .default.
+ *   2. INVOCAZIONE npm REALE con `child_process.execFileSync` MOCKATO (nessun npm
+ *      lanciato davvero): asserisce che il ramo self-contained deleghi a
+ *      core/installPluginNpmDeps con `cwd` = cartella del plugin (`install`/`ci`) e
+ *      che il ramo legacy usi `--no-save` a root con gli spec corretti.
+ */
+
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+
+// Mock di child_process PRIMA di require del reconciler (che transitivamente carica
+// core/installPluginNpmDeps, il quale usa execFileSync). I test in dry-run non
+// invocano mai npm, quindi il mock è innocuo per loro.
+jest.mock('child_process', () => ({ execFileSync: jest.fn() }));
+const { execFileSync } = require('child_process');
+
 const loadJson5 = require('../../../core/loadJson5');
 const { reconcile } = require('../../../scripts/lib/pluginDepsReconciler');
 
@@ -12,6 +32,7 @@ function mkPlugin(name, { def, live, pkg } = {}) {
   if (def !== undefined) fs.writeFileSync(path.join(dir, 'pluginConfig.default.json5'), def);
   if (live !== undefined) fs.writeFileSync(path.join(dir, 'pluginConfig.json5'), live);
   if (pkg !== undefined) fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(pkg, null, 2));
+  return dir;
 }
 function mkTheme(name, { def } = {}) {
   const dir = path.join(root, 'themes', name);
@@ -20,10 +41,16 @@ function mkTheme(name, { def } = {}) {
 }
 const cfg = (obj) => `// test\n{\n${Object.entries(obj).map(([k, v]) => `  "${k}": ${JSON.stringify(v)},`).join('\n')}\n}\n`;
 
+// Chiamate a execFileSync('npm', ...) con un dato cwd (per il gruppo 2).
+function npmCallsWithCwd(cwd) {
+  return execFileSync.mock.calls.filter((c) => c[0] === 'npm' && c[2] && c[2].cwd === cwd);
+}
+
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'ital8-recon-'));
   fs.mkdirSync(path.join(root, 'plugins'), { recursive: true });
   fs.mkdirSync(path.join(root, 'themes'), { recursive: true });
+  execFileSync.mockReset();
 });
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
@@ -95,5 +122,37 @@ describe('reconcile (realign live nodeModuleDependency from default)', () => {
     });
     const r = await reconcile(root, { dryRun: true });
     expect(r.realigned).toEqual([]);
+  });
+});
+
+describe('reconcile (invocazione npm reale, execFileSync mockato)', () => {
+  test('self-contained attivo → `npm install --no-audit --no-fund` DENTRO la cartella', async () => {
+    const pdir = mkPlugin('sc', { def: cfg({ active: 1 }), pkg: { name: 'sc', version: '1.0.0', private: true } });
+
+    const report = await reconcile(root, {});
+
+    const calls = npmCallsWithCwd(pdir);
+    expect(calls).toHaveLength(1);
+    expect(calls[0][1]).toEqual(['install', '--no-audit', '--no-fund']);
+    expect(report.perPlugin).toContainEqual({ container: 'plugins', name: 'sc', ok: true });
+  });
+
+  test('clean=true → `npm ci` nel ramo self-contained', async () => {
+    const pdir = mkPlugin('sc', { def: cfg({ active: 1 }), pkg: { name: 'sc', version: '1.0.0', private: true } });
+
+    await reconcile(root, { clean: true });
+
+    expect(npmCallsWithCwd(pdir)[0][1]).toEqual(['ci', '--no-audit', '--no-fund']);
+  });
+
+  test('legacy con dep mancante → `npm install --no-save <spec>` a ROOT', async () => {
+    mkPlugin('lg', { def: cfg({ active: 1, nodeModuleDependency: { leftpad: '^1.0.0' } }) });
+
+    const report = await reconcile(root, {});
+
+    const rootCalls = npmCallsWithCwd(root);
+    expect(rootCalls).toHaveLength(1);
+    expect(rootCalls[0][1]).toEqual(['install', '--no-save', '--no-audit', '--no-fund', 'leftpad@^1.0.0']);
+    expect(report.legacy.some((e) => e.name === 'lg')).toBe(true);
   });
 });

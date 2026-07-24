@@ -108,4 +108,29 @@ describe('installPluginNpmDeps', () => {
     expect(env.npm_config_local_prefix).toBeUndefined();
     expect(env.INIT_CWD).toBeUndefined();
   });
+
+  test('dir inesistente: no-op senza lanciare (package.json non trovato)', () => {
+    const missingDir = path.join(tmpDir, 'does', 'not', 'exist');
+    const result = installPluginNpmDeps(missingDir);
+    expect(result).toEqual({ ran: false, reason: 'no-package-json' });
+    expect(execFileSync).not.toHaveBeenCalled();
+  });
+
+  test('opts.stdio custom viene propagato a execFileSync', () => {
+    writePackageJson();
+    installPluginNpmDeps(tmpDir, { stdio: 'ignore' });
+    expect(execFileSync.mock.calls[0][2].stdio).toBe('ignore');
+  });
+
+  test('clean + onLog insieme: onLog riceve il subcomando "ci"', () => {
+    writePackageJson();
+    const onLog = jest.fn();
+    installPluginNpmDeps(tmpDir, { clean: true, onLog });
+    expect(onLog).toHaveBeenCalledWith('ci');
+    expect(execFileSync.mock.calls[0][1]).toEqual(['ci', '--no-audit', '--no-fund']);
+  });
+
+  test('default export e proprietà .installPluginNpmDeps sono la stessa funzione', () => {
+    expect(installPluginNpmDeps.installPluginNpmDeps).toBe(installPluginNpmDeps);
+  });
 });
