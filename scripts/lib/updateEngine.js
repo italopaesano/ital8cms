@@ -141,6 +141,11 @@ function fetchTags(projectRoot) {
 
 /** Checkout di un ref (tag/sha) in detached HEAD. */
 function checkout(projectRoot, ref) {
+  // Guard: un ref che inizia con '-' (o vuoto) verrebbe interpretato da git come
+  // un'opzione. I tag arrivano da ls-remote o da --tag: rifiuta i valori ambigui.
+  if (typeof ref !== 'string' || ref.length === 0 || ref.startsWith('-')) {
+    throw new Error(`ref non valido per il checkout: ${JSON.stringify(ref)}`);
+  }
   git(projectRoot, ['checkout', '--detach', ref], { inheritErr: true });
 }
 

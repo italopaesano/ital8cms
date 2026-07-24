@@ -122,6 +122,31 @@ fallire l'install).
 - `restore` è **overlay** (non rimuove i file creati dopo lo snapshot).
 - `.update.lock` in root impedisce update concorrenti.
 
+## Sicurezza
+
+Questi sono strumenti da **terminale** eseguiti da chi ha accesso shell al server
+(non endpoint web). Note rilevanti:
+
+- **I backup contengono segreti.** Uno snapshot include `certs/` (chiavi TLS),
+  le chiavi di sessione (`koaSession.json5`), `.env` e gli hash delle password
+  (`userAccount.json5`). Le cartelle di backup sono create con permessi **0700** e
+  i file mantengono i loro permessi originali, ma proteggi comunque `backups/` e
+  non condividere gli snapshot. `.gitignore` esclude già `backups/`.
+- **Integrità dell'update.** L'update si fida del trasporto **HTTPS** verso GitHub
+  e dell'integrità degli oggetti git; **non** verifica firme dei tag. Un account
+  GitHub compromesso o un MITM (con HTTPS rotto) potrebbe servire codice
+  malevolo — come per la maggior parte degli updater. La verifica di **tag/release
+  firmati** è un possibile hardening futuro.
+- **`npm install` esegue script di lifecycle.** L'install di root e quelli
+  plugin-local eseguono gli script (`postinstall`, ecc.) delle dipendenze e dei
+  plugin self-contained — comportamento npm standard. Rientra nel confine di
+  fiducia esistente (chi può scrivere in `plugins/` esegue già codice al boot).
+  I nomi/range dichiarati in `nodeModuleDependency` sono **validati** prima di
+  passarli a `npm install` (no arg-injection).
+- **Input.** I nomi dei backup sono risolti contro le cartelle reali (niente path
+  traversal); le etichette sono sanificate; i ref di checkout sono validati; il
+  lock è creato in modo atomico.
+
 ## Architettura (moduli)
 
 ```

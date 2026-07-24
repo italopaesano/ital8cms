@@ -149,7 +149,9 @@ async function stopSelfManaged(projectRoot, opts = {}) {
   }
 
   const supervisor = status.data.supervisor || null;
-  const pid = status.data.pid || null;
+  // Valida il pid (intero positivo) prima di inviargli un segnale: evita di
+  // chiamare process.kill con un valore inatteso proveniente dallo status.
+  const pid = (Number.isInteger(status.data.pid) && status.data.pid > 0) ? status.data.pid : null;
 
   if (supervisor) {
     // Sotto supervisor: fermarlo noi sarebbe inutile (verrebbe riavviato).
