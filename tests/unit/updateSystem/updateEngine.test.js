@@ -1,4 +1,47 @@
-const { versionFromTag, selectLatest, checkout } = require('../../../scripts/lib/updateEngine');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const {
+  versionFromTag, selectLatest, checkout, parseOwnerRepo, currentVersion, isGitRepo,
+} = require('../../../scripts/lib/updateEngine');
+
+describe('parseOwnerRepo', () => {
+  test.each([
+    ['https://github.com/italopaesano/ital8cms.git', { owner: 'italopaesano', repo: 'ital8cms' }],
+    ['https://github.com/italopaesano/ital8cms', { owner: 'italopaesano', repo: 'ital8cms' }],
+    ['git@github.com:italopaesano/ital8cms.git', { owner: 'italopaesano', repo: 'ital8cms' }],
+    ['http://127.0.0.1:41729/git/italopaesano/ital8cms', { owner: 'italopaesano', repo: 'ital8cms' }],
+  ])('%s', (url, expected) => {
+    expect(parseOwnerRepo(url)).toEqual(expected);
+  });
+
+  test('null / unrecognized → null', () => {
+    expect(parseOwnerRepo(null)).toBeNull();
+    expect(parseOwnerRepo('')).toBeNull();
+  });
+});
+
+describe('currentVersion / isGitRepo', () => {
+  let dir;
+  beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ital8-ue-')); });
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  test('currentVersion reads package.json', () => {
+    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ version: '9.9.9' }));
+    expect(currentVersion(dir)).toBe('9.9.9');
+  });
+
+  test('currentVersion null when no/invalid package.json', () => {
+    expect(currentVersion(dir)).toBeNull();
+  });
+
+  test('isGitRepo reflects .git presence', () => {
+    expect(isGitRepo(dir)).toBe(false);
+    fs.mkdirSync(path.join(dir, '.git'));
+    expect(isGitRepo(dir)).toBe(true);
+  });
+});
+
 
 describe('checkout ref guard (option-injection)', () => {
   test.each(['-x', '--upload-pack=evil', '', null])('rejects ambiguous ref %j before touching git', (ref) => {

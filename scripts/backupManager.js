@@ -20,7 +20,9 @@ const readline = require('readline');
 const backupEngine = require('./lib/backupEngine');
 const { parseArgs } = require('./lib/cliArgs');
 
-const projectRoot = path.resolve(__dirname, '..');
+const projectRoot = process.env.ITAL8CMS_PROJECT_ROOT
+  ? path.resolve(process.env.ITAL8CMS_PROJECT_ROOT)
+  : path.resolve(__dirname, '..');
 const { _: positional, flags } = parseArgs(process.argv.slice(2), []);
 
 function ask(question) {
