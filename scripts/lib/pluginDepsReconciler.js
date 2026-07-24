@@ -33,6 +33,8 @@ const semver = require('semver');
 const loadJson5 = require('../../core/loadJson5');
 const setJson5Key = require('../../core/setJson5Key');
 const { checkNpmDeps } = require('../../core/pluginStateResolver');
+const installPluginNpmDeps = require('../../core/installPluginNpmDeps');
+const { sanitizedNpmEnv } = installPluginNpmDeps;
 
 // Nome pacchetto npm valido (con eventuale scope). Serve a NON passare a
 // `npm install` stringhe controllate da un plugin che potrebbero essere
@@ -81,20 +83,11 @@ function makeRootResolver(projectRoot) {
   };
 }
 
-/**
- * Ambiente sanificato per il `npm install` annidato: rimuove le variabili di
- * "prefix" ereditate dal npm padre (npm run / postinstall) che altrimenti
- * farebbero installare le deps del plugin nella cartella sbagliata. Proxy,
- * registry e cache restano intatti.
- */
-function sanitizedNpmEnv() {
-  const env = { ...process.env };
-  delete env.npm_config_local_prefix;
-  delete env.npm_config_prefix;
-  delete env.INIT_CWD;
-  return env;
-}
+// sanitizedNpmEnv è condivisa con core/installPluginNpmDeps (importata sopra):
+// unica fonte di verità per la sanificazione dell'ambiente del npm annidato.
 
+// runNpm resta locale per il solo ramo LEGACY (npm install --no-save a root); il
+// ramo self-contained delega a installPluginNpmDeps (stessa sanificazione env).
 function runNpm(args, cwd) {
   execFileSync('npm', args, { cwd, stdio: 'inherit', env: sanitizedNpmEnv() });
 }
@@ -149,7 +142,7 @@ async function reconcile(projectRoot, opts = {}) {
         onLog(`⇩ npm ${clean ? 'ci' : 'install'} in ${c.dir}/${name}`);
         if (dryRun) { report.perPlugin.push({ container: c.dir, name, dryRun: true }); continue; }
         try {
-          runNpm([clean ? 'ci' : 'install', '--no-audit', '--no-fund'], pdir);
+          installPluginNpmDeps(pdir, { clean });
           report.perPlugin.push({ container: c.dir, name, ok: true });
         } catch (err) {
           report.perPlugin.push({ container: c.dir, name, ok: false });
