@@ -528,6 +528,8 @@ async function loadPlugin(pluginSys, pathPluginFolder) {
 
 Chiamata **una sola volta**, alla **transizione `isInstalled` non-1 → 1** (clone fresco, o dipendenze appena risolte che portano il plugin a `installed`). Esegue il setup iniziale. Vedi *Stati dei plugin e boot graceful* sotto per come lo stato e `isInstalled` sono calcolati e persistiti (Variante 1).
 
+> **Deps npm dei plugin self-contained (alla stessa transizione).** Se il plugin porta un proprio `package.json` (plugin *self-contained*, con `node_modules` locale — vedi [`docs/self-update.it.md`](../docs/self-update.it.md)), alla transizione d'installazione `pluginSys` esegue `npm install` **dentro la cartella del plugin** (`core/installPluginNpmDeps.js`) **prima** di `require(main.js)`, così le dipendenze locali sono risolvibili anche se `main.js` le richiede al top-level. È best-effort (un fallimento non blocca il boot: `loadPlugin` resta l'arbitro → plugin `incomplete` come sempre) e gira **una sola volta** (ai boot successivi, con `isInstalled: 1`, è saltata). Copre il caso "plugin self-contained attivato dopo l'`npm install` iniziale", che altrimenti resterebbe `incomplete` fino a un `npm run deps-sync` manuale. No-op sui plugin *legacy* (senza `package.json`, che dichiarano `nodeModuleDependency`).
+
 ```js
 async function installPlugin(pluginSys, pathPluginFolder) {
   const db = pluginSys.getSharedObject('dbApi').db;

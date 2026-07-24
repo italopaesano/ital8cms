@@ -7,6 +7,7 @@ const loadJson5 = require('./loadJson5');
 const saveJson5 = require('./saveJson5');
 const editJson5 = require('./editJson5');
 const setJson5Key = require('./setJson5Key');
+const installPluginNpmDeps = require('./installPluginNpmDeps');
 const { checkNpmDeps, resolvePluginStates } = require('./pluginStateResolver');
 const demoNotice = require('./demoNotice');
 
@@ -53,6 +54,29 @@ class pluginSys{
       try {
         //console.log(pluginConfig);
         const pluginConfig = loadJson5(path.join(__dirname, '..', 'plugins', pluginName, 'pluginConfig.json5'));
+
+        // TRANSIZIONE D'INSTALLAZIONE — deps npm di un plugin SELF-CONTAINED.
+        // Se il plugin sta diventando "installed" per la prima volta (isInstalled
+        // non ancora 1) ED è self-contained (porta un proprio package.json),
+        // installa le sue dipendenze npm nel node_modules LOCALE eseguendo
+        // `npm install` dentro la sua cartella. Gira PRIMA di require(main.js) così
+        // le deps sono risolvibili anche se main.js le richiede al top-level.
+        // No-op sui plugin legacy (nessun package.json). Best-effort: un fallimento
+        // NON blocca il boot — loadPlugin resta l'arbitro (una dep davvero mancante
+        // → il require lancia → catch graceful → plugin 'incomplete'). Copre lo
+        // scenario "attivo un plugin self-contained dopo l'install iniziale" che
+        // altrimenti resterebbe incomplete finché non si rilancia deps-sync
+        // (docs/self-update.it.md, spigolo #5).
+        if (pluginConfig.isInstalled !== 1) {
+          try {
+            installPluginNpmDeps(pathPluginFolder, {
+              onLog: (sub) => logger.info('pluginSys', `Plugin self-contained "${pluginName}": installo le dipendenze npm (npm ${sub})...`),
+            });
+          } catch (npmErr) {
+            logger.warn('pluginSys', `npm install fallito per "${pluginName}": ${String(npmErr.message).split('\n')[0]} — il plugin potrebbe restare 'incomplete'`);
+          }
+        }
+
         const plugin = require(path.join(__dirname, '..', 'plugins', pluginName, 'main.js'));
 
         // Aggiungi metadata al plugin object per uso futuro

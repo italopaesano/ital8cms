@@ -112,6 +112,12 @@ boot resta graceful). È cablato anche come **`postinstall`** di root: `npm inst
 sincronizza da sé le deps plugin-local (`--postinstall` esce sempre 0, non fa mai
 fallire l'install).
 
+Il ramo self-contained di `deps-sync` e la **transizione d'installazione** del boot
+(`pluginSys`, vedi spigolo #5) condividono lo stesso helper `core/installPluginNpmDeps.js`
+(che a sua volta è l'unica fonte di verità della sanificazione dell'ambiente npm,
+`sanitizedNpmEnv`): un unico posto dove `npm install` viene lanciato dentro la cartella
+di un plugin/tema self-contained.
+
 ### Perché il `node_modules` plugin-local funziona (risoluzione di Node)
 
 Un dubbio ricorrente: se il plugin viene `require`ato *dentro* `index.js`/`pluginSys`,
@@ -169,10 +175,15 @@ difetti — vanno rispettati e (in prospettiva) coperti da test di regressione.
    `incomplete`) invece di crashare.
 
 5. **`deps-sync` tocca solo i plugin ATTIVI** (mirroring del boot gate; `dbApi`/`ccxt`
-   disabilitati sono saltati). Conseguenza non ovvia: se **attivi** un plugin
-   self-contained *dopo* aver già installato, resterà `incomplete` finché non rilanci
-   `npm run deps-sync` (o `npm install`). Va comunicato all'utente al momento
-   dell'attivazione.
+   disabilitati sono saltati). Se **attivi** un plugin self-contained *dopo* aver già
+   installato, `deps-sync` da solo non lo coprirebbe fino al prossimo `npm install`/
+   `npm run deps-sync`. **Rete di sicurezza:** al **primo boot** dopo l'attivazione, la
+   **transizione d'installazione** in `pluginSys` (`isInstalled` non-1 → 1) esegue da
+   sé `npm install` dentro la cartella del plugin (`core/installPluginNpmDeps.js`),
+   prima di `require(main.js)` — così il plugin non resta `incomplete` in attesa di un
+   `deps-sync` manuale. È best-effort: se `npm install` fallisce il boot resta graceful
+   (`loadPlugin` resta l'arbitro → il plugin va `incomplete` come sempre). Gira una
+   sola volta (alla transizione); ai boot successivi, con `isInstalled: 1`, è saltata.
 
 6. **Landmine `npm workspaces`.** Se in `package.json` di root si aggiungesse
    `"workspaces": ["plugins/*"]`, npm farebbe **hoisting** di tutto in root e il modello
@@ -211,7 +222,9 @@ scripts/
 ```
 
 Riusi: `core/pluginStateResolver.checkNpmDeps` (stati npm), `core/setJson5Key`
-(realign preservando i commenti), il control plane socket del `cliBridge`
+(realign preservando i commenti), `core/installPluginNpmDeps` (`npm install` nella
+cartella di un plugin/tema self-contained — condiviso con la transizione
+d'installazione del boot in `pluginSys`), il control plane socket del `cliBridge`
 (`status.supervisor`), `gracefulShutdown` di `index.js` (SIGTERM).
 
 Test: `tests/unit/updateSystem/` (cliArgs, updateEngine, backupEngine) e
