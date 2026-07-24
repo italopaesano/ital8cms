@@ -195,6 +195,11 @@ difetti — vanno rispettati e (in prospettiva) coperti da test di regressione.
    esegue i lifecycle script delle **sue** dipendenze. È il normale rischio
    supply-chain di npm, ma con **più punti d'ingresso** (uno per plugin
    self-contained). Da considerare nella valutazione di sicurezza delle dipendenze.
+   **Nota (trigger di boot):** dalla v2.60.0 anche la **transizione d'installazione**
+   in `pluginSys` lancia `npm install` per un plugin self-contained (spigolo #5),
+   quindi i lifecycle script possono girare **al riavvio**, non solo a
+   `npm install`/`deps-sync`. Rientra nel confine di fiducia esistente (vedi
+   §Sicurezza), ma il trigger "basta riavviare" è meno evidente.
 
 ## Precondizioni e limiti (v1)
 
@@ -224,9 +229,10 @@ Questi sono strumenti da **terminale** eseguiti da chi ha accesso shell al serve
 - **`npm install` esegue script di lifecycle.** L'install di root e quelli
   plugin-local eseguono gli script (`postinstall`, ecc.) delle dipendenze e dei
   plugin self-contained — comportamento npm standard. Rientra nel confine di
-  fiducia esistente (chi può scrivere in `plugins/` esegue già codice al boot).
-  I nomi/range dichiarati in `nodeModuleDependency` sono **validati** prima di
-  passarli a `npm install` (no arg-injection).
+  fiducia esistente (chi può scrivere in `plugins/` esegue già codice al boot);
+  dalla v2.60.0 anche la transizione d'installazione a boot lancia gli install
+  plugin-local (spigolo #7). I nomi/range dichiarati in `nodeModuleDependency` sono
+  **validati** prima di passarli a `npm install` (no arg-injection).
 - **Input.** I nomi dei backup sono risolti contro le cartelle reali (niente path
   traversal); le etichette sono sanificate; i ref di checkout sono validati; il
   lock è creato in modo atomico.

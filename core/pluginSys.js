@@ -55,19 +55,24 @@ class pluginSys{
         //console.log(pluginConfig);
         const pluginConfig = loadJson5(path.join(__dirname, '..', 'plugins', pluginName, 'pluginConfig.json5'));
 
-        // TRANSIZIONE D'INSTALLAZIONE — deps npm di un plugin SELF-CONTAINED.
-        // Se il plugin sta diventando "installed" per la prima volta (isInstalled
-        // non ancora 1) ED è self-contained (porta un proprio package.json),
-        // installa le sue dipendenze npm nel node_modules LOCALE eseguendo
-        // `npm install` dentro la sua cartella. Gira PRIMA di require(main.js) così
-        // le deps sono risolvibili anche se main.js le richiede al top-level.
-        // No-op sui plugin legacy (nessun package.json). Best-effort: un fallimento
-        // NON blocca il boot — loadPlugin resta l'arbitro (una dep davvero mancante
-        // → il require lancia → catch graceful → plugin 'incomplete'). Copre lo
-        // scenario "attivo un plugin self-contained dopo l'install iniziale" che
-        // altrimenti resterebbe incomplete finché non si rilancia deps-sync
-        // (docs/self-update.it.md, spigolo #5).
-        if (pluginConfig.isInstalled !== 1) {
+        // TRANSIZIONE D'INSTALLAZIONE: il plugin diventa "installed" la prima volta
+        // quando isInstalled non era già 1 (clone fresco: il campo può mancare →
+        // undefined === 1 è false → transizione). Gate condiviso da: (1) install
+        // deps npm self-contained qui sotto, (2) installPlugin() più avanti. Definito
+        // una sola volta così i due non possono divergere.
+        const wasInstalled = pluginConfig.isInstalled === 1;
+
+        // DEPS NPM DI UN PLUGIN SELF-CONTAINED (alla transizione d'installazione).
+        // Se il plugin è self-contained (porta un proprio package.json), installa le
+        // sue dipendenze npm nel node_modules LOCALE eseguendo `npm install` dentro
+        // la sua cartella. Gira PRIMA di require(main.js) così le deps sono
+        // risolvibili anche se main.js le richiede al top-level. No-op sui plugin
+        // legacy (nessun package.json). Best-effort: un fallimento NON blocca il boot
+        // — loadPlugin resta l'arbitro (una dep davvero mancante → il require lancia
+        // → catch graceful → plugin 'incomplete'). Copre lo scenario "attivo un
+        // plugin self-contained dopo l'install iniziale" che altrimenti resterebbe
+        // incomplete finché non si rilancia deps-sync (docs/self-update.it.md, #5).
+        if (!wasInstalled) {
           try {
             installPluginNpmDeps(pathPluginFolder, {
               onLog: (sub) => logger.info('pluginSys', `Plugin self-contained "${pluginName}": installo le dipendenze npm (npm ${sub})...`),
@@ -119,7 +124,7 @@ class pluginSys{
         // regredisce a non scrivibile (nessun preflight fatale separato).
         require('./storageWritabilityCheck').assertPluginWritableOrThrow(plugin, this);
 
-        const wasInstalled = pluginConfig.isInstalled === 1;
+        // wasInstalled è definito sopra (subito dopo il load di pluginConfig).
         if( !wasInstalled ){
           if (plugin.installPlugin) {
             await plugin.installPlugin(this, pathPluginFolder);// può lanciare → catch graceful sotto
