@@ -1,6 +1,6 @@
 ---
 name: ital8cms-theme-creator
-description: Scaffold a new ital8cms theme. Use when the user asks to create, scaffold, or generate an ital8cms theme (minimal, standard, complete with PLACEHOLDER markers, or admin). Works both inside an ital8cms repository and standalone (outputs a self-contained theme folder ready to be dropped into `themes/`).
+description: Scaffold a new ital8cms theme. Use when the user asks to create, scaffold, or generate an ital8cms theme (minimal, standard, complete with PLACEHOLDER markers, or admin). Also scaffolds the mandatory ital8doc documentation (README.it.md + English stub, optional EXPLAIN) and supports the self-contained per-theme npm dependency model (own package.json). Works both inside an ital8cms repository and standalone (outputs a self-contained theme folder ready to be dropped into `themes/`).
 ---
 
 # ital8cms Theme Creator
@@ -26,8 +26,8 @@ Before writing any file, gather these inputs from the user. **Do not guess.** Al
 
 1. **Theme variant** — one of:
    - `minimal` — only required files: `themeConfig.default.json5`, `themeDescription.json5`, `views/{head,header,footer}.ejs`, `templates/page.template.ejs`
-   - `standard` — adds optional partials (`nav.ejs`, `main.ejs`, `aside.ejs`), `themeResources/css/theme.css`, `themeResources/js/theme.js`, `README.md`
-   - `complete` — full placeholderExample-style: 4 templates (page, blog-post, landing, minimal), partials with PLACEHOLDER content blocks, `pluginsEndpointsMarkup/adminUsers/login/style.css`, themeResources, README
+   - `standard` — adds optional partials (`nav.ejs`, `main.ejs`, `aside.ejs`), `themeResources/css/theme.css`, `themeResources/js/theme.js`
+   - `complete` — full placeholderExample-style: 4 templates (page, blog-post, landing, minimal), partials with PLACEHOLDER content blocks, `pluginsEndpointsMarkup/adminUsers/login/style.css`, themeResources
    - `admin` — admin theme (`isAdminTheme: true`), defaultAdminTheme-style: views with admin layout (sidebar, dashboard hooks), themeResources/js/escapeHtml.js placeholder, no `templates/` (admin themes don't have user-creatable pages)
 2. **Theme name** (camelCase). Validate: matches `^[a-zA-Z][a-zA-Z0-9]*$`. Must not collide with an existing directory under `themes/` (when run inside a project).
 3. **Output location** — absolute path of the destination directory. Default candidates, in order:
@@ -40,6 +40,10 @@ Before writing any file, gather these inputs from the user. **Do not guess.** Al
    - `minimal` / `standard`: nothing else.
    - `complete`: ask which subset of templates to include if the user wants fewer than the default 4. Default: all 4 (page, blog-post, landing, minimal).
    - `admin`: confirm `isAdminTheme: true`. Tell the user that admin themes are activated via `adminActiveTheme` (not `activeTheme`) in `ital8Config.json5`.
+7. **npm dependency model** (optional) — most themes only need `ejs` (already a root dependency, kept in `nodeModuleDependency` for the boot check). Ask **only if** the theme pulls extra npm packages of its own; if so, pick a model (same hybrid per-package model as plugins — see [`docs/self-update.it.md`](../../../docs/self-update.it.md)):
+   - **self-contained** — the theme ships its own `package.json`; packages install into `themes/<name>/node_modules` (git-ignored, resolved theme-local first). Keep those packages **out** of `nodeModuleDependency`.
+   - **legacy** — declare the packages in `themeConfig.default.json5 → nodeModuleDependency` (installed at root); this is what the default template does for `ejs`.
+   If no extra packages: leave the default `nodeModuleDependency: { ejs: "^6.0.0" }` and don't create a `package.json`.
 
 ## Conventions to enforce
 
@@ -55,11 +59,13 @@ Before writing any file, gather these inputs from the user. **Do not guess.** Al
   ```
 - Templates MUST include `head.ejs`, `header.ejs`, `footer.ejs` partials and MUST NOT duplicate `<html>`, `<head>`, `<body>` tags (they are already in the partials).
 - Partials use `passData.pluginSys.hookPage("section", passData)` for plugin integration (sections: `head`, `header`, `nav`, `main`, `body`, `aside`, `footer`, `script`).
+- **Documentation (ital8doc v1-1, MANDATORY).** Every theme ships `README.it.md` — the Italian **reference** ("how do I USE / customize it?") — plus an English `README.md` **stub**. Add `EXPLAIN.it.md` (+ its `EXPLAIN.md` stub) — "why is it built this way + how do I tune it?" — **only** when the theme has non-trivial internals worth a deep-dive (an empty or README-duplicating EXPLAIN is **forbidden**). Line 1 of each doc is the ital8doc marker, line 2 the English pointer note. See [`docs/ITAL8DOC-latest.md`](../../../docs/ITAL8DOC-latest.md).
+- **npm dependencies — hybrid per-theme model.** Themes follow the same per-package model as plugins: a theme that needs its own npm packages can be **self-contained** (own `package.json` → `themes/<name>/node_modules`, git-ignored) and keep those packages out of `nodeModuleDependency`, or **legacy** (declared in `nodeModuleDependency`, installed at root — the default for `ejs`). Never enable npm `workspaces`. See [`docs/self-update.it.md`](../../../docs/self-update.it.md).
 - Don't add error handling, validation, or comments beyond what the variant strictly needs.
 
 ## File templates
 
-Substitute placeholders: `{{themeName}}`, `{{description}}`, `{{author}}`, `{{email}}`, `{{license}}`, `{{isAdminTheme}}` (boolean, lowercase).
+Substitute placeholders: `{{themeName}}`, `{{themeNameLower}}` (the theme name lowercased, for the npm `name` field), `{{description}}`, `{{author}}`, `{{email}}`, `{{license}}`, `{{isAdminTheme}}` (boolean, lowercase), `{{npmPackage}}`, `{{npmRange}}`.
 
 ### `themeConfig.default.json5` (all variants)
 
@@ -346,6 +352,86 @@ Create a single example file demonstrating the pattern:
 
 Tell the user (in the post-generation summary) that other endpoints can be customized by adding `pluginsEndpointsMarkup/<pluginName>/<pageName>/{style.css,script.js,before-content.html,after-content.html,template.ejs}`.
 
+### Documentation (ital8doc) — README mandatory, EXPLAIN optional
+
+Per the **ital8doc v1-1** standard ([`docs/ITAL8DOC-latest.md`](../../../docs/ITAL8DOC-latest.md)),
+**always** generate the Italian reference `README.it.md` **and** its English `README.md`
+stub. Generate `EXPLAIN.it.md` (+ `EXPLAIN.md` stub) **only** when the theme has
+non-trivial internals worth explaining — never an empty or README-duplicating EXPLAIN.
+
+`README.it.md` (reference — where you write; fill the TODOs from the actual theme):
+
+```markdown
+<!-- ital8doc v1-1 · tipo: README · lang: it · rev: 1 · ref -->
+> 🌐 Italian reference edition (always up to date). English `README.md` is a stub until release.
+# {{themeName}}
+
+{{description}}
+
+## Cosa offre
+
+- TODO: layout, partial, template, feature (es. PLACEHOLDER, responsive).
+
+## Attivazione
+
+TODO: `activeTheme: "{{themeName}}"` (o `adminActiveTheme` se admin) in `ital8Config.json5`, poi riavvio.
+
+## Struttura
+
+TODO: `views/` (partial), `templates/`, `themeResources/`, eventuale `pluginsEndpointsMarkup/`.
+
+## Personalizzazione
+
+TODO: dove mettere mani (CSS/JS in `themeResources/`, blocchi PLACEHOLDER, override endpoint plugin).
+
+## Dipendenze
+
+TODO: `pluginDependency` e npm (self-contained `package.json` oppure `nodeModuleDependency`).
+```
+
+`README.md` (English stub — the GitHub face; never left empty):
+
+```markdown
+<!-- ital8doc v1-1 · tipo: README · lang: en · stub -->
+> 🌐 This document is maintained in Italian → see `README.it.md`. The English edition will be filled in at release.
+# {{themeName}}
+
+> English translation pending. Authoritative version: [`README.it.md`](./README.it.md).
+```
+
+`EXPLAIN.it.md` + `EXPLAIN.md` stub follow the same pattern as the plugin skill (tipo `EXPLAIN`), generated **only** for non-trivial internals.
+
+### Self-contained npm dependencies (`package.json`) — optional add-on
+
+Apply **only** when the user chose the **self-contained** npm model (input #7) — the
+theme pulls npm packages of its own and should carry them theme-local. Two parts:
+
+**1. Create `package.json` in the theme folder** (packages install into
+`themes/{{themeName}}/node_modules` via `npm install` inside the folder, resolved
+theme-local first by Node):
+
+```json
+{
+  "name": "ital8cms-theme-{{themeNameLower}}",
+  "version": "0.1.0",
+  "description": "{{description}}",
+  "private": true,
+  "license": "{{license}}",
+  "author": "{{author}} <{{email}}>",
+  "dependencies": {
+    "{{npmPackage}}": "{{npmRange}}"
+  }
+}
+```
+
+**2. Keep those packages OUT of `nodeModuleDependency`** in `themeConfig.default.json5`
+(the root-model boot gate must not check theme-local deps). Note: `ejs` stays in
+`nodeModuleDependency` because it is a **root** dependency of the CMS, not a theme-local
+one.
+
+For the **legacy** model instead, skip the `package.json` and add the packages to
+`nodeModuleDependency` alongside `ejs`.
+
 ## Generation procedure
 
 1. Confirm the gathered inputs back to the user as a single summary block (variant, name, output path, files to create). Wait for explicit confirmation before writing.
@@ -358,13 +444,16 @@ Tell the user (in the post-generation summary) that other endpoints can be custo
    - `templates/*` (minimal: page only; standard: page only; complete: 1–4 templates per user choice; admin: skip)
    - `themeResources/css/theme.css`, `themeResources/js/theme.js` (standard, complete, admin)
    - `pluginsEndpointsMarkup/adminUsers/login/style.css` (complete only)
-   - `README.md` only if user explicitly asked for one
+   - **Documentation** — `README.it.md` + `README.md` stub (always), plus `EXPLAIN.it.md` + `EXPLAIN.md` stub only if the theme has non-trivial internals
+   - `package.json` only if the user chose the self-contained npm model (input #7)
 4. After writing, print a short summary:
-   - Files created (relative paths)
+   - Files created (relative paths), including the docs (`README.it.md` + stub, and EXPLAIN pair if generated) and `package.json` if self-contained
    - Manual steps the user must take:
      - Activate the theme in `ital8Config.json5` (`activeTheme` for public, `adminActiveTheme` for admin)
      - Restart the server
      - Move folder into `themes/` if scaffolded standalone
+     - If self-contained: run `npm install` inside the theme folder (or root `npm install` / `npm run deps-sync`) so its `node_modules` is populated
+   - Reminder to fill the `README.it.md` TODOs (and EXPLAIN, if generated) — a shipped-but-empty README is out of ital8doc spec
    - For `complete`: note that templates with PLACEHOLDER markers are designed to integrate with the ital8cms editor system
 5. Do not modify `ital8Config.json5` automatically.
 6. Do not run `npm install`, do not start the server.
@@ -375,10 +464,13 @@ If the current directory does not look like an ital8cms project (no `ital8Config
 - Copy the generated folder into the `themes/` directory of their ital8cms installation
 - Set `activeTheme` (or `adminActiveTheme` for admin themes) in `ital8Config.json5`
 - Restart the server
+- If the theme is **self-contained** (has its own `package.json`), run `npm install` inside the theme folder (or root `npm install` / `npm run deps-sync`) so its `node_modules` is populated
 
 ## Things to avoid
 
-- Don't create `README.md`, `CHANGELOG.md`, `screenshot.png`, or `theme-icon.svg` unless the user asks.
+- Do generate the ital8doc docs: `README.it.md` + its `README.md` stub are **mandatory**; add `EXPLAIN.it.md` (+ stub) **only** for non-trivial internals (empty/redundant EXPLAIN is forbidden). Don't create `CHANGELOG.md`, `screenshot.png`, or `theme-icon.svg` unless the user asks.
+- Don't ship an English `README.md`/`EXPLAIN.md` with real content — it's a **stub** (marker + pointer to the `.it.md`); the reference is always the `.it.md`.
+- Don't move `ejs` out of `nodeModuleDependency` (it's a root dependency); only a theme's own extra npm packages go into a self-contained `package.json`, and don't enable npm `workspaces`.
 - Don't add tests (themes can have `themes/<name>/tests/` per project convention, but generating empty test scaffolding is out of scope).
 - Don't add the `<html>`, `<head>`, or `<body>` tags inside a template — they belong to the partials.
 - Don't generate a `templates/` directory for the `admin` variant.
