@@ -1,4 +1,4 @@
-<!-- ital8doc v1-1 · tipo: guide · lang: it · rev: 1 · ref -->
+<!-- ital8doc v1-1 · tipo: guide · lang: it · rev: 2 · ref -->
 > 🌐 Italian reference edition (always up to date). English `self-update.md` is a stub until release.
 # Self-update, backup & restore — ital8cms
 
@@ -111,6 +111,79 @@ Errori **warn-non-fatali** (un dep non risolto → il plugin resta `incomplete`,
 boot resta graceful). È cablato anche come **`postinstall`** di root: `npm install`
 sincronizza da sé le deps plugin-local (`--postinstall` esce sempre 0, non fa mai
 fallire l'install).
+
+### Perché il `node_modules` plugin-local funziona (risoluzione di Node)
+
+Un dubbio ricorrente: se il plugin viene `require`ato *dentro* `index.js`/`pluginSys`,
+il suo `node_modules` — sepolto in una sottocartella stratificata — non viene forse
+ignorato, facendo mancare le dipendenze? **No.** La risoluzione dei moduli di Node
+**non** è relativa a *chi innesca* il require, ma a **dove sta fisicamente il file**
+che esegue `require('lib')`: Node costruisce `module.paths` risalendo l'albero delle
+cartelle a partire dalla directory del file stesso (`__dirname`) e si ferma alla
+**prima** corrispondenza. Quando `plugins/adminMedia/main.js` fa
+`require('@koa/multer')`, l'ordine di ricerca è:
+
+```
+plugins/adminMedia/node_modules   ← per PRIMO (priorità massima)
+plugins/node_modules
+node_modules                       ← root, solo come fallback
+… (risale fino a /node_modules)
+```
+
+Il fatto che il caricamento sia *innescato* da `core/pluginSys.js` (via
+`require(path.join(..., 'plugins', pluginName, 'main.js'))`) è irrilevante: conta solo
+che `main.js` e i suoi sotto-moduli vivano **dentro** la cartella del plugin. Il
+`node_modules` plugin-local ha quindi **priorità** su quello di root, non è affatto
+inutile.
+
+### Spigoli e vincoli del modello per-plugin (impatti da conoscere)
+
+La meccanica base è solida, ma il modello ibrido introduce **7 comportamenti
+spigolosi** che si rompono in silenzio se ignorati. Sono precondizioni/vincoli, non
+difetti — vanno rispettati e (in prospettiva) coperti da test di regressione.
+
+1. **Il `require` DEVE partire da un file interno al plugin.** La risoluzione risale
+   da `__dirname` del file che chiama `require`. Se una dipendenza del plugin venisse
+   `require`ata da un file **core** (es. `core/qualcosa.js` che fa `require('sharp')`
+   per conto del plugin), Node risalirebbe da `core/` e **non** vedrebbe
+   `plugins/x/node_modules`. Regola: **ogni plugin fa i propri require a casa propria**
+   (in `main.js` o nei suoi `lib/*.js`), mai delegandoli al core.
+
+2. **Doppia istanza / problema del singleton.** Se lo stesso modulo esiste sia in root
+   sia nel plugin (magari a versioni diverse), Node carica **due copie distinte** in
+   memoria. Innocuo per librerie "foglia" (`multer`, `sharp`: nessuna identità
+   attraversa il confine), ma è un bug sottile se un plugin impacchetta la propria copia
+   del **framework** (`koa`, `@koa/router`) e passa oggetti con controlli `instanceof`
+   attraverso il confine plugin↔core. Regola: **i plugin non bundlano il framework** —
+   lo usano da root.
+
+3. **Nessun hoisting/dedup con root.** Il `node_modules` plugin-local non è deduplicato
+   con quello di root: due versioni della stessa lib = **doppio peso su disco** +
+   possibile *version-skew*. È il prezzo (voluto) dell'isolamento; va messo in conto
+   nel dimensionamento del deploy.
+
+4. **Moduli nativi (sharp, better-sqlite3).** Il binario nativo è compilato/scaricato
+   **dentro** il `node_modules` del plugin. Dopo un **major di Node** l'ABI cambia e
+   serve ricompilare (`npm run deps-sync -- --clean`). Per questo `sharp` è dichiarato
+   in `optionalDependencies`: se il build fallisce, il boot resta **graceful** (plugin
+   `incomplete`) invece di crashare.
+
+5. **`deps-sync` tocca solo i plugin ATTIVI** (mirroring del boot gate; `dbApi`/`ccxt`
+   disabilitati sono saltati). Conseguenza non ovvia: se **attivi** un plugin
+   self-contained *dopo* aver già installato, resterà `incomplete` finché non rilanci
+   `npm run deps-sync` (o `npm install`). Va comunicato all'utente al momento
+   dell'attivazione.
+
+6. **Landmine `npm workspaces`.** Se in `package.json` di root si aggiungesse
+   `"workspaces": ["plugins/*"]`, npm farebbe **hoisting** di tutto in root e il modello
+   per-plugin **salterebbe del tutto** (le deps finirebbero in root, non più isolate).
+   Regola: **non abilitare workspaces** senza riprogettare consapevolmente il modello.
+
+7. **`postinstall` = esecuzione di script arbitrari.** `deps-sync` come `postinstall`
+   di root lancia `npm install` dentro ogni plugin self-contained, e ogni install
+   esegue i lifecycle script delle **sue** dipendenze. È il normale rischio
+   supply-chain di npm, ma con **più punti d'ingresso** (uno per plugin
+   self-contained). Da considerare nella valutazione di sicurezza delle dipendenze.
 
 ## Precondizioni e limiti (v1)
 
