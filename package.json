@@ -8,8 +8,16 @@
   },
   "scripts": {
     "start-configure": "node scripts/init.js",
-    "start": "nodemon index.js",
+    "start": "node index.js",
+    "dev": "nodemon index.js",
     "cli": "node bin/ital8cms-cli.js",
+    "backup": "node scripts/backup.js",
+    "backup-list": "node scripts/backupList.js",
+    "backup-manager": "node scripts/backupManager.js",
+    "restore": "node scripts/restore.js",
+    "deps-sync": "node scripts/depsSync.js",
+    "update": "node scripts/update.js",
+    "postinstall": "node scripts/depsSync.js --postinstall",
     "test": "node scripts/checkNixShell.js && jest --config=tests/jest.config.js && npx playwright test --config=tests/playwright.config.js",
     "test:watch": "jest --config=tests/jest.config.js --watch",
     "test:coverage": "jest --config=tests/jest.config.js --coverage",
@@ -29,7 +37,6 @@
   "author": "Italo Paesano <italopaesano@protonmail.com> (https://github.com/italopaesano)",
   "license": "ISC",
   "dependencies": {
-    "@koa/multer": "^4.0.0",
     "@koa/router": "^15.7.0",
     "bcryptjs": "^3.0.3",
     "bootstrap": "^5.3.8",
@@ -45,7 +52,6 @@
     "koa-bodyparser": "^4.4.1",
     "koa-classic-server": "^5.1.0",
     "koa-session": "^7.0.2",
-    "multer": "^2.2.0",
     "nodemailer": "^9.0.3",
     "nodemon": "^3.1.14",
     "semver": "^7.8.5"

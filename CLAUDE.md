@@ -1025,10 +1025,17 @@ L'oggetto `passData` è disponibile in tutti i template EJS e contiene:
 ### Avvio
 
 ```bash
-npm install        # dipendenze
-npm start          # avvio con auto-reload (nodemon)
+npm install        # dipendenze (+ postinstall: deps-sync per i plugin self-contained)
+npm start          # avvio in produzione (node index.js)
+npm run dev        # avvio con auto-reload (nodemon) — sviluppo
 ```
 Server su `http://localhost:3000`.
+
+> **Aggiornamento del CMS / backup:** `npm run update` (self-update da release
+> GitHub, strada B/git), `npm run backup` / `restore` / `backup-list` /
+> `backup-manager`, `npm run deps-sync`. Modello **ibrido per-plugin** delle
+> dipendenze npm (plugin con `package.json` proprio → `node_modules` locale;
+> pilota `adminMedia`). → [`docs/self-update.it.md`](./docs/self-update.it.md).
 
 ### Creare plugin / temi (usa le skill di scaffolding)
 
@@ -1477,14 +1484,22 @@ Spostato in [`docs/roadmap.it.md`](./docs/roadmap.it.md).
 
 ```bash
 # Development
-npm install                    # Install dependencies
-npm start                      # Start with auto-reload
-node index.js                  # Start without auto-reload
+npm install                    # Install dependencies (+ postinstall: deps-sync)
+npm run dev                    # Start with auto-reload (nodemon)
+npm start                      # Start (node index.js)
 
 # Production
 npm install --production       # Install production dependencies only
-node index.js                  # Run application
+npm start                      # Run application (node index.js)
 pm2 start index.js             # Run with PM2 process manager
+
+# Update / backup (terminal-driven; see docs/self-update.it.md)
+npm run update                 # Self-update to the latest GitHub release (git)
+npm run backup                 # Snapshot the install into backups/
+npm run backup-list            # List snapshots
+npm run backup-manager         # Manage snapshots (delete / prune)
+npm run restore                # Restore from a snapshot (--latest | --name <n>)
+npm run deps-sync              # Reconcile plugin/theme npm deps
 
 # Database
 # Access via better-sqlite3 in plugin code

@@ -1,0 +1,15 @@
+{
+  "name": "ital8cms-plugin-adminmedia",
+  "version": "1.1.0",
+  "description": "Admin twin of the media service: upload/browse/organize media plus responsive image optimization (sharp).",
+  "private": true,
+  "license": "ISC",
+  "author": "Italo Paesano <italopaesano@protonmail.com>",
+  "dependencies": {
+    "@koa/multer": "^4.0.0",
+    "multer": "^2.2.0"
+  },
+  "optionalDependencies": {
+    "sharp": "^0.35.3"
+  }
+}
