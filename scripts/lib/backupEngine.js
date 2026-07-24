@@ -107,7 +107,15 @@ function createBackup(projectRoot, opts = {}) {
   const name = BACKUP_PREFIX + italianTimestamp() + (label ? `_${label}` : '');
   const dir = path.join(backupRoot(projectRoot), name);
   const treeDir = path.join(dir, TREE_SUBDIR);
-  fs.mkdirSync(treeDir, { recursive: true });
+  // 0700: uno snapshot contiene segreti (certs/, chiavi di sessione, .env, hash
+  // password). Limita l'accesso a livello di cartella (i file conservano i loro
+  // permessi originali, copiati da fs.cpSync). Best-effort: su FS che ignorano i
+  // mode Unix (es. alcuni montaggi) la chmod è innocua.
+  fs.mkdirSync(treeDir, { recursive: true, mode: 0o700 });
+  try {
+    fs.chmodSync(backupRoot(projectRoot), 0o700);
+    fs.chmodSync(dir, 0o700);
+  } catch (_) { /* best-effort */ }
 
   const deepFilter = makeDeepFilter(withNodeModules);
   const entries = fs.readdirSync(projectRoot, { withFileTypes: true });

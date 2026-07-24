@@ -1,4 +1,10 @@
-const { versionFromTag, selectLatest } = require('../../../scripts/lib/updateEngine');
+const { versionFromTag, selectLatest, checkout } = require('../../../scripts/lib/updateEngine');
+
+describe('checkout ref guard (option-injection)', () => {
+  test.each(['-x', '--upload-pack=evil', '', null])('rejects ambiguous ref %j before touching git', (ref) => {
+    expect(() => checkout('/tmp', ref)).toThrow(/ref non valido/);
+  });
+});
 
 describe('versionFromTag', () => {
   test.each([

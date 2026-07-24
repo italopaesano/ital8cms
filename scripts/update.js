@@ -130,7 +130,14 @@ async function main() {
   }
 
   // ── EXECUTE ──────────────────────────────────────────────────────────────
-  fs.writeFileSync(LOCK_FILE, `${process.pid} ${new Date().toISOString()}\n`, 'utf8');
+  // Lock atomico ('wx' = crea-esclusivo): niente TOCTOU tra il check di preflight
+  // e la creazione, così due update concorrenti non partono entrambi.
+  try {
+    fs.writeFileSync(LOCK_FILE, `${process.pid} ${new Date().toISOString()}\n`, { flag: 'wx' });
+  } catch (err) {
+    if (err.code === 'EEXIST') fail(`update già in corso? lock presente: ${path.relative(projectRoot, LOCK_FILE)}\n  Se è un residuo di un run interrotto, rimuovilo e riprova.`);
+    throw err;
+  }
   let movedNm = false;
   let nmRollback = null;
   const nmDir = path.join(projectRoot, 'node_modules');

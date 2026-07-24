@@ -29,9 +29,20 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const semver = require('semver');
 const loadJson5 = require('../../core/loadJson5');
 const setJson5Key = require('../../core/setJson5Key');
 const { checkNpmDeps } = require('../../core/pluginStateResolver');
+
+// Nome pacchetto npm valido (con eventuale scope). Serve a NON passare a
+// `npm install` stringhe controllate da un plugin che potrebbero essere
+// interpretate come opzioni (arg-injection): un plugin malevolo controlla il
+// proprio nodeModuleDependency, quindi validiamo nome + range prima dell'install.
+const NPM_NAME_RE = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
+function isValidDepSpec(name, range) {
+  return typeof name === 'string' && NPM_NAME_RE.test(name)
+    && typeof range === 'string' && semver.validRange(range) !== null;
+}
 
 const CONTAINERS = [
   { dir: 'plugins', descriptorDefault: 'pluginConfig.default.json5', descriptorLive: 'pluginConfig.json5' },
@@ -151,7 +162,15 @@ async function reconcile(projectRoot, opts = {}) {
         const check = checkNpmDeps(defNMD, resolveRoot);
         if (check.ok) continue; // nulla da fare
 
-        const specs = [...check.missing, ...check.incompatible].map((d) => `${d.name}@${d.required}`);
+        const specs = [];
+        for (const d of [...check.missing, ...check.incompatible]) {
+          if (!isValidDepSpec(d.name, d.required)) {
+            report.warnings.push(`${c.dir}/${name}: dipendenza dichiarata non valida, ignorata (${JSON.stringify(d.name)}@${JSON.stringify(d.required)})`);
+            continue;
+          }
+          specs.push(`${d.name}@${d.required}`);
+        }
+        if (specs.length === 0) continue;
         onLog(`⇩ root --no-save (${c.dir}/${name}): ${specs.join(' ')}`);
         if (dryRun) { report.legacy.push({ container: c.dir, name, wouldInstall: specs, dryRun: true }); continue; }
         try {
