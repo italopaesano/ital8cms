@@ -44,12 +44,16 @@ function remoteUrl(projectRoot) {
   catch (_) { return null; }
 }
 
-/** owner/repo dedotti dall'URL del remote (https o ssh). */
-function ownerRepo(projectRoot) {
-  const url = remoteUrl(projectRoot);
+/** owner/repo da un URL git (https/ssh/proxy). Puro/testabile. null se non riconosciuto. */
+function parseOwnerRepo(url) {
   if (!url) return null;
   const m = url.match(/[/:]([^/:]+)\/([^/]+?)(?:\.git)?$/);
   return m ? { owner: m[1], repo: m[2] } : null;
+}
+
+/** owner/repo dedotti dall'URL del remote origin (https o ssh). */
+function ownerRepo(projectRoot) {
+  return parseOwnerRepo(remoteUrl(projectRoot));
 }
 
 /** Versione corrente da package.json. */
@@ -154,6 +158,7 @@ module.exports = {
   isGitRepo,
   gitAvailable,
   remoteUrl,
+  parseOwnerRepo,
   ownerRepo,
   currentVersion,
   versionFromTag,

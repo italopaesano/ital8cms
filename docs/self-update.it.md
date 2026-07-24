@@ -166,6 +166,13 @@ Riusi: `core/pluginStateResolver.checkNpmDeps` (stati npm), `core/setJson5Key`
 (realign preservando i commenti), il control plane socket del `cliBridge`
 (`status.supervisor`), `gracefulShutdown` di `index.js` (SIGTERM).
 
-Test: `tests/unit/updateSystem/` (cliArgs, updateEngine, backupEngine) e
-`tests/integration/updateSystem/gitApply.test.js` (checkout reale che preserva i
-file untracked, su repo usa-e-getta).
+**Test** (suite dedicata, `tests/unit/updateSystem/` + `tests/integration/updateSystem/`):
+`cliArgs`, `updateEngine` (versionFromTag/selectLatest/parseOwnerRepo/guard checkout),
+`backupEngine` (roundtrip, esclusioni, perms 0700, symlink, humanSize),
+`serverControl` (socket finto, stop self-managed con SIGTERM reale, gate supervisor,
+pid non valido), `pluginDepsReconciler` (rami, gate active, realign, validazione
+spec); integrazione `gitApply` (checkout reale che preserva gli untracked) e
+`scriptsCli` (i veri entrypoint via child-process: backup/list/restore roundtrip,
+deps-sync, guardie di update, path-traversal). Gli entrypoint accettano l'env
+**`ITAL8CMS_PROJECT_ROOT`** (default = root del repo) per operare su una root
+usa-e-getta: usato dai test per non toccare l'installazione reale.

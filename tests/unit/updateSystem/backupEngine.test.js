@@ -76,4 +76,53 @@ describe('backupEngine', () => {
   test('findBackup throws on unknown name', () => {
     expect(() => backupEngine.findBackup(root, 'nope')).toThrow();
   });
+
+  test('excludes *.sock and .tmp at top level and nested', () => {
+    fs.writeFileSync(path.join(root, 'ital8cms.sock'), '');
+    fs.mkdirSync(path.join(root, '.tmp'));
+    fs.writeFileSync(path.join(root, 'sub', 'nested.sock'), '');
+    const b = backupEngine.createBackup(root, { includeGit: false });
+    const tree = path.join(b.dir, 'tree');
+    expect(fs.existsSync(path.join(tree, 'ital8cms.sock'))).toBe(false);
+    expect(fs.existsSync(path.join(tree, '.tmp'))).toBe(false);
+    expect(fs.existsSync(path.join(tree, 'sub', 'nested.sock'))).toBe(false);
+    expect(fs.existsSync(path.join(tree, 'sub', 'inner.txt'))).toBe(true);
+  });
+
+  test('.git excluded by default flag but included when includeGit:true', () => {
+    fs.mkdirSync(path.join(root, '.git'));
+    fs.writeFileSync(path.join(root, '.git', 'config'), '[core]');
+    expect(fs.existsSync(path.join(backupEngine.createBackup(root, { includeGit: false }).dir, 'tree', '.git'))).toBe(false);
+    expect(fs.existsSync(path.join(backupEngine.createBackup(root, { includeGit: true }).dir, 'tree', '.git', 'config'))).toBe(true);
+  });
+
+  test('backup directories are created with 0700 perms', () => {
+    const b = backupEngine.createBackup(root, { includeGit: false });
+    expect(fs.statSync(b.dir).mode & 0o777).toBe(0o700);
+    expect(fs.statSync(path.join(b.dir, 'tree')).mode & 0o777).toBe(0o700);
+  });
+
+  test('manifest records reason, cmsVersion and nodeVersion', () => {
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ version: '3.2.1' }));
+    const b = backupEngine.createBackup(root, { includeGit: false, reason: 'pre-update' });
+    expect(b.manifest).toMatchObject({ reason: 'pre-update', cmsVersion: '3.2.1', nodeVersion: process.version });
+  });
+
+  test('symlinks are copied as links, not dereferenced', () => {
+    fs.symlinkSync(path.join(root, 'file.txt'), path.join(root, 'link.txt'));
+    const b = backupEngine.createBackup(root, { includeGit: false });
+    expect(fs.lstatSync(path.join(b.dir, 'tree', 'link.txt')).isSymbolicLink()).toBe(true);
+  });
+});
+
+describe('humanSize', () => {
+  test.each([
+    [0, '0 B'],
+    [512, '512 B'],
+    [1024, '1.0 KB'],
+    [1536, '1.5 KB'],
+    [1048576, '1.0 MB'],
+  ])('%d → %s', (bytes, expected) => {
+    expect(backupEngine.humanSize(bytes)).toBe(expected);
+  });
 });
