@@ -195,6 +195,13 @@ difetti — vanno rispettati e (in prospettiva) coperti da test di regressione.
    esegue i lifecycle script delle **sue** dipendenze. È il normale rischio
    supply-chain di npm, ma con **più punti d'ingresso** (uno per plugin
    self-contained). Da considerare nella valutazione di sicurezza delle dipendenze.
+   **Nota (trigger di boot):** dalla v2.60.0 anche la **transizione d'installazione**
+   in `pluginSys` lancia `npm install` per un plugin self-contained (spigolo #5),
+   quindi i lifecycle script delle sue dipendenze possono girare **al riavvio** del
+   server — non solo a `npm install`/`deps-sync`. In pratica il livello di fiducia è
+   lo stesso di attivare un plugin (di cui già esegui `main.js`), ma il trigger
+   "basta riavviare" è meno evidente: rilasciare una cartella plugin in `plugins/`
+   con `active:1` e riavviare **è** un'azione con potenziale esecuzione di codice.
 
 ## Precondizioni e limiti (v1)
 
