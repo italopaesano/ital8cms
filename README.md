@@ -49,6 +49,7 @@ Server runs on: `http://localhost:3000`
 ### Project Documentation
 
 - **[Panoramica documentazione](./docs/archive/documentation-overview.it.md)** - panoramica storica (archiviata; vedi CLAUDE.md e `docs/`)
+- **[CLI control plane](./docs/cli-control-plane.it.md)** - pilotare un'istanza in esecuzione da terminale/SSH con `ital8cms-cli` (`npm run cli -- …`): attivare/disattivare l'area admin, manutenzione del sito pubblico, reset config
 
 ## Technology Stack
 
