@@ -8,6 +8,9 @@ Terminal tool to drive a **running** ital8cms instance over a local UNIX socket
 (SSH-friendly, no network port): `npm run cli -- status`,
 `npm run cli -- admin start|stop` (enable/disable the admin area, triggers a
 restart), `npm run cli -- public start|stop` (public maintenance gate, no
-restart), `npm run cli -- reset <target>`. The `--` after `npm run cli` is
-required to forward arguments to the tool. Config lives in `ital8Config.json5`
-(`cli` and `maintenance` sections).
+restart), `npm run cli -- reset <target>`. With `npm run`, positional arguments
+are forwarded as-is, but **flags** (`--json`, `--theme`, …) are swallowed by npm
+**silently** unless you insert `--` — always use it. Note that `public stop` also
+returns 503 for `/api/*` and `/pluginPages/*`, so the login page and login
+endpoint are unreachable while maintenance is on. Config lives in
+`ital8Config.json5` (`cli` and `maintenance` sections).
