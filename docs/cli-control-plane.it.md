@@ -1,4 +1,4 @@
-<!-- ital8doc v1-1 · tipo: guide · lang: it · rev: 2 · ref -->
+<!-- ital8doc v1-1 · tipo: guide · lang: it · rev: 3 · ref -->
 > 🌐 Edizione italiana di riferimento (sempre aggiornata). L'inglese `cli-control-plane.md` è uno stub fino alla release.
 # Control plane CLI (`ital8cms-cli`) — ital8cms
 
@@ -187,32 +187,58 @@ Comportamento verificato con `public stopped`:
 | `/` | `503` (manutenzione) |
 | `/admin/` | passa il gate (poi `302` al login se non autenticato) |
 | `/admin-theme-resources/css/theme.css` | `200` |
-| `/api/adminUsers/logged` | `503` — **le API sono bloccate** |
-| `/pluginPages/adminUsers/login.ejs` | `503` — **la pagina di login è bloccata** |
-
-> 🚨 **Attenzione: durante `public stop` non puoi effettuare il login.** L'area
-> admin è esente dal gate, ma la **pagina di login** vive sotto `/pluginPages/…`
-> e l'**endpoint di autenticazione** sotto `/api/adminUsers/login`: entrambi sono
-> percorsi pubblici e rispondono `503`. Conseguenza pratica: **una sessione già
-> autenticata continua a lavorare** nel pannello, mentre chi è **sloggato resta
-> fuori** finché non riporti il sito online.
->
-> Regole operative: **autenticati prima** di lanciare `public stop`; se ti trovi
-> chiuso fuori, la via d'uscita è dal terminale — `npm run cli -- public start`
-> (nessun riavvio, effetto immediato).
+| `/api/adminUsers/logged` | `503` — le altre API restano bloccate |
+| `/api/adminUsers/login` | **passa** (via `exemptPaths`, vedi sotto) |
+| `/pluginPages/adminUsers/login` | **passa** (via `exemptPaths`, vedi sotto) |
 
 Lo stato public è **persistito** in un file di stato interno del cliBridge
 (`core/cliBridge/state.json5`, scritto dal sistema — non modificarlo a mano) e
 sopravvive ai riavvii.
 
-Config in `ital8Config.json5`:
+### Perché il login è esente: `maintenance.exemptPaths`
+
+Poiché il gate è montato prima del router, senza correttivi bloccherebbe anche la
+**pagina di login** (`/pluginPages/adminUsers/login`) e l'**endpoint di
+autenticazione** (`/api/adminUsers/login`), che sono percorsi pubblici. Effetto
+collaterale: un amministratore **sloggato** non potrebbe più entrare nel pannello
+durante la manutenzione, pur essendo `/admin/*` esente.
+
+Per questo esiste `maintenance.exemptPaths`: la lista dei percorsi **pubblici**
+che restano raggiungibili a sito fermo.
 
 ```json5
 "maintenance": {
   "pagePath": "./core/maintenancePage.ejs",  // pagina servita durante lo stop
   "retryAfterSeconds": 600,                   // header Retry-After (secondi)
+  "exemptPaths": [
+    "/pluginPages/adminUsers/login",          // pagina di login (copre anche login.ejs)
+    "/api/adminUsers/login",                  // endpoint di autenticazione
+  ],
 }
 ```
+
+Semantica:
+
+- confronto per **prefisso** (come per i prefissi admin): `/api/adminUsers/login`
+  copre anche le sue sotto-risorse, e `/pluginPages/adminUsers/login` copre sia
+  `login` sia `login.ejs` (utile se attivi `hideExtension`);
+- i percorsi si scrivono **senza `globalPrefix`**: lo antepone il gate;
+- sono accettate solo stringhe che iniziano con `/`; le altre voci vengono
+  **ignorate** (una stringa vuota esenterebbe l'intero sito);
+- **chiave assente** → si usano i **default incorporati** (gli stessi due percorsi
+  di login). Serve alle installazioni **aggiornate**: il merge additivo del boot
+  propaga solo le chiavi *top-level* nuove, non quelle annidate come questa;
+- **lista vuota `[]`** → **massima chiusura**: nessun endpoint pubblico
+  raggiungibile, login incluso.
+
+> 🔒 **Se scegli `[]`**, durante la manutenzione chi è sloggato **non può entrare**:
+> `/admin/*` passa il gate ma rimanda a una pagina di login che risponde `503`. In
+> quel caso autenticati **prima** di fermare il pubblico, o rientra dal terminale
+> con `npm run cli -- public start` (immediato, nessun riavvio).
+
+> ℹ️ L'esenzione riguarda **solo** il gate di manutenzione: gli altri livelli di
+> sicurezza restano attivi. Un `POST` al login senza token CSRF continua a
+> ricevere `403` anche a sito fermo.
 
 ## `reset <target>` (config di plugin/temi)
 
@@ -342,7 +368,7 @@ Scenari reali (ricalcano gli errori più comuni al primo utilizzo):
 | `error: unknown command 'stop'` | `stop` non è un comando top-level | È un **sottocomando**: `admin stop` o `public stop` |
 | Un flag (`--json`, `--theme`, `--timeout`) sembra non avere effetto, **senza errori** | Manca il `--`: npm ha intercettato il flag e lo ha scartato in silenzio | Anteponi `--`: `npm run cli -- <cmd> --json` |
 | Il comando ha agito sul plugin invece che sul tema | `npm run cli reset X --theme` → npm ha mangiato `--theme` | `npm run cli -- reset X --theme` |
-| Durante la manutenzione non riesci a fare login (`503`) | `public stop` blocca `/api/*` e `/pluginPages/*`, dove vivono login e pagina di login | `npm run cli -- public start`; in futuro autenticati **prima** di fermare il pubblico |
+| Durante la manutenzione il login risponde `503` | `maintenance.exemptPaths` è impostata a `[]` (massima chiusura) o contiene percorsi errati | Riporta i percorsi di login in `exemptPaths`, oppure rientra da terminale con `npm run cli -- public start` |
 | `ital8cms non sembra in esecuzione (socket non trovato)` | Server spento o `socketPath` diverso | Avvia il server, o passa `--socket`/`--config`; per il solo `reset` usa la modalità offline |
 | `socket presente ma il server non risponde` | Possibile crash dell'istanza (socket orfano) | Controlla i log del server; riavvialo |
 | `permessi insufficienti sul socket` | `socketMode`/owner non consentono l'accesso al tuo utente | Esegui come l'utente del server, o allinea gruppo/permessi |

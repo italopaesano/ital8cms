@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 3,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   "globalPrefix": "",
   "apiPrefix": "api",
   "adminPrefix": "admin",
@@ -163,16 +163,42 @@
   // MAINTENANCE PAGE (public stop)
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // Pagina servita quando la sezione public è stoppata via CLI
-  // (`ital8cms-cli public stop`). Risponde 503 + Retry-After + X-Robots-Tag:noindex.
-  // Lascia passare /admin/* e /admin-theme-resources/*.
+  // (`npm run cli -- public stop`). Risponde 503 + Retry-After + X-Robots-Tag:noindex.
+  // Lascia SEMPRE passare /admin/* e /admin-theme-resources/*.
   //
-  //   • pagePath           string  — percorso EJS della pagina (default: ./core/maintenancePage.ejs)
-  //   • retryAfterSeconds  number  — header Retry-After in secondi (default: 600)
+  //   • pagePath           string    — percorso EJS della pagina (default: ./core/maintenancePage.ejs)
+  //   • retryAfterSeconds  number    — header Retry-After in secondi (default: 600)
+  //   • exemptPaths        string[]  — percorsi PUBBLICI che restano raggiungibili
+  //                                    durante la manutenzione (vedi sotto)
+  //
+  // exemptPaths — perché serve:
+  //   Il gate è montato PRIMA del router, quindi intercetta anche /api/* e
+  //   /pluginPages/*. Poiché la pagina di login vive sotto /pluginPages/ e
+  //   l'endpoint di autenticazione sotto /api/, senza queste esenzioni un admin
+  //   SLOGGATO non potrebbe più entrare nel pannello durante la manutenzione
+  //   (l'unica via d'uscita sarebbe il terminale: `npm run cli -- public start`).
+  //
+  //   Semantica: confronto per PREFISSO (come per i prefissi admin), da scrivere
+  //   SENZA globalPrefix (viene anteposto dal gate). Sono accettate solo stringhe
+  //   che iniziano con '/': le altre voci vengono ignorate (una stringa vuota
+  //   esenterebbe l'intero sito).
+  //
+  //   Assente vs vuota:
+  //     • chiave ASSENTE  → si usano i default incorporati nel codice (gli stessi
+  //                         due percorsi di login qui sotto). Serve alle installazioni
+  //                         aggiornate: il merge additivo del boot propaga solo le
+  //                         chiavi top-level nuove, non quelle annidate.
+  //     • lista VUOTA []  → massima chiusura: nessun endpoint pubblico raggiungibile,
+  //                         login incluso (l'unica via d'uscita è il terminale).
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   "maintenance": {
     "pagePath": "./core/maintenancePage.ejs",
     "retryAfterSeconds": 600,
+    "exemptPaths": [
+      "/pluginPages/adminUsers/login",  // pagina di login (copre anche login.ejs)
+      "/api/adminUsers/login",          // endpoint di autenticazione
+    ],
   },
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

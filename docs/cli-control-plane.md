@@ -11,6 +11,8 @@ restart), `npm run cli -- public start|stop` (public maintenance gate, no
 restart), `npm run cli -- reset <target>`. With `npm run`, positional arguments
 are forwarded as-is, but **flags** (`--json`, `--theme`, …) are swallowed by npm
 **silently** unless you insert `--` — always use it. Note that `public stop` also
-returns 503 for `/api/*` and `/pluginPages/*`, so the login page and login
-endpoint are unreachable while maintenance is on. Config lives in
-`ital8Config.json5` (`cli` and `maintenance` sections).
+returns 503 for `/api/*` and `/pluginPages/*` (the gate sits before the router);
+the login page and login endpoint stay reachable through
+`maintenance.exemptPaths`, which defaults to exempting them — set it to `[]` for
+maximum lockdown. Config lives in `ital8Config.json5` (`cli` and `maintenance`
+sections).
