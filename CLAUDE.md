@@ -250,7 +250,7 @@ module.exports = {
 - `pluginConfig.json5`: `schemaVersion` (intero, versione della *struttura* del file), `active` (0/1), `isInstalled`, `weight` (priorità, minore = caricato prima), `dependency` (semver), `nodeModuleDependency`, `custom` (impostazioni specifiche).
 - `pluginDescription.json5`: `name`, `version`, `description`, `author`, `email`, `license`.
 
-**Sidecar `*.default.json5` (ciclo di vita dei config):** ogni file di configurazione modificabile ha un sidecar **`x.default.json5`** committato (fonte di verità) accanto al **`x.json5`** vivo. Al boot i vivi mancanti sono **materializzati** dai default (`materializeMissingConfigs`); il **reset** (`ital8cms-cli reset <plugin>`, offline o `--online`) li rimuove per farli rigenerare. Nei `*.default.json5` dei descrittori `schemaVersion` è la **prima chiave** e `isInstalled` è **assente** (è stato runtime, scritto al boot). **Tutti i vivi sono git-ignored** (contenuto, dati utente, descrittori `pluginConfig`/`themeConfig` e core `ital8Config`/`adminConfig`/`koaSession`) — rigenerabili dai `.default` (la migrazione repo è completa, fasi 0–5). Se un `.default` evolve la struttura (bump di `schemaVersion`), al boot `reconcileSchemaVersions` fa il **merge additivo** sui vivi (solo chiavi nuove) + box `[SCHEMA]`. → [`docs/decisions/config-lifecycle.it.md`](./docs/decisions/config-lifecycle.it.md).
+**Sidecar `*.default.json5` (ciclo di vita dei config):** ogni file di configurazione modificabile ha un sidecar **`x.default.json5`** committato (fonte di verità) accanto al **`x.json5`** vivo. Al boot i vivi mancanti sono **materializzati** dai default (`materializeMissingConfigs`); il **reset** (`npm run cli -- reset <plugin>`, offline o `--online`) li rimuove per farli rigenerare. Nei `*.default.json5` dei descrittori `schemaVersion` è la **prima chiave** e `isInstalled` è **assente** (è stato runtime, scritto al boot). **Tutti i vivi sono git-ignored** (contenuto, dati utente, descrittori `pluginConfig`/`themeConfig` e core `ital8Config`/`adminConfig`/`koaSession`) — rigenerabili dai `.default` (la migrazione repo è completa, fasi 0–5). Se un `.default` evolve la struttura (bump di `schemaVersion`), al boot `reconcileSchemaVersions` fa il **merge additivo** sui vivi (solo chiavi nuove) + box `[SCHEMA]`. → [`docs/decisions/config-lifecycle.it.md`](./docs/decisions/config-lifecycle.it.md).
 
 ### Ordine di caricamento
 
@@ -1041,9 +1041,21 @@ Server su `http://localhost:3000`.
 > socket UNIX locale (tipicamente in SSH). `npm run cli -- status` /
 > `admin start|stop` (attiva/disattiva l'area admin, con riavvio) /
 > `public start|stop` (manutenzione del sito pubblico, senza riavvio) /
-> `reset <target>`. Il `--` con `npm run` è **obbligatorio** per inoltrare gli
-> argomenti. Config: `ital8Config.json5 → cli` e `maintenance`. Sorgenti:
-> `bin/ital8cms-cli.js` + `core/cliBridge/`. → [`docs/cli-control-plane.it.md`](./docs/cli-control-plane.it.md).
+> `reset <target>` (offline o `--online`). Config: `ital8Config.json5 → cli` e
+> `maintenance`. Sorgenti: `bin/ital8cms-cli.js` + `core/cliBridge/`.
+> → [`docs/cli-control-plane.it.md`](./docs/cli-control-plane.it.md).
+>
+> Tre punti da ricordare (verificati sul campo, vedi la guida):
+> 1. **Il `--` con `npm run`:** i posizionali passano anche senza, ma i **flag**
+>    (`--json`, `--theme`, …) sono intercettati da npm e **scartati in silenzio**
+>    (`npm run cli reset X --theme` agisce su `plugins/X`, non su `themes/X`).
+>    Usa **sempre** `--`. Il binario globale `ital8cms-cli` esiste solo dopo
+>    `npm link` / `npm install -g .`.
+> 2. **`admin`/`public` sono gruppi di sottocomandi:** `admin stop`, non `stop`.
+> 3. **`public stop` è montato prima del router** → 503 anche su `/api/*` e
+>    `/pluginPages/*`; restano esenti i due prefissi admin più i percorsi in
+>    `maintenance.exemptPaths` (default: pagina di login + endpoint di
+>    autenticazione, così un admin sloggato può rientrare; `[]` = massima chiusura).
 
 ### Creare plugin / temi (usa le skill di scaffolding)
 
@@ -1500,6 +1512,15 @@ npm start                      # Start (node index.js)
 npm install --production       # Install production dependencies only
 npm start                      # Run application (node index.js)
 pm2 start index.js             # Run with PM2 process manager
+
+# CLI control plane — drives a RUNNING instance (see docs/cli-control-plane.it.md)
+# NOTE: always keep the `--`; without it npm silently drops flags (--json, --theme, …)
+npm run cli -- status          # pid, uptime, ports, admin state, public state
+npm run cli -- admin start     # enable the admin area  (rewrites enableAdmin + restarts)
+npm run cli -- admin stop      # disable the admin area (rewrites enableAdmin + restarts)
+npm run cli -- public stop     # public site in maintenance: 503 (no restart)
+npm run cli -- public start    # public site back online  (no restart)
+npm run cli -- reset <target>  # plugin/theme configs back to defaults (add --theme for themes)
 
 # Update / backup (terminal-driven; see docs/self-update.it.md)
 npm run update                 # Self-update to the latest GitHub release (git)

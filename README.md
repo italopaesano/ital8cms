@@ -149,7 +149,10 @@ ital8cms/
 ## Development
 
 ```bash
-# Start with auto-reload
+# Start with auto-reload (development)
+npm run dev
+
+# Start without auto-reload (production)
 npm start
 
 # Run tests
@@ -160,6 +163,24 @@ npm test
 # 2. npm install better-sqlite3
 # 3. Restart server
 ```
+
+### Operating a running instance (CLI control plane)
+
+Drive a **running** instance from the terminal over a local UNIX socket — the
+usual way to do it over SSH. Full guide:
+[docs/cli-control-plane.it.md](./docs/cli-control-plane.it.md).
+
+```bash
+npm run cli -- status          # pid, uptime, ports, admin state, public state
+npm run cli -- admin stop      # disable the admin area (restarts the process)
+npm run cli -- admin start     # enable it again
+npm run cli -- public stop     # public site in maintenance (503, no restart)
+npm run cli -- public start    # public site back online
+```
+
+Keep the `--`: with `npm run`, positional arguments are forwarded but **flags**
+(`--json`, `--theme`, …) are swallowed by npm **without any error**. The global
+`ital8cms-cli` binary only exists after `npm link` or `npm install -g .`.
 
 ## License
 
