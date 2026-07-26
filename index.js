@@ -77,7 +77,10 @@ const httpsManager = require('./core/httpsManager');
 // Log discreto se la sezione admin è stata disabilitata via CLI (o a mano).
 if (!ital8Conf.enableAdmin) {
   console.log('[cliBridge] sezione admin disattivata (enableAdmin=false)');
-  console.log('[cliBridge] per riattivare: ital8cms-cli admin start');
+  // Si suggerisce la forma `npm run cli --` perché funziona sempre dalla root del
+  // progetto; il binario `ital8cms-cli` esiste solo dopo un install/link globale.
+  console.log('[cliBridge] per riattivare: npm run cli -- admin start');
+  console.log('[cliBridge]   (oppure: ital8cms-cli admin start, se installato globalmente)');
 }
 
 const priorityMiddlewares = require('./core/priorityMiddlewares/priorityMiddlewares.js')(app, ital8Conf, { projectRoot: __dirname });

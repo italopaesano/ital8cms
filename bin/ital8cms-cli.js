@@ -158,7 +158,11 @@ function handleResponse(command, payload, socketPath, exitCode) {
       process.stdout.write(`✓ server ripartito (pid: ${statusPayload.data.pid})\n`);
       process.exit(0);
     } else {
-      process.stderr.write('⚠ server non ripartito entro 15s, controlla manualmente con: ital8cms-cli status\n');
+      // Il suggerimento rispecchia come il CLI è stato invocato: via `npm run cli`
+      // (npm_lifecycle_event valorizzato) il binario globale potrebbe non esistere.
+      process.stderr.write(
+        `⚠ server non ripartito entro 15s, controlla manualmente con: ${process.env.npm_lifecycle_event ? 'npm run cli -- status' : 'ital8cms-cli status'}\n`
+      );
       process.exit(1);
     }
   }).catch((err) => {
