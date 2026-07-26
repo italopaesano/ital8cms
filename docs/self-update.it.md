@@ -1,4 +1,4 @@
-<!-- ital8doc v1-1 · tipo: guide · lang: it · rev: 2 · ref -->
+<!-- ital8doc v1-1 · tipo: guide · lang: it · rev: 3 · ref -->
 > 🌐 Italian reference edition (always up to date). English `self-update.md` is a stub until release.
 # Self-update, backup & restore — ital8cms
 
@@ -210,6 +210,12 @@ difetti — vanno rispettati e (in prospettiva) coperti da test di regressione.
   (nodemon). Se rimetti nodemon a mano, evita di aggiornare mentre è in watch.
 - `restore` è **overlay** (non rimuove i file creati dopo lo snapshot).
 - `.update.lock` in root impedisce update concorrenti.
+
+> **Strumento gemello — control plane CLI:** questi script agiscono **dall'esterno**
+> del processo (possono fermarlo); per pilotare l'istanza **in esecuzione** (stato,
+> area admin, finestra di manutenzione, reset a caldo) si usa `npm run cli -- …`
+> → [`cli-control-plane.it.md`](./cli-control-plane.it.md). Utile prima di un
+> update: `npm run cli -- public stop` mette il sito in manutenzione senza riavvio.
 
 ## Sicurezza
 

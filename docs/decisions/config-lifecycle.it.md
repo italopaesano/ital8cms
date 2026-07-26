@@ -146,7 +146,7 @@ Aggiornato al 2026-06-27 (Fase 5 completata) · branch `claude/dazzling-darwin-g
 
 **Fase 1 — materializzazione + reset**
 - Materializzazione a 3 livelli: `core/materializeFromDefault.js` (coppia), `core/materializeDirDefaults.js` (una cartella), `core/materializeMissingConfigs.js` (un contenitore), agganciata al boot in `index.js` **prima** di `pluginSys.initialize()`.
-- Reset: `core/resetConfigsToDefault.js` + comando `ital8cms-cli reset <target>` **offline** (filesystem, a server spento) e **`--online`** (via socket, con restart).
+- Reset: `core/resetConfigsToDefault.js` + comando `ital8cms-cli reset <target>` (in pratica `npm run cli -- reset <target>`, vedi [`../cli-control-plane.it.md`](../cli-control-plane.it.md)) **offline** (filesystem, a server spento) e **`--online`** (via socket, con restart). ⚠️ Col wrapper npm i **flag** vanno dopo `--`: senza, `npm run cli reset X --theme` perde `--theme` e agisce su `plugins/X`.
 - Test unit per ogni modulo + verifica di boot e di "clone fresco" (cancellazione dei vivi → rigenerazione dai `.default`).
 
 **Fase 2 — stati + boot graceful**

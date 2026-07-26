@@ -139,12 +139,20 @@
   //   • status               (reale)
   //   • admin start|stop     (hard: riscrive enableAdmin nel config + riavvia il processo)
   //   • public start|stop    (soft: applica un middleware "torniamo subito" senza riavvio)
+  //   • reset <target>       (config di un plugin/tema ai default; offline o --online)
   //
-  // Utilizzo:
-  //   ital8cms-cli status               # human-readable
-  //   ital8cms-cli --json status        # JSON grezzo
-  //   ital8cms-cli admin stop           # restart del processo, sito admin spento al reboot
-  //   ital8cms-cli public stop          # immediatamente: 503 + pagina di manutenzione
+  // Utilizzo (forma che funziona sempre dalla root del progetto):
+  //   npm run cli -- status                # human-readable
+  //   npm run cli -- status --json         # JSON grezzo
+  //   npm run cli -- admin stop            # restart del processo, area admin spenta al reboot
+  //   npm run cli -- public stop           # immediatamente: 503 + pagina di manutenzione
+  //
+  // ATTENZIONE al `--`: con `npm run` gli argomenti posizionali passano anche senza,
+  // ma i FLAG (--json, --theme, --config, --timeout) vengono intercettati da npm e
+  // scartati SENZA errore. Usa sempre `--`. Il binario globale `ital8cms-cli` esiste
+  // solo dopo `npm link` / `npm install -g .`; in alternativa: node bin/ital8cms-cli.js
+  //
+  // Guida completa: docs/cli-control-plane.it.md
   //
   // Campi:
   //   • enabled     boolean — true (default) abilita il bridge
