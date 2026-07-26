@@ -1037,6 +1037,14 @@ Server su `http://localhost:3000`.
 > dipendenze npm (plugin con `package.json` proprio → `node_modules` locale;
 > pilota `adminMedia`). → [`docs/self-update.it.md`](./docs/self-update.it.md).
 
+> **Control plane CLI (`ital8cms-cli`):** pilota un'istanza **in esecuzione** via
+> socket UNIX locale (tipicamente in SSH). `npm run cli -- status` /
+> `admin start|stop` (attiva/disattiva l'area admin, con riavvio) /
+> `public start|stop` (manutenzione del sito pubblico, senza riavvio) /
+> `reset <target>`. Il `--` con `npm run` è **obbligatorio** per inoltrare gli
+> argomenti. Config: `ital8Config.json5 → cli` e `maintenance`. Sorgenti:
+> `bin/ital8cms-cli.js` + `core/cliBridge/`. → [`docs/cli-control-plane.it.md`](./docs/cli-control-plane.it.md).
+
 ### Creare plugin / temi (usa le skill di scaffolding)
 
 - **Plugin:** skill `ital8cms-plugin-creator` (minimal / con webPages / admin / con funzioni globali). Riferimento completo: `plugins/exampleComplete/` + `core/EXPLAIN-pluginsSys.it.md`. Struttura minima: `main.js` + `pluginConfig.json5` + `pluginDescription.json5`; aggiungi `webPages/` per le pagine HTML (vedi *Sistema Plugin Pages*).

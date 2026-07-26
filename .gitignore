@@ -93,3 +93,7 @@ themes/*/node_modules/
 
 # CLI control plane unix socket (created at startup, removed on shutdown)
 *.sock
+
+# CLI control plane runtime state (public running/stopped), written by cliBridge:
+# stato di runtime della singola istanza, non configurazione da versionare.
+/core/cliBridge/state.json5
