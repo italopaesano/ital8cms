@@ -60,7 +60,7 @@
     "node": ">=22.13.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
+    "@playwright/test": "^1.62.0",
     "@types/jest": "^30.0.0",
     "jest": "^30.4.2"
   },
