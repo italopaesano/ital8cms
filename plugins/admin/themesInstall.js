@@ -6,7 +6,7 @@
  * Vincolo naming: il repository remoto DEVE avere un nome che inizia con
  * il prefisso configurato in `pluginConfig.json5` (default: "ital8cms-theme-").
  * Lo stesso prefisso vale per temi public e admin: il tipo è dichiarato
- * esclusivamente dal campo `isAdminTheme` del `themeConfig.json5` clonato.
+ * esclusivamente dal campo `isAdminTheme` del `themeConfig.default.json5` clonato.
  *
  * Nome cartella tema: la parte del nome repo dopo il prefisso viene convertita
  * da kebab-case a camelCase.
@@ -28,9 +28,17 @@
  *   1. Parse e validazione URL, estrazione nome tema
  *   2. Check destinazione (con eventuale overwrite previa conferma)
  *   3. Clone via `git clone`
- *   4. Validazione file richiesti, parsing JSON5, lettura `isAdminTheme`
- *   5. Forzatura `isInstalled: 0` (e rimozione legacy `active`), scrittura `themeConfig.json5`
- *   6. Audit log
+ *   4. Materializzazione dei config vivi dai `.default` del repo clonato
+ *   5. Validazione file richiesti, parsing JSON5, lettura `isAdminTheme`
+ *   6. Forzatura `isInstalled: 0` (e rimozione legacy `active`), scrittura `themeConfig.json5`
+ *   7. Audit log
+ *
+ * CICLO DI VITA DEI CONFIG (docs/decisions/config-lifecycle.it.md): il repo di un
+ * tema distribuibile committa i soli sidecar `x.default.json5` (fonte di verità);
+ * i `x.json5` vivi sono generati — qui in fase di installazione, al boot da
+ * `materializeMissingConfigs` — e sono git-ignored. Un repo che pubblica anche i
+ * vivi non è conforme: quelli sovrapposti a un `.default` vengono scartati e
+ * rigenerati (warning), perché la fonte di verità è una sola.
  *
  * Su QUALUNQUE fallimento dopo lo step 3 (clone riuscito) la cartella appena
  * creata viene rimossa per non lasciare uno stato sporco.
@@ -56,6 +64,9 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const loadJson5 = require('../../core/loadJson5');
+const setJson5Key = require('../../core/setJson5Key');
+const materializeDirDefaults = require('../../core/materializeDirDefaults');
+const resetConfigsToDefault = require('../../core/resetConfigsToDefault');
 
 // ----- COSTANTI / PATH -------------------------------------------------------
 
@@ -444,19 +455,75 @@ function runGitClone({ repoUrl, branchOrTag, destDir, timeoutMs, onProgress }) {
     });
 }
 
+// ----- POST-CLONE CONFIG MATERIALIZATION -------------------------------------
+
+// Prepara i config vivi del pacchetto appena clonato a partire dai suoi sidecar
+// `x.default.json5`, che sono la sola fonte di verità ammessa in un repo
+// distribuibile (config-lifecycle §1). Fa tre cose, in quest'ordine:
+//
+//   1. pretende il descrittore `<descriptorName>.default.json5` — senza di esso
+//      il pacchetto non è conforme e l'installazione si ferma qui;
+//   2. scarta gli eventuali vivi committati per errore (ogni `x.json5` che ha un
+//      `x.default.json5` accanto), così il default resta l'unica sorgente e
+//      l'admin non eredita valori arbitrari lasciati nel repo dall'autore;
+//   3. materializza TUTTI i vivi mancanti (descrittore + eventuali config
+//      secondari del pacchetto: mappe, regole, store JSON5...).
+//
+// Volutamente identica per temi e plugin: cambia solo `descriptorName`. È
+// duplicata in pluginsInstall.js seguendo il parallelismo già in essere fra i due
+// moduli (parser di progress, audit log, gestione job), che li tiene disaccoppiati.
+//
+// I passi 2 e 3 delegano ai moduli core del ciclo di vita: resetConfigsToDefault
+// rimuove esattamente i vivi che hanno un default (mai i file senza sidecar, es.
+// contenuto iniziale o log di runtime), materializeDirDefaults li rigenera.
+async function materializeConfigFile(packageDir, descriptorName) {
+    const warnings = [];
+    const descriptorDefaultName = `${descriptorName}.default.json5`;
+
+    if (!fs.existsSync(path.join(packageDir, descriptorDefaultName))) {
+        return {
+            ok: false,
+            error: `Struttura non valida: manca ${descriptorDefaultName}. Il repo deve committare il sidecar di default (fonte di verità); il ${descriptorName}.json5 vivo è generato dall'installazione e non va pubblicato.`,
+        };
+    }
+
+    // I vivi committati nel repo violano il ciclo di vita: via, si riparte dai default.
+    const discarded = await resetConfigsToDefault(packageDir);
+    if (discarded.removed.length > 0) {
+        warnings.push(
+            `Il repo pubblica ${discarded.removed.length} file di config vivo/i (${discarded.removed.join(', ')}) che duplicano un ".default": scartati e rigenerati dai rispettivi default.`,
+        );
+    }
+    for (const failure of discarded.errors) {
+        warnings.push(`Impossibile rimuovere il config vivo "${failure.file}": ${failure.message}`);
+    }
+
+    const materialized = await materializeDirDefaults(packageDir);
+    if (materialized.errors.length > 0) {
+        const detail = materialized.errors.map(e => `${e.file}: ${e.message}`).join('; ');
+        return { ok: false, error: `Materializzazione dei config fallita -> ${detail}` };
+    }
+
+    return { ok: true, value: { created: materialized.created, warnings } };
+}
+
 // ----- POST-CLONE VALIDATION -------------------------------------------------
 
+// Da invocare DOPO materializeConfigFile(): il descrittore richiesto nel repo è
+// il `.default`, mentre i controlli di merito girano sul vivo appena generato —
+// è quello che il boot leggerà e che finalizeThemeConfig aggiornerà.
 function validateClonedTheme(themeDir, expectedThemeName) {
     const warnings = [];
 
     const configPath = path.join(themeDir, 'themeConfig.json5');
+    const configDefaultPath = path.join(themeDir, 'themeConfig.default.json5');
     const descriptionPath = path.join(themeDir, 'themeDescription.json5');
     const viewsDir = path.join(themeDir, 'views');
     const headPath = path.join(viewsDir, 'head.ejs');
     const footerPath = path.join(viewsDir, 'footer.ejs');
 
     const missingFiles = [];
-    if (!fs.existsSync(configPath)) missingFiles.push('themeConfig.json5');
+    if (!fs.existsSync(configDefaultPath)) missingFiles.push('themeConfig.default.json5');
     if (!fs.existsSync(descriptionPath)) missingFiles.push('themeDescription.json5');
     if (!fs.existsSync(viewsDir) || !fs.statSync(viewsDir).isDirectory()) missingFiles.push('views/');
     if (!fs.existsSync(headPath)) missingFiles.push('views/head.ejs');
@@ -466,6 +533,13 @@ function validateClonedTheme(themeDir, expectedThemeName) {
         return {
             ok: false,
             error: `Struttura tema non valida: file/cartelle mancanti -> ${missingFiles.join(', ')}.`,
+        };
+    }
+
+    if (!fs.existsSync(configPath)) {
+        return {
+            ok: false,
+            error: 'themeConfig.json5 vivo assente: la validazione va eseguita dopo la materializzazione dei config dal .default.',
         };
     }
 
@@ -497,8 +571,18 @@ function validateClonedTheme(themeDir, expectedThemeName) {
     if (typeof config.isAdminTheme !== 'boolean') {
         return {
             ok: false,
-            error: 'themeConfig.json5: il campo "isAdminTheme" è obbligatorio e deve essere booleano (true/false).',
+            error: 'themeConfig.default.json5: il campo "isAdminTheme" è obbligatorio e deve essere booleano (true/false).',
         };
+    }
+
+    // Nessuno dei due appartiene al default di un tema: `active` è uscito dallo
+    // schema (la fonte di verità è ital8Config.json5), `isInstalled` è stato
+    // runtime. Segnalati all'autore; li normalizza finalizeThemeConfig.
+    if (typeof config.active !== 'undefined') {
+        warnings.push('Il themeConfig.default.json5 dichiara "active": campo legacy uscito dallo schema dei temi (il tema attivo si sceglie in ital8Config.json5). Verrà rimosso.');
+    }
+    if (typeof config.isInstalled !== 'undefined') {
+        warnings.push('Il themeConfig.default.json5 dichiara "isInstalled": è uno stato runtime e non appartiene al default (valore ignorato).');
     }
 
     return {
@@ -518,12 +602,25 @@ function validateClonedTheme(themeDir, expectedThemeName) {
 // Forza il tema a stato non-installato (isInstalled: 0), indipendentemente da
 // quanto dichiarato nel repo. L'attivazione è responsabilità dell'admin.
 // Il campo legacy 'active' viene rimosso (non fa più parte dello schema dei temi).
-function finalizeThemeConfig({ configPath, config }) {
-    const updated = Object.assign({}, config);
-    delete updated.active;
-    updated.isInstalled = 0;
-    writeJson5Atomic(configPath, updated);
-    return updated;
+//
+// Percorso normale (default conforme, senza `active`): scrittura con setJson5Key,
+// upsert chirurgico che PRESERVA commenti e formattazione del vivo appena
+// materializzato — che nasce come copia fedele del .default e deve restare
+// leggibile per l'admin che poi lo modifica a mano.
+// Percorso legacy (il .default porta ancora `active`): setJson5Key sa solo fare
+// upsert, non rimuovere una chiave, quindi si ricade sulla riserializzazione
+// integrale. Perde i commenti, ma solo per un pacchetto già fuori standard e
+// dopo un warning esplicito emesso in validazione.
+async function finalizeThemeConfig({ configPath, config }) {
+    if (typeof config.active !== 'undefined') {
+        const updated = Object.assign({}, config);
+        delete updated.active;
+        updated.isInstalled = 0;
+        writeJson5Atomic(configPath, updated);
+        return updated;
+    }
+    await setJson5Key(configPath, 'isInstalled', 0, { afterKey: 'schemaVersion' });
+    return loadJson5(configPath);
 }
 
 // ----- AUDIT LOG -------------------------------------------------------------
@@ -638,7 +735,16 @@ async function runInstall(job, installConfig) {
         createdDir = true;
         pushPhase(job, 'cloneDone', true);
 
-        // FASE 4 - validazione
+        // FASE 4 - materializzazione dei config vivi dai .default del repo
+        const matRes = await materializeConfigFile(targetThemeDir(job.themeName), 'themeConfig');
+        if (!matRes.ok) {
+            throw new Error(matRes.error);
+        }
+        pushPhase(job, 'materializeConfigs', true,
+            matRes.value.created.length ? `generati: ${matRes.value.created.join(', ')}` : 'nessun config da generare');
+        matRes.value.warnings.forEach(w => job.warnings.push(w));
+
+        // FASE 5 - validazione
         const valRes = validateClonedTheme(targetThemeDir(job.themeName), job.themeName);
         if (!valRes.ok) {
             throw new Error(valRes.error);
@@ -648,8 +754,8 @@ async function runInstall(job, installConfig) {
         pushPhase(job, 'validate', true, `isAdminTheme=${job.isAdminTheme}`);
         valRes.value.warnings.forEach(w => job.warnings.push(w));
 
-        // FASE 5 - scrittura config finale (sempre disattivato)
-        const finalConfig = finalizeThemeConfig({
+        // FASE 6 - scrittura config finale (sempre disattivato)
+        const finalConfig = await finalizeThemeConfig({
             configPath: valRes.value.configPath,
             config: valRes.value.config,
         });
@@ -827,11 +933,13 @@ function runDryRunInstall(job, installConfig) {
             }
 
             pushPhase(job, 'cloneDone', true, 'DRY-RUN');
-            await sleep(tailMs / 3);
+            await sleep(tailMs / 4);
+            pushPhase(job, 'materializeConfigs', true, 'DRY-RUN: themeConfig.json5 generato dal .default (simulato)');
+            await sleep(tailMs / 4);
             pushPhase(job, 'validate', true, 'DRY-RUN: isAdminTheme=false');
-            await sleep(tailMs / 3);
+            await sleep(tailMs / 4);
             pushPhase(job, 'finalizeConfig', true, 'DRY-RUN: isInstalled=0');
-            await sleep(tailMs / 3);
+            await sleep(tailMs / 4);
 
             job.status = JOB_STATUS.SUCCESS;
             job.finishedAt = new Date().toISOString();
@@ -1083,7 +1191,9 @@ module.exports = {
     _validateRepoUrl: validateRepoUrl,
     _extractThemeNameFromUrl: extractThemeNameFromUrl,
     _validateBranchOrTag: validateBranchOrTag,
+    _materializeConfigFile: materializeConfigFile,
     _validateClonedTheme: validateClonedTheme,
+    _finalizeThemeConfig: finalizeThemeConfig,
     _kebabToCamel: kebabToCamel,
     _readExistingThemeMetadata: readExistingThemeMetadata,
     _parseGitProgressLine: parseGitProgressLine,

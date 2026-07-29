@@ -12,10 +12,17 @@
  * `setJson5Key` (preservando i commenti), dopo `schemaVersion` come per i plugin.
  *
  * È volutamente NON distruttivo: imposta solo se `isInstalled` è ASSENTE (mai
- * sovrascrive un valore già presente). I temi non-bundled (installati via
- * `plugins/admin/themesInstall.js`, che NON portano un `.default`) non vengono
- * toccati, così il loro `isInstalled: 0` — l'attivazione resta scelta manuale
- * dell'admin — è preservato.
+ * sovrascrive un valore già presente). È questa la garanzia che protegge i temi
+ * installati a runtime via `plugins/admin/themesInstall.js`: l'installazione
+ * scrive esplicitamente `isInstalled: 0` nel vivo, quindi il campo c'è e questo
+ * step lo lascia stare — l'attivazione resta una scelta manuale dell'admin.
+ *
+ * NB: da quando il `.default` è la sola fonte di verità ammessa anche nei
+ * pacchetti di terze parti, la presenza di `themeConfig.default.json5` NON
+ * distingue più un tema bundled da uno clonato (ce l'hanno entrambi). Resta il
+ * criterio corretto per rispondere alla domanda che a questo modulo interessa
+ * davvero — "questo vivo nasce da un default e potrebbe quindi essere privo di
+ * `isInstalled`?" — mentre a discriminare i due casi è il valore già scritto.
  *
  * Parallelo ai plugin: lì `pluginSys.initialize()` persiste `isInstalled` al boot
  * (Variante 1); i temi non hanno un `initialize()` che itera tutti i temi, quindi

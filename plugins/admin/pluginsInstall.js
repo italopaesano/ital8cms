@@ -13,10 +13,18 @@
  *   2. Verifica che la cartella di destinazione non esista
  *   3. Acquisizione lock globale (una sola installazione alla volta)
  *   4. Clone via `git clone`
- *   5. Validazione file richiesti, parsing JSON5
- *   6. Controlli incrociati (name coincide, admin convention, require main.js)
- *   7. Decisione `active` finale, scrittura `pluginConfig.json5` aggiornato
- *   8. Audit log
+ *   5. Materializzazione dei config vivi dai `.default` del repo clonato
+ *   6. Validazione file richiesti, parsing JSON5
+ *   7. Controlli incrociati (name coincide, admin convention, require main.js)
+ *   8. Decisione `active` finale, scrittura `pluginConfig.json5` aggiornato
+ *   9. Audit log
+ *
+ * CICLO DI VITA DEI CONFIG (docs/decisions/config-lifecycle.it.md): il repo di un
+ * plugin distribuibile committa i soli sidecar `x.default.json5` (fonte di
+ * verità); i `x.json5` vivi sono generati — qui in fase di installazione, al boot
+ * da `materializeMissingConfigs` — e sono git-ignored. Un repo che pubblica anche
+ * i vivi non è conforme: quelli sovrapposti a un `.default` vengono scartati e
+ * rigenerati (warning), perché la fonte di verità è una sola.
  *
  * Su QUALUNQUE fallimento dopo lo step 4 (clone riuscito) la cartella appena
  * creata viene rimossa per non lasciare uno stato sporco.
@@ -34,6 +42,9 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const loadJson5 = require('../../core/loadJson5');
+const setJson5Key = require('../../core/setJson5Key');
+const materializeDirDefaults = require('../../core/materializeDirDefaults');
+const resetConfigsToDefault = require('../../core/resetConfigsToDefault');
 
 // ----- COSTANTI / PATH -------------------------------------------------------
 
@@ -362,18 +373,74 @@ function runGitClone({ repoUrl, branchOrTag, destDir, timeoutMs, onProgress }) {
     });
 }
 
+// ----- POST-CLONE CONFIG MATERIALIZATION -------------------------------------
+
+// Prepara i config vivi del pacchetto appena clonato a partire dai suoi sidecar
+// `x.default.json5`, che sono la sola fonte di verità ammessa in un repo
+// distribuibile (config-lifecycle §1). Fa tre cose, in quest'ordine:
+//
+//   1. pretende il descrittore `<descriptorName>.default.json5` — senza di esso
+//      il pacchetto non è conforme e l'installazione si ferma qui;
+//   2. scarta gli eventuali vivi committati per errore (ogni `x.json5` che ha un
+//      `x.default.json5` accanto), così il default resta l'unica sorgente e
+//      l'admin non eredita valori arbitrari lasciati nel repo dall'autore;
+//   3. materializza TUTTI i vivi mancanti (descrittore + eventuali config
+//      secondari del pacchetto: mappe, regole, store JSON5...).
+//
+// Volutamente identica per plugin e temi: cambia solo `descriptorName`. È
+// duplicata in themesInstall.js seguendo il parallelismo già in essere fra i due
+// moduli (parser di progress, audit log, gestione job), che li tiene disaccoppiati.
+//
+// I passi 2 e 3 delegano ai moduli core del ciclo di vita: resetConfigsToDefault
+// rimuove esattamente i vivi che hanno un default (mai i file senza sidecar, es.
+// contenuto iniziale o log di runtime), materializeDirDefaults li rigenera.
+async function materializeConfigFile(packageDir, descriptorName) {
+    const warnings = [];
+    const descriptorDefaultName = `${descriptorName}.default.json5`;
+
+    if (!fs.existsSync(path.join(packageDir, descriptorDefaultName))) {
+        return {
+            ok: false,
+            error: `Struttura non valida: manca ${descriptorDefaultName}. Il repo deve committare il sidecar di default (fonte di verità); il ${descriptorName}.json5 vivo è generato dall'installazione e non va pubblicato.`,
+        };
+    }
+
+    // I vivi committati nel repo violano il ciclo di vita: via, si riparte dai default.
+    const discarded = await resetConfigsToDefault(packageDir);
+    if (discarded.removed.length > 0) {
+        warnings.push(
+            `Il repo pubblica ${discarded.removed.length} file di config vivo/i (${discarded.removed.join(', ')}) che duplicano un ".default": scartati e rigenerati dai rispettivi default.`,
+        );
+    }
+    for (const failure of discarded.errors) {
+        warnings.push(`Impossibile rimuovere il config vivo "${failure.file}": ${failure.message}`);
+    }
+
+    const materialized = await materializeDirDefaults(packageDir);
+    if (materialized.errors.length > 0) {
+        const detail = materialized.errors.map(e => `${e.file}: ${e.message}`).join('; ');
+        return { ok: false, error: `Materializzazione dei config fallita -> ${detail}` };
+    }
+
+    return { ok: true, value: { created: materialized.created, warnings } };
+}
+
 // ----- POST-CLONE VALIDATION -------------------------------------------------
 
+// Da invocare DOPO materializeConfigFile(): il descrittore richiesto nel repo è
+// il `.default`, mentre i controlli di merito girano sul vivo appena generato —
+// è quello che il boot leggerà e che finalizePluginConfig aggiornerà.
 function validateClonedPlugin(pluginDir, expectedPluginName) {
     const warnings = [];
 
     const mainPath = path.join(pluginDir, 'main.js');
     const configPath = path.join(pluginDir, 'pluginConfig.json5');
+    const configDefaultPath = path.join(pluginDir, 'pluginConfig.default.json5');
     const descriptionPath = path.join(pluginDir, 'pluginDescription.json5');
 
     const missingFiles = [];
     if (!fs.existsSync(mainPath)) missingFiles.push('main.js');
-    if (!fs.existsSync(configPath)) missingFiles.push('pluginConfig.json5');
+    if (!fs.existsSync(configDefaultPath)) missingFiles.push('pluginConfig.default.json5');
     if (!fs.existsSync(descriptionPath)) missingFiles.push('pluginDescription.json5');
 
     if (missingFiles.length > 0) {
@@ -383,12 +450,25 @@ function validateClonedPlugin(pluginDir, expectedPluginName) {
         };
     }
 
+    if (!fs.existsSync(configPath)) {
+        return {
+            ok: false,
+            error: 'pluginConfig.json5 vivo assente: la validazione va eseguita dopo la materializzazione dei config dal .default.',
+        };
+    }
+
     let config;
     let description;
     try {
         config = loadJson5(configPath);
     } catch (e) {
         return { ok: false, error: `pluginConfig.json5 non parsificabile: ${e.message}` };
+    }
+
+    // `isInstalled` è stato runtime (scritto qui e a ogni boot da pluginSys): nel
+    // .default non ci va. Non è bloccante — finalizePluginConfig lo sovrascrive.
+    if (typeof config.isInstalled !== 'undefined') {
+        warnings.push('Il pluginConfig.default.json5 dichiara "isInstalled": è uno stato runtime e non appartiene al default (valore ignorato).');
     }
     try {
         description = loadJson5(descriptionPath);
@@ -446,16 +526,15 @@ function validateClonedPlugin(pluginDir, expectedPluginName) {
 
 // ----- WRITE FINAL CONFIG ----------------------------------------------------
 
-function finalizePluginConfig({ configPath, config, wantActive, hasNpmDeps }) {
-    const updated = Object.assign({}, config);
-    updated.active = (wantActive && !hasNpmDeps) ? 1 : 0;
-    if (typeof updated.isInstalled === 'undefined') {
-        updated.isInstalled = 1;
-    } else {
-        updated.isInstalled = 1;
-    }
-    writeJson5Atomic(configPath, updated);
-    return updated;
+// Scrive lo stato finale nel config vivo con setJson5Key (upsert chirurgico che
+// PRESERVA commenti e formattazione), non riserializzando l'intero file: il vivo
+// nasce come copia fedele del .default e deve restare leggibile e commentato
+// per l'admin che poi lo modifica a mano. Stessa utility usata dal boot per
+// persistere `isInstalled`, e stesso posizionamento (subito dopo schemaVersion).
+async function finalizePluginConfig({ configPath, wantActive, hasNpmDeps }) {
+    await setJson5Key(configPath, 'active', (wantActive && !hasNpmDeps) ? 1 : 0, { afterKey: 'schemaVersion' });
+    await setJson5Key(configPath, 'isInstalled', 1, { afterKey: 'schemaVersion' });
+    return loadJson5(configPath);
 }
 
 // ----- AUDIT LOG -------------------------------------------------------------
@@ -574,7 +653,16 @@ async function runInstall(job, installConfig) {
         createdDir = true;
         pushPhase(job, 'cloneDone', true);
 
-        // FASE 4 - validazione
+        // FASE 4 - materializzazione dei config vivi dai .default del repo
+        const matRes = await materializeConfigFile(targetPluginDir(job.pluginName), 'pluginConfig');
+        if (!matRes.ok) {
+            throw new Error(matRes.error);
+        }
+        pushPhase(job, 'materializeConfigs', true,
+            matRes.value.created.length ? `generati: ${matRes.value.created.join(', ')}` : 'nessun config da generare');
+        matRes.value.warnings.forEach(w => job.warnings.push(w));
+
+        // FASE 5 - validazione
         const valRes = validateClonedPlugin(targetPluginDir(job.pluginName), job.pluginName);
         if (!valRes.ok) {
             throw new Error(valRes.error);
@@ -582,11 +670,10 @@ async function runInstall(job, installConfig) {
         pushPhase(job, 'validate', true);
         valRes.value.warnings.forEach(w => job.warnings.push(w));
 
-        // FASE 5 - scrittura config finale
+        // FASE 6 - scrittura config finale
         const hasNpmDeps = Object.keys(valRes.value.nodeModuleDependency).length > 0;
-        const finalConfig = finalizePluginConfig({
+        const finalConfig = await finalizePluginConfig({
             configPath: valRes.value.configPath,
-            config: valRes.value.config,
             wantActive: job.wantActive,
             hasNpmDeps,
         });
@@ -762,12 +849,14 @@ function runDryRunInstall(job, installConfig) {
             }
 
             pushPhase(job, 'cloneDone', true, 'DRY-RUN');
-            await sleep(tailMs / 3);
+            await sleep(tailMs / 4);
+            pushPhase(job, 'materializeConfigs', true, 'DRY-RUN: pluginConfig.json5 generato dal .default (simulato)');
+            await sleep(tailMs / 4);
             pushPhase(job, 'validate', true, 'DRY-RUN: struttura plugin simulata');
-            await sleep(tailMs / 3);
+            await sleep(tailMs / 4);
             pushPhase(job, 'finalizeConfig', true,
                 `DRY-RUN: active=${job.wantActive ? 1 : 0}, isInstalled=1`);
-            await sleep(tailMs / 3);
+            await sleep(tailMs / 4);
 
             job.status = JOB_STATUS.SUCCESS;
             job.finishedAt = new Date().toISOString();
@@ -1033,7 +1122,14 @@ module.exports = {
     _validateRepoUrl: validateRepoUrl,
     _extractPluginNameFromUrl: extractPluginNameFromUrl,
     _validateBranchOrTag: validateBranchOrTag,
+    _materializeConfigFile: materializeConfigFile,
     _validateClonedPlugin: validateClonedPlugin,
+    _finalizePluginConfig: finalizePluginConfig,
+    // Esposto per i test di integrazione: permette di esercitare il flusso
+    // completo (clone → materialize → validate → finalize) contro un repo git
+    // LOCALE, senza rete. La validazione dell'URL vive nell'handler della route,
+    // quindi qui `git clone` accetta anche un path su disco.
+    _runInstall: runInstall,
     _detectSupervisor: detectSupervisor,
     _parseGitProgressLine: parseGitProgressLine,
     _isDryRunEnabled: isDryRunEnabled,

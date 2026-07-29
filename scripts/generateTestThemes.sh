@@ -7,7 +7,7 @@
 # progress dell'installazione tema da repo Git remoto.
 #
 # Ogni tema contiene:
-#   - Struttura minima valida (themeConfig.json5, themeDescription.json5, views/)
+#   - Struttura minima valida (themeConfig.default.json5, themeDescription.json5, views/)
 #   - 1 blob binario incompressibile da 5 MB (rallenta la fase 'Receiving objects'
 #     facendo avanzare la percentuale e il contatore bytes in modo visibile)
 #   - 200 piccoli file (rallentano la fase 'Updating files' producendo molti
@@ -47,16 +47,20 @@ warn()  { printf "${c_yellow}[warn]${c_reset} %s\n" "$*"; }
 
 # ----- generators ----------------------------------------------------------
 
+# Genera il SOLO sidecar `themeConfig.default.json5`: in un repo di tema
+# distribuibile il default è la fonte di verità e il `themeConfig.json5` vivo
+# viene generato dall'installazione (config-lifecycle). Un repo che pubblica
+# anche il vivo non è conforme e themesInstall lo scarta con un warning.
+# Per lo stesso motivo il default NON dichiara né 'active' (uscito dallo schema
+# dei temi) né 'isInstalled' (stato runtime, forzato a 0 dall'installazione).
 write_theme_config() {
     local theme_dir="$1"
     local is_admin="$2"
-    cat > "$theme_dir/themeConfig.json5" <<EOF
+    cat > "$theme_dir/themeConfig.default.json5" <<EOF
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  // 'active' e 'isInstalled' vengono comunque forzati a 0 dal modulo
-  // themesInstall durante l'installazione: i valori qui sono solo orientativi.
-  "active": 0,
-  "isInstalled": 0,
+  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi).
+  "schemaVersion": 1,
   "weight": 100,
   "isAdminTheme": $is_admin,
   "pluginDependency": {},

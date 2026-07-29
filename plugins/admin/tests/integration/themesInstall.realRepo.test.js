@@ -17,6 +17,11 @@
  * console; il file non fa fallire la suite. La rilevazione avviene a
  * load-time via `git ls-remote` (~1s di overhead, una sola volta).
  *
+ * Precondizione sui pacchetti remoti: i test che installano davvero girano solo
+ * se i due repo committano `themeConfig.default.json5` (standard del ciclo di
+ * vita dei config). Finché non sono rigenerati e ripushati vengono skippati con
+ * un warning esplicito — vedi il blocco "Conformità dei repo remoti" più sotto.
+ *
  * Side effects: ogni test installa il tema nella cartella themes/ del
  * progetto. beforeEach e afterAll fanno cleanup esplicito per non lasciare
  * residui. Il file di audit log plugins/admin/themeInstallLog.json5 viene
@@ -65,8 +70,71 @@ if (!NETWORK_OK) {
     'raggiungibile dal runner.\n'
   );
 }
+
+// ---------------------------------------------------------------------------
+// Conformità dei repo remoti allo standard `.default`
+// ---------------------------------------------------------------------------
+//
+// Un repo di tema distribuibile committa `themeConfig.default.json5` (fonte di
+// verità) e NON il vivo: è il contratto che themesInstall pretende dopo la
+// canonizzazione del ciclo di vita dei config. I due repo di test qui sopra
+// sono stati generati prima di quella regola e vanno rigenerati con
+// scripts/generateTestThemes.sh (già aggiornato) e ripushati.
+//
+// Finché non lo sono, i test del flusso "install riuscita" non possono passare
+// per un motivo legittimo — il pacchetto remoto è fuori standard, non il codice.
+// Li skippiamo con un messaggio esplicito invece di allentare le asserzioni,
+// così il debito resta visibile a ogni run. Il rilevamento tenta prima
+// `git archive --remote` (nessun clone) e, quando l'host non lo espone —
+// GitHub non lo fa — ricade su un clone blobless usa-e-getta.
+function remoteShipsConfigDefault(repoUrl) {
+  try {
+    const ls = spawnSync('git', ['ls-remote', '--exit-code', repoUrl, 'HEAD'], {
+      timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    if (ls.status !== 0) return false;
+    const archive = spawnSync(
+      'git', ['archive', `--remote=${repoUrl}`, 'HEAD', '--', 'themeConfig.default.json5'],
+      { timeout: 15000, stdio: ['ignore', 'pipe', 'ignore'] },
+    );
+    // GitHub non espone `git archive --remote`: in quel caso si ricade su un
+    // clone bare minimale, l'unico modo affidabile di ispezionare l'albero.
+    if (archive.status === 0) return true;
+    const probeDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'ital8-probe-'));
+    try {
+      const clone = spawnSync(
+        'git', ['clone', '--depth', '1', '--filter=blob:none', '--quiet', repoUrl, probeDir],
+        { timeout: 30000, stdio: ['ignore', 'ignore', 'ignore'] },
+      );
+      if (clone.status !== 0) return false;
+      return fs.existsSync(path.join(probeDir, 'themeConfig.default.json5'));
+    } finally {
+      fs.rmSync(probeDir, { recursive: true, force: true });
+    }
+  } catch (_e) {
+    return false;
+  }
+}
+
+const REPOS_MIGRATED = NETWORK_OK
+  && remoteShipsConfigDefault(PUBLIC_REPO)
+  && remoteShipsConfigDefault(ADMIN_REPO);
+
+if (NETWORK_OK && !REPOS_MIGRATED) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    '\n[themesInstall.realRepo] I repo di test remoti non committano ancora ' +
+    'themeConfig.default.json5:\n' +
+    '                         i test del flusso di installazione sono skippati.\n' +
+    '                         Rigenerarli con `bash scripts/generateTestThemes.sh` ' +
+    'e ripushare.\n'
+  );
+}
+
 // In offline-mode skippiamo i test ma manteniamo la suite valida.
 const testOnline = NETWORK_OK ? test : test.skip;
+// I test che installano davvero richiedono anche un pacchetto remoto conforme.
+const testInstall = (NETWORK_OK && REPOS_MIGRATED) ? test : test.skip;
 
 // ---------------------------------------------------------------------------
 // Helpers per invocare le route reali con un ctx Koa mock
@@ -160,7 +228,7 @@ describe('themesInstall — integration vs real GitHub repos', () => {
   // -------------------------------------------------------------------------
 
   describe('public theme (isAdminTheme: false)', () => {
-    testOnline('install completo: clone → validate → finalize, files su disco', async () => {
+    testInstall('install completo: clone → validate → finalize, files su disco', async () => {
       const start = await postInstall({ repoUrl: PUBLIC_REPO });
       expect(start.status).toBe(200);
       expect(start.body.success).toBe(true);
@@ -177,7 +245,7 @@ describe('themesInstall — integration vs real GitHub repos', () => {
         expect.arrayContaining([
           'parseUrl', 'checkDestination',
           'cloneStart', 'cloneDone',
-          'validate', 'finalizeConfig',
+          'materializeConfigs', 'validate', 'finalizeConfig',
         ]),
       );
       for (const ph of job.phases) {
@@ -207,7 +275,7 @@ describe('themesInstall — integration vs real GitHub repos', () => {
       expect(cfg.isAdminTheme).toBe(false);
     }, TEST_TIMEOUT_MS);
 
-    testOnline('cattura progress ben formati durante il clone (best-effort)', async () => {
+    testInstall('cattura progress ben formati durante il clone (best-effort)', async () => {
       const start = await postInstall({ repoUrl: PUBLIC_REPO });
       const job = await waitForJobTerminal(start.body.installId);
       expect(job.status).toBe('success');
@@ -253,7 +321,7 @@ describe('themesInstall — integration vs real GitHub repos', () => {
   // -------------------------------------------------------------------------
 
   describe('admin theme (isAdminTheme: true)', () => {
-    testOnline('rileva isAdminTheme=true dal themeConfig.json5 clonato', async () => {
+    testInstall('rileva isAdminTheme=true dal themeConfig.default.json5 clonato', async () => {
       const start = await postInstall({ repoUrl: ADMIN_REPO });
       expect(start.body.success).toBe(true);
       expect(start.body.themeName).toBe(ADMIN_THEME_NAME);
@@ -281,7 +349,7 @@ describe('themesInstall — integration vs real GitHub repos', () => {
   // -------------------------------------------------------------------------
 
   describe('flusso di sovrascrittura', () => {
-    testOnline('senza confirmOverwrite la seconda install ritorna 409 conflict', async () => {
+    testInstall('senza confirmOverwrite la seconda install ritorna 409 conflict', async () => {
       // Prima install: ok
       const first = await postInstall({ repoUrl: PUBLIC_REPO });
       await waitForJobTerminal(first.body.installId);
@@ -299,7 +367,7 @@ describe('themesInstall — integration vs real GitHub repos', () => {
       expect(second.body.existingTheme.isAdminTheme).toBe(false);
     }, TEST_TIMEOUT_MS);
 
-    testOnline('con confirmOverwrite=true la seconda install procede', async () => {
+    testInstall('con confirmOverwrite=true la seconda install procede', async () => {
       const first = await postInstall({ repoUrl: PUBLIC_REPO });
       await waitForJobTerminal(first.body.installId);
 

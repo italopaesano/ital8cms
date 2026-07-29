@@ -7,7 +7,7 @@
 # plugin nel pannello admin di ital8cms.
 #
 # Il plugin generato contiene:
-#   - Struttura minima valida (main.js, pluginConfig.json5, pluginDescription.json5)
+#   - Struttura minima valida (main.js, pluginConfig.default.json5, pluginDescription.json5)
 #   - Una singola rotta GET /api/<name>/ping per verificare il caricamento
 #   - 1 blob binario incompressibile da 5 MB (rallenta la fase 'Receiving
 #     objects' facendo avanzare la percentuale e il contatore bytes in modo
@@ -25,7 +25,7 @@
 # flag isAdminTheme), per i plugin la convenzione admin è data dal nome che
 # inizia per "admin" — questo script genera un plugin regolare. Per generare
 # anche un plugin admin di test in futuro, basterà cambiare PLUGIN_NAME in
-# "admin<Qualcosa>" e aggiungere "adminSections": [...] in pluginConfig.json5
+# "admin<Qualcosa>" e aggiungere "adminSections": [...] in pluginConfig.default.json5
 # (vedi commento nella funzione write_plugin_config).
 #
 # Usage:
@@ -52,6 +52,12 @@ warn()  { printf "${c_yellow}[warn]${c_reset} %s\n" "$*"; }
 
 # ----- generators ----------------------------------------------------------
 
+# Genera il SOLO sidecar `pluginConfig.default.json5`: in un repo di plugin
+# distribuibile il default è la fonte di verità e il `pluginConfig.json5` vivo
+# viene generato dall'installazione (config-lifecycle). Un repo che pubblica
+# anche il vivo non è conforme e pluginsInstall lo scarta con un warning.
+# Per lo stesso motivo il default NON dichiara 'isInstalled' (stato runtime,
+# scritto dall'installazione e a ogni boot da pluginSys).
 write_plugin_config() {
     local plugin_dir="$1"
     # Nota per estensioni future: se il plugin generato fosse admin (nome che
@@ -59,18 +65,18 @@ write_plugin_config() {
     #     "adminSections": ["sezioneEsempio"],
     # e creare la cartella adminWebSections/sezioneEsempio/index.ejs.
     # Per ora il plugin di test è volutamente regolare.
-    cat > "$plugin_dir/pluginConfig.json5" <<EOF
+    cat > "$plugin_dir/pluginConfig.default.json5" <<EOF
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  // 'active' e 'isInstalled' vengono settati dal modulo pluginsInstall
-  // durante l'installazione in base a wantActive e alla presenza di
-  // dipendenze npm. I valori qui sono solo orientativi.
+  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi).
+  "schemaVersion": 1,
+  // 'active' viene deciso dal modulo pluginsInstall durante l'installazione in
+  // base a wantActive e alla presenza di dipendenze npm: il valore qui è solo
+  // orientativo.
   "active": 0,
-  "isInstalled": 0,
   "weight": 100,
   "dependency": {},
   "nodeModuleDependency": {},
-  "version": "1.0.0",
   "custom": {},
 }
 EOF
@@ -153,7 +159,7 @@ dell'installazione plugin da repo Git nel pannello admin di ital8cms.
 
 - Struttura minima valida per essere accettato da \`pluginsInstall\`:
   - \`main.js\` con rotta \`GET /ping\`
-  - \`pluginConfig.json5\`
+  - \`pluginConfig.default.json5\` (il \`pluginConfig.json5\` vivo lo genera l'installazione)
   - \`pluginDescription.json5\`
 - Payload "ciccione" in \`lib/blob/\` e \`lib/assets/\` (5 MB di urandom +
   200 file di testo random) per stress-testare il clone.

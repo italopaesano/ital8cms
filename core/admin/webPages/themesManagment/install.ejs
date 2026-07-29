@@ -30,8 +30,11 @@
         <code>ital8cms-theme-</code>. Quanto segue diventa il nome del tema (convertito in camelCase) e
         deve combaciare con il campo <code>name</code> in <code>themeDescription.json5</code>.<br>
         Il tipo di tema (public o admin) è dichiarato esclusivamente dal campo
-        <code>isAdminTheme</code> in <code>themeConfig.json5</code>: il nome del repo non distingue
-        fra i due casi.
+        <code>isAdminTheme</code> in <code>themeConfig.default.json5</code>: il nome del repo non
+        distingue fra i due casi.<br>
+        Il repository deve committare <code>themeConfig.default.json5</code> (la fonte di verità
+        della configurazione): il <code>themeConfig.json5</code> vivo viene generato
+        dall'installazione e <strong>non</strong> va pubblicato.
         <br><br>
         Esempi:
         <ul class="mb-0">
