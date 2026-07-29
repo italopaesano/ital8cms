@@ -29,6 +29,9 @@
         <strong>Convenzione obbligatoria:</strong> il repository deve avere un nome che inizia con
         <code>ital8cms-plugin-</code>. Quanto segue diventa il nome del plugin e deve combaciare con
         il campo <code>name</code> in <code>pluginDescription.json5</code>.<br>
+        Il repository deve inoltre committare <code>pluginConfig.default.json5</code> (la fonte di
+        verità della configurazione): il <code>pluginConfig.json5</code> vivo viene generato
+        dall'installazione e <strong>non</strong> va pubblicato.<br>
         Esempi:
         <ul class="mb-0">
           <li><code>https://github.com/utente/ital8cms-plugin-mailerSimple.git</code> &rarr; plugin <code>mailerSimple</code></li>

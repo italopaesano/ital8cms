@@ -34,6 +34,12 @@ Tre categorie di config, trattate diversamente:
 
 I `*.default.json5` dei config "di contenuto" rappresentano lo stato **minimale/vergine** ("appena installato"): es. `seoPages` senza regole, `redirectMap` vuota. Gli esempi vivono altrove (profilo demo, documentazione), non nei default. I `pluginConfig.default.json5`/`themeConfig.default.json5` corrispondono invece ai valori di default attuali del descrittore.
 
+**Vale anche per i pacchetti di terze parti** (Fase 6). Un repo Git di plugin/tema installabile dalla GUI admin committa i soli `.default`, esattamente come i pacchetti bundled:
+
+- il descrittore `pluginConfig.default.json5` / `themeConfig.default.json5` è **obbligatorio** — senza, l'installazione si ferma;
+- i `x.json5` vivi **non vanno pubblicati**: se il repo ne contiene uno che duplica un `.default`, l'installazione lo **scarta** e lo rigenera dal default (con warning), perché la fonte di verità resta una sola;
+- un `x.json5` **privo** di sidecar `.default` non è un config nel senso del ciclo di vita (è contenuto o stato runtime) e viene lasciato intatto.
+
 ### 2. Modello a 3 stati dei plugin
 
 Lo stato non è una seconda fonte di verità separata: è la combinazione tra **presenza del file** e flag `isInstalled`.
@@ -174,6 +180,18 @@ Aggiornato al 2026-06-27 (Fase 5 completata) · branch `claude/dazzling-darwin-g
 - **Untrack** (`git rm --cached`) + git-ignore di `themes/*/themeConfig.json5`; i `.default` restano committati. **Completa la migrazione repo** (descrittori plugin + temi tutti untrackati).
 - Verifica: 10 nuovi test unit (`ensureThemesInstalled`) + `themesManagment.test.js` reso robusto al clone fresco (asserzioni di base sul `.default` committato); suite 83 suite / 2207 test verdi; boot reale pulito; E2E clone-fresco temi (cancellati 2 `themeConfig` → rigenerati dai `.default` con `schemaVersion:1` + `isInstalled:1`).
 
+**Fase 6 — installazione di terze parti: il `.default` è la sola fonte di verità**
+
+Le fasi 0–5 hanno canonizzato il ciclo di vita per i pacchetti **bundled**, ma i due percorsi di **terze parti** (installazione da repo Git via GUI admin) erano rimasti al vecchio contratto: pretendevano il config **vivo** nel repo clonato. Un plugin/tema scaffoldato secondo lo standard — che committa il solo `.default`, essendo il vivo git-ignored — veniva quindi **rifiutato** in validazione (`file mancanti -> pluginConfig.json5`) e la cartella appena clonata rimossa dal rollback: installazione impossibile.
+
+Scelta (maintainer): **canonizzare il solo `.default`**, invece di accettare entrambe le forme.
+
+- **`plugins/admin/pluginsInstall.js` e `themesInstall.js`**: nuova fase di job `materializeConfigs` fra `cloneDone` e `validate`, che invoca una `materializeConfigFile(packageDir, descriptorName)` volutamente identica nei due moduli (duplicata, come già il parser di progress: i due installer restano disaccoppiati). Pretende `<descriptor>.default.json5`, **scarta** gli eventuali vivi committati nel repo che duplicano un `.default` (via `resetConfigsToDefault`, con warning) e **materializza** tutti i vivi mancanti (via `materializeDirDefaults`) — descrittore *e* config secondari del pacchetto. La validazione richiede ora il `.default` e gira sul vivo appena generato.
+- **Commenti preservati in scrittura**: `finalizePluginConfig`/`finalizeThemeConfig` scrivevano `active`/`isInstalled` riserializzando l'intero file con `JSON.stringify`, distruggendo i commenti del vivo appena materializzato. Passano a `setJson5Key` (upsert chirurgico, `afterKey: 'schemaVersion'`, come il boot). Resta un solo fallback alla riserializzazione: un `themeConfig.default` legacy che dichiari ancora `active`, chiave che `setJson5Key` non sa rimuovere — caso già fuori standard e segnalato da un warning.
+- **Effetto sul criterio "tema bundled"**: ora il `.default` ce l'hanno anche i temi clonati, quindi non discrimina più (vedi *Decisioni emerse*). `ensureThemesInstalled` resta corretto perché è non distruttivo e `themesInstall` scrive esplicitamente `isInstalled: 0` nel vivo.
+- **Tooling e GUI**: `scripts/generateTestPlugins.sh` e `generateTestThemes.sh` generano il `.default` (niente più `active`/`isInstalled` nei temi, `schemaVersion` presente); le pagine `install.ejs` di plugin e temi dichiarano il requisito all'admin.
+- Verifica: 14 nuovi test unit (`plugins/admin/tests/unit/installConfigMaterialization.test.js`, paralleli plugin/tema) + 1 su `ensureThemesInstalled` per la nuova invariante + 4 di integrazione end-to-end **offline** (`pluginsInstall.localRepo.test.js`: `runInstall` completo contro un repo git locale, con `git clone` reale); suite 110 suite / 2625 test verdi; boot reale pulito. I 5 test di `themesInstall.realRepo` che installano davvero sono **skippati con warning esplicito** finché i due repo GitHub di test non vengono rigenerati e ripushati con il `.default` (debito tracciato, visibile a ogni run).
+
 ### Decisioni emerse in implementazione (integrano il design)
 - **Reset online = reset + restart** (self-respawn/supervisor), non hot-reload "senza riavvio" puro: realizza l'intento riusando l'infrastruttura di restart esistente; l'hot-reload per-plugin resta una miglioria futura.
 - **Conferma rafforzata `essentialPlugins`**: rimandata alla Fase 2 (lì vive la lista). In Fase 1 il reset usa conferma base + **avviso lockout** quando tocca dati utente (`userAccount`/`userRole`).
@@ -181,7 +199,7 @@ Aggiornato al 2026-06-27 (Fase 5 completata) · branch `claude/dazzling-darwin-g
 - **`accessControl.default`** conserva l'esempio `customRules.userProfile` (regola di sicurezza *funzionale*, protegge la pagina profilo): svuotarlo esporrebbe la pagina. Spostare quella protezione "dove appartiene" (è `adminUsers` a possedere la pagina) è una miglioria architetturale separata.
 - **`isInstalled` persistito (Variante 1, scelta dal maintainer):** lo stato vive nel file (non solo in memoria), scritto dal boot. Ha richiesto `setJson5Key` (add-or-update preservando i commenti) e l'untrack dei descrittori. `installPlugin()` è agganciato alla transizione `isInstalled` non-1→1: così la presenza/valore di `isInstalled` traccia anche il setup one-shot, senza un flag separato.
 - **Untrack dei `themeConfig` spostato alla Fase 5 → poi RISOLTO in Fase 5:** in Fase 2 i temi non avevano ancora la gestione di `isInstalled`; untrackati allora sarebbero risultati senza `isInstalled` (rompendo `tests/unit/admin/themesManagment.test.js`). Si erano quindi untrackati solo i `pluginConfig`, lasciando i `themeConfig` tracciati con `isInstalled:1`. In **Fase 5** `ensureThemesInstalled` ripristina `isInstalled:1` al boot per i temi bundled, sbloccando l'untrack dei `themeConfig` (e il test è stato reso robusto al clone fresco, asserendo sul `.default`).
-- **Tema "bundled" = ha un `.default` (Fase 5):** il criterio per distinguere un tema distribuito con ital8cms (sempre installato) da uno clonato a runtime via `themesInstall` (attivazione manuale, `isInstalled:0`) è la **presenza di `themeConfig.default.json5`**. `ensureThemesInstalled` agisce solo sui bundled, lasciando intatti i clonati — coerente con `themesInstall` che NON genera un `.default`. Non si è introdotto il modello a 4 stati dei plugin per i temi: il design (Fase 5) li vuole più semplici ("presenza = preso in carico"), e `isInstalled` dei temi è un flag gestito (1 per i bundled, 0→admin per i clonati), non una precondizione calcolata dalle dipendenze.
+- **Tema "bundled" = ha un `.default` (Fase 5):** il criterio per distinguere un tema distribuito con ital8cms (sempre installato) da uno clonato a runtime via `themesInstall` (attivazione manuale, `isInstalled:0`) era la **presenza di `themeConfig.default.json5`**. `ensureThemesInstalled` agisce solo sui bundled, lasciando intatti i clonati — coerente con `themesInstall` che allora NON generava un `.default`. Non si è introdotto il modello a 4 stati dei plugin per i temi: il design (Fase 5) li vuole più semplici ("presenza = preso in carico"), e `isInstalled` dei temi è un flag gestito (1 per i bundled, 0→admin per i clonati), non una precondizione calcolata dalle dipendenze. **Superato dalla Fase 6** (vedi sotto): ora il `.default` ce l'hanno anche i temi clonati, e a distinguerli è il valore di `isInstalled` già scritto nel vivo.
 - **Scope del reconcile `schemaVersion` (Fase 4) = solo config git-ignored:** il merge additivo *scrive* sul vivo, quindi al boot toccherebbe file tracciati. È limitato a `plugins/` + i 3 core (tutti git-ignored) così la riconciliazione non sporca il working tree in un checkout pulito. `themes/` entrerà nello scope in Fase 5, insieme all'untrack dei `themeConfig` — stessa motivazione del punto precedente.
 - **`schemaVersion` come merge additivo (soluzione-ponte), non migrazione vera:** la Fase 4 risolve solo le *aggiunte* di chiavi e segnala il drift; rinomine/rimozioni e la persistenza de "l'ultima versione vista" restano *Punti rimandati*. Il box `[SCHEMA]` invita esplicitamente a rivedere i valori dei campi aggiunti.
 
@@ -194,6 +212,7 @@ Aggiornato al 2026-06-27 (Fase 5 completata) · branch `claude/dazzling-darwin-g
 | 3 — gate di init + untrack core | ✅ completata |
 | 4 — `schemaVersion` (solo detection) | ✅ completata |
 | 5 — allineamento temi | ✅ completata |
+| 6 — install di terze parti (`.default` canonico) | ✅ completata (resta da rigenerare i 2 repo GitHub di test dei temi) |
 
 ## Punti rimandati
 

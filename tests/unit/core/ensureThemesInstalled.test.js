@@ -80,6 +80,21 @@ describe('ensureThemesInstalled', () => {
     expect(live.isInstalled).toBe(0); // l'attivazione manuale dell'admin è preservata
   });
 
+  test('tema clonato via themesInstall (CON .default e isInstalled: 0) → non promosso a 1', async () => {
+    // Da quando il `.default` è obbligatorio anche nei pacchetti di terze parti,
+    // un tema clonato ne ha uno esattamente come un bundled: a proteggerlo dalla
+    // promozione a `isInstalled: 1` non è più l'assenza del sidecar ma il valore
+    // già scritto nel vivo da themesInstall.finalizeThemeConfig.
+    theme('clonedWithDefault', { def: DEF, live: '// h\n{\n  "schemaVersion": 1,\n  "isInstalled": 0,\n}\n' });
+
+    const res = await ensureThemesInstalled(themesDir);
+
+    expect(res.updated).toEqual([]);
+    expect(res.skipped).toEqual([{ theme: 'clonedWithDefault', reason: 'already-present' }]);
+    const live = loadJson5(path.join(themesDir, 'clonedWithDefault', 'themeConfig.json5'));
+    expect(live.isInstalled).toBe(0);
+  });
+
   test('bundled theme with .default but no live → skipped (no-live)', async () => {
     theme('orphan', { def: DEF });
 
