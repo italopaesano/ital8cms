@@ -20,7 +20,9 @@ Indice della documentazione. La guida operativa per l'AI e l'architettura in sin
 
 ## Decision record
 
-- [`decisions/`](./decisions/) — registri di decisioni architetturali (admin plugin pages, project review, campi tema `active`/`isInstalled`)
+- [`decisions/`](./decisions/) — registri di decisioni architetturali (admin plugin pages, project review, campi tema `active`/`isInstalled`, ciclo di vita dei config, migrazione dei config)
+  - [`config-lifecycle.it.md`](./decisions/config-lifecycle.it.md) — sidecar `x.default.json5`, stati dei plugin, boot graceful, gate di init
+  - [`config-migrations.it.md`](./decisions/config-migrations.it.md) — cartella `migrations/` di plugin e temi: come si porta un'installazione da una `schemaVersion` alla successiva
 
 ## Archivio (storico / spunto)
 

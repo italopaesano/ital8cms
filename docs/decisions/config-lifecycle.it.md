@@ -91,7 +91,7 @@ Lo stato non è una seconda fonte di verità separata: è la combinazione tra **
 - **Hash del default scartato:** misurerebbe anche i *valori*, non la sola *struttura* → falsi positivi di drift.
 - Distinto da `pluginDescription.version` (versione del **codice** del plugin). `upgradePlugin(old, new)` resta il **luogo** delle migrazioni; `schemaVersion` per-file indica **quali file** sono fuori allineamento.
 - Il campo `schemaVersion` va su **tutti i config versionabili** (descrittori, core e config di contenuto), così ogni file può evolvere la propria struttura in modo indipendente.
-- In questa decisione si implementa **solo il rilevamento** del drift (confronto `schemaVersion` default↔live → warning). La migrazione vera è rimandata.
+- In questa decisione si implementa **solo il rilevamento** del drift (confronto `schemaVersion` default↔live → warning). La migrazione vera è rimandata → **ora definita in [`config-migrations.it.md`](./config-migrations.it.md)** (cartella `migrations/` per plugin, temi e config core; il descrittore diventa il *clock* del pacchetto, quindi "l'ultima versione vista" non va persistita da nessuna parte: è la `schemaVersion` del vivo).
 - **Comportamento provvisorio del boot** quando un `x.json5` vivo esiste già ma il suo `.default` ha una `schemaVersion` più recente (struttura cambiata): **merge additivo** delle sole chiavi nuove del default (senza toccare i valori esistenti) **+ warning**. È una soluzione-ponte: il comportamento ideale (controllo pre-aggiornamento + scelta esplicita dell'utente su come procedere) sarà definito quando si stabiliranno le procedure di aggiornamento.
 
 ### 7. Temi
@@ -216,7 +216,7 @@ Scelta (maintainer): **canonizzare il solo `.default`**, invece di accettare ent
 
 ## Punti rimandati
 
-- **Migrazione vera** dei config al cambio di `schemaVersion` (oltre il semplice warning): meccanismo, dove persistere "l'ultima versione vista" (candidato: `scripts/lib/stateManager.js`), aggancio a `upgradePlugin()`.
+- ~~**Migrazione vera** dei config al cambio di `schemaVersion`~~ → **RISOLTO** in [`config-migrations.it.md`](./config-migrations.it.md) (2026-07-30). Nessuno stato da persistere: con il descrittore come clock, "l'ultima versione vista" **è** la `schemaVersion` del file vivo, quindi `scripts/lib/stateManager.js` non viene coinvolto. L'aggancio non è a `upgradePlugin()` ma a un runner del core (`migrationRunner.js`), perché i temi non hanno `main.js` e resterebbero scoperti.
 - **Reset via GUI web** dedicata (per ora solo CLI).
 - Semantica esatta delle "scelte di configurazione obbligatorie" come precondizione dello stato `installed`.
 - Cronologia/undo delle modifiche (backup rotazionale on-write): già prototipato in `plugins/adminBootstrapNavbar/lib/navbarFileManager.js`, da eventualmente promuovere a utility core in un intervento separato.
