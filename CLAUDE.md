@@ -1512,7 +1512,7 @@ Configurazione di launch (`.vscode/launch.json`):
 
 ## Miglioramenti futuri
 
-Spostato in [`docs/roadmap.it.md`](./docs/roadmap.it.md).
+Direzioni ampie in [`docs/roadmap.it.md`](./docs/roadmap.it.md); i lavori **aperti e spuntabili** (punti rimandati dalle decisioni + debito emerso dagli interventi, ciascuno con la sua fonte) in [`TODO.md`](./TODO.md).
 
 ## Comandi di riferimento rapido
 

@@ -4,6 +4,8 @@
 
 Miglioramenti e lavori pianificati, raccolti dall'analisi del codebase. Non è un impegno di rilascio, ma una lista di direzioni.
 
+> I lavori **aperti e spuntabili** (punti rimandati dalle decisioni, debito emerso dagli interventi) sono raccolti in [`TODO.md`](../TODO.md), che rimanda qui per il dettaglio delle direzioni ampie.
+
 ## Documentazione (ital8doc)
 
 - Riempire gli stub `.md` inglesi (plugin, temi, core EXPLAIN) alla prima pubblicazione importante.

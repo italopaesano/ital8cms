@@ -18,6 +18,10 @@ Indice della documentazione. La guida operativa per l'AI e l'architettura in sin
 - [`roadmap.it.md`](./roadmap.it.md) — miglioramenti e lavori pianificati
 - [`security_improvement_for_V3.md`](./security_improvement_for_V3.md) — note di sicurezza per la V3
 
+## Lavori aperti
+
+- [`../TODO.md`](../TODO.md) — punti rimandati e debito tracciato, con checkbox e riferimento alla fonte
+
 ## Decision record
 
 - [`decisions/`](./decisions/) — registri di decisioni architetturali (admin plugin pages, project review, campi tema `active`/`isInstalled`, ciclo di vita dei config, migrazione dei config)
