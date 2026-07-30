@@ -7,5 +7,4 @@
   "nodeModuleDependency": {
     "better-sqlite3": "^9.2.2"
   },
-  "version": "1.0.0"
 }

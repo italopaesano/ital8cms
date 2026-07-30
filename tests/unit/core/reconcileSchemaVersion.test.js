@@ -111,6 +111,104 @@ describe('reconcileSchemaVersion', () => {
     expect(raw).toContain('// keep me');
   });
 
+  // Il merge additivo era limitato alle chiavi top-level: tre dei quattro bump
+  // realmente avvenuti nel progetto non arrivavano alle installazioni esistenti.
+  // Questi test ricalcano quei casi reali (docs/decisions/config-migrations.it.md).
+  describe('merge ricorsivo', () => {
+    test('aggiunge una chiave annidata quando il parent esiste già nel vivo', async () => {
+      // Caso reale: ital8Config 2→3, `maintenance.exemptPaths`.
+      const [d, l] = paths(
+        '{ "schemaVersion": 3, "maintenance": { "enabled": false, "exemptPaths": ["/api/adminUsers/login"] } }\n',
+        '// h\n{\n  "schemaVersion": 2,\n  "maintenance": {\n    "enabled": true,\n  },\n}\n'
+      );
+
+      const res = await reconcileSchemaVersion(d, l);
+
+      expect(res.added).toEqual(['maintenance.exemptPaths']);
+      const live = loadJson5(l);
+      expect(live.maintenance.exemptPaths).toEqual(['/api/adminUsers/login']);
+      expect(live.maintenance.enabled).toBe(true); // scelta dell'utente intatta
+    });
+
+    test('aggiunge una chiave sotto `custom`, dove vivono le impostazioni dei plugin', async () => {
+      // Caso reale: exampleComplete 1→2, `custom.dataPath`.
+      const [d, l] = paths(
+        '{ "schemaVersion": 2, "custom": { "showBanner": true, "dataPath": "./data" } }\n',
+        '// h\n{\n  "schemaVersion": 1,\n  "custom": {\n    "showBanner": false,\n  },\n}\n'
+      );
+
+      const res = await reconcileSchemaVersion(d, l);
+
+      expect(res.added).toEqual(['custom.dataPath']);
+      expect(loadJson5(l).custom).toEqual({ showBanner: false, dataPath: './data' });
+    });
+
+    test('scende su più livelli e riporta i path in notazione puntata', async () => {
+      const [d, l] = paths(
+        '{ "schemaVersion": 2, "a": { "b": { "c": 1, "d": 2 } } }\n',
+        '// h\n{\n  "schemaVersion": 1,\n  "a": {\n    "b": {\n      "c": 1,\n    },\n  },\n}\n'
+      );
+
+      const res = await reconcileSchemaVersion(d, l);
+
+      expect(res.added).toEqual(['a.b.d']);
+      expect(loadJson5(l).a.b).toEqual({ c: 1, d: 2 });
+    });
+
+    test('un sottoalbero interamente mancante viene inserito in blocco, senza discendervi', async () => {
+      const [d, l] = paths(
+        '{ "schemaVersion": 2, "custom": { "x": 1, "y": { "z": 2 } } }\n',
+        '// h\n{\n  "schemaVersion": 1,\n  "custom": {\n    "x": 1,\n  },\n}\n'
+      );
+
+      const res = await reconcileSchemaVersion(d, l);
+
+      expect(res.added).toEqual(['custom.y']); // non 'custom.y.z'
+      expect(loadJson5(l).custom.y).toEqual({ z: 2 });
+    });
+
+    test('non fonde gli array elemento per elemento: sono valori dell\'utente', async () => {
+      const [d, l] = paths(
+        '{ "schemaVersion": 2, "list": [1, 2, 3] }\n',
+        '// h\n{\n  "schemaVersion": 1,\n  "list": [9],\n}\n'
+      );
+
+      const res = await reconcileSchemaVersion(d, l);
+
+      expect(res.added).toEqual([]);
+      expect(loadJson5(l).list).toEqual([9]);
+    });
+
+    test('un cambio di solo VALORE non produce aggiunte (competenza delle migrazioni)', async () => {
+      // Caso reale: adminMedia 1→2, `nodeModuleDependency` svuotato. Il merge non
+      // può e non deve toccarlo; il chiamante lo classifica `unresolved`.
+      const [d, l] = paths(
+        '{ "schemaVersion": 2, "nodeModuleDependency": {} }\n',
+        '// h\n{\n  "schemaVersion": 1,\n  "nodeModuleDependency": { "multer": "^1.4.5" },\n}\n'
+      );
+
+      const res = await reconcileSchemaVersion(d, l);
+
+      expect(res.status).toBe('merged');
+      expect(res.added).toEqual([]);
+      expect(loadJson5(l).nodeModuleDependency).toEqual({ multer: '^1.4.5' });
+    });
+
+    test('preserva i commenti dentro il blocco annidato in cui inserisce', async () => {
+      const [d, l] = paths(
+        '{ "schemaVersion": 2, "custom": { "a": 1, "b": 2 } }\n',
+        '// live header\n{\n  "schemaVersion": 1,\n  "custom": {\n    // non perdermi\n    "a": 1,\n  },\n}\n'
+      );
+
+      await reconcileSchemaVersion(d, l);
+
+      const raw = fs.readFileSync(l, 'utf8');
+      expect(raw).toContain('// live header');
+      expect(raw).toContain('// non perdermi');
+      expect(loadJson5(l).custom.b).toBe(2);
+    });
+  });
+
   describe('errors', () => {
     test('throws when the default is missing', async () => {
       const l = write('x.json5', '{ "schemaVersion": 1 }\n');

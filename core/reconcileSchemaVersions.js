@@ -8,14 +8,27 @@
  *     `*.json5` con vivo esistente;
  *   - `pairs`: coppie esplicite (i config core: ital8Config/adminConfig/koaSession).
  *
- * Box anti-rumore: segnala solo i drift **significativi** — i `merged` con chiavi
- * effettivamente aggiunte e i casi `live-ahead` (anomali). Il semplice allineamento
- * di `schemaVersion` su un vivo pre-versionamento (merge senza chiavi nuove) avviene
- * ma resta silenzioso. Vedi config-lifecycle §6 (rilevamento drift, soluzione-ponte).
+ * Box anti-rumore, con una distinzione che vale la pena capire. Un merge che non
+ * ha aggiunto NULLA (`added: []`) significa due cose molto diverse a seconda di
+ * dove partiva il vivo:
+ *
+ *   - `from === 0` → il vivo è **pre-versionamento** (non aveva `schemaVersion`):
+ *     l'allineamento è di pura forma, non c'era drift. Resta **silenzioso**: è
+ *     esattamente il rumore che il box deve evitare.
+ *
+ *   - `from >= 1` → il vivo era **già versionato** e il default è andato avanti,
+ *     ma il merge non ha trovato una sola chiave da aggiungere. Vuol dire che il
+ *     bump ha cambiato qualcosa che il merge non sa vedere — un valore, una
+ *     rinomina, una rimozione. È il caso `unresolved`, e va **segnalato**.
+ *
+ * Prima erano indistinguibili e tacevano entrambi: così i tre bump del progetto
+ * che non hanno prodotto l'effetto atteso sono passati inosservati, lasciando
+ * ogni volta un vivo la cui `schemaVersion` dichiarava di essere aggiornato
+ * mentre non lo era. Vedi docs/decisions/config-migrations.it.md.
  *
  * API:
  *   reconcileSchemaVersions({ containers?: string[], pairs?: {label,defaultPath,livePath}[] })
- *     → Promise<{ drifted, alignedSilently, ahead, errors }>
+ *     → Promise<{ drifted, unresolved, alignedSilently, ahead, errors }>
  *
  * Non lancia per i singoli errori (li raccoglie in `errors`): il boot non si ferma.
  */
@@ -60,7 +73,8 @@ async function reconcileSchemaVersions({ containers = [], pairs = [] } = {}) {
   for (const c of containers) all.push(...scanContainer(c));
 
   const drifted = [];          // merged con chiavi aggiunte (drift significativo)
-  const alignedSilently = [];  // merged senza chiavi nuove (solo schemaVersion bump)
+  const unresolved = [];       // merged senza chiavi nuove su un vivo GIÀ versionato
+  const alignedSilently = [];  // merged senza chiavi nuove su un vivo pre-versionamento
   const ahead = [];            // vivo più avanti del default (anomalo)
   const errors = [];
 
@@ -69,6 +83,7 @@ async function reconcileSchemaVersions({ containers = [], pairs = [] } = {}) {
       const res = await reconcileSchemaVersion(defaultPath, livePath);
       if (res.status === 'merged') {
         if (res.added && res.added.length > 0) drifted.push({ label, from: res.from, to: res.to, added: res.added });
+        else if (res.from >= 1) unresolved.push({ label, from: res.from, to: res.to });
         else alignedSilently.push({ label, from: res.from, to: res.to });
       } else if (res.status === 'live-ahead') {
         ahead.push({ label, from: res.from, to: res.to });
@@ -78,12 +93,14 @@ async function reconcileSchemaVersions({ containers = [], pairs = [] } = {}) {
     }
   }
 
-  if (drifted.length > 0 || ahead.length > 0) printSchemaDriftBox(drifted, ahead);
+  if (drifted.length > 0 || unresolved.length > 0 || ahead.length > 0) {
+    printSchemaDriftBox(drifted, unresolved, ahead);
+  }
 
-  return { drifted, alignedSilently, ahead, errors };
+  return { drifted, unresolved, alignedSilently, ahead, errors };
 }
 
-function printSchemaDriftBox(drifted, ahead) {
+function printSchemaDriftBox(drifted, unresolved, ahead) {
   const line = '[SCHEMA] ' + '═'.repeat(58);
   const out = ['', line, '[SCHEMA]  ⚠  Drift di struttura (schemaVersion) rilevato al boot', line];
   if (drifted.length > 0) {
@@ -93,9 +110,23 @@ function printSchemaDriftBox(drifted, ahead) {
     }
     out.push(
       '[SCHEMA]',
-      '[SCHEMA]  Soluzione-ponte: aggiunte SOLO le chiavi nuove (valori esistenti',
-      '[SCHEMA]  intatti). Per rinomine/rimozioni intervieni a mano — la migrazione',
-      '[SCHEMA]  vera non è automatica. Verifica i valori dei nuovi campi.',
+      '[SCHEMA]  Aggiunte SOLO le chiavi nuove, a ogni profondità (valori esistenti',
+      '[SCHEMA]  intatti). Per rinomine/rimozioni serve una migrazione dedicata',
+      '[SCHEMA]  (migrations/). Verifica i valori dei nuovi campi.',
+    );
+  }
+  if (unresolved.length > 0) {
+    out.push('[SCHEMA]', `[SCHEMA]  ${unresolved.length} config con drift NON risolto dal merge:`);
+    for (const u of unresolved) {
+      out.push(`[SCHEMA]    • ${u.label}: v${u.from} → v${u.to}  (nessuna chiave da aggiungere)`);
+    }
+    out.push(
+      '[SCHEMA]',
+      '[SCHEMA]  Il .default ha alzato schemaVersion ma la struttura del vivo era',
+      '[SCHEMA]  già completa: il bump riguarda un VALORE cambiato, una rinomina o',
+      '[SCHEMA]  una rimozione — cose che il merge additivo non può applicare.',
+      '[SCHEMA]  Confronta il vivo col suo .default e allinea a mano, oppure fornisci',
+      '[SCHEMA]  una migrazione in migrations/ (docs/decisions/config-migrations.it.md).',
     );
   }
   if (ahead.length > 0) {

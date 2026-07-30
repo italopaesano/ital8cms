@@ -7,13 +7,23 @@
  * file, non i valori. L'incremento è delegato allo sviluppatore quando cambia la
  * struttura del `.default`. Al boot, se il `.default` ha una `schemaVersion` più
  * recente del vivo (struttura evoluta), questa utility:
- *   1. aggiunge al vivo le sole chiavi top-level **nuove** presenti nel default
- *      (senza toccare i valori già esistenti — niente override delle scelte utente);
+ *   1. aggiunge al vivo le chiavi **nuove** presenti nel default, a QUALSIASI
+ *      profondità (senza toccare i valori già esistenti — niente override delle
+ *      scelte utente);
  *   2. allinea `schemaVersion` del vivo a quella del default.
  *
- * È volutamente PARZIALE: gestisce solo le *aggiunte* di chiavi. Rinominazioni e
- * rimozioni richiedono la migrazione vera (rimandata). Per questo il chiamante
- * emette comunque un warning di drift, così lo sviluppatore può rivedere.
+ * MERGE RICORSIVO: la prima versione aggiungeva le sole chiavi **top-level**, e
+ * sul campo non bastava — quasi tutte le impostazioni di un plugin vivono sotto
+ * `custom`, che nel vivo esiste già, quindi ogni nuovo default annidato veniva
+ * saltato. Dei quattro bump realmente avvenuti nel progetto, tre non hanno
+ * prodotto l'effetto atteso (due chiavi annidate e un cambio di valore) e hanno
+ * generato altrettanti workaround nel codice. Ora la traversata scende nei
+ * sotto-oggetti; quando manca un intero sottoalbero viene inserito in blocco,
+ * senza discendervi. Vedi docs/decisions/config-migrations.it.md.
+ *
+ * Resta PARZIALE per costruzione: gestisce le *aggiunte*, non rinominazioni,
+ * rimozioni o cambi di valore — quelli sono competenza delle migrazioni
+ * (`migrations/`). Per questo il chiamante segnala comunque il drift.
  * Nota: i commenti associati alle chiavi nuove nel `.default` NON vengono copiati
  * (setJson5Key inserisce solo `chiave: valore`).
  *
@@ -25,6 +35,7 @@
  *       'aligned'            stesse versioni: nessuna azione
  *       'live-ahead'         il vivo è PIÙ avanti del default (anomalo) → { from, to }
  *       'merged'             drift risolto additivamente → { from, to, added: string[] }
+ *                            `added` contiene path in notazione puntata (`custom.dataPath`)
  *
  * Throws su: argomenti non validi; default mancante / JSON5 non valido; vivo JSON5 non valido.
  */
@@ -37,6 +48,43 @@ const setJson5Key = require('./setJson5Key');
 
 function asIntVersion(value, fallback) {
   return Number.isInteger(value) ? value : fallback;
+}
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * Raccoglie i path presenti nel default e assenti nel vivo, scendendo nei
+ * sotto-oggetti. Si ferma al primo livello mancante: se manca un intero
+ * sottoalbero viene riportato quello, non le sue foglie (verrà inserito in
+ * blocco, con la sua struttura).
+ *
+ * Gli array sono trattati come valori, non come contenitori navigabili: un array
+ * già presente nel vivo è una scelta dell'utente e non va fuso elemento per
+ * elemento (coerente con editJson5, che non naviga negli indici).
+ *
+ * @param {object} defaultObj
+ * @param {object} liveObj
+ * @param {string[]} [prefix] - Path accumulato nella ricorsione.
+ * @returns {Array<{segments: string[], value: *}>}
+ */
+function collectMissingPaths(defaultObj, liveObj, prefix = []) {
+  const missing = [];
+  for (const key of Object.keys(defaultObj)) {
+    if (prefix.length === 0 && key === 'schemaVersion') continue;
+    const segments = [...prefix, key];
+    const defaultValue = defaultObj[key];
+    if (!Object.prototype.hasOwnProperty.call(liveObj, key)) {
+      missing.push({ segments, value: defaultValue });
+      continue;
+    }
+    // Presente in entrambi: si scende solo se entrambi sono oggetti semplici.
+    if (isPlainObject(defaultValue) && isPlainObject(liveObj[key])) {
+      missing.push(...collectMissingPaths(defaultValue, liveObj[key], segments));
+    }
+  }
+  return missing;
 }
 
 /**
@@ -68,16 +116,16 @@ async function reconcileSchemaVersion(defaultPath, livePath) {
   if (liveV === defV) return { status: 'aligned' };
   if (liveV > defV) return { status: 'live-ahead', from: liveV, to: defV };
 
-  // liveV < defV → drift: merge additivo delle chiavi top-level nuove del default.
+  // liveV < defV → drift: merge additivo RICORSIVO delle chiavi nuove del default.
   await setJson5Key(livePath, 'schemaVersion', defV); // allinea (aggiunge se mancava)
 
   const added = [];
-  for (const key of Object.keys(def)) {
-    if (key === 'schemaVersion') continue;
-    if (!Object.prototype.hasOwnProperty.call(live, key)) {
-      await setJson5Key(livePath, key, def[key], { afterKey: 'schemaVersion' });
-      added.push(key);
-    }
+  for (const { segments, value } of collectMissingPaths(def, live)) {
+    // `afterKey` vale solo al top-level: in profondità l'inserimento va in testa
+    // al blocco del parent, dove non esiste un'ancora sensata da rispettare.
+    const options = segments.length === 1 ? { afterKey: 'schemaVersion' } : {};
+    await setJson5Key(livePath, segments, value, options);
+    added.push(segments.join('.'));
   }
 
   return { status: 'merged', from: liveV, to: defV, added };

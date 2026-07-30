@@ -555,7 +555,29 @@ async function installPlugin(pluginSys, pathPluginFolder) {
 
 ### upgradePlugin()
 
-Chiamata quando la versione in `pluginDescription.json5` è maggiore di `installedVersion` in `pluginConfig.json5`.
+Chiamata quando la `version` in `pluginDescription.json5` (versione del **codice**,
+read-only) è maggiore della `version` nel `pluginConfig.json5` **vivo** — che
+significa *"ultima versione per cui l'upgrade è già stato eseguito"*, non la
+versione corrente. È uno stato runtime, come `isInstalled`: sta nel vivo
+(git-ignored), **mai** nel `.default`.
+
+Tre regole del ciclo:
+
+- **La prima installazione NON è un upgrade.** Lì gira `installPlugin()`; qui si
+  registra soltanto la versione di partenza, senza invocare l'hook.
+- **La `version` si persiste solo a esito riuscito** (via `setJson5Key`, chirurgico:
+  una chiave, commenti e formattazione intatti). Se `upgradePlugin()` lancia, la
+  versione resta indietro e l'upgrade viene ritentato al boot successivo — il
+  `throw` finisce nel catch graceful e marca il plugin `incomplete`.
+- **Scrivi hook idempotenti comunque.** Un upgrade può essere ritentato dopo un
+  fallimento parziale.
+
+> ⚠️ Fino alla v2.66.0 la `version` non veniva **mai** persistita (il codice lo
+> dichiarava esplicitamente): `oldVersion` valeva quindi sempre `'0.0.0'` e
+> `upgradePlugin()` girava **a ogni boot** invece che agli aggiornamenti. Il difetto
+> è passato inosservato perché tutte le implementazioni esistenti erano stub vuoti.
+> Se hai un plugin con un `upgradePlugin()` reale scritto prima, verificane
+> l'idempotenza.
 
 ```js
 async function upgradePlugin(pluginSys, pathPluginFolder, oldVersion, newVersion) {
@@ -573,7 +595,8 @@ async function upgradePlugin(pluginSys, pathPluginFolder, oldVersion, newVersion
 
   console.log(`MyPlugin upgraded: ${oldVersion} → ${newVersion}`);
 
-  // installedVersion verrà aggiornato automaticamente
+  // La `version` nel pluginConfig.json5 vivo viene aggiornata da pluginSys
+  // SOLO se questa funzione termina senza lanciare.
 }
 ```
 

@@ -39,5 +39,4 @@
     // Numero di file per pagina nella UI (griglia e lista)
     "itemsPerPage": 50,
   },
-  "version": "1.0.0"
 }

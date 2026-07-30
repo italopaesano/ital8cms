@@ -36,5 +36,4 @@
     "defaultLoginRedirectURL": "/api/adminUsers/logged",
     "useLoginStatusBox": true
   },
-  "version": "1.0.0"
 }

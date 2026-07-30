@@ -612,3 +612,16 @@ async function editJson5(filePath, fieldNameOrPath, newValue) {
 }
 
 module.exports = editJson5;
+
+// Localizzatore testuale condiviso con setJson5Key.
+//
+// setJson5Key deve INSERIRE una chiave dentro un oggetto annidato già esistente
+// (es. `custom.dataPath` quando `custom` c'è ma la chiave no), operazione fuori
+// dallo scope di editJson5 (che aggiorna soltanto). Per farlo gli serve sapere
+// dove comincia il blocco `{` del parent: esattamente ciò che `locatePath`
+// calcola qui, sopra una mask che distingue codice da stringhe e commenti.
+//
+// Esposto invece di duplicare quella logica: è la parte più delicata del modulo
+// (una seconda implementazione divergerebbe in silenzio), e resta un dettaglio
+// interno al core — non fa parte dell'API pubblica di editJson5.
+module.exports._internals = { buildCodeMask, buildDepthArray, locatePath };

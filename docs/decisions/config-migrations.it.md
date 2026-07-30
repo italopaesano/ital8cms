@@ -1,7 +1,8 @@
 <!-- ital8doc v1-1 · tipo: decision · lang: it · rev: 1 · ref -->
 # Decisione: migrazione dei file di configurazione (`migrations/`)
 
-> **Stato: APPROVATA** (2026-07-30) — design completo, implementazione da avviare.
+> **Stato: APPROVATA** (2026-07-30) — design completo; **prerequisiti implementati**
+> (v2.66.0, vedi in fondo), runner `migrations/` da realizzare.
 > Estende [`config-lifecycle.it.md`](./config-lifecycle.it.md), che al §6 aveva
 > definito `schemaVersion` come **solo rilevamento** del drift e rimandato la
 > migrazione vera. Questo documento è quella migrazione.
@@ -344,26 +345,35 @@ codice.
 | Box al boot | `[MIGRATE]` |
 | Policy | `ital8Config.json5 → migrations.autoApply` (default `false`) |
 
-## Prerequisiti (intervento separato, da fare PRIMA)
+## Prerequisiti — ✅ COMPLETATI (v2.66.0)
 
-Tre correzioni al meccanismo esistente, indipendenti da `migrations/` ma
-**bloccanti** per esso:
+Tre correzioni al meccanismo esistente, indipendenti da `migrations/` ma bloccanti
+per esso. Realizzate in un intervento separato **prima** del runner.
 
-1. **Merge ricorsivo.** Il merge additivo deve scendere nelle chiavi annidate: da
-   solo copre 2 dei 3 fallimenti reali e rende superflui i workaround 1 e 2.
-   Richiede che `setJson5Key` sappia scrivere chiavi annidate — oggi è
-   dichiaratamente "SOLO chiavi top-level".
-2. **`upgradePlugin()` riparato.** `oldVersion` è letto da `pluginConfig.version`, che
-   `pluginSys.js:155-157` dichiara di non salvare mai: è **sempre `'0.0.0'`**, quindi
-   l'hook gira **a ogni boot** invece che all'upgrade. Non se n'è accorto nessuno
-   perché tutte e 10 le implementazioni sono stub vuoti — il che rende questo il
-   momento più economico per correggerlo.
-3. **Box `[SCHEMA]` invertito.** Segnalare i `merged` con `added: []` come
-   **sospetti** invece di silenziarli. È il cambio più piccolo dei tre ed è quello
-   che avrebbe fatto emergere tutti e tre i fallimenti al primo boot.
+1. **Merge ricorsivo** — ✅ `reconcileSchemaVersion` scende ora nei sotto-oggetti e
+   riporta i path in notazione puntata (`custom.dataPath`). Un sottoalbero
+   interamente mancante viene inserito in blocco senza discendervi; gli array
+   restano valori dell'utente e non vengono fusi elemento per elemento. Ha richiesto
+   di estendere `setJson5Key` ai path annidati (`['custom','dataPath']`), riusando il
+   locator testuale di `editJson5` invece di duplicarlo — la parte più delicata del
+   modulo, dove una seconda implementazione divergerebbe in silenzio.
+2. **`upgradePlugin()` riparato** — ✅ la `version` è ora persistita nel
+   `pluginConfig.json5` vivo, **solo a esito riuscito**, con semantica "ultima
+   versione per cui l'upgrade è stato eseguito". La prima installazione non è un
+   upgrade: registra la versione di partenza senza invocare l'hook. La chiave
+   `version` è stata rimossa dai 7 `.default` che la portavano (è stato runtime,
+   come `isInstalled`).
+3. **Box `[SCHEMA]` invertito** — ✅ nuova categoria `unresolved`: un merge con
+   `added: []` su un vivo **già versionato** (`from >= 1`) viene segnalato, perché
+   significa che il bump riguarda un valore, una rinomina o una rimozione — cose che
+   il merge non sa applicare. Il caso `from === 0` (vivo pre-versionamento) resta
+   silenzioso: è il rumore che il box deve evitare. Prima erano indistinguibili e
+   tacevano entrambi.
 
 Il punto 3 è anche il presupposto tecnico del §7: finché `reconcileSchemaVersion`
-allinea la `schemaVersion` a vuoto, **brucia il trigger** di qualunque migrazione.
+allineava la `schemaVersion` a vuoto **senza dirlo**, bruciava il trigger di
+qualunque migrazione. Ora il caso è visibile; quando il runner esisterà, dovrà
+comunque girare **prima** della riconciliazione.
 
 ## Conseguenze
 

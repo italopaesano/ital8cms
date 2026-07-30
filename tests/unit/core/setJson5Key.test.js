@@ -119,6 +119,82 @@ describe('setJson5Key', () => {
     });
   });
 
+  describe('chiavi annidate', () => {
+    const NESTED = `// This file follows the JSON5 standard
+{
+  "schemaVersion": 1,
+  "active": 1,
+  custom: {
+    // commento dell'utente su showBanner
+    showBanner: true,
+    nested: {
+      deep: 1,
+    },
+  },
+}
+`;
+
+    test('inserisce una chiave in un oggetto annidato preservando i commenti', async () => {
+      const p = writeFile('nested.json5', NESTED);
+
+      const res = await setJson5Key(p, ['custom', 'dataPath'], './data');
+
+      expect(res.action).toBe('inserted');
+      expect(loadJson5(p).custom.dataPath).toBe('./data');
+      expect(read(p)).toContain("// commento dell'utente su showBanner");
+      // il valore preesistente non viene toccato
+      expect(loadJson5(p).custom.showBanner).toBe(true);
+    });
+
+    test('inserisce a due livelli di profondità', async () => {
+      const p = writeFile('nested.json5', NESTED);
+
+      await setJson5Key(p, ['custom', 'nested', 'added'], [1, 2]);
+
+      expect(loadJson5(p).custom.nested).toEqual({ deep: 1, added: [1, 2] });
+    });
+
+    test('aggiorna una chiave annidata già presente (delega a editJson5)', async () => {
+      const p = writeFile('nested.json5', NESTED);
+
+      const res = await setJson5Key(p, ['custom', 'showBanner'], false);
+
+      expect(res.action).toBe('updated');
+      expect(loadJson5(p).custom.showBanner).toBe(false);
+    });
+
+    test('valore già uguale → unchanged, file non riscritto', async () => {
+      const p = writeFile('nested.json5', NESTED);
+      const before = read(p);
+
+      const res = await setJson5Key(p, ['custom', 'nested', 'deep'], 1);
+
+      expect(res.action).toBe('unchanged');
+      expect(read(p)).toBe(before);
+    });
+
+    test('parent inesistente → throw (i segmenti intermedi non si creano)', async () => {
+      const p = writeFile('nested.json5', NESTED);
+
+      await expect(setJson5Key(p, ['assente', 'chiave'], 1))
+        .rejects.toThrow(/non esiste o non è un oggetto/);
+    });
+
+    test('parent non-oggetto → throw', async () => {
+      const p = writeFile('scalar.json5', '// h\n{\n  "schemaVersion": 1,\n  "weight": 5,\n}\n');
+
+      await expect(setJson5Key(p, ['weight', 'chiave'], 1))
+        .rejects.toThrow(/non esiste o non è un oggetto/);
+    });
+
+    test('path non valido → throw', async () => {
+      const p = writeFile('nested.json5', NESTED);
+
+      await expect(setJson5Key(p, [], 1)).rejects.toThrow(/non-empty string or an array/);
+      await expect(setJson5Key(p, ['custom', ''], 1)).rejects.toThrow(/non-empty string or an array/);
+    });
+  });
+
   describe('error handling', () => {
     test('throws when the file does not exist', async () => {
       await expect(
