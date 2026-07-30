@@ -83,16 +83,23 @@ Fonte: intervento v2.64.0 (canonizzazione del `.default`).
 
 ## 4. Documentazione e scaffolding
 
-- [ ] **Le skill di scaffolding non conoscono `migrations/`.**
-      `ital8cms-plugin-creator` e `ital8cms-theme-creator` documentano `schemaVersion`
-      ma non dicono che, al bump, il pacchetto dovrebbe dichiarare lo step di
-      migrazione. Da aggiungere: nota nelle *Conventions* + eventuale scaffolding
-      opzionale di `migrations/` con `migrations.json5` e un `from-v1-to-v2.md`
-      d'esempio.
+- [x] ~~**Le skill di scaffolding non conoscono `migrations/`**~~ — fatto (v2.69.0).
+      `ital8cms-plugin-creator` e `ital8cms-theme-creator` hanno ora la regola nelle
+      *Conventions*, un add-on dedicato e la nota obbligatoria nel riepilogo finale.
+      Scelta esplicita: **non** si scaffolda `migrations/` per un pacchetto nuovo
+      (a `schemaVersion: 1` non c'è nulla da cui migrare), ma la skill deve dire
+      cosa fare al primo cambio di struttura.
 - [ ] **`core/priorityMiddlewares/README.md`**: nota legacy di 10 righe, fuori
       standard ital8doc, che non documenta né il maintenance gate né gli altri
       priority middleware. Riscrittura come task dedicato.
       *(Fonte: CHANGELOG v2.63.0, "Gap noto".)*
+- [ ] **Completare la documentazione del plugin `admin`.** `EXPLAIN.it.md` (creato
+      in v2.69.0) copre a fondo la sola **installazione da repo Git**; gli altri
+      moduli — `pluginsManagment`, `themesManagment`, `pagesManagment`,
+      `systemSettings` — hanno per ora una riga di mappa ciascuno. Manca inoltre il
+      `README.it.md` del plugin, obbligatorio per ital8doc.
+      *(Il vecchio `EXPLAIN.md` era un placeholder di 15 righe con uno schema di
+      `pluginConfig` obsoleto; sostituito dallo stub inglese standard.)*
 - [ ] **Confermare il nome `_internals`** in `core/editJson5.js` — proprietà di
       export interna, introdotta in v2.66.0 per condividere il locator testuale con
       `setJson5Key` senza duplicarlo. Rinominabile senza impatto esterno.

@@ -1137,7 +1137,9 @@ Poiché il `.default` non porta `isInstalled`, un vivo appena materializzato (cl
 
 ### `schemaVersion` e drift
 
-Anche i `themeConfig` partecipano al rilevamento del drift di `schemaVersion`: al boot `reconcileSchemaVersions` (con `themes/` nello scope) confronta il vivo col `.default` e, se il `.default` è più avanti, fa il **merge additivo** (solo chiavi nuove) + box `[SCHEMA]`. Poiché i vivi dei temi sono git-ignored, questa scrittura al boot non sporca il working tree.
+Anche i `themeConfig` partecipano al rilevamento del drift di `schemaVersion`: al boot `reconcileSchemaVersions` (con `themes/` nello scope) confronta il vivo col `.default` e, se il `.default` è più avanti, fa il **merge additivo ricorsivo** (chiavi nuove a qualsiasi profondità, valori esistenti intatti) + box `[SCHEMA]`. Poiché i vivi dei temi sono git-ignored, questa scrittura al boot non sporca il working tree.
+
+Il merge copre le sole **aggiunte**. Se l'evoluzione del tema comporta una **rinomina, una rimozione o un cambio di valore**, il tema deve dichiararla nella propria cartella `migrations/` — stesso standard dei plugin, stesso runner del core (i temi non hanno `main.js`, quindi non hanno un hook di upgrade proprio: è la ragione per cui il runner vive nel core). Un tema con una migrazione pendente viene **escluso** dalla riconciliazione, altrimenti l'allineamento di `schemaVersion` brucerebbe il trigger. → [`docs/decisions/config-migrations.it.md`](../docs/decisions/config-migrations.it.md).
 
 ### Ordine al boot (in `index.js`, prima di `themeSys`)
 

@@ -13,7 +13,8 @@ Oggi i file di configurazione `.json5` sono committati come file "vivi": una vol
 
 Questa decisione completa quanto rimasto aperto in [`theme-active-isinstalled.it.md`](./theme-active-isinstalled.it.md), che definiva la rimozione di `active` dai temi e rimandava la semantica operativa di `isInstalled` "a un secondo momento". Questo è quel momento, esteso a plugin, temi e config globali.
 
-> **Scope attuale:** solo la gestione dei **default** (conservazione + ripristino) e il **modello a stati** che ne deriva. La cronologia/undo delle modifiche e la **migrazione vera** dei config tra versioni sono esplicitamente **rimandate** (vedi *Punti rimandati*).
+> **Scope di QUESTA decisione:** solo la gestione dei **default** (conservazione + ripristino) e il **modello a stati** che ne deriva. La cronologia/undo delle modifiche e la **migrazione vera** dei config tra versioni erano esplicitamente **rimandate**.
+> **Aggiornamento (2026-07-30):** la migrazione vera è ora definita e implementata in [`config-migrations.it.md`](./config-migrations.it.md) (cartella `migrations/`); resta rimandata la sola cronologia/undo (vedi *Punti rimandati*).
 
 ## Decisione
 
@@ -93,6 +94,7 @@ Lo stato non è una seconda fonte di verità separata: è la combinazione tra **
 - Il campo `schemaVersion` va su **tutti i config versionabili** (descrittori, core e config di contenuto), così ogni file può evolvere la propria struttura in modo indipendente.
 - In questa decisione si implementa **solo il rilevamento** del drift (confronto `schemaVersion` default↔live → warning). La migrazione vera è rimandata → **ora definita in [`config-migrations.it.md`](./config-migrations.it.md)** (cartella `migrations/` per plugin, temi e config core; il descrittore diventa il *clock* del pacchetto, quindi "l'ultima versione vista" non va persistita da nessuna parte: è la `schemaVersion` del vivo).
 - **Comportamento provvisorio del boot** quando un `x.json5` vivo esiste già ma il suo `.default` ha una `schemaVersion` più recente (struttura cambiata): **merge additivo** delle sole chiavi nuove del default (senza toccare i valori esistenti) **+ warning**. È una soluzione-ponte: il comportamento ideale (controllo pre-aggiornamento + scelta esplicita dell'utente su come procedere) sarà definito quando si stabiliranno le procedure di aggiornamento.
+  > **Superato (2026-07-30).** Il merge è ora **ricorsivo** e non più limitato alle chiavi top-level (v2.66.0), e la scelta esplicita è realizzata: le migrazioni dichiarate in `migrations/` hanno la precedenza sul merge, si applicano su richiesta (`npm run cli -- migrate`) e il boot si limita a segnalarle. → [`config-migrations.it.md`](./config-migrations.it.md)
 
 ### 7. Temi
 

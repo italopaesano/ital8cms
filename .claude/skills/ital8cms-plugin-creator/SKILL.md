@@ -54,6 +54,7 @@ Before writing any file, gather these inputs from the user. **Do not guess.** Al
 - All config files use the `.json5` extension and a comment on line 1: `// This file follows the JSON5 standard - comments and trailing commas are supported`
 - **Config lifecycle (sidecar `.default`):** the plugin descriptor is committed as `pluginConfig.default.json5` (source of truth); the live `pluginConfig.json5` is git-ignored and materialized at boot. The `.default` has `schemaVersion` as its first key and **omits** `isInstalled` (a runtime state written at boot). The static `pluginDescription.json5` has **no** `.default` (it is committed as-is). See [`docs/decisions/config-lifecycle.it.md`](../../../docs/decisions/config-lifecycle.it.md).
 - **Distributing the plugin as a Git repo** (installable from the admin GUI, repo named `ital8cms-plugin-<name>`): the same rule is a hard contract. `pluginConfig.default.json5` is **required** — the install aborts without it — and the live `pluginConfig.json5` **must not be published**; if the repo ships one anyway, the install discards it and regenerates it from the `.default` (with a warning). The installer materializes *every* `.default` in the folder, so a plugin's secondary config files travel the same way: ship `myStore.default.json5`, never the live twin.
+- **Evolving the config later → `migrations/`.** `schemaVersion` is not just a number to bump: it is the **clock** of the whole package. When you later change the structure of *any* `.default` in the plugin, bump the **descriptor's** `schemaVersion` and declare the step in `migrations/migrations.json5`. Existing installations get the change through that declaration — a bump alone only propagates **added** keys (the boot's recursive additive merge), never renames, removals or changed values. See the "Config migrations" add-on below and [`docs/decisions/config-migrations.it.md`](../../../docs/decisions/config-migrations.it.md).
 - Inside an ital8cms project, configs are loaded via `loadJson5()` — never `require()`. The generated plugin code follows this rule.
 - All routes returned from `getRouteArray()` MUST include the `access` field (`requiresAuth`, `allowedRoles`). Method strings MUST be UPPERCASE (`'GET'`, `'POST'`, `'PUT'`, `'DEL'`, `'ALL'`). Handler key MUST be `handler`, not `func`.
 - Naming: camelCase for files/dirs/variables/functions, PascalCase for classes, UPPER_SNAKE_CASE for constants.
@@ -450,6 +451,63 @@ TODO: tuning consapevole (conseguenze delle scelte di config), trade-off, come e
 > English translation pending. Authoritative version: [`EXPLAIN.it.md`](./EXPLAIN.it.md).
 ```
 
+### Config migrations (`migrations/`) — not for a new plugin, but say so
+
+**Do NOT scaffold `migrations/` for a brand-new plugin.** A plugin at
+`schemaVersion: 1` has no installation in the wild to migrate *from*, so an empty
+migrations folder is noise.
+
+**Do tell the user, in the final summary, what to do at the first structural
+change** — it is the single most-missed step, and getting it wrong means existing
+installations silently keep the old config:
+
+> When you later change the structure of any `.default` in this plugin (add,
+> rename or remove a key, or change a default value), bump `schemaVersion` in
+> `pluginConfig.default.json5` **and** declare the step in `migrations/migrations.json5`.
+> Adding a key would also travel on its own via the boot's recursive merge, but
+> renames, removals and changed values reach existing installations **only** through
+> a declared migration.
+
+The shape, for when that moment comes:
+
+```
+plugins/<name>/migrations/
+├── migrations.json5        index of the steps
+├── CHANGELOG.md            what changed and why
+├── from-v1-to-v2.md        human/AI-actionable instructions (fixed sections)
+├── from-v1-to-v2.js        optional script
+└── from-v1-to-v2/          optional materials for that step
+```
+
+```json5
+// migrations.json5
+{
+  schemaVersion: 1,
+  steps: [
+    {
+      from: 1, to: 2,
+      title: "custom.dataPath introdotto",
+      automatic: true,
+      // MANDATORY even when automatic: say WHY it is safe, not just that it is.
+      reason: "Sola aggiunta di una chiave con default sano: il merge additivo basta.",
+      // script: "from-v1-to-v2.js",   // omit when the additive merge is enough
+      touches: ["pluginConfig.json5"],
+    },
+  ],
+}
+```
+
+Three strategies, derived with no extra fields: `automatic: true` **without**
+`script` → the recursive additive merge is enough (added keys only — the common
+case); `automatic: true` **with** `script` → renames, removals, changed values;
+`automatic: false` → a human or an AI follows the `.md`, and the chain resumes via
+`verify()` or `--confirm-manual`. Scripts must be **idempotent** and must respect
+`ctx.dryRun`; prefer `ctx.setJson5Key` over rewriting the whole file with
+`saveJson5`, which loses the live config's comments.
+
+Applied with `npm run cli -- migrate <plugin>`; the boot only *reports* pending
+migrations in a `[MIGRATE]` box.
+
 ### Self-contained npm dependencies (`package.json`) — optional add-on
 
 Apply **only** when the user chose the **self-contained** npm model (input #8) — the
@@ -508,6 +566,7 @@ For the **legacy** model instead, skip the `package.json` and declare the packag
    - Manual steps the user must take (admin section registration, whitelist entry, moving the folder into `plugins/` if scaffolded standalone, restarting the server; **for the self-contained model: run `npm install` inside the plugin folder** so its `node_modules` is populated, or run root `npm install` / `npm run deps-sync` which reconciles active plugins)
    - Reminder to fill the `README.it.md` TODOs (and EXPLAIN, if generated) — a shipped-but-empty README is out of ital8doc spec
    - If a writable data directory was declared: note that it is created/verified automatically at boot, and that on a read-only/sandboxed host the plugin will be skipped with a `[STORAGE]` message until the directory is made writable
+   - **The config-migration note** (see the "Config migrations" add-on): at the first structural change of any `.default`, bump `schemaVersion` **and** declare the step in `migrations/` — otherwise renames, removals and changed values never reach existing installations
    - URL where the new plugin will be reachable, computed from variant:
      - minimal/admin: `/api/{{pluginName}}/...` (and `/admin/{{sectionId}}/index.ejs` for admin)
      - webPages: `/pluginPages/{{pluginName}}/{{pageName}}.ejs`
@@ -530,6 +589,7 @@ If the current directory does not look like an ital8cms project, still scaffold 
 - Don't add a `webPages/` directory to the minimal/admin/globalFunctions variants.
 - Don't omit the `access` field from any route — the ital8cms boot validation will fail.
 - Don't use lowercase HTTP methods or `func` instead of `handler` — routes will be silently ignored.
+- Don't scaffold a `migrations/` folder for a brand-new plugin (nothing to migrate from at `schemaVersion: 1`) — but don't stay silent about it either: the summary must tell the user what to do at the first structural change.
 - Don't add `getWritablePaths()` to a plugin that doesn't write its own data to disk (API-only, pure middleware) — it's only for plugins with a runtime data directory.
 - Don't make `getWritablePaths()` depend on state set inside `loadPlugin()` — it runs *before* `loadPlugin` and offline in the wizard; resolve paths from `custom.dataPath` in the config.
 - Don't create the data directory during scaffolding — the boot gate creates/verifies it (and creating it early would mask a non-writable-host problem).

@@ -50,6 +50,7 @@ Before writing any file, gather these inputs from the user. **Do not guess.** Al
 - All config files use the `.json5` extension and a comment on line 1: `// This file follows the JSON5 standard - comments and trailing commas are supported`
 - **Config lifecycle (sidecar `.default`):** the theme descriptor is committed as `themeConfig.default.json5` (source of truth); the live `themeConfig.json5` is git-ignored and materialized at boot. The `.default` has `schemaVersion` as its first key and **omits** both `isInstalled` (written at boot by `ensureThemesInstalled` for bundled themes) and `active` (removed from the schema). The static `themeDescription.json5` has **no** `.default`. See [`docs/decisions/config-lifecycle.it.md`](../../../docs/decisions/config-lifecycle.it.md).
 - **Distributing the theme as a Git repo** (installable from the admin GUI, repo named `ital8cms-theme-<name>`): the same rule is a hard contract. `themeConfig.default.json5` is **required** — the install aborts without it — and the live `themeConfig.json5` **must not be published**; if the repo ships one anyway, the install discards it and regenerates it from the `.default` (with a warning). Keeping `active` out of the `.default` matters here too: it is the one key the installer cannot strip without reserializing the file and losing its comments.
+- **Evolving the config later → `migrations/`.** `schemaVersion` is the **clock** of the whole theme package. When you later change the structure of any `.default` in the theme, bump it in `themeConfig.default.json5` **and** declare the step in `migrations/migrations.json5`. A bump alone only propagates **added** keys (the boot's recursive additive merge), never renames, removals or changed values. Themes use the very same standard and the same core runner as plugins — they have no `main.js`, so there is no theme-side hook: it all goes through `migrations/`. See the "Config migrations" add-on below and [`docs/decisions/config-migrations.it.md`](../../../docs/decisions/config-migrations.it.md).
 - Inside an ital8cms project, configs are loaded via `loadJson5()` — never `require()`. Themes themselves do not load config files at runtime, but follow the same JSON5 conventions.
 - Naming: camelCase for theme name, files, and directories. Templates use compound names with `.template.ejs` suffix (e.g., `page.template.ejs`, `blog-post.template.ejs` is the documented exception — kebab is allowed in template basenames since the standard doc shows it).
 - **PLACEHOLDER standard v1.0** (only for `complete` variant): content blocks are wrapped in EJS comment markers:
@@ -402,6 +403,26 @@ TODO: `pluginDependency` e npm (self-contained `package.json` oppure `nodeModule
 
 `EXPLAIN.it.md` + `EXPLAIN.md` stub follow the same pattern as the plugin skill (tipo `EXPLAIN`), generated **only** for non-trivial internals.
 
+### Config migrations (`migrations/`) — not for a new theme, but say so
+
+**Do NOT scaffold `migrations/` for a brand-new theme**: at `schemaVersion: 1` there
+is no installation in the wild to migrate *from*.
+
+**Do tell the user, in the final summary, what to do at the first structural change:**
+
+> When you later change the structure of `themeConfig.default.json5` (add, rename or
+> remove a key, or change a default value), bump `schemaVersion` **and** declare the
+> step in `migrations/migrations.json5`. Adding a key would also travel on its own
+> via the boot's recursive merge, but renames, removals and changed values reach
+> existing installations **only** through a declared migration.
+
+Same shape and same rules as plugins — `migrations.json5` (with `reason` **mandatory
+on every step**, including automatic ones), a `from-vN-to-vM.md` with fixed sections,
+an optional idempotent `from-vN-to-vM.js`, and an optional folder for materials.
+Applied with `npm run cli -- migrate <theme> --theme`; the boot only *reports*
+pending migrations in a `[MIGRATE]` box. Full standard:
+[`docs/decisions/config-migrations.it.md`](../../../docs/decisions/config-migrations.it.md).
+
 ### Self-contained npm dependencies (`package.json`) — optional add-on
 
 Apply **only** when the user chose the **self-contained** npm model (input #7) — the
@@ -455,6 +476,7 @@ For the **legacy** model instead, skip the `package.json` and add the packages t
      - Move folder into `themes/` if scaffolded standalone
      - If self-contained: run `npm install` inside the theme folder (or root `npm install` / `npm run deps-sync`) so its `node_modules` is populated
    - Reminder to fill the `README.it.md` TODOs (and EXPLAIN, if generated) — a shipped-but-empty README is out of ital8doc spec
+   - **The config-migration note** (see the "Config migrations" add-on): at the first structural change of `themeConfig.default.json5`, bump `schemaVersion` **and** declare the step in `migrations/` — otherwise renames, removals and changed values never reach existing installations
    - For `complete`: note that templates with PLACEHOLDER markers are designed to integrate with the ital8cms editor system
 5. Do not modify `ital8Config.json5` automatically.
 6. Do not run `npm install`, do not start the server.
@@ -471,6 +493,7 @@ If the current directory does not look like an ital8cms project (no `ital8Config
 
 - Do generate the ital8doc docs: `README.it.md` + its `README.md` stub are **mandatory**; add `EXPLAIN.it.md` (+ stub) **only** for non-trivial internals (empty/redundant EXPLAIN is forbidden). Don't create `CHANGELOG.md`, `screenshot.png`, or `theme-icon.svg` unless the user asks.
 - Don't ship an English `README.md`/`EXPLAIN.md` with real content — it's a **stub** (marker + pointer to the `.it.md`); the reference is always the `.it.md`.
+- Don't scaffold a `migrations/` folder for a brand-new theme (nothing to migrate from at `schemaVersion: 1`) — but don't stay silent about it either: the summary must tell the user what to do at the first structural change.
 - Don't move `ejs` out of `nodeModuleDependency` (it's a root dependency); only a theme's own extra npm packages go into a self-contained `package.json`, and don't enable npm `workspaces`.
 - Don't add tests (themes can have `themes/<name>/tests/` per project convention, but generating empty test scaffolding is out of scope).
 - Don't add the `<html>`, `<head>`, or `<body>` tags inside a template — they belong to the partials.

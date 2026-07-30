@@ -49,7 +49,7 @@ Server runs on: `http://localhost:3000`
 ### Project Documentation
 
 - **[Panoramica documentazione](./docs/archive/documentation-overview.it.md)** - panoramica storica (archiviata; vedi CLAUDE.md e `docs/`)
-- **[CLI control plane](./docs/cli-control-plane.it.md)** - pilotare un'istanza in esecuzione da terminale/SSH con `ital8cms-cli` (`npm run cli -- …`): attivare/disattivare l'area admin, manutenzione del sito pubblico, reset config
+- **[CLI control plane](./docs/cli-control-plane.it.md)** - pilotare un'istanza in esecuzione da terminale/SSH con `ital8cms-cli` (`npm run cli -- …`): attivare/disattivare l'area admin, manutenzione del sito pubblico, reset config, migrazioni dei config
 
 ## Technology Stack
 
@@ -176,6 +176,8 @@ npm run cli -- admin stop      # disable the admin area (restarts the process)
 npm run cli -- admin start     # enable it again
 npm run cli -- public stop     # public site in maintenance (503, no restart)
 npm run cli -- public start    # public site back online
+npm run cli -- reset <target>  # plugin/theme configs back to defaults
+npm run cli -- migrate <target> # apply pending config migrations (--dry-run)
 ```
 
 Keep the `--`: with `npm run`, positional arguments are forwarded but **flags**

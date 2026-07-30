@@ -740,7 +740,14 @@ Il `*.default.json5` del descrittore **non** contiene `isInstalled` (è stato ru
 
 ### Relazione con materializzazione e `schemaVersion`
 
-Prima ancora di `initialize()`, il boot (`index.js`) **materializza** i `pluginConfig.json5` vivi mancanti dai rispettivi `.default` (`materializeMissingConfigs`) e **riconcilia** gli eventuali drift di `schemaVersion` (`reconcileSchemaVersions`, merge additivo + box `[SCHEMA]`). Quindi, quando `initialize()` legge i config, questi esistono e sono strutturalmente allineati. Dettaglio completo nel [decision record](../docs/decisions/config-lifecycle.it.md).
+Prima ancora di `initialize()`, il boot (`index.js`) **materializza** i `pluginConfig.json5` vivi mancanti dai rispettivi `.default` (`materializeMissingConfigs`), **rileva le migrazioni pendenti** dichiarate in `migrations/` (`migrationRunner`, box `[MIGRATE]`) e **riconcilia** gli eventuali drift di `schemaVersion` (`reconcileSchemaVersions`, merge additivo ricorsivo + box `[SCHEMA]`). Quindi, quando `initialize()` legge i config, questi esistono e sono strutturalmente allineati.
+
+Due sfumature che contano:
+
+- il merge è **ricorsivo** ma copre le sole **aggiunte** di chiavi; rinomine, rimozioni e cambi di valore sono competenza delle **migrazioni** del pacchetto;
+- un plugin con una migrazione ancora da applicare è **escluso** dalla riconciliazione: se il merge ne allineasse `schemaVersion`, brucerebbe il trigger e la migrazione non partirebbe più.
+
+Dettaglio completo nei decision record: [ciclo di vita](../docs/decisions/config-lifecycle.it.md) · [migrazione](../docs/decisions/config-migrations.it.md).
 
 ---
 
