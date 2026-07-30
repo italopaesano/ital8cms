@@ -26,9 +26,17 @@
  * ogni volta un vivo la cui `schemaVersion` dichiarava di essere aggiornato
  * mentre non lo era. Vedi docs/decisions/config-migrations.it.md.
  *
+ * PRECEDENZA DELLE MIGRAZIONI. Dove un pacchetto dichiara una migrazione per il
+ * salto in corso (`migrations/`), il merge additivo NON deve intervenire: sarebbe
+ * il primo ad allineare `schemaVersion`, e allineandola **brucerebbe il trigger**
+ * della migrazione — al boot successivo il vivo risulterebbe aggiornato e la
+ * rinomina/rimozione dichiarata non verrebbe più applicata, per sempre. I file
+ * interessati arrivano in `skipLivePaths` e vengono saltati in blocco.
+ *
  * API:
- *   reconcileSchemaVersions({ containers?: string[], pairs?: {label,defaultPath,livePath}[] })
- *     → Promise<{ drifted, unresolved, alignedSilently, ahead, errors }>
+ *   reconcileSchemaVersions({ containers?, pairs?, skipLivePaths? })
+ *     skipLivePaths: Set<string>|string[] — path dei vivi da NON riconciliare
+ *     → Promise<{ drifted, unresolved, alignedSilently, ahead, skipped, errors }>
  *
  * Non lancia per i singoli errori (li raccoglie in `errors`): il boot non si ferma.
  */
@@ -68,17 +76,26 @@ function scanContainer(containerDir) {
   return pairs;
 }
 
-async function reconcileSchemaVersions({ containers = [], pairs = [] } = {}) {
+async function reconcileSchemaVersions({ containers = [], pairs = [], skipLivePaths = [] } = {}) {
   const all = [...pairs];
   for (const c of containers) all.push(...scanContainer(c));
+
+  // Normalizzati a path assoluti: chiamante e scanner possono costruirli in modi
+  // diversi (relativi vs assoluti) e un confronto per stringa fallirebbe in
+  // silenzio, lasciando passare proprio i file da proteggere.
+  const skip = new Set(
+    (skipLivePaths instanceof Set ? [...skipLivePaths] : skipLivePaths).map((p) => path.resolve(p))
+  );
 
   const drifted = [];          // merged con chiavi aggiunte (drift significativo)
   const unresolved = [];       // merged senza chiavi nuove su un vivo GIÀ versionato
   const alignedSilently = [];  // merged senza chiavi nuove su un vivo pre-versionamento
   const ahead = [];            // vivo più avanti del default (anomalo)
+  const skipped = [];          // saltati: una migrazione dichiarata li gestirà
   const errors = [];
 
   for (const { label, defaultPath, livePath } of all) {
+    if (skip.has(path.resolve(livePath))) { skipped.push({ label }); continue; }
     try {
       const res = await reconcileSchemaVersion(defaultPath, livePath);
       if (res.status === 'merged') {
@@ -97,7 +114,7 @@ async function reconcileSchemaVersions({ containers = [], pairs = [] } = {}) {
     printSchemaDriftBox(drifted, unresolved, ahead);
   }
 
-  return { drifted, unresolved, alignedSilently, ahead, errors };
+  return { drifted, unresolved, alignedSilently, ahead, skipped, errors };
 }
 
 function printSchemaDriftBox(drifted, unresolved, ahead) {

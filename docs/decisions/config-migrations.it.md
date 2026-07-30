@@ -1,8 +1,9 @@
 <!-- ital8doc v1-1 · tipo: decision · lang: it · rev: 1 · ref -->
 # Decisione: migrazione dei file di configurazione (`migrations/`)
 
-> **Stato: APPROVATA** (2026-07-30) — design completo; **prerequisiti implementati**
-> (v2.66.0, vedi in fondo), runner `migrations/` da realizzare.
+> **Stato: IMPLEMENTATA** (2026-07-30) — prerequisiti in v2.66.0, runner
+> `migrations/` in v2.67.0 (`core/migrationRunner.js`, `npm run cli -- migrate`,
+> box `[MIGRATE]`, `migrations.autoApply`).
 > Estende [`config-lifecycle.it.md`](./config-lifecycle.it.md), che al §6 aveva
 > definito `schemaVersion` come **solo rilevamento** del drift e rimandato la
 > migrazione vera. Questo documento è quella migrazione.
@@ -221,6 +222,11 @@ dell'utente**:
 5. **Scritture solo dentro `packageDir`.** Uno script che tocca `ital8Config.json5` o
    un altro plugin è fuori mandato.
 
+**Preferisci `setJson5Key`/`editJson5` a una riserializzazione integrale.** Un
+`saveJson5(configPath, oggettoModificato)` riscrive il file da capo e **perde tutti i
+commenti** del vivo — lo stesso difetto che il progetto ha appena eliminato altrove.
+Va bene per un file di dati; per un config commentato, modifica le singole chiavi.
+
 ### 6. `from-vN-to-vM.md` — per l'umano o per l'AI
 
 Sezioni **fisse** (è ciò che rende il file azionabile invece che descrittivo: un'AI
@@ -258,6 +264,14 @@ per ogni pacchetto (nell'ordine delle dipendenze calcolato da pluginSys):
   aggiornata e lo step non riparte più, lasciando uno stato a metà che il sistema
   crede sano. È esattamente il difetto che oggi ha `reconcileSchemaVersion`
   (allinea anche con `added: []`) e che va corretto **prima** di questo lavoro.
+- **Il merge additivo va tenuto lontano dai file con una migrazione pendente.** Non
+  basta che la migrazione giri prima: se il rilevamento è passivo (default), il
+  merge la trova comunque e allinea `schemaVersion` per conto suo — bruciando lo
+  stesso trigger, in silenzio e a ogni boot. `reportPendingMigrations` restituisce
+  quindi `protectedLivePaths` (descrittore **e** file secondari dichiarati in
+  `touches`) e `reconcileSchemaVersions` li salta via `skipLivePaths`.
+  *Verificato sul campo:* senza questa protezione, un plugin fixture con una
+  rinomina dichiarata perdeva la migrazione al primo avvio del server.
 - **Uno step alla volta**, allineando a ogni passo riuscito: un'interruzione lascia
   uno stato coerente e ripartibile.
 - **Chi allinea i file secondari:** lo step che gira è responsabile di **tutti** i

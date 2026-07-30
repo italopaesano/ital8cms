@@ -131,7 +131,7 @@ describe('reconcileSchemaVersions', () => {
 
   test('empty input → empty report, no box', async () => {
     const res = await reconcileSchemaVersions({});
-    expect(res).toEqual({ drifted: [], unresolved: [], alignedSilently: [], ahead: [], errors: [] });
+    expect(res).toEqual({ drifted: [], unresolved: [], alignedSilently: [], ahead: [], skipped: [], errors: [] });
     expect(warnSpy).not.toHaveBeenCalled();
   });
 });

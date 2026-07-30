@@ -72,6 +72,15 @@ program
     return doReset(target, cmdOpts);
   });
 
+program
+  .command('migrate <target>')
+  .description('run pending config migrations for a plugin/theme (or a core config: ital8Config, adminConfig, koaSession)')
+  .option('--theme', 'target is a theme under themes/ (default: a plugin under plugins/)')
+  .option('--dry-run', 'show which steps would run, without touching anything')
+  .option('--confirm-manual', 'mark the current MANUAL step as done by hand and resume the chain')
+  .option('-y, --yes', 'skip the confirmation prompt')
+  .action(async (target, cmdOpts) => doMigrate(target, cmdOpts));
+
 program.parseAsync(process.argv).catch((err) => {
   bail('client_error', err.message || String(err));
 });
@@ -477,4 +486,109 @@ function safeSocketPath() {
   } catch (_) {
     return null;
   }
+}
+
+// ── migrate (offline, filesystem) ───────────────────────────────────────────
+// Esegue le migrazioni di configurazione dichiarate in migrations/ del pacchetto
+// (docs/decisions/config-migrations.it.md). Come `reset`, opera direttamente sui
+// file e funziona anche a server spento: non passa per il socket.
+
+async function doMigrate(target, cmdOpts) {
+  const opts = program.opts();
+
+  if (!/^[A-Za-z0-9_-]+$/.test(target)) {
+    bail('client_error', `nome target non valido: ${JSON.stringify(target)} (ammessi lettere, numeri, _ e -)`);
+  }
+
+  const configPath = path.resolve(opts.config || './ital8Config.json5');
+  if (!fs.existsSync(configPath)) {
+    bail('client_error', `config non trovato: ${configPath} (esegui dalla root del progetto o usa --config <path>)`);
+  }
+  const projectRoot = path.dirname(configPath);
+
+  const migrationRunner = require('../core/migrationRunner');
+  const resolved = migrationRunner.resolveTarget(projectRoot, target, { theme: !!cmdOpts.theme });
+  if (!resolved) {
+    const otherBase = cmdOpts.theme ? 'plugins' : 'themes';
+    if (fs.existsSync(path.join(projectRoot, otherBase, target))) {
+      bail('client_error', `"${target}" non è in ${cmdOpts.theme ? 'themes' : 'plugins'}/, ma esiste in ${otherBase}/ — ${cmdOpts.theme ? 'ometti --theme' : 'aggiungi --theme'}`);
+    }
+    bail('client_error', `target non trovato: ${target}`);
+  }
+
+  const plan = migrationRunner.readPlan(resolved);
+
+  if (plan.status === 'invalid' || plan.status === 'incomplete-chain') {
+    bail('client_error', `migrazioni non valide per ${resolved.label}: ${plan.errors.join('; ')}`);
+  }
+  if (plan.status === 'aligned' || plan.pending.length === 0) {
+    const msg = plan.status === 'no-migrations'
+      ? `${resolved.label} non ha una cartella migrations/ (il merge additivo del boot copre le sole aggiunte di chiavi)`
+      : `${resolved.label} è già allineato (schemaVersion v${plan.target})`;
+    if (opts.json) process.stdout.write(JSON.stringify({ ok: true, action: 'migrate', target, noop: true, message: msg }) + '\n');
+    else process.stdout.write(`= migrate ${target}: ${msg}\n`);
+    process.exit(0);
+  }
+  if (plan.status !== 'ok') {
+    bail('client_error', `${resolved.label}: nulla da migrare (${plan.status})`);
+  }
+
+  // Anteprima: sempre mostrata, anche senza --dry-run, così la conferma è informata.
+  process.stdout.write(`Migrazioni pendenti per ${resolved.label}: v${plan.live === null ? 0 : plan.live} → v${plan.target}\n`);
+  for (const step of plan.pending) {
+    process.stdout.write(`  ${step.automatic ? '[auto]  ' : '[manual]'} from-v${step.from}-to-v${step.to} — ${step.title}\n`);
+    process.stdout.write(`            motivo: ${step.reason}\n`);
+    if (step.touches.length) process.stdout.write(`            tocca: ${step.touches.join(', ')}\n`);
+    if (!step.automatic && step.doc) {
+      process.stdout.write(`            guida: ${path.join('migrations', step.doc)}\n`);
+    }
+  }
+
+  if (cmdOpts.dryRun) {
+    const res = await migrationRunner.runMigrations(resolved, { dryRun: true });
+    if (opts.json) process.stdout.write(JSON.stringify({ ok: true, action: 'migrate', target, dryRun: true, ...res }) + '\n');
+    else process.stdout.write(`\ndry-run: nessuna modifica scritta su disco.\n`);
+    process.exit(0);
+  }
+
+  if (!cmdOpts.yes) {
+    process.stdout.write('\nI file toccati vengono salvati in backup prima di ogni step.\n');
+    const ok = await confirm('Procedere con la migrazione? [y/N] ');
+    if (!ok) {
+      process.stdout.write('Migrazione annullata.\n');
+      process.exit(0);
+    }
+  }
+
+  const res = await migrationRunner.runMigrations(resolved, {
+    confirmManual: !!cmdOpts.confirmManual,
+    onLog: (m) => process.stdout.write(`  ${m}\n`),
+  });
+
+  if (opts.json) {
+    process.stdout.write(JSON.stringify({ ok: res.errors.length === 0, action: 'migrate', target, ...res }) + '\n');
+    process.exit(res.errors.length === 0 ? 0 : 1);
+  }
+
+  process.stdout.write(`\n${res.applied.length} step applicati su ${plan.pending.length}.\n`);
+  if (res.stopped) {
+    if (res.stopped.needs === 'manual' || res.stopped.needs === 'verify-failed') {
+      process.stdout.write(`\n⏸  Fermato su ${res.stopped.step} — ${res.stopped.title}\n`);
+      process.stdout.write(`   ${res.stopped.reason || ''}\n`);
+      if (res.stopped.doc) {
+        process.stdout.write(`   Segui le istruzioni in ${path.join(resolved.migrationsDir, res.stopped.doc)}\n`);
+      }
+      if (res.stopped.needs === 'verify-failed') {
+        process.stdout.write(`   La verifica automatica non è passata${res.stopped.detail ? `: ${res.stopped.detail}` : ''}.\n`);
+      }
+      process.stdout.write(`   Poi rilancia:  npm run cli -- migrate ${target}${cmdOpts.theme ? ' --theme' : ''}\n`);
+      process.stdout.write(`   Se lo step non espone una verifica automatica, aggiungi --confirm-manual.\n`);
+      process.exit(0);
+    }
+    process.stdout.write(`\n✗ Fermato su ${res.stopped.step}: ${res.stopped.detail}\n`);
+    process.stdout.write(`   La schemaVersion NON è avanzata: correggi e rilancia.\n`);
+    process.exit(1);
+  }
+  process.stdout.write('✓ Migrazione completata.\n');
+  process.exit(0);
 }

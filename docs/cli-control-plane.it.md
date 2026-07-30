@@ -1,4 +1,4 @@
-<!-- ital8doc v1-1 · tipo: guide · lang: it · rev: 3 · ref -->
+<!-- ital8doc v1-1 · tipo: guide · lang: it · rev: 4 · ref -->
 > 🌐 Edizione italiana di riferimento (sempre aggiornata). L'inglese `cli-control-plane.md` è uno stub fino alla release.
 # Control plane CLI (`ital8cms-cli`) — ital8cms
 
@@ -21,6 +21,7 @@ npm run cli -- admin stop          # DISABILITA l'area di amministrazione (riavv
 npm run cli -- public start        # sito pubblico online (nessun riavvio)
 npm run cli -- public stop         # sito pubblico in manutenzione (nessun riavvio)
 npm run cli -- reset <target>      # reset config di un plugin/tema ai default
+npm run cli -- migrate <target>    # applica le migrazioni di config pendenti
 ```
 
 > ⚠️ **Il `--` e i flag — la perdita è silenziosa.** Con `npm run` gli argomenti
@@ -270,6 +271,51 @@ npm run cli -- reset adminUsers -y       # salta il prompt di conferma
 
 > Approfondimento sul ciclo di vita dei config e sulla relazione default↔vivo:
 > [`decisions/config-lifecycle.it.md`](./decisions/config-lifecycle.it.md).
+
+## `migrate <target>` (migrazioni di configurazione)
+
+Applica le migrazioni che un plugin/tema dichiara nella sua cartella `migrations/`
+per portare i config vivi da una `schemaVersion` alla successiva. Come `reset`,
+opera **offline** sui file: non passa dal socket e funziona a server spento.
+
+```bash
+npm run cli -- migrate seo                    # plugin
+npm run cli -- migrate mySite --theme         # tema
+npm run cli -- migrate ital8Config            # config del core
+npm run cli -- migrate seo --dry-run          # mostra gli step senza toccare nulla
+npm run cli -- migrate seo --confirm-manual   # sblocca uno step manuale già eseguito a mano
+```
+
+Il comando **elenca sempre** gli step pendenti prima di chiedere conferma, con
+motivo e file toccati, così la decisione è informata:
+
+```
+Migrazioni pendenti per plugins/seo: v1 → v2
+  [auto]   from-v1-to-v2 — custom.vecchioNome rinominata in custom.nuovoNome
+            motivo: Rinomina meccanica a valore invariato: il valore dell'utente viene trasportato.
+            tocca: pluginConfig.json5
+```
+
+- **Backup automatico** dei file dichiarati in `touches`, prima di ogni step
+  (`pluginConfig.json5.backup-v1-<timestamp>`).
+- **Uno step alla volta:** la `schemaVersion` avanza solo a esito riuscito. Se uno
+  step fallisce la catena si ferma lì, la versione **non** avanza e il comando
+  esce con `1`: correggi e rilancia.
+- **Step manuali:** la catena si ferma e il CLI ti indica il `.md` da seguire.
+  Dopo averlo fatto rilancia `migrate`: se lo step espone una `verify()` la
+  verifica sblocca la catena da sola, altrimenti aggiungi `--confirm-manual`.
+- **Quando non c'è nulla da fare** la risposta è un `noop` con uscita `0` — anche
+  quando il pacchetto non ha affatto una cartella `migrations/` (in quel caso è il
+  merge additivo del boot a coprire le sole aggiunte di chiavi).
+
+Il **boot non applica nulla di sua iniziativa**: si limita a elencare le migrazioni
+pendenti nel box `[MIGRATE]`. Per farle applicare automaticamente al boot — solo
+quelle dichiarate `automatic` — imposta `migrations.autoApply: true` in
+`ital8Config.json5`; il default è `false` perché gli step possono eseguire script
+forniti dal pacchetto.
+
+> Standard completo (struttura della cartella, formato di `migrations.json5`,
+> contratto degli script): [`decisions/config-migrations.it.md`](./decisions/config-migrations.it.md).
 
 ## Opzioni globali
 
