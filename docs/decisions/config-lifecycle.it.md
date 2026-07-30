@@ -13,7 +13,8 @@ Oggi i file di configurazione `.json5` sono committati come file "vivi": una vol
 
 Questa decisione completa quanto rimasto aperto in [`theme-active-isinstalled.it.md`](./theme-active-isinstalled.it.md), che definiva la rimozione di `active` dai temi e rimandava la semantica operativa di `isInstalled` "a un secondo momento". Questo è quel momento, esteso a plugin, temi e config globali.
 
-> **Scope attuale:** solo la gestione dei **default** (conservazione + ripristino) e il **modello a stati** che ne deriva. La cronologia/undo delle modifiche e la **migrazione vera** dei config tra versioni sono esplicitamente **rimandate** (vedi *Punti rimandati*).
+> **Scope di QUESTA decisione:** solo la gestione dei **default** (conservazione + ripristino) e il **modello a stati** che ne deriva. La cronologia/undo delle modifiche e la **migrazione vera** dei config tra versioni erano esplicitamente **rimandate**.
+> **Aggiornamento (2026-07-30):** la migrazione vera è ora definita e implementata in [`config-migrations.it.md`](./config-migrations.it.md) (cartella `migrations/`); resta rimandata la sola cronologia/undo (vedi *Punti rimandati*).
 
 ## Decisione
 
@@ -91,8 +92,9 @@ Lo stato non è una seconda fonte di verità separata: è la combinazione tra **
 - **Hash del default scartato:** misurerebbe anche i *valori*, non la sola *struttura* → falsi positivi di drift.
 - Distinto da `pluginDescription.version` (versione del **codice** del plugin). `upgradePlugin(old, new)` resta il **luogo** delle migrazioni; `schemaVersion` per-file indica **quali file** sono fuori allineamento.
 - Il campo `schemaVersion` va su **tutti i config versionabili** (descrittori, core e config di contenuto), così ogni file può evolvere la propria struttura in modo indipendente.
-- In questa decisione si implementa **solo il rilevamento** del drift (confronto `schemaVersion` default↔live → warning). La migrazione vera è rimandata.
+- In questa decisione si implementa **solo il rilevamento** del drift (confronto `schemaVersion` default↔live → warning). La migrazione vera è rimandata → **ora definita in [`config-migrations.it.md`](./config-migrations.it.md)** (cartella `migrations/` per plugin, temi e config core; il descrittore diventa il *clock* del pacchetto, quindi "l'ultima versione vista" non va persistita da nessuna parte: è la `schemaVersion` del vivo).
 - **Comportamento provvisorio del boot** quando un `x.json5` vivo esiste già ma il suo `.default` ha una `schemaVersion` più recente (struttura cambiata): **merge additivo** delle sole chiavi nuove del default (senza toccare i valori esistenti) **+ warning**. È una soluzione-ponte: il comportamento ideale (controllo pre-aggiornamento + scelta esplicita dell'utente su come procedere) sarà definito quando si stabiliranno le procedure di aggiornamento.
+  > **Superato (2026-07-30).** Il merge è ora **ricorsivo** e non più limitato alle chiavi top-level (v2.66.0), e la scelta esplicita è realizzata: le migrazioni dichiarate in `migrations/` hanno la precedenza sul merge, si applicano su richiesta (`npm run cli -- migrate`) e il boot si limita a segnalarle. → [`config-migrations.it.md`](./config-migrations.it.md)
 
 ### 7. Temi
 
@@ -156,7 +158,7 @@ Aggiornato al 2026-06-27 (Fase 5 completata) · branch `claude/dazzling-darwin-g
 - Test unit per ogni modulo + verifica di boot e di "clone fresco" (cancellazione dei vivi → rigenerazione dai `.default`).
 
 **Fase 2 — stati + boot graceful**
-- `core/setJson5Key.js` (upsert di una chiave top-level, preserva i commenti) e `core/pluginStateResolver.js` (puro: `checkNpmDeps` + `resolvePluginStates` con cascata e rilevamento cicli).
+- `core/setJson5Key.js` (upsert di una chiave, preserva i commenti; **dalla v2.66.0 accetta anche path annidati** — `['custom','dataPath']` — riusando il locator testuale di `editJson5`) e `core/pluginStateResolver.js` (puro: `checkNpmDeps` + `resolvePluginStates` con cascata e rilevamento cicli).
 - Refactor di `pluginSys.initialize()`: stati `available`/`disabled`/`incomplete`/`installed`; i `throw` (npm/dipendenze/cicli/load-error) → skip + marcatura + box `[PLUGINS]`; cascata sui dipendenti; il boot **completa sempre**. Nuovi getter `getPluginState()`/`getPluginStates()`.
 - `isInstalled` (Variante 1): "precondizioni ok", **persistito** via `setJson5Key`; `installPlugin()` solo alla transizione `isInstalled` non-1→1 (clone fresco / dipendenze appena risolte).
 - `essentialPlugins` in `ital8Config.json5`: un essenziale non caricato → box `[FATAL]` + exit; reset CLI con **conferma rafforzata** (offline e `--online`).
@@ -169,7 +171,7 @@ Aggiornato al 2026-06-27 (Fase 5 completata) · branch `claude/dazzling-darwin-g
 - Verifica: gate (`ital8Config` rinominato → box `[INIT]` + exit 1); clone-fresco dei core (cancellati i 3 → boot mostra `[INIT]`; wizard simulato li materializza → boot up, 20 plugin); suite 80 suite / 2182 test verdi.
 
 **Fase 4 — `schemaVersion` (solo rilevamento) + merge additivo (soluzione-ponte)**
-- `core/reconcileSchemaVersion.js` (coppia singola): confronta `schemaVersion` default↔vivo; se il default è più avanti, **merge additivo** (aggiunge solo le chiavi top-level nuove, preserva i valori esistenti) e allinea `schemaVersion`. Stati: `aligned` / `merged` / `live-ahead` (anomalo) / `no-live` / `no-default-version`. Volutamente parziale: rinomine/rimozioni richiedono migrazione vera (rimandata).
+- `core/reconcileSchemaVersion.js` (coppia singola): confronta `schemaVersion` default↔vivo; se il default è più avanti, **merge additivo** (aggiunge le chiavi nuove, preserva i valori esistenti) e allinea `schemaVersion`. Stati: `aligned` / `merged` / `live-ahead` (anomalo) / `no-live` / `no-default-version`. Volutamente parziale: rinomine/rimozioni richiedono migrazione vera. **Aggiornato in v2.66.0:** il merge è **ricorsivo** (scende nei sotto-oggetti: `custom.dataPath`, `maintenance.exemptPaths`…), non più limitato alle chiavi top-level — la limitazione aveva reso inefficaci 3 dei 4 bump reali. Vedi [`config-migrations.it.md`](./config-migrations.it.md).
 - `core/reconcileSchemaVersions.js` (scansione + boot): applica il reconcile ai contenitori e alle coppie esplicite dei core, e riepiloga in un box `[SCHEMA]` **anti-rumore** (solo drift significativi con chiavi nuove + casi `live-ahead`; il semplice bump di `schemaVersion` su un vivo pre-versionamento resta silenzioso). Non lancia sui singoli errori (raccolti in `errors`): il boot non si ferma.
 - Hook al boot in `index.js` dopo la materializzazione, **scope `plugins/` + i 3 core** (tutti git-ignored → la riconciliazione additiva non sporca il working tree); `themes/` escluso finché i `themeConfig` restano tracciati (→ Fase 5).
 - Verifica: 9 + 6 nuovi test unit; boot reale (cores allineati silenziosamente, nessun box, working tree pulito); suite 82 suite / 2197 test verdi.
@@ -216,7 +218,7 @@ Scelta (maintainer): **canonizzare il solo `.default`**, invece di accettare ent
 
 ## Punti rimandati
 
-- **Migrazione vera** dei config al cambio di `schemaVersion` (oltre il semplice warning): meccanismo, dove persistere "l'ultima versione vista" (candidato: `scripts/lib/stateManager.js`), aggancio a `upgradePlugin()`.
+- ~~**Migrazione vera** dei config al cambio di `schemaVersion`~~ → **RISOLTO** in [`config-migrations.it.md`](./config-migrations.it.md) (2026-07-30). Nessuno stato da persistere: con il descrittore come clock, "l'ultima versione vista" **è** la `schemaVersion` del file vivo, quindi `scripts/lib/stateManager.js` non viene coinvolto. L'aggancio non è a `upgradePlugin()` ma a un runner del core (`migrationRunner.js`), perché i temi non hanno `main.js` e resterebbero scoperti.
 - **Reset via GUI web** dedicata (per ora solo CLI).
 - Semantica esatta delle "scelte di configurazione obbligatorie" come precondizione dello stato `installed`.
 - Cronologia/undo delle modifiche (backup rotazionale on-write): già prototipato in `plugins/adminBootstrapNavbar/lib/navbarFileManager.js`, da eventualmente promuovere a utility core in un intervento separato.

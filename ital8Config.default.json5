@@ -1,5 +1,25 @@
 {
-  "schemaVersion": 3,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 4,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+
+  // ── Migrazioni dei file di configurazione ──────────────────────────────────
+  // Quando un plugin/tema evolve la struttura dei suoi config, la cartella
+  // migrations/ del pacchetto descrive come portare un'installazione esistente
+  // da una schemaVersion alla successiva.
+  //
+  // autoApply: false (default) → il boot si limita a RILEVARE le migrazioni
+  //   pendenti e a elencarle nel box [MIGRATE]; le applichi tu, quando vuoi, con
+  //   `npm run cli -- migrate <plugin>` (`--dry-run` per vedere prima cosa farebbe).
+  // autoApply: true → il boot applica da solo gli step dichiarati `automatic`,
+  //   sempre previo backup dei file toccati. Gli step manuali restano comunque
+  //   fermi in attesa di un intervento guidato.
+  //
+  // Il default è false di proposito: gli step possono eseguire script forniti dal
+  // pacchetto, e un boot che modifica i config in silenzio rende difficile capire
+  // cosa è successo quando qualcosa si rompe.
+  // Vedi docs/decisions/config-migrations.it.md
+  "migrations": {
+    "autoApply": false,
+  },
   "globalPrefix": "",
   "apiPrefix": "api",
   "adminPrefix": "admin",

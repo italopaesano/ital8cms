@@ -189,7 +189,7 @@ Comprendere la sequenza di inizializzazione è fondamentale:
    - **Gate di init:** se manca `ital8Config.json5` ma esiste il suo `.default` → box `[INIT]` che indirizza a `npm run start-configure` + `exit` (senza config globale non si conosce nemmeno la porta).
    - **Materializza i vivi mancanti** (`materializeMissingConfigs` su `plugins/` e `themes/`): crea i `x.json5` mancanti copiando i rispettivi `x.default.json5` (atomico, zero interazione), così i config esistono quando i plugin/temi li leggono.
    - **`isInstalled` dei temi bundled** (`ensureThemesInstalled`): i `.default` non portano `isInstalled` (stato runtime); per i temi bundled (con `.default`) il cui vivo ne è privo, persiste `isInstalled: 1`. Gemello, per i temi, della persistenza fatta da `pluginSys`.
-   - **Drift di `schemaVersion`** (`reconcileSchemaVersions` su `plugins/`, `themes/` e i 3 core): se un `.default` ha `schemaVersion` più recente del vivo, **merge additivo** (aggiunge solo le chiavi nuove, valori esistenti intatti) + box `[SCHEMA]` per i drift significativi. Soluzione-ponte: niente migrazione automatica.
+   - **Drift di `schemaVersion`** (`reconcileSchemaVersions` su `plugins/`, `themes/` e i 3 core): se un `.default` ha `schemaVersion` più recente del vivo, **merge additivo ricorsivo** (aggiunge le chiavi nuove a qualsiasi profondità, valori esistenti intatti) + box `[SCHEMA]`. Il box segnala anche il caso `unresolved`: bump senza alcuna chiave da aggiungere su un vivo già versionato → il cambiamento è un valore, una rinomina o una rimozione, che il merge non sa applicare. Migrazione vera → `migrations/` ([`docs/decisions/config-migrations.it.md`](./docs/decisions/config-migrations.it.md)).
 4. **Inizializza il sistema plugin** (`pluginSys`)
 5. **Carica i plugin attivi** (boot **graceful**, vedi *Stati dei plugin* sotto):
    - Calcola lo **stato** di ogni plugin (`available`/`disabled`/`incomplete`/`installed`); carica solo gli `installed`
@@ -250,7 +250,20 @@ module.exports = {
 - `pluginConfig.json5`: `schemaVersion` (intero, versione della *struttura* del file), `active` (0/1), `isInstalled`, `weight` (priorità, minore = caricato prima), `dependency` (semver), `nodeModuleDependency`, `custom` (impostazioni specifiche).
 - `pluginDescription.json5`: `name`, `version`, `description`, `author`, `email`, `license`.
 
-**Sidecar `*.default.json5` (ciclo di vita dei config):** ogni file di configurazione modificabile ha un sidecar **`x.default.json5`** committato (fonte di verità) accanto al **`x.json5`** vivo. Vale anche per i **pacchetti di terze parti** installabili da repo Git: il descrittore `.default` è **obbligatorio**, i vivi **non vanno pubblicati** (se presenti l'installazione li scarta e li rigenera dal default, con warning). Al boot i vivi mancanti sono **materializzati** dai default (`materializeMissingConfigs`); il **reset** (`npm run cli -- reset <plugin>`, offline o `--online`) li rimuove per farli rigenerare. Nei `*.default.json5` dei descrittori `schemaVersion` è la **prima chiave** e `isInstalled` è **assente** (è stato runtime, scritto al boot). **Tutti i vivi sono git-ignored** (contenuto, dati utente, descrittori `pluginConfig`/`themeConfig` e core `ital8Config`/`adminConfig`/`koaSession`) — rigenerabili dai `.default` (la migrazione repo è completa, fasi 0–5). Se un `.default` evolve la struttura (bump di `schemaVersion`), al boot `reconcileSchemaVersions` fa il **merge additivo** sui vivi (solo chiavi nuove) + box `[SCHEMA]`. → [`docs/decisions/config-lifecycle.it.md`](./docs/decisions/config-lifecycle.it.md).
+**Sidecar `*.default.json5` (ciclo di vita dei config):** ogni file di configurazione modificabile ha un sidecar **`x.default.json5`** committato (fonte di verità) accanto al **`x.json5`** vivo. Vale anche per i **pacchetti di terze parti** installabili da repo Git: il descrittore `.default` è **obbligatorio**, i vivi **non vanno pubblicati** (se presenti l'installazione li scarta e li rigenera dal default, con warning). Al boot i vivi mancanti sono **materializzati** dai default (`materializeMissingConfigs`); il **reset** (`npm run cli -- reset <plugin>`, offline o `--online`) li rimuove per farli rigenerare. Nei `*.default.json5` dei descrittori `schemaVersion` è la **prima chiave** e `isInstalled` è **assente** (è stato runtime, scritto al boot). **Tutti i vivi sono git-ignored** (contenuto, dati utente, descrittori `pluginConfig`/`themeConfig` e core `ital8Config`/`adminConfig`/`koaSession`) — rigenerabili dai `.default` (la migrazione repo è completa, fasi 0–5). Se un `.default` evolve la struttura (bump di `schemaVersion`), al boot `reconcileSchemaVersions` fa il **merge additivo ricorsivo** sui vivi (chiavi nuove a ogni profondità) + box `[SCHEMA]`. Il merge copre le sole **aggiunte**: per rinomine, rimozioni e cambi di valore il pacchetto dichiara una **migrazione** nella sua cartella `migrations/` (vedi *Migrazione dei config*). Oltre a `isInstalled`, è stato runtime del vivo anche **`version`** (ultima versione per cui `upgradePlugin()` è girato): assente dai `.default`. → [`docs/decisions/config-lifecycle.it.md`](./docs/decisions/config-lifecycle.it.md) · [`config-migrations.it.md`](./docs/decisions/config-migrations.it.md).
+
+### Migrazione dei config (`migrations/`)
+
+Il merge additivo sa solo **aggiungere** chiavi. Quando un `.default` evolve con una **rinomina, una rimozione o un cambio di valore**, il pacchetto deve dichiarare una migrazione: cartella `migrations/` (opzionale ma raccomandata) dentro il plugin o il tema, più `core/migrations/{ital8Config,adminConfig,koaSession}/` per i config globali.
+
+- **Clock:** la `schemaVersion` del **descrittore** (`pluginConfig.default.json5` / `themeConfig.default.json5`) è la versione di struttura dell'intero pacchetto; per i core è il file stesso. Se cambi un config secondario, **bumpa anche il descrittore**, altrimenti il runner non parte. Nessuno stato da persistere: "dove sta questa installazione" **è** la `schemaVersion` del vivo.
+- **Contenuto:** `migrations.json5` (indice degli `steps`), `CHANGELOG.md`, e per ogni salto `from-vN-to-vM.md` (sezioni fisse, azionabile da umano o AI), `from-vN-to-vM.js` opzionale, `from-vN-to-vM/` per i materiali.
+- **Tre strategie**, derivate senza campi extra: `automatic: true` **senza** script → basta il merge ricorsivo (caso più frequente); `automatic: true` **con** script → rinomine/rimozioni/valori; `automatic: false` → umano o AI guidato dal `.md`, sbloccato da `verify()` o `--confirm-manual`. `reason` è **obbligatorio sempre**, anche nel caso automatico.
+- **Esecuzione:** il boot **rileva** e basta (box `[MIGRATE]`); si applica con `npm run cli -- migrate <target>` (`--dry-run`, `--theme`, `--confirm-manual`). L'auto-apply degli step automatici richiede `ital8Config.json5 → migrations.autoApply: true` (default `false`). Backup automatico dei file in `touches` prima di ogni step.
+- **La `schemaVersion` avanza solo a esito riuscito** (è una ricevuta, non un contatore di tentativi), e i config con una migrazione pendente sono **esclusi** dal merge additivo — che altrimenti li allineerebbe bruciando il trigger.
+- Negli script preferisci `setJson5Key`/`editJson5` a un `saveJson5` dell'oggetto intero: quest'ultimo **perde i commenti** del config vivo.
+
+→ [`docs/decisions/config-migrations.it.md`](./docs/decisions/config-migrations.it.md) · modulo: `core/migrationRunner.js`
 
 ### Ordine di caricamento
 
@@ -1380,10 +1393,11 @@ Spostato in [`docs/deployment.it.md`](./docs/deployment.it.md).
 - `/core/materializeDirDefaults.js` - Materializza i config vivi mancanti di UNA cartella (plugin/tema)
 - `/core/materializeMissingConfigs.js` - Materializza i vivi mancanti di un contenitore (`plugins/`/`themes/`); invocata al boot
 - `/core/resetConfigsToDefault.js` - Reset: rimuove i vivi di una cartella (rigenerati dai default al boot); usata dal comando CLI `ital8cms-cli reset`
-- `/core/setJson5Key.js` - Ciclo di vita config: upsert (add-or-update) di una chiave top-level in un `.json5` preservando i commenti (usata dal boot per scrivere `isInstalled`); complementare a `editJson5` (che solo aggiorna)
+- `/core/setJson5Key.js` - Ciclo di vita config: upsert (add-or-update) di una chiave in un `.json5` preservando i commenti (usata dal boot per scrivere `isInstalled`/`version`); accetta anche **path annidati** (`['custom','dataPath']`); complementare a `editJson5` (che solo aggiorna)
 - `/core/pluginStateResolver.js` - Ciclo di vita config: modulo **puro** per gli stati dei plugin — `checkNpmDeps` + `resolvePluginStates` (cascata a punto fisso + rilevamento cicli); usato da `pluginSys.initialize()`
-- `/core/reconcileSchemaVersion.js` - Ciclo di vita config: drift di `schemaVersion` per UNA coppia default↔vivo + **merge additivo** (aggiunge solo le chiavi nuove, preserva i valori)
-- `/core/reconcileSchemaVersions.js` - Ciclo di vita config: scansione di contenitori/coppie + box `[SCHEMA]` anti-rumore; invocata al boot
+- `/core/reconcileSchemaVersion.js` - Ciclo di vita config: drift di `schemaVersion` per UNA coppia default↔vivo + **merge additivo ricorsivo** (aggiunge le chiavi nuove a ogni profondità, preserva i valori)
+- `/core/reconcileSchemaVersions.js` - Ciclo di vita config: scansione di contenitori/coppie + box `[SCHEMA]` anti-rumore; invocata al boot (salta i config con una migrazione pendente, via `skipLivePaths`)
+- `/core/migrationRunner.js` - Migrazione dei config: scoperta/validazione degli step in `migrations/`, esecuzione della catena (backup, script, merge, postcondizione strutturale, ricevuta `schemaVersion`), box `[MIGRATE]` al boot
 - `/core/ensureThemesInstalled.js` - Ciclo di vita config (Fase 5): scrive `isInstalled: 1` al boot sui temi **bundled** (con `.default`) il cui vivo ne è privo; gemello, per i temi, della persistenza fatta da `pluginSys`
 - `/core/servingRootResolver.js` - Utility di isolamento del path di serving
 - `/core/patternMatcher.js` - Utility di pattern matching degli URL (esatto, wildcard, regex) — condivisa dai plugin adminAccessControl e seo
@@ -1412,7 +1426,7 @@ Spostato in [`docs/deployment.it.md`](./docs/deployment.it.md).
 
 ### File dei plugin
 
-Ogni plugin documenta i propri file nel rispettivo `README.it.md`/`EXPLAIN.it.md` (vedi i puntatori nelle sezioni dei plugin sopra). Utility core trasversali: `core/patternMatcher.js` (pattern matching condiviso), `core/servingRootResolver.js` (isolamento path), `core/editJson5.js` (modifica chirurgica di chiavi JSON5 — update-only), `core/setJson5Key.js` (upsert di una chiave top-level, preserva i commenti), `core/loadJson5.js`, `core/logger.js`, `core/escapeHtml.js`, `core/sessionSecurity.js`, `core/processSafetyNet.js`.
+Ogni plugin documenta i propri file nel rispettivo `README.it.md`/`EXPLAIN.it.md` (vedi i puntatori nelle sezioni dei plugin sopra). Utility core trasversali: `core/patternMatcher.js` (pattern matching condiviso), `core/servingRootResolver.js` (isolamento path), `core/editJson5.js` (modifica chirurgica di chiavi JSON5 — update-only), `core/setJson5Key.js` (upsert di una chiave, anche annidata, preserva i commenti), `core/loadJson5.js`, `core/logger.js`, `core/escapeHtml.js`, `core/sessionSecurity.js`, `core/processSafetyNet.js`.
 
 ### Database
 
@@ -1498,7 +1512,7 @@ Configurazione di launch (`.vscode/launch.json`):
 
 ## Miglioramenti futuri
 
-Spostato in [`docs/roadmap.it.md`](./docs/roadmap.it.md).
+Direzioni ampie in [`docs/roadmap.it.md`](./docs/roadmap.it.md); i lavori **aperti e spuntabili** (punti rimandati dalle decisioni + debito emerso dagli interventi, ciascuno con la sua fonte) in [`TODO.md`](./TODO.md).
 
 ## Comandi di riferimento rapido
 
@@ -1521,6 +1535,7 @@ npm run cli -- admin stop      # disable the admin area (rewrites enableAdmin + 
 npm run cli -- public stop     # public site in maintenance: 503 (no restart)
 npm run cli -- public start    # public site back online  (no restart)
 npm run cli -- reset <target>  # plugin/theme configs back to defaults (add --theme for themes)
+npm run cli -- migrate <target> # apply pending config migrations (--dry-run, --theme, --confirm-manual)
 
 # Update / backup (terminal-driven; see docs/self-update.it.md)
 npm run update                 # Self-update to the latest GitHub release (git)

@@ -96,9 +96,42 @@ describe('reconcileSchemaVersions', () => {
     expect(res.errors[0].label).toBe('bad/pluginConfig.json5');
   });
 
+  test('vivo GIÀ versionato + bump senza chiavi da aggiungere → unresolved, box emesso', async () => {
+    // Il .default alza schemaVersion ma cambia solo un VALORE: il merge additivo
+    // non ha nulla da aggiungere. Prima taceva (indistinguibile dal caso
+    // pre-versionamento); ora dev'essere segnalato, perché il vivo resta indietro.
+    child('plugins', 'valueOnly', {
+      def: '// h\n{\n  "schemaVersion": 2,\n  "active": 1,\n}\n',
+      live: LIVE_V1,
+    });
+
+    const res = await reconcileSchemaVersions({ containers: [path.join(root, 'plugins')] });
+
+    expect(res.unresolved).toEqual([{ label: 'valueOnly/pluginConfig.json5', from: 1, to: 2 }]);
+    expect(res.drifted).toEqual([]);
+    expect(res.alignedSilently).toEqual([]);
+    expect(warnSpy).toHaveBeenCalled();
+    expect(warnSpy.mock.calls[0][0]).toContain('drift NON risolto dal merge');
+  });
+
+  test('vivo PRE-versionamento senza chiavi da aggiungere → resta silenzioso', async () => {
+    // from === 0: l'allineamento è di pura forma, non c'era drift. È il rumore
+    // che il box deve continuare a evitare.
+    child('plugins', 'preVersioning', {
+      def: '// h\n{\n  "schemaVersion": 1,\n  "active": 0,\n}\n',
+      live: LIVE_NOVER,
+    });
+
+    const res = await reconcileSchemaVersions({ containers: [path.join(root, 'plugins')] });
+
+    expect(res.alignedSilently).toEqual([{ label: 'preVersioning/pluginConfig.json5', from: 0, to: 1 }]);
+    expect(res.unresolved).toEqual([]);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
   test('empty input → empty report, no box', async () => {
     const res = await reconcileSchemaVersions({});
-    expect(res).toEqual({ drifted: [], alignedSilently: [], ahead: [], errors: [] });
+    expect(res).toEqual({ drifted: [], unresolved: [], alignedSilently: [], ahead: [], skipped: [], errors: [] });
     expect(warnSpy).not.toHaveBeenCalled();
   });
 });

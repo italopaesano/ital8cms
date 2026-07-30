@@ -131,13 +131,36 @@ class pluginSys{
           }
         }
 
-        // SISTEMA DI UPGRADE: controlla se la versione del plugin è cambiata
+        // SISTEMA DI UPGRADE: esegue upgradePlugin() quando la versione del CODICE
+        // del plugin è avanzata rispetto all'ultima per cui l'upgrade è già girato.
+        //
+        // `version` nel pluginConfig VIVO = "ultima versione di codice per cui
+        // l'upgrade è stato eseguito con successo", non la versione corrente (che
+        // è e resta in pluginDescription.json5, read-only). È uno stato runtime,
+        // come isInstalled: sta nel vivo (git-ignored), mai nel `.default`.
+        //
+        // Prima questa versione non veniva MAI persistita — il codice lo dichiarava
+        // esplicitamente, per timore di corrompere il file riscrivendolo. Con
+        // setJson5Key la scrittura è chirurgica (una sola chiave, commenti e
+        // formattazione intatti) e quel timore non ha più fondamento. Senza
+        // persistenza `oldVersion` valeva sempre '0.0.0', quindi `semver.gt` era
+        // vero per qualunque plugin e upgradePlugin() girava A OGNI BOOT invece che
+        // agli aggiornamenti: inoffensivo finché tutte le implementazioni erano
+        // stub vuoti, rotto al primo che ci avesse messo una migrazione reale.
+        //
+        // Prima installazione: NON è un upgrade. Là gira installPlugin() (sopra) e
+        // qui si registra soltanto la versione di partenza, senza invocare l'hook.
         const pluginDescription = loadJson5(path.join(__dirname, '..', 'plugins', pluginName, 'pluginDescription.json5'));
         const newVersion = pluginDescription.version;
-        const oldVersion = pluginConfig.version || '0.0.0'; // Se non esiste, assume 0.0.0
+        const oldVersion = pluginConfig.version || '0.0.0'; // mai eseguito prima → 0.0.0
+        const livePluginConfigPath = path.join(pathPluginFolder, 'pluginConfig.json5');
 
-        if (semver.valid(newVersion) && semver.valid(oldVersion) && semver.gt(newVersion, oldVersion)) {
-          // Nuova versione rilevata! Esegui upgrade
+        if (!wasInstalled) {
+          // Installazione fresca: allinea il segnaposto senza eseguire l'upgrade.
+          if (semver.valid(newVersion)) {
+            await setJson5Key(livePluginConfigPath, 'version', newVersion, { afterKey: 'schemaVersion' });
+          }
+        } else if (semver.valid(newVersion) && semver.valid(oldVersion) && semver.gt(newVersion, oldVersion)) {
           logger.info('pluginSys', `Upgrade plugin ${pluginName}: ${oldVersion} -> ${newVersion}`);
 
           if (plugin.upgradePlugin) {
@@ -146,15 +169,16 @@ class pluginSys{
               logger.info('pluginSys', `Upgrade ${pluginName} completato con successo`);
             } catch (upgradeError) {
               logger.error('pluginSys', `Errore durante upgrade plugin ${pluginName}`, upgradeError);
+              // Non si persiste la nuova versione: l'upgrade va ritentato al boot
+              // successivo. Il throw finisce nel catch graceful → 'incomplete'.
               throw upgradeError;
             }
           } else {
             logger.debug('pluginSys', `Nessuna funzione upgradePlugin() per ${pluginName}, skip migrazione`);
           }
 
-          // NOTA: La versione NON viene mai salvata in pluginConfig.json5
-          // La versione è sempre letta SOLO da pluginDescription.json5 (read-only)
-          // Questo evita corruzioni del file pluginConfig.json5 durante aggiornamenti
+          // Persistita SOLO a esito riuscito: è la ricevuta dell'upgrade eseguito.
+          await setJson5Key(livePluginConfigPath, 'version', newVersion, { afterKey: 'schemaVersion' });
         }
 
         // aggiungo le rotte del plugin all'elenco delle rotte da caricare

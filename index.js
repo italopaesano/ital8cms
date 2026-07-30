@@ -71,6 +71,7 @@ function warnInitRequired() {
 
 const materializeMissingConfigs = require('./core/materializeMissingConfigs');
 const reconcileSchemaVersions = require('./core/reconcileSchemaVersions');
+const { reportPendingMigrations } = require('./core/migrationRunner');
 const ensureThemesInstalled = require('./core/ensureThemesInstalled');
 const httpsManager = require('./core/httpsManager');
 
@@ -152,11 +153,24 @@ async function startApp() {
     console.warn(`[themeInstall]   ⚠ ${failure.theme}: ${failure.message}`);
   }
 
+  // ── Migrazioni di configurazione (migrations/) ─────────────────────────────
+  // Gira PRIMA della riconciliazione: dove esiste una migrazione dichiarata è LEI
+  // ad avere la precedenza, perché sa fare anche rinomine, rimozioni e cambi di
+  // valore; il merge additivo resta il fallback per i pacchetti che non ne hanno.
+  // Di default è solo RILEVAMENTO passivo (box [MIGRATE]): l'esecuzione degli step
+  // automatici richiede `migrations.autoApply: true`, perché un boot che modifica
+  // i config in silenzio rende impossibile capire cosa è successo quando qualcosa
+  // si rompe. Vedi docs/decisions/config-migrations.it.md.
+  const migrationSummary = await reportPendingMigrations(__dirname, {
+    autoApply: !!(ital8Conf.migrations && ital8Conf.migrations.autoApply),
+  });
+
   // ── Drift di schemaVersion: riconcilia i config vivi col loro .default ──────
   // Se un .default ha una schemaVersion più recente del vivo (struttura evoluta),
-  // aggiunge additivamente le sole chiavi nuove (valori esistenti intatti) e
-  // segnala con un box [SCHEMA]. In sviluppo (vivi allineati) è un no-op
-  // silenzioso. Soluzione-ponte (config-lifecycle §6): no migrazione automatica.
+  // aggiunge additivamente (in modo ricorsivo) le sole chiavi nuove — valori
+  // esistenti intatti — e segnala con un box [SCHEMA]. In sviluppo (vivi
+  // allineati) è un no-op silenzioso. È il fallback di migrations/: copre le
+  // aggiunte, non rinomine/rimozioni/valori.
   // `plugins/` + `themes/` + i 3 core: tutti config vivi git-ignored, quindi la
   // riconciliazione additiva al boot non sporca il working tree.
   await reconcileSchemaVersions({
@@ -166,6 +180,10 @@ async function startApp() {
       { label: 'core/admin/adminConfig.json5', defaultPath: path.join(__dirname, 'core/admin/adminConfig.default.json5'), livePath: path.join(__dirname, 'core/admin/adminConfig.json5') },
       { label: 'core/priorityMiddlewares/koaSession.json5', defaultPath: path.join(__dirname, 'core/priorityMiddlewares/koaSession.default.json5'), livePath: path.join(__dirname, 'core/priorityMiddlewares/koaSession.json5') },
     ],
+    // I config con una migrazione ancora da applicare NON vanno riconciliati: il
+    // merge additivo allineerebbe schemaVersion e brucerebbe il trigger, facendo
+    // perdere per sempre le rinomine/rimozioni dichiarate dalla migrazione.
+    skipLivePaths: migrationSummary.protectedLivePaths,
   });
 
   const pluginSys = new ( require("./core/pluginSys") )(ital8Conf); // carico il sistema di plugin e passo la configurazione per whitelist

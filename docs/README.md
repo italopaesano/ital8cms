@@ -18,9 +18,15 @@ Indice della documentazione. La guida operativa per l'AI e l'architettura in sin
 - [`roadmap.it.md`](./roadmap.it.md) — miglioramenti e lavori pianificati
 - [`security_improvement_for_V3.md`](./security_improvement_for_V3.md) — note di sicurezza per la V3
 
+## Lavori aperti
+
+- [`../TODO.md`](../TODO.md) — punti rimandati e debito tracciato, con checkbox e riferimento alla fonte
+
 ## Decision record
 
-- [`decisions/`](./decisions/) — registri di decisioni architetturali (admin plugin pages, project review, campi tema `active`/`isInstalled`)
+- [`decisions/`](./decisions/) — registri di decisioni architetturali (admin plugin pages, project review, campi tema `active`/`isInstalled`, ciclo di vita dei config, migrazione dei config)
+  - [`config-lifecycle.it.md`](./decisions/config-lifecycle.it.md) — sidecar `x.default.json5`, stati dei plugin, boot graceful, gate di init
+  - [`config-migrations.it.md`](./decisions/config-migrations.it.md) — cartella `migrations/` di plugin e temi: come si porta un'installazione da una `schemaVersion` alla successiva
 
 ## Archivio (storico / spunto)
 

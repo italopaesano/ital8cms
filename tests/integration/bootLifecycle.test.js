@@ -213,4 +213,79 @@ describe('boot — ciclo di vita config (integration)', () => {
     expect(res.output).toMatch(/\[FATAL\]/);
     expect(res.output).toMatch(/adminAccessControl/);
   });
+
+  // upgradePlugin() girava a OGNI boot: `oldVersion` veniva letto da
+  // `pluginConfig.version`, che il codice dichiarava di non salvare mai, quindi
+  // valeva sempre '0.0.0' e `semver.gt` era vero per qualunque plugin. Inoffensivo
+  // finché tutte le implementazioni erano stub vuoti; rotto al primo che ci avesse
+  // messo una migrazione reale. Qui si verifica il ciclo completo su boot
+  // successivi — l'unico modo di osservare il difetto.
+  test('upgradePlugin: non gira alla prima installazione né a boot invariati, gira al bump di versione', async () => {
+    const { dir } = await buildFixture();
+
+    // Questo test fa QUATTRO boot: su una porta dedicata, per non contendere la
+    // 3000 con gli altri test che spawnano un server (la suite gira seriale, ma
+    // un processo che tarda a chiudere basta a far fallire il boot successivo
+    // con EADDRINUSE).
+    await editJson5(path.join(dir, 'ital8Config.json5'), 'httpPort', 3457);
+
+    const pdir = path.join(dir, 'plugins', 'zzUpgradeProbe');
+    const logPath = path.join(pdir, 'upgradeCalls.json');
+    fs.mkdirSync(pdir, { recursive: true });
+    fs.writeFileSync(path.join(pdir, 'pluginConfig.default.json5'),
+      '// test\n{\n  "schemaVersion": 1,\n  "active": 1,\n  "weight": 250,\n  "dependency": {},\n  "nodeModuleDependency": {},\n  "custom": {},\n}\n', 'utf8');
+    const writeDescription = (version) => fs.writeFileSync(path.join(pdir, 'pluginDescription.json5'),
+      `// test\n{\n  "name": "zzUpgradeProbe",\n  "version": "${version}",\n  "description": "fixture",\n  "author": "test",\n  "email": "t@t.t",\n  "license": "ISC",\n}\n`, 'utf8');
+    writeDescription('1.0.0');
+
+    // Registra ogni invocazione su file: la require cache non falsa il conteggio
+    // fra boot successivi, che sono processi distinti.
+    fs.writeFileSync(path.join(pdir, 'main.js'), `
+const fs = require('fs');
+const path = require('path');
+module.exports = {
+  async loadPlugin() {},
+  async upgradePlugin(pluginSys, pathPluginFolder, oldVersion, newVersion) {
+    const p = path.join(pathPluginFolder, 'upgradeCalls.json');
+    const calls = fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : [];
+    calls.push({ oldVersion, newVersion });
+    fs.writeFileSync(p, JSON.stringify(calls), 'utf8');
+  },
+  getRouteArray() { return []; },
+};
+`, 'utf8');
+
+    const readCalls = () => (fs.existsSync(logPath) ? JSON.parse(fs.readFileSync(logPath, 'utf8')) : []);
+    const liveVersion = () => loadJson5(path.join(pdir, 'pluginConfig.json5')).version;
+
+    // Boot 1 — prima installazione: NON è un upgrade. L'hook non va invocato, ma
+    // la versione di partenza va registrata.
+    let res = await runBoot(dir);
+    expect(res.started).toBe(true);
+    expect(readCalls()).toEqual([]);
+    expect(liveVersion()).toBe('1.0.0');
+    await killProc(res.proc);
+
+    // Boot 2 — nulla è cambiato: l'hook deve restare fermo (è QUI che prima
+    // scattava, a ogni riavvio).
+    res = await runBoot(dir);
+    expect(res.started).toBe(true);
+    expect(readCalls()).toEqual([]);
+    await killProc(res.proc);
+
+    // Boot 3 — versione del codice avanzata: l'hook gira una volta, con le due
+    // versioni corrette, e la nuova viene persistita.
+    writeDescription('2.0.0');
+    res = await runBoot(dir);
+    expect(res.started).toBe(true);
+    expect(readCalls()).toEqual([{ oldVersion: '1.0.0', newVersion: '2.0.0' }]);
+    expect(liveVersion()).toBe('2.0.0');
+    await killProc(res.proc);
+
+    // Boot 4 — l'upgrade è già stato eseguito: non si ripete.
+    res = await runBoot(dir);
+    expect(res.started).toBe(true);
+    expect(readCalls()).toHaveLength(1);
+    await killProc(res.proc);
+  }, 180000);
 });
