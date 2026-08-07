@@ -167,57 +167,6 @@ Fonte: `docs/roadmap.it.md` punto 16 — aggiornamenti rinviati dal bulk del 202
       cambi di ABI) con install e test mirati.
       *Escluso dagli update di routine per policy (CLAUDE.md regola 12).*
 
-### 🐞 `koa-classic-server` v5.1.0 — `dirListing.enabled: false` disabilita anche la risoluzione del file indice
-
-Fonte: intervento *superficie riservata / assetto vetrina*.
-**Dipendenza mantenuta dal team → da correggere nel modulo, NON da aggirare (CLAUDE.md regola 4).**
-
-- [ ] **Segnalare al maintainer** (Italo Paesano) e attendere la release corretta.
-- [ ] Dopo il fix: `npm install koa-classic-server@<versione>`, poi **riattivare** le
-      due parti già pronte e volutamente disattivate:
-  - [ ] `index.js`, static server di `/www`: tornare a
-        `dirListing: { enabled: ital8Conf.dirListing?.wwwPath !== false }`
-  - [ ] `ital8Config.default.json5`: reintrodurre la chiave `dirListing: { wwwPath: true }`
-        (+ bump di `schemaVersion` 4 → 5)
-  - [ ] `core/cliBridge/handlers.js` → `handlePublicOnly`: reintrodurre il terzo passo
-        (`setJson5Key(configPath, ['dirListing','wwwPath'], false)`, solo su `on`;
-        `off` **non** lo riaccende) e rimettere `dirListingChanged` nel calcolo di
-        `needsRestart`
-  - [ ] `docs/cli-control-plane.it.md`: sostituire l'avviso con il comportamento reale
-
-**Root cause** — in `node_modules/koa-classic-server/index.cjs`, ramo directory:
-
-```js
-if (stat.isDirectory()) {
-    if (options.dirListing.enabled) {
-        // ...trailing-slash redirect...
-        // ricerca del file indice (options.index) → serve il file trovato
-        // nessun indice → mostra il listing
-    } else {
-        await sendErrorPage(ctx, 404);   // ← l'indice non viene MAI cercato
-    }
-}
-```
-
-La ricerca dell'indice vive **dentro** il ramo `enabled`, quindi `enabled: false`
-cortocircuita a 404 prima di guardare `options.index`.
-
-**Comportamento atteso:** `dirListing.enabled` dovrebbe governare **solo il fallback
-listing**. Con `enabled: false` e `index: ["index.ejs"]` una directory che contiene
-l'indice deve servirlo (200); il 404 deve scattare **solo** quando nessun indice
-corrisponde.
-
-**Riproduzione minima** (verificata):
-
-```js
-kcs(dir, { index: ['index.ejs'], dirListing: { enabled: true  }, /* … */ }) // GET / → 200, serve index.ejs
-kcs(dir, { index: ['index.ejs'], dirListing: { enabled: false }, /* … */ }) // GET / → 404 ❌
-```
-
-**Sistemi affetti:** qualunque sito che voglia servire una homepage **senza**
-esporre il directory listing — cioè la configurazione normale di un sito in
-produzione. Oggi le due cose non sono separabili.
-
 ## 8. Direzioni ampie
 
 Non sono debito, ma direzioni: il dettaglio vive in

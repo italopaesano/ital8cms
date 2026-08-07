@@ -54,7 +54,7 @@ npm run cli -- migrate <target>    # applica le migrazioni di config pendenti
 | `admin start` / `admin stop` | Scrive `enableAdmin` in `ital8Config.json5` (l'admin system si aggancia al boot) | **Sì** |
 | `reserved start` / `reserved stop` | Alza/abbassa il gate della superficie riservata (a runtime) | No |
 | `public start` / `public stop` | Alza/abbassa il gate di manutenzione del sito pubblico (a runtime) | No |
-| `publicOnly on` / `publicOnly off` | Macro: compone `reserved` + `admin` nell'assetto vetrina | **Sì** |
+| `publicOnly on` / `publicOnly off` | Macro: compone `reserved` + `admin` + `dirListing` nell'assetto vetrina | **Sì** |
 | `reset <target>` | Rimuove i config vivi di un plugin/tema (rigenerati dai `.default` al boot) | Solo con `--online` |
 
 L'area **admin** richiede un riavvio perché la sua inizializzazione (symlink,
@@ -436,19 +436,28 @@ che restano usabili anche singolarmente.
 
 | | Cosa fa |
 |---|---|
-| `publicOnly on` | `reserved stop` + `admin stop` → **riavvia** |
+| `publicOnly on` | `reserved stop` + `admin stop` + `dirListing.wwwPath: false` → **riavvia** |
 | `publicOnly off` | `reserved start` + `admin start` → **riavvia** |
 
 Resta pienamente funzionante tutto ciò che è pubblico: pagine, form contatti,
 `mailer`, `csrfProtection`, `rateLimiter`, i18n, SEO.
 
-> ⚠️ **Terzo passo ancora mancante: il directory listing.** Spegnere il listing di
-> `/www` fa parte del progetto dell'assetto vetrina — un listing pubblico rivela
-> nomi di file, bozze e materiale non linkato — ma è **bloccato da un bug di
-> `koa-classic-server` v5.1.0**: disabilitare il listing fa rispondere **404 alla
-> radice del sito** anche quando un file indice è configurato ed esiste. Poiché il
-> modulo è mantenuto dal team, il passo verrà aggiunto **dopo la release corretta**
-> invece di essere aggirato (vedi [`TODO.md`](../TODO.md) → *Dipendenze*).
+**Il terzo passo: il directory listing.** Quando una directory di `/www` non ha
+un file indice, il file server può elencarne il contenuto — rivelando nomi di
+file, bozze e materiale non linkato da nessuna pagina. `publicOnly on` lo spegne
+scrivendo `dirListing.wwwPath: false`; le directory **con** un file indice
+continuano a funzionare normalmente.
+
+> **`publicOnly off` non riaccende `dirListing`**, di proposito: sarebbe l'unico
+> effetto della macro a ripristinare una condizione *peggiore* di quella in cui ha
+> trovato il sito. Il listing pubblico non è un pezzo dell'assetto vetrina da
+> annullare, è un'impostazione che quasi nessun sito in produzione vuole: chi la
+> desidera la riattiva esplicitamente in `ital8Config.json5`.
+
+> ℹ️ Richiede **`koa-classic-server` >= 5.2.0**. Nella 5.1.0 `dirListing.enabled:
+> false` disabilitava anche la *risoluzione del file indice*, quindi spegnere il
+> listing faceva rispondere 404 alla radice del sito: il passo era stato
+> deliberatamente omesso in attesa della correzione nel modulo.
 
 ## `reset <target>` (config di plugin/temi)
 

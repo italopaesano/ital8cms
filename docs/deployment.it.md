@@ -77,7 +77,7 @@ npm run cli -- admin stop      # disattiva l'area admin (riscrive enableAdmin + 
 npm run cli -- admin start     # la riattiva
 npm run cli -- reserved stop   # chiude tutto cio che sta dietro l'autenticazione: 404 (nessun riavvio)
 npm run cli -- reserved start  # la riapre
-npm run cli -- publicOnly on   # assetto "sito vetrina": reserved stop + admin stop (riavvia)
+npm run cli -- publicOnly on   # assetto "sito vetrina": reserved stop + admin stop + listing off (riavvia)
 ```
 
 Note rilevanti in produzione:

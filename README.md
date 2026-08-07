@@ -178,7 +178,7 @@ npm run cli -- public stop     # public site in maintenance (503, no restart)
 npm run cli -- public start    # public site back online
 npm run cli -- reserved stop   # everything behind auth (login, admin panel): 404, no restart
 npm run cli -- reserved start  # reserved surface reachable again
-npm run cli -- publicOnly on   # showcase layout: reserved stop + admin stop (restarts)
+npm run cli -- publicOnly on   # showcase layout: reserved stop + admin stop + dir listing off (restarts)
 npm run cli -- publicOnly off  # back to the normal layout
 npm run cli -- reset <target>  # plugin/theme configs back to defaults
 npm run cli -- migrate <target> # apply pending config migrations (--dry-run)

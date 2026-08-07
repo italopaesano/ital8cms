@@ -4,6 +4,7 @@ const { readEnableAdmin, writeEnableAdmin } = require('./configEditor');
 const { readState, writeState } = require('./stateFile');
 const { detectSupervisor } = require('./respawn');
 const resetConfigsToDefault = require('../resetConfigsToDefault');
+const setJson5Key = require('../setJson5Key');
 
 function buildStatus(ctx) {
   const { startTime, ital8Conf, configPath, statePath, getPublicState, getReservedState } = ctx;
@@ -199,17 +200,20 @@ async function handleReset(ctx, request) {
 // singolarmente, così `status` continua a dire la verità su tre righe e non
 // esistono combinazioni contraddittorie da arbitrare.
 //
-//   on  → reserved stop + admin stop
-//   off → reserved start + admin start
+//   on  → reserved stop + admin stop + dirListing.wwwPath false
+//   off → reserved start + admin start        (dirListing NON viene ritoccato)
 //
-// ⚠ TERZO PASSO MANCANTE — spegnere il directory listing pubblico faceva parte
-// del progetto, ma e' BLOCCATO da un bug di koa-classic-server v5.1.0: in
-// index.cjs la ricerca del file indice vive dentro il ramo
-// `if (options.dirListing.enabled)`, quindi disabilitare il listing fa
-// rispondere 404 alla radice del sito anche con `index: ["index.ejs"]`
-// configurato e il file presente. Il modulo e' mantenuto dal team: il passo
-// verra' aggiunto qui dopo la release corretta, non aggirato.
-// Vedi TODO.md §Dipendenze e index.js (static server di /www).
+// PERCHE' `off` NON RIACCENDE dirListing: sarebbe l'unico effetto della macro a
+// ripristinare una condizione peggiore di quella in cui ha trovato il sito. Il
+// listing di directory pubblico non e' un pezzo dell'assetto vetrina da
+// annullare, e' un'impostazione che quasi nessun sito in produzione vuole: chi lo
+// desidera lo riattiva esplicitamente nel config. `off` riporta l'ESPOSIZIONE al
+// normale, non il file di configurazione a com'era.
+//
+// NB: il passo su dirListing richiede koa-classic-server >= 5.2.0. Nella 5.1.0
+// `enabled: false` disabilitava anche la risoluzione del file indice (404 sulla
+// radice del sito), quindi il passo era stato deliberatamente omesso in attesa
+// della correzione nel modulo. Vincolo espresso dal range in package.json.
 async function handlePublicOnly(ctx, turnOn) {
   const { configPath, requestRestart } = ctx;
   const action = `publicOnly.${turnOn ? 'on' : 'off'}`;
@@ -234,14 +238,31 @@ async function handlePublicOnly(ctx, turnOn) {
     return { ok: false, action, error: err.code || 'config_edit_failed', message: err.message };
   }
 
-  // 2. Superficie riservata (runtime, senza riavvio)
+  // 2. Directory listing pubblico (solo in accensione — vedi commento sopra).
+  //    Anche questo e' un passo fallibile che tocca il config: sta quindi PRIMA
+  //    del toggle della superficie, per la stessa ragione di ordine.
+  let dirListingChanged = false;
+  if (turnOn) {
+    try {
+      const dirListingResult = await setJson5Key(configPath, ['dirListing', 'wwwPath'], false);
+      dirListingChanged = dirListingResult.action !== 'unchanged';
+      steps.push(`dirListing.wwwPath false${dirListingChanged ? '' : ' (già così)'}`);
+    } catch (err) {
+      // Non fatale: l'assetto vetrina regge anche senza questo passo (la chiusura
+      // della superficie riservata, che e' il cuore, e' gia' avvenuta o sta per
+      // avvenire), e interrompere qui lascerebbe il sistema a meta'.
+      steps.push(`dirListing.wwwPath NON modificato (${err.message})`);
+    }
+  }
+
+  // 3. Superficie riservata (runtime, senza riavvio)
   const reservedResult = handleRuntimeSurfaceToggle(ctx, 'reserved', !turnOn);
   if (!reservedResult.ok) return { ...reservedResult, action };
   steps.push(`reserved ${!turnOn ? 'running' : 'stopped'}${reservedResult.noop ? ' (già così)' : ''}`);
 
   // Il riavvio serve solo se qualcosa che si applica al boot è cambiato davvero:
-  // enableAdmin è letto all'avvio, la superficie riservata no.
-  const needsRestart = adminChanged;
+  // enableAdmin e dirListing sono letti all'avvio, la superficie riservata no.
+  const needsRestart = adminChanged || dirListingChanged;
   if (!needsRestart) {
     return {
       ok: true, action, restart: false,

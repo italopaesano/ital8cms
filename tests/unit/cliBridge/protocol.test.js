@@ -344,6 +344,47 @@ describe('makeDispatcher reserved', () => {
 });
 
 describe('makeDispatcher publicOnly', () => {
+  // Terzo passo della macro, riabilitato con koa-classic-server >= 5.2.0: nella
+  // 5.1.0 `dirListing.enabled: false` disabilitava anche la risoluzione del file
+  // indice (404 sulla radice del sito), quindi il passo era omesso.
+  test('publicOnly.on turns the public directory listing off', async () => {
+    const sb = makeSandbox(true, 'running');
+    try {
+      fs.writeFileSync(sb.configPath,
+        '{\n  "enableAdmin": true,\n  "httpPort": 3000,\n  "dirListing": {\n    "wwwPath": true,\n  },\n}\n', 'utf8');
+      const dispatch = makeDispatcher({
+        startTime: Date.now(), ital8Conf: { httpPort: 3000 },
+        configPath: sb.configPath, statePath: sb.statePath,
+        setReservedState: () => {}, requestRestart: () => {},
+      });
+      const res = await dispatch('publicOnly.on');
+      expect(res.ok).toBe(true);
+      expect(fs.readFileSync(sb.configPath, 'utf8')).toMatch(/"wwwPath"\s*:\s*false/);
+      expect(res.steps.join(' ')).toMatch(/dirListing\.wwwPath false/);
+      await flush();
+    } finally { sb.cleanup(); }
+  });
+
+  // Asimmetria deliberata: `off` ripristina l'ESPOSIZIONE, non il file di config.
+  // Riaccendere il listing sarebbe l'unico effetto della macro a lasciare il sito
+  // in una condizione peggiore di come l'ha trovato.
+  test('publicOnly.off does NOT turn the directory listing back on', async () => {
+    const sb = makeSandbox(false, 'running');
+    try {
+      fs.writeFileSync(sb.configPath,
+        '{\n  "enableAdmin": false,\n  "httpPort": 3000,\n  "dirListing": {\n    "wwwPath": false,\n  },\n}\n', 'utf8');
+      fs.writeFileSync(sb.statePath, '{ "public": "running", "reserved": "stopped" }', 'utf8');
+      const dispatch = makeDispatcher({
+        startTime: Date.now(), ital8Conf: { httpPort: 3000 },
+        configPath: sb.configPath, statePath: sb.statePath,
+        setReservedState: () => {}, requestRestart: () => {},
+      });
+      await dispatch('publicOnly.off');
+      expect(fs.readFileSync(sb.configPath, 'utf8')).toMatch(/"wwwPath"\s*:\s*false/);
+      await flush();
+    } finally { sb.cleanup(); }
+  });
+
   test('publicOnly.on stops reserved, disables admin and asks for a restart', async () => {
     const sb = makeSandbox(true, 'running');
     const applied = [];

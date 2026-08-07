@@ -9,7 +9,7 @@ Terminal tool to drive a **running** ital8cms instance over a local UNIX socket
 `npm run cli -- admin start|stop` (enable/disable the admin area, triggers a
 restart), `npm run cli -- public start|stop` (public maintenance gate, no
 restart), `npm run cli -- reserved start|stop` (the whole authenticated surface,
-no restart), `npm run cli -- publicOnly on|off` (showcase preset, restarts),
+no restart), `npm run cli -- publicOnly on|off` (showcase preset: reserved stop + admin stop + public directory listing off, restarts),
 `npm run cli -- reset <target>`, `npm run cli -- migrate <target>`. With
 `npm run`, positional arguments are forwarded as-is, but **flags** (`--json`,
 `--theme`, …) are swallowed by npm **silently** unless you insert `--` — always

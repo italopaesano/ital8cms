@@ -319,14 +319,16 @@ async function startApp() {
       (opt = {
         index: ital8Conf.indexFiles.wwwPath,
         urlPrefix: `${ital8Conf.globalPrefix}`,
-        // ⚠ BLOCCATO da un bug di koa-classic-server v5.1.0 — vedi TODO.md §Dipendenze.
-        // Rendere questo valore configurabile (per spegnere il listing in produzione e
-        // nell'assetto `publicOnly`) e' pronto ma NON attivabile: in index.cjs la
-        // ricerca del file indice vive DENTRO il ramo `if (options.dirListing.enabled)`,
-        // quindi `enabled: false` risponde 404 alla radice del sito anche quando
-        // `index: ["index.ejs"]` e' configurato e il file esiste. Riattivare qui la
-        // lettura da `ital8Conf.dirListing.wwwPath` dopo la release corretta del modulo.
-        dirListing: { enabled: true },
+        // Directory listing del sito pubblico: quando una directory di /www non ha un
+        // file indice, koa-classic-server puo elencarne il contenuto invece di
+        // rispondere 404. In produzione conviene spegnerlo (il listing rivela nomi di
+        // file, bozze e materiale non linkato); `npm run cli -- publicOnly on` lo fa
+        // come parte dell'assetto vetrina.
+        // Default `true` = comportamento storico invariato per chi aggiorna.
+        // Richiede koa-classic-server >= 5.2.0: nella 5.1.0 `enabled: false`
+        // disabilitava anche la risoluzione del file indice (404 sulla radice del
+        // sito). Il vincolo e' espresso dal range in package.json.
+        dirListing: { enabled: ital8Conf.dirListing?.wwwPath !== false },
         // urlsReserved è RELATIVO a urlPrefix: koa-classic-server toglie prima urlPrefix
         // dalla richiesta, poi confronta il PRIMO segmento rimanente con questi valori.
         // Quindi NON includere globalPrefix qui (urlPrefix lo contiene già): se i reserved

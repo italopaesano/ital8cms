@@ -45,9 +45,9 @@ reserved.command('start').description('serve the reserved surface normally').act
 reserved.command('stop').description('answer 404 on login, authenticated routes and the admin panel').action(() => sendCommand('reserved.stop'));
 
 // Macro: compone le leve esistenti nell'assetto "sito vetrina".
-const publicOnly = program.command('publicOnly').description('showcase preset: public site only (macro over reserved + admin)');
-publicOnly.command('on').description('reserved stop + admin stop (restarts)').action(() => sendCommand('publicOnly.on'));
-publicOnly.command('off').description('reserved start + admin start (restarts)').action(() => sendCommand('publicOnly.off'));
+const publicOnly = program.command('publicOnly').description('showcase preset: public site only (macro over reserved + admin + dirListing)');
+publicOnly.command('on').description('reserved stop + admin stop + dirListing off (restarts)').action(() => sendCommand('publicOnly.on'));
+publicOnly.command('off').description('reserved start + admin start (does not re-enable dirListing)').action(() => sendCommand('publicOnly.off'));
 
 program
   .command('reset <target>')

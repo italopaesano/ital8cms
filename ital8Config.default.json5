@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 4,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 5,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
 
   // ── Migrazioni dei file di configurazione ──────────────────────────────────
   // Quando un plugin/tema evolve la struttura dei suoi config, la cartella
@@ -279,6 +279,25 @@
       "enabled": false,
       "ext": ".ejs"
     }
+  },
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // DIRECTORY LISTING
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Quando una directory di /www non contiene un file indice, koa-classic-server
+  // puo elencarne il contenuto invece di rispondere 404.
+  //
+  //   • true  (default storico) — elenca i file: comodo in sviluppo
+  //   • false                   — 404: nessuna divulgazione della struttura
+  //
+  // Su un sito in produzione conviene false: il listing rivela nomi di file,
+  // bozze e materiale non ancora linkato da nessuna pagina. La homepage e le altre
+  // directory CON un file indice continuano a funzionare normalmente.
+  //
+  // `npm run cli -- publicOnly on` lo imposta a false come parte dell'assetto
+  // vetrina; `publicOnly off` NON lo riaccende (vedi docs/cli-control-plane.it.md).
+  "dirListing": {
+    "wwwPath": true,
   },
 
   // File indice per ogni istanza di koa-classic-server
