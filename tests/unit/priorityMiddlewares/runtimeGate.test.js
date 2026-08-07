@@ -573,3 +573,92 @@ describe('createMaintenanceGate + reserved closed', () => {
     expect(nextCalled).toBe(true);
   });
 });
+
+// Il gate legge quattro valori dal config (globalPrefix, apiPrefix, adminPrefix,
+// adminThemeResourcesPrefix). Testarlo solo con i default lascia scoperte le
+// installazioni che li personalizzano — dove un errore non darebbe un errore ma
+// una superficie silenziosamente aperta, o un sito pubblico silenziosamente chiuso.
+describe('createReservedGate — prefissi personalizzati', () => {
+  const conf = {
+    globalPrefix: '/myapp',
+    apiPrefix: 'servizi',
+    adminPrefix: 'backoffice',
+    adminThemeResourcesPrefix: 'bo-resources',
+  };
+
+  function fakeCtxWithHeaders(reqPath) {
+    const headers = {};
+    return { path: reqPath, status: 200, type: null, body: null, headers, set(n, v) { headers[n] = v; } };
+  }
+
+  async function passesThrough(gate, reqPath) {
+    const ctx = fakeCtxWithHeaders(reqPath);
+    let nextCalled = false;
+    await gate.middleware(ctx, async () => { nextCalled = true; });
+    return { nextCalled, ctx };
+  }
+
+  test('chiude i prefissi admin sotto il globalPrefix', async () => {
+    const gate = createReservedGate({ ital8Conf: conf, initialState: 'stopped' });
+    for (const reqPath of ['/myapp/backoffice', '/myapp/backoffice/utenti/', '/myapp/bo-resources/css/x.css']) {
+      const { nextCalled, ctx } = await passesThrough(gate, reqPath);
+      expect([reqPath, nextCalled, ctx.status]).toEqual([reqPath, false, 404]);
+    }
+  });
+
+  // Gli stessi path SENZA globalPrefix non appartengono a questo deploy: chiuderli
+  // spegnerebbe contenuto che non c'entra nulla.
+  test('non tocca gli stessi prefissi privi di globalPrefix', async () => {
+    const gate = createReservedGate({ ital8Conf: conf, initialState: 'stopped' });
+    const { nextCalled } = await passesThrough(gate, '/backoffice/utenti');
+    expect(nextCalled).toBe(true);
+  });
+
+  // La forma della risposta dipende dall'apiPrefix EFFETTIVO: sbagliarlo
+  // restituirebbe la pagina HTML dove il sito risponde text/plain (e viceversa),
+  // cioe' esattamente la divergenza che rende enumerabile la superficie.
+  test('la forma della risposta segue apiPrefix e globalPrefix configurati', async () => {
+    const gate = createReservedGate({ ital8Conf: conf, initialState: 'stopped' });
+
+    const apiCtx = fakeCtxWithHeaders('/myapp/servizi/adminUsers/logged');
+    gate.deny(apiCtx);
+    expect(apiCtx.type).toBe('text/plain; charset=utf-8');
+    expect(apiCtx.body).toBe('Not Found');
+
+    const pageCtx = fakeCtxWithHeaders('/myapp/backoffice/x');
+    gate.deny(pageCtx);
+    expect(pageCtx.type).toBe('text/html; charset=utf-8');
+    expect(Buffer.byteLength(pageCtx.body, 'utf8')).toBe(325);
+
+    // `/servizi/...` senza globalPrefix non e' l'API di QUESTO deploy: forma pagina.
+    const strayCtx = fakeCtxWithHeaders('/servizi/adminUsers/logged');
+    gate.deny(strayCtx);
+    expect(strayCtx.type).toBe('text/html; charset=utf-8');
+  });
+
+  test('senza apiPrefix nel config ricade su "api"', () => {
+    const gate = createReservedGate({ ital8Conf: { globalPrefix: '' }, initialState: 'stopped' });
+    const ctx = fakeCtxWithHeaders('/api/qualcosa');
+    gate.deny(ctx);
+    expect(ctx.type).toBe('text/plain; charset=utf-8');
+  });
+});
+
+// getReservedRoutePaths() deve restituire una COPIA: se restituisse il Set interno,
+// un chiamante potrebbe svuotarlo e disarmare il gate senza che nulla lo segnali.
+describe('createReservedGate — isolamento dell indice', () => {
+  const conf = { adminPrefix: 'admin', adminThemeResourcesPrefix: 'admin-theme-resources', globalPrefix: '' };
+
+  test('mutare il Set passato non altera l indice del gate', async () => {
+    const gate = createReservedGate({ ital8Conf: conf, initialState: 'stopped' });
+    const source = new Set(['/api/adminUsers/login']);
+    gate.setReservedRoutePaths(source);
+    source.clear();
+
+    const ctx = { path: '/api/adminUsers/login', status: 200, type: null, body: null, headers: {}, set(n, v) { this.headers[n] = v; } };
+    let nextCalled = false;
+    await gate.middleware(ctx, async () => { nextCalled = true; });
+    expect(nextCalled).toBe(false);
+    expect(ctx.status).toBe(404);
+  });
+});

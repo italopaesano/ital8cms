@@ -91,12 +91,22 @@ mantenere a mano:
 | prefissi `adminPrefix` e `adminThemeResourcesPrefix` | pannello e risorse del tema admin | il gate stesso |
 | indice dei path delle rotte riservate | chiude anche il **405** di `allowedMethods()`, che risponde senza passare dall'handler | il gate stesso |
 
-> I pattern delle pagine usano il wildcard (`/pluginPages/adminUsers/login*`)
-> perché con `hideExtension.pluginPagesPrefix` attivo l'URL servito è senza
-> estensione: un match esatto su `login.ejs` non intercetterebbe `/…/login`.
+> **Ogni pagina ha due regole**, una per forma di URL: con
+> `hideExtension.pluginPagesPrefix` attivo l'URL servito è senza estensione
+> (`/…/login`), e una regola su `login.ejs` non lo intercetterebbe.
+> Sono **match esatti**, non wildcard: `login*` sembrerebbe coprire entrambe le
+> forme e invece no — il wildcard singolo traduce `*` in `[^/]+`, cioè *uno o
+> più* caratteri, quindi copre `login.ejs` ma **non** `login`, e in più
+> cattura per sbaglio pagine vicine come `loginHelper.ejs`.
+>
 > L'indice delle rotte è confrontato come confronta il **router** — che gira con
 > `sensitive: false` e `strict: false` — quindi `/API/…/login` e `/…/login/` sono
 > chiusi come la forma canonica.
+>
+> Un test rilegge le pagine effettivamente presenti in
+> `plugins/{adminUsers,adminAccessControl}/webPages/` e verifica che ognuna sia
+> classificata, **in entrambe le forme di URL**: se aggiungi una pagina a quei
+> plugin il test fallisce finché non dichiari a quale faccia del sito appartiene.
 
 Un plugin di terze parti che ignora del tutto l'esistenza di `reserved` eredita
 il comportamento corretto **gratis**: `access` è già obbligatorio su ogni rotta e

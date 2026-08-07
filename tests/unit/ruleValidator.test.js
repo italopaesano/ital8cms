@@ -172,6 +172,35 @@ describe('RuleValidator', () => {
       expect(errors).toContainEqual(expect.stringContaining('"requiresAuth" must be boolean'));
     });
 
+    // isAuthEntryPoint marca una pagina PUBBLICA che appartiene comunque alla
+    // superficie riservata. Non incide sul controllo accessi ordinario, quindi un
+    // valore sbagliato non produrrebbe alcun sintomo visibile: passerebbe la
+    // validazione e la pagina resterebbe servita a `reserved stop`. Va quindi
+    // rifiutato al boot, non scoperto in produzione.
+    test('accepts a boolean isAuthEntryPoint', () => {
+      const rules = {
+        '/pluginPages/adminUsers/login.ejs': { requiresAuth: false, allowedRoles: [], isAuthEntryPoint: true },
+      };
+      const errors = validator.validateRuleSection(rules, 'customRules', false);
+      expect(errors).toHaveLength(0);
+    });
+
+    test('reports non-boolean isAuthEntryPoint', () => {
+      const rules = {
+        '/page': { requiresAuth: false, allowedRoles: [], isAuthEntryPoint: 'yes' },
+      };
+      const errors = validator.validateRuleSection(rules, 'customRules', false);
+      expect(errors).toContainEqual(expect.stringContaining('"isAuthEntryPoint" must be boolean'));
+    });
+
+    test('isAuthEntryPoint is optional (absence is not an error)', () => {
+      const rules = {
+        '/page': { requiresAuth: true, allowedRoles: [0] },
+      };
+      const errors = validator.validateRuleSection(rules, 'customRules', false);
+      expect(errors).toHaveLength(0);
+    });
+
     test('reports missing allowedRoles', () => {
       const rules = {
         '/page': { requiresAuth: true },

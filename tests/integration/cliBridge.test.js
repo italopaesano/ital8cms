@@ -129,6 +129,22 @@ function httpGet(reqPath) {
   });
 }
 
+function httpPost(reqPath, body = '') {
+  return new Promise((resolve, reject) => {
+    const req = http.request({
+      host: '127.0.0.1', port: TEST_HTTP_PORT, path: reqPath, method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) },
+    }, (res) => {
+      let payload = '';
+      res.on('data', (c) => { payload += c.toString(); });
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: payload }));
+    });
+    req.on('error', reject);
+    req.setTimeout(5000, () => req.destroy(new Error('http timeout')));
+    req.end(body);
+  });
+}
+
 function killProc(proc) {
   return new Promise((resolve) => {
     if (!proc || proc.exitCode !== null) return resolve();
@@ -412,5 +428,33 @@ describe('cliBridge public stop + reserved stop (uniformita)', () => {
   ])('%s answers 503 like everything else', async (urlPath) => {
     const r = await httpGet(urlPath);
     expect(r.status).toBe(503);
+  });
+});
+
+// Un 403 da CSRF racconta che dietro quel path c'e' un endpoint che accetta POST:
+// e' lo stesso canale di fingerprinting dei 401/405, solo per un'altra porta.
+// Il route-wrap controlla infatti la superficie riservata PRIMA del CSRF, e il
+// gate chiude comunque il path prima ancora del router. Questo test blocca
+// entrambe le regressioni possibili: un riordino del wrap, o un buco nell'indice.
+describe('superficie riservata — nessun 403 CSRF a superficie chiusa', () => {
+  beforeAll(async () => { await runClient(['--json', '--socket', TEST_SOCKET, 'reserved', 'stop']); });
+  afterAll(async () => { await runClient(['--json', '--socket', TEST_SOCKET, 'reserved', 'start']); });
+
+  test.each([
+    ['/api/adminUsers/login',  'username=x&password=y'],
+    ['/api/adminUsers/logout', ''],
+  ])('POST %s senza token CSRF risponde 404, non 403', async (urlPath, body) => {
+    const r = await httpPost(urlPath, body);
+    expect(r.status).toBe(404);
+    expect(r.body).not.toMatch(/csrf/i);
+  });
+
+  test('a superficie APERTA lo stesso POST torna a essere respinto dal CSRF (403)', async () => {
+    await runClient(['--json', '--socket', TEST_SOCKET, 'reserved', 'start']);
+    const r = await httpPost('/api/adminUsers/login', 'username=x&password=y');
+    // Il punto non e' il codice esatto, ma che il comportamento pre-esistente
+    // sia tornato: la richiesta viene VALUTATA invece che ignorata.
+    expect(r.status).not.toBe(404);
+    await runClient(['--json', '--socket', TEST_SOCKET, 'reserved', 'stop']);
   });
 });
