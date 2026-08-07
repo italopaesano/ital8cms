@@ -123,7 +123,12 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
     {
       method: 'GET',
       path: '/ping',
-      access: { requiresAuth: false, allowedRoles: [] },
+      // Pubblica (sonda di liveness), ma appartiene alla superficie riservata:
+      // la sua sola esistenza rivela che il plugin admin è caricato. Con
+      // `reserved stop` risponde 404 come il resto. Se serve un health check
+      // raggiungibile anche in assetto vetrina, va esposto come rotta propria
+      // e dichiaratamente pubblica (senza questo marcatore).
+      access: { requiresAuth: false, allowedRoles: [], isAuthEntryPoint: true },
       handler: async (ctx) => {
         ctx.body = { ok: true, ts: Date.now() };
       }

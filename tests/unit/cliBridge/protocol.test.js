@@ -3,6 +3,7 @@ const os = require('os');
 const path = require('path');
 const { parseRequestLine, parseSocketMode } = require('../../../core/cliBridge/server');
 const { makeDispatcher, KNOWN_COMMANDS } = require('../../../core/cliBridge/handlers');
+const { readState } = require('../../../core/cliBridge/stateFile');
 
 describe('parseRequestLine', () => {
   test('accepts a valid status request', () => {
@@ -71,7 +72,8 @@ describe('makeDispatcher.status', () => {
       });
       const res = await dispatch('status');
       expect(res.ok).toBe(true);
-      expect(res.data.admin).toEqual({ state: 'running' });
+      expect(res.data.admin).toEqual({ state: 'running', unreachable: false });
+      expect(res.data.reserved).toEqual({ state: 'running' });
       expect(res.data.public).toEqual({ state: 'running' });
       expect(res.data.httpPort).toBe(3000);
       expect(res.data.httpsEnabled).toBe(true);
@@ -89,7 +91,7 @@ describe('makeDispatcher.status', () => {
         statePath: sb.statePath,
       });
       const res = await dispatch('status');
-      expect(res.data.admin).toEqual({ state: 'stopped' });
+      expect(res.data.admin).toEqual({ state: 'stopped', unreachable: false });
       expect(res.data.public).toEqual({ state: 'stopped' });
       expect(res.data.httpsEnabled).toBe(false);
       expect(res.data.httpsPort).toBeNull();
@@ -262,6 +264,168 @@ describe('makeDispatcher unknown commands', () => {
   });
 });
 
-test('KNOWN_COMMANDS lists all 6 commands', () => {
-  expect(KNOWN_COMMANDS.sort()).toEqual(['admin.start', 'admin.stop', 'public.start', 'public.stop', 'reset', 'status']);
+test('KNOWN_COMMANDS lists all 10 commands', () => {
+  expect(KNOWN_COMMANDS.sort()).toEqual([
+    'admin.start', 'admin.stop',
+    'public.start', 'public.stop',
+    'publicOnly.off', 'publicOnly.on',
+    'reserved.start', 'reserved.stop',
+    'reset', 'status',
+  ]);
+});
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SUPERFICIE RISERVATA + MACRO publicOnly
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+describe('makeDispatcher reserved', () => {
+  test('reserved.stop persists the state and applies it to the gate (no restart)', async () => {
+    const sb = makeSandbox(true, 'running');
+    const applied = [];
+    try {
+      const dispatch = makeDispatcher({
+        startTime: Date.now(),
+        ital8Conf: { httpPort: 3000 },
+        configPath: sb.configPath,
+        statePath: sb.statePath,
+        setReservedState: (s) => applied.push(s),
+      });
+      const res = await dispatch('reserved.stop');
+      expect(res.ok).toBe(true);
+      expect(res.restart).toBe(false);
+      expect(applied).toEqual(['stopped']);
+      expect(readState(sb.statePath).reserved).toBe('stopped');
+    } finally { sb.cleanup(); }
+  });
+
+  test('reserved.stop is a noop when already stopped', async () => {
+    const sb = makeSandbox(true, 'running');
+    try {
+      fs.writeFileSync(sb.statePath, '{ "public": "running", "reserved": "stopped" }', 'utf8');
+      const dispatch = makeDispatcher({
+        startTime: Date.now(), ital8Conf: { httpPort: 3000 },
+        configPath: sb.configPath, statePath: sb.statePath,
+      });
+      const res = await dispatch('reserved.stop');
+      expect(res.noop).toBe(true);
+    } finally { sb.cleanup(); }
+  });
+
+  // Le due superfici sono indipendenti: toccarne una non deve riportare l'altra
+  // al suo default (un `reserved stop` non deve annullare una manutenzione).
+  test('reserved.stop does not clobber an active public stop', async () => {
+    const sb = makeSandbox(true, 'stopped');
+    try {
+      const dispatch = makeDispatcher({
+        startTime: Date.now(), ital8Conf: { httpPort: 3000 },
+        configPath: sb.configPath, statePath: sb.statePath,
+      });
+      await dispatch('reserved.stop');
+      const state = readState(sb.statePath);
+      expect(state).toEqual({ public: 'stopped', reserved: 'stopped' });
+    } finally { sb.cleanup(); }
+  });
+
+  // Il pannello sta DENTRO la superficie riservata: status deve dirlo, o
+  // "admin: running" accanto a un pannello che da 404 diventa una trappola.
+  test('status flags the admin panel as unreachable when reserved is stopped', async () => {
+    const sb = makeSandbox(true, 'running');
+    try {
+      fs.writeFileSync(sb.statePath, '{ "public": "running", "reserved": "stopped" }', 'utf8');
+      const dispatch = makeDispatcher({
+        startTime: Date.now(), ital8Conf: { httpPort: 3000 },
+        configPath: sb.configPath, statePath: sb.statePath,
+      });
+      const res = await dispatch('status');
+      expect(res.data.admin).toEqual({ state: 'running', unreachable: true });
+      expect(res.data.reserved).toEqual({ state: 'stopped' });
+    } finally { sb.cleanup(); }
+  });
+});
+
+describe('makeDispatcher publicOnly', () => {
+  test('publicOnly.on stops reserved, disables admin and asks for a restart', async () => {
+    const sb = makeSandbox(true, 'running');
+    const applied = [];
+    try {
+      const dispatch = makeDispatcher({
+        startTime: Date.now(), ital8Conf: { httpPort: 3000 },
+        configPath: sb.configPath, statePath: sb.statePath,
+        setReservedState: (s) => applied.push(s),
+        requestRestart: () => {},
+      });
+      const res = await dispatch('publicOnly.on');
+      expect(res.ok).toBe(true);
+      expect(res.restart).toBe(true);
+      expect(applied).toEqual(['stopped']);
+      expect(readState(sb.statePath).reserved).toBe('stopped');
+      expect(fs.readFileSync(sb.configPath, 'utf8')).toMatch(/"enableAdmin"\s*:\s*false/);
+      await flush();
+    } finally { sb.cleanup(); }
+  });
+
+  test('publicOnly.off reopens reserved and re-enables admin', async () => {
+    const sb = makeSandbox(false, 'running');
+    const applied = [];
+    try {
+      fs.writeFileSync(sb.statePath, '{ "public": "running", "reserved": "stopped" }', 'utf8');
+      const dispatch = makeDispatcher({
+        startTime: Date.now(), ital8Conf: { httpPort: 3000 },
+        configPath: sb.configPath, statePath: sb.statePath,
+        setReservedState: (s) => applied.push(s),
+        requestRestart: () => {},
+      });
+      const res = await dispatch('publicOnly.off');
+      expect(res.ok).toBe(true);
+      expect(applied).toEqual(['running']);
+      expect(readState(sb.statePath).reserved).toBe('running');
+      expect(fs.readFileSync(sb.configPath, 'utf8')).toMatch(/"enableAdmin"\s*:\s*true/);
+      await flush();
+    } finally { sb.cleanup(); }
+  });
+
+  // Nulla da cambiare = nessun riavvio: un riavvio inutile chiude le connessioni
+  // in corso per niente.
+  test('publicOnly.on does not restart when the layout is already in place', async () => {
+    const sb = makeSandbox(false, 'running');
+    try {
+      fs.writeFileSync(sb.statePath, '{ "public": "running", "reserved": "stopped" }', 'utf8');
+      const dispatch = makeDispatcher({
+        startTime: Date.now(), ital8Conf: { httpPort: 3000 },
+        configPath: sb.configPath, statePath: sb.statePath,
+      });
+      const res = await dispatch('publicOnly.on');
+      expect(res.ok).toBe(true);
+      expect(res.restart).toBe(false);
+    } finally { sb.cleanup(); }
+  });
+});
+
+// L'ordine dei passi della macro conta: prima quello che puo fallire.
+// Con l'ordine invertito, un `writeEnableAdmin` fallito restituiva ok:false
+// dopo aver gia commutato E PERSISTITO la superficie — cioe `publicOnly off`
+// poteva riaprire l'area riservata e riportare comunque un errore.
+describe('makeDispatcher publicOnly — atomicita dei passi', () => {
+  test('a failing admin write leaves the reserved surface untouched', async () => {
+    const sb = makeSandbox(true, 'running');
+    const applied = [];
+    try {
+      // Config senza enableAdmin → writeEnableAdmin lancia ENABLE_ADMIN_NOT_FOUND
+      fs.writeFileSync(sb.configPath, '{\n  "httpPort": 3000,\n}\n', 'utf8');
+      fs.writeFileSync(sb.statePath, '{ "public": "running", "reserved": "stopped" }', 'utf8');
+
+      const dispatch = makeDispatcher({
+        startTime: Date.now(), ital8Conf: { httpPort: 3000 },
+        configPath: sb.configPath, statePath: sb.statePath,
+        setReservedState: (s) => applied.push(s),
+        requestRestart: () => {},
+      });
+      const res = await dispatch('publicOnly.off');
+
+      expect(res.ok).toBe(false);
+      // Il punto: la superficie NON e stata riaperta né in memoria né su disco.
+      expect(applied).toEqual([]);
+      expect(readState(sb.statePath).reserved).toBe('stopped');
+    } finally { sb.cleanup(); }
+  });
 });

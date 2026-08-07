@@ -1,6 +1,6 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 3,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   "version": "1.0.0",
   "lastModified": "2026-01-28T10:00:00Z",
 
@@ -53,6 +53,68 @@
     "/pluginPages/adminUsers/userProfile.ejs": {
       "requiresAuth": true,
       "allowedRoles": [] // Tutti gli utenti autenticati
+    },
+    "/pluginPages/adminUsers/userProfile": {
+      "requiresAuth": true,
+      "allowedRoles": [] // idem, forma senza estensione (hideExtension attivo)
+    },
+
+    // ── Varchi di autenticazione: pagine PUBBLICHE che appartengono comunque
+    //    alla superficie riservata ──────────────────────────────────────────
+    //
+    // isAuthEntryPoint non incide sul controllo accessi ordinario: serve solo al
+    // comando `npm run cli -- reserved stop`, che chiude tutto cio che sta dietro
+    // l'autenticazione. Senza il marcatore queste pagine resterebbero servite
+    // anche a superficie chiusa, annunciando l'esistenza dell'area riservata —
+    // esattamente cio che l'assetto vetrina vuole evitare.
+    //
+    // PERCHE' OGNI PAGINA HA DUE REGOLE: con `hideExtension.pluginPagesPrefix`
+    // attivo l'URL servito e senza estensione (`.../login`), e una regola su
+    // `login.ejs` non lo intercetterebbe.
+    //
+    // Le due forme sono scritte come match ESATTI, non come wildcard `login*`:
+    // il wildcard singolo di patternMatcher traduce `*` in `[^/]+` — UNO O PIU'
+    // caratteri — quindi `login*` copre `login.ejs` ma NON `login`, cioe
+    // proprio la forma che doveva coprire (verificato). In piu' catturerebbe
+    // per sbaglio pagine vicine come `loginHelper.ejs`. Il match esatto e anche
+    // quello a priorita' massima.
+    // Vedi docs/cli-control-plane.it.md → "Superficie riservata".
+
+    // Pagina di login (deve essere pubblica, o nessuno potrebbe autenticarsi)
+    "/pluginPages/adminUsers/login.ejs": {
+      "requiresAuth": false,
+      "allowedRoles": [],
+      "isAuthEntryPoint": true
+    },
+    "/pluginPages/adminUsers/login": {
+      "requiresAuth": false,
+      "allowedRoles": [],
+      "isAuthEntryPoint": true
+    },
+
+    // Pagina di logout: varco in uscita, stessa logica
+    "/pluginPages/adminUsers/logout.ejs": {
+      "requiresAuth": false,
+      "allowedRoles": [],
+      "isAuthEntryPoint": true
+    },
+    "/pluginPages/adminUsers/logout": {
+      "requiresAuth": false,
+      "allowedRoles": [],
+      "isAuthEntryPoint": true
+    },
+
+    // Pagina "accesso negato": non richiede autenticazione, ma la sua sola
+    // esistenza annuncia che esiste un sistema di controllo accessi
+    "/pluginPages/adminAccessControl/access-denied.ejs": {
+      "requiresAuth": false,
+      "allowedRoles": [],
+      "isAuthEntryPoint": true
+    },
+    "/pluginPages/adminAccessControl/access-denied": {
+      "requiresAuth": false,
+      "allowedRoles": [],
+      "isAuthEntryPoint": true
     }
   },
 

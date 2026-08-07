@@ -37,6 +37,18 @@ const pub = program.command('public').description('public section control (no re
 pub.command('start').description('serve public pages normally').action(() => sendCommand('public.start'));
 pub.command('stop').description('serve a "be right back" page on all public routes').action(() => sendCommand('public.stop'));
 
+// Superficie riservata: tutto cio che sta dietro l'autenticazione (rotte con
+// requiresAuth, varchi isAuthEntryPoint, pannello admin e risorse del tema admin).
+// Come `public`, e un gate a runtime: nessun riavvio.
+const reserved = program.command('reserved').description('reserved surface control — everything behind authentication (no restart)');
+reserved.command('start').description('serve the reserved surface normally').action(() => sendCommand('reserved.start'));
+reserved.command('stop').description('answer 404 on login, authenticated routes and the admin panel').action(() => sendCommand('reserved.stop'));
+
+// Macro: compone le leve esistenti nell'assetto "sito vetrina".
+const publicOnly = program.command('publicOnly').description('showcase preset: public site only (macro over reserved + admin)');
+publicOnly.command('on').description('reserved stop + admin stop (restarts)').action(() => sendCommand('publicOnly.on'));
+publicOnly.command('off').description('reserved start + admin start (restarts)').action(() => sendCommand('publicOnly.off'));
+
 program
   .command('reset <target>')
   .description('reset a plugin/theme config to defaults (offline: deletes live x.json5, regenerated at next boot)')
@@ -303,7 +315,12 @@ function renderHuman(payload, command) {
       `  uptime:        ${formatUptime(d.uptime)}`,
       `  http:          ${d.httpPort}`,
       `  https:         ${d.httpsEnabled ? d.httpsPort : 'disabled'}`,
-      `  admin state:   ${d.admin && d.admin.state}`,
+      // Il pannello admin sta DENTRO la superficie riservata: con `reserved stop`
+      // e` irraggiungibile anche quando enableAdmin resta true. Senza questa nota
+      // "admin state: running" accanto a un pannello che risponde 404 sarebbe una
+      // trappola diagnostica.
+      `  admin state:   ${d.admin && d.admin.state}${d.admin && d.admin.unreachable ? '  (irraggiungibile: reserved stopped)' : ''}`,
+      `  reserved state:${d.reserved ? ' ' + d.reserved.state : ' unknown'}`,
       `  public state:  ${d.public && d.public.state}`,
     ];
     if (d.supervisor) lines.push(`  supervisor:    ${d.supervisor}`);

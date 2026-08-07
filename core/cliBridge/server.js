@@ -154,6 +154,8 @@ async function start(ital8Conf, options = {}) {
     requestRestart: options.requestRestart,
     setPublicState: options.setPublicState,
     getPublicState: options.getPublicState,
+    setReservedState: options.setReservedState,
+    getReservedState: options.getReservedState,
   });
 
   const server = net.createServer((sock) => handleConnection(sock, dispatcher));

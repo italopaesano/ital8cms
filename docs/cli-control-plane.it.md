@@ -20,6 +20,10 @@ npm run cli -- admin start         # ABILITA l'area di amministrazione (riavvia)
 npm run cli -- admin stop          # DISABILITA l'area di amministrazione (riavvia)
 npm run cli -- public start        # sito pubblico online (nessun riavvio)
 npm run cli -- public stop         # sito pubblico in manutenzione (nessun riavvio)
+npm run cli -- reserved start      # superficie riservata raggiungibile (nessun riavvio)
+npm run cli -- reserved stop       # superficie riservata: 404 su tutto (nessun riavvio)
+npm run cli -- publicOnly on       # assetto "sito vetrina" (riavvia)
+npm run cli -- publicOnly off      # ritorno all'assetto normale (riavvia)
 npm run cli -- reset <target>      # reset config di un plugin/tema ai default
 npm run cli -- migrate <target>    # applica le migrazioni di config pendenti
 ```
@@ -46,15 +50,183 @@ npm run cli -- migrate <target>    # applica le migrazioni di config pendenti
 
 | Comando | Cosa fa | Riavvia il processo? |
 |---------|---------|----------------------|
-| `status` | Mostra pid, uptime, porte HTTP/HTTPS, stato admin, stato public, supervisor rilevato | No |
+| `status` | Mostra pid, uptime, porte HTTP/HTTPS, stato admin, stato reserved, stato public, supervisor rilevato | No |
 | `admin start` / `admin stop` | Scrive `enableAdmin` in `ital8Config.json5` (l'admin system si aggancia al boot) | **Sì** |
+| `reserved start` / `reserved stop` | Alza/abbassa il gate della superficie riservata (a runtime) | No |
 | `public start` / `public stop` | Alza/abbassa il gate di manutenzione del sito pubblico (a runtime) | No |
+| `publicOnly on` / `publicOnly off` | Macro: compone `reserved` + `admin` + `dirListing` nell'assetto vetrina | **Sì** |
 | `reset <target>` | Rimuove i config vivi di un plugin/tema (rigenerati dai `.default` al boot) | Solo con `--online` |
 
 L'area **admin** richiede un riavvio perché la sua inizializzazione (symlink,
 service discovery, rotte) avviene **al boot**: cambiare `enableAdmin` a caldo non
-avrebbe effetto. Il gate **public**, invece, è un middleware già attivo che
-commuta stato a runtime, quindi è **istantaneo e senza riavvio**.
+avrebbe effetto. I gate **public** e **reserved**, invece, sono middleware già
+attivi che commutano stato a runtime, quindi sono **istantanei e senza riavvio**.
+
+## Superficie riservata (`reserved`)
+
+Le tre aree non sono tre scatole affiancate: **`admin` sta dentro `reserved`**.
+
+```
+sito pubblico                            ← public
+└── tutto cio che sta dietro l'autenticazione   ← reserved
+    └── pannello di amministrazione                ← admin
+```
+
+- `admin stop` spegne il **pannello**, lasciando raggiungibile il resto della
+  superficie autenticata (login, profilo utente, eventuali aree membri).
+- `reserved stop` spegne **tutta** la superficie autenticata, pannello incluso —
+  anche con `enableAdmin: true`. `status` lo dichiara:
+  `admin state: running  (irraggiungibile: reserved stopped)`.
+
+### Cosa comprende, e come viene calcolato
+
+Il perimetro **si deriva da dichiarazioni che esistono già**, non da un elenco da
+mantenere a mano:
+
+| Sorgente | Criterio | Chi lo applica |
+|---|---|---|
+| `getRouteArray() → access.requiresAuth: true` | rotta dietro l'autenticazione | route-wrap di `pluginSys` |
+| `getRouteArray() → access.isAuthEntryPoint: true` | rotta pubblica che appartiene comunque alla superficie riservata | route-wrap di `pluginSys` |
+| regola in `accessControl.json5` con `requiresAuth` o `isAuthEntryPoint` | pagina riservata (`userProfile`, `login`, `logout`, `access-denied`) | middleware di `adminAccessControl` |
+| prefissi `adminPrefix` e `adminThemeResourcesPrefix` | pannello e risorse del tema admin | il gate stesso |
+| indice dei path delle rotte riservate | chiude anche il **405** di `allowedMethods()`, che risponde senza passare dall'handler | il gate stesso |
+
+> **Ogni pagina ha due regole**, una per forma di URL: con
+> `hideExtension.pluginPagesPrefix` attivo l'URL servito è senza estensione
+> (`/…/login`), e una regola su `login.ejs` non lo intercetterebbe.
+> Sono **match esatti**, non wildcard: `login*` sembrerebbe coprire entrambe le
+> forme e invece no — il wildcard singolo traduce `*` in `[^/]+`, cioè *uno o
+> più* caratteri, quindi copre `login.ejs` ma **non** `login`, e in più
+> cattura per sbaglio pagine vicine come `loginHelper.ejs`.
+>
+> L'indice delle rotte è confrontato come confronta il **router** — che gira con
+> `sensitive: false` e `strict: false` — quindi `/API/…/login` e `/…/login/` sono
+> chiusi come la forma canonica.
+>
+> Un test rilegge le pagine effettivamente presenti in
+> `plugins/{adminUsers,adminAccessControl}/webPages/` e verifica che ognuna sia
+> classificata, **in entrambe le forme di URL**: se aggiungi una pagina a quei
+> plugin il test fallisce finché non dichiari a quale faccia del sito appartiene.
+
+Un plugin di terze parti che ignora del tutto l'esistenza di `reserved` eredita
+il comportamento corretto **gratis**: `access` è già obbligatorio su ogni rotta e
+la sua assenza è errore fatale al boot.
+
+### `isAuthEntryPoint` — l'unica dichiarazione da aggiungere
+
+Alcune rotte sono `requiresAuth: false` **per necessità** (nessuno potrebbe
+autenticarsi, altrimenti) ma appartengono comunque alla superficie riservata.
+Il marcatore serve solo a queste:
+
+```javascript
+{
+  method: 'POST', path: '/login',
+  access: { requiresAuth: false, allowedRoles: [], isAuthEntryPoint: true },
+  handler: async (ctx) => { … }
+}
+```
+
+Stesso marcatore, stessa semantica, per le **pagine** (che non sono rotte) in
+`accessControl.json5`:
+
+```json5
+"/pluginPages/adminUsers/login.ejs": {
+  "requiresAuth": false,
+  "allowedRoles": [],
+  "isAuthEntryPoint": true
+}
+```
+
+> Il nome dice "varco di autenticazione", ma la semantica esatta è più larga:
+> **rotta o pagina pubblica che appartiene comunque alla superficie riservata**.
+> Oltre a `login` sono marcati anche `logout` e `logged` (uscita e sonda di stato)
+> e `/api/admin/ping`, la cui sola esistenza rivelerebbe il plugin admin. Se ti
+> serve un health check raggiungibile anche in assetto vetrina, esponilo come
+> rotta propria **senza** il marcatore.
+
+### La risposta è sempre 404 — e nella forma giusta
+
+Mai 403, mai un redirect. In assetto vetrina "chiuso" deve essere
+**indistinguibile da "mai esistito"**: un 401 racconta che dietro c'è un
+endpoint, un 302 verso il login racconta dove si entra. È la differenza
+deliberata rispetto al 503 esplicito di `public stop`, che invece *vuole* dire
+"torniamo subito".
+
+Ma non basta lo status: deve coincidere anche la **forma** della risposta,
+perché questo CMS ne ha **due** per un URL inesistente.
+
+| Famiglia | 404 autentico |
+|---|---|
+| sotto `apiPrefix` (`/api/…`) | `text/plain`, corpo `Not Found` (9 byte) — nessuno static server serve `/api/*`, quindi risponde Koa |
+| tutto il resto | pagina HTML di `koa-classic-server` (325 byte) con `no-store`, CSP, `nosniff`, `X-Frame-Options`, … |
+
+Il gate produce la forma **della famiglia richiesta**. Una prima versione
+rispondeva sempre `text/plain` di 9 byte: coerente fra i tre punti di
+enforcement, ma diversa dal resto del sito — e quindi ogni percorso riservato
+restava enumerabile dalla sola forma della risposta. Un test d'integrazione
+confronta ora **byte per byte** la risposta riservata con un 404 autentico della
+stessa famiglia, così una divergenza futura fallisce invece di passare in
+silenzio.
+
+### Con anche `public stop`: 503 uniforme
+
+Con `public stop` e `reserved stop` attivi insieme il sito risponde **503
+ovunque**, esenzioni comprese.
+
+Le esenzioni del gate di manutenzione (prefissi admin + `maintenance.exemptPaths`,
+che di default contiene la pagina di login) esistono per una ragione sola: far
+lavorare un amministratore durante la manutenzione. Se la superficie riservata è
+chiusa, quella ragione decade — non entra più nessuno — e resterebbe solo
+l'effetto collaterale: i percorsi esenti risponderebbero 404 mentre tutto il
+resto risponde 503, e la differenza sarebbe una mappa precisa della superficie
+riservata. Perciò, a superficie chiusa, le esenzioni sono **sospese**.
+
+### Fail-closed
+
+Se `core/cliBridge/state.json5` **esiste ma non è leggibile**, `reserved` parte
+**chiuso** (mentre `public` parte aperto). L'asimmetria è deliberata: un file
+corrotto non deve mettere in manutenzione un sito sano, ma non deve nemmeno
+riaprire in silenzio la superficie riservata proprio quando qualcosa è andato
+storto. Un file **assente** (clone fresco) non è corruzione: tutto parte aperto.
+
+### Via di rientro
+
+Con la superficie chiusa la pagina di login non esiste più: **l'unica via di
+rientro è il terminale** (`npm run cli -- reserved start`). È la stessa filosofia
+di `maintenance.exemptPaths: []`, ed è il motivo per cui il control plane vive su
+socket UNIX e si usa via SSH.
+
+### Nei template
+
+`passData.reservedClosed` (booleano) permette a temi e navbar di non stampare
+voci verso l'area riservata, invece di produrre link che darebbero 404.
+
+```ejs
+<% if (!passData.reservedClosed) { %>
+  <a href="/pluginPages/adminUsers/login.ejs">Area riservata</a>
+<% } %>
+```
+
+## Assetto sito vetrina (`publicOnly`)
+
+Macro **trasparente**: non introduce un quarto stato, compone le leve esistenti —
+che restano usabili anche singolarmente.
+
+| | Cosa fa |
+|---|---|
+| `publicOnly on` | `reserved stop` + `admin stop` → **riavvia** |
+| `publicOnly off` | `reserved start` + `admin start` → **riavvia** |
+
+Resta pienamente funzionante tutto ciò che è pubblico: pagine, form contatti,
+`mailer`, `csrfProtection`, `rateLimiter`, i18n, SEO.
+
+> ⚠️ **Terzo passo ancora mancante: il directory listing.** Spegnere il listing di
+> `/www` fa parte del progetto dell'assetto vetrina — un listing pubblico rivela
+> nomi di file, bozze e materiale non linkato — ma è **bloccato da un bug di
+> `koa-classic-server` v5.1.0**: disabilitare il listing fa rispondere **404 alla
+> radice del sito** anche quando un file indice è configurato ed esiste. Poiché il
+> modulo è mantenuto dal team, il passo verrà aggiunto **dopo la release corretta**
+> invece di essere aggirato (vedi [`TODO.md`](../TODO.md) → *Dipendenze*).
 
 ## Prerequisiti
 

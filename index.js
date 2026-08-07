@@ -87,6 +87,7 @@ if (!ital8Conf.enableAdmin) {
 const priorityMiddlewares = require('./core/priorityMiddlewares/priorityMiddlewares.js')(app, ital8Conf, { projectRoot: __dirname });
 const router = priorityMiddlewares.router;
 const maintenanceGate = priorityMiddlewares.maintenanceGate;
+const reservedGate = priorityMiddlewares.reservedGate;
 
 // CLI control plane (unix socket) — avviato subito dopo i priority middlewares,
 // indipendente dal server HTTP. Se il bind fallisce o cli.enabled=false
@@ -106,6 +107,11 @@ cliBridge.start(ital8Conf, {
     console.log(`[cliBridge] public state → ${newState}`);
   },
   getPublicState: () => maintenanceGate ? maintenanceGate.getState() : 'running',
+  setReservedState: (newState) => {
+    if (reservedGate) reservedGate.setState(newState);
+    console.log(`[cliBridge] reserved state → ${newState}`);
+  },
+  getReservedState: () => reservedGate ? reservedGate.getState() : 'running',
 }).catch((err) => {
   console.error('[cliBridge] errore inatteso durante l\'avvio:', err && err.message ? err.message : err);
 });
@@ -188,6 +194,12 @@ async function startApp() {
 
   const pluginSys = new ( require("./core/pluginSys") )(ital8Conf); // carico il sistema di plugin e passo la configurazione per whitelist
 
+  // Superficie riservata: il route-wrap di pluginSys deve poter rispondere 404
+  // (invece di 401/403) sulle rotte che le appartengono quando il gate e chiuso.
+  // Iniettato PRIMA di initialize() cosi le rotte registrate lo trovano gia
+  // disponibile. Vedi core/priorityMiddlewares/runtimeGate.js.
+  pluginSys.setReservedGate(reservedGate);
+
   // Carica/installa/aggiorna i plugin risolvendo le dipendenze. await: i lifecycle hook
   // dei plugin (loadPlugin/installPlugin/upgradePlugin) possono essere async → questo
   // elimina alla radice la classe di unhandledRejection da caricamento plugin.
@@ -210,6 +222,13 @@ async function startApp() {
 
   // carico le rotte di tutti i plugin
   pluginSys.loadRoutes( router , `${ital8Conf.globalPrefix}/${ital8Conf.apiPrefix}`);// il secondo paramentro è il primo prefix
+
+  // Passa al reserved gate l'indice dei path riservati appena raccolto: il gate
+  // sta PRIMA del router e cosi puo chiuderli per path, intercettando anche il
+  // 405 di allowedMethods() sul metodo sbagliato (che non passa dall'handler).
+  if (reservedGate) {
+    reservedGate.setReservedRoutePaths(pluginSys.getReservedRoutePaths());
+  }
   const getObjectsToShareInWebPages = pluginSys.getObjectsToShareInWebPages();
 
   // Ottieni le funzioni globali da esportare nei template EJS
@@ -300,6 +319,13 @@ async function startApp() {
       (opt = {
         index: ital8Conf.indexFiles.wwwPath,
         urlPrefix: `${ital8Conf.globalPrefix}`,
+        // ⚠ BLOCCATO da un bug di koa-classic-server v5.1.0 — vedi TODO.md §Dipendenze.
+        // Rendere questo valore configurabile (per spegnere il listing in produzione e
+        // nell'assetto `publicOnly`) e' pronto ma NON attivabile: in index.cjs la
+        // ricerca del file indice vive DENTRO il ramo `if (options.dirListing.enabled)`,
+        // quindi `enabled: false` risponde 404 alla radice del sito anche quando
+        // `index: ["index.ejs"]` e' configurato e il file esiste. Riattivare qui la
+        // lettura da `ital8Conf.dirListing.wwwPath` dopo la release corretta del modulo.
         dirListing: { enabled: true },
         // urlsReserved è RELATIVO a urlPrefix: koa-classic-server toglie prima urlPrefix
         // dalla richiesta, poi confronta il PRIMO segmento rimanente con questi valori.
@@ -316,6 +342,10 @@ async function startApp() {
             const passData = {
               isAdminContext: false, // Flag per distinguere contesto pubblico da admin
               demo: !!ital8Conf.demo, // Flag profilo demo (per badge/template); puramente segnaletico
+              // Superficie riservata chiusa (CLI: `reserved stop`). Serve a temi e
+              // navbar per NON stampare voci verso l'area riservata: senza questo
+              // flag un link "Area riservata" cablato in un tema porterebbe a 404.
+              reservedClosed: reservedGate ? reservedGate.isClosed() : false,
               globalPrefix: ital8Conf.globalPrefix,// prefisso globale per costruire URL corretti
               apiPrefix: ital8Conf.apiPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamare in modo corretto e flessibile le api ad esempio dei vari plugin
               //adminPrefix: ital8Conf.adminPrefix,//ATTENZIONE PER NESSUN MOTIVO DOVRÀ ESSERE PASSATO adminPrefix nelle pagine web non di amministrazione per non svelare ad utenti potenzialmente pericolosi la locazion della sezione di admin
@@ -365,6 +395,10 @@ async function startApp() {
             const passData = {
               isAdminContext: false,
               demo: !!ital8Conf.demo, // Flag profilo demo (per badge/template); puramente segnaletico
+              // Superficie riservata chiusa (CLI: `reserved stop`). Serve a temi e
+              // navbar per NON stampare voci verso l'area riservata: senza questo
+              // flag un link "Area riservata" cablato in un tema porterebbe a 404.
+              reservedClosed: reservedGate ? reservedGate.isClosed() : false,
               globalPrefix: ital8Conf.globalPrefix,
               apiPrefix: ital8Conf.apiPrefix,
               pluginSys: pluginSys,
@@ -429,6 +463,10 @@ async function startApp() {
               const passData = {
                 isAdminContext: true, // Flag per distinguere contesto admin da pubblico
                 demo: !!ital8Conf.demo, // Flag profilo demo (per badge/template); puramente segnaletico
+              // Superficie riservata chiusa (CLI: `reserved stop`). Serve a temi e
+              // navbar per NON stampare voci verso l'area riservata: senza questo
+              // flag un link "Area riservata" cablato in un tema porterebbe a 404.
+              reservedClosed: reservedGate ? reservedGate.isClosed() : false,
                 globalPrefix: ital8Conf.globalPrefix,// prefisso globale per costruire URL corretti
                 apiPrefix: ital8Conf.apiPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamare in modo corretto e flessibile le api ad esempio dei vari plugin
                 adminPrefix: ital8Conf.adminPrefix,// questo potrà essere usato all'interno della pagine web per poter richiamamare correttamente le pagine di admin con il corretto prefix

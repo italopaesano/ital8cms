@@ -121,6 +121,13 @@ class RuleValidator {
         errors.push(`${sectionName}["${pattern}"]: "editable" must be boolean`);
       }
 
+      // Valida isAuthEntryPoint (opzionale): marca una pagina PUBBLICA che
+      // appartiene comunque alla superficie riservata (es. la pagina di login).
+      // Non incide sul controllo accessi ordinario, solo sul `reserved stop`.
+      if (rule.isAuthEntryPoint !== undefined && typeof rule.isAuthEntryPoint !== 'boolean') {
+        errors.push(`${sectionName}["${pattern}"]: "isAuthEntryPoint" must be boolean`);
+      }
+
       // NOTA: Il controllo per hardcodedRules immutabili è fatto in validateFromUI()
       // tramite confronto byte-per-byte dell'intera sezione (linee 295-301)
       // Non serve controllare qui ogni singola regola

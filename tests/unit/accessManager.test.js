@@ -310,3 +310,132 @@ describe('AccessManager', () => {
     });
   });
 });
+
+// ==========================================================================
+// SUPERFICIE RISERVATA — createMiddleware()
+// ==========================================================================
+// Terzo punto di enforcement del `reserved stop`: quello delle PAGINE. Le rotte
+// API le chiude il route-wrap di pluginSys, i due prefissi admin il gate stesso;
+// le pagine servite staticamente passano SOLO di qui, perche cadono oltre il
+// router. Finora questo ramo non aveva alcun unit test.
+describe('createMiddleware - superficie riservata', () => {
+  // Il folder e solo un'etichetta: loadJson5 e mockato, non si tocca il disco.
+  const mockPathPluginFolder = '/fake/path/plugins/adminAccessControl';
+
+  // Config con anche i varchi (login/logout), come il default reale.
+  const configWithEntryPoints = {
+    ...mockAccessConfig,
+    customRules: {
+      ...mockAccessConfig.customRules,
+      '/pluginPages/adminUsers/login.ejs': { requiresAuth: false, allowedRoles: [], isAuthEntryPoint: true },
+    },
+  };
+
+  function makeGate(closed) {
+    const denied = [];
+    return {
+      denied,
+      isClosed: () => closed,
+      deny: (ctx) => { denied.push(ctx.path); ctx.status = 404; ctx.body = 'denied'; },
+    };
+  }
+
+  function makeCtx(reqPath, user = null) {
+    return {
+      path: reqPath,
+      status: 200,
+      body: null,
+      session: user ? { user } : null,
+      redirect(location) { this.status = 302; this.headers = { location }; },
+    };
+  }
+
+  async function run(managerConfig, gate, ctx) {
+    loadJson5.mockReturnValue(managerConfig);
+    const manager = new AccessManager({ getReservedGate: () => gate }, mockPathPluginFolder);
+    let nextCalled = false;
+    await manager.createMiddleware()(ctx, async () => { nextCalled = true; });
+    return nextCalled;
+  }
+
+  test('superficie CHIUSA: una pagina requiresAuth viene negata dal gate', async () => {
+    const gate = makeGate(true);
+    const ctx = makeCtx('/pluginPages/adminUsers/userProfile.ejs');
+    const nextCalled = await run(configWithEntryPoints, gate, ctx);
+    expect(nextCalled).toBe(false);
+    expect(gate.denied).toEqual(['/pluginPages/adminUsers/userProfile.ejs']);
+  });
+
+  // Il varco e requiresAuth:false: senza il ramo isAuthEntryPoint passerebbe
+  // liscio proprio la pagina piu' importante da nascondere.
+  test('superficie CHIUSA: un varco isAuthEntryPoint viene negato dal gate', async () => {
+    const gate = makeGate(true);
+    const ctx = makeCtx('/pluginPages/adminUsers/login.ejs');
+    const nextCalled = await run(configWithEntryPoints, gate, ctx);
+    expect(nextCalled).toBe(false);
+    expect(gate.denied).toEqual(['/pluginPages/adminUsers/login.ejs']);
+  });
+
+  test('superficie CHIUSA: una pagina pubblica passa comunque', async () => {
+    const gate = makeGate(true);
+    const ctx = makeCtx('/chi-siamo.ejs');
+    const nextCalled = await run(configWithEntryPoints, gate, ctx);
+    expect(nextCalled).toBe(true);
+    expect(gate.denied).toEqual([]);
+  });
+
+  // Il gate NON deve negare prima di checkAccess quando la superficie e aperta:
+  // il comportamento ordinario (redirect al login) deve restare intatto.
+  test('superficie APERTA: nessun intervento del gate, resta il redirect al login', async () => {
+    const gate = makeGate(false);
+    const ctx = makeCtx('/pluginPages/adminUsers/userProfile.ejs');
+    const nextCalled = await run(configWithEntryPoints, gate, ctx);
+    expect(gate.denied).toEqual([]);
+    expect(nextCalled).toBe(false);
+    expect(ctx.status).toBe(302);
+    expect(ctx.headers.location).toBe('/pluginPages/adminUsers/login.ejs');
+  });
+
+  test('superficie APERTA: un utente autorizzato accede normalmente', async () => {
+    const gate = makeGate(false);
+    const ctx = makeCtx('/admin/dashboard', { roleIds: [1] });
+    const nextCalled = await run(configWithEntryPoints, gate, ctx);
+    expect(nextCalled).toBe(true);
+  });
+
+  // Degradazione: il middleware non deve rompersi se il gate non c'e' (pluginSys
+  // senza il getter, o gate non ancora iniettato durante il boot).
+  test('nessun gate disponibile: comportamento ordinario, nessun errore', async () => {
+    loadJson5.mockReturnValue(configWithEntryPoints);
+    const manager = new AccessManager({}, mockPathPluginFolder);
+    const ctx = makeCtx('/chi-siamo.ejs');
+    let nextCalled = false;
+    await expect(
+      manager.createMiddleware()(ctx, async () => { nextCalled = true; })
+    ).resolves.not.toThrow();
+    expect(nextCalled).toBe(true);
+  });
+
+  // Il gate viene interrogato a OGNI richiesta, non letto una volta al boot:
+  // altrimenti `reserved start/stop` non avrebbe effetto immediato.
+  test('lo stato del gate e riletto a ogni richiesta (commutazione a caldo)', async () => {
+    loadJson5.mockReturnValue(configWithEntryPoints);
+    let closed = false;
+    const denied = [];
+    const gate = {
+      isClosed: () => closed,
+      deny: (ctx) => { denied.push(ctx.path); ctx.status = 404; },
+    };
+    const manager = new AccessManager({ getReservedGate: () => gate }, mockPathPluginFolder);
+    const middleware = manager.createMiddleware();
+
+    const first = makeCtx('/pluginPages/adminUsers/login.ejs');
+    await middleware(first, async () => {});
+    expect(denied).toEqual([]);
+
+    closed = true;
+    const second = makeCtx('/pluginPages/adminUsers/login.ejs');
+    await middleware(second, async () => {});
+    expect(denied).toEqual(['/pluginPages/adminUsers/login.ejs']);
+  });
+});

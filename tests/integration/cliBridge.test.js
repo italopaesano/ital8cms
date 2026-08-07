@@ -129,6 +129,22 @@ function httpGet(reqPath) {
   });
 }
 
+function httpPost(reqPath, body = '') {
+  return new Promise((resolve, reject) => {
+    const req = http.request({
+      host: '127.0.0.1', port: TEST_HTTP_PORT, path: reqPath, method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) },
+    }, (res) => {
+      let payload = '';
+      res.on('data', (c) => { payload += c.toString(); });
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: payload }));
+    });
+    req.on('error', reject);
+    req.setTimeout(5000, () => req.destroy(new Error('http timeout')));
+    req.end(body);
+  });
+}
+
 function killProc(proc) {
   return new Promise((resolve) => {
     if (!proc || proc.exitCode !== null) return resolve();
@@ -168,7 +184,10 @@ describe('cliBridge status', () => {
     expect(payload.data.httpPort).toBe(TEST_HTTP_PORT);
     expect(payload.data.httpsEnabled).toBe(false);
     expect(payload.data.httpsPort).toBeNull();
-    expect(payload.data.admin).toEqual({ state: 'running' });
+    // `unreachable` segnala che il pannello, pur acceso, e' irraggiungibile
+    // perche' la superficie riservata che lo contiene e' chiusa.
+    expect(payload.data.admin).toEqual({ state: 'running', unreachable: false });
+    expect(payload.data.reserved).toEqual({ state: 'running' });
     expect(payload.data.public).toEqual({ state: 'running' });
     expect(typeof payload.data.uptime).toBe('number');
     expect(payload.data.uptime).toBeGreaterThanOrEqual(0);
@@ -182,6 +201,7 @@ describe('cliBridge status', () => {
     expect(r.stdout).toMatch(new RegExp(`http:\\s+${TEST_HTTP_PORT}`));
     expect(r.stdout).toMatch(/https:\s+disabled/);
     expect(r.stdout).toMatch(/admin state:\s+running/);
+    expect(r.stdout).toMatch(/reserved state:\s+running/);
     expect(r.stdout).toMatch(/public state:\s+running/);
   });
 });
@@ -272,5 +292,169 @@ describe('cliBridge transport errors', () => {
     const payload = JSON.parse(r.stdout.trim());
     expect(payload).toMatchObject({ ok: false, error: 'not_running' });
     expect(payload.message).toMatch(/non sembra in esecuzione/);
+  });
+});
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SUPERFICIE RISERVATA — il perimetro end-to-end
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// L'ordine conta: stop → verifiche → start → verifiche. Come per public,
+// ogni test dipende dallo stato lasciato dal precedente.
+
+describe('cliBridge reserved stop/start (soft, no restart)', () => {
+  test('reserved stop returns ok + restart:false, writes state file', async () => {
+    const r = await runClient(['--json', '--socket', TEST_SOCKET, 'reserved', 'stop']);
+    expect(r.code).toBe(0);
+    const payload = JSON.parse(r.stdout.trim());
+    expect(payload.ok).toBe(true);
+    expect(payload.action).toBe('reserved.stop');
+    expect(payload.restart).toBe(false);
+    expect(fs.readFileSync(STATE_PATH, 'utf8')).toMatch(/"reserved"\s*:\s*"stopped"/);
+  });
+
+  test('status reports reserved stopped and admin unreachable', async () => {
+    const r = await runClient(['--json', '--socket', TEST_SOCKET, 'status']);
+    const payload = JSON.parse(r.stdout.trim());
+    expect(payload.data.reserved.state).toBe('stopped');
+    // enableAdmin resta true: e' proprio il caso in cui `unreachable` conta.
+    expect(payload.data.admin).toEqual({ state: 'running', unreachable: true });
+  });
+
+  // Il cuore della feature: ogni faccia della superficie riservata deve dare 404,
+  // e devono darlo TUTTE ALLO STESSO MODO — una risposta diversa dalle altre
+  // ridiventa un canale di fingerprinting.
+  test.each([
+    ['/admin/',                                'pannello admin (prefisso)'],
+    ['/admin-theme-resources/css/theme.css',   'risorse del tema admin (prefisso)'],
+    ['/pluginPages/adminUsers/login.ejs',      'pagina di login (isAuthEntryPoint via regola)'],
+    ['/pluginPages/adminUsers/userProfile.ejs','pagina autenticata (requiresAuth via regola)'],
+    ['/api/adminUsers/logged',                 'rotta isAuthEntryPoint'],
+    ['/api/adminUsers/userList',               'rotta requiresAuth'],
+    ['/api/admin/ping',                        'sonda del plugin admin'],
+    ['/api/adminUsers/login',                  'varco POST interrogato in GET (niente 405)'],
+  ])('GET %s → 404 when reserved is stopped (%s)', async (urlPath) => {
+    const r = await httpGet(urlPath);
+    expect(r.status).toBe(404);
+  });
+
+  test('the public site keeps working while reserved is stopped', async () => {
+    const r = await httpGet('/api/bootstrap/css/bootstrap.min.css');
+    expect(r.status).toBe(200);
+  });
+
+  // Un prefisso riservato non deve inghiottire i suoi fratelli pubblici.
+  test('a public page whose name merely starts with the admin prefix still works', async () => {
+    const publicPage = path.join(PROJECT_ROOT, 'www', 'admin-guide.ejs');
+    fs.writeFileSync(publicPage, '<h1>guida pubblica</h1>', 'utf8');
+    try {
+      const r = await httpGet('/admin-guide.ejs');
+      expect(r.status).toBe(200);
+      expect(r.body).toContain('guida pubblica');
+    } finally { fs.unlinkSync(publicPage); }
+  });
+
+  // GUARDIA ANTI-DERIVA E CUORE DELLA PROMESSA: la risposta di un percorso
+  // riservato deve essere INDISTINGUIBILE da quella di un percorso che non e mai
+  // esistito. Non basta "404": corpo e header devono coincidere, e le forme sono
+  // due (sotto /api risponde Koa, altrove la error page del file server).
+  // Se koa-classic-server cambia la sua pagina, e questo test a fallire — invece
+  // che le due risposte a divergere in silenzio.
+  test.each([
+    ['/api/adminUsers/logged',                '/api/adminUsers/zzz-non-esiste'],
+    ['/api/adminUsers/userList',              '/api/adminUsers/zzz-non-esiste'],
+    ['/pluginPages/adminUsers/login.ejs',     '/pluginPages/adminUsers/zzz-non-esiste.ejs'],
+    ['/pluginPages/adminUsers/logout.ejs',    '/pluginPages/adminUsers/zzz-non-esiste.ejs'],
+    ['/admin-theme-resources/css/theme.css',  '/admin-theme-resources/css/zzz-non-esiste.css'],
+    ['/admin/',                               '/zzz-non-esiste.ejs'],
+  ])('%s is byte-identical to a genuine 404 (%s)', async (reservedPath, genuineMissingPath) => {
+    const reserved = await httpGet(reservedPath);
+    const genuine = await httpGet(genuineMissingPath);
+
+    expect(reserved.status).toBe(genuine.status);
+    expect(reserved.body).toBe(genuine.body);
+
+    // Header volatili esclusi: cambiano a ogni richiesta e non sono un segnale.
+    const VOLATILE = new Set(['date', 'set-cookie', 'connection', 'keep-alive']);
+    const stable = (headers) => Object.fromEntries(
+      Object.entries(headers).filter(([name]) => !VOLATILE.has(name.toLowerCase()))
+    );
+    expect(stable(reserved.headers)).toEqual(stable(genuine.headers));
+  });
+
+  test('reserved stop is idempotent (noop) when already stopped', async () => {
+    const r = await runClient(['--json', '--socket', TEST_SOCKET, 'reserved', 'stop']);
+    const payload = JSON.parse(r.stdout.trim());
+    expect(payload.ok).toBe(true);
+    expect(payload.noop).toBe(true);
+  });
+
+  test('reserved start reopens the surface without a restart', async () => {
+    const r = await runClient(['--json', '--socket', TEST_SOCKET, 'reserved', 'start']);
+    expect(r.code).toBe(0);
+    const payload = JSON.parse(r.stdout.trim());
+    expect(payload.restart).toBe(false);
+
+    // Il login torna raggiungibile: 404 non e' piu' la risposta.
+    const login = await httpGet('/pluginPages/adminUsers/login.ejs');
+    expect(login.status).not.toBe(404);
+    // E il pannello torna a comportarsi come prima (302 verso il login da anonimo).
+    const admin = await httpGet('/admin/');
+    expect(admin.status).not.toBe(404);
+  });
+});
+
+// Con entrambi i gate chiusi il sito deve rispondere 503 OVUNQUE. Prima, i
+// percorsi esenti dal maintenance (login) e i prefissi admin davano 404 mentre
+// tutto il resto dava 503: la differenza era essa stessa una mappa della
+// superficie riservata.
+describe('cliBridge public stop + reserved stop (uniformita)', () => {
+  beforeAll(async () => {
+    await runClient(['--json', '--socket', TEST_SOCKET, 'reserved', 'stop']);
+    await runClient(['--json', '--socket', TEST_SOCKET, 'public', 'stop']);
+  });
+
+  afterAll(async () => {
+    await runClient(['--json', '--socket', TEST_SOCKET, 'public', 'start']);
+    await runClient(['--json', '--socket', TEST_SOCKET, 'reserved', 'start']);
+  });
+
+  test.each([
+    ['/'],
+    ['/robots.txt'],
+    ['/pluginPages/adminUsers/login.ejs'],
+    ['/admin/'],
+    ['/admin-theme-resources/css/theme.css'],
+    ['/api/adminUsers/logged'],
+  ])('%s answers 503 like everything else', async (urlPath) => {
+    const r = await httpGet(urlPath);
+    expect(r.status).toBe(503);
+  });
+});
+
+// Un 403 da CSRF racconta che dietro quel path c'e' un endpoint che accetta POST:
+// e' lo stesso canale di fingerprinting dei 401/405, solo per un'altra porta.
+// Il route-wrap controlla infatti la superficie riservata PRIMA del CSRF, e il
+// gate chiude comunque il path prima ancora del router. Questo test blocca
+// entrambe le regressioni possibili: un riordino del wrap, o un buco nell'indice.
+describe('superficie riservata — nessun 403 CSRF a superficie chiusa', () => {
+  beforeAll(async () => { await runClient(['--json', '--socket', TEST_SOCKET, 'reserved', 'stop']); });
+  afterAll(async () => { await runClient(['--json', '--socket', TEST_SOCKET, 'reserved', 'start']); });
+
+  test.each([
+    ['/api/adminUsers/login',  'username=x&password=y'],
+    ['/api/adminUsers/logout', ''],
+  ])('POST %s senza token CSRF risponde 404, non 403', async (urlPath, body) => {
+    const r = await httpPost(urlPath, body);
+    expect(r.status).toBe(404);
+    expect(r.body).not.toMatch(/csrf/i);
+  });
+
+  test('a superficie APERTA lo stesso POST torna a essere respinto dal CSRF (403)', async () => {
+    await runClient(['--json', '--socket', TEST_SOCKET, 'reserved', 'start']);
+    const r = await httpPost('/api/adminUsers/login', 'username=x&password=y');
+    // Il punto non e' il codice esatto, ma che il comportamento pre-esistente
+    // sia tornato: la richiesta viene VALUTATA invece che ignorata.
+    expect(r.status).not.toBe(404);
+    await runClient(['--json', '--socket', TEST_SOCKET, 'reserved', 'stop']);
   });
 });

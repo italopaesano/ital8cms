@@ -1054,21 +1054,52 @@ Server su `http://localhost:3000`.
 > socket UNIX locale (tipicamente in SSH). `npm run cli -- status` /
 > `admin start|stop` (attiva/disattiva l'area admin, con riavvio) /
 > `public start|stop` (manutenzione del sito pubblico, senza riavvio) /
+> `reserved start|stop` (superficie riservata, senza riavvio) /
+> `publicOnly on|off` (assetto sito vetrina, con riavvio) /
 > `reset <target>` (offline o `--online`). Config: `ital8Config.json5 → cli` e
 > `maintenance`. Sorgenti: `bin/ital8cms-cli.js` + `core/cliBridge/`.
 > → [`docs/cli-control-plane.it.md`](./docs/cli-control-plane.it.md).
 >
-> Tre punti da ricordare (verificati sul campo, vedi la guida):
+> Quattro punti da ricordare (verificati sul campo, vedi la guida):
 > 1. **Il `--` con `npm run`:** i posizionali passano anche senza, ma i **flag**
 >    (`--json`, `--theme`, …) sono intercettati da npm e **scartati in silenzio**
 >    (`npm run cli reset X --theme` agisce su `plugins/X`, non su `themes/X`).
 >    Usa **sempre** `--`. Il binario globale `ital8cms-cli` esiste solo dopo
 >    `npm link` / `npm install -g .`.
-> 2. **`admin`/`public` sono gruppi di sottocomandi:** `admin stop`, non `stop`.
+> 2. **`admin`/`public`/`reserved`/`publicOnly` sono gruppi di sottocomandi:**
+>    `admin stop`, non `stop`.
 > 3. **`public stop` è montato prima del router** → 503 anche su `/api/*` e
 >    `/pluginPages/*`; restano esenti i due prefissi admin più i percorsi in
 >    `maintenance.exemptPaths` (default: pagina di login + endpoint di
 >    autenticazione, così un admin sloggato può rientrare; `[]` = massima chiusura).
+> 4. **`reserved` CONTIENE `admin`:** `reserved stop` rende il pannello
+>    irraggiungibile anche con `enableAdmin: true` (`status` lo dichiara).
+
+#### Superficie riservata (`reserved`) — perimetro derivato
+
+Tutto ciò che sta **dietro l'autenticazione** si chiude con un comando, e il
+perimetro **si deriva da dichiarazioni già obbligatorie** invece di essere un
+elenco da mantenere:
+
+| Sorgente | Criterio | Enforcement |
+|---|---|---|
+| `access.requiresAuth: true` | rotta autenticata | route-wrap di `pluginSys` |
+| `access.isAuthEntryPoint: true` | rotta **pubblica** che appartiene comunque alla superficie riservata (login, logout, sonde) | route-wrap di `pluginSys` |
+| regola di `accessControl.json5` con `requiresAuth`/`isAuthEntryPoint` | pagina riservata | middleware di `adminAccessControl` |
+| prefissi `adminPrefix` / `adminThemeResourcesPrefix` + indice dei path riservati | pannello, risorse tema admin, e il **405** di `allowedMethods()` | `createReservedGate` |
+
+Un plugin nuovo eredita il comportamento **senza dichiarare nulla**: `access` è già
+obbligatorio. Il marcatore `isAuthEntryPoint` serve **solo** alle rotte/pagine
+pubbliche per necessità. **La risposta è sempre 404** (mai 403, mai redirect) e
+**nella forma che il sito userebbe per quella famiglia di path**: `text/plain` di
+Koa sotto `apiPrefix` (nessuno static server serve `/api/*`), pagina HTML del file
+server altrove. Un test d'integrazione confronta byte per byte con un 404
+autentico: una risposta "quasi uguale" rende comunque enumerabile la superficie.
+Con anche `public stop` le esenzioni del maintenance gate sono **sospese** → 503
+uniforme. Nei template: `passData.reservedClosed`.
+
+Modulo: `core/priorityMiddlewares/runtimeGate.js` (ospita entrambi i gate a runtime:
+il maintenance **esenta** i due prefissi admin, il reserved li **prende di mira**).
 
 ### Creare plugin / temi (usa le skill di scaffolding)
 
@@ -1534,6 +1565,10 @@ npm run cli -- admin start     # enable the admin area  (rewrites enableAdmin + 
 npm run cli -- admin stop      # disable the admin area (rewrites enableAdmin + restarts)
 npm run cli -- public stop     # public site in maintenance: 503 (no restart)
 npm run cli -- public start    # public site back online  (no restart)
+npm run cli -- reserved stop   # everything behind auth (login, admin panel): 404 (no restart)
+npm run cli -- reserved start  # reserved surface reachable again (no restart)
+npm run cli -- publicOnly on   # showcase layout: reserved stop + admin stop (restarts)
+npm run cli -- publicOnly off  # back to the normal layout (restarts)
 npm run cli -- reset <target>  # plugin/theme configs back to defaults (add --theme for themes)
 npm run cli -- migrate <target> # apply pending config migrations (--dry-run, --theme, --confirm-manual)
 
