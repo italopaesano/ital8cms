@@ -1,4 +1,4 @@
-<!-- ital8doc v1-1 · tipo: guide · lang: it · rev: 4 · ref -->
+<!-- ital8doc v1-1 · tipo: guide · lang: it · rev: 5 · ref -->
 > 🌐 Edizione italiana di riferimento (sempre aggiornata). L'inglese `cli-control-plane.md` è uno stub fino alla release.
 # Control plane CLI (`ital8cms-cli`) — ital8cms
 
@@ -54,7 +54,7 @@ npm run cli -- migrate <target>    # applica le migrazioni di config pendenti
 | `admin start` / `admin stop` | Scrive `enableAdmin` in `ital8Config.json5` (l'admin system si aggancia al boot) | **Sì** |
 | `reserved start` / `reserved stop` | Alza/abbassa il gate della superficie riservata (a runtime) | No |
 | `public start` / `public stop` | Alza/abbassa il gate di manutenzione del sito pubblico (a runtime) | No |
-| `publicOnly on` / `publicOnly off` | Macro: compone `reserved` + `admin` + `dirListing` nell'assetto vetrina | **Sì** |
+| `publicOnly on` / `publicOnly off` | Macro: compone `reserved` + `admin` nell'assetto vetrina | **Sì** |
 | `reset <target>` | Rimuove i config vivi di un plugin/tema (rigenerati dai `.default` al boot) | Solo con `--online` |
 
 L'area **admin** richiede un riavvio perché la sua inizializzazione (symlink,
@@ -62,14 +62,236 @@ service discovery, rotte) avviene **al boot**: cambiare `enableAdmin` a caldo no
 avrebbe effetto. I gate **public** e **reserved**, invece, sono middleware già
 attivi che commutano stato a runtime, quindi sono **istantanei e senza riavvio**.
 
+## Prerequisiti
+
+- Il server ital8cms deve essere **in esecuzione** (il socket esiste solo mentre
+  il processo è vivo). **Eccezione:** `reset` in modalità *offline* opera sul
+  filesystem e funziona anche a server spento.
+- Il control plane deve essere **abilitato** in `ital8Config.json5` →
+  `cli.enabled: true` (default).
+- Devi avere i **permessi** sul file socket (default mode `0660`): tipicamente
+  significa essere l'utente che ha avviato il server o appartenere al suo gruppo.
+- Devi lanciare il comando dalla **root del progetto** (dove sta
+  `ital8Config.json5`), oppure passare `--config <path>` / `--socket <path>`.
+
+## Come si invoca
+
+Ci sono tre modi, in ordine di praticità per l'uso via SSH:
+
+### 1. `npm run cli -- <comando>` (sempre disponibile)
+
+Nessuna installazione extra: usa lo script `cli` di `package.json`
+(`node bin/ital8cms-cli.js`).
+
+```bash
+cd /percorso/di/ital8cms
+npm run cli -- status
+npm run cli -- admin stop
+```
+
+### 2. `node bin/ital8cms-cli.js <comando>` (equivalente diretto)
+
+Salta il livello npm (nessun `--` da ricordare):
+
+```bash
+node bin/ital8cms-cli.js admin start
+```
+
+### 3. `ital8cms-cli <comando>` (dopo install globale)
+
+Il binario è dichiarato in `package.json → bin`, ma **non è disponibile come
+comando globale finché non lo installi/colleghi**. Dalla root del progetto:
+
+```bash
+npm link            # crea il symlink globale ital8cms-cli → ./bin/ital8cms-cli.js
+# oppure
+npm install -g .
+
+ital8cms-cli status
+ital8cms-cli admin stop
+```
+
+> Senza uno di questi passaggi, `ital8cms-cli` restituisce `command not found`
+> (vedi [Troubleshooting](#troubleshooting)).
+
+## Procedura: attivare/disattivare l'area admin via SSH
+
+```bash
+ssh utente@server
+cd /percorso/di/ital8cms
+
+# 1. verifica lo stato attuale
+npm run cli -- status
+#   admin state:   running
+
+# 2. disattiva l'area admin (il processo viene riavviato)
+npm run cli -- admin stop
+#   ✓ admin.stop richiesto (config aggiornato; processo in chiusura, … si occuperà del riavvio)
+#   ⏳ in attesa del riavvio del processo...
+#   ✓ server ripartito (pid: 81109)
+
+# 3. per riattivarla
+npm run cli -- admin start
+```
+
+In modalità testuale (human) il client, dopo un comando che richiede riavvio,
+**attende** che il processo sparisca e ritorni (poll fino a 15s) e conferma con
+il nuovo `pid`. Con `--no-wait` o `--json` il client restituisce subito la
+risposta iniziale senza attendere il riavvio.
+
+Cosa succede sotto:
+
+1. `writeEnableAdmin` modifica **solo** il valore `enableAdmin` in
+   `ital8Config.json5` (regex chirurgica, **preserva commenti** e formattazione),
+   con scrittura **atomica** (temp + `rename`).
+2. Se il valore è già quello richiesto → risposta `noop`, nessuna azione, nessun
+   riavvio (`= admin.stop: admin già in stato stopped, nessuna azione`).
+3. Altrimenti il server richiede un riavvio pulito (`requestRestart`) e riparte
+   (vedi [Meccanica del riavvio](#meccanica-del-riavvio)).
+
+### Cosa disattiva esattamente `admin stop`
+
+Con `enableAdmin: false`, al boot **non** vengono montati:
+
+- l'**AdminSystem** (symlink delle sezioni, service discovery, menu dinamico);
+- lo static server delle **pagine admin** (`/{adminPrefix}/…`, default `/admin/`);
+- lo static server delle **risorse del tema admin**
+  (`/{adminThemeResourcesPrefix}/…`, default `/admin-theme-resources/`).
+
+> ⚠️ **Non aspettarti un 404 su `/admin/`.** Per un utente **non autenticato**
+> `/admin/` risponde `302` verso il login **sia con admin attivo sia con admin
+> disattivato**: il middleware di controllo accessi (`adminAccessControl`) è un
+> middleware di plugin e interviene **prima** dello static server admin. La
+> differenza osservabile è sulle risorse non protette — ad esempio
+> `/admin-theme-resources/css/theme.css` passa da `200` (admin attivo) a `404`
+> (admin disattivato). Per una verifica sintetica usa `status`, che è la fonte
+> autorevole (`admin state: running|stopped`).
+
+**`admin stop` spegne il pannello, non l'autenticazione.** Restano raggiungibili
+la pagina di login, l'endpoint di autenticazione e le rotte API dei plugin admin
+(protette, ma presenti): il sito continua a dichiarare di avere un'area
+riservata. È un comportamento voluto e utile — l'amministratore lavora via API o
+rientra quando riattiva il pannello.
+
+Se invece vuoi che di quell'area **non resti traccia**, è il caso d'uso di
+[`reserved stop`](#superficie-riservata-reserved).
+
+## La coppia `public start` / `public stop` (manutenzione)
+
+Mette il **sito pubblico** in manutenzione senza fermare il processo:
+
+```bash
+npm run cli -- public stop     # attiva la pagina di manutenzione
+npm run cli -- public start    # rimette online il sito pubblico
+```
+
+Quando `public` è `stopped`, il gate di manutenzione:
+
+- risponde **HTTP 503** con header **`Retry-After`** (da `retryAfterSeconds`) e
+  **`X-Robots-Tag: noindex`**, servendo la pagina definita da `maintenance.pagePath`
+  (se il rendering fallisce, una pagina minimale di fallback);
+- è montato **prima del router**, quindi intercetta **anche le rotte API dei
+  plugin**, non solo le pagine;
+- **lascia passare soltanto** i due prefissi admin — `/{adminPrefix}/…` e
+  `/{adminThemeResourcesPrefix}/…` (di default `/admin/` e
+  `/admin-theme-resources/`, più l'eventuale `globalPrefix`).
+
+Comportamento verificato con `public stopped`:
+
+| Percorso | Esito |
+|----------|-------|
+| `/` | `503` (manutenzione) |
+| `/admin/` | passa il gate (poi `302` al login se non autenticato) |
+| `/admin-theme-resources/css/theme.css` | `200` |
+| `/api/adminUsers/logged` | `503` — le altre API restano bloccate |
+| `/api/adminUsers/login` | **passa** (via `exemptPaths`, vedi sotto) |
+| `/pluginPages/adminUsers/login` | **passa** (via `exemptPaths`, vedi sotto) |
+
+Lo stato public è **persistito** in un file di stato interno del cliBridge
+(`core/cliBridge/state.json5`, scritto dal sistema — non modificarlo a mano) e
+sopravvive ai riavvii.
+
+### Perché il login è esente: `maintenance.exemptPaths`
+
+Poiché il gate è montato prima del router, senza correttivi bloccherebbe anche la
+**pagina di login** (`/pluginPages/adminUsers/login`) e l'**endpoint di
+autenticazione** (`/api/adminUsers/login`), che sono percorsi pubblici. Effetto
+collaterale: un amministratore **sloggato** non potrebbe più entrare nel pannello
+durante la manutenzione, pur essendo `/admin/*` esente.
+
+Per questo esiste `maintenance.exemptPaths`: la lista dei percorsi **pubblici**
+che restano raggiungibili a sito fermo.
+
+```json5
+"maintenance": {
+  "pagePath": "./core/maintenancePage.ejs",  // pagina servita durante lo stop
+  "retryAfterSeconds": 600,                   // header Retry-After (secondi)
+  "exemptPaths": [
+    "/pluginPages/adminUsers/login",          // pagina di login (copre anche login.ejs)
+    "/api/adminUsers/login",                  // endpoint di autenticazione
+  ],
+}
+```
+
+Semantica:
+
+- confronto per **prefisso** (come per i prefissi admin): `/api/adminUsers/login`
+  copre anche le sue sotto-risorse, e `/pluginPages/adminUsers/login` copre sia
+  `login` sia `login.ejs` (utile se attivi `hideExtension`);
+- i percorsi si scrivono **senza `globalPrefix`**: lo antepone il gate;
+- sono accettate solo stringhe che iniziano con `/`; le altre voci vengono
+  **ignorate** (una stringa vuota esenterebbe l'intero sito);
+- **chiave assente** → si usano i **default incorporati** (gli stessi due percorsi
+  di login). Serve alle installazioni **aggiornate**: il merge additivo del boot
+  propaga solo le chiavi *top-level* nuove, non quelle annidate come questa;
+- **lista vuota `[]`** → **massima chiusura**: nessun endpoint pubblico
+  raggiungibile, login incluso.
+
+> 🔒 **Se scegli `[]`**, durante la manutenzione chi è sloggato **non può entrare**:
+> `/admin/*` passa il gate ma rimanda a una pagina di login che risponde `503`. In
+> quel caso autenticati **prima** di fermare il pubblico, o rientra dal terminale
+> con `npm run cli -- public start` (immediato, nessun riavvio).
+
+> ℹ️ L'esenzione riguarda **solo** il gate di manutenzione: gli altri livelli di
+> sicurezza restano attivi. Un `POST` al login senza token CSRF continua a
+> ricevere `403` anche a sito fermo.
+
+> ⚠️ **Le esenzioni valgono finché la superficie riservata è aperta.** Con
+> [`reserved stop`](#superficie-riservata-reserved) attivo vengono **sospese** e
+> il sito risponde `503` ovunque: le esenzioni servono a far entrare un
+> amministratore, e se la superficie è chiusa non entra più nessuno — resterebbe
+> solo la differenza fra `404` (esenti) e `503` (tutto il resto), che equivale a
+> pubblicare la mappa dell'area riservata. In quella combinazione anche il `403`
+> del CSRF citato sopra diventa `404`, per la stessa ragione.
+
 ## Superficie riservata (`reserved`)
+
+```bash
+npm run cli -- reserved stop    # login, profilo, API autenticate, pannello → 404
+npm run cli -- reserved start   # tutto di nuovo raggiungibile
+```
+
+In una frase: **spegne tutto ciò che sta dietro l'autenticazione**, e lo fa
+sparire — non "vietato", proprio *inesistente*. Il sito pubblico continua a
+funzionare per intero, form contatti compresi. È istantaneo e non riavvia nulla.
+
+Serve quando il sito è **solo una vetrina** e non c'è ragione che un visitatore
+veda una pagina di login; il caso completo è
+[l'assetto `publicOnly`](#assetto-sito-vetrina-publiconly).
+
+> ℹ️ **Da non confondere con `loggedReservedPrefix`** (in
+> `plugins/adminUsers/pluginConfig.json5`): quello è un elenco di prefissi —
+> `/reserved`, `/private`, … — per cui il plugin `adminUsers` **richiede il
+> login**. Nomi simili, concetti opposti: `loggedReservedPrefix` decide *cosa
+> protegge* l'autenticazione, `reserved stop` decide *se l'autenticazione esiste*
+> agli occhi di chi visita il sito.
 
 Le tre aree non sono tre scatole affiancate: **`admin` sta dentro `reserved`**.
 
 ```
-sito pubblico                            ← public
-└── tutto cio che sta dietro l'autenticazione   ← reserved
-    └── pannello di amministrazione                ← admin
+sito pubblico                                  ← public
+└── tutto ciò che sta dietro l'autenticazione  ← reserved
+    └── pannello di amministrazione            ← admin
 ```
 
 - `admin stop` spegne il **pannello**, lasciando raggiungibile il resto della
@@ -227,191 +449,6 @@ Resta pienamente funzionante tutto ciò che è pubblico: pagine, form contatti,
 > radice del sito** anche quando un file indice è configurato ed esiste. Poiché il
 > modulo è mantenuto dal team, il passo verrà aggiunto **dopo la release corretta**
 > invece di essere aggirato (vedi [`TODO.md`](../TODO.md) → *Dipendenze*).
-
-## Prerequisiti
-
-- Il server ital8cms deve essere **in esecuzione** (il socket esiste solo mentre
-  il processo è vivo). **Eccezione:** `reset` in modalità *offline* opera sul
-  filesystem e funziona anche a server spento.
-- Il control plane deve essere **abilitato** in `ital8Config.json5` →
-  `cli.enabled: true` (default).
-- Devi avere i **permessi** sul file socket (default mode `0660`): tipicamente
-  significa essere l'utente che ha avviato il server o appartenere al suo gruppo.
-- Devi lanciare il comando dalla **root del progetto** (dove sta
-  `ital8Config.json5`), oppure passare `--config <path>` / `--socket <path>`.
-
-## Come si invoca
-
-Ci sono tre modi, in ordine di praticità per l'uso via SSH:
-
-### 1. `npm run cli -- <comando>` (sempre disponibile)
-
-Nessuna installazione extra: usa lo script `cli` di `package.json`
-(`node bin/ital8cms-cli.js`).
-
-```bash
-cd /percorso/di/ital8cms
-npm run cli -- status
-npm run cli -- admin stop
-```
-
-### 2. `node bin/ital8cms-cli.js <comando>` (equivalente diretto)
-
-Salta il livello npm (nessun `--` da ricordare):
-
-```bash
-node bin/ital8cms-cli.js admin start
-```
-
-### 3. `ital8cms-cli <comando>` (dopo install globale)
-
-Il binario è dichiarato in `package.json → bin`, ma **non è disponibile come
-comando globale finché non lo installi/colleghi**. Dalla root del progetto:
-
-```bash
-npm link            # crea il symlink globale ital8cms-cli → ./bin/ital8cms-cli.js
-# oppure
-npm install -g .
-
-ital8cms-cli status
-ital8cms-cli admin stop
-```
-
-> Senza uno di questi passaggi, `ital8cms-cli` restituisce `command not found`
-> (vedi [Troubleshooting](#troubleshooting)).
-
-## Procedura: attivare/disattivare l'area admin via SSH
-
-```bash
-ssh utente@server
-cd /percorso/di/ital8cms
-
-# 1. verifica lo stato attuale
-npm run cli -- status
-#   admin state:   running
-
-# 2. disattiva l'area admin (il processo viene riavviato)
-npm run cli -- admin stop
-#   ✓ admin.stop richiesto (config aggiornato; processo in chiusura, … si occuperà del riavvio)
-#   ⏳ in attesa del riavvio del processo...
-#   ✓ server ripartito (pid: 81109)
-
-# 3. per riattivarla
-npm run cli -- admin start
-```
-
-In modalità testuale (human) il client, dopo un comando che richiede riavvio,
-**attende** che il processo sparisca e ritorni (poll fino a 15s) e conferma con
-il nuovo `pid`. Con `--no-wait` o `--json` il client restituisce subito la
-risposta iniziale senza attendere il riavvio.
-
-Cosa succede sotto:
-
-1. `writeEnableAdmin` modifica **solo** il valore `enableAdmin` in
-   `ital8Config.json5` (regex chirurgica, **preserva commenti** e formattazione),
-   con scrittura **atomica** (temp + `rename`).
-2. Se il valore è già quello richiesto → risposta `noop`, nessuna azione, nessun
-   riavvio (`= admin.stop: admin già in stato stopped, nessuna azione`).
-3. Altrimenti il server richiede un riavvio pulito (`requestRestart`) e riparte
-   (vedi [Meccanica del riavvio](#meccanica-del-riavvio)).
-
-### Cosa disattiva esattamente `admin stop`
-
-Con `enableAdmin: false`, al boot **non** vengono montati:
-
-- l'**AdminSystem** (symlink delle sezioni, service discovery, menu dinamico);
-- lo static server delle **pagine admin** (`/{adminPrefix}/…`, default `/admin/`);
-- lo static server delle **risorse del tema admin**
-  (`/{adminThemeResourcesPrefix}/…`, default `/admin-theme-resources/`).
-
-> ⚠️ **Non aspettarti un 404 su `/admin/`.** Per un utente **non autenticato**
-> `/admin/` risponde `302` verso il login **sia con admin attivo sia con admin
-> disattivato**: il middleware di controllo accessi (`adminAccessControl`) è un
-> middleware di plugin e interviene **prima** dello static server admin. La
-> differenza osservabile è sulle risorse non protette — ad esempio
-> `/admin-theme-resources/css/theme.css` passa da `200` (admin attivo) a `404`
-> (admin disattivato). Per una verifica sintetica usa `status`, che è la fonte
-> autorevole (`admin state: running|stopped`).
-
-## La coppia `public start` / `public stop` (manutenzione)
-
-Mette il **sito pubblico** in manutenzione senza fermare il processo:
-
-```bash
-npm run cli -- public stop     # attiva la pagina di manutenzione
-npm run cli -- public start    # rimette online il sito pubblico
-```
-
-Quando `public` è `stopped`, il gate di manutenzione:
-
-- risponde **HTTP 503** con header **`Retry-After`** (da `retryAfterSeconds`) e
-  **`X-Robots-Tag: noindex`**, servendo la pagina definita da `maintenance.pagePath`
-  (se il rendering fallisce, una pagina minimale di fallback);
-- è montato **prima del router**, quindi intercetta **anche le rotte API dei
-  plugin**, non solo le pagine;
-- **lascia passare soltanto** i due prefissi admin — `/{adminPrefix}/…` e
-  `/{adminThemeResourcesPrefix}/…` (di default `/admin/` e
-  `/admin-theme-resources/`, più l'eventuale `globalPrefix`).
-
-Comportamento verificato con `public stopped`:
-
-| Percorso | Esito |
-|----------|-------|
-| `/` | `503` (manutenzione) |
-| `/admin/` | passa il gate (poi `302` al login se non autenticato) |
-| `/admin-theme-resources/css/theme.css` | `200` |
-| `/api/adminUsers/logged` | `503` — le altre API restano bloccate |
-| `/api/adminUsers/login` | **passa** (via `exemptPaths`, vedi sotto) |
-| `/pluginPages/adminUsers/login` | **passa** (via `exemptPaths`, vedi sotto) |
-
-Lo stato public è **persistito** in un file di stato interno del cliBridge
-(`core/cliBridge/state.json5`, scritto dal sistema — non modificarlo a mano) e
-sopravvive ai riavvii.
-
-### Perché il login è esente: `maintenance.exemptPaths`
-
-Poiché il gate è montato prima del router, senza correttivi bloccherebbe anche la
-**pagina di login** (`/pluginPages/adminUsers/login`) e l'**endpoint di
-autenticazione** (`/api/adminUsers/login`), che sono percorsi pubblici. Effetto
-collaterale: un amministratore **sloggato** non potrebbe più entrare nel pannello
-durante la manutenzione, pur essendo `/admin/*` esente.
-
-Per questo esiste `maintenance.exemptPaths`: la lista dei percorsi **pubblici**
-che restano raggiungibili a sito fermo.
-
-```json5
-"maintenance": {
-  "pagePath": "./core/maintenancePage.ejs",  // pagina servita durante lo stop
-  "retryAfterSeconds": 600,                   // header Retry-After (secondi)
-  "exemptPaths": [
-    "/pluginPages/adminUsers/login",          // pagina di login (copre anche login.ejs)
-    "/api/adminUsers/login",                  // endpoint di autenticazione
-  ],
-}
-```
-
-Semantica:
-
-- confronto per **prefisso** (come per i prefissi admin): `/api/adminUsers/login`
-  copre anche le sue sotto-risorse, e `/pluginPages/adminUsers/login` copre sia
-  `login` sia `login.ejs` (utile se attivi `hideExtension`);
-- i percorsi si scrivono **senza `globalPrefix`**: lo antepone il gate;
-- sono accettate solo stringhe che iniziano con `/`; le altre voci vengono
-  **ignorate** (una stringa vuota esenterebbe l'intero sito);
-- **chiave assente** → si usano i **default incorporati** (gli stessi due percorsi
-  di login). Serve alle installazioni **aggiornate**: il merge additivo del boot
-  propaga solo le chiavi *top-level* nuove, non quelle annidate come questa;
-- **lista vuota `[]`** → **massima chiusura**: nessun endpoint pubblico
-  raggiungibile, login incluso.
-
-> 🔒 **Se scegli `[]`**, durante la manutenzione chi è sloggato **non può entrare**:
-> `/admin/*` passa il gate ma rimanda a una pagina di login che risponde `503`. In
-> quel caso autenticati **prima** di fermare il pubblico, o rientra dal terminale
-> con `npm run cli -- public start` (immediato, nessun riavvio).
-
-> ℹ️ L'esenzione riguarda **solo** il gate di manutenzione: gli altri livelli di
-> sicurezza restano attivi. Un `POST` al login senza token CSRF continua a
-> ricevere `403` anche a sito fermo.
 
 ## `reset <target>` (config di plugin/temi)
 

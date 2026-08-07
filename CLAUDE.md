@@ -1560,7 +1560,7 @@ pm2 start index.js             # Run with PM2 process manager
 
 # CLI control plane — drives a RUNNING instance (see docs/cli-control-plane.it.md)
 # NOTE: always keep the `--`; without it npm silently drops flags (--json, --theme, …)
-npm run cli -- status          # pid, uptime, ports, admin state, public state
+npm run cli -- status          # pid, uptime, ports, admin/reserved/public state
 npm run cli -- admin start     # enable the admin area  (rewrites enableAdmin + restarts)
 npm run cli -- admin stop      # disable the admin area (rewrites enableAdmin + restarts)
 npm run cli -- public stop     # public site in maintenance: 503 (no restart)
