@@ -343,9 +343,13 @@ describe('createMaintenanceGate', () => {
 
 const { createReservedGate, isReservedPrefixPath } = require('../../../core/priorityMiddlewares/runtimeGate');
 
-// Contesto Koa minimo: al gate servono solo path, status, type e body.
+// Contesto Koa minimo: al gate servono path, status, type, body e set().
 function fakeCtx(reqPath) {
-  return { path: reqPath, status: 200, type: null, body: null };
+  const headers = {};
+  return {
+    path: reqPath, status: 200, type: null, body: null, headers,
+    set(name, value) { headers[name] = value; },
+  };
 }
 
 describe('isReservedPrefixPath', () => {
@@ -387,14 +391,57 @@ describe('createReservedGate', () => {
     expect(gate.isClosed()).toBe(false);
   });
 
-  test('stopped: answers a bare 404 on the admin prefix', async () => {
+  test('stopped: answers 404 on the admin prefix, in the site 404 shape', async () => {
     const gate = createReservedGate({ ital8Conf: conf, initialState: 'stopped' });
     const ctx = fakeCtx('/admin/usersManagment/');
     let nextCalled = false;
     await gate.middleware(ctx, async () => { nextCalled = true; });
     expect(nextCalled).toBe(false);
     expect(ctx.status).toBe(404);
+    // Fuori da /api la forma e quella della error page del file server.
+    expect(ctx.type).toBe('text/html; charset=utf-8');
+    expect(ctx.body).toContain('The requested URL was not found on this server.');
+    expect(ctx.headers['X-Content-Type-Options']).toBe('nosniff');
+  });
+
+  // Un prefisso non deve catturare i fratelli che gli somigliano: `/admin-guide.ejs`
+  // e contenuto pubblico, e prima veniva 404'ato (startsWith senza confine).
+  test('stopped: a public sibling of the admin prefix is NOT captured', async () => {
+    const gate = createReservedGate({ ital8Conf: conf, initialState: 'stopped' });
+    for (const publicPath of ['/admin-guide.ejs', '/administrivia', '/admin-theme-resources-public.css']) {
+      const ctx = fakeCtx(publicPath);
+      let nextCalled = false;
+      await gate.middleware(ctx, async () => { nextCalled = true; });
+      expect([publicPath, nextCalled]).toEqual([publicPath, true]);
+    }
+  });
+
+  // Il router gira con `sensitive:false` e `strict:false`: risponde anche a
+  // /API/... e a .../login/. Un confronto esatto lasciava passare proprio quelle
+  // forme attraverso allowedMethods() (405/200), riaprendo il canale che
+  // l'indice esiste per chiudere.
+  test('stopped: route index matches the way the router matches (case + trailing slash)', async () => {
+    const gate = createReservedGate({ ital8Conf: conf, initialState: 'stopped' });
+    gate.setReservedRoutePaths(new Set(['/api/adminUsers/login']));
+    for (const variant of ['/api/adminUsers/login', '/api/adminUsers/login/', '/API/adminUsers/login', '/api/adminusers/LOGIN']) {
+      const ctx = fakeCtx(variant);
+      let nextCalled = false;
+      await gate.middleware(ctx, async () => { nextCalled = true; });
+      expect([variant, nextCalled, ctx.status]).toEqual([variant, false, 404]);
+    }
+  });
+
+  // Sotto /api nessuno static server risponde: il 404 autentico e quello di
+  // default di Koa, quindi qui la forma deve essere QUELLA, non la pagina HTML.
+  test('stopped: /api paths get the Koa-default 404 shape instead of the HTML page', async () => {
+    const gate = createReservedGate({ ital8Conf: conf, initialState: 'stopped' });
+    gate.setReservedRoutePaths(new Set(['/api/adminUsers/logged']));
+    const ctx = fakeCtx('/api/adminUsers/logged');
+    await gate.middleware(ctx, async () => {});
+    expect(ctx.status).toBe(404);
+    expect(ctx.type).toBe('text/plain; charset=utf-8');
     expect(ctx.body).toBe('Not Found');
+    expect(ctx.headers['X-Content-Type-Options']).toBeUndefined();
   });
 
   test('stopped: still lets the public site through', async () => {
@@ -447,12 +494,82 @@ describe('createReservedGate', () => {
   // deny() e condiviso con pluginSys e adminAccessControl proprio perche' le tre
   // risposte devono essere IDENTICHE: una differenza fra loro tornerebbe a essere
   // un canale di fingerprinting.
-  test('deny() produces a bare 404 with no telltale headers', () => {
+  //
+  // GUARDIA ANTI-DERIVA: il corpo e gli header qui sotto sono un mirror della
+  // error page di koa-classic-server. Il confronto byte per byte con un 404
+  // autentico vive nel test d'integrazione; questo fissa il contenuto atteso, in
+  // modo che una modifica distratta al mirror non passi inosservata.
+  test('deny() mirrors the file server 404 page outside /api', () => {
     const gate = createReservedGate({ ital8Conf: conf, initialState: 'stopped' });
     const ctx = fakeCtx('/whatever');
     gate.deny(ctx);
     expect(ctx.status).toBe(404);
-    expect(ctx.body).toBe('Not Found');
-    expect(ctx.type).toBe('text/plain; charset=utf-8');
+    expect(ctx.type).toBe('text/html; charset=utf-8');
+    expect(Buffer.byteLength(ctx.body, 'utf8')).toBe(325);
+    expect(ctx.headers).toEqual({
+      'Cache-Control': 'no-store',
+      'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Referrer-Policy': 'no-referrer',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+    });
+  });
+});
+
+// Le esenzioni del maintenance gate esistono per far lavorare l'admin durante la
+// manutenzione. Se la superficie riservata e chiusa non entra piu nessuno: le
+// esenzioni non servono e il loro unico effetto residuo e far rispondere 404 ai
+// percorsi esenti mentre tutto il resto risponde 503 — differenza che enumera
+// con precisione la superficie riservata.
+describe('createMaintenanceGate + reserved closed', () => {
+  const conf = {
+    adminPrefix: 'admin',
+    adminThemeResourcesPrefix: 'admin-theme-resources',
+    globalPrefix: '',
+    maintenance: { pagePath: path.join(os.tmpdir(), 'nope.ejs'), retryAfterSeconds: 60, exemptPaths: ['/api/adminUsers/login'] },
+  };
+
+  function ctxFor(reqPath) {
+    return { path: reqPath, status: 200, type: null, body: null, set() {} };
+  }
+
+  test('exemptions apply while the reserved surface is open', async () => {
+    const gate = createMaintenanceGate({
+      ital8Conf: conf, projectRoot: os.tmpdir(), initialState: 'stopped',
+      isReservedClosed: () => false,
+    });
+    for (const exempt of ['/admin/x', '/admin-theme-resources/a.css', '/api/adminUsers/login']) {
+      const ctx = ctxFor(exempt);
+      let nextCalled = false;
+      await gate.middleware(ctx, async () => { nextCalled = true; });
+      expect([exempt, nextCalled]).toEqual([exempt, true]);
+    }
+  });
+
+  test('exemptions are suspended once the reserved surface is closed', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const gate = createMaintenanceGate({
+        ital8Conf: conf, projectRoot: os.tmpdir(), initialState: 'stopped',
+        isReservedClosed: () => true,
+      });
+      for (const formerlyExempt of ['/admin/x', '/admin-theme-resources/a.css', '/api/adminUsers/login']) {
+        const ctx = ctxFor(formerlyExempt);
+        let nextCalled = false;
+        await gate.middleware(ctx, async () => { nextCalled = true; });
+        expect([formerlyExempt, nextCalled, ctx.status]).toEqual([formerlyExempt, false, 503]);
+      }
+    } finally { warn.mockRestore(); }
+  });
+
+  test('defaults to exemptions enabled when no predicate is supplied', async () => {
+    const gate = createMaintenanceGate({
+      ital8Conf: conf, projectRoot: os.tmpdir(), initialState: 'stopped',
+    });
+    const ctx = ctxFor('/admin/x');
+    let nextCalled = false;
+    await gate.middleware(ctx, async () => { nextCalled = true; });
+    expect(nextCalled).toBe(true);
   });
 });

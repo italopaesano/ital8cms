@@ -215,12 +215,16 @@ async function handlePublicOnly(ctx, turnOn) {
   const action = `publicOnly.${turnOn ? 'on' : 'off'}`;
   const steps = [];
 
-  // 1. Superficie riservata (runtime, senza riavvio)
-  const reservedResult = handleRuntimeSurfaceToggle(ctx, 'reserved', !turnOn);
-  if (!reservedResult.ok) return { ...reservedResult, action };
-  steps.push(`reserved ${!turnOn ? 'running' : 'stopped'}${reservedResult.noop ? ' (già così)' : ''}`);
+  // ORDINE — prima il passo che può fallire, poi quello che non fallisce.
+  // `writeEnableAdmin` legge e riscrive un file e può sollevare (config assente,
+  // formato non standard, disco pieno); il toggle della superficie è una
+  // scrittura di stato molto più semplice. Facendo prima il toggle, un fallimento
+  // del secondo passo restituiva `ok:false` lasciando però la superficie già
+  // commutata E persistita: `publicOnly off` poteva riaprire l'area riservata e
+  // riportare un errore, il peggior esito possibile. Invertendo, un fallimento
+  // lascia il sistema esattamente com'era.
 
-  // 2. Area admin (riscrive enableAdmin: richiede riavvio)
+  // 1. Area admin (riscrive enableAdmin: richiede riavvio) — passo fallibile
   let adminChanged = false;
   try {
     const adminResult = writeEnableAdmin(configPath, !turnOn);
@@ -229,6 +233,11 @@ async function handlePublicOnly(ctx, turnOn) {
   } catch (err) {
     return { ok: false, action, error: err.code || 'config_edit_failed', message: err.message };
   }
+
+  // 2. Superficie riservata (runtime, senza riavvio)
+  const reservedResult = handleRuntimeSurfaceToggle(ctx, 'reserved', !turnOn);
+  if (!reservedResult.ok) return { ...reservedResult, action };
+  steps.push(`reserved ${!turnOn ? 'running' : 'stopped'}${reservedResult.noop ? ' (già così)' : ''}`);
 
   // Il riavvio serve solo se qualcosa che si applica al boot è cambiato davvero:
   // enableAdmin è letto all'avvio, la superficie riservata no.

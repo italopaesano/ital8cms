@@ -87,8 +87,16 @@ mantenere a mano:
 |---|---|---|
 | `getRouteArray() → access.requiresAuth: true` | rotta dietro l'autenticazione | route-wrap di `pluginSys` |
 | `getRouteArray() → access.isAuthEntryPoint: true` | rotta pubblica che appartiene comunque alla superficie riservata | route-wrap di `pluginSys` |
-| regola in `accessControl.json5` con `requiresAuth` o `isAuthEntryPoint` | pagina riservata (`userProfile.ejs`, `login.ejs`) | middleware di `adminAccessControl` |
+| regola in `accessControl.json5` con `requiresAuth` o `isAuthEntryPoint` | pagina riservata (`userProfile`, `login`, `logout`, `access-denied`) | middleware di `adminAccessControl` |
 | prefissi `adminPrefix` e `adminThemeResourcesPrefix` | pannello e risorse del tema admin | il gate stesso |
+| indice dei path delle rotte riservate | chiude anche il **405** di `allowedMethods()`, che risponde senza passare dall'handler | il gate stesso |
+
+> I pattern delle pagine usano il wildcard (`/pluginPages/adminUsers/login*`)
+> perché con `hideExtension.pluginPagesPrefix` attivo l'URL servito è senza
+> estensione: un match esatto su `login.ejs` non intercetterebbe `/…/login`.
+> L'indice delle rotte è confrontato come confronta il **router** — che gira con
+> `sensitive: false` e `strict: false` — quindi `/API/…/login` e `/…/login/` sono
+> chiusi come la forma canonica.
 
 Un plugin di terze parti che ignora del tutto l'esistenza di `reserved` eredita
 il comportamento corretto **gratis**: `access` è già obbligatorio su ogni rotta e
@@ -126,20 +134,42 @@ Stesso marcatore, stessa semantica, per le **pagine** (che non sono rotte) in
 > serve un health check raggiungibile anche in assetto vetrina, esponilo come
 > rotta propria **senza** il marcatore.
 
-### La risposta è sempre 404
+### La risposta è sempre 404 — e nella forma giusta
 
-Mai 403, mai un redirect, nessun header segnaletico. In assetto vetrina "chiuso"
-deve essere **indistinguibile da "mai esistito"**: un 401 racconta che dietro c'è
-un endpoint, un 302 verso il login racconta dove si entra. È la differenza
+Mai 403, mai un redirect. In assetto vetrina "chiuso" deve essere
+**indistinguibile da "mai esistito"**: un 401 racconta che dietro c'è un
+endpoint, un 302 verso il login racconta dove si entra. È la differenza
 deliberata rispetto al 503 esplicito di `public stop`, che invece *vuole* dire
 "torniamo subito".
 
-### Precedenza sul gate di manutenzione
+Ma non basta lo status: deve coincidere anche la **forma** della risposta,
+perché questo CMS ne ha **due** per un URL inesistente.
 
-Con `public stop` e `reserved stop` attivi insieme, un percorso riservato dà
-**404 anche se compare in `maintenance.exemptPaths`** — che di default contiene
-la pagina di login. L'esenzione lo fa passare dal gate di manutenzione, il gate
-riservato lo chiude subito dopo. È voluto: la superficie riservata vince.
+| Famiglia | 404 autentico |
+|---|---|
+| sotto `apiPrefix` (`/api/…`) | `text/plain`, corpo `Not Found` (9 byte) — nessuno static server serve `/api/*`, quindi risponde Koa |
+| tutto il resto | pagina HTML di `koa-classic-server` (325 byte) con `no-store`, CSP, `nosniff`, `X-Frame-Options`, … |
+
+Il gate produce la forma **della famiglia richiesta**. Una prima versione
+rispondeva sempre `text/plain` di 9 byte: coerente fra i tre punti di
+enforcement, ma diversa dal resto del sito — e quindi ogni percorso riservato
+restava enumerabile dalla sola forma della risposta. Un test d'integrazione
+confronta ora **byte per byte** la risposta riservata con un 404 autentico della
+stessa famiglia, così una divergenza futura fallisce invece di passare in
+silenzio.
+
+### Con anche `public stop`: 503 uniforme
+
+Con `public stop` e `reserved stop` attivi insieme il sito risponde **503
+ovunque**, esenzioni comprese.
+
+Le esenzioni del gate di manutenzione (prefissi admin + `maintenance.exemptPaths`,
+che di default contiene la pagina di login) esistono per una ragione sola: far
+lavorare un amministratore durante la manutenzione. Se la superficie riservata è
+chiusa, quella ragione decade — non entra più nessuno — e resterebbe solo
+l'effetto collaterale: i percorsi esenti risponderebbero 404 mentre tutto il
+resto risponde 503, e la differenza sarebbe una mappa precisa della superficie
+riservata. Perciò, a superficie chiusa, le esenzioni sono **sospese**.
 
 ### Fail-closed
 

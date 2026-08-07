@@ -747,7 +747,7 @@ class pluginSys{
       // PRIMO controllo, prima ancora del CSRF: se la rotta appartiene alla
       // superficie riservata deve semplicemente non esistere — non deve né
       // validare token né distinguere fra 401 e 403, perché ogni risposta
-      // diversa da un 404 nudo racconta qualcosa di ciò che c'è dietro.
+      // diversa dal 404 del sito racconta qualcosa di ciò che c'è dietro.
       //
       // Perimetro, derivato da quel che le rotte GIÀ dichiarano:
       //   • requiresAuth: true      → sta dietro l'autenticazione

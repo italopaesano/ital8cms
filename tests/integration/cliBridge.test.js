@@ -326,6 +326,45 @@ describe('cliBridge reserved stop/start (soft, no restart)', () => {
     expect(r.status).toBe(200);
   });
 
+  // Un prefisso riservato non deve inghiottire i suoi fratelli pubblici.
+  test('a public page whose name merely starts with the admin prefix still works', async () => {
+    const publicPage = path.join(PROJECT_ROOT, 'www', 'admin-guide.ejs');
+    fs.writeFileSync(publicPage, '<h1>guida pubblica</h1>', 'utf8');
+    try {
+      const r = await httpGet('/admin-guide.ejs');
+      expect(r.status).toBe(200);
+      expect(r.body).toContain('guida pubblica');
+    } finally { fs.unlinkSync(publicPage); }
+  });
+
+  // GUARDIA ANTI-DERIVA E CUORE DELLA PROMESSA: la risposta di un percorso
+  // riservato deve essere INDISTINGUIBILE da quella di un percorso che non e mai
+  // esistito. Non basta "404": corpo e header devono coincidere, e le forme sono
+  // due (sotto /api risponde Koa, altrove la error page del file server).
+  // Se koa-classic-server cambia la sua pagina, e questo test a fallire — invece
+  // che le due risposte a divergere in silenzio.
+  test.each([
+    ['/api/adminUsers/logged',                '/api/adminUsers/zzz-non-esiste'],
+    ['/api/adminUsers/userList',              '/api/adminUsers/zzz-non-esiste'],
+    ['/pluginPages/adminUsers/login.ejs',     '/pluginPages/adminUsers/zzz-non-esiste.ejs'],
+    ['/pluginPages/adminUsers/logout.ejs',    '/pluginPages/adminUsers/zzz-non-esiste.ejs'],
+    ['/admin-theme-resources/css/theme.css',  '/admin-theme-resources/css/zzz-non-esiste.css'],
+    ['/admin/',                               '/zzz-non-esiste.ejs'],
+  ])('%s is byte-identical to a genuine 404 (%s)', async (reservedPath, genuineMissingPath) => {
+    const reserved = await httpGet(reservedPath);
+    const genuine = await httpGet(genuineMissingPath);
+
+    expect(reserved.status).toBe(genuine.status);
+    expect(reserved.body).toBe(genuine.body);
+
+    // Header volatili esclusi: cambiano a ogni richiesta e non sono un segnale.
+    const VOLATILE = new Set(['date', 'set-cookie', 'connection', 'keep-alive']);
+    const stable = (headers) => Object.fromEntries(
+      Object.entries(headers).filter(([name]) => !VOLATILE.has(name.toLowerCase()))
+    );
+    expect(stable(reserved.headers)).toEqual(stable(genuine.headers));
+  });
+
   test('reserved stop is idempotent (noop) when already stopped', async () => {
     const r = await runClient(['--json', '--socket', TEST_SOCKET, 'reserved', 'stop']);
     const payload = JSON.parse(r.stdout.trim());
@@ -345,5 +384,33 @@ describe('cliBridge reserved stop/start (soft, no restart)', () => {
     // E il pannello torna a comportarsi come prima (302 verso il login da anonimo).
     const admin = await httpGet('/admin/');
     expect(admin.status).not.toBe(404);
+  });
+});
+
+// Con entrambi i gate chiusi il sito deve rispondere 503 OVUNQUE. Prima, i
+// percorsi esenti dal maintenance (login) e i prefissi admin davano 404 mentre
+// tutto il resto dava 503: la differenza era essa stessa una mappa della
+// superficie riservata.
+describe('cliBridge public stop + reserved stop (uniformita)', () => {
+  beforeAll(async () => {
+    await runClient(['--json', '--socket', TEST_SOCKET, 'reserved', 'stop']);
+    await runClient(['--json', '--socket', TEST_SOCKET, 'public', 'stop']);
+  });
+
+  afterAll(async () => {
+    await runClient(['--json', '--socket', TEST_SOCKET, 'public', 'start']);
+    await runClient(['--json', '--socket', TEST_SOCKET, 'reserved', 'start']);
+  });
+
+  test.each([
+    ['/'],
+    ['/robots.txt'],
+    ['/pluginPages/adminUsers/login.ejs'],
+    ['/admin/'],
+    ['/admin-theme-resources/css/theme.css'],
+    ['/api/adminUsers/logged'],
+  ])('%s answers 503 like everything else', async (urlPath) => {
+    const r = await httpGet(urlPath);
+    expect(r.status).toBe(503);
   });
 });

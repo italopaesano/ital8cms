@@ -93,32 +93,38 @@ function priorityMiddleware(app, ital8Conf, options = {}){
     // fonte di verità è l'oggetto gate in memoria, che il cliBridge commuta a caldo.
     const initialState = readState();
 
-    // ========== MAINTENANCE GATE (CLI-controlled public stop) ==========
-    // Posizionato PRIMA del router così intercetta anche le rotte API.
-    // Lascia passare /admin/* e /admin-theme-resources/* per non bloccare l'amministrazione.
-    const initialPublicState = initialState.public || 'running';
-    const maintenanceGate = createMaintenanceGate({
-        ital8Conf,
-        projectRoot,
-        initialState: initialPublicState,
-    });
-    app.use(maintenanceGate.middleware);
-    console.log(`[PriorityMiddleware] ✓ maintenance gate loaded (initial public state: ${initialPublicState})`);
-
-
     // ========== RESERVED GATE (CLI-controlled reserved stop) ==========
-    // DOPO il maintenance gate e PRIMA del router.
-    //
-    // Perché prima del router: deve vedere sia le pagine statiche sia le rotte API.
-    // Perché dopo il maintenance gate: quando ENTRAMBI sono chiusi un path
-    // riservato deve dare 404 e non 503 — ma `maintenance.exemptPaths` contiene di
-    // default la pagina di login, che è riservata. L'esenzione dal 503 la fa
-    // passare, questo gate la chiude subito dopo: il 404 vince, come da progetto.
+    // NB: creato PRIMA del maintenance gate ma montato DOPO — le due cose sono
+    // indipendenti. Va creato prima perché il maintenance gate ne interroga lo
+    // stato per decidere se le proprie esenzioni abbiano ancora senso.
     const initialReservedState = initialState.reserved || 'running';
     const reservedGate = createReservedGate({
         ital8Conf,
         initialState: initialReservedState,
     });
+
+
+    // ========== MAINTENANCE GATE (CLI-controlled public stop) ==========
+    // Posizionato PRIMA del router così intercetta anche le rotte API.
+    // Lascia passare /admin/* e /admin-theme-resources/* per non bloccare
+    // l'amministrazione — ma solo finché la superficie riservata è aperta
+    // (vedi exemptionsAreUseful in runtimeGate.js).
+    const initialPublicState = initialState.public || 'running';
+    const maintenanceGate = createMaintenanceGate({
+        ital8Conf,
+        projectRoot,
+        initialState: initialPublicState,
+        isReservedClosed: () => reservedGate.isClosed(),
+    });
+    app.use(maintenanceGate.middleware);
+    console.log(`[PriorityMiddleware] ✓ maintenance gate loaded (initial public state: ${initialPublicState})`);
+
+    // Montato DOPO il maintenance gate e PRIMA del router.
+    //
+    // Perché prima del router: deve vedere sia le pagine statiche sia le rotte API.
+    // Perché dopo il maintenance gate: con entrambi chiusi il 503 uniforme del
+    // maintenance ha la precedenza e non lascia trapelare nulla; se solo questo è
+    // chiuso, il maintenance lascia passare e qui si applica il 404.
     app.use(reservedGate.middleware);
     console.log(`[PriorityMiddleware] ✓ reserved gate loaded (initial reserved state: ${initialReservedState})`);
 

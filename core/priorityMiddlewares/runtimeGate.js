@@ -48,6 +48,11 @@ function createMaintenanceGate(options) {
     ital8Conf,
     projectRoot,
     initialState = 'running',
+    // Predicato sullo stato della superficie riservata. Vedi il commento su
+    // `exemptionsAreUseful()` più sotto: quando la superficie è chiusa le
+    // esenzioni di questo gate non servono più a nessuno e diventano un canale
+    // di enumerazione, quindi vengono sospese.
+    isReservedClosed = () => false,
   } = options;
 
   let publicState = initialState;
@@ -92,9 +97,22 @@ function createMaintenanceGate(options) {
     ctx.body = html;
   }
 
+  // Le esenzioni di questo gate (prefissi admin + `maintenance.exemptPaths`)
+  // esistono per UNA ragione: durante la manutenzione un amministratore deve
+  // poter entrare e lavorare. Se la superficie riservata è chiusa quella ragione
+  // decade — non entra più nessuno — e resta solo l'effetto collaterale:
+  // i percorsi esenti rispondono 404 mentre tutto il resto risponde 503, e la
+  // differenza enumera con precisione la superficie riservata (verificato).
+  // Sospendendo le esenzioni, con entrambi i gate chiusi il sito risponde 503
+  // ovunque: nessuna differenza da cui dedurre alcunché.
+  function exemptionsAreUseful() {
+    return !isReservedClosed();
+  }
+
   async function middleware(ctx, next) {
     if (publicState === 'running') return next();
-    if (isExemptPath(ctx.path, adminPrefix, adminThemeResourcesPrefix, globalPrefix, exemptPaths)) {
+    if (exemptionsAreUseful() &&
+        isExemptPath(ctx.path, adminPrefix, adminThemeResourcesPrefix, globalPrefix, exemptPaths)) {
       return next();
     }
     await renderMaintenance(ctx);
@@ -144,7 +162,72 @@ function createMaintenanceGate(options) {
 // in modo IDENTICO, altrimenti la differenza fra le risposte ridiventa un canale
 // di fingerprinting. Un solo posto che produce il 404 → nessuna divergenza
 // possibile.
+//
+// COME `deny()` PRODUCE IL 404 — il punto più delicato dell'intera feature.
+//
+// Non basta rispondere "404": la risposta deve avere la STESSA FORMA di quella
+// che il sito dà per un URL che non esiste davvero, altrimenti la differenza
+// rende ogni percorso riservato enumerabile — cioè esattamente ciò che l'assetto
+// vetrina promette di impedire.
+//
+// E le forme sono DUE, misurate sul server reale:
+//   • sotto `apiPrefix` → 404 di default di Koa: `text/plain`, corpo "Not Found"
+//     (9 byte). Nessuno static server serve `/api/*` — è in `urlsReserved` di
+//     tutti — quindi una rotta inesistente arriva in fondo alla catena senza che
+//     nessuno la gestisca.
+//   • altrove → pagina HTML di koa-classic-server (325 byte) con `no-store`,
+//     CSP, `nosniff`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`.
+//
+// TENTATIVO SCARTATO — delegare invece di imitare. L'idea era riscrivere il path
+// su una sentinella inesistente e lasciar proseguire la richiesta, così il 404 lo
+// produceva lo static server stesso: zero duplicazione, nessuna deriva possibile.
+// **Non funziona ed è pericoloso:** koa-classic-server gira con
+// `useOriginalUrl: true` (suo default) e legge `ctx.originalUrl`, che la
+// riscrittura di `ctx.path` non tocca. Verificato sul server reale: con la
+// superficie CHIUSA `/admin/` tornava **200 con la dashboard** e la pagina di
+// login **200 con il form**. La delega trasformava la chiusura in un pass-through
+// completo — molto peggio del difetto che voleva correggere. La fabbricazione,
+// per quanto meno elegante, è l'unica che non può essere aggirata.
+//
+// La duplicazione della pagina qui sotto è quindi deliberata, e presidiata da un
+// test che confronta BYTE PER BYTE la risposta riservata con un 404 autentico:
+// se koa-classic-server cambia la sua pagina, il test fallisce invece di lasciar
+// divergere le due risposte in silenzio.
+// TODO(koa-classic-server): chiedere al maintainer di esportare il renderer
+// della error page, così questo mirror può sparire.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// Mirror della error page di koa-classic-server v5.1.0 (verificata byte per byte).
+const NOT_FOUND_HTML = '<!DOCTYPE html>\n' +
+  '<html>\n' +
+  '<head>\n' +
+  '  <meta charset="UTF-8">\n' +
+  '  <meta http-equiv="X-UA-Compatible" content="IE=edge">\n' +
+  '  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n' +
+  '  <title>URL not found</title>\n' +
+  '</head>\n' +
+  '<body>\n' +
+  '  <h1>Not Found</h1>\n' +
+  '  <h3>The requested URL was not found on this server.</h3>\n' +
+  '</body>\n' +
+  '</html>';
+
+const NOT_FOUND_HEADERS = {
+  'Cache-Control': 'no-store',
+  'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'no-referrer',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+};
+
+// Confronto per SEGMENTO, non per semplice prefisso di stringa: `startsWith`
+// nudo su `/admin` cattura anche `/admin-guide.ejs`, cioè contenuto pubblico
+// legittimo (verificato: dava 404 a superficie chiusa). Un prefisso vale quando
+// il path È il prefisso oppure prosegue con `/`.
+function pathIsUnderSegment(reqPath, prefixPath) {
+  return reqPath === prefixPath || reqPath.startsWith(`${prefixPath}/`);
+}
 
 // Un path appartiene alla superficie riservata "per prefisso" quando ricade sotto
 // il pannello admin o sotto le risorse del tema admin. Le risorse del tema NON
@@ -153,9 +236,26 @@ function createMaintenanceGate(options) {
 // rivelerebbero l'esistenza del pannello.
 function isReservedPrefixPath(reqPath, adminPrefix, adminThemeResourcesPrefix, globalPrefix) {
   const base = globalPrefix || '';
-  if (adminPrefix && reqPath.startsWith(`${base}/${adminPrefix}`)) return true;
-  if (adminThemeResourcesPrefix && reqPath.startsWith(`${base}/${adminThemeResourcesPrefix}`)) return true;
+  if (adminPrefix && pathIsUnderSegment(reqPath, `${base}/${adminPrefix}`)) return true;
+  if (adminThemeResourcesPrefix && pathIsUnderSegment(reqPath, `${base}/${adminThemeResourcesPrefix}`)) return true;
   return false;
+}
+
+// Normalizzazione per il confronto con l'indice dei path riservati.
+//
+// L'indice è costruito dai path che pluginSys registra su @koa/router, che gira
+// con le opzioni di default `sensitive: false` e `strict: false`: il router
+// risponde quindi anche a `/API/adminUsers/login` e `/api/adminUsers/login/`.
+// Un confronto esatto lasciava scoperte proprio quelle due forme (verificato:
+// `OPTIONS /api/adminUsers/login/` → 200 con `Allow: POST`, e
+// `GET /API/adminUsers/login` → 405), riaprendo il canale 405 che l'indice
+// esisteva per chiudere. Il gate deve normalizzare come normalizza il router.
+function normalizeReservedPath(reqPath) {
+  if (typeof reqPath !== 'string' || reqPath === '') return '';
+  const withoutTrailingSlash = reqPath.length > 1 && reqPath.endsWith('/')
+    ? reqPath.slice(0, -1)
+    : reqPath;
+  return withoutTrailingSlash.toLowerCase();
 }
 
 function createReservedGate(options) {
@@ -176,27 +276,46 @@ function createReservedGate(options) {
   const adminThemeResourcesPrefix = ital8Conf.adminThemeResourcesPrefix || 'admin-theme-resources';
   const globalPrefix = ital8Conf.globalPrefix || '';
 
-  // Risposta unica per tutti i punti di enforcement (vedi commento sopra).
+  const apiPrefix = ital8Conf.apiPrefix || 'api';
+
+  // Risposta unica per tutti i punti di enforcement, nella forma che il sito
+  // userebbe per quella stessa famiglia di path (vedi commento in testa alla
+  // sezione).
   function deny(ctx) {
     ctx.status = 404;
-    ctx.type = 'text/plain; charset=utf-8';
-    ctx.body = 'Not Found';
+
+    if (pathIsUnderSegment(ctx.path, `${globalPrefix || ''}/${apiPrefix}`)) {
+      // Nessuno static server serve /api/*: qui il 404 lo emette Koa.
+      ctx.type = 'text/plain; charset=utf-8';
+      ctx.body = 'Not Found';
+      return;
+    }
+
+    for (const [header, value] of Object.entries(NOT_FOUND_HEADERS)) {
+      ctx.set(header, value);
+    }
+    ctx.type = 'text/html; charset=utf-8';
+    ctx.body = NOT_FOUND_HTML;
+  }
+
+  function isReservedPath(reqPath) {
+    return isReservedPrefixPath(reqPath, adminPrefix, adminThemeResourcesPrefix, globalPrefix) ||
+      reservedRoutePaths.has(normalizeReservedPath(reqPath));
   }
 
   async function middleware(ctx, next) {
     if (reservedState === 'running') return next();
-    const isReserved =
-      isReservedPrefixPath(ctx.path, adminPrefix, adminThemeResourcesPrefix, globalPrefix) ||
-      reservedRoutePaths.has(ctx.path);
-    if (!isReserved) return next();
+    if (!isReservedPath(ctx.path)) return next();
     deny(ctx);
   }
 
   return {
     middleware,
     deny,
+    isReservedPath,
     setReservedRoutePaths(paths) {
-      reservedRoutePaths = paths instanceof Set ? paths : new Set(paths || []);
+      const source = paths instanceof Set ? paths : new Set(paths || []);
+      reservedRoutePaths = new Set([...source].map(normalizeReservedPath));
     },
     setState(newState) {
       if (newState !== 'running' && newState !== 'stopped') {

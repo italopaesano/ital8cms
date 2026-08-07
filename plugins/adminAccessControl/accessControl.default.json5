@@ -1,6 +1,6 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 2,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   "version": "1.0.0",
   "lastModified": "2026-01-28T10:00:00Z",
 
@@ -50,21 +50,43 @@
   // ==========================================================================
   "customRules": {
     // Pagina profilo utente: accessibile solo a utenti autenticati (qualsiasi ruolo)
-    "/pluginPages/adminUsers/userProfile.ejs": {
+    "/pluginPages/adminUsers/userProfile*": {
       "requiresAuth": true,
       "allowedRoles": [] // Tutti gli utenti autenticati
     },
 
-    // Pagina di login: PUBBLICA (deve esserlo, o nessuno potrebbe autenticarsi)
-    // ma appartenente alla superficie riservata.
+    // ── Varchi di autenticazione: pagine PUBBLICHE che appartengono comunque
+    //    alla superficie riservata ──────────────────────────────────────────
     //
     // isAuthEntryPoint non incide sul controllo accessi ordinario: serve solo al
-    // comando `npm run cli -- reserved stop`, che chiude tutto ciò che sta dietro
-    // l'autenticazione. Senza questo marcatore la pagina di login resterebbe
-    // servita anche a superficie chiusa, annunciando l'esistenza dell'area
-    // riservata — esattamente ciò che l'assetto vetrina vuole evitare.
+    // comando `npm run cli -- reserved stop`, che chiude tutto cio che sta dietro
+    // l'autenticazione. Senza il marcatore queste pagine resterebbero servite
+    // anche a superficie chiusa, annunciando l'esistenza dell'area riservata —
+    // esattamente cio che l'assetto vetrina vuole evitare.
+    //
+    // PERCHE' DUE PATTERN PER PAGINA: con `hideExtension.pluginPagesPrefix`
+    // attivo l'URL servito e senza estensione (`.../login`), e un match esatto
+    // su `login.ejs` non lo intercetterebbe. Il wildcard singolo `login*` copre
+    // entrambe le forme senza sconfinare in altre pagine.
     // Vedi docs/cli-control-plane.it.md → "Superficie riservata".
-    "/pluginPages/adminUsers/login.ejs": {
+
+    // Pagina di login (deve essere pubblica, o nessuno potrebbe autenticarsi)
+    "/pluginPages/adminUsers/login*": {
+      "requiresAuth": false,
+      "allowedRoles": [],
+      "isAuthEntryPoint": true
+    },
+
+    // Pagina di logout: varco in uscita, stessa logica
+    "/pluginPages/adminUsers/logout*": {
+      "requiresAuth": false,
+      "allowedRoles": [],
+      "isAuthEntryPoint": true
+    },
+
+    // Pagina "accesso negato": non richiede autenticazione, ma la sua sola
+    // esistenza annuncia che esiste un sistema di controllo accessi
+    "/pluginPages/adminAccessControl/access-denied*": {
       "requiresAuth": false,
       "allowedRoles": [],
       "isAuthEntryPoint": true

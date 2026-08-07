@@ -400,3 +400,32 @@ describe('makeDispatcher publicOnly', () => {
     } finally { sb.cleanup(); }
   });
 });
+
+// L'ordine dei passi della macro conta: prima quello che puo fallire.
+// Con l'ordine invertito, un `writeEnableAdmin` fallito restituiva ok:false
+// dopo aver gia commutato E PERSISTITO la superficie — cioe `publicOnly off`
+// poteva riaprire l'area riservata e riportare comunque un errore.
+describe('makeDispatcher publicOnly — atomicita dei passi', () => {
+  test('a failing admin write leaves the reserved surface untouched', async () => {
+    const sb = makeSandbox(true, 'running');
+    const applied = [];
+    try {
+      // Config senza enableAdmin → writeEnableAdmin lancia ENABLE_ADMIN_NOT_FOUND
+      fs.writeFileSync(sb.configPath, '{\n  "httpPort": 3000,\n}\n', 'utf8');
+      fs.writeFileSync(sb.statePath, '{ "public": "running", "reserved": "stopped" }', 'utf8');
+
+      const dispatch = makeDispatcher({
+        startTime: Date.now(), ital8Conf: { httpPort: 3000 },
+        configPath: sb.configPath, statePath: sb.statePath,
+        setReservedState: (s) => applied.push(s),
+        requestRestart: () => {},
+      });
+      const res = await dispatch('publicOnly.off');
+
+      expect(res.ok).toBe(false);
+      // Il punto: la superficie NON e stata riaperta né in memoria né su disco.
+      expect(applied).toEqual([]);
+      expect(readState(sb.statePath).reserved).toBe('stopped');
+    } finally { sb.cleanup(); }
+  });
+});

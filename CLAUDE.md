@@ -1090,10 +1090,13 @@ elenco da mantenere:
 
 Un plugin nuovo eredita il comportamento **senza dichiarare nulla**: `access` è già
 obbligatorio. Il marcatore `isAuthEntryPoint` serve **solo** alle rotte/pagine
-pubbliche per necessità. **La risposta è sempre 404 nudo** (mai 403, mai redirect):
-in assetto vetrina "chiuso" deve essere indistinguibile da "mai esistito" — per
-questo i tre punti di enforcement condividono l'unico `deny()` del gate.
-Nei template: `passData.reservedClosed`.
+pubbliche per necessità. **La risposta è sempre 404** (mai 403, mai redirect) e
+**nella forma che il sito userebbe per quella famiglia di path**: `text/plain` di
+Koa sotto `apiPrefix` (nessuno static server serve `/api/*`), pagina HTML del file
+server altrove. Un test d'integrazione confronta byte per byte con un 404
+autentico: una risposta "quasi uguale" rende comunque enumerabile la superficie.
+Con anche `public stop` le esenzioni del maintenance gate sono **sospese** → 503
+uniforme. Nei template: `passData.reservedClosed`.
 
 Modulo: `core/priorityMiddlewares/runtimeGate.js` (ospita entrambi i gate a runtime:
 il maintenance **esenta** i due prefissi admin, il reserved li **prende di mira**).
