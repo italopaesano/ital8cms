@@ -53,6 +53,21 @@
     "/pluginPages/adminUsers/userProfile.ejs": {
       "requiresAuth": true,
       "allowedRoles": [] // Tutti gli utenti autenticati
+    },
+
+    // Pagina di login: PUBBLICA (deve esserlo, o nessuno potrebbe autenticarsi)
+    // ma appartenente alla superficie riservata.
+    //
+    // isAuthEntryPoint non incide sul controllo accessi ordinario: serve solo al
+    // comando `npm run cli -- reserved stop`, che chiude tutto ciò che sta dietro
+    // l'autenticazione. Senza questo marcatore la pagina di login resterebbe
+    // servita anche a superficie chiusa, annunciando l'esistenza dell'area
+    // riservata — esattamente ciò che l'assetto vetrina vuole evitare.
+    // Vedi docs/cli-control-plane.it.md → "Superficie riservata".
+    "/pluginPages/adminUsers/login.ejs": {
+      "requiresAuth": false,
+      "allowedRoles": [],
+      "isAuthEntryPoint": true
     }
   },
 

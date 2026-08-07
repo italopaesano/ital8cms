@@ -111,7 +111,11 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       path: '/login',
       access: {
         requiresAuth: false,
-        allowedRoles: [] // Pubblico, tutti possono tentare il login
+        allowedRoles: [], // Pubblico, tutti possono tentare il login
+        // Pubblica per necessità, ma è IL varco della superficie riservata:
+        // con `npm run cli -- reserved stop` risponde 404 come tutto il resto
+        // di ciò che sta dietro l'autenticazione.
+        isAuthEntryPoint: true
       },
       handler: async (ctx) => {//
         const { username, password, referrerTo } = ctx.request.body;
@@ -180,7 +184,10 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       path: '/logged',
       access: {
         requiresAuth: false,
-        allowedRoles: [] // Pubblico, utile per test
+        allowedRoles: [], // Pubblico, utile per test
+        // Pubblica, ma rivela l'esistenza del sistema di autenticazione →
+        // appartiene alla superficie riservata (404 con `reserved stop`).
+        isAuthEntryPoint: true
       },
       handler: async (ctx) => { 
         if (!ctx.session || !ctx.session.authenticated) {
@@ -206,7 +213,10 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       path: '/logout',
       access: {
         requiresAuth: false,
-        allowedRoles: [] // Pubblico, chiunque può chiamare logout
+        allowedRoles: [], // Pubblico, chiunque può chiamare logout
+        // Varco di uscita: senza il marcatore resterebbe l'unico endpoint di
+        // adminUsers raggiungibile a superficie chiusa.
+        isAuthEntryPoint: true
       },
       handler: async (ctx) => {//
         const {referrerTo } = ctx.request.body;

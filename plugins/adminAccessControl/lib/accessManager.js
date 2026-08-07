@@ -202,6 +202,26 @@ class AccessManager {
       }
       const user = ctx.session?.user || null;
 
+      // ── Superficie riservata chiusa (CLI: `reserved stop`) ──
+      // Terzo punto di enforcement, quello delle PAGINE: le rotte API le chiude il
+      // route-wrap di pluginSys, i due prefissi admin li chiude il gate stesso,
+      // ma le pagine servite staticamente (userProfile.ejs, login.ejs) passano
+      // solo di qui, perché cadono oltre il router.
+      //
+      // Va PRIMA di checkAccess: altrimenti una pagina riservata risponderebbe
+      // con un redirect verso il login — che a superficie chiusa è a sua volta un
+      // 404. Un 302 verso il nulla è insieme brutto e rivelatore.
+      const reservedGate = typeof this.pluginSys?.getReservedGate === 'function'
+        ? this.pluginSys.getReservedGate()
+        : null;
+      if (reservedGate && reservedGate.isClosed()) {
+        const reservedRule = this.patternMatcher.findMatchingRule(url, this.rules);
+        if (reservedRule && (reservedRule.requiresAuth || reservedRule.isAuthEntryPoint)) {
+          reservedGate.deny(ctx);
+          return;
+        }
+      }
+
       // Verifica accesso
       const accessResult = this.checkAccess(url, user);
 

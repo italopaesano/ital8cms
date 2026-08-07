@@ -20,6 +20,8 @@ class pluginSys{
   #activePlugins = new Map();// Mappa che conterrà i plugin attivi
   #pluginsToActive = new Map();// plugin da attivare non ancora attivati perchè bisogna controllare le dipendenze
   #themeSys = null;// riferimento al sistema dei temi (impostato dopo l'inizializzazione)
+  #reservedGate = null;// gate della superficie riservata (impostato da index.js dopo i priority middlewares)
+  #reservedRoutePaths = new Set();// path completi delle rotte che appartengono alla superficie riservata (popolato da loadRoutes)
   #ital8Conf = null;// configurazione principale del sistema (per whitelist funzioni globali)
   #pluginStates = new Map();// stato runtime per plugin: 'available'|'disabled'|'incomplete'|'installed' (+ reason/detail)
 
@@ -661,6 +663,39 @@ class pluginSys{
     return this.#themeSys;
   }
 
+  /**
+   * Imposta il riferimento al reserved gate (superficie riservata).
+   * Chiamato da index.js con il gate creato dai priority middlewares.
+   *
+   * Serve al route-wrap: quando la superficie riservata è chiusa, le rotte che le
+   * appartengono devono rispondere 404 invece di 401/403. Il gate è la fonte di
+   * verità unica dello stato — e fornisce anche il `deny()` condiviso, così tutti
+   * i punti di enforcement rispondono in modo identico.
+   * @param {object} reservedGate - Gate creato da createReservedGate()
+   */
+  setReservedGate(reservedGate) {
+    this.#reservedGate = reservedGate;
+  }
+
+  /**
+   * Restituisce il riferimento al reserved gate
+   * @returns {object|null} - Gate o null se non ancora impostato
+   */
+  getReservedGate() {
+    return this.#reservedGate;
+  }
+
+  /**
+   * Path completi (prefisso incluso) delle rotte appartenenti alla superficie
+   * riservata, raccolti durante loadRoutes(). Da passare al reserved gate, che
+   * li chiude PER PATH — chiudendo anche il 405 di allowedMethods() sul metodo
+   * sbagliato, che il route-wrap non puo intercettare.
+   * @returns {Set<string>} - Copia dell'indice
+   */
+  getReservedRoutePaths() {
+    return new Set(this.#reservedRoutePaths);
+  }
+
   loadRoutes( router , prefix = "" ){//prefisso delle rotte  questa chiamata farà caricare tutte le istanze di route caricate precedentemente dal costruttore
     // le rotte avranno comepresso sia "prefix" se impostato , e sia il nome del modulo , questo permetterà di evitare conflitti
     for( const[ key, Avalue ] of  this.#routes ){ // itero la mappa key è il nome del modulo Avalue è l'array che contiene tuti gli ogrtti che rapresentano le rotte
@@ -669,6 +704,19 @@ class pluginSys{
 
         // Se la route dichiara un campo access, wrappa l'handler con un controllo di autenticazione e ruoli
         const handler = oRoute.access ? this.#wrapHandlerWithAccessCheck(oRoute.handler, oRoute.access) : oRoute.handler;
+
+        // Indice dei path riservati, per il reserved gate.
+        //
+        // Il route-wrap qui sopra copre il caso normale (metodo giusto, handler
+        // invocato), ma NON il metodo sbagliato: `router.allowedMethods()`
+        // risponde 405 senza mai entrare nell'handler, e un 405 dice "questo path
+        // esiste" — l'esatto contrario di quel che l'assetto vetrina promette
+        // (verificato: GET su una rotta POST-only dava 405 mentre tutto il resto
+        // dava 404). Il gate, che sta prima del router, chiude questi path per
+        // path e non per metodo.
+        if (oRoute.access && (oRoute.access.requiresAuth || oRoute.access.isAuthEntryPoint)) {
+          this.#reservedRoutePaths.add(path);
+        }
 
         if( oRoute.method == 'GET'){
           router.get( path , handler );// key è il nome del plugin che farà parte del percorso per evitare conflitti
@@ -695,6 +743,23 @@ class pluginSys{
    */
   #wrapHandlerWithAccessCheck(originalHandler, access) {
     return async (ctx) => {
+      // ── Superficie riservata chiusa (CLI: `reserved stop`) ──
+      // PRIMO controllo, prima ancora del CSRF: se la rotta appartiene alla
+      // superficie riservata deve semplicemente non esistere — non deve né
+      // validare token né distinguere fra 401 e 403, perché ogni risposta
+      // diversa da un 404 nudo racconta qualcosa di ciò che c'è dietro.
+      //
+      // Perimetro, derivato da quel che le rotte GIÀ dichiarano:
+      //   • requiresAuth: true      → sta dietro l'autenticazione
+      //   • isAuthEntryPoint: true  → è pubblica per necessità (login, logout,
+      //                               sonde di stato) ma appartiene comunque
+      //                               alla superficie riservata
+      const reservedGate = this.#reservedGate;
+      if (reservedGate && reservedGate.isClosed() && (access.requiresAuth || access.isAuthEntryPoint)) {
+        reservedGate.deny(ctx);
+        return;
+      }
+
       // ── Protezione CSRF (anti cross-site request forgery) ──
       // Eseguita PRIMA del controllo auth così copre anche le rotte pubbliche
       // mutanti (es. POST /login). Il plugin csrfProtection è OPZIONALE: se

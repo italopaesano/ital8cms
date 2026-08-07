@@ -6,7 +6,7 @@ const { detectSupervisor } = require('./respawn');
 const resetConfigsToDefault = require('../resetConfigsToDefault');
 
 function buildStatus(ctx) {
-  const { startTime, ital8Conf, configPath, statePath, getPublicState } = ctx;
+  const { startTime, ital8Conf, configPath, statePath, getPublicState, getReservedState } = ctx;
   const httpsEnabled = !!(ital8Conf && ital8Conf.https && ital8Conf.https.enabled);
 
   let adminState = 'unknown';
@@ -20,6 +20,16 @@ function buildStatus(ctx) {
     ? getPublicState()
     : (readState(statePath).public);
 
+  const reservedState = typeof getReservedState === 'function'
+    ? getReservedState()
+    : (readState(statePath).reserved);
+
+  // Il pannello admin è un SOTTOINSIEME della superficie riservata: con
+  // `reserved stop` è irraggiungibile anche quando enableAdmin è true. Senza
+  // questo flag `status` mostrerebbe "admin: running" mentre l'admin riceve 404
+  // — una trappola diagnostica. Il client lo rende esplicito accanto allo stato.
+  const adminUnreachable = adminState === 'running' && reservedState === 'stopped';
+
   return {
     ok: true,
     data: {
@@ -28,7 +38,8 @@ function buildStatus(ctx) {
       httpPort: ital8Conf ? ital8Conf.httpPort : null,
       httpsEnabled,
       httpsPort: httpsEnabled ? ital8Conf.https.port : null,
-      admin: { state: adminState },
+      admin: { state: adminState, unreachable: adminUnreachable },
+      reserved: { state: reservedState },
       public: { state: publicState },
       supervisor: detectSupervisor(),
     },
@@ -80,43 +91,51 @@ function handleAdminToggle(ctx, targetValue) {
   };
 }
 
-function handlePublicToggle(ctx, targetValue) {
-  const { statePath, setPublicState } = ctx;
+// Commuta una delle due superfici governate da un gate a runtime ('public' o
+// 'reserved'). Entrambe funzionano allo stesso modo — scrittura nello state file
+// (per sopravvivere al riavvio) + applicazione immediata sul gate in memoria —
+// quindi condividono un solo handler invece di due copie da tenere allineate.
+function handleRuntimeSurfaceToggle(ctx, surface, targetValue) {
+  const { statePath } = ctx;
   const targetLabel = targetValue ? 'running' : 'stopped';
-  const action = targetValue ? 'public.start' : 'public.stop';
+  const action = `${surface}.${targetValue ? 'start' : 'stop'}`;
+  const applyToGate = surface === 'public' ? ctx.setPublicState : ctx.setReservedState;
 
-  let current;
+  let currentState;
   try {
-    current = readState(statePath).public;
+    currentState = readState(statePath);
   } catch (err) {
     return { ok: false, error: 'state_read_failed', message: err.message };
   }
 
-  if (current === targetLabel) {
+  if (currentState[surface] === targetLabel) {
     return {
       ok: true,
       action,
       restart: false,
       noop: true,
-      message: `public già in stato ${targetLabel}, nessuna azione`,
+      message: `${surface} già in stato ${targetLabel}, nessuna azione`,
     };
   }
 
+  // Lo state file va riscritto INTERO: writeState normalizza l'oggetto ricevuto,
+  // quindi passare solo la chiave toccata riporterebbe l'altra superficie al suo
+  // default (un `reserved stop` spegnerebbe di nascosto una manutenzione attiva).
   try {
-    writeState({ public: targetLabel }, statePath);
+    writeState({ ...currentState, [surface]: targetLabel }, statePath);
   } catch (err) {
     return { ok: false, error: 'state_write_failed', message: err.message };
   }
 
-  if (typeof setPublicState === 'function') {
-    setPublicState(targetLabel);
+  if (typeof applyToGate === 'function') {
+    applyToGate(targetLabel);
   }
 
   return {
     ok: true,
     action,
     restart: false,
-    message: `public ${targetLabel} applicato a runtime (nessun riavvio richiesto)`,
+    message: `${surface} ${targetLabel} applicato a runtime (nessun riavvio richiesto)`,
   };
 }
 
@@ -175,14 +194,83 @@ async function handleReset(ctx, request) {
   };
 }
 
+// ── publicOnly: assetto "sito vetrina" ────────────────────────────────────────
+// MACRO trasparente, non un quarto stato: compone leve che restano usabili anche
+// singolarmente, così `status` continua a dire la verità su tre righe e non
+// esistono combinazioni contraddittorie da arbitrare.
+//
+//   on  → reserved stop + admin stop
+//   off → reserved start + admin start
+//
+// ⚠ TERZO PASSO MANCANTE — spegnere il directory listing pubblico faceva parte
+// del progetto, ma e' BLOCCATO da un bug di koa-classic-server v5.1.0: in
+// index.cjs la ricerca del file indice vive dentro il ramo
+// `if (options.dirListing.enabled)`, quindi disabilitare il listing fa
+// rispondere 404 alla radice del sito anche con `index: ["index.ejs"]`
+// configurato e il file presente. Il modulo e' mantenuto dal team: il passo
+// verra' aggiunto qui dopo la release corretta, non aggirato.
+// Vedi TODO.md §Dipendenze e index.js (static server di /www).
+async function handlePublicOnly(ctx, turnOn) {
+  const { configPath, requestRestart } = ctx;
+  const action = `publicOnly.${turnOn ? 'on' : 'off'}`;
+  const steps = [];
+
+  // 1. Superficie riservata (runtime, senza riavvio)
+  const reservedResult = handleRuntimeSurfaceToggle(ctx, 'reserved', !turnOn);
+  if (!reservedResult.ok) return { ...reservedResult, action };
+  steps.push(`reserved ${!turnOn ? 'running' : 'stopped'}${reservedResult.noop ? ' (già così)' : ''}`);
+
+  // 2. Area admin (riscrive enableAdmin: richiede riavvio)
+  let adminChanged = false;
+  try {
+    const adminResult = writeEnableAdmin(configPath, !turnOn);
+    adminChanged = adminResult.changed;
+    steps.push(`admin ${!turnOn ? 'running' : 'stopped'}${adminChanged ? '' : ' (già così)'}`);
+  } catch (err) {
+    return { ok: false, action, error: err.code || 'config_edit_failed', message: err.message };
+  }
+
+  // Il riavvio serve solo se qualcosa che si applica al boot è cambiato davvero:
+  // enableAdmin è letto all'avvio, la superficie riservata no.
+  const needsRestart = adminChanged;
+  if (!needsRestart) {
+    return {
+      ok: true, action, restart: false,
+      noop: reservedResult.noop === true,
+      steps,
+      message: `assetto ${turnOn ? 'publicOnly' : 'normale'} già in vigore: ${steps.join(', ')}`,
+    };
+  }
+
+  const supervisor = detectSupervisor();
+  const restartMode = supervisor ? 'supervisor' : 'self-respawn';
+  if (typeof requestRestart === 'function') {
+    setImmediate(() => requestRestart({ reason: action, mode: restartMode }));
+  }
+
+  return {
+    ok: true,
+    action,
+    restart: true,
+    restartMode,
+    supervisor,
+    steps,
+    message: `assetto ${turnOn ? 'publicOnly' : 'normale'} applicato (${steps.join(', ')}); riavvio in corso`,
+  };
+}
+
 function makeDispatcher(ctx) {
   return async function dispatch(command, request = {}) {
     switch (command) {
       case 'status': return buildStatus(ctx);
       case 'admin.start': return handleAdminToggle(ctx, true);
       case 'admin.stop': return handleAdminToggle(ctx, false);
-      case 'public.start': return handlePublicToggle(ctx, true);
-      case 'public.stop': return handlePublicToggle(ctx, false);
+      case 'public.start': return handleRuntimeSurfaceToggle(ctx, 'public', true);
+      case 'public.stop': return handleRuntimeSurfaceToggle(ctx, 'public', false);
+      case 'reserved.start': return handleRuntimeSurfaceToggle(ctx, 'reserved', true);
+      case 'reserved.stop': return handleRuntimeSurfaceToggle(ctx, 'reserved', false);
+      case 'publicOnly.on': return handlePublicOnly(ctx, true);
+      case 'publicOnly.off': return handlePublicOnly(ctx, false);
       case 'reset': return handleReset(ctx, request);
       default:
         return {
@@ -194,6 +282,13 @@ function makeDispatcher(ctx) {
   };
 }
 
-const KNOWN_COMMANDS = ['status', 'admin.start', 'admin.stop', 'public.start', 'public.stop', 'reset'];
+const KNOWN_COMMANDS = [
+  'status',
+  'admin.start', 'admin.stop',
+  'public.start', 'public.stop',
+  'reserved.start', 'reserved.stop',
+  'publicOnly.on', 'publicOnly.off',
+  'reset',
+];
 
 module.exports = { makeDispatcher, KNOWN_COMMANDS };

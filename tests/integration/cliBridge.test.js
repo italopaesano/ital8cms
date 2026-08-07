@@ -168,7 +168,10 @@ describe('cliBridge status', () => {
     expect(payload.data.httpPort).toBe(TEST_HTTP_PORT);
     expect(payload.data.httpsEnabled).toBe(false);
     expect(payload.data.httpsPort).toBeNull();
-    expect(payload.data.admin).toEqual({ state: 'running' });
+    // `unreachable` segnala che il pannello, pur acceso, e' irraggiungibile
+    // perche' la superficie riservata che lo contiene e' chiusa.
+    expect(payload.data.admin).toEqual({ state: 'running', unreachable: false });
+    expect(payload.data.reserved).toEqual({ state: 'running' });
     expect(payload.data.public).toEqual({ state: 'running' });
     expect(typeof payload.data.uptime).toBe('number');
     expect(payload.data.uptime).toBeGreaterThanOrEqual(0);
@@ -182,6 +185,7 @@ describe('cliBridge status', () => {
     expect(r.stdout).toMatch(new RegExp(`http:\\s+${TEST_HTTP_PORT}`));
     expect(r.stdout).toMatch(/https:\s+disabled/);
     expect(r.stdout).toMatch(/admin state:\s+running/);
+    expect(r.stdout).toMatch(/reserved state:\s+running/);
     expect(r.stdout).toMatch(/public state:\s+running/);
   });
 });
@@ -272,5 +276,74 @@ describe('cliBridge transport errors', () => {
     const payload = JSON.parse(r.stdout.trim());
     expect(payload).toMatchObject({ ok: false, error: 'not_running' });
     expect(payload.message).toMatch(/non sembra in esecuzione/);
+  });
+});
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SUPERFICIE RISERVATA — il perimetro end-to-end
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// L'ordine conta: stop → verifiche → start → verifiche. Come per public,
+// ogni test dipende dallo stato lasciato dal precedente.
+
+describe('cliBridge reserved stop/start (soft, no restart)', () => {
+  test('reserved stop returns ok + restart:false, writes state file', async () => {
+    const r = await runClient(['--json', '--socket', TEST_SOCKET, 'reserved', 'stop']);
+    expect(r.code).toBe(0);
+    const payload = JSON.parse(r.stdout.trim());
+    expect(payload.ok).toBe(true);
+    expect(payload.action).toBe('reserved.stop');
+    expect(payload.restart).toBe(false);
+    expect(fs.readFileSync(STATE_PATH, 'utf8')).toMatch(/"reserved"\s*:\s*"stopped"/);
+  });
+
+  test('status reports reserved stopped and admin unreachable', async () => {
+    const r = await runClient(['--json', '--socket', TEST_SOCKET, 'status']);
+    const payload = JSON.parse(r.stdout.trim());
+    expect(payload.data.reserved.state).toBe('stopped');
+    // enableAdmin resta true: e' proprio il caso in cui `unreachable` conta.
+    expect(payload.data.admin).toEqual({ state: 'running', unreachable: true });
+  });
+
+  // Il cuore della feature: ogni faccia della superficie riservata deve dare 404,
+  // e devono darlo TUTTE ALLO STESSO MODO — una risposta diversa dalle altre
+  // ridiventa un canale di fingerprinting.
+  test.each([
+    ['/admin/',                                'pannello admin (prefisso)'],
+    ['/admin-theme-resources/css/theme.css',   'risorse del tema admin (prefisso)'],
+    ['/pluginPages/adminUsers/login.ejs',      'pagina di login (isAuthEntryPoint via regola)'],
+    ['/pluginPages/adminUsers/userProfile.ejs','pagina autenticata (requiresAuth via regola)'],
+    ['/api/adminUsers/logged',                 'rotta isAuthEntryPoint'],
+    ['/api/adminUsers/userList',               'rotta requiresAuth'],
+    ['/api/admin/ping',                        'sonda del plugin admin'],
+    ['/api/adminUsers/login',                  'varco POST interrogato in GET (niente 405)'],
+  ])('GET %s → 404 when reserved is stopped (%s)', async (urlPath) => {
+    const r = await httpGet(urlPath);
+    expect(r.status).toBe(404);
+  });
+
+  test('the public site keeps working while reserved is stopped', async () => {
+    const r = await httpGet('/api/bootstrap/css/bootstrap.min.css');
+    expect(r.status).toBe(200);
+  });
+
+  test('reserved stop is idempotent (noop) when already stopped', async () => {
+    const r = await runClient(['--json', '--socket', TEST_SOCKET, 'reserved', 'stop']);
+    const payload = JSON.parse(r.stdout.trim());
+    expect(payload.ok).toBe(true);
+    expect(payload.noop).toBe(true);
+  });
+
+  test('reserved start reopens the surface without a restart', async () => {
+    const r = await runClient(['--json', '--socket', TEST_SOCKET, 'reserved', 'start']);
+    expect(r.code).toBe(0);
+    const payload = JSON.parse(r.stdout.trim());
+    expect(payload.restart).toBe(false);
+
+    // Il login torna raggiungibile: 404 non e' piu' la risposta.
+    const login = await httpGet('/pluginPages/adminUsers/login.ejs');
+    expect(login.status).not.toBe(404);
+    // E il pannello torna a comportarsi come prima (302 verso il login da anonimo).
+    const admin = await httpGet('/admin/');
+    expect(admin.status).not.toBe(404);
   });
 });

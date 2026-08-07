@@ -336,3 +336,123 @@ describe('createMaintenanceGate', () => {
     } finally { warn.mockRestore(); }
   });
 });
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// RESERVED GATE — superficie riservata (tutto cio che sta dietro l'autenticazione)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const { createReservedGate, isReservedPrefixPath } = require('../../../core/priorityMiddlewares/runtimeGate');
+
+// Contesto Koa minimo: al gate servono solo path, status, type e body.
+function fakeCtx(reqPath) {
+  return { path: reqPath, status: 200, type: null, body: null };
+}
+
+describe('isReservedPrefixPath', () => {
+  // Specchio esatto di isExemptPath: il maintenance gate ESENTA questi due
+  // prefissi, il reserved gate li PRENDE DI MIRA.
+  test('targets the admin panel prefix', () => {
+    expect(isReservedPrefixPath('/admin', 'admin', 'admin-theme-resources', '')).toBe(true);
+    expect(isReservedPrefixPath('/admin/usersManagment/index.ejs', 'admin', 'admin-theme-resources', '')).toBe(true);
+  });
+
+  // Nessuna regola di accessControl.json5 copre le risorse del tema admin:
+  // senza questo caso resterebbero servite a chiunque, rivelando il pannello.
+  test('targets the admin theme resources prefix', () => {
+    expect(isReservedPrefixPath('/admin-theme-resources/css/theme.css', 'admin', 'admin-theme-resources', '')).toBe(true);
+  });
+
+  test('leaves the public site alone', () => {
+    expect(isReservedPrefixPath('/', 'admin', 'admin-theme-resources', '')).toBe(false);
+    expect(isReservedPrefixPath('/chi-siamo.ejs', 'admin', 'admin-theme-resources', '')).toBe(false);
+    expect(isReservedPrefixPath('/public-theme-resources/css/main.css', 'admin', 'admin-theme-resources', '')).toBe(false);
+  });
+
+  test('honours custom prefixes and globalPrefix', () => {
+    expect(isReservedPrefixPath('/myapp/backoffice/x', 'backoffice', 'admin-theme-resources', '/myapp')).toBe(true);
+    expect(isReservedPrefixPath('/backoffice/x', 'backoffice', 'admin-theme-resources', '/myapp')).toBe(false);
+  });
+});
+
+describe('createReservedGate', () => {
+  const conf = { adminPrefix: 'admin', adminThemeResourcesPrefix: 'admin-theme-resources', globalPrefix: '' };
+
+  test('running: lets everything through untouched', async () => {
+    const gate = createReservedGate({ ital8Conf: conf, initialState: 'running' });
+    const ctx = fakeCtx('/admin');
+    let nextCalled = false;
+    await gate.middleware(ctx, async () => { nextCalled = true; });
+    expect(nextCalled).toBe(true);
+    expect(ctx.status).toBe(200);
+    expect(gate.isClosed()).toBe(false);
+  });
+
+  test('stopped: answers a bare 404 on the admin prefix', async () => {
+    const gate = createReservedGate({ ital8Conf: conf, initialState: 'stopped' });
+    const ctx = fakeCtx('/admin/usersManagment/');
+    let nextCalled = false;
+    await gate.middleware(ctx, async () => { nextCalled = true; });
+    expect(nextCalled).toBe(false);
+    expect(ctx.status).toBe(404);
+    expect(ctx.body).toBe('Not Found');
+  });
+
+  test('stopped: still lets the public site through', async () => {
+    const gate = createReservedGate({ ital8Conf: conf, initialState: 'stopped' });
+    const ctx = fakeCtx('/chi-siamo.ejs');
+    let nextCalled = false;
+    await gate.middleware(ctx, async () => { nextCalled = true; });
+    expect(nextCalled).toBe(true);
+    expect(ctx.status).toBe(200);
+  });
+
+  // Il route-wrap di pluginSys non vede il metodo sbagliato: allowedMethods()
+  // risponde 405 senza entrare nell'handler, e un 405 dice "questo path esiste".
+  // Il gate chiude i path riservati PER PATH, chiudendo anche quel canale.
+  test('stopped: closes reserved route paths regardless of method', async () => {
+    const gate = createReservedGate({ ital8Conf: conf, initialState: 'stopped' });
+    gate.setReservedRoutePaths(new Set(['/api/adminUsers/login', '/api/adminUsers/userList']));
+    const ctx = fakeCtx('/api/adminUsers/login');
+    let nextCalled = false;
+    await gate.middleware(ctx, async () => { nextCalled = true; });
+    expect(nextCalled).toBe(false);
+    expect(ctx.status).toBe(404);
+  });
+
+  test('stopped: a public route path is not in the index and passes', async () => {
+    const gate = createReservedGate({ ital8Conf: conf, initialState: 'stopped' });
+    gate.setReservedRoutePaths(new Set(['/api/adminUsers/login']));
+    const ctx = fakeCtx('/api/bootstrap/css/bootstrap.min.css');
+    let nextCalled = false;
+    await gate.middleware(ctx, async () => { nextCalled = true; });
+    expect(nextCalled).toBe(true);
+  });
+
+  test('setReservedRoutePaths accepts an array too', () => {
+    const gate = createReservedGate({ ital8Conf: conf, initialState: 'stopped' });
+    expect(() => gate.setReservedRoutePaths(['/api/x/y'])).not.toThrow();
+    expect(() => gate.setReservedRoutePaths(undefined)).not.toThrow();
+  });
+
+  test('setState toggles at runtime and rejects invalid values', async () => {
+    const gate = createReservedGate({ ital8Conf: conf, initialState: 'running' });
+    gate.setState('stopped');
+    expect(gate.getState()).toBe('stopped');
+    expect(gate.isClosed()).toBe(true);
+    gate.setState('running');
+    expect(gate.isClosed()).toBe(false);
+    expect(() => gate.setState('paused')).toThrow(/stato non valido/);
+  });
+
+  // deny() e condiviso con pluginSys e adminAccessControl proprio perche' le tre
+  // risposte devono essere IDENTICHE: una differenza fra loro tornerebbe a essere
+  // un canale di fingerprinting.
+  test('deny() produces a bare 404 with no telltale headers', () => {
+    const gate = createReservedGate({ ital8Conf: conf, initialState: 'stopped' });
+    const ctx = fakeCtx('/whatever');
+    gate.deny(ctx);
+    expect(ctx.status).toBe(404);
+    expect(ctx.body).toBe('Not Found');
+    expect(ctx.type).toBe('text/plain; charset=utf-8');
+  });
+});
