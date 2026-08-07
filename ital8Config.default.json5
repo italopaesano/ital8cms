@@ -159,7 +159,16 @@
   //   • status               (reale)
   //   • admin start|stop     (hard: riscrive enableAdmin nel config + riavvia il processo)
   //   • public start|stop    (soft: applica un middleware "torniamo subito" senza riavvio)
+  //   • reserved start|stop  (soft: 404 su TUTTO cio che sta dietro l'autenticazione —
+  //                           login, rotte autenticate, pannello admin — senza riavvio)
+  //   • publicOnly on|off    (macro "sito vetrina": reserved stop + admin stop; riavvia)
   //   • reset <target>       (config di un plugin/tema ai default; offline o --online)
+  //   • migrate <target>     (applica le migrazioni di config pendenti)
+  //
+  // Le tre aree sono ANNIDATE, non parallele: `admin` sta dentro `reserved`.
+  // `reserved stop` rende irraggiungibile anche un pannello acceso (`status` lo
+  // dichiara). Con la superficie chiusa la pagina di login non esiste piu': la
+  // sola via di rientro e il terminale (`reserved start`).
   //
   // Utilizzo (forma che funziona sempre dalla root del progetto):
   //   npm run cli -- status                # human-readable
@@ -218,6 +227,12 @@
   //                         chiavi top-level nuove, non quelle annidate.
   //     • lista VUOTA []  → massima chiusura: nessun endpoint pubblico raggiungibile,
   //                         login incluso (l'unica via d'uscita è il terminale).
+  //
+  //   ⚠ Le esenzioni valgono finché la SUPERFICIE RISERVATA è aperta. Con
+  //   `npm run cli -- reserved stop` attivo vengono SOSPESE e il sito risponde 503
+  //   ovunque: servono a far entrare un amministratore, e a superficie chiusa non
+  //   entra piu' nessuno — resterebbe solo la differenza fra 404 (esenti) e 503
+  //   (tutto il resto), che equivale a pubblicare la mappa dell'area riservata.
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   "maintenance": {

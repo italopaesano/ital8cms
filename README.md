@@ -49,7 +49,7 @@ Server runs on: `http://localhost:3000`
 ### Project Documentation
 
 - **[Panoramica documentazione](./docs/archive/documentation-overview.it.md)** - panoramica storica (archiviata; vedi CLAUDE.md e `docs/`)
-- **[CLI control plane](./docs/cli-control-plane.it.md)** - pilotare un'istanza in esecuzione da terminale/SSH con `ital8cms-cli` (`npm run cli -- …`): attivare/disattivare l'area admin, manutenzione del sito pubblico, reset config, migrazioni dei config
+- **[CLI control plane](./docs/cli-control-plane.it.md)** - pilotare un'istanza in esecuzione da terminale/SSH con `ital8cms-cli` (`npm run cli -- …`): attivare/disattivare l'area admin, manutenzione del sito pubblico, chiusura della superficie riservata (assetto "sito vetrina"), reset config, migrazioni dei config
 
 ## Technology Stack
 
@@ -171,11 +171,15 @@ usual way to do it over SSH. Full guide:
 [docs/cli-control-plane.it.md](./docs/cli-control-plane.it.md).
 
 ```bash
-npm run cli -- status          # pid, uptime, ports, admin state, public state
+npm run cli -- status          # pid, uptime, ports, admin/reserved/public state
 npm run cli -- admin stop      # disable the admin area (restarts the process)
 npm run cli -- admin start     # enable it again
 npm run cli -- public stop     # public site in maintenance (503, no restart)
 npm run cli -- public start    # public site back online
+npm run cli -- reserved stop   # everything behind auth (login, admin panel): 404, no restart
+npm run cli -- reserved start  # reserved surface reachable again
+npm run cli -- publicOnly on   # showcase layout: reserved stop + admin stop (restarts)
+npm run cli -- publicOnly off  # back to the normal layout
 npm run cli -- reset <target>  # plugin/theme configs back to defaults
 npm run cli -- migrate <target> # apply pending config migrations (--dry-run)
 ```

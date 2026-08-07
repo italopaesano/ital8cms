@@ -1,4 +1,4 @@
-<!-- ital8doc v1-1 · tipo: guide · lang: it · rev: 2 · ref -->
+<!-- ital8doc v1-1 · tipo: guide · lang: it · rev: 3 · ref -->
 > 🌐 Italian reference edition (always up to date). English `deployment.md` is a stub until release.
 # Deployment — ital8cms
 
@@ -70,11 +70,14 @@ completa: [`cli-control-plane.it.md`](./cli-control-plane.it.md).
 ```bash
 cd /percorso/di/ital8cms
 
-npm run cli -- status          # pid, uptime, porte, stato admin, stato public
+npm run cli -- status          # pid, uptime, porte, stato admin/reserved/public
 npm run cli -- public stop     # finestra di manutenzione: 503 + Retry-After (nessun riavvio)
 npm run cli -- public start    # sito pubblico di nuovo online
 npm run cli -- admin stop      # disattiva l'area admin (riscrive enableAdmin + riavvia)
 npm run cli -- admin start     # la riattiva
+npm run cli -- reserved stop   # chiude tutto cio che sta dietro l'autenticazione: 404 (nessun riavvio)
+npm run cli -- reserved start  # la riapre
+npm run cli -- publicOnly on   # assetto "sito vetrina": reserved stop + admin stop (riavvia)
 ```
 
 Note rilevanti in produzione:
