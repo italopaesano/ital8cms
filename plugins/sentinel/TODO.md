@@ -27,6 +27,13 @@ Le fasi (v1/v2/v3) sono indicative dell'ordine, non di una scadenza.
 - Deployment attuale: **processo singolo, senza reverse proxy** — entrambi gli
   scenari futuri vanno però predisposti fin da subito (vedi §13)
 - Dipendenze npm: **zero** (coerente con la filosofia del progetto)
+- Regole malformate: **fail-open** + `strictValidation` opzionale
+- Osservazione dell'esito delle richieste lasciate passare: **in v1**
+- `censusIpMode`: default **`count`**
+- **Il set di regole di default non blocca nulla.** All'installazione sentinel è
+  un *osservatorio*, non un filtro: classifica il traffico e lo registra, senza
+  agire. L'enforcement è una promozione consapevole fatta dall'amministratore
+  dopo aver letto i propri dati. Vedi §2 → *Set di regole di default*.
 
 ---
 
@@ -87,15 +94,37 @@ Le fasi (v1/v2/v3) sono indicative dell'ordine, non di una scadenza.
 - [ ] Combinatori `all` / `any` / `not`
 - [ ] `appliesTo`: `anonymous` | `authenticated` | `any`
 
-### Set di regole di default
+### Set di regole di default — un osservatorio, non un filtro
 
-- [ ] `sentinelRules.default.json5` con un set **conservativo** e commentato
-      (le sole regole sicure al 99% su un CMS che non esegue PHP)
-- [ ] Preset opzionali attivabili singolarmente: scanner comuni, CMS estranei
-      (WordPress/Joomla/Drupal), file sensibili (`.env`, `.git`, dump SQL),
-      metodi anomali. Disattivati di default, documentati uno per uno.
+**Decisione: il set di default non blocca nulla.** Tutte le regole fornite hanno
+`action: "monitor"`. All'installazione sentinel comincia semplicemente ad
+analizzare il traffico; l'amministratore legge i propri dati e poi decide cosa
+promuovere a `block`.
+
+Conseguenza sul modello: le regole di default non sono una *blocklist*, sono una
+**tassonomia del traffico**. Ogni regola è un classificatore che dà un nome a una
+famiglia di richieste.
+
+- [ ] `sentinelRules.default.json5` — tutte le regole in `monitor`, commentate una
+      per una con cosa osservano e perché
+- [ ] Campo `category` sulle regole (`scanner`, `cms-probe`, `sensitive-file`,
+      `anomalous-method`, `ua-mismatch`, `traversal`, …): serve ad aggregare il log
+      per famiglia invece che per singolo nome di regola
+- [ ] Bucket implicito **`unclassified`** nelle statistiche: il traffico anomalo che
+      nessuna regola descrive è esattamente dove si scoprono le regole mancanti
+- [ ] Flusso di **promozione `monitor` → `block`** come percorso principale del
+      prodotto, non come dettaglio di configurazione
+- [ ] Indicatori di confidenza calcolati dal log a supporto della promozione:
+      quanti hit, quanti IP distinti, quota da bot riconosciuti, e soprattutto
+      **quanti utenti autenticati sarebbero stati colpiti** (se > 0, non promuovere)
 - [ ] Tester delle regole: data una richiesta d'esempio, dice quale regola matcha
       e perché (indispensabile per la GUI del twin admin, utile in CLI)
+
+> **Nota architetturale.** Il fatto che il default non blocchi *non* rende
+> superfluo lo slot pre-router: per osservare il traffico verso `/api/*` bisogna
+> stare prima del router, perché una rotta matchata non prosegue nella catena.
+> Un middleware normale (post-router) vedrebbe solo le pagine — cioè proprio non
+> la superficie dove vivono gli attacchi all'autenticazione.
 
 ---
 
@@ -253,14 +282,28 @@ e accumulare statistiche locali sulle firme viste.
 - [ ] Nota nel README sulla base giuridica: IP pieni per 365 giorni a fini di
       sicurezza (legittimo interesse, considerando 49 GDPR)
 
-### Osservazione dell'esito (non solo dei blocchi)
+- [ ] **Tetto di dimensione** oltre alla retention temporale (`maxFileBytes` +
+      budget totale della data dir, eviction dal più vecchio). Sotto attacco un
+      file giornaliero può crescere di gigabyte: un disco pieno non rompe sentinel,
+      rompe **l'intero sito**. La retention a tempo da sola non protegge da questo.
+- [ ] Fuso orario della rotazione per data allineato a quello di `analytics`
+      (i nomi file `YYYY-MM-DD` devono significare la stessa cosa nei due plugin)
+- [ ] Lettore da riga di comando (`npm run cli -- sentinel report` o script
+      dedicato): senza il twin admin, la v1 sarebbe **write-only** — produrrebbe
+      dati che nessuno può leggere
+
+### Osservazione dell'esito (non solo dei blocchi) — **in v1**
 
 - [ ] Per le richieste **lasciate passare**, `await next()` e osservazione dello
       status finale: permette di scoprire pattern di attacco per cui non esiste
       ancora una regola (es. «questo IP ha collezionato 40 404 diversi in un minuto»)
+- [ ] **Osservare solo gli esiti non-2xx.** Un 200 non è un segnale; 404/403/500 sì.
+      Taglia il volume di circa il 99% e conserva tutto il valore.
 - [ ] Solo aggregato, non una riga di log per richiesta (il volume sarebbe quello
       di analytics)
 - [ ] Attivabile/disattivabile: ha un costo su ogni richiesta servita
+- [ ] Nota: durante la manutenzione (`public stop`) il 503 arriva **prima** di
+      sentinel, quindi non c'è osservazione. Comportamento corretto, da documentare.
 
 ---
 
@@ -377,7 +420,36 @@ e le decisioni che le rendono indolori vanno prese **ora**, non dopo.
 
 ---
 
-## 14. Punti aperti / da rivalutare
+## 14. Autodifesa: limiti di risorsa
+
+Sentinel accumula aggregati **indicizzati da valori che l'attaccante controlla**.
+Ogni struttura di questo tipo è una potenziale via di esaurimento delle risorse
+*contro sentinel stesso*: chi randomizza l'ordine degli header genera una firma
+nuova ad ogni richiesta e fa crescere il censimento senza limite, in memoria e su
+disco. Stessa forma di problema che `rateLimiter` risolve con lo sweep periodico.
+
+- [ ] **Censimento delle firme**: tetto massimo di firme tracciate + eviction LRU
+- [ ] **Coerenza di sessione** (primo UA/IP visto per sessione): tetto + TTL
+- [ ] **Osservazione degli esiti per IP**: tetto + TTL
+- [ ] Sweep periodico delle strutture scadute (modello: `rateLimiter` `sweepIntervalSeconds`)
+- [ ] Contatore delle eviction esposto nelle statistiche: un tasso di eviction alto
+      **è esso stesso il segnale** di un attacco che randomizza le firme
+- [ ] Memoizzazione del fingerprint sul socket: con keep-alive molte richieste
+      condividono la connessione e gli header cambiano poco → si evita di
+      ricalcolare l'hash decine di volte per pagina
+
+### Salt del fingerprint
+
+- [ ] `fingerprintSalt` generato **per installazione**, non un placeholder condiviso:
+      altrimenti le firme sono confrontabili fra siti diversi, che è esattamente ciò
+      che volevamo evitare
+- [ ] Riuso del meccanismo esistente: `scripts/lib/sessionKeyManager.js` (wizard) +
+      avviso al boot sul modello di `core/sessionSecurity.js` se il salt è ancora
+      quello di default
+
+---
+
+## 15. Punti aperti / da rivalutare
 
 - [ ] **Denylist persistente propria** — oggi delegata interamente a `rateLimiter`
       (soluzione A). Da rivalutare se emerge il bisogno di ban permanenti non scadenti.
