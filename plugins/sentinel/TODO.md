@@ -302,8 +302,10 @@ e accumulare statistiche locali sulle firme viste.
       configurabile del budget disco (es. 70%), notifica — via `mailer` se
       disponibile, comunque nel log applicativo. Avvisare *prima* di dover
       cancellare dati, non dopo.
-      Destinatario: **campo di configurazione esplicito** (`alertRecipient`), non
-      dedotto dagli account. Motivi: `adminUsers.getObjectToShareToOthersPlugin()`
+      Destinatario: **campo di configurazione esplicito** (`alertRecipient`) —
+      **soluzione provvisoria e consapevole**, da rendere più robusta più avanti
+      (vedi §15, API di lookup utenti). Non dedotto dagli account. Motivi:
+      `adminUsers.getObjectToShareToOthersPlugin()`
       oggi restituisce `{}` — non esiste alcuna API per risolvere l'email di root —
       e comunque un indirizzo operativo (monitoraggio, on-call) è spesso diverso
       dall'account amministrativo. Vedi §7 per l'aggancio a `mailer`.
