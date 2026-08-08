@@ -185,6 +185,12 @@ espliciti: `all`, `any`, `not`.
 **I path si scrivono senza `globalPrefix`**, che viene anteposto dal codice —
 stessa convenzione di `maintenance.exemptPaths`.
 
+**Con `hideExtension` attivo** le regole per `extension` non cambiano — una sonda
+`.php` arriva sempre con l'estensione, perché i clean URL riguardano solo le
+pagine del sito. Ma una regola per `path` verso una pagina interna deve coprire
+**entrambe le forme** (`/segreta` e `/segreta.ejs`): con i clean URL il
+visitatore può chiedere l'una o l'altra, e coprirne una sola lascia un varco.
+
 **La querystring** viene confrontata sia nella forma grezza sia in quella
 decodificata: `union\s+select` matcha anche `union+select` e `union%20select`,
 che sono le forme in cui i tentativi arrivano davvero.

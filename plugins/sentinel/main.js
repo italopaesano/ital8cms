@@ -255,6 +255,13 @@ function shouldEnforce(rule, subject) {
   // Tetto globale: in "monitor" nulla agisce, nemmeno una regola `block`.
   if (custom.mode !== 'enforce') return false;
 
+  // Tetto del gate. Il gate lo applica comunque per conto suo — è la difesa che
+  // deve reggere anche con un motore impazzito — ma va considerato ANCHE qui,
+  // altrimenti il log mente: con `sentinel monitor` attivo il motore scriverebbe
+  // `enforced: true` su una richiesta che è passata. Un log che racconta blocchi
+  // mai avvenuti è peggio di un log assente, perché ci si fa affidamento.
+  if (gateState !== 'running') return false;
+
   if (subject.authenticated) {
     const authConf = custom.authenticatedTraffic || {};
     if (authConf.mode !== 'enforce') return false;

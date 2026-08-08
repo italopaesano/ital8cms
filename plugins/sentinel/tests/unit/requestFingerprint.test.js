@@ -116,6 +116,43 @@ describe('buildFingerprint — indipendenza dallo User-Agent', () => {
   });
 });
 
+describe('buildFingerprint — memoizzazione sul socket', () => {
+  // Con keep-alive una pagina porta decine di richieste sulla stessa
+  // connessione, e un client non cambia libreria HTTP a metà connessione.
+  function ctxWithSocket(headerPairs, socket) {
+    const ctx = makeCtx(headerPairs);
+    ctx.req.socket = socket;
+    return ctx;
+  }
+
+  test('la seconda richiesta sulla stessa connessione riusa l impronta', () => {
+    const socket = {};
+    const first = buildFingerprint(ctxWithSocket(CURL_HEADERS, socket));
+    const second = buildFingerprint(ctxWithSocket(CHROME_HEADERS, socket));
+    // Stessa connessione → stesso oggetto, senza ricalcolo (header ignorati).
+    expect(second).toBe(first);
+  });
+
+  test('connessioni diverse non condividono la cache', () => {
+    const a = buildFingerprint(ctxWithSocket(CURL_HEADERS, {}));
+    const b = buildFingerprint(ctxWithSocket(CHROME_HEADERS, {}));
+    expect(b).not.toBe(a);
+    expect(b.fp).not.toBe(a.fp);
+  });
+
+  test('un salt cambiato a caldo invalida la cache', () => {
+    const socket = {};
+    const primo = buildFingerprint(ctxWithSocket(CURL_HEADERS, socket), { salt: 'a' });
+    const dopo = buildFingerprint(ctxWithSocket(CURL_HEADERS, socket), { salt: 'b' });
+    expect(dopo.fp).not.toBe(primo.fp);
+  });
+
+  test('un socket non estendibile non fa fallire nulla', () => {
+    const socket = Object.freeze({});
+    expect(() => buildFingerprint(ctxWithSocket(CURL_HEADERS, socket))).not.toThrow();
+  });
+});
+
 describe('buildFingerprint — salt', () => {
   test('senza salt le impronte sono confrontabili fra installazioni', () => {
     expect(buildFingerprint(makeCtx(CURL_HEADERS), { salt: '' }).fp)

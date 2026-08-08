@@ -50,6 +50,98 @@ Le fasi (v1/v2/v3) sono indicative dell'ordine, non di una scadenza.
 
 ---
 
+## Piano di lavoro — in che ordine, e perché
+
+Le sezioni che seguono elencano *cosa* manca. Questa dice *in che ordine
+affrontarlo*, che è una decisione diversa e non deducibile dall'elenco.
+
+### Il vincolo che detta l'ordine
+
+La v1 è **write-only**: sentinel osserva, classifica e registra, ma per leggere
+quei dati bisogna aprire i JSONL a mano e per promuovere una regola bisogna
+editare un file. Il percorso *osserva → capisci → promuovi* ha la prima fase
+completa e le altre due scoperte.
+
+Aggiungere azioni adesso significherebbe **aggiungere capacità a qualcosa che
+nessuno può ancora operare**: un decoy di cui non si sa se è mai scattato vale
+meno di una dashboard che mostra cosa si è già intercettato.
+
+Da qui l'inversione rispetto alla suddivisione v1/v2/v3 della §17: **prima si
+rende leggibile e governabile quello che c'è, poi si aggiungono le azioni.**
+
+| # | Passo | Perché lì |
+|---|---|---|
+| **0** | Debito e attriti | Chiudere le cose piccole già mature prima di aprire fronti nuovi |
+| **1** | `adminSentinel` — Vista Dati | L'unico passo che aumenta il valore del lavoro già fatto invece di aggiungerne. Stabilizza il contratto dell'oggetto condiviso prima che altre feature ci si appoggino |
+| **2** | Promozione e retrocessione | Completa le fasi 2 e 3. **La retrocessione conta più della promozione**: un percorso a senso unico invita a non imboccarlo mai |
+| **3** | Tester delle regole | Serve appena si comincia a scrivere regole proprie, ed è il prerequisito per scrivere in sicurezza quelle dei passi successivi |
+| **4** | `redirect` + `decoy` L0/L1 | Gate, validatore e non-interferenza sono **già scritti e testati**: manca solo chi produce il corpo. Miglior rapporto valore/codice nuovo |
+| **5** | Canary (`decoy` L2) + `banClient` + allerte | Il salto da difesa passiva a **sensore**: certezza di un attaccante attivo, non inferenza |
+| **6** | Coerenza di sessione | Miglior segnale del blocco autenticato, ma introduce stato e foglie nuove: meglio quando la GUI può mostrarne gli effetti |
+| **7** | `drop` reale e `tarpit` | Le uniche azioni che possono farti male da sole (retry aggressivi, esaurimento di file descriptor) |
+| **8** | Reputazione locale e apprendimento | Poggia sul censimento, che già raccoglie i dati: qui si aggiunge solo l'inferenza |
+
+I passi **0-3 rendono usabile** quello che c'è. I **4-5** aggiungono l'inganno.
+Il **6** copre gli account. I **7-8** sono raffinamento.
+
+### Dettaglio dei passi
+
+**Passo 0 — Debito e attriti.** Riscrittura di `core/priorityMiddlewares/README.md`;
+test di identità byte-per-byte per il blocco di sentinel (esiste per il reserved
+gate, non per questo); memoizzazione del fingerprint sul socket; chiusura per
+**decisione** — non per implementazione — delle voci §9 *prefissi admin* e §16
+*hideExtension*.
+
+**Passo 1 — `adminSentinel`, Vista Dati.** Plugin twin con `dependency:
+{ sentinel: "^1.0.0" }` — qui la dipendenza **è** legittima, al contrario di
+quella verso `rateLimiter`: il twin senza il service non ha ragione di esistere.
+Mostra KPI per categoria, top regole con `authenticatedHits` in evidenza, top
+impronte, sospetti scanner da `getSuspectedScanners()`, timeline, contatore
+delle eviction. Il lettore dei JSONL fa la **fusione degli shard**, così il
+giorno del cluster non si riscrive.
+
+**Passo 2 — Promozione e retrocessione.** `setRuleAction(name, action)` e
+`setMode(mode)` sull'oggetto condiviso, editor JSON5 raw, pulsanti sulla Vista
+Dati. ⚠ Usare `setJson5Key`/`editJson5` e **mai** un `saveJson5` dell'oggetto
+intero: perderebbe i commenti, che nel file delle regole sono metà del valore.
+
+**Passo 3 — Tester delle regole.** Funzione pura che restituisce verdetto **e
+traccia** delle foglie che hanno matchato. Il costo vero è la traccia:
+`evaluateNode` oggi restituisce un booleano e va istrumentata con una funzione
+separata, non con un flag che appesantisca il percorso caldo. Riusabile come
+lettore CLI (`sentinel test <path>`), chiudendo in parte la voce §15.
+
+**Passo 4 — `redirect` + `decoy` L0/L1.** `redirect` è quasi finito (validazione,
+allowlist e divieto del 301 esterno sono già in `ruleValidator`): manca la
+`respond`. Per il decoy: risoluzione con precedenza a `decoys/data/`, servizio
+fuori dalla pipeline EJS, e un corredo distribuito (finto `wp-login.php`, finto
+`phpinfo()`, finto `.env`).
+
+**Passo 5 — Canary.** Token nel decoy + regola trappola + `banClient()` immediato
++ notifica `mailer` (che chiude anche l'allerta sul tasso di eviction, §6).
+
+**Passo 6 — Coerenza di sessione.** `BoundedStore` per sessione con tetto e TTL
+(le sessioni costano nulla da creare: altra chiave controllata dall'attaccante),
+foglia `sessionAnomaly`, cadenza per account. **È qui che scatta `migrations/`**:
+aggiungere foglie è additivo e il merge del boot lo copre, ma una rinomina o una
+rimozione va dichiarata *nello stesso passo*, bumpando la `schemaVersion` del
+**descrittore** (regola dell'orologio).
+
+**Passi 7-8.** Vedi §3 e §5.
+
+### Trasversali, da fare quando servono e non come passo a sé
+
+| Voce | Quando |
+|---|---|
+| `migrations/` | Al primo cambio non additivo dello schema — realisticamente al passo 6 |
+| `keyResolver` in `core/` | Quando `trustProxy` verrà davvero attivato: oggi sentinel ha la sua versione, che conta da destra, e consolidarle a freddo è churn |
+| Limiti in cluster documentati | Insieme al passo 1, dove il lettore fa già la fusione degli shard |
+| Retention del censimento | Solo se qualcuno attiva `censusIpMode: "full"` |
+| Salt nel wizard | Quando si toccherà `sessionKeyManager` per altro |
+| Punto cieco `bodyParser`, profilo `demo`, HTTP/2, `app.proxy` | Voci di **vigilanza**: si chiudono con una decisione scritta, non con codice |
+
+---
+
 ## 1. Infrastruttura
 
 - [x] `sentinelGate` in `core/priorityMiddlewares/runtimeGate.js` (guscio pre-router)
@@ -374,7 +466,13 @@ e accumulare statistiche locali sulle firme viste.
 
 - [x] `/.well-known/acme-challenge/` — bloccarlo impedisce il rinnovo Let's Encrypt
       e fa cadere l'HTTPS dopo 90 giorni, con una causa che nessuno collegherà al filtro
-- [ ] Prefissi admin quando la superficie riservata è aperta
+- [x] ~~Prefissi admin quando la superficie riservata è aperta~~ — **archiviata,
+      non implementata**: la preoccupazione era di non chiudere fuori gli
+      amministratori, ma il problema è già risolto altrove e meglio, da
+      `authenticatedTraffic.mode: "monitor"` più `enforceExemptRoles: [0, 1]`.
+      Bloccare una scansione **anonima** verso `/admin/*` è invece desiderabile:
+      esentare quei prefissi renderebbe il pannello l'unico posto dove il filtro
+      non guarda.
 - [x] `curl` **in quanto tale** non è ostile (health check, webhook, monitoraggio,
       consumer API): va colpito `curl che chiede /wp-login.php`, non `curl`
 - [x] La firma bot generica `\bbot\b` matcha Googlebot: mai usarla per bloccare
@@ -510,8 +608,14 @@ client.
       richiesta con body malformato riceve 400 da bodyParser e sentinel non la vede
       né la registra. Valutare se intercettare quel caso (e come, senza spostare
       sentinel a monte e perdere sessione e body).
-- [ ] **Interazione con `hideExtension`** — verificare il comportamento delle regole
-      per estensione quando i clean URL sono attivi
+- [x] **Interazione con `hideExtension`** — verificato, **nessuna modifica al
+      codice necessaria**. Le regole per `extension` non sono toccate: una sonda
+      `.php` arriva sempre con l'estensione, perché il clean URL riguarda solo le
+      pagine del sito. Le regole per `path` verso pagine interne invece **devono
+      coprire entrambe le forme** (`/segreta` e `/segreta.ejs`) — stessa lezione
+      imparata da `adminAccessControl` in v2.70.1. Documentato in
+      `sentinelRules.default.json5` e nel README, non risolvibile nel codice
+      perché dipende da come l'amministratore scrive le proprie regole.
 - [ ] **Profilo `demo`** — decidere se sentinel debba comportarsi diversamente
       (probabilmente no, ma va deciso esplicitamente)
 - [ ] **HTTP/2** — oggi `httpsManager` non lo abilita. Se un domani lo facesse,

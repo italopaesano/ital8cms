@@ -46,6 +46,11 @@
 //         roleIds, fingerprint, fingerprintClass.
 // I path si scrivono SENZA globalPrefix, che viene anteposto dal codice.
 //
+// ⚠ CON `hideExtension` ATTIVO: le regole per `extension` non cambiano (una sonda
+// .php arriva sempre con l'estensione), ma una regola per `path` verso una pagina
+// interna deve coprire ENTRAMBE le forme — `/segreta` e `/segreta.ejs` — perché
+// con i clean URL il visitatore può chiedere l'una o l'altra.
+//
 // ─── ESENZIONI CHE NON TROVI QUI ──────────────────────────────────────────────
 // /.well-known/ (rinnovo dei certificati Let's Encrypt) è esente nel CORE, non
 // qui: dev'essere una precondizione, non una decisione cancellabile per

@@ -180,6 +180,21 @@ function classifyHeaderProfile(headers) {
 }
 
 /**
+ * Chiave sotto cui l'impronta viene memoizzata sull'oggetto socket.
+ *
+ * Con keep-alive una singola pagina porta con sé decine di richieste sulla
+ * STESSA connessione — 40 asset non sono un caso raro — e per definizione un
+ * client non cambia libreria HTTP a metà connessione: l'impronta sarebbe
+ * ricalcolata quaranta volte identica, hash compreso.
+ *
+ * La memoizzazione vive sul socket e non su una mappa nostra proprio perché così
+ * non serve alcuna gestione della scadenza: quando la connessione si chiude, il
+ * socket viene raccolto e la voce sparisce con lui. Nessun tetto da imporre,
+ * nessuno sweep, nessuna chiave controllata dall'attaccante che possa crescere.
+ */
+const FINGERPRINT_CACHE_KEY = Symbol.for('ital8cms.sentinel.fingerprint');
+
+/**
  * Costruisce l'impronta di una richiesta.
  *
  * @param {object} ctx - Contesto Koa
@@ -194,6 +209,14 @@ function buildFingerprint(ctx, options = {}) {
   const salt = typeof options.salt === 'string' ? options.salt : '';
   const headers = (ctx && ctx.headers) || {};
   const req = (ctx && ctx.req) || {};
+
+  // Riuso dalla stessa connessione, se l'impronta è già stata calcolata con lo
+  // stesso salt (che può cambiare a caldo via reloadConfig).
+  const socket = req.socket || null;
+  if (socket) {
+    const cached = socket[FINGERPRINT_CACHE_KEY];
+    if (cached && cached.salt === salt) return cached.value;
+  }
 
   const headerOrder = extractHeaderOrder(req);
   const httpVersion = req.httpVersion || '1.1';
@@ -245,7 +268,7 @@ function buildFingerprint(ctx, options = {}) {
   // atipici finiscono lì. Si segnala solo il caso netto.
   const coherent = !(claimedBrowser !== null && headerProfile === 'minimal');
 
-  return {
+  const result = {
     fp,
     fpClass: {
       family,
@@ -257,6 +280,17 @@ function buildFingerprint(ctx, options = {}) {
       botName,
     },
   };
+
+  if (socket) {
+    try {
+      socket[FINGERPRINT_CACHE_KEY] = { salt, value: result };
+    } catch (_err) {
+      // Socket non estendibile (doppio di test, proxy sigillato): la
+      // memoizzazione è un'ottimizzazione, non un requisito.
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -283,4 +317,5 @@ module.exports = {
   classifyHeaderProfile,
   extractHeaderOrder,
   MAX_UA_LENGTH,
+  FINGERPRINT_CACHE_KEY,
 };
