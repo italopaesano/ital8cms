@@ -69,6 +69,32 @@ function warnInitRequired() {
   ].join('\n'));
 }
 
+// Box [SENTINEL]: la cartella del plugin esiste ma il motore non è finito nello
+// slot pre-router. Il sito funziona, ma NON sta filtrando né osservando nulla —
+// e un plugin di sicurezza che tace è peggio di un plugin di sicurezza assente,
+// perché lascia credere di essere in funzione.
+function warnSentinelEngineMissing(pluginState) {
+  const line = '[SENTINEL] ' + '═'.repeat(54);
+  const reason = pluginState === 'installed'
+    ? 'il plugin è caricato ma non espone un motore valido (getObjectToShareToOthersPlugin)'
+    : `stato del plugin: ${pluginState || 'sconosciuto'}`;
+  console.warn([
+    '',
+    line,
+    '[SENTINEL]  ⚠  filtro delle richieste NON attivo',
+    line,
+    `[SENTINEL]  ${reason}`,
+    '[SENTINEL]',
+    '[SENTINEL]  Lo slot pre-router è vuoto: nessuna richiesta viene filtrata',
+    '[SENTINEL]  né osservata. Il sito funziona normalmente.',
+    '[SENTINEL]',
+    '[SENTINEL]  Controlla plugins/sentinel/pluginConfig.json5 (active: 1) e i',
+    '[SENTINEL]  messaggi [PLUGINS] più sopra.',
+    line,
+    '',
+  ].join('\n'));
+}
+
 const materializeMissingConfigs = require('./core/materializeMissingConfigs');
 const reconcileSchemaVersions = require('./core/reconcileSchemaVersions');
 const { reportPendingMigrations } = require('./core/migrationRunner');
@@ -88,6 +114,7 @@ const priorityMiddlewares = require('./core/priorityMiddlewares/priorityMiddlewa
 const router = priorityMiddlewares.router;
 const maintenanceGate = priorityMiddlewares.maintenanceGate;
 const reservedGate = priorityMiddlewares.reservedGate;
+const sentinelGate = priorityMiddlewares.sentinelGate;
 
 // CLI control plane (unix socket) — avviato subito dopo i priority middlewares,
 // indipendente dal server HTTP. Se il bind fallisce o cli.enabled=false
@@ -112,6 +139,13 @@ cliBridge.start(ital8Conf, {
     console.log(`[cliBridge] reserved state → ${newState}`);
   },
   getReservedState: () => reservedGate ? reservedGate.getState() : 'running',
+  setSentinelState: (newState) => {
+    if (sentinelGate) sentinelGate.setState(newState);
+    console.log(`[cliBridge] sentinel state → ${newState}`);
+  },
+  getSentinelState: () => sentinelGate ? sentinelGate.getState() : 'running',
+  // Distinto dallo stato: un gate 'running' senza motore non sta filtrando nulla.
+  hasSentinelEngine: () => sentinelGate ? sentinelGate.hasEngine() : false,
 }).catch((err) => {
   console.error('[cliBridge] errore inatteso durante l\'avvio:', err && err.message ? err.message : err);
 });
@@ -229,6 +263,26 @@ async function startApp() {
   if (reservedGate) {
     reservedGate.setReservedRoutePaths(pluginSys.getReservedRoutePaths());
   }
+
+  // ── Motore del filtro richieste nello slot pre-router ──────────────────────
+  // Il gate è già montato (fra maintenance e reserved) ma è nato vuoto: i plugin
+  // non esistevano ancora. Qui riceve il proprio motore, con lo stesso schema
+  // usato sopra da setReservedRoutePaths.
+  //
+  // Se il plugin `sentinel` è presente e attivo ma lo slot resta vuoto, il sito
+  // gira SENZA filtro in silenzio — inaccettabile per un plugin di sicurezza,
+  // quindi lo si dice a voce alta. Non è fatale: sentinel non è essenziale, e un
+  // sito senza filtro è un sito normale.
+  if (sentinelGate) {
+    const sentinelEngine = pluginSys.getSharedObject('sentinel');
+    const engineInstalled = sentinelGate.setEngine(sentinelEngine);
+    if (engineInstalled) {
+      console.log(`[sentinel] motore installato nello slot pre-router (stato gate: ${sentinelGate.getState()})`);
+    } else if (fs.existsSync(path.join(__dirname, 'plugins', 'sentinel'))) {
+      warnSentinelEngineMissing(pluginSys.getPluginState('sentinel'));
+    }
+  }
+
   const getObjectsToShareInWebPages = pluginSys.getObjectsToShareInWebPages();
 
   // Ottieni le funzioni globali da esportare nei template EJS

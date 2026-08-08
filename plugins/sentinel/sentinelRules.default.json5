@@ -1,0 +1,240 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// sentinelRules — regole del filtro delle richieste
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// QUESTO SET NON BLOCCA NULLA. Tutte le regole sono `action: "monitor"`: matchano,
+// vengono registrate, e la richiesta prosegue. All'installazione sentinel è un
+// OSSERVATORIO, non un filtro.
+//
+// Non è timidezza: è che all'installazione non si sa ancora nulla del proprio
+// traffico. Queste regole non sono una blocklist, sono una TASSONOMIA — ognuna dà
+// un nome a una famiglia di richieste. Dopo qualche settimana il log non dirà
+// "4.312 richieste bloccate" ma la COMPOSIZIONE del traffico ostile: quali
+// famiglie, in che proporzione, da quante origini, con quali impronte.
+//
+// ─── COME SI PROMUOVE UNA REGOLA ──────────────────────────────────────────────
+//   1. guarda i contatori (data/ruleHits.json5): quanti hit, da quanti IP
+//   2. guarda `authenticatedHits`. È il semaforo: se è ZERO dopo settimane di
+//      traffico, la regola non ha mai toccato un utente vero e si può promuovere
+//      tranquillamente. Se è diverso da zero c'è un falso positivo che non hai
+//      ancora capito.
+//   3. cambia `action` in "block" e metti `mode: "enforce"` in pluginConfig.json5
+//   4. se qualcosa va storto: `npm run cli -- sentinel monitor` ferma
+//      l'enforcement a caldo SENZA perdere i dati che servono a capire cosa è
+//      andato storto.
+//
+// Il percorso non è obbligato: chi sa già cosa vuole può scrivere "block" subito.
+//
+// ─── SINTASSI ─────────────────────────────────────────────────────────────────
+// Ordine = priorità: FIRST-MATCH-WINS, si scorre dall'alto e la prima regola che
+// matcha decide. Le `allow` vanno in cima.
+//
+//   name         OBBLIGATORIO, univoco. È la chiave primaria: lega fra loro
+//                contatori, righe di log e azioni della GUI. Rinominarla azzera
+//                la storia della regola.
+//   category     per aggregare il log per famiglia invece che per singolo nome
+//   appliesTo    "anonymous" | "authenticated" | "any"
+//   action       allow | monitor | block | drop | decoy | redirect | throttle | tarpit
+//   match        condizioni; più foglie nello stesso oggetto = AND implicito.
+//                Combinatori: all / any / not.
+//   escalate     { rateLimiterRule } — alimenta il plugin rateLimiter, che con la
+//                sua escalation trasforma l'insistenza in un ban IP
+//
+// Foglie: path, extension, method, userAgent, header, query, ip, authenticated,
+//         roleIds, fingerprint, fingerprintClass.
+// I path si scrivono SENZA globalPrefix, che viene anteposto dal codice.
+//
+// ─── ESENZIONI CHE NON TROVI QUI ──────────────────────────────────────────────
+// /.well-known/ (rinnovo dei certificati Let's Encrypt) è esente nel CORE, non
+// qui: dev'essere una precondizione, non una decisione cancellabile per
+// distrazione. Bloccarlo farebbe cadere l'HTTPS dopo 90 giorni, con una causa che
+// nessuno collegherebbe mai al plugin di sicurezza.
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  schemaVersion: 1,
+
+  rules: [
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // WHITELIST — sempre in cima, con first-match-wins è qui che funziona
+    // ─────────────────────────────────────────────────────────────────────────
+    // DISATTIVATA DI DEFAULT, ed è una scelta ragionata.
+    //
+    // In produzione questa regola è utile: health check, cron e script di deploy
+    // arrivano dalla macchina stessa e non hanno niente da dire al filtro.
+    //
+    // Ma in SVILUPPO tutto il traffico è loopback. Con la regola attiva — e in
+    // cima, dove first-match-wins la rende sovrana — sentinel appena installato
+    // non osserverebbe nulla: si prova qualche URL strano, non compare niente nel
+    // log, e si conclude che il plugin è rotto. Per un plugin il cui unico
+    // compito iniziale è mostrarti il tuo traffico, è il peggior esordio
+    // possibile.
+    //
+    // Attivala quando vai in produzione, se il rumore dei controlli locali
+    // disturba.
+    {
+      name: "allow-loopback",
+      enabled: false,
+      category: "allow",
+      description: "Traffico dalla macchina stessa: health check, cron, script di deploy. Contato ma non registrato, per non seppellire gli eventi che contano. Disattivata di default: in sviluppo azzererebbe l'osservazione.",
+      action: "allow",
+      match: {
+        ip: ["127.0.0.0/8", "::1"],
+      },
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // FILE SENSIBILI
+    // ─────────────────────────────────────────────────────────────────────────
+    {
+      name: "sensitive-file-probe",
+      enabled: true,
+      category: "sensitive-file",
+      description: "Tentativi di leggere file di configurazione o segreti.  Nessun visitatore legittimo chiede .env o .git/config.",
+      action: "monitor",
+      match: {
+        any: [
+          { path: ["/.env", "/.env.*", "/.git/**", "/.svn/**", "/.hg/**"] },
+          { path: ["/.htaccess", "/.htpasswd", "/web.config", "/.npmrc", "/.aws/**"] },
+          { path: "regex:/id_(rsa|dsa|ecdsa|ed25519)$" },
+        ],
+      },
+    },
+
+    {
+      name: "backup-probe",
+      enabled: true,
+      category: "sensitive-file",
+      description: "Ricerca di dump e backup lasciati sul server.  Nota: analytics ESCLUDE queste estensioni dal tracking, quindi  senza questa regola il tentativo non comparirebbe da nessuna parte.",
+      action: "monitor",
+      match: {
+        extension: ["sql", "bak", "old", "swp", "dump", "tar", "gz", "tgz", "rar", "7z"],
+      },
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SONDE VERSO ALTRI CMS
+    // ─────────────────────────────────────────────────────────────────────────
+    {
+      name: "php-probe",
+      enabled: true,
+      category: "cms-probe",
+      description: "Qualsiasi richiesta a un file .php. ital8cms non esegue PHP:  il segnale è puro, non esiste il caso legittimo.  È la prima regola da promuovere a block su quasi ogni installazione.",
+      action: "monitor",
+      match: {
+        extension: ["php", "php3", "php4", "php5", "php7", "phtml"],
+      },
+    },
+
+    {
+      name: "foreign-cms-probe",
+      enabled: true,
+      category: "cms-probe",
+      description: "Percorsi caratteristici di WordPress, Joomla, Drupal, TYPO3, Magento.",
+      action: "monitor",
+      match: {
+        any: [
+          { path: ["/wp-admin/**", "/wp-content/**", "/wp-includes/**", "/wp-login*", "/xmlrpc*"] },
+          { path: ["/administrator/**", "/joomla/**"] },
+          { path: ["/user/login", "/sites/default/**", "/core/install*"] },
+          { path: ["/typo3/**", "/downloader/**", "/magento_version"] },
+        ],
+      },
+    },
+
+    {
+      name: "db-admin-probe",
+      enabled: true,
+      category: "cms-probe",
+      description: "Pannelli di amministrazione database esposti per errore.",
+      action: "monitor",
+      match: {
+        path: ["/phpmyadmin/**", "/phpMyAdmin/**", "/pma/**", "/adminer*", "/mysql/**", "/dbadmin/**"],
+      },
+    },
+
+    {
+      name: "shell-probe",
+      enabled: true,
+      category: "scanner",
+      description: "Nomi di webshell noti: chi li cerca sta verificando se il server  è già stato compromesso da qualcun altro.",
+      action: "monitor",
+      match: {
+        path: "regex:/(c99|r57|wso|b374k|shell|cmd|backdoor|webshell)\\.",
+      },
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ANOMALIE DI PROTOCOLLO
+    // ─────────────────────────────────────────────────────────────────────────
+    {
+      name: "anomalous-method",
+      enabled: true,
+      category: "anomalous-method",
+      description: "Metodi HTTP che questo sito non usa. TRACE e TRACK servono a  tentativi di cross-site tracing, PROPFIND a scoprire WebDAV.",
+      action: "monitor",
+      match: {
+        method: ["TRACE", "TRACK", "DEBUG", "PROPFIND", "PROPPATCH", "MKCOL", "COPY", "MOVE", "LOCK", "UNLOCK"],
+      },
+    },
+
+    {
+      name: "traversal-attempt",
+      enabled: true,
+      category: "traversal",
+      description: "Sequenze di risalita nella QUERYSTRING. Il path è già coperto dal  gate canonico del core (400 su path non canonici), la querystring no.",
+      action: "monitor",
+      match: {
+        query: "regex:(\\.\\./|\\.\\.%2f|%2e%2e[/%]|/etc/passwd|c:\\\\windows)",
+      },
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ANOMALIE DEL CLIENT
+    // ─────────────────────────────────────────────────────────────────────────
+    {
+      name: "ua-absent",
+      enabled: true,
+      category: "ua-anomaly",
+      description: "Nessun header User-Agent. Nessun browser lo omette.  Attenzione: alcuni monitoraggi e script interni sì — guarda i dati  prima di promuovere, e semmai mettili in allow-loopback.",
+      action: "monitor",
+      match: {
+        userAgent: "empty",
+      },
+    },
+
+    {
+      name: "ua-fingerprint-mismatch",
+      enabled: true,
+      category: "ua-mismatch",
+      description:
+        "L'User-Agent dichiara un browser ma la FORMA degli header è quella di un  client script. Uno dei due mente, e sappiamo quale: l'UA è l'unico dei due  che si cambia con un flag (`curl -A ...`), mentre sembrare Chrome richiede  di replicarne ordine degli header, Accept, Sec-CH-UA... cioè di emularlo.  È il segnale singolo più affidabile del plugin: non chiede di decidere se  curl sia buono o cattivo (curl legittimo è ovunque), ma di accorgersi che  qualcuno sta FINGENDO di non essere curl.",
+      action: "monitor",
+      match: {
+        fingerprintClass: { coherent: false },
+      },
+    },
+
+    {
+      name: "auth-surface-noise",
+      enabled: true,
+      category: "scanner",
+      description:
+        "Richieste anonime agli endpoint di autenticazione con una forma di header  da client script. Un tentativo di login parte da un browser; questo no.  Candidata naturale a escalate verso rateLimiter una volta promossa.",
+      action: "monitor",
+      appliesTo: "anonymous",
+      match: {
+        all: [
+          { path: ["/api/adminUsers/login", "/api/adminUsers/logout", "/pluginPages/adminUsers/**"] },
+          { fingerprintClass: { headerProfile: "minimal" } },
+        ],
+      },
+      // Attiva l'escalation solo quando promuovi la regola: finché è in monitor
+      // alimenterebbe rateLimiter senza che tu ne abbia visto i dati.
+      // escalate: { rateLimiterRule: "scanner" },
+    },
+
+  ],
+}

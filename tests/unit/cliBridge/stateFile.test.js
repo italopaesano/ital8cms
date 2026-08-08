@@ -19,14 +19,14 @@ describe('readState', () => {
     fs.writeFileSync(p, '// header\n{ "public": "stopped" }\n', 'utf8');
     // reserved assente: chiave semplicemente non ancora scritta (installazione
     // che precede la sua introduzione), NON corruzione → default aperto.
-    try { expect(readState(p)).toEqual({ public: 'stopped', reserved: 'running' }); }
+    try { expect(readState(p)).toEqual({ public: 'stopped', reserved: 'running', sentinel: 'running' }); }
     finally { fs.unlinkSync(p); }
   });
 
   test('reads a stored reserved state', () => {
     const p = tmpStatePath();
     fs.writeFileSync(p, '{ "public": "running", "reserved": "stopped" }', 'utf8');
-    try { expect(readState(p)).toEqual({ public: 'running', reserved: 'stopped' }); }
+    try { expect(readState(p)).toEqual({ public: 'running', reserved: 'stopped', sentinel: 'running' }); }
     finally { fs.unlinkSync(p); }
   });
 
@@ -76,7 +76,7 @@ describe('writeState', () => {
     try {
       writeState({ public: 'stopped' }, p);
       expect(fs.existsSync(p)).toBe(true);
-      expect(readState(p)).toEqual({ public: 'stopped', reserved: 'running' });
+      expect(readState(p)).toEqual({ public: 'stopped', reserved: 'running', sentinel: 'running' });
     } finally { fs.unlinkSync(p); }
   });
 

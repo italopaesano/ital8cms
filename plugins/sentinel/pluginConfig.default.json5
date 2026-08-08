@@ -1,0 +1,238 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "active": 1,
+
+  // Weight 3: prima di analytics (5) e rateLimiter (5). Conta poco in pratica —
+  // il motore non è un middleware ma viene installato in uno slot del core dopo
+  // il caricamento di tutti i plugin — ma tiene l'ordine coerente con il ruolo.
+  "weight": 3,
+
+  // NESSUNA dipendenza dichiarata, di proposito.
+  // sentinel usa rateLimiter e mailer quando ci sono, ma li risolve in modo lazy
+  // con fallback null. Dichiararli qui significherebbe che un rateLimiter
+  // disabilitato renderebbe sentinel "incomplete": il filtro si spegnerebbe
+  // perché manca il rate limiter. Inversione di priorità inaccettabile.
+  "dependency": {},
+  "nodeModuleDependency": {},
+
+  "custom": {
+
+    // ────────────────────────────────────────────────────────────────
+    // INTERRUTTORI PRINCIPALI
+    // ────────────────────────────────────────────────────────────────
+
+    // Interruttore globale. Se false, getSharedObject('sentinel') restituisce
+    // null, lo slot pre-router resta vuoto e il sito gira senza filtro.
+    "enabled": true,
+
+    // MODALITA — la scelta più importante del file.
+    //
+    // "monitor" (default) → le regole matchano, gli eventi vengono registrati,
+    //                       ma NESSUNA azione viene applicata. Nemmeno le regole
+    //                       dichiarate `block` agiscono.
+    // "enforce"           → le azioni vengono applicate.
+    //
+    // È un TETTO, non un override: "enforce" non promuove nulla, una regola in
+    // `monitor` resta osservativa. E c'è un secondo tetto indipendente, lo stato
+    // del gate, commutabile a caldo con `npm run cli -- sentinel monitor`.
+    //
+    // Il default è "monitor" perché all'installazione non si sa ancora nulla del
+    // proprio traffico. Si guarda una settimana di log, si vede cosa AVREBBE
+    // bloccato, e poi si promuove con cognizione di causa. Non è un percorso
+    // obbligato: chi ha già le idee chiare può passare subito a "enforce".
+    "mode": "monitor",
+
+    // Se true, un errore di validazione delle regole impedisce l'avvio del
+    // plugin invece di scartare le sole regole invalide. Default false: un
+    // filtro che fallisce fail-closed trasforma una virgola fuori posto in un
+    // blackout. (Stessa convenzione di rateLimiter, urlRedirect, csrfProtection.)
+    "strictValidation": false,
+
+    // ────────────────────────────────────────────────────────────────
+    // TRAFFICO AUTENTICATO
+    // ────────────────────────────────────────────────────────────────
+    // Un account autenticato è più pericoloso di un anonimo, non meno: ha già
+    // superato la porta. Le tre situazioni che solo questa osservazione coglie
+    // sono l'account compromesso, il bot registrato e la sessione rubata.
+    "authenticatedTraffic": {
+
+      // "exempt"  → le regole non si applicano affatto agli autenticati
+      // "monitor" → le regole matchano e vengono registrate, ma non applicate
+      // "enforce" → applicate come agli anonimi
+      //
+      // Default "monitor": si osserva tutto, non si blocca nessuno. Zero rischio
+      // di chiudersi fuori dal proprio pannello mentre si accumulano i dati.
+      "mode": "monitor",
+
+      // Ruoli mai soggetti a ENFORCEMENT (restano sempre osservati).
+      // 0 = root, 1 = admin.
+      "enforceExemptRoles": [0, 1],
+    },
+
+    // ────────────────────────────────────────────────────────────────
+    // IDENTITA DEL CLIENT
+    // ────────────────────────────────────────────────────────────────
+
+    // Leggere X-Forwarded-For. Abilitare SOLO dietro un reverse proxy fidato che
+    // lo imposta davvero: l'header è falsificabile dal client, e senza un proxy
+    // davanti chiunque potrebbe far attribuire i propri blocchi a un indirizzo
+    // altrui o aggirare un ban cambiandolo a ogni richiesta.
+    "trustProxy": false,
+
+    // Quanti proxy fidati ci sono davanti. La voce del client si conta DA DESTRA:
+    // la catena è "client, proxy1, proxy2" e solo le ultime voci sono state
+    // scritte da proxy fidati. Prendere la prima da sinistra — la scelta comoda —
+    // significa leggere un valore che il client controlla.
+    "trustedProxyCount": 1,
+
+    // ────────────────────────────────────────────────────────────────
+    // FINGERPRINT
+    // ────────────────────────────────────────────────────────────────
+
+    // Salt dell'hash dell'impronta.
+    //
+    // VUOTO (default) → le impronte sono deterministiche e quindi CONFRONTABILI
+    //   fra installazioni diverse: apre a set di regole condivisibili
+    //   ("questa impronta è uno scanner noto"). È legittimo perché l'impronta
+    //   HTTP è a bassa entropia: identifica una famiglia di client
+    //   ("Chrome 120 su Linux"), non una persona.
+    //
+    // VALORIZZATO → le impronte diventano locali a questa installazione e non
+    //   confrontabili altrove.
+    //
+    // Non viene distribuito alcun salt di default: un placeholder condiviso
+    // sarebbe il peggiore dei mondi, darebbe l'illusione della separazione senza
+    // fornirla, perché tutte le installazioni avrebbero la stessa firma per lo
+    // stesso client.
+    "fingerprintSalt": "",
+
+    // ────────────────────────────────────────────────────────────────
+    // OSSERVAZIONE DELL'ESITO
+    // ────────────────────────────────────────────────────────────────
+
+    // Osserva come finiscono le richieste LASCIATE PASSARE (solo esiti non-2xx:
+    // un 200 non è un segnale, e il filtro toglie ~99% delle chiamate).
+    //
+    // È il pezzo che permette di accorgersi di attacchi per cui NON esiste ancora
+    // una regola: «questo client ha collezionato 198 percorsi distinti tutti in
+    // 404». Senza, il filtro saprebbe solo ciò che gli è già stato insegnato.
+    "observeOutcomes": true,
+
+    // ────────────────────────────────────────────────────────────────
+    // STORAGE
+    // ────────────────────────────────────────────────────────────────
+
+    // Directory dati, relativa alla cartella del plugin.
+    // Non è raggiungibile dal web: nessuno static server serve plugins/, e il
+    // Plugin Pages System crea symlink solo verso plugins/<nome>/webPages/.
+    // INVARIANTE: sentinel non deve avere una directory webPages/.
+    "dataPath": "./data",
+
+    // Suffisso di istanza nei nomi dei file. Con un processo solo lasciarlo
+    // vuoto va benissimo. In cluster, dando a ogni worker un valore diverso,
+    // ciascuno scrive sul proprio shard invece di contendersi lo stesso file, e
+    // la lettura resta una fusione degli shard.
+    "instanceId": "",
+
+    // Ogni quanti secondi far scadere le voci vecchie degli aggregati e
+    // ricontrollare il budget disco. 0 = disattivato (sconsigliato).
+    "sweepIntervalSeconds": 300,
+
+    // ── Log degli eventi ──
+    "log": {
+      // "none" | "daily" | "weekly" | "monthly".
+      // Default "daily" (analytics usa "monthly"): sotto attacco il volume
+      // esplode e un file mensile diventa ingestibile.
+      // Il fuso è quello LOCALE del server, come analytics.
+      "rotationMode": "daily",
+
+      // Giorni di conservazione. 0 = nessuna scadenza.
+      "retentionDays": 365,
+
+      // Secondi fra un salvataggio e il successivo. 0 = scrittura immediata.
+      // Più breve di analytics (2s): perdere gli ultimi secondi di log durante
+      // un attacco — o durante un crash causato dall'attacco — pesa più che
+      // perdere qualche visita.
+      "flushIntervalSeconds": 1,
+
+      // TETTO DI DIMENSIONE della data dir, in byte (default 200 MB).
+      // La retention a tempo protegge dal log che invecchia, non da quello che
+      // cresce: sotto attacco un file giornaliero può prendere gigabyte in poche
+      // ore, e un disco pieno non rompe sentinel, rompe l'INTERO sito.
+      // Superato il tetto si eliminano i file più vecchi (mai quello corrente).
+      "maxTotalBytes": 209715200,
+
+      // Percentuale del budget oltre la quale viene emessa un'allerta, PRIMA di
+      // dover cancellare qualcosa: avvisare mentre si stanno già perdendo dati
+      // sarebbe inutile.
+      "alertAtPercent": 70,
+    },
+
+    // ── Censimento delle impronte e degli esiti ──
+    "census": {
+      // Cosa conservare sugli IP nel censimento delle impronte.
+      //
+      // "none"  → nulla
+      // "count" → solo il NUMERO di indirizzi distinti per impronta (default).
+      //           Dà già il segnale botnet — «questa impronta arriva da 500 IP» —
+      //           senza conservare un solo indirizzo.
+      // "full"  → l'elenco degli indirizzi. Rende il censimento un archivio di
+      //           dati personali a lunga conservazione: valuta la retention.
+      "censusIpMode": "count",
+
+      // Tetto di impronte tracciate e scadenza in giorni.
+      // Non è un'ottimizzazione: la chiave è controllata dall'attaccante, e chi
+      // randomizza l'ordine degli header genera un'impronta nuova a OGNI
+      // richiesta. Senza tetto, la difesa diventa il modo di esaurire la memoria.
+      "maxFingerprints": 10000,
+      "ttlDays": 90,
+
+      // Quanti indirizzi tenere in memoria per impronta, per sapere se un IP è
+      // già stato visto (senza, il conteggio dei distinti diventerebbe un
+      // contatore di richieste travestito).
+      "maxIpsPerFingerprint": 256,
+
+      // Secondi fra un salvataggio del censimento e il successivo.
+      "saveIntervalSeconds": 60,
+
+      // Aggregato degli esiti, con gli stessi vincoli e una finestra più corta.
+      "outcome": {
+        "maxClients": 5000,
+        "ttlHours": 24,
+      },
+    },
+
+    // ── Contatori per regola ──
+    // Servono al percorso osserva → capisci → promuovi: senza, dopo sei mesi non
+    // si sa quali regole abbiano mai sparato.
+    "hitCounter": {
+      "flushIntervalSeconds": 30,
+    },
+
+    // ────────────────────────────────────────────────────────────────
+    // AZIONI
+    // ────────────────────────────────────────────────────────────────
+
+    // Host verso cui è ammesso un redirect esterno. VUOTO di default.
+    // Rimandare traffico verso un terzo che non ha acconsentito è un abuso verso
+    // di lui, e nei suoi log la sorgente saresti tu. Il 301 verso l'esterno è
+    // sempre vietato: la cache persistente del browser rende irreparabile un
+    // falso positivo su un utente reale.
+    "allowedRedirectHosts": [],
+
+    // ────────────────────────────────────────────────────────────────
+    // ALLERTE
+    // ────────────────────────────────────────────────────────────────
+
+    // Indirizzo a cui recapitare le allerte operative (soglia del budget disco,
+    // eventi gravi). Vuoto = nessuna email, l'evento resta comunque nel log.
+    // Richiede il plugin `mailer` attivo e configurato.
+    //
+    // Soluzione provvisoria: adminUsers non espone oggi alcuna API per risolvere
+    // l'email dell'account root, e un indirizzo operativo è comunque spesso
+    // diverso da quello amministrativo. Vedi TODO.md del plugin.
+    "alertRecipient": "",
+
+  },
+}

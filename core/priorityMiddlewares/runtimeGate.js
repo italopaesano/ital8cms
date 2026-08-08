@@ -328,11 +328,230 @@ function createReservedGate(options) {
   };
 }
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SENTINEL GATE (slot pre-router per il filtro delle richieste)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Terzo gate del modulo, di natura diversa dai due precedenti: maintenance e
+// reserved portano dentro di sé tutta la propria logica, questo è un GUSCIO VUOTO
+// che ospita un motore fornito dal plugin `sentinel`.
+//
+// PERCHE UN GUSCIO NEL CORE E NON UN MIDDLEWARE DI PLUGIN — i middleware dei
+// plugin sono montati DOPO il router (vedi index.js), quindi non vedono mai una
+// rotta API già matchata: `POST /api/adminUsers/login` eseguirebbe l'handler e la
+// catena si fermerebbe lì. Un filtro che gira dopo il router non è un filtro. Ma
+// il momento in cui i plugin vengono caricati è successivo al montaggio dei
+// priority middleware, e in Koa non si inserisce un middleware a metà catena a
+// posteriori. La soluzione è la stessa già usata dal reserved gate: montare qui
+// un middleware che nasce vuoto e riceve il proprio contenuto più tardi
+// (`setReservedRoutePaths` per quello, `setEngine` per questo).
+//
+// RIPARTIZIONE DELLE RESPONSABILITA — gli invarianti di sicurezza restano nel
+// core, l'intelligenza sta nel plugin:
+//   • il 404 di blocco  → `reservedGate.deny()`, un unico posto che lo produce
+//   • la non interferenza con la superficie riservata chiusa → qui
+//   • le esenzioni non negoziabili (ACME) → qui
+//   • il tetto di enforcement (stato del gate) → qui
+//   • matching, classificazione, log, fingerprint, corpo dei decoy → plugin
+// Così un motore sbagliato può al più non filtrare: non può far scadere il
+// certificato TLS, non può rendere enumerabile il pannello, non può disattivare
+// il kill switch.
+//
+// TRE STATI, corrispondenti ai tre verbi del control plane:
+//   running  → il motore decide, il gate applica
+//   monitor  → il motore decide ma NULLA viene applicato (dati intatti)
+//   stopped  → il motore non viene nemmeno interrogato: pass-through puro
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const SENTINEL_STATES = ['running', 'monitor', 'stopped'];
+
+// Percorsi che nessuna regola può toccare, a nessuna condizione.
+//
+// `/.well-known/` copre acme-challenge: bloccarlo impedisce il rinnovo dei
+// certificati Let's Encrypt e fa cadere l'HTTPS dopo 90 giorni, con una causa
+// che nessuno collegherebbe mai al plugin di sicurezza. Il resto di
+// `/.well-known/` (security.txt, ...) è per definizione destinato all'accesso
+// pubblico automatizzato, quindi rientra nella stessa logica.
+//
+// Sta nel CORE e non nel file di regole di proposito: dev'essere una
+// precondizione, non una decisione che si possa cancellare per distrazione.
+const SENTINEL_HARD_EXEMPT_PREFIXES = ['/.well-known/'];
+
+// Tetto di tempo per una valutazione del motore. Un motore che si impianta (una
+// regex catastrofica sfuggita al validatore, un decoy su un filesystem lento)
+// non deve poter trascinare con sé la richiesta: scaduto il tempo si lascia
+// passare. Vedi anche il fail-open su eccezione.
+const ENGINE_TIMEOUT_MS = 250;
+
+function createSentinelGate(options) {
+  const {
+    ital8Conf,
+    reservedGate = null,
+    initialState = 'running',
+  } = options;
+
+  let gateState = SENTINEL_STATES.includes(initialState) ? initialState : 'running';
+  let engine = null;
+
+  const globalPrefix = ital8Conf.globalPrefix || '';
+  const debugMode = Number(ital8Conf.debugMode) >= 1;
+
+  // Latch log-once: un motore che lancia lo farebbe a OGNI richiesta, e il log
+  // dell'errore diventerebbe esso stesso un attacco al disco. Si segnala una
+  // volta; una valutazione riuscita riarma la segnalazione.
+  let engineFailureLogged = false;
+
+  function isHardExempt(reqPath) {
+    const base = globalPrefix || '';
+    for (const prefix of SENTINEL_HARD_EXEMPT_PREFIXES) {
+      if (reqPath.startsWith(`${base}${prefix}`)) return true;
+    }
+    return false;
+  }
+
+  // Una risposta "decorata" (decoy, redirect) su un percorso della superficie
+  // riservata mentre questa è CHIUSA rivelerebbe che quel percorso esiste: è
+  // esattamente il canale di enumerazione che il reserved gate esiste per
+  // chiudere, e il suo 404 è presidiato da un test byte-per-byte. In quel caso
+  // sentinel degrada al 404 comune. Per l'azione `block` la questione non si
+  // pone: usa già lo stesso `deny()`.
+  function decorationWouldLeak(ctx) {
+    return !!(reservedGate
+      && reservedGate.isClosed()
+      && reservedGate.isReservedPath(ctx.path));
+  }
+
+  function deny(ctx) {
+    if (reservedGate && typeof reservedGate.deny === 'function') {
+      reservedGate.deny(ctx);
+      return;
+    }
+    // Ripiego difensivo: senza reserved gate non esiste il mirror della error
+    // page. Meglio un 404 nudo che nessun blocco.
+    ctx.status = 404;
+    ctx.type = 'text/plain; charset=utf-8';
+    ctx.body = 'Not Found';
+  }
+
+  async function evaluateSafely(ctx) {
+    if (!engine || typeof engine.evaluate !== 'function') return null;
+    try {
+      const verdict = await Promise.race([
+        Promise.resolve(engine.evaluate(ctx)),
+        new Promise((resolve) => {
+          const timer = setTimeout(() => resolve(undefined), ENGINE_TIMEOUT_MS);
+          if (timer.unref) timer.unref();
+        }),
+      ]);
+      engineFailureLogged = false;
+      return verdict === undefined ? null : verdict;
+    } catch (err) {
+      if (!engineFailureLogged) {
+        console.error(
+          `[sentinelGate] il motore ha sollevato un'eccezione (${err && err.message}); ` +
+          'le richieste proseguono NON filtrate finché il problema persiste'
+        );
+        engineFailureLogged = true;
+      }
+      return null; // fail-open
+    }
+  }
+
+  async function passThrough(ctx, next, verdict) {
+    const startedAt = Date.now();
+    await next();
+    // L'osservazione dell'esito serve a scoprire i pattern per cui NON esiste
+    // ancora una regola (il classico «40 404 diversi in un minuto»). Un 2xx non
+    // è un segnale, e filtrarlo qui evita al motore il 99% delle chiamate.
+    if (engine && typeof engine.observeOutcome === 'function'
+        && (ctx.status < 200 || ctx.status >= 300)) {
+      try {
+        engine.observeOutcome(ctx, { startedAt, verdict: verdict || null });
+      } catch (_err) {
+        // fail-soft: l'osservazione non deve mai toccare la risposta già emessa
+      }
+    }
+  }
+
+  async function middleware(ctx, next) {
+    if (gateState === 'stopped') return next();
+    if (!engine) return next();
+    if (isHardExempt(ctx.path)) return next();
+
+    const verdict = await evaluateSafely(ctx);
+
+    if (!verdict || verdict.action === 'allow' || verdict.action === 'monitor') {
+      return passThrough(ctx, next, verdict);
+    }
+
+    // `verdict.enforce` è una PROPOSTA del motore (che ha già applicato il tetto
+    // della configurazione: mode globale + action della regola). Lo stato del
+    // gate è un secondo tetto indipendente, commutabile a caldo dalla CLI. Due
+    // tetti che possono fermare da soli, nessuno dei due in grado di forzare.
+    const enforced = verdict.enforce === true && gateState === 'running';
+    if (!enforced) {
+      return passThrough(ctx, next, verdict);
+    }
+
+    if (debugMode && verdict.ruleName) {
+      // Solo in debug: in produzione rivelerebbe l'esistenza e la logica del filtro.
+      ctx.set('X-Sentinel-Rule', String(verdict.ruleName));
+    }
+
+    if (verdict.action === 'block' || verdict.action === 'drop') {
+      deny(ctx);
+      return;
+    }
+
+    // decoy / redirect / tarpit: il corpo lo produce il plugin, ma solo se non
+    // tradisce la superficie riservata.
+    if (decorationWouldLeak(ctx) || typeof verdict.respond !== 'function') {
+      deny(ctx);
+      return;
+    }
+
+    try {
+      await verdict.respond(ctx);
+    } catch (err) {
+      if (!engineFailureLogged) {
+        console.error(`[sentinelGate] risposta del motore fallita (${err && err.message}); emesso 404`);
+        engineFailureLogged = true;
+      }
+      deny(ctx);
+    }
+  }
+
+  return {
+    middleware,
+    setEngine(newEngine) {
+      engine = newEngine && typeof newEngine.evaluate === 'function' ? newEngine : null;
+      if (engine && typeof engine.onGateState === 'function') {
+        try { engine.onGateState(gateState); } catch (_err) { /* fail-soft */ }
+      }
+      return !!engine;
+    },
+    hasEngine() { return !!engine; },
+    setState(newState) {
+      if (!SENTINEL_STATES.includes(newState)) {
+        throw new Error(`sentinelGate: stato non valido ${newState}`);
+      }
+      gateState = newState;
+      if (engine && typeof engine.onGateState === 'function') {
+        try { engine.onGateState(gateState); } catch (_err) { /* fail-soft */ }
+      }
+    },
+    getState() { return gateState; },
+    isClosed() { return gateState === 'stopped'; },
+  };
+}
+
 module.exports = {
   createMaintenanceGate,
   createReservedGate,
+  createSentinelGate,
   isExemptPath,
   isReservedPrefixPath,
   normalizeExemptPaths,
   DEFAULT_EXEMPT_PATHS,
+  SENTINEL_STATES,
+  SENTINEL_HARD_EXEMPT_PREFIXES,
 };

@@ -1,12 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 const { readEnableAdmin, writeEnableAdmin } = require('./configEditor');
-const { readState, writeState } = require('./stateFile');
+const { readState, writeState, VALID_SENTINEL_STATES } = require('./stateFile');
 const { detectSupervisor } = require('./respawn');
 const resetConfigsToDefault = require('../resetConfigsToDefault');
 
 function buildStatus(ctx) {
-  const { startTime, ital8Conf, configPath, statePath, getPublicState, getReservedState } = ctx;
+  const { startTime, ital8Conf, configPath, statePath, getPublicState, getReservedState,
+          getSentinelState, hasSentinelEngine } = ctx;
   const httpsEnabled = !!(ital8Conf && ital8Conf.https && ital8Conf.https.enabled);
 
   let adminState = 'unknown';
@@ -30,6 +31,16 @@ function buildStatus(ctx) {
   // — una trappola diagnostica. Il client lo rende esplicito accanto allo stato.
   const adminUnreachable = adminState === 'running' && reservedState === 'stopped';
 
+  // Il filtro richieste ha DUE condizioni indipendenti da mostrare: lo stato del
+  // gate (che l'amministratore commuta) e la presenza del motore (che dipende dal
+  // caricamento del plugin). Un gate 'running' senza motore NON sta filtrando, e
+  // mostrare solo lo stato sarebbe una trappola diagnostica identica a quella che
+  // `adminUnreachable` esiste per evitare.
+  const sentinelState = typeof getSentinelState === 'function'
+    ? getSentinelState()
+    : (readState(statePath).sentinel);
+  const sentinelEngine = typeof hasSentinelEngine === 'function' ? hasSentinelEngine() : false;
+
   return {
     ok: true,
     data: {
@@ -41,6 +52,7 @@ function buildStatus(ctx) {
       admin: { state: adminState, unreachable: adminUnreachable },
       reserved: { state: reservedState },
       public: { state: publicState },
+      sentinel: { state: sentinelState, engine: sentinelEngine },
       supervisor: detectSupervisor(),
     },
   };
@@ -136,6 +148,62 @@ function handleRuntimeSurfaceToggle(ctx, surface, targetValue) {
     action,
     restart: false,
     message: `${surface} ${targetLabel} applicato a runtime (nessun riavvio richiesto)`,
+  };
+}
+
+// Commuta lo stato del filtro richieste. Non riusa handleRuntimeSurfaceToggle
+// perché sentinel ha TRE stati, non due: fra "filtra" e "spento" c'è "osserva ma
+// non agire", che è la via di fuga quando una regola promossa si rivela sbagliata
+// (spegnere tutto perderebbe i dati proprio nel momento in cui servono).
+function handleSentinelState(ctx, targetLabel) {
+  const { statePath, setSentinelState } = ctx;
+  // Lo stato interno è 'running'/'monitor'/'stopped', i comandi sono
+  // start/monitor/stop: l'azione echeggiata deve nominare il COMANDO emesso,
+  // altrimenti il client stampa un'azione che non esiste ('sentinel.stopped').
+  const VERB_BY_STATE = { running: 'start', monitor: 'monitor', stopped: 'stop' };
+  const action = `sentinel.${VERB_BY_STATE[targetLabel] || targetLabel}`;
+
+  if (!VALID_SENTINEL_STATES.includes(targetLabel)) {
+    return { ok: false, error: 'invalid_state', message: `stato non valido: ${targetLabel}` };
+  }
+
+  let currentState;
+  try {
+    currentState = readState(statePath);
+  } catch (err) {
+    return { ok: false, error: 'state_read_failed', message: err.message };
+  }
+
+  if (currentState.sentinel === targetLabel) {
+    return {
+      ok: true, action, restart: false, noop: true,
+      message: `sentinel già in stato ${targetLabel}, nessuna azione`,
+    };
+  }
+
+  // Come per le altre superfici: lo state file va riscritto INTERO, altrimenti
+  // writeState riporterebbe le altre chiavi al loro default.
+  try {
+    writeState({ ...currentState, sentinel: targetLabel }, statePath);
+  } catch (err) {
+    return { ok: false, error: 'state_write_failed', message: err.message };
+  }
+
+  if (typeof setSentinelState === 'function') {
+    setSentinelState(targetLabel);
+  }
+
+  const explain = {
+    running: 'filtro attivo secondo la configurazione dichiarata nei file',
+    monitor: 'osservazione attiva, nessuna azione applicata (dati e log intatti)',
+    stopped: 'motore non interrogato: pass-through puro',
+  }[targetLabel];
+
+  return {
+    ok: true,
+    action,
+    restart: false,
+    message: `sentinel ${targetLabel} applicato a runtime — ${explain}`,
   };
 }
 
@@ -278,6 +346,9 @@ function makeDispatcher(ctx) {
       case 'public.stop': return handleRuntimeSurfaceToggle(ctx, 'public', false);
       case 'reserved.start': return handleRuntimeSurfaceToggle(ctx, 'reserved', true);
       case 'reserved.stop': return handleRuntimeSurfaceToggle(ctx, 'reserved', false);
+      case 'sentinel.start': return handleSentinelState(ctx, 'running');
+      case 'sentinel.monitor': return handleSentinelState(ctx, 'monitor');
+      case 'sentinel.stop': return handleSentinelState(ctx, 'stopped');
       case 'publicOnly.on': return handlePublicOnly(ctx, true);
       case 'publicOnly.off': return handlePublicOnly(ctx, false);
       case 'reset': return handleReset(ctx, request);
@@ -296,6 +367,7 @@ const KNOWN_COMMANDS = [
   'admin.start', 'admin.stop',
   'public.start', 'public.stop',
   'reserved.start', 'reserved.stop',
+  'sentinel.start', 'sentinel.monitor', 'sentinel.stop',
   'publicOnly.on', 'publicOnly.off',
   'reset',
 ];

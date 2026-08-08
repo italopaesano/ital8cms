@@ -44,6 +44,15 @@ const reserved = program.command('reserved').description('reserved surface contr
 reserved.command('start').description('serve the reserved surface normally').action(() => sendCommand('reserved.start'));
 reserved.command('stop').description('answer 404 on login, authenticated routes and the admin panel').action(() => sendCommand('reserved.stop'));
 
+// Filtro delle richieste in ingresso (plugin `sentinel`). Gate a runtime come
+// public e reserved: nessun riavvio. Tre stati invece di due — `monitor` e la via
+// di fuga da usare quando una regola promossa si rivela sbagliata: ferma
+// l'enforcement ma NON perde i dati che servono a capire cosa e andato storto.
+const sentinel = program.command('sentinel').description('request filter control — the sentinel plugin (no restart)');
+sentinel.command('start').description('filter according to the rules as configured').action(() => sendCommand('sentinel.start'));
+sentinel.command('monitor').description('observe and log, but apply no action (back to phase 1)').action(() => sendCommand('sentinel.monitor'));
+sentinel.command('stop').description('kill switch: the engine is not even consulted').action(() => sendCommand('sentinel.stop'));
+
 // Macro: compone le leve esistenti nell'assetto "sito vetrina".
 const publicOnly = program.command('publicOnly').description('showcase preset: public site only (macro over reserved + admin)');
 publicOnly.command('on').description('reserved stop + admin stop (restarts)').action(() => sendCommand('publicOnly.on'));
@@ -322,6 +331,11 @@ function renderHuman(payload, command) {
       `  admin state:   ${d.admin && d.admin.state}${d.admin && d.admin.unreachable ? '  (irraggiungibile: reserved stopped)' : ''}`,
       `  reserved state:${d.reserved ? ' ' + d.reserved.state : ' unknown'}`,
       `  public state:  ${d.public && d.public.state}`,
+      // Due condizioni indipendenti: il gate puo essere 'running' mentre il
+      // motore non e stato caricato (plugin assente, disattivato o incompleto).
+      // In quel caso NON si sta filtrando nulla, e dirlo evita la stessa
+      // trappola diagnostica dell'admin irraggiungibile qui sopra.
+      `  sentinel state:${d.sentinel ? ' ' + d.sentinel.state : ' unknown'}${d.sentinel && !d.sentinel.engine ? '  (motore non caricato: nessun filtro attivo)' : ''}`,
     ];
     if (d.supervisor) lines.push(`  supervisor:    ${d.supervisor}`);
     process.stdout.write(lines.join('\n') + '\n');

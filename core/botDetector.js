@@ -3,10 +3,21 @@
  *
  * Rilevamento bot e crawler automatici dal valore dell'header User-Agent.
  *
+ * UTILITY CORE CONDIVISA — come core/patternMatcher.js e core/escapeHtml.js.
+ * Nata dentro il plugin analytics, promossa in core/ quando è servita anche a
+ * `sentinel`: due elenchi di firme UA da tenere allineati a mano sarebbero
+ * divergiti al primo aggiornamento. I consumer la richiedono come
+ * `require('../../core/botDetector')` senza dipendere l'uno dall'altro.
+ *
  * COMPORTAMENTO:
- *   I bot vengono SEMPRE tracciati (non filtrati), ma marcati con:
+ *   Questo modulo si limita a RICONOSCERE: non decide nulla. I bot vengono
+ *   marcati con:
  *     isBot: true
  *     botName: "NomeBot" (es. "Googlebot", "SemrushBot", ...)
+ *
+ * ⚠ Le firme generiche in coda alla lista (`bot`, `crawler`, `spider`) matchano
+ *   anche i crawler legittimi, Googlebot incluso: NON vanno mai usate da sole
+ *   come criterio di blocco.
  *
  * Questo permette all'adminAnalytics di:
  *   - Visualizzare traffico umano vs bot separatamente

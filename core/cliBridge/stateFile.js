@@ -6,10 +6,16 @@ const DEFAULT_STATE_PATH = path.join(__dirname, 'state.json5');
 
 const VALID_STATES = ['running', 'stopped'];
 
+// `sentinel` ha uno stato in più delle altre superfici: fra "filtra" e "spento"
+// esiste "osserva ma non agire", che è la via di fuga da usare quando una regola
+// chiude fuori qualcuno — spegnere tutto perderebbe proprio i dati che servono a
+// capire cosa è andato storto. Vedi createSentinelGate in runtimeGate.js.
+const VALID_SENTINEL_STATES = ['running', 'monitor', 'stopped'];
+
 // Stato di partenza di un'installazione che il control plane non ha mai toccato
 // (file assente): tutto acceso. È il caso del clone fresco, NON una condizione
 // d'errore — vedi readState() per la distinzione con il file corrotto.
-const DEFAULT_STATE = { public: 'running', reserved: 'running' };
+const DEFAULT_STATE = { public: 'running', reserved: 'running', sentinel: 'running' };
 
 // Stato di ripiego quando il file ESISTE ma non è leggibile/parsabile.
 //
@@ -23,7 +29,11 @@ const DEFAULT_STATE = { public: 'running', reserved: 'running' };
 //                control plane per riaprirla (`reserved start`), mentre una
 //                riapertura silenziosa vanificherebbe l'assetto vetrina proprio
 //                nel momento in cui qualcosa è andato storto.
-const FALLBACK_STATE_ON_CORRUPTION = { public: 'running', reserved: 'stopped' };
+//   • sentinel → 'running' (fail-OPEN), come public: il filtro non blocca nulla
+//                finché non è l'amministratore a promuovere una regola, quindi
+//                lasciarlo attivo non può chiudere fuori nessuno; spegnerlo, al
+//                contrario, interromperebbe in silenzio la raccolta dei dati.
+const FALLBACK_STATE_ON_CORRUPTION = { public: 'running', reserved: 'stopped', sentinel: 'running' };
 
 function readState(statePath = DEFAULT_STATE_PATH) {
   // File assente = installazione nuova o control plane mai usato: default aperti.
@@ -60,6 +70,7 @@ function normalizeState(raw) {
   if (raw && typeof raw === 'object') {
     if (VALID_STATES.includes(raw.public)) out.public = raw.public;
     if (VALID_STATES.includes(raw.reserved)) out.reserved = raw.reserved;
+    if (VALID_SENTINEL_STATES.includes(raw.sentinel)) out.sentinel = raw.sentinel;
   }
   return out;
 }
@@ -71,4 +82,5 @@ module.exports = {
   DEFAULT_STATE,
   FALLBACK_STATE_ON_CORRUPTION,
   VALID_STATES,
+  VALID_SENTINEL_STATES,
 };

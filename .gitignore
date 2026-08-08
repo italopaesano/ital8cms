@@ -35,6 +35,11 @@ themes/*/node_modules/
 # Auto-generated runtime data
 /plugins/urlRedirect/redirectHitCount.json5
 /plugins/analytics/data/
+/plugins/sentinel/data/
+# Decoy personalizzati dall'utente: la cartella resta nel repo (README + .gitkeep),
+# il contenuto no. Vedi plugins/sentinel/decoys/README.md.
+/plugins/sentinel/decoys/data/*
+!/plugins/sentinel/decoys/data/.gitkeep
 /plugins/admin/themeInstallLog.json5
 /plugins/admin/pluginInstallLog.json5
 
@@ -48,6 +53,7 @@ themes/*/node_modules/
 /plugins/urlRedirect/redirectMap.json5
 /plugins/adminAccessControl/accessControl.json5
 /plugins/rateLimiter/protectedRoutes.json5
+/plugins/sentinel/sentinelRules.json5
 /plugins/adminUsers/userAccount.json5
 /plugins/adminUsers/userRole.json5
 # Descrittori vivi (plugin + temi): generati dai .default; isInstalled (stato
