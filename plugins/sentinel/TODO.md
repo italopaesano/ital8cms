@@ -34,6 +34,14 @@ Le fasi (v1/v2/v3) sono indicative dell'ordine, non di una scadenza.
   un *osservatorio*, non un filtro: classifica il traffico e lo registra, senza
   agire. L'enforcement è una promozione consapevole fatta dall'amministratore
   dopo aver letto i propri dati. Vedi §2 → *Set di regole di default*.
+- Il percorso **osserva → capisci → promuovi** è quello centrale ma **non è
+  obbligato**: chi ha già le idee chiare deve poter scrivere una regola in
+  `block` fin dal primo minuto, senza passare dall'osservazione.
+- `active: 1` nel `pluginConfig.default.json5`: con un default non bloccante
+  l'installazione non può rompere nulla.
+- Fuso orario della rotazione: **ora locale del server**, come `analytics`
+  (verificato: `analytics/lib/fileManager.js` usa `getFullYear/getMonth/getDate`).
+- Nessun **salt di fingerprint di default** distribuito col plugin.
 
 ---
 
@@ -113,7 +121,9 @@ famiglia di richieste.
 - [ ] Bucket implicito **`unclassified`** nelle statistiche: il traffico anomalo che
       nessuna regola descrive è esattamente dove si scoprono le regole mancanti
 - [ ] Flusso di **promozione `monitor` → `block`** come percorso principale del
-      prodotto, non come dettaglio di configurazione
+      prodotto, non come dettaglio di configurazione — ma **mai obbligatorio**:
+      una regola può nascere direttamente in `block` se chi la scrive sa cosa fa.
+      Le tre fasi sono un percorso guidato offerto, non un vincolo imposto.
 - [ ] Indicatori di confidenza calcolati dal log a supporto della promozione:
       quanti hit, quanti IP distinti, quota da bot riconosciuti, e soprattutto
       **quanti utenti autenticati sarebbero stati colpiti** (se > 0, non promuovere)
@@ -286,11 +296,19 @@ e accumulare statistiche locali sulle firme viste.
       budget totale della data dir, eviction dal più vecchio). Sotto attacco un
       file giornaliero può crescere di gigabyte: un disco pieno non rompe sentinel,
       rompe **l'intero sito**. La retention a tempo da sola non protegge da questo.
-- [ ] Fuso orario della rotazione per data allineato a quello di `analytics`
-      (i nomi file `YYYY-MM-DD` devono significare la stessa cosa nei due plugin)
-- [ ] Lettore da riga di comando (`npm run cli -- sentinel report` o script
-      dedicato): senza il twin admin, la v1 sarebbe **write-only** — produrrebbe
-      dati che nessuno può leggere
+- [ ] Fuso orario della rotazione per data allineato a quello di `analytics`:
+      **ora locale del server** (verificato in `analytics/lib/fileManager.js`)
+- [ ] **Allerta di soglia prima del limite.** Al superamento di una percentuale
+      configurabile del budget disco (es. 70%), notifica — via `mailer` se
+      disponibile, comunque nel log applicativo. Avvisare *prima* di dover
+      cancellare dati, non dopo.
+      Destinatario: **campo di configurazione esplicito** (`alertRecipient`), non
+      dedotto dagli account. Motivi: `adminUsers.getObjectToShareToOthersPlugin()`
+      oggi restituisce `{}` — non esiste alcuna API per risolvere l'email di root —
+      e comunque un indirizzo operativo (monitoraggio, on-call) è spesso diverso
+      dall'account amministrativo. Vedi §7 per l'aggancio a `mailer`.
+- [ ] La stessa allerta vale per il tasso di eviction anomalo (§14) e per gli
+      eventi gravi (canary scattato): un unico canale di notifica, più soglie.
 
 ### Osservazione dell'esito (non solo dei blocchi) — **in v1**
 
@@ -366,6 +384,10 @@ e accumulare statistiche locali sulle firme viste.
 
 ## 11. Twin admin (`adminSentinel`) — fase successiva
 
+- [ ] **Interfaccia costruita sulle tre fasi** (osserva → capisci → promuovi):
+      è la spina dorsale della GUI, non un accessorio. Ogni regola mostra a colpo
+      d'occhio in quale fase si trova e cosa serve per passare alla successiva.
+      Deve restare possibile saltare direttamente alla fase di blocco.
 - [ ] Sezione admin con le **Tre Viste**
 - [ ] Vista Dati: richieste filtrate, top regole, top IP, top fingerprint, timeline
 - [ ] Editor JSON5 raw di `sentinelRules.json5` (validazione lato server + scrittura atomica)
@@ -440,19 +462,38 @@ disco. Stessa forma di problema che `rateLimiter` risolve con lo sweep periodico
 
 ### Salt del fingerprint
 
-- [ ] `fingerprintSalt` generato **per installazione**, non un placeholder condiviso:
-      altrimenti le firme sono confrontabili fra siti diversi, che è esattamente ciò
-      che volevamo evitare
-- [ ] Riuso del meccanismo esistente: `scripts/lib/sessionKeyManager.js` (wizard) +
-      avviso al boot sul modello di `core/sessionSecurity.js` se il salt è ancora
-      quello di default
+Decisione: **nessun salt di default distribuito col plugin.** Un placeholder
+condiviso sarebbe il peggiore dei mondi — dà l'illusione della separazione senza
+fornirla, perché tutte le installazioni avrebbero la stessa firma per lo stesso
+client.
+
+- [ ] `fingerprintSalt` vuoto nel `.default.json5`
+- [ ] Se valorizzato → firme locali, non confrontabili fra installazioni
+- [ ] Se vuoto → firme deterministiche, confrontabili: apre a set di regole
+      condivisibili fra siti («questa firma è uno scanner noto»). Legittimo:
+      il fingerprint HTTP è a **bassa entropia** — identifica una famiglia di
+      client (Chrome 120 su Linux), non una persona.
+- [ ] Generazione opzionale nel wizard, riusando `scripts/lib/sessionKeyManager.js`
 
 ---
 
-## 15. Punti aperti / da rivalutare
+## 15. Rimandato a versioni future
 
-- [ ] **Denylist persistente propria** — oggi delegata interamente a `rateLimiter`
-      (soluzione A). Da rivalutare se emerge il bisogno di ban permanenti non scadenti.
+- [ ] **Lettore da riga di comando** dei dati (`npm run cli -- sentinel report` o
+      script dedicato). In v1 la lettura è compito del twin `adminSentinel`.
+- [ ] **API di lookup utenti in `adminUsers`** — oggi
+      `getObjectToShareToOthersPlugin()` restituisce `{}`. Servirebbe qualcosa come
+      `getUsersByRole(roleId)` per risolvere l'email di root senza leggere
+      direttamente `userAccount.json5` di un altro plugin. Utile a sentinel per le
+      allerte, e probabilmente ad altri.
+- [ ] **Denylist persistente propria** (vedi §0: oggi soluzione A)
+- [ ] **Modalità apprendimento**: dopo N giorni di osservazione, proporre
+      automaticamente un set di regole basato su quanto visto
+
+---
+
+## 16. Punti aperti / da rivalutare
+
 - [ ] **Punto cieco `bodyParser`** — sentinel sta a valle di `bodyParser`, quindi una
       richiesta con body malformato riceve 400 da bodyParser e sentinel non la vede
       né la registra. Valutare se intercettare quel caso (e come, senza spostare
@@ -463,5 +504,3 @@ disco. Stessa forma di problema che `rateLimiter` risolve con lo sweep periodico
       (probabilmente no, ma va deciso esplicitamente)
 - [ ] **HTTP/2** — oggi `httpsManager` non lo abilita. Se un domani lo facesse,
       la logica di fingerprint sugli header va rivista (pseudo-header e HPACK).
-- [ ] **Modalità apprendimento** — dopo N giorni di osservazione, proporre
-      automaticamente un set di regole basato su quanto visto *(v3)*
