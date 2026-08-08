@@ -11,6 +11,25 @@ Le fasi (v1/v2/v3) sono indicative dell'ordine, non di una scadenza.
 
 ---
 
+## 0. Decisioni acquisite (non più in discussione)
+
+- Nome del plugin: `sentinel`; twin admin futuro: `adminSentinel`
+- Posizionamento: slot pre-router (`sentinelGate`), fra `maintenanceGate` e `reservedGate`
+- Azione di blocco: **404** riusando `reservedGate.deny()`
+- Modalità di default alla prima installazione: **`monitor`**
+- **Nessuna** interconnessione con `analytics` (log proprio; integrazione futura eventuale)
+- Log eventi: JSONL multi-file per data, **IP pieno**, retention **365 giorni**
+- Interconnessione con `rateLimiter`: **sì**
+- Denylist persistente propria: **no** (soluzione A — tutta la memoria nel tempo
+  è delegata a `rateLimiter`). Da rivalutare in futuro se servono ban non scadenti.
+- Kill switch dal control plane: **sì**
+- Header diagnostico `X-Sentinel-Rule`: **sì, solo con `debugMode >= 1`**
+- Deployment attuale: **processo singolo, senza reverse proxy** — entrambi gli
+  scenari futuri vanno però predisposti fin da subito (vedi §13)
+- Dipendenze npm: **zero** (coerente con la filosofia del progetto)
+
+---
+
 ## 1. Infrastruttura
 
 - [ ] `sentinelGate` in `core/priorityMiddlewares/runtimeGate.js` (guscio pre-router)
@@ -20,10 +39,13 @@ Le fasi (v1/v2/v3) sono indicative dell'ordine, non di una scadenza.
 - [ ] Regola di non-interferenza: superficie riservata chiusa → degrado a `deny()`
       (niente decoy, niente redirect sui path riservati)
 - [ ] Box `[SENTINEL]` al boot se il plugin è attivo ma lo slot è rimasto vuoto
-- [ ] `getWritablePaths()` per la data dir (gate di scrivibilità al boot)
+- [ ] `getWritablePaths()` per le due data dir (`data/`, `decoys/data/`)
 - [ ] Riscrittura di `core/priorityMiddlewares/README.md` (chiude `TODO.md:92` della root)
 - [ ] Kill switch dal control plane: `npm run cli -- sentinel start|stop`
       (riusa `handleRuntimeSurfaceToggle`; via di fuga se una regola chiude tutti fuori)
+- [ ] `sentinel` in `npm run cli -- status`
+- [ ] Verificato: nessuna finestra scoperta al boot — i server HTTP partono
+      (`index.js:518`) dopo il caricamento dei plugin (`index.js:206`)
 
 ---
 
@@ -31,11 +53,24 @@ Le fasi (v1/v2/v3) sono indicative dell'ordine, non di una scadenza.
 
 - [ ] Caricamento di `sentinelRules.json5` (+ `.default.json5`), cache in prod / re-read in debug
 - [ ] Semantica **first-match-wins** sull'ordine dell'array
+- [ ] **Fail-OPEN su regole malformate**: file illeggibile o regola invalida → il filtro
+      non si attiva, box di avviso, il sito resta raggiungibile. Un filtro che
+      fallisce fail-closed trasforma un errore di battitura in un blackout.
+- [ ] `strictValidation` (convenzione già usata da `rateLimiter`, `urlRedirect`,
+      `csrfProtection`): se `true`, un errore di validazione impedisce l'avvio del plugin
 - [ ] Validatore delle regole con guardrail **ReDoS** (cap lunghezza input, pattern rifiutati al load)
 - [ ] Regex pre-compilate una sola volta
 - [ ] Short-circuit per estensione (`Set`, O(1)) prima delle regex
 - [ ] Riuso di `core/patternMatcher.js` per i pattern sui path
-- [ ] Hot-reload via oggetto condiviso (`reloadRules()`, `reloadConfig()`)
+- [ ] **Convenzione `globalPrefix`**: i path nelle regole si scrivono SENZA
+      `globalPrefix`, che viene anteposto dal codice — come già fa
+      `maintenance.exemptPaths` in `runtimeGate.js`
+- [ ] Hot-reload via oggetto condiviso (`reloadRules()`, `reloadConfig()`);
+      swap atomico dell'array compilato, nessuna race con le richieste in volo
+- [ ] Contatore di hit per regola (chi scatta davvero? serve a potare le regole morte).
+      Modello: `urlRedirect/lib/hitCounter.js`
+- [ ] `migrations/` + bump di `schemaVersion` del descrittore quando cambia la
+      struttura di `sentinelRules.json5` (regola del clock: il descrittore è l'orologio)
 
 ### Condizioni di match
 
@@ -45,11 +80,22 @@ Le fasi (v1/v2/v3) sono indicative dell'ordine, non di una scadenza.
 - [ ] `userAgent` (regex / lista / `empty`)
 - [ ] `header` (presenza / assenza / valore)
 - [ ] `query` (pattern sulla querystring)
-- [ ] `ip` / `cidr` (allowlist e denylist)
+- [ ] `ip` / `cidr` (allowlist e denylist) — **IPv4 e IPv6**, con normalizzazione
+      degli indirizzi IPv4-mapped (`::ffff:1.2.3.4`) che `ctx.ip` può restituire
 - [ ] `authenticated` / `roleIds`
 - [ ] `fingerprint` / `fingerprintClass` (vedi §5)
 - [ ] Combinatori `all` / `any` / `not`
 - [ ] `appliesTo`: `anonymous` | `authenticated` | `any`
+
+### Set di regole di default
+
+- [ ] `sentinelRules.default.json5` con un set **conservativo** e commentato
+      (le sole regole sicure al 99% su un CMS che non esegue PHP)
+- [ ] Preset opzionali attivabili singolarmente: scanner comuni, CMS estranei
+      (WordPress/Joomla/Drupal), file sensibili (`.env`, `.git`, dump SQL),
+      metodi anomali. Disattivati di default, documentati uno per uno.
+- [ ] Tester delle regole: data una richiesta d'esempio, dice quale regola matcha
+      e perché (indispensabile per la GUI del twin admin, utile in CLI)
 
 ---
 
@@ -70,6 +116,7 @@ Le fasi (v1/v2/v3) sono indicative dell'ordine, non di una scadenza.
 - [ ] `mode: "monitor" | "enforce"` — **default `monitor` alla prima installazione**
 - [ ] `authenticatedTraffic.mode`: `exempt` | `monitor` | `enforce` — default `monitor`
 - [ ] `enforceExemptRoles` — ruoli mai soggetti a enforcement (default `[0, 1]`)
+- [ ] `X-Sentinel-Rule` sulla risposta **solo** con `debugMode >= 1`
 
 ---
 
@@ -102,6 +149,21 @@ Scala progressiva: ogni livello presuppone il precedente.
       un'installazione isolata e monitorata. È infrastruttura, non più plugin.
       *Punto d'arrivo teorico, fuori dallo scope del plugin.*
 
+### Organizzazione dei file dei decoy
+
+```
+decoys/
+├── README.md      ← spiega la distinzione fra le due cartelle
+├── default/       ← decoy forniti col plugin, VERSIONATI (sovrascritti dagli update)
+└── data/          ← decoy personalizzati dall'utente, MAI toccati (git-ignored)
+```
+
+- [ ] `decoys/README.md` che spiega la distinzione
+- [ ] Risoluzione con precedenza a `decoys/data/` sul file omonimo in `decoys/default/`
+- [ ] `decoys/data/` git-ignored nel contenuto ma presente nel repo (solo il README)
+- [ ] Simmetria con la filosofia `x.default.json5` ↔ `x.json5` del ciclo di vita
+      dei config: il default è la fonte di verità versionata, il vivo è dell'utente
+
 ### Contromisure attive — non implementate per scelta
 
 - [ ] **Zip / gzip bomb — `off` di default, mai nei preset.**
@@ -111,7 +173,9 @@ Scala progressiva: ogni livello presuppone il precedente.
       Scenario d'uso ipotetico e circoscritto: attaccante **specifico e
       identificato**, attivazione mirata su di lui, preferibilmente su indicazione
       delle autorità competenti. Mai come regola generale, mai attiva di default.
-      Se implementata: richiede opt-in esplicito + avviso nel README + log dedicato.
+      Se implementata: opt-in esplicito + avviso nel README + log dedicato
+      (in uno scenario simile la tracciabilità di chi ha attivato cosa e quando
+      è parte della difesa, non un dettaglio).
 
 ---
 
@@ -135,9 +199,16 @@ e accumulare statistiche locali sulle firme viste.
 
 ### Statistiche e reputazione locale
 
-- [ ] Censimento aggregato delle firme (store separato dal log eventi):
-      `firstSeen`, `lastSeen`, `count`, IP distinti, path distinti, quota bloccata
-- [ ] Nessun IP nel censimento (solo conteggi) → profilo privacy leggero, retention lunga
+- [ ] Censimento aggregato delle firme, archivio separato dal log eventi:
+      `firstSeen`, `lastSeen`, `count`, path distinti, quota bloccata
+- [ ] `censusIpMode`: **`none` | `count` | `full`** (default `count`)
+      - `none` → nessuna informazione sugli IP
+      - `count` → solo il **numero** di IP distinti per firma: dà già il segnale
+        botnet (una firma su 500 IP) senza conservare alcun indirizzo
+      - `full` → elenco degli IP per firma: correlazione completa firma↔IP
+- [ ] Se `censusIpMode: "full"`, il censimento diventa un archivio di dati
+      personali a lunga conservazione → **serve una retention anche per il
+      censimento**, non solo per il log eventi
 - [ ] Firma mai vista prima + alta cadenza = sospetto
 - [ ] Reputazione locale: firma con quota di blocchi elevata → escalation automatica *(v3)*
 
@@ -155,7 +226,8 @@ e accumulare statistiche locali sulle firme viste.
 
 - [ ] ~~Fingerprint TLS (JA3/JA4)~~ — richiede il ClientHello grezzo, che Node non
       espone; servirebbe un hook sotto `httpsManager`, e funzionerebbe **solo** se
-      ital8cms termina il TLS (non dietro nginx). Rivalutare solo se emerge il caso d'uso.
+      ital8cms termina il TLS (non dietro reverse proxy). Verificato: `httpsManager`
+      usa `https` classico, senza HTTP/2. Rivalutare solo se emerge il caso d'uso.
 - [ ] ~~Fingerprint TCP/IP (p0f-style)~~ — richiede accesso ai raw socket, non
       disponibile dallo userland Node.
 - [ ] ~~Fingerprint attivo lato browser (canvas, font, WebGL)~~ — **strumento sbagliato
@@ -169,7 +241,7 @@ e accumulare statistiche locali sulle firme viste.
 
 - [ ] JSONL multi-file con rotazione per data (`sentinel-YYYY-MM-DD.jsonl`),
       stessa logica di `analytics`: `none` / `daily` / `weekly` / `monthly`
-- [ ] `retentionDays` con pulizia all'avvio
+- [ ] `retentionDays: 365` con pulizia all'avvio
 - [ ] **IP pieno** conservato (scelta esplicita: un log di sicurezza senza IP è inutile)
 - [ ] Schema evento con nomi di campo **compatibili con quelli di analytics** dove il
       significato coincide → una futura lettura da parte di analytics non richiederà traduttori
@@ -178,6 +250,17 @@ e accumulare statistiche locali sulle firme viste.
       blocco né rompere la risposta
 - [ ] **Invariante:** `sentinel` non deve avere una directory `webPages/`
       (altrimenti il Plugin Pages System creerebbe un symlink verso la cartella del plugin)
+- [ ] Nota nel README sulla base giuridica: IP pieni per 365 giorni a fini di
+      sicurezza (legittimo interesse, considerando 49 GDPR)
+
+### Osservazione dell'esito (non solo dei blocchi)
+
+- [ ] Per le richieste **lasciate passare**, `await next()` e osservazione dello
+      status finale: permette di scoprire pattern di attacco per cui non esiste
+      ancora una regola (es. «questo IP ha collezionato 40 404 diversi in un minuto»)
+- [ ] Solo aggregato, non una riga di log per richiesta (il volume sarebbe quello
+      di analytics)
+- [ ] Attivabile/disattivabile: ha un costo su ogni richiesta servita
 
 ---
 
@@ -190,6 +273,14 @@ e accumulare statistiche locali sulle firme viste.
 - [ ] Chiave per account (`user:<username>`) invece dell'IP sul traffico autenticato:
       coglie un account compromesso anche se distribuito su molti IP
 - [ ] `banClient()` immediato per le regole gravi (es. canary token usato)
+
+### Altre interconnessioni possibili (da valutare)
+
+- [ ] `mailer`: notifica su evento grave (canary scattato, attacco massivo).
+      Stesso modello: lazy, opzionale, nessuna dipendenza dichiarata.
+- [ ] Fallimenti CSRF ripetuti come segnale di automazione
+      (`csrfProtection` enforce nel route-wrap, quindi a valle di sentinel:
+      servirebbe un canale dedicato)
 
 ---
 
@@ -225,6 +316,7 @@ e accumulare statistiche locali sulle firme viste.
 - [ ] Test: superficie riservata chiusa → nessun decoy né redirect sui path riservati
 - [ ] Test: plugin disabilitato → gate pass-through, nessun impatto
 - [ ] Test: guardrail ReDoS sul validatore
+- [ ] Test: regole malformate → fail-open, il sito resta raggiungibile
 - [ ] Voce in `CHANGELOG.md` (progetto alpha: breaking change ammessi ma documentati)
 
 ---
@@ -235,6 +327,7 @@ e accumulare statistiche locali sulle firme viste.
 - [ ] Vista Dati: richieste filtrate, top regole, top IP, top fingerprint, timeline
 - [ ] Editor JSON5 raw di `sentinelRules.json5` (validazione lato server + scrittura atomica)
 - [ ] Form strutturato coordinato con l'editor (validatore condiviso col service plugin)
+- [ ] Tester delle regole nella GUI (incolla una richiesta → dice cosa matcherebbe)
 - [ ] Azioni live via oggetto condiviso: toggle regola, ban immediato, passaggio
       `monitor` ↔ `enforce` senza riavvio
 
@@ -244,3 +337,59 @@ e accumulare statistiche locali sulle firme viste.
 
 - [ ] Promuovere `analytics/lib/botDetector.js` in `core/` (precedente: `patternMatcher.js`,
       `escapeHtml.js`) — evita due liste di firme UA destinate a divergere
+- [ ] Valutare la promozione in `core/` della risoluzione dell'identità client
+      (oggi `rateLimiter/lib/keyResolver.js`): sentinel non può dipendere da
+      rateLimiter, quindi o si duplica o si condivide. Stesso precedente.
+
+---
+
+## 13. Predisposizione per scenari futuri
+
+Oggi: processo singolo, nessun reverse proxy. Entrambe le cose possono cambiare,
+e le decisioni che le rendono indolori vanno prese **ora**, non dopo.
+
+### Reverse proxy
+
+- [ ] `trustProxy: false` di default (stessa convenzione di `rateLimiter`)
+- [ ] Quando `true`, l'IP reale si legge da `X-Forwarded-For`; da valutare
+      `trustedProxyCount` per prendere la voce giusta **da destra** invece della
+      prima da sinistra (la prima è scrivibile dal client: con la sola lettura
+      "primo valore" un attaccante può attribuire i propri blocchi a un IP altrui
+      o aggirare un ban cambiando header a ogni richiesta)
+- [ ] Documentare che dietro un proxy il fingerprint TLS è impossibile e quello
+      HTTP può essere degradato (alcuni proxy normalizzano o riordinano gli header)
+- [ ] Coerenza con `app.proxy` di Koa se in futuro venisse impostato
+
+### Cluster multi-processo
+
+- [ ] **Nessun read-modify-write su file condivisi.** Il censimento delle firme e
+      i contatori vanno scritti in shard per processo e uniti in lettura.
+- [ ] Nomi di file con suffisso di istanza: `sentinel-YYYY-MM-DD.<instanceId>.jsonl`,
+      `fingerprintCensus.<instanceId>.json5`. Con un processo solo il suffisso è
+      costante e il comportamento è identico a oggi: costo zero adesso, nessuna
+      riscrittura dopo.
+- [ ] Lettura = merge di tutti gli shard (il twin admin lo fa già trasparentemente)
+- [ ] Documentare i limiti noti in cluster: stato in memoria per-worker
+      (censimento a caldo, coerenza di sessione) e escalation `rateLimiter`
+      per-worker — limitazione che `rateLimiter` ha già oggi
+- [ ] `append` di una singola riga JSONL è atomico su POSIX sotto i 4 KB:
+      scrivere **riga per riga**, non blocchi bufferizzati di dimensione arbitraria
+
+---
+
+## 14. Punti aperti / da rivalutare
+
+- [ ] **Denylist persistente propria** — oggi delegata interamente a `rateLimiter`
+      (soluzione A). Da rivalutare se emerge il bisogno di ban permanenti non scadenti.
+- [ ] **Punto cieco `bodyParser`** — sentinel sta a valle di `bodyParser`, quindi una
+      richiesta con body malformato riceve 400 da bodyParser e sentinel non la vede
+      né la registra. Valutare se intercettare quel caso (e come, senza spostare
+      sentinel a monte e perdere sessione e body).
+- [ ] **Interazione con `hideExtension`** — verificare il comportamento delle regole
+      per estensione quando i clean URL sono attivi
+- [ ] **Profilo `demo`** — decidere se sentinel debba comportarsi diversamente
+      (probabilmente no, ma va deciso esplicitamente)
+- [ ] **HTTP/2** — oggi `httpsManager` non lo abilita. Se un domani lo facesse,
+      la logica di fingerprint sugli header va rivista (pseudo-header e HPACK).
+- [ ] **Modalità apprendimento** — dopo N giorni di osservazione, proporre
+      automaticamente un set di regole basato su quanto visto *(v3)*
