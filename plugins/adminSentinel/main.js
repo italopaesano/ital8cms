@@ -28,9 +28,11 @@
 'use strict';
 
 const path = require('path');
+const JSON5 = require('json5');
 const loadJson5 = require('../../core/loadJson5');
 const reader = require('./lib/sentinelDataReader');
 const aggregator = require('./lib/aggregator');
+const rulesFile = require('./lib/rulesFileManager');
 
 const pluginName = path.basename(__dirname);
 
@@ -40,6 +42,7 @@ const ownConfig = loadJson5(path.join(__dirname, 'pluginConfig.json5'));
 const custom = ownConfig.custom || {};
 
 let myPluginSys = null;
+let ownFolder = null;
 
 // Il filtro delle richieste è configurazione sensibile: root (0) e admin (1).
 const pluginAccess = {
@@ -76,11 +79,58 @@ function serviceUnavailable(extra = {}) {
   return { enabled: false, ...extra };
 }
 
+/**
+ * Valida il testo dell'editor: prima la sintassi JSON5, poi le regole vere e
+ * proprie con il validatore **del service**.
+ *
+ * Riusare quel validatore invece di riscriverne uno qui è la sola garanzia che
+ * ciò che la GUI accetta e ciò che il motore accetta restino la stessa cosa: due
+ * implementazioni divergerebbero al primo campo nuovo.
+ *
+ * @param {*} content
+ * @param {object} sentinel - oggetto condiviso del service
+ * @returns {{ ok: boolean, errors: string[], warnings: string[], ruleCount: number }}
+ */
+function validateText(content, sentinel) {
+  if (typeof content !== 'string' || content.trim() === '') {
+    return { ok: false, errors: ['contenuto vuoto'], warnings: [], ruleCount: 0 };
+  }
+
+  let parsed;
+  try {
+    parsed = JSON5.parse(content);
+  } catch (err) {
+    return { ok: false, errors: [`sintassi JSON5 non valida: ${err.message}`], warnings: [], ruleCount: 0 };
+  }
+
+  const result = sentinel.validateRules(parsed);
+  return {
+    ok: result.valid,
+    errors: result.errors,
+    warnings: result.warnings,
+    ruleCount: result.rules ? result.rules.length : 0,
+  };
+}
+
 module.exports = {
 
   async loadPlugin(pluginSys, pathPluginFolder) {
     myPluginSys = pluginSys;
+    ownFolder = pathPluginFolder;
     console.log(`[${pluginName}] Plugin caricato — GUI di lettura per il filtro sentinel`);
+  },
+
+  /**
+   * I backup dell'editor raw vengono creati pigramente al primo salvataggio.
+   * Dichiararli qui li fa sondare al boot: una cartella non scrivibile diventa
+   * un box [STORAGE] azionabile invece di un errore al primo tentativo di
+   * salvare, cioè nel momento peggiore.
+   */
+  getWritablePaths(pluginSys, pathPluginFolder) {
+    return [{
+      path: path.join(pathPluginFolder || __dirname, rulesFile.BACKUP_DIR_NAME),
+      purpose: 'backups of sentinelRules.json5 before raw edits',
+    }];
   },
 
   /** Parametri UI letti dalla config, esposti ai template. */
@@ -165,8 +215,12 @@ module.exports = {
             return;
           }
           const hits = reader.readRuleHits(dataDir);
-          const names = sentinel && typeof sentinel.getRuleNames === 'function' ? sentinel.getRuleNames() : [];
-          ctx.body = { enabled: true, rules: aggregator.mergeRuleStatus(hits, names) };
+          // Le definizioni complete, non i soli nomi: la GUI ha bisogno
+          // dell'`action` in vigore per proporre il gesto giusto.
+          let definitions = [];
+          if (sentinel && typeof sentinel.getRules === 'function') definitions = sentinel.getRules();
+          else if (sentinel && typeof sentinel.getRuleNames === 'function') definitions = sentinel.getRuleNames();
+          ctx.body = { enabled: true, rules: aggregator.mergeRuleStatus(hits, definitions) };
         },
       },
 
@@ -233,6 +287,159 @@ module.exports = {
             enforcedOnly: ctx.query.enforcedOnly === '1',
           });
           ctx.body = { enabled: true, ...result };
+        },
+      },
+
+      // ─────────────────────────────────────────────────────────────────────
+      // SCRITTURA — promozione, retrocessione, editor raw
+      // ─────────────────────────────────────────────────────────────────────
+
+      /**
+       * Promuove o retrocede una regola.
+       *
+       * La scrittura la fa il SERVICE, non questo plugin: lì stanno la
+       * conoscenza del formato del file e l'obbligo di ricaricare dopo. Se la
+       * facesse il twin, prima o poi qualcuno scriverebbe senza ricaricare e la
+       * GUI direbbe "salvato" mentre il filtro continua col vecchio.
+       */
+      {
+        method: 'POST',
+        path: '/rules/action',
+        access: pluginAccess,
+        handler: async (ctx) => {
+          const sentinel = getSentinel();
+          if (!sentinel || typeof sentinel.setRuleAction !== 'function') {
+            ctx.status = 503;
+            ctx.body = serviceUnavailable({ error: 'sentinel non disponibile' });
+            return;
+          }
+
+          const body = ctx.request.body || {};
+          const ruleName = typeof body.ruleName === 'string' ? body.ruleName.trim() : '';
+          const action = typeof body.action === 'string' ? body.action.trim() : '';
+
+          if (!ruleName || !action) {
+            ctx.status = 400;
+            ctx.body = { ok: false, error: 'ruleName e action sono obbligatori' };
+            return;
+          }
+
+          try {
+            const result = sentinel.setRuleAction(ruleName, action);
+            ctx.body = { ok: true, ...result, ruleName, action };
+          } catch (err) {
+            // L'editor verifica la propria modifica prima di scrivere: se
+            // arriva qui, il file non è stato toccato.
+            ctx.status = 400;
+            ctx.body = { ok: false, error: err.message };
+          }
+        },
+      },
+
+      /** Interruttore globale monitor ↔ enforce. */
+      {
+        method: 'POST',
+        path: '/mode',
+        access: pluginAccess,
+        handler: async (ctx) => {
+          const sentinel = getSentinel();
+          if (!sentinel || typeof sentinel.setMode !== 'function') {
+            ctx.status = 503;
+            ctx.body = serviceUnavailable({ error: 'sentinel non disponibile' });
+            return;
+          }
+          const mode = ctx.request.body && ctx.request.body.mode;
+          try {
+            const result = await sentinel.setMode(mode);
+            ctx.body = { ok: true, ...result, mode };
+          } catch (err) {
+            ctx.status = 400;
+            ctx.body = { ok: false, error: err.message };
+          }
+        },
+      },
+
+      /** Vista B — lettura del file di regole come testo. */
+      {
+        method: 'GET',
+        path: '/rules/raw',
+        access: pluginAccess,
+        handler: async (ctx) => {
+          const sentinel = getSentinel();
+          if (!sentinel || typeof sentinel.getRulesFilePath !== 'function') {
+            ctx.body = serviceUnavailable({ content: '' });
+            return;
+          }
+          const result = rulesFile.readRaw(sentinel.getRulesFilePath());
+          ctx.body = { enabled: true, ...result, backups: rulesFile.listBackups(ownFolder || __dirname) };
+        },
+      },
+
+      /**
+       * Vista B — validazione senza salvare.
+       *
+       * Separata dal salvataggio di proposito: si deve poter controllare una
+       * regola prima di metterla in produzione, ed è anche il modo di capire un
+       * errore senza doverlo prima provocare.
+       */
+      {
+        method: 'POST',
+        path: '/rules/validate',
+        access: pluginAccess,
+        handler: async (ctx) => {
+          const sentinel = getSentinel();
+          if (!sentinel || typeof sentinel.validateRules !== 'function') {
+            ctx.status = 503;
+            ctx.body = serviceUnavailable();
+            return;
+          }
+          ctx.body = validateText(ctx.request.body && ctx.request.body.content, sentinel);
+        },
+      },
+
+      /** Vista B — salvataggio del testo, previa validazione e backup. */
+      {
+        method: 'POST',
+        path: '/rules/save',
+        access: pluginAccess,
+        handler: async (ctx) => {
+          const sentinel = getSentinel();
+          if (!sentinel || typeof sentinel.getRulesFilePath !== 'function') {
+            ctx.status = 503;
+            ctx.body = serviceUnavailable();
+            return;
+          }
+
+          const content = ctx.request.body && ctx.request.body.content;
+          const check = validateText(content, sentinel);
+
+          // Validazione LATO SERVER prima di ogni scrittura, con il validatore
+          // del service: quella del browser è comodità, questa è la garanzia.
+          if (!check.ok) {
+            ctx.status = 400;
+            ctx.body = { ...check, saved: false };
+            return;
+          }
+
+          const filePath = sentinel.getRulesFilePath();
+          const backup = rulesFile.createBackup(filePath, ownFolder || __dirname, custom.maxBackupsPerFile);
+          const written = rulesFile.writeRaw(filePath, content);
+
+          if (!written.ok) {
+            ctx.status = 500;
+            ctx.body = { ok: false, saved: false, error: written.error };
+            return;
+          }
+
+          const ruleCount = sentinel.reloadRules();
+          ctx.body = {
+            ok: true,
+            saved: true,
+            ruleCount,
+            warnings: check.warnings,
+            backup: backup.file,
+            backupError: backup.error,
+          };
         },
       },
 

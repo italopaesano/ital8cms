@@ -121,12 +121,21 @@ vanno esposte a chiunque.
 ```
 GET  /status                        stato vivo + effectivelyEnforcing + dataDir
 GET  /summary?days=7                KPI, composizione, timeline, quota non classificata
-GET  /rules                         contatori per regola + indicatore di promuovibilità
+GET  /rules                         contatori + azione in vigore + indicatore di promuovibilità
 GET  /fingerprints?limit=50         censimento delle impronte
 GET  /scanners?minPaths=20          sospetti scanner
 GET  /events?limit=100&...          eventi recenti (ruleName, category, ip, enforcedOnly)
 POST /flush                         forza il salvataggio degli archivi prima di leggerli
+
+POST /rules/action                  { ruleName, action } — promuovi o retrocedi
+POST /mode                          { mode: "monitor"|"enforce" }
+GET  /rules/raw                     testo del file + elenco dei backup
+POST /rules/validate                { content } — valida senza salvare
+POST /rules/save                    { content } — valida, fa il backup, salva, ricarica
 ```
+
+Le POST richiedono il token CSRF, iniettato automaticamente nelle pagine admin
+dall'hook `head` di `csrfProtection`: il `fetch` del browser lo aggiunge da sé.
 
 ## Sicurezza dell'interfaccia
 
@@ -137,14 +146,56 @@ dati è un bersaglio, non uno strumento.
 
 ---
 
+## Promozione e retrocessione
+
+Nella tabella delle regole ogni riga ha un pulsante che propone **il passo
+opposto** a quello attuale: `⏻ promuovi` su una regola in osservazione,
+`↩ retrocedi` su una in blocco.
+
+**La retrocessione conta più della promozione.** Se disfare richiedesse di aprire
+un editor JSON5 alle tre di notte, nessuno promuoverebbe niente: per questo il
+pulsante che retrocede è vistoso quanto quello che promuove, non nascosto in un
+menu. E resta comunque la via più rapida, dalla riga di comando:
+
+```bash
+npm run cli -- sentinel monitor    # ferma TUTTO l'enforcement, senza perdere i dati
+```
+
+Promuovere una regola che ha già colpito utenti autenticati chiede conferma
+nominando il numero: è la mossa che chiude fuori qualcuno.
+
+L'interruttore globale in alto commuta fra osservazione ed enforcement, con la
+stessa logica: propone sempre l'altra modalità, e attivare l'enforcement chiede
+conferma ricordando come annullarlo.
+
+**La scrittura la fa il service, non questo plugin.** In `sentinel` stanno la
+conoscenza del formato del file e l'obbligo di ricaricare dopo ogni modifica: se
+la facesse il twin, prima o poi qualcuno scriverebbe senza ricaricare e la GUI
+direbbe «salvato» mentre il filtro continua col vecchio.
+
+## Editor JSON5 (Vista B)
+
+Scheda **Regole (JSON5)**: il file grezzo, con validazione separata dal
+salvataggio.
+
+- **Il testo viene salvato esattamente come lo scrivi**, commenti compresi. La
+  validazione controlla, non riformatta: se il salvataggio passasse da
+  `parse` → `stringify` sparirebbero commenti, indentazione e ordine delle
+  chiavi — e in `sentinelRules.json5` i commenti sono la descrizione di cosa
+  osserva ogni regola.
+- **Validazione lato server** con il validatore **del service**: riusarlo invece
+  di riscriverne uno è la sola garanzia che ciò che la GUI accetta e ciò che il
+  motore accetta restino la stessa cosa.
+- **Backup prima di ogni salvataggio** (ultimi 10). L'editor raw è l'unica
+  operazione della GUI che può distruggere il file in un colpo solo.
+- Un salvataggio rifiutato **non tocca il file su disco**.
+- Avviso di modifiche non salvate uscendo dalla pagina.
+
+Le modifiche entrano in vigore **subito**: il server chiama `reloadRules()` dopo
+la scrittura, nessun riavvio.
+
 ## Cosa NON fa ancora
 
-È la **Vista Dati**, la prima delle [Tre Viste](../../CLAUDE.md). Mancano:
-
-- editor JSON5 delle regole (Vista B) e form strutturato (Vista C);
-- **promozione e retrocessione in un gesto** — oggi si edita
-  `sentinelRules.json5` a mano;
-- tester delle regole nella GUI.
-
-Sono i passi 2 e 3 del piano di lavoro in
-[`plugins/sentinel/TODO.md`](../sentinel/TODO.md).
+Manca la **Vista C**, il form strutturato campo per campo, e il tester delle
+regole nella GUI (passo 3 del piano di lavoro in
+[`plugins/sentinel/TODO.md`](../sentinel/TODO.md)).

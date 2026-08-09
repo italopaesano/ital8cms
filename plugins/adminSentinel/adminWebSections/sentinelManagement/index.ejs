@@ -4,6 +4,11 @@
 
 <div class="container mt-4 sn-admin">
 
+  <ul class="nav nav-pills mb-3">
+    <li class="nav-item"><a class="nav-link active" href="/<%= passData.adminPrefix %>/sentinelManagement/index.ejs"><%= __({it: 'Panoramica', en: 'Overview'}, passData.ctx) %></a></li>
+    <li class="nav-item"><a class="nav-link" href="/<%= passData.adminPrefix %>/sentinelManagement/rules.ejs"><%= __({it: 'Regole (JSON5)', en: 'Rules (JSON5)'}, passData.ctx) %></a></li>
+  </ul>
+
   <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
     <h3 class="mb-0">
       🔭 <%= __({it: 'Sentinel — filtro delle richieste', en: 'Sentinel — request filter'}, passData.ctx) %>
@@ -22,6 +27,7 @@
           <%= __({it: 'Auto-aggiornamento', en: 'Auto-refresh'}, passData.ctx) %>
         </label>
       </div>
+      <button id="btnToggleMode" class="btn btn-outline-danger btn-sm" disabled>—</button>
       <button id="btnRefresh" class="btn btn-outline-secondary btn-sm">
         <span id="loadingSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
         ⟳ <%= __({it: 'Aggiorna', en: 'Refresh'}, passData.ctx) %>
@@ -174,9 +180,10 @@
                 <th class="text-end"><%= __({it: 'Bot', en: 'Bots'}, passData.ctx) %></th>
                 <th class="text-end"><%= __({it: 'Utenti autenticati', en: 'Authenticated users'}, passData.ctx) %></th>
                 <th><%= __({it: 'Promuovibile', en: 'Promotable'}, passData.ctx) %></th>
+                <th><%= __({it: 'Azione', en: 'Action'}, passData.ctx) %></th>
               </tr></thead>
               <tbody id="ruleTable">
-                <tr><td colspan="7" class="text-muted p-3"><%= __({it: 'Caricamento…', en: 'Loading…'}, passData.ctx) %></td></tr>
+                <tr><td colspan="8" class="text-muted p-3"><%= __({it: 'Caricamento…', en: 'Loading…'}, passData.ctx) %></td></tr>
               </tbody>
             </table>
           </div>

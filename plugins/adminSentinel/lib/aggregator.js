@@ -83,20 +83,37 @@ function toSortedArray(map, keyName) {
  * la tabella mostra anche quelle che non hanno MAI sparato — che sono
  * l'informazione più utile per potare.
  *
- * @param {Array<object>} ruleHits    - da sentinelDataReader.readRuleHits
- * @param {Array<string>} ruleNames   - dall'oggetto condiviso del service
+ * Accetta sia un elenco di NOMI sia le definizioni complete: queste ultime
+ * portano l'`action` in vigore, che serve alla GUI per sapere quale gesto
+ * proporre — promuovere o retrocedere.
+ *
+ * @param {Array<object>} ruleHits          - da sentinelDataReader.readRuleHits
+ * @param {Array<string|object>} definitions - dall'oggetto condiviso del service
  * @returns {Array<object>}
  */
-function mergeRuleStatus(ruleHits, ruleNames) {
+function mergeRuleStatus(ruleHits, definitions) {
   const byName = new Map(ruleHits.map((r) => [r.ruleName, r]));
   const out = [];
 
-  for (const name of ruleNames || []) {
+  for (const entry of definitions || []) {
+    const definition = typeof entry === 'string' ? { name: entry } : (entry || {});
+    const name = definition.name;
+    if (!name) continue;
+
+    const meta = {
+      action: definition.action || null,
+      category: definition.category || null,
+      description: definition.description || '',
+      enabled: definition.enabled !== false,
+      escalatesTo: definition.escalatesTo || null,
+    };
+
     const hits = byName.get(name);
     out.push(hits
-      ? { ...hits, defined: true }
+      ? { ...hits, ...meta, defined: true }
       : {
         ruleName: name,
+        ...meta,
         defined: true,
         hits: 0, enforcedHits: 0, authenticatedHits: 0, botHits: 0, distinctIps: 0,
         firstHit: null, lastHit: null,

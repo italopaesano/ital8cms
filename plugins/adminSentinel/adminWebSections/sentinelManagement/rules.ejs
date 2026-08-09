@@ -1,0 +1,79 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<link rel="stylesheet" href="/<%= passData.adminPrefix %>/sentinelManagement/sentinel-admin.css">
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
+
+<div class="container mt-4 sn-admin">
+
+  <ul class="nav nav-pills mb-3">
+    <li class="nav-item"><a class="nav-link" href="/<%= passData.adminPrefix %>/sentinelManagement/index.ejs"><%= __({it: 'Panoramica', en: 'Overview'}, passData.ctx) %></a></li>
+    <li class="nav-item"><a class="nav-link active" href="/<%= passData.adminPrefix %>/sentinelManagement/rules.ejs"><%= __({it: 'Regole (JSON5)', en: 'Rules (JSON5)'}, passData.ctx) %></a></li>
+  </ul>
+
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <h3 class="mb-0">📝 <%= __({it: 'Editor delle regole', en: 'Rules editor'}, passData.ctx) %></h3>
+    <div class="d-flex gap-2">
+      <button id="btnReload" class="btn btn-outline-secondary btn-sm">
+        ⟳ <%= __({it: 'Ricarica da disco', en: 'Reload from disk'}, passData.ctx) %>
+      </button>
+      <button id="btnValidate" class="btn btn-outline-primary btn-sm">
+        ✓ <%= __({it: 'Valida', en: 'Validate'}, passData.ctx) %>
+      </button>
+      <button id="btnSave" class="btn btn-primary btn-sm" disabled>
+        💾 <%= __({it: 'Salva', en: 'Save'}, passData.ctx) %>
+      </button>
+    </div>
+  </div>
+
+  <div id="globalAlert" class="alert d-none" role="alert"></div>
+
+  <div class="alert alert-secondary small">
+    <%= __({
+      it: 'Il file viene salvato esattamente come lo scrivi, commenti compresi: la validazione controlla, non riformatta. Un backup viene creato prima di ogni salvataggio.',
+      en: 'The file is saved exactly as you write it, comments included: validation checks, it does not reformat. A backup is taken before every save.'
+    }, passData.ctx) %>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-xl-8">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <code class="small">sentinelRules.json5</code>
+          <span id="dirtyBadge" class="badge bg-warning text-dark d-none">
+            <%= __({it: 'modifiche non salvate', en: 'unsaved changes'}, passData.ctx) %>
+          </span>
+        </div>
+        <div class="card-body p-0">
+          <textarea id="rulesEditor" class="form-control sn-editor" spellcheck="false" wrap="off"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-4">
+      <div class="card mb-3">
+        <div class="card-header"><%= __({it: 'Esito della validazione', en: 'Validation result'}, passData.ctx) %></div>
+        <div class="card-body">
+          <div id="validationResult" class="small text-muted">
+            <%= __({it: 'Non ancora validato.', en: 'Not validated yet.'}, passData.ctx) %>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><%= __({it: 'Backup', en: 'Backups'}, passData.ctx) %></div>
+        <div class="card-body p-0">
+          <ul id="backupList" class="list-group list-group-flush small">
+            <li class="list-group-item text-muted"><%= __({it: 'Nessuno.', en: 'None.'}, passData.ctx) %></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const SN_API = '/<%= passData.apiPrefix %>/adminSentinel';
+</script>
+<script src="/<%= passData.adminPrefix %>/sentinelManagement/rules-editor.js"></script>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>

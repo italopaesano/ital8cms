@@ -48,6 +48,8 @@ const PatternMatcher = require('../../core/patternMatcher');
 const { buildFingerprint } = require('./lib/requestFingerprint');
 const { buildSubject, findFirstMatch } = require('./lib/ruleMatcher');
 const { validateRules, logValidationResults } = require('./lib/ruleValidator');
+const setJson5Key = require('../../core/setJson5Key');
+const { setRuleAction: editRuleAction } = require('./lib/rulesFileEditor');
 const { SentinelLog } = require('./lib/sentinelLog');
 const { FingerprintCensus, OutcomeCensus } = require('./lib/census');
 const RuleHitCounter = require('./lib/ruleHitCounter');
@@ -576,6 +578,24 @@ module.exports = {
       }),
       getRuleSummary: () => (hitCounter ? hitCounter.getSummary() : []),
       getRuleNames: () => compiledRules.map((r) => r.name),
+
+      /**
+       * Definizione corrente delle regole, senza il `match` compilato.
+       *
+       * Il twin ha bisogno dell'`action` in vigore per sapere quale gesto
+       * proporre — promuovere o retrocedere — e ricavarla rileggendo il file
+       * significherebbe mostrare qualcosa di diverso da ciò che il motore sta
+       * applicando in quel momento.
+       */
+      getRules: () => compiledRules.map((r) => ({
+        name: r.name,
+        action: r.action,
+        category: r.category,
+        description: r.description,
+        appliesTo: r.appliesTo,
+        enabled: r.enabled,
+        escalatesTo: r.escalate ? r.escalate.rateLimiterRule : null,
+      })),
       getSuspectedScanners: (minPaths) => (outcomeCensus ? outcomeCensus.getSuspectedScanners(minPaths) : []),
       getConfig: () => JSON.parse(JSON.stringify(custom)),
 
@@ -584,6 +604,49 @@ module.exports = {
         knownRateLimiterRules: getRateLimiterRuleNames(),
         allowedRedirectHosts: Array.isArray(custom.allowedRedirectHosts) ? custom.allowedRedirectHosts : [],
       }),
+
+      // ── Scrittura (usata dal twin adminSentinel) ──
+      // Stanno QUI e non nel twin perché la conoscenza del formato del file e
+      // l'obbligo di ricaricare dopo ogni scrittura appartengono al service:
+      // se stessero di là, prima o poi qualcuno scriverebbe senza ricaricare e
+      // la GUI direbbe "salvato" mentre il filtro continua col vecchio.
+      getRulesFilePath: () => path.join(pluginFolder, 'sentinelRules.json5'),
+
+      /**
+       * Promuove o retrocede una regola.
+       *
+       * La RETROCESSIONE conta più della promozione: un percorso a senso unico
+       * invita a non imboccarlo mai. Se disfare richiedesse di aprire un editor
+       * JSON5 alle tre di notte, nessuno promuoverebbe niente.
+       */
+      setRuleAction: (ruleName, action) => {
+        const filePath = path.join(pluginFolder, 'sentinelRules.json5');
+        const result = editRuleAction(filePath, ruleName, action);
+        if (result.changed) {
+          reloadRules();
+          log('info', `regola "${ruleName}": ${result.previous} → ${action}`);
+        }
+        return result;
+      },
+
+      /**
+       * Cambia la modalità globale (tetto sull'enforcement).
+       *
+       * `custom.mode` è un path annidato con parent oggetto, quindi setJson5Key
+       * basta e i commenti restano intatti.
+       */
+      setMode: async (mode) => {
+        if (mode !== 'monitor' && mode !== 'enforce') {
+          throw new Error(`modalità non valida: ${mode} (ammesse: monitor, enforce)`);
+        }
+        const previous = custom.mode;
+        if (previous === mode) return { changed: false, previous };
+
+        await setJson5Key(path.join(pluginFolder, 'pluginConfig.json5'), ['custom', 'mode'], mode);
+        custom.mode = mode; // effetto immediato, senza attendere un reload completo
+        log('info', `modalità globale: ${previous} → ${mode}`);
+        return { changed: true, previous };
+      },
 
       // ── Ricarica a caldo ──
       reloadRules,

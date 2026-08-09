@@ -73,7 +73,7 @@ rende leggibile e governabile quello che c'è, poi si aggiungono le azioni.**
 |---|---|---|
 | ~~**0**~~ | ~~Debito e attriti~~ ✅ | Chiudere le cose piccole già mature prima di aprire fronti nuovi |
 | ~~**1**~~ | ~~`adminSentinel` — Vista Dati~~ ✅ | L'unico passo che aumenta il valore del lavoro già fatto invece di aggiungerne. Stabilizza il contratto dell'oggetto condiviso prima che altre feature ci si appoggino |
-| **2** | Promozione e retrocessione | Completa le fasi 2 e 3. **La retrocessione conta più della promozione**: un percorso a senso unico invita a non imboccarlo mai |
+| ~~**2**~~ | ~~Promozione e retrocessione~~ ✅ | Completa le fasi 2 e 3. **La retrocessione conta più della promozione**: un percorso a senso unico invita a non imboccarlo mai |
 | **3** | Tester delle regole | Serve appena si comincia a scrivere regole proprie, ed è il prerequisito per scrivere in sicurezza quelle dei passi successivi |
 | **4** | `redirect` + `decoy` L0/L1 | Gate, validatore e non-interferenza sono **già scritti e testati**: manca solo chi produce il corpo. Miglior rapporto valore/codice nuovo |
 | **5** | Canary (`decoy` L2) + `banClient` + allerte | Il salto da difesa passiva a **sensore**: certezza di un attaccante attivo, non inferenza |
@@ -219,12 +219,12 @@ famiglia di richieste.
       registra OGNI impronta, anche quando nessuna regola ha matchato (`count` −
       `matchedCount` = traffico non classificato), ma manca ancora una vista che
       lo presenti come tale
-- [~] Flusso di **promozione `monitor` → `block`** come percorso principale del
+- [x] Flusso di **promozione `monitor` → `block`** come percorso principale del
       prodotto, non come dettaglio di configurazione — ma **mai obbligatorio**:
       una regola può nascere direttamente in `block` se chi la scrive sa cosa fa.
       Le tre fasi sono un percorso guidato offerto, non un vincolo imposto.
-      *In v1 il percorso esiste nei dati e nella documentazione; la promozione è
-      un'operazione manuale sul file. Il gesto singolo arriva col twin admin.*
+      *Fatto nel passo 2: pulsante per riga che propone sempre il gesto opposto,
+      con conferma nominata quando la regola ha colpito utenti autenticati.*
 - [x] Indicatori di confidenza calcolati dal log a supporto della promozione:
       quanti hit, quanti IP distinti, quota da bot riconosciuti, e soprattutto
       **quanti utenti autenticati sarebbero stati colpiti** (se > 0, non promuovere).
@@ -499,13 +499,15 @@ e accumulare statistiche locali sulle firme viste.
       quale fase si trova ogni regola e cosa serve per passare alla successiva
       (colonna «utenti autenticati» + indicatore di promuovibilità); il *gesto*
       per promuovere arriva col passo 2.
-- [~] Sezione admin con le **Tre Viste** — Vista Dati fatta, B e C al passo 2
+- [~] Sezione admin con le **Tre Viste** — Viste A e B fatte, C (form strutturato) aperta
 - [x] Vista Dati: richieste filtrate, top regole, top IP, top fingerprint, timeline
-- [ ] Editor JSON5 raw di `sentinelRules.json5` (validazione lato server + scrittura atomica)
+- [x] Editor JSON5 raw di `sentinelRules.json5` (validazione lato server + scrittura atomica,
+      backup prima di ogni salvataggio, testo salvato senza riformattazione)
 - [ ] Form strutturato coordinato con l'editor (validatore condiviso col service plugin)
 - [ ] Tester delle regole nella GUI (incolla una richiesta → dice cosa matcherebbe)
-- [ ] Azioni live via oggetto condiviso: toggle regola, ban immediato, passaggio
-      `monitor` ↔ `enforce` senza riavvio
+- [~] Azioni live via oggetto condiviso: promozione/retrocessione e passaggio
+      `monitor` ↔ `enforce` **fatti** (senza riavvio); il ban immediato arriva col
+      passo 5, insieme ai canary token
 
 ---
 

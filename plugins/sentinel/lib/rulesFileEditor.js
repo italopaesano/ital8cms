@@ -1,0 +1,199 @@
+/**
+ * rulesFileEditor.js
+ *
+ * Modifica chirurgica dell'`action` di UNA regola dentro `sentinelRules.json5`,
+ * preservando commenti e formattazione.
+ *
+ * ─── PERCHE NON BASTA setJson5Key ─────────────────────────────────────────────
+ * `core/setJson5Key.js` sa scendere in path annidati (`['custom','dataPath']`)
+ * ma solo attraverso **oggetti**: il suo locator cerca chiavi. Qui il bersaglio
+ * è `rules[i].action`, e `rules` è un array — non c'è una chiave da cercare, c'è
+ * un elemento da individuare per contenuto.
+ *
+ * ─── PERCHE NON SI RISCRIVE IL FILE INTERO ────────────────────────────────────
+ * La strada ovvia — `loadJson5`, cambia il campo, `saveJson5` — **perde tutti i
+ * commenti**. In `sentinelRules.json5` i commenti non sono decorazione: sono la
+ * descrizione di cosa osserva ogni regola, la spiegazione di perché una è
+ * disattivata, e le istruzioni per promuoverle. Un salvataggio dalla GUI che
+ * silenziosamente cancella metà del file è inaccettabile.
+ *
+ * ─── COME SI RENDE SICURA UNA MODIFICA TESTUALE ───────────────────────────────
+ * Un'edit di testo su un file strutturato è fragile per natura. La rete è la
+ * verifica differenziale: si parsa PRIMA, si parsa DOPO, e si pretende che i due
+ * oggetti differiscano **esattamente** nel campo bersaglio. Se un'espressione
+ * regolare ha colpito la riga sbagliata, il confronto se ne accorge e la
+ * scrittura viene annullata prima di toccare il file vero.
+ */
+
+'use strict';
+
+const fs = require('fs');
+const json5 = require('json5');
+
+/** Azioni ammesse: duplicare qui l'elenco del validatore sarebbe un doppione. */
+const { VALID_ACTIONS } = require('./ruleValidator');
+
+/**
+ * Individua l'intervallo di righe dell'oggetto-regola che contiene un dato nome.
+ *
+ * Si parte dalla riga con `name: "<nome>"` e si risale fino alla `{` che apre
+ * l'oggetto, poi si scende fino alla `}` che lo chiude, contando le graffe. Il
+ * conteggio ignora le graffe dentro stringhe e commenti, che nelle descrizioni
+ * ci sono davvero.
+ *
+ * @param {string[]} lines
+ * @param {string} ruleName
+ * @returns {{ start: number, end: number }|null}
+ */
+function findRuleBlock(lines, ruleName) {
+  const escaped = ruleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const namePattern = new RegExp(`^\\s*["']?name["']?\\s*:\\s*["']${escaped}["']\\s*,?\\s*$`);
+
+  let nameLine = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (namePattern.test(lines[i])) { nameLine = i; break; }
+  }
+  if (nameLine === -1) return null;
+
+  // Risalita fino alla graffa che apre l'oggetto della regola.
+  let start = -1;
+  let depth = 0;
+  for (let i = nameLine; i >= 0; i--) {
+    const { open, close } = countBraces(lines[i]);
+    depth += close - open;
+    if (depth < 0) { start = i; break; }
+  }
+  if (start === -1) return null;
+
+  // Discesa fino alla sua chiusura.
+  let end = -1;
+  depth = 0;
+  for (let i = start; i < lines.length; i++) {
+    const { open, close } = countBraces(lines[i]);
+    depth += open - close;
+    if (depth === 0 && i >= start) { end = i; break; }
+  }
+  if (end === -1) return null;
+
+  return { start, end };
+}
+
+/**
+ * Conta le graffe di una riga ignorando stringhe e commenti.
+ * Senza questo, una descrizione che contiene `{` sposterebbe il conteggio e la
+ * ricerca finirebbe sul blocco sbagliato.
+ */
+function countBraces(line) {
+  let open = 0;
+  let close = 0;
+  let inString = null;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+
+    if (inString) {
+      if (ch === '\\') { i++; continue; }
+      if (ch === inString) inString = null;
+      continue;
+    }
+
+    if (ch === '"' || ch === "'") { inString = ch; continue; }
+    if (ch === '/' && line[i + 1] === '/') break;          // commento di riga
+    if (ch === '{') open++;
+    else if (ch === '}') close++;
+  }
+
+  return { open, close };
+}
+
+/**
+ * Cambia l'`action` di una regola, preservando il resto del file.
+ *
+ * @param {string} filePath
+ * @param {string} ruleName
+ * @param {string} action
+ * @returns {{ changed: boolean, previous: string|null }}
+ * @throws se la regola non esiste, l'azione non è valida, o la verifica
+ *   differenziale rileva un effetto collaterale
+ */
+function setRuleAction(filePath, ruleName, action) {
+  if (!VALID_ACTIONS.includes(action)) {
+    throw new Error(`azione non valida: ${action} (ammesse: ${VALID_ACTIONS.join(', ')})`);
+  }
+
+  const original = fs.readFileSync(filePath, 'utf8');
+  const before = json5.parse(original);
+
+  const rules = Array.isArray(before.rules) ? before.rules : [];
+  const target = rules.find((r) => r && r.name === ruleName);
+  if (!target) throw new Error(`regola non trovata: ${ruleName}`);
+
+  const previous = target.action;
+  if (previous === action) return { changed: false, previous };
+
+  const lines = original.split('\n');
+  const block = findRuleBlock(lines, ruleName);
+  if (!block) throw new Error(`blocco testuale della regola "${ruleName}" non individuabile`);
+
+  // Cerca la riga `action:` DENTRO il blocco della regola, non nel file intero.
+  const actionPattern = /^(\s*)(["']?action["']?\s*:\s*)(["'])[^"']*\3(\s*,?\s*)$/;
+  let actionLine = -1;
+  for (let i = block.start; i <= block.end; i++) {
+    if (actionPattern.test(lines[i])) { actionLine = i; break; }
+  }
+  if (actionLine === -1) throw new Error(`riga "action" non trovata nella regola "${ruleName}"`);
+
+  lines[actionLine] = lines[actionLine].replace(actionPattern,
+    (_m, indent, key, quote, tail) => `${indent}${key}${quote}${action}${quote}${tail}`);
+
+  const updated = lines.join('\n');
+
+  // ── Verifica differenziale: la rete di sicurezza dell'edit testuale ──
+  let after;
+  try {
+    after = json5.parse(updated);
+  } catch (err) {
+    throw new Error(`la modifica avrebbe prodotto JSON5 non valido: ${err.message}`);
+  }
+
+  const diff = describeDifference(before, after);
+  const expected = `rules[${rules.indexOf(target)}].action`;
+  if (diff.length !== 1 || diff[0] !== expected) {
+    throw new Error(
+      `la modifica avrebbe toccato più di quanto previsto (atteso ${expected}, `
+      + `rilevato ${diff.length === 0 ? 'nulla' : diff.join(', ')}) — scrittura annullata`);
+  }
+
+  // Scrittura atomica: un lettore non può mai vedere il file a metà, e in
+  // debugMode il motore rilegge le regole a ogni richiesta.
+  const tempPath = `${filePath}.tmp`;
+  fs.writeFileSync(tempPath, updated, 'utf8');
+  fs.renameSync(tempPath, filePath);
+
+  return { changed: true, previous };
+}
+
+/**
+ * Elenca i path in notazione puntata dove due strutture differiscono.
+ * Serve solo alla verifica differenziale, quindi si ferma alla prima differenza
+ * per ramo e non tenta di descrivere modifiche complesse.
+ *
+ * @returns {string[]}
+ */
+function describeDifference(a, b, prefix = '') {
+  if (a === b) return [];
+
+  const bothObjects = a && b && typeof a === 'object' && typeof b === 'object'
+    && Array.isArray(a) === Array.isArray(b);
+  if (!bothObjects) return [prefix || '<root>'];
+
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  const out = [];
+  for (const key of keys) {
+    const childPrefix = Array.isArray(a) ? `${prefix}[${key}]` : (prefix ? `${prefix}.${key}` : key);
+    out.push(...describeDifference(a[key], b[key], childPrefix));
+  }
+  return out;
+}
+
+module.exports = { setRuleAction, findRuleBlock, countBraces, describeDifference };

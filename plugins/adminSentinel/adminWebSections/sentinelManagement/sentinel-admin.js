@@ -16,6 +16,7 @@
   const esc = (v) => escapeHtml(v === null || v === undefined ? '' : String(v));
 
   let autoRefreshTimer = null;
+  let currentMode = null;
 
   // ── Utility di presentazione ──────────────────────────────────────────────
 
@@ -68,7 +69,20 @@
     }
 
     const stats = data.stats || {};
+    currentMode = stats.mode || null;
     $('dataDir').textContent = data.dataDir || '—';
+
+    // L'interruttore propone sempre l'altra modalità, così il pulsante dice cosa
+    // farà e non in che stato ti trovi — che è già scritto nel badge.
+    const btn = $('btnToggleMode');
+    btn.disabled = false;
+    if (currentMode === 'enforce') {
+      btn.className = 'btn btn-outline-secondary btn-sm';
+      btn.textContent = '↩ Torna in osservazione';
+    } else {
+      btn.className = 'btn btn-outline-danger btn-sm';
+      btn.textContent = '⏻ Attiva enforcement';
+    }
 
     // Le due condizioni vanno mostrate insieme: `mode: enforce` con il gate su
     // `monitor` non sta bloccando, e dirlo a metà sarebbe peggio che tacere.
@@ -120,9 +134,10 @@
     const data = await fetchJson(SN_API + '/rules');
     const tbody = $('ruleTable');
     const rules = data.rules || [];
+    window.__snRules = rules;
 
     if (rules.length === 0) {
-      emptyRow(tbody, 7, 'Nessuna regola definita.');
+      emptyRow(tbody, 8, 'Nessuna regola definita.');
       return;
     }
 
@@ -149,8 +164,88 @@
         + '<td class="text-end">' + num(r.botHits) + '</td>'
         + '<td class="text-end ' + authClass + '">' + num(r.authenticatedHits) + '</td>'
         + '<td>' + flag + '</td>'
+        + '<td>' + actionButton(r) + '</td>'
         + '</tr>';
     }).join('');
+
+    tbody.querySelectorAll('button[data-rule]').forEach((btn) => {
+      btn.addEventListener('click', () => changeRuleAction(btn.dataset.rule, btn.dataset.action));
+    });
+  }
+
+  /**
+   * Il pulsante propone SEMPRE il passo opposto a quello attuale.
+   *
+   * La retrocessione conta più della promozione: se disfare richiedesse di
+   * aprire un editor JSON5 alle tre di notte, nessuno promuoverebbe niente. Per
+   * questo su una regola in `block` il pulsante è vistoso quanto quello che l'ha
+   * promossa, non nascosto in un menu.
+   */
+  function actionButton(rule) {
+    if (!rule.defined) return '';
+    if (rule.action === 'allow') return '';
+
+    if (rule.action === 'block') {
+      return '<button class="btn btn-outline-secondary btn-sm py-0" '
+        + 'data-rule="' + esc(rule.ruleName) + '" data-action="monitor">↩ retrocedi</button>';
+    }
+    const warn = rule.authenticatedHits > 0 ? ' sn-risky' : '';
+    return '<button class="btn btn-outline-danger btn-sm py-0' + warn + '" '
+      + 'data-rule="' + esc(rule.ruleName) + '" data-action="block">⏻ promuovi</button>';
+  }
+
+  async function changeRuleAction(ruleName, action) {
+    // Promuovere una regola che ha colpito utenti autenticati è la mossa che
+    // chiude fuori qualcuno: si chiede conferma nominando il numero.
+    const row = (window.__snRules || []).find((r) => r.ruleName === ruleName);
+    if (action === 'block' && row && row.authenticatedHits > 0) {
+      const ok = window.confirm(
+        'Questa regola ha colpito ' + row.authenticatedHits + ' richieste di utenti '
+        + 'autenticati. Promuoverla a blocco potrebbe chiudere fuori qualcuno.\n\nProcedere comunque?');
+      if (!ok) return;
+    }
+
+    try {
+      const res = await fetch(SN_API + '/rules/action', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ruleName: ruleName, action: action }),
+      });
+      const data = await res.json();
+      if (!data.ok) { showAlert('Modifica rifiutata: ' + data.error, 'danger'); return; }
+
+      showAlert('Regola "' + ruleName + '": ' + (data.previous || '?') + ' → ' + action
+        + '. In vigore adesso, senza riavvio.', 'success');
+      refreshAll();
+    } catch (err) {
+      showAlert('Errore di rete: ' + err.message, 'danger');
+    }
+  }
+
+  async function toggleMode() {
+    const target = currentMode === 'enforce' ? 'monitor' : 'enforce';
+    if (target === 'enforce') {
+      const ok = window.confirm(
+        'Attivando l\'enforcement le regole in "block" cominceranno a bloccare davvero.\n\n'
+        + 'Se qualcosa va storto: npm run cli -- sentinel monitor\n'
+        + '(ferma l\'enforcement a caldo SENZA perdere i dati).\n\nProcedere?');
+      if (!ok) return;
+    }
+    try {
+      const res = await fetch(SN_API + '/mode', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: target }),
+      });
+      const data = await res.json();
+      if (!data.ok) { showAlert('Cambio modalità rifiutato: ' + data.error, 'danger'); return; }
+      showAlert('Modalità globale: ' + target, 'success');
+      refreshAll();
+    } catch (err) {
+      showAlert('Errore di rete: ' + err.message, 'danger');
+    }
   }
 
   // ── Sospetti scanner ──────────────────────────────────────────────────────
@@ -282,6 +377,7 @@
     $('autoRefreshToggle').addEventListener('change', setupAutoRefresh);
     $('windowDays').addEventListener('change', refreshAll);
     $('enforcedOnlyToggle').addEventListener('change', loadEvents);
+    $('btnToggleMode').addEventListener('click', toggleMode);
 
     refreshAll();
     setupAutoRefresh();

@@ -19,7 +19,10 @@
     "bootstrap": "^1.0.0",
     "simpleI18n": "^1.0.0",
   },
-  "nodeModuleDependency": {},
+  "nodeModuleDependency": {
+    // Per il parsing JSON5 del testo che arriva dall'editor raw.
+    "json5": "^2.2.3",
+  },
 
   "custom": {
     // Finestra temporale (giorni) usata dalla panoramica.
@@ -38,5 +41,11 @@
 
     // Intervallo (secondi) dell'auto-aggiornamento. 0 = disattivato.
     "autoRefreshSeconds": 15,
+
+    // Quanti backup di sentinelRules.json5 conservare. Ne viene creato uno prima
+    // di ogni salvataggio dall'editor raw: è l'unica operazione della GUI che
+    // può distruggere il file in un colpo solo (un incolla sbagliato, una
+    // selezione parziale), quindi è quella che merita una rete.
+    "maxBackupsPerFile": 10,
   },
 }

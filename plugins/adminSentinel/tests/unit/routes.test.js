@@ -83,7 +83,11 @@ describe('contratto delle rotte', () => {
 
   test('espone gli endpoint attesi dalla Vista Dati', () => {
     const paths = routes.map((r) => r.path).sort();
-    expect(paths).toEqual(['/events', '/fingerprints', '/flush', '/rules', '/scanners', '/status', '/summary']);
+    expect(paths).toEqual([
+      '/events', '/fingerprints', '/flush', '/mode',
+      '/rules', '/rules/action', '/rules/raw', '/rules/save', '/rules/validate',
+      '/scanners', '/status', '/summary',
+    ]);
   });
 });
 
