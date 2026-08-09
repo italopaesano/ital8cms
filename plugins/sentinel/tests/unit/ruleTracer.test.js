@@ -29,6 +29,9 @@ function subjectFor(spec) {
     sessionAnomalies: spec.authenticated && Array.isArray(spec.sessionAnomalies)
       ? spec.sessionAnomalies
       : [],
+    reputation: Array.isArray(spec.reputation)
+      ? { levels: spec.reputation, requests: 0, blockedShare: 0, ageSeconds: 0, protected: false }
+      : null,
   });
   if (Number.isInteger(spec.status)) s.status = spec.status;
   return s;
@@ -102,6 +105,9 @@ describe('conformità fra il valutatore veloce e quello che racconta', () => {
     { sessionAnomaly: true },
     { sessionAnomaly: ['uaChanged'] },
     { sessionAnomaly: ['ipChanged', 'scriptClient'] },
+    { reputation: true },
+    { reputation: ['bad'] },
+    { reputation: ['burst', 'suspect'] },
     { extension: ['php'], method: ['GET'] },
     { all: [{ path: '/a.php' }, { method: ['GET'] }] },
     { any: [{ path: '/nope' }, { extension: ['php'] }] },
@@ -126,6 +132,8 @@ describe('conformità fra il valutatore veloce e quello che racconta', () => {
     // entrambi i valutatori allo stesso modo, o la foglia scatterebbe dove
     // sessione non c'è.
     { path: '/pannello', sessionAnomalies: ['uaChanged'], headers: {} },
+    { path: '/scansione', reputation: ['bad'], headers: {} },
+    { path: '/scansione', reputation: ['burst'], headers: {} },
   ];
 
   for (const node of NODES) {

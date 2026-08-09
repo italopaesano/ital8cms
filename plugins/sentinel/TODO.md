@@ -79,7 +79,7 @@ rende leggibile e governabile quello che c'è, poi si aggiungono le azioni.**
 | ~~**5**~~ | ~~Canary (`decoy` L2) + `banClient` + allerte~~ ✅ | Il salto da difesa passiva a **sensore**: certezza di un attaccante attivo, non inferenza |
 | ~~**6**~~ | ~~Coerenza di sessione~~ ✅ | Miglior segnale del blocco autenticato, ma introduce stato e foglie nuove: meglio quando la GUI può mostrarne gli effetti |
 | ~~**7**~~ | ~~`drop` reale e `tarpit`~~ ✅ | Le uniche azioni che possono farti male da sole (retry aggressivi, esaurimento di file descriptor) |
-| **8** | Reputazione locale e apprendimento | Poggia sul censimento, che già raccoglie i dati: qui si aggiunge solo l'inferenza |
+| ~~**8**~~ | ~~Reputazione locale e apprendimento~~ ✅ | Poggia sul censimento, che già raccoglie i dati: qui si aggiunge solo l'inferenza |
 
 I passi **0-3 rendono usabile** quello che c'è. I **4-5** aggiungono l'inganno.
 Il **6** copre gli account. I **7-8** sono raffinamento.
@@ -172,7 +172,20 @@ condizioni operative previste, non errori, e trattarle come eccezioni avrebbe
 riempito i log di «risposta fallita» proprio sotto carico. Invariante: chi
 rinuncia lascia il contesto intatto, perché il gate ci scriverà il 404.
 
-**Passo 8.** Vedi §5.
+**Passo 8 — Reputazione locale.** ✅ Fatto. `lib/reputation.js` + foglia
+`reputation` (`burst` / `suspect` / `bad`), retention degli indirizzi nel
+censimento, filtro d'audience documentato.
+
+Le due protezioni contano più della funzione:
+- **Un'impronta non è una persona, è una famiglia di client.** Condannare
+  un'impronta da browser vero chiude fuori tutti quelli che usano quel browser:
+  `protectBrowserFingerprints` lo impedisce, al prezzo dichiarato di rendere
+  immune chi emula bene un browser.
+- **Il giudizio non deve alimentarsi da solo.** Escludere i blocchi decisi dalla
+  reputazione non bastava, e si è visto solo dal vivo: mentre il giudizio è in
+  vigore la sua regola scatta per prima, il numeratore si ferma e il denominatore
+  no, quindi la quota scende finché l'impronta viene perdonata — per poi essere
+  ricondannata. Il censimento tiene ora `judgedCount` accanto a `count`.
 
 ### Trasversali, da fare quando servono e non come passo a sé
 
@@ -421,21 +434,31 @@ e accumulare statistiche locali sulle firme viste.
       - `count` → solo il **numero** di IP distinti per firma: dà già il segnale
         botnet (una firma su 500 IP) senza conservare alcun indirizzo
       - `full` → elenco degli IP per firma: correlazione completa firma↔IP
-- [ ] Se `censusIpMode: "full"`, il censimento diventa un archivio di dati
+- [x] Se `censusIpMode: "full"`, il censimento diventa un archivio di dati
       personali a lunga conservazione → **serve una retention anche per il
-      censimento**, non solo per il log eventi
-- [ ] Firma mai vista prima + alta cadenza = sospetto
-- [ ] Reputazione locale: firma con quota di blocchi elevata → escalation automatica *(v3)*
+      censimento**, non solo per il log eventi.
+      `census.ipRetentionDays` (default 30). Il TTL della voce si conta
+      dall'ULTIMO uso, quindi un'impronta sempre attiva non scadeva mai e il suo
+      elenco di indirizzi restava per sempre. Scadono **gli indirizzi, non il
+      conteggio**: `ipCount` è una statistica (il segnale botnet), non un dato
+      personale.
+- [x] Firma mai vista prima + alta cadenza = sospetto → livello `burst` della
+      foglia `reputation`
+- [x] Reputazione locale: firma con quota di blocchi elevata → livelli `suspect`
+      e `bad` della foglia `reputation`, usabili in una regola come qualsiasi
+      altra condizione (anche con `escalate`).
 
 ### Enforcement per firma
 
 - [x] Regole che matchano su `fp` esatto
 - [x] Regole che matchano su `fpClass` / componenti (l'equivalente utile del
       concetto di "range": gli hash non hanno intervalli, le **classi** sì)
-- [ ] Scenario "sito riservato a un solo ecosistema" (es. solo Linux):
+- [x] Scenario "sito riservato a un solo ecosistema" (es. solo Linux):
       filtro d'**audience**, non confine di sicurezza — l'OS dichiarato è
       falsificabile in un secondo. Da usare in `monitor` prima di `enforce`,
       per misurare quanti visitatori reali verrebbero esclusi.
+      Non serviva codice: si scrive con `fingerprintClass`. Documentato come
+      esempio commentato nel file di regole e nel README, con l'avvertenza.
 
 ### Fuori scope (motivato)
 

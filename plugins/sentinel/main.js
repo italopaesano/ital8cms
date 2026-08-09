@@ -55,6 +55,7 @@ const { renderDecoy, resolveDecoyPath } = require('./lib/decoyRenderer');
 const { CanaryRegistry, findCanary } = require('./lib/canaryRegistry');
 const { SessionCoherence } = require('./lib/sessionCoherence');
 const { Tarpit } = require('./lib/tarpit');
+const { classify: classifyReputation } = require('./lib/reputation');
 const { AlertDispatcher } = require('./lib/alertDispatcher');
 const { SentinelLog } = require('./lib/sentinelLog');
 const { FingerprintCensus, OutcomeCensus } = require('./lib/census');
@@ -453,6 +454,10 @@ function buildEvent(ctx, subject, rule, enforced, extra = {}) {
     sessionAnomalies: subject.sessionAnomalies && subject.sessionAnomalies.length > 0
       ? subject.sessionAnomalies
       : null,
+    // Giudizio sulla storia locale dell'impronta, quando c'è.
+    reputation: subject.reputation && subject.reputation.levels.length > 0
+      ? subject.reputation.levels
+      : null,
   };
 }
 
@@ -740,25 +745,41 @@ const engine = {
       // percorso e querystring, e quasi nessuna richiesta contiene un token.
       canary: findCanary(canaryRegistry, ctx.path, ctx.querystring),
       sessionAnomalies: inspectSession(ctx, fingerprint, clientIp),
+      // Sulla voce di censimento com'era PRIMA di questa richiesta: registrarla
+      // per prima farebbe influenzare alla richiesta il giudizio su sé stessa.
+      reputation: fingerprintCensus
+        ? classifyReputation(
+          fingerprintCensus.getEntry(fingerprint.fp),
+          fingerprint.fpClass,
+          custom.reputation || {},
+        )
+        : null,
     });
 
     const rule = findFirstMatch(rules, subject, matcher);
+
+    const enforced = rule ? shouldEnforce(rule, subject) : false;
 
     // Censimento: registra SEMPRE la comparsa dell'impronta, anche quando nessuna
     // regola ha matchato. È il traffico non classificato a dire quali regole
     // mancano; contarlo solo quando una regola scatta significherebbe vedere solo
     // ciò che si sa già riconoscere.
+    //
+    // Gira DOPO il calcolo di `enforced` perché la quota di blocchi è il dato su
+    // cui poggia la reputazione, e senza il verdetto non la si saprebbe. I
+    // blocchi decisi da una regola che USA la reputazione sono però esclusi: se
+    // contassero, il primo inciampo di un'impronta la condannerebbe per sempre —
+    // bloccata, quindi quota più alta, quindi più bloccata.
     if (fingerprintCensus) {
       fingerprintCensus.record(fingerprint.fp, {
         fpClass: fingerprint.fpClass,
         ip: subject.ip,
         path: subject.path,
         matched: !!rule,
-        blocked: false,
+        judged: !(rule && rule.usesReputation),
+        blocked: enforced && !(rule && rule.usesReputation),
       });
     }
-
-    const enforced = rule ? shouldEnforce(rule, subject) : false;
     const escalation = rule && (enforced || rule.action === 'monitor')
       ? escalate(rule, subject, enforced)
       : false;
@@ -1006,6 +1027,7 @@ module.exports = {
         sessions: sessionCoherence ? sessionCoherence.getStats() : null,
         tarpit: tarpit ? tarpit.getStats() : null,
         drop: { dropped, degradedBehindProxy: dropDegraded },
+        reputation: custom.reputation || {},
         alerts: alerts ? alerts.getStats() : null,
       }),
       getRuleSummary: () => (hitCounter ? hitCounter.getSummary() : []),

@@ -144,11 +144,12 @@ gate la chiama **soltanto** dopo aver verificato tre cose in quest'ordine —
 l'enforcement è davvero in vigore, la risposta non tradirebbe la superficie
 riservata chiusa, `respond` esiste. Se una qualsiasi manca, 404.
 
-L'ultima delle tre è più utile di quanto sembri: è il motivo per cui `tarpit` è
-scrivibile nel file di regole **oggi**, pur non essendo implementato. Una regola
-`tarpit` matcha, viene contata e registrata, e produce un 404: la si può
-osservare per settimane e il giorno in cui l'azione arriverà cambierà solo
-l'effetto, non la configurazione né la storia della regola.
+L'ultima delle tre vale come regola generale, e ha già pagato due volte: fra il
+Passo 4 e il Passo 7 `tarpit` era scrivibile nel file di regole pur non essendo
+implementata — matchava, veniva contata e registrata, e produceva un 404. Si
+poteva osservare per settimane, e il giorno in cui l'azione è arrivata è cambiato
+solo l'effetto, non la configurazione né la storia della regola. Vale per
+qualunque azione futura.
 
 ### Perché il renderer sta fuori dal percorso di rendering
 
@@ -419,6 +420,67 @@ Sono due strumenti, e il default resta `block`. Per la stessa ragione `drop` è
 soggetto al controllo `decorationWouldLeak`: sulla superficie riservata chiusa,
 un percorso che tronca invece di rispondere 404 si è appena distinto dagli altri.
 
+## 4-novies. La reputazione, e i due modi in cui si sbaglia
+
+### Il primo: condannare una folla credendo di condannare una persona
+
+Un'impronta HTTP è a **bassa entropia**: identifica «Chrome 120 su Linux», non
+Mario. Tutta la documentazione del fingerprint lo dice già, ma finché il
+fingerprint serviva a *descrivere* il traffico la cosa non aveva conseguenze.
+Nel momento in cui serve a **condannare**, ne ha una enorme: bloccare
+un'impronta da browser vero significa bloccare tutti quelli che usano quel
+browser.
+
+Da qui una protezione che non è un'opzione fra le altre ma la condizione perché
+la funzione possa esistere: un'impronta `coherent: true` con
+`headerProfile: 'browser'` **non riceve mai** un giudizio negativo, per quanto
+sporca sia la sua storia. Si può disattivare, ma bisogna volerlo.
+
+Il costo è dichiarato: chi emula Chrome alla perfezione è immune. È il costo
+giusto — la reputazione è una vittoria facile contro lo scanner pigro, non uno
+strumento a cui affidare la difesa da un avversario capace.
+
+### Il secondo: il giudizio che si alimenta da solo
+
+Se la quota di blocchi determina il giudizio e il giudizio produce blocchi, il
+primo inciampo condanna per sempre. La difesa ovvia — escludere dal conteggio i
+blocchi decisi da una regola di reputazione — l'ho scritta subito, con la
+marcatura `usesReputation` fatta dal validatore.
+
+**Non bastava, e si è visto solo dal vivo.** Mentre il giudizio è in vigore la
+sua regola scatta *per prima*, quindi nessun'altra regola produce più blocchi: il
+numeratore si ferma e il denominatore no. Nella prova su server reale la quota è
+scesa da 0,73 a 0,33 nell'arco di trenta richieste, e l'impronta è stata
+**perdonata proprio perché la stavamo bloccando** — per poi essere ricondannata
+appena avesse ricominciato a sondare. Un'oscillazione perfettamente silenziosa.
+
+La correzione è simmetrica: se una richiesta decisa dalla reputazione non conta
+come blocco, non deve contare nemmeno come richiesta. Il censimento tiene due
+contatori — `count`, tutte le richieste, e `judgedCount`, quelle giudicate **nel
+merito** — e la reputazione usa il secondo come denominatore. Verificato:
+26→66 richieste, `judgedCount` fermo a 20, quota stabile a 0,95.
+
+È il tipo di difetto che un unit test sulla singola classificazione non può
+vedere, perché non riguarda una classificazione ma la loro **successione**.
+
+### La retention degli indirizzi, e cosa scade davvero
+
+Con `censusIpMode: "full"` gli indirizzi finiscono su disco. Il TTL della voce si
+conta però dall'**ultimo uso**: un'impronta sempre attiva non scade mai, e il suo
+elenco di indirizzi resterebbe lì per sempre — un archivio di dati personali
+senza scadenza, che è esattamente ciò che il TODO segnalava.
+
+`ipRetentionDays` fa scadere **gli indirizzi, non il conteggio**. `ipCount`
+(«questa impronta arriva da 500 origini», il segnale botnet) è una statistica, non
+un dato personale, e non ha ragione di sparire con loro. La distinzione vale la
+pena di essere ricordata: la retention si applica agli identificatori, non a ciò
+che si è imparato da essi.
+
+Gira solo con `full`, perché è l'unico caso in cui c'è qualcosa da conservare:
+con `count` l'insieme vive in memoria per non ricontare due volte lo stesso
+indirizzo, e farlo scadere gonfierebbe il conteggio dei distinti senza alcun
+beneficio.
+
 ## 5. Il fingerprint: la scelta che sembra un errore
 
 **Lo User-Agent non entra nel calcolo dell'impronta.** Rileggendo
@@ -578,6 +640,7 @@ Emerso provando il plugin sul server reale, non ragionandoci sopra.
 | `lib/canaryRegistry.js` | conio dei token esca, memoria del destinatario, riconoscimento |
 | `lib/sessionCoherence.js` | linea di base per sessione autenticata e sue anomalie |
 | `lib/tarpit.js` | risposta a goccia, con tetto di connessioni, di durata e abort |
+| `lib/reputation.js` | giudizio sulla storia locale di un'impronta |
 | `migrations/` | step che portano le regole nuove sulle installazioni esistenti |
 | `lib/alertDispatcher.js` | canale unico delle allerte, con finestra di silenzio per genere |
 

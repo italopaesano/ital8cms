@@ -32,6 +32,7 @@
 
 const { isValidCidr } = require('./ipMatcher');
 const { ANOMALY_KINDS } = require('./sessionCoherence');
+const { LEVELS: REPUTATION_LEVELS } = require('./reputation');
 
 const VALID_ACTIONS = [
   'allow', 'monitor', 'block', 'drop', 'decoy', 'redirect', 'throttle', 'tarpit',
@@ -128,6 +129,20 @@ function compileStringMatcher(value, where, errors) {
 
   errors.push(`${where}: valore non valido (attesa stringa, "empty" o array)`);
   return null;
+}
+
+/**
+ * L'albero delle condizioni contiene, a qualsiasi profondità, una foglia
+ * `reputation`? Serve al motore per non far contare a una regola di reputazione
+ * i blocchi che alimenterebbero la reputazione stessa.
+ */
+function nodeUsesReputation(node) {
+  if (!node || typeof node !== 'object') return false;
+  if (node.reputation !== undefined) return true;
+  if (Array.isArray(node.all) && node.all.some(nodeUsesReputation)) return true;
+  if (Array.isArray(node.any) && node.any.some(nodeUsesReputation)) return true;
+  if (node.not !== undefined && nodeUsesReputation(node.not)) return true;
+  return false;
 }
 
 /**
@@ -325,6 +340,24 @@ function compileMatchNode(node, where, errors) {
         return null;
       }
       out.sessionAnomaly = new Set(list);
+    }
+    conditionCount++;
+  }
+
+  if (node.reputation !== undefined) {
+    if (node.reputation === true) {
+      out.reputation = true;
+    } else {
+      const list = Array.isArray(node.reputation) ? node.reputation : [node.reputation];
+      const unknown = list.filter((level) => !REPUTATION_LEVELS.includes(level));
+      if (list.length === 0 || unknown.length > 0) {
+        errors.push(
+          `${where}.reputation: atteso true oppure uno o più fra ${REPUTATION_LEVELS.join(', ')}` +
+          (unknown.length ? ` (sconosciuti: ${unknown.join(', ')})` : '')
+        );
+        return null;
+      }
+      out.reputation = new Set(list);
     }
     conditionCount++;
   }
@@ -712,6 +745,14 @@ function validateRules(rulesData, options = {}) {
         banSeconds: Number.isInteger(escalate.banSeconds) ? escalate.banSeconds : null,
       };
     }
+
+    // ── Marcatura anti-anello ──
+    // Se il giudizio di reputazione si basasse anche sui blocchi decisi DA una
+    // regola di reputazione, il primo inciampo di un'impronta la condannerebbe
+    // per sempre: bloccata → quota di blocchi più alta → più bloccata. Il motore
+    // esclude dal contatore i blocchi delle regole marcate qui, così il giudizio
+    // poggia solo su prove raccolte da altre regole.
+    compiled.usesReputation = nodeUsesReputation(match);
 
     seenNames.add(name);
     rules.push(compiled);

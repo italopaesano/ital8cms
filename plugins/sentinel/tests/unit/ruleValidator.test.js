@@ -172,6 +172,52 @@ describe('parametri delle azioni', () => {
   });
 });
 
+describe('foglia reputation', () => {
+  test('true e i tre livelli sono ammessi', () => {
+    expect(validateRules({ rules: [rule({ match: { reputation: true } })] }).valid).toBe(true);
+    for (const level of ['burst', 'suspect', 'bad']) {
+      const r = validateRules({ rules: [rule({ match: { reputation: [level] } })] });
+      expect(r.valid).toBe(true);
+      expect(r.rules[0].match.reputation.has(level)).toBe(true);
+    }
+  });
+
+  test('un livello inventato è rifiutato, con l\'elenco di quelli validi', () => {
+    const r = validateRules({ rules: [rule({ match: { reputation: ['pessima'] } })] });
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/pessima/);
+    expect(r.errors.join(' ')).toMatch(/suspect/);
+  });
+
+  // ── La marcatura che rompe l'anello di retroazione ──
+  // Se i blocchi decisi da una regola di reputazione contassero nel calcolo
+  // della reputazione, il primo inciampo di un'impronta la condannerebbe per
+  // sempre. Il motore esclude dal contatore le regole marcate qui.
+  test('una regola che usa reputation viene marcata', () => {
+    const r = validateRules({ rules: [rule({ action: 'block', match: { reputation: ['bad'] } })] });
+    expect(r.rules[0].usesReputation).toBe(true);
+  });
+
+  test('la marcatura vede la foglia anche annidata nei combinatori', () => {
+    const r = validateRules({
+      rules: [rule({ action: 'block', match: { all: [{ path: '/x' }, { any: [{ reputation: true }] }] } })],
+    });
+    expect(r.rules[0].usesReputation).toBe(true);
+  });
+
+  test('la marcatura vede la foglia anche dentro un not', () => {
+    const r = validateRules({
+      rules: [rule({ action: 'block', match: { all: [{ path: '/x' }, { not: { reputation: ['bad'] } }] } })],
+    });
+    expect(r.rules[0].usesReputation).toBe(true);
+  });
+
+  test('una regola che non la usa non è marcata', () => {
+    const r = validateRules({ rules: [rule({ action: 'block', match: { extension: ['php'] } })] });
+    expect(r.rules[0].usesReputation).toBe(false);
+  });
+});
+
 describe('azioni drop e tarpit', () => {
   test('tarpit senza parametri usa i default del plugin', () => {
     const r = validateRules({ rules: [rule({ action: 'tarpit' })] });

@@ -198,6 +198,25 @@ function traceLeaf(leaf, node, subject, matcher) {
             ? '(nessuna anomalia)'
             : '(richiesta anonima: nessuna sessione da confrontare)'));
     }
+    case 'reputation': {
+      const rep = subject.reputation;
+      const found = (rep && rep.levels) || [];
+      const wantAny = node.reputation === true;
+      const matched = found.length > 0 && (wantAny || found.some((l) => node.reputation.has(l)));
+      let osservato;
+      if (found.length > 0) {
+        osservato = found.join(', ');
+      } else if (rep && rep.protected) {
+        // Il motivo più probabile per cui una regola di reputazione "non
+        // scatta": l'impronta sembra un browser vero, e quelle sono protette.
+        osservato = '(impronta da browser: protetta dal giudizio)';
+      } else if (rep) {
+        osservato = `(nessun giudizio — ${rep.requests} richieste, quota blocchi ${rep.blockedShare})`;
+      } else {
+        osservato = '(censimento non disponibile)';
+      }
+      return entry(matched, wantAny ? 'un giudizio qualsiasi' : Array.from(node.reputation), osservato);
+    }
     case 'authenticated':
       return entry(subject.authenticated === node.authenticated, node.authenticated, subject.authenticated);
     case 'roleIds':
@@ -214,7 +233,7 @@ function traceLeaf(leaf, node, subject, matcher) {
 
 const LEAF_KEYS = [
   'path', 'extension', 'method', 'userAgent', 'header', 'query',
-  'ip', 'status', 'canary', 'sessionAnomaly',
+  'ip', 'status', 'canary', 'sessionAnomaly', 'reputation',
   'authenticated', 'roleIds', 'fingerprint', 'fingerprintClass',
 ];
 
@@ -295,6 +314,11 @@ function testRequest(spec, rules, matcher, options = {}) {
     sessionAnomalies: spec.authenticated && Array.isArray(spec.sessionAnomalies)
       ? spec.sessionAnomalies
       : [],
+    // Come le anomalie di sessione, il giudizio di reputazione si DICHIARA nella
+    // prova: dipende da mesi di censimento, e una richiesta sintetica non ne ha.
+    reputation: Array.isArray(spec.reputation)
+      ? { levels: spec.reputation, requests: 0, blockedShare: 0, ageSeconds: 0, protected: false }
+      : null,
   });
   if (Number.isInteger(spec.status)) subject.status = spec.status;
 
@@ -345,6 +369,7 @@ function testRequest(spec, rules, matcher, options = {}) {
       status: subject.status,
       canary: subject.canary,
       sessionAnomalies: subject.sessionAnomalies,
+      reputation: subject.reputation,
       fp: subject.fp,
       fpClass: subject.fpClass,
     },

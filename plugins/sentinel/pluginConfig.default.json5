@@ -1,6 +1,6 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "schemaVersion": 4,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 5,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   "active": 1,
 
   // Weight 3: prima di analytics (5) e rateLimiter (5). Conta poco in pratica —
@@ -235,6 +235,19 @@
       // contatore di richieste travestito).
       "maxIpsPerFingerprint": 256,
 
+      // Giorni di conservazione DEGLI INDIRIZZI, distinta da `ttlDays` che
+      // riguarda le voci. Ha effetto solo con censusIpMode "full", l'unico caso
+      // in cui gli indirizzi finiscono su disco.
+      //
+      // Serve perché `ttlDays` si conta dall'ULTIMO uso: un'impronta sempre
+      // attiva non scadrebbe mai, e il suo elenco di indirizzi resterebbe lì per
+      // sempre — un archivio di dati personali senza scadenza.
+      //
+      // Scadono gli INDIRIZZI, non il CONTEGGIO: `ipCount` è una statistica
+      // ("questa impronta arriva da 500 origini", il segnale botnet), non un
+      // dato personale, e non ha ragione di sparire con loro. 0 = disattivata.
+      "ipRetentionDays": 30,
+
       // Secondi fra un salvataggio del censimento e il successivo.
       "saveIntervalSeconds": 60,
 
@@ -243,6 +256,51 @@
         "maxClients": 5000,
         "ttlHours": 24,
       },
+    },
+
+    // ────────────────────────────────────────────────────────────────
+    // REPUTAZIONE LOCALE DELLE IMPRONTE
+    // ────────────────────────────────────────────────────────────────
+    //
+    // Il censimento accumula da mesi; questo blocco trasforma quella storia in
+    // un giudizio usabile in una regola, con la foglia `reputation`:
+    //
+    //   burst    impronta mai vista prima e già a raffica
+    //   suspect  quota di blocchi oltre `suspectShare`
+    //   bad      quota di blocchi oltre `badShare`
+    //
+    // ⚠ DUE AVVERTENZE, ENTRAMBE IMPORTANTI.
+    //
+    // 1. UN'IMPRONTA NON È UNA PERSONA, è una FAMIGLIA di client: "Chrome 120 su
+    //    Linux" è la stessa per tutti quelli che usano quel browser. Condannare
+    //    un'impronta da browser vero significa chiudere fuori tutti i suoi
+    //    utenti — il modo più probabile in cui questa funzione rovina un sito.
+    //    Da qui `protectBrowserFingerprints`, attiva di default.
+    //
+    // 2. L'IMPRONTA LA CONTROLLA CHI BUSSA: chi randomizza l'ordine degli header
+    //    ha un'impronta nuova a ogni richiesta, quindi reputazione sempre
+    //    pulita. Questa funzione ferma l'attaccante PIGRO, non quello
+    //    determinato — e non è un buco silenzioso: randomizzare fa esplodere il
+    //    tasso di sfratto del censimento, che ha la sua allerta.
+    "reputation": {
+      // Sotto questa soglia non si giudica: una quota calcolata su tre richieste
+      // è rumore, e condannare per rumore è come si producono i falsi positivi.
+      "minRequests": 20,
+
+      // Quote di blocchi (sul totale delle richieste dell'impronta) per i due
+      // giudizi. I blocchi decisi DA una regola di reputazione non contano, o il
+      // giudizio alimenterebbe sé stesso.
+      "suspectShare": 0.2,
+      "badShare": 0.5,
+
+      // `burst`: mai vista fino a `burstWindowSeconds` fa e già a
+      // `burstMinRequests` richieste. Un visitatore nuovo carica una pagina e le
+      // sue risorse; decine di richieste nei primi secondi sono una scansione.
+      "burstWindowSeconds": 60,
+      "burstMinRequests": 30,
+
+      // Non disattivarla senza aver capito l'avvertenza 1 qui sopra.
+      "protectBrowserFingerprints": true,
     },
 
     // ── Contatori per regola ──

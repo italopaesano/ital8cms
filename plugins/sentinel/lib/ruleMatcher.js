@@ -78,6 +78,9 @@ function buildSubject(ctx, deps) {
     // costruisce il soggetto. Array vuoto anche sul traffico anonimo: una
     // regola su questa foglia non deve poter scattare dove sessione non c'è.
     sessionAnomalies: Array.isArray(deps.sessionAnomalies) ? deps.sessionAnomalies : [],
+    // Giudizio sulla storia locale dell'impronta, calcolato una volta per
+    // richiesta sulla voce di censimento PRECEDENTE a questa richiesta.
+    reputation: deps.reputation || null,
     _queryDecoded: undefined, // memo di decodedQuery: una decodifica per richiesta
   };
 }
@@ -213,6 +216,21 @@ function matchSessionAnomaly(subject, expected) {
   return found.some((kind) => expected.has(kind));
 }
 
+/**
+ * La storia locale di questa impronta dice qualcosa?
+ *
+ * `subject.reputation.levels` è calcolato una volta per richiesta da chi
+ * costruisce il soggetto, a partire dalla voce di censimento **precedente** a
+ * questa richiesta: altrimenti la richiesta in corso influenzerebbe il giudizio
+ * su sé stessa.
+ */
+function matchReputation(subject, expected) {
+  const found = subject.reputation && subject.reputation.levels;
+  if (!Array.isArray(found) || found.length === 0) return false;
+  if (expected === true) return true;
+  return found.some((level) => expected.has(level));
+}
+
 function matchStatus(subject, compiledSet) {
   // Ha senso solo nella valutazione dell'esito: in `evaluate` lo status non
   // esiste ancora, e una regola che lo nomina non deve matchare per sbaglio.
@@ -257,6 +275,7 @@ function evaluateNode(node, subject, matcher) {
   if (node.status !== undefined && !matchStatus(subject, node.status)) return false;
   if (node.canary !== undefined && !matchCanary(subject, node.canary)) return false;
   if (node.sessionAnomaly !== undefined && !matchSessionAnomaly(subject, node.sessionAnomaly)) return false;
+  if (node.reputation !== undefined && !matchReputation(subject, node.reputation)) return false;
 
   if (node.authenticated !== undefined && subject.authenticated !== node.authenticated) return false;
   if (node.roleIds !== undefined && !node.roleIds.some((id) => subject.roleIds.includes(id))) return false;
@@ -272,7 +291,7 @@ function evaluateNode(node, subject, matcher) {
 const CONDITION_KEYS = [
   'all', 'any', 'not',
   'path', 'extension', 'method', 'userAgent', 'header', 'query', 'ip',
-  'status', 'canary', 'sessionAnomaly',
+  'status', 'canary', 'sessionAnomaly', 'reputation',
   'authenticated', 'roleIds', 'fingerprint', 'fingerprintClass',
 ];
 

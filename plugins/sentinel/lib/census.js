@@ -55,6 +55,26 @@ function saveAtomic(filePath, payload, log) {
   }
 }
 
+/**
+ * Ricostruisce la mappa indirizzo → ultima comparsa da ciò che c'è su disco.
+ *
+ * Accetta due formati: quello attuale (`ipsSeenMs`, un oggetto con le date) e
+ * quello storico (`ips`, un semplice elenco). Nel secondo caso gli indirizzi
+ * vengono datati all'ultima comparsa della voce: è l'informazione più vicina al
+ * vero che si abbia, ed è conservativa — li fa scadere prima, non dopo.
+ */
+function hydrateIps(ips, seenMs, ipsSeenMs) {
+  const map = new Map();
+  if (ipsSeenMs && typeof ipsSeenMs === 'object') {
+    for (const [ip, ms] of Object.entries(ipsSeenMs)) map.set(ip, Number(ms) || seenMs);
+    return map;
+  }
+  if (Array.isArray(ips)) {
+    for (const ip of ips) map.set(ip, seenMs);
+  }
+  return map;
+}
+
 function loadSafely(filePath) {
   if (!fs.existsSync(filePath)) return null;
   try {
@@ -89,6 +109,18 @@ class FingerprintCensus {
     this.filePath = path.join(dataDir, `fingerprintCensus${config.instanceId ? '.' + config.instanceId : ''}.json5`);
     this.ipMode = ['none', 'count', 'full'].includes(config.censusIpMode) ? config.censusIpMode : 'count';
     this.maxIpsPerFingerprint = Number.isFinite(config.maxIpsPerFingerprint) ? config.maxIpsPerFingerprint : 256;
+
+    // Retention DEGLI INDIRIZZI, separata da quella delle voci.
+    //
+    // Serve solo con ipMode "full", che è l'unico caso in cui gli indirizzi
+    // finiscono su disco. Senza, un'impronta sempre attiva non scadrebbe mai —
+    // il TTL della voce si conta dall'ultimo uso — e il suo elenco di indirizzi
+    // resterebbe lì per sempre: un archivio di dati personali senza scadenza.
+    //
+    // Scadono gli INDIRIZZI, non il CONTEGGIO: `ipCount` è una statistica
+    // ("questa impronta arriva da 500 origini", il segnale botnet) e non un dato
+    // personale, quindi non ha ragione di essere cancellata con loro.
+    this.ipRetentionDays = Number.isFinite(config.ipRetentionDays) ? config.ipRetentionDays : 30;
     this.log = deps.log || (() => {});
 
     this.store = new BoundedStore({
@@ -108,11 +140,17 @@ class FingerprintCensus {
         firstSeenMs: raw.firstSeenMs || Date.now(),
         lastSeenMs: raw.lastSeenMs || Date.now(),
         count: raw.count || 0,
+        // Ricadere su `count` per le voci scritte prima che questo campo
+        // esistesse: un censimento vecchio non deve far sparire il giudizio.
+        judgedCount: raw.judgedCount === undefined ? (raw.count || 0) : raw.judgedCount,
         matchedCount: raw.matchedCount || 0,
         blockedCount: raw.blockedCount || 0,
         paths: new Set(Array.isArray(raw.samplePaths) ? raw.samplePaths : []),
         pathCount: raw.pathCount || 0,
-        ips: new Set(Array.isArray(raw.ips) ? raw.ips : []),
+        // Formato storico: array di stringhe. Si accetta ancora, datando gli
+        // indirizzi all'ultima comparsa della voce — l'informazione più vicina
+        // al vero che si abbia, e comunque conservativa.
+        ips: hydrateIps(raw.ips, raw.lastSeenMs || Date.now(), raw.ipsSeenMs),
         ipCount: raw.ipCount || 0,
         class: raw.class || {},
       };
@@ -138,16 +176,28 @@ class FingerprintCensus {
         firstSeenMs: Date.now(),
         lastSeenMs: Date.now(),
         count: 0,
+        judgedCount: 0,
         matchedCount: 0,
         blockedCount: 0,
         paths: new Set(),
         pathCount: 0,
-        ips: new Set(),
+        ips: new Map(),
         ipCount: 0,
         class: info.fpClass || {},
       }),
       (entry) => {
         entry.count++;
+        // `judgedCount` è il denominatore della reputazione, e conta solo le
+        // richieste giudicate NEL MERITO. Una richiesta decisa da una regola di
+        // reputazione non lo è stata: è stata decisa dal giudizio stesso.
+        //
+        // Escludere solo il numeratore non basterebbe, ed è un errore che si
+        // vede solo dal vivo: mentre il giudizio è in vigore la regola di
+        // reputazione scatta per prima, quindi nessun'altra regola produce più
+        // blocchi, il numeratore si ferma e il denominatore no. La quota
+        // scende da sola finché l'impronta non viene perdonata — e poi
+        // ricondannata, in un'oscillazione senza fine.
+        if (info.judged !== false) entry.judgedCount++;
         if (info.matched) entry.matchedCount++;
         if (info.blocked) entry.blockedCount++;
         entry.class = info.fpClass || entry.class;
@@ -169,7 +219,9 @@ class FingerprintCensus {
             // si potrebbe sapere se un IP è già stato visto e ogni richiesta
             // incrementerebbe il conteggio, rendendolo un contatore di richieste
             // travestito da contatore di indirizzi.
-            if (entry.ips.size < this.maxIpsPerFingerprint) entry.ips.add(info.ip);
+            if (entry.ips.size < this.maxIpsPerFingerprint) entry.ips.set(info.ip, Date.now());
+          } else {
+            entry.ips.set(info.ip, Date.now());
           }
         }
       });
@@ -180,7 +232,40 @@ class FingerprintCensus {
   sweep() {
     const removed = this.store.sweep();
     if (removed > 0) this.dirty = true;
+    if (this.sweepIps() > 0) this.dirty = true;
     return removed;
+  }
+
+  /**
+   * Fa scadere gli INDIRIZZI conservati, lasciando intatti i conteggi.
+   *
+   * Gira solo con ipMode "full": è l'unico caso in cui gli indirizzi finiscono
+   * su disco, e quindi l'unico in cui c'è qualcosa da conservare o da
+   * dimenticare. Con "count" l'insieme vive solo in memoria e serve a non
+   * ricontare due volte lo stesso indirizzo; farlo scadere gonfierebbe il
+   * conteggio dei distinti senza alcun beneficio.
+   *
+   * @returns {number} indirizzi dimenticati
+   */
+  sweepIps() {
+    if (this.ipMode !== 'full' || this.ipRetentionDays <= 0) return 0;
+
+    const cutoff = Date.now() - this.ipRetentionDays * 86400 * 1000;
+    let removed = 0;
+    for (const entry of this.store.entries.values()) {
+      for (const [ip, seenMs] of entry.ips) {
+        if (seenMs < cutoff) { entry.ips.delete(ip); removed++; }
+      }
+    }
+    return removed;
+  }
+
+  /**
+   * Voce del censimento, per chi deve ricavarne un giudizio.
+   * Sola lettura: chi chiama non deve modificarla.
+   */
+  getEntry(fp) {
+    return fp ? this.store.get(fp) || null : null;
   }
 
   save() {
@@ -198,12 +283,16 @@ class FingerprintCensus {
         firstSeenMs: entry.firstSeenMs,
         lastSeenMs: entry.lastSeenMs,
         count: entry.count,
+        judgedCount: entry.judgedCount,
         matchedCount: entry.matchedCount,
         blockedCount: entry.blockedCount,
         pathCount: entry.pathCount,
         samplePaths: Array.from(entry.paths).slice(0, 16),
         ipCount: this.ipMode === 'none' ? 0 : entry.ipCount,
-        ips: this.ipMode === 'full' ? Array.from(entry.ips) : [],
+        // Solo con "full" gli indirizzi finiscono su disco. Con "count" restano
+        // in memoria come aiuto alla deduplica e non vengono mai scritti.
+        ips: this.ipMode === 'full' ? Array.from(entry.ips.keys()) : [],
+        ipsSeenMs: this.ipMode === 'full' ? Object.fromEntries(entry.ips) : undefined,
         class: entry.class,
       })),
     };
@@ -217,6 +306,7 @@ class FingerprintCensus {
       tracked: this.store.size,
       evictions: this.store.evictions,
       ipMode: this.ipMode,
+      ipRetentionDays: this.ipMode === 'full' ? this.ipRetentionDays : null,
     };
   }
 }

@@ -352,6 +352,55 @@
     //   match: { all: [{ extension: ["php"] }, { fingerprintClass: { coherent: false } }] },
     // },
     //
+    // ── reputazione: agisci su ciò che il censimento ha già visto ───────────
+    // Il censimento accumula da mesi. La foglia `reputation` trasforma quella
+    // storia in una condizione:
+    //   burst    impronta mai vista prima e già a raffica
+    //   suspect  quota di blocchi oltre custom.reputation.suspectShare
+    //   bad      quota di blocchi oltre custom.reputation.badShare
+    //
+    // ⚠ UN'IMPRONTA NON È UNA PERSONA, è una FAMIGLIA di client: "Chrome 120 su
+    // Linux" è la stessa per tutti quelli che usano quel browser. Le impronte da
+    // browser vero sono perciò PROTETTE dal giudizio
+    // (`protectBrowserFingerprints`), e chi emula bene un browser è immune alla
+    // reputazione. È il prezzo giusto: meglio perdere l'attaccante capace che
+    // chiudere fuori tutti gli utenti di un browser.
+    //
+    // ⚠ L'impronta la controlla chi bussa: randomizzando gli header ne ha una
+    // nuova a ogni richiesta. Questa è una vittoria facile contro lo scanner
+    // pigro, non una difesa da un avversario determinato — che però, provandoci,
+    // fa scattare l'allerta sul tasso di sfratto del censimento.
+    //
+    // {
+    //   name: "known-bad-fingerprint",
+    //   enabled: true,
+    //   category: "reputation",
+    //   description: "Impronta che nel nostro censimento ha una storia di blocchi.",
+    //   action: "block",
+    //   appliesTo: "anonymous",
+    //   match: { reputation: ["bad"] },
+    // },
+    //
+    // ── filtro d'AUDIENCE, non confine di sicurezza ─────────────────────────
+    // Lo scenario "sito riservato a un solo ecosistema" si scrive con
+    // `fingerprintClass`, ma va capito per quello che è: l'OS dichiarato si
+    // falsifica in un secondo, quindi questa non tiene fuori nessuno che non
+    // voglia esserlo. Serve a orientare un pubblico, non a difendersi.
+    //
+    // Tienila in "monitor" per settimane prima di promuoverla: il numero che
+    // conta è quanti visitatori REALI verrebbero esclusi, e lo si sa solo
+    // guardando i contatori.
+    //
+    // {
+    //   name: "solo-ecosistema-linux",
+    //   enabled: true,
+    //   category: "audience",
+    //   description: "Sito destinato al solo mondo Linux. FILTRO D'AUDIENCE: l'OS dichiarato è falsificabile, non è un confine di sicurezza.",
+    //   action: "monitor",
+    //   appliesTo: "anonymous",
+    //   match: { not: { fingerprintClass: { claimedOs: "linux" } } },
+    // },
+    //
     // ── tarpit: risposta a goccia ───────────────────────────────────────────
     // Uno scanner vale per la sua cadenza: un 404 gli costa millisecondi, una
     // risposta che non finisce mai gli occupa un worker e un socket per decine

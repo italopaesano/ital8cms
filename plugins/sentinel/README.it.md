@@ -26,6 +26,7 @@ che fai tu dopo aver letto i tuoi dati.
 - [Ban immediato](#ban-immediato-escalateban)
 - [Coerenza di sessione](#coerenza-di-sessione)
 - [`drop` e `tarpit`](#drop-e-tarpit-le-due-azioni-che-costano-anche-a-te)
+- [Reputazione locale](#reputazione-locale-delle-impronte)
 - [Il control plane](#il-control-plane)
 - [I dati prodotti](#i-dati-prodotti)
 - [Interconnessioni](#interconnessioni)
@@ -135,6 +136,8 @@ contano di più:
 | `sessionCoherence.enabled` | `true` | Sorveglia se una sessione autenticata continua ad assomigliare a sé stessa. |
 | `tarpit.maxConcurrent` | `20` | Connessioni trattenute contemporaneamente. Oltre il tetto si degrada al 404. |
 | `tarpit.maxSeconds` | `30` | Durata massima. Una regola può chiedere meno, mai di più. |
+| `reputation.protectBrowserFingerprints` | `true` | Le impronte da browser vero non ricevono mai un giudizio negativo. |
+| `census.ipRetentionDays` | `30` | Conservazione degli **indirizzi** (solo con `censusIpMode: "full"`). |
 | `alertRecipient` | `""` | Email per le allerte operative (richiede il plugin `mailer`). |
 
 ### Due tetti indipendenti sull'enforcement
@@ -191,6 +194,7 @@ espliciti: `all`, `any`, `not`.
 | `fingerprintClass` | `{ coherent: false, family: "curl" }` |
 | `canary` | `true` · `"known"` · `"unknown"` — vedi [token esca](#token-esca-canary) |
 | `sessionAnomaly` | `true` · `["uaChanged", "scriptClient"]` — vedi [coerenza di sessione](#coerenza-di-sessione) |
+| `reputation` | `true` · `["burst", "suspect", "bad"]` — vedi [reputazione](#reputazione-locale-delle-impronte) |
 | `status` | `[404, 403]` — solo nella valutazione dell'esito |
 
 **I path si scrivono senza `globalPrefix`**, che viene anteposto dal codice —
@@ -549,6 +553,78 @@ lungo — un fermo causato dalla propria difesa.
 > Dietro un proxy vale l'avvertenza gemella di `drop`: trattieni una connessione
 > del **proxy**, e l'attesa la paga la tua infrastruttura.
 
+## Reputazione locale delle impronte
+
+Il censimento accumula da mesi. La foglia `reputation` trasforma quella storia in
+una condizione utilizzabile in una regola.
+
+| Giudizio | Quando |
+|---|---|
+| `burst` | Impronta mai vista fino a poco fa, e già a decine di richieste |
+| `suspect` | Quota di blocchi oltre `suspectShare` (default 20%) |
+| `bad` | Quota di blocchi oltre `badShare` (default 50%) |
+
+```json5
+{
+  name: "known-bad-fingerprint",
+  action: "block",
+  appliesTo: "anonymous",
+  match: { reputation: ["bad"] },
+}
+```
+
+### Le due avvertenze, che contano più della funzione
+
+**1. Un'impronta non è una persona: è una famiglia di client.** «Chrome 120 su
+Linux» è la stessa impronta per tutti quelli che usano quel browser. Se qualcuno
+attacca con un Chrome perfettamente ordinario e la reputazione condanna
+quell'impronta, si chiude fuori **ogni visitatore con quel browser**. È il modo
+più probabile in cui questa funzione rovina un sito.
+
+Per questo un'impronta **coerente e con profilo da browser** non riceve mai un
+giudizio negativo, per quanto sporca sia la sua storia. Il prezzo è dichiarato:
+chi emula Chrome alla perfezione è immune alla reputazione. È il prezzo giusto —
+meglio perdere l'attaccante capace che chiudere fuori gli utenti di un browser.
+
+**2. L'impronta la controlla chi bussa.** Chi randomizza l'ordine degli header ha
+un'impronta nuova a ogni richiesta, quindi reputazione sempre pulita: questa è
+una vittoria facile contro lo scanner **pigro** — la stragrande maggioranza del
+traffico ostile — non una difesa da un avversario determinato.
+
+E non è un buco silenzioso: randomizzare le impronte fa esplodere il tasso di
+sfratto del censimento, che ha già la sua allerta. L'evasione da questa funzione
+ne accende un'altra.
+
+### Perché il giudizio non può alimentare sé stesso
+
+Se la quota di blocchi determinasse il giudizio e il giudizio producesse blocchi,
+il primo inciampo condannerebbe un'impronta per sempre. Le richieste decise **da
+una regola che usa la reputazione** sono quindi escluse dal calcolo — da
+entrambi i lati della frazione.
+
+Escludere solo i blocchi non basterebbe, ed è un errore che si vede solo dal
+vivo: mentre il giudizio è in vigore la sua regola scatta per prima, quindi
+nessun'altra regola produce più blocchi. Il numeratore si ferma, il denominatore
+no, e la quota **scende da sola** finché l'impronta non viene perdonata — per poi
+essere ricondannata, in un'oscillazione senza fine. Il censimento tiene perciò
+due contatori: `count`, tutte le richieste, e `judgedCount`, quelle giudicate nel
+merito, che è il denominatore della reputazione.
+
+### Filtro d'audience, non confine di sicurezza
+
+Lo scenario «sito riservato a un solo ecosistema» si scrive con
+`fingerprintClass`:
+
+```json5
+match: { not: { fingerprintClass: { claimedOs: "linux" } } }
+```
+
+Va capito per quello che è: l'OS dichiarato si falsifica in un secondo, quindi
+non tiene fuori nessuno che non voglia esserlo. Serve a **orientare un pubblico**,
+non a difendersi. Tienila in `monitor` per settimane prima di promuoverla: il
+numero che conta è quanti visitatori reali verrebbero esclusi, e lo si sa solo
+guardando i contatori.
+
 ## Il control plane
 
 ```bash
@@ -687,8 +763,8 @@ del filtro.
 
 ## Cosa NON fa (ancora)
 
-Trappole di livello superiore (finto pannello che registra i tentativi),
-reputazione locale delle impronte, `challenge` (proof-of-work).
+Trappole di livello superiore (finto pannello che registra i tentativi) e
+`challenge` (proof-of-work).
 Roadmap completa e stato di avanzamento in [`TODO.md`](./TODO.md).
 
 La lettura dei dati passa dalla GUI di [`adminSentinel`](../adminSentinel/README.it.md);
