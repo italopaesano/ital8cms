@@ -264,13 +264,170 @@ describe('makeDispatcher unknown commands', () => {
   });
 });
 
-test('KNOWN_COMMANDS lists all 10 commands', () => {
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SENTINEL — la terza superficie a runtime, l'unica con TRE stati
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+describe('makeDispatcher sentinel', () => {
+  function sentinelCtx(sb, extra = {}) {
+    return {
+      startTime: Date.now(), ital8Conf: { httpPort: 3000 },
+      configPath: sb.configPath, statePath: sb.statePath,
+      ...extra,
+    };
+  }
+
+  test.each([
+    ['sentinel.start', 'running'],
+    ['sentinel.monitor', 'monitor'],
+    ['sentinel.stop', 'stopped'],
+  ])('%s persiste lo stato %s', async (command, expected) => {
+    const sb = makeSandbox(true, 'running');
+    try {
+      // Si parte da uno stato diverso da quello atteso, altrimenti il comando
+      // sarebbe un noop e non proverebbe nulla.
+      fs.writeFileSync(sb.statePath, `{ "sentinel": "${expected === 'monitor' ? 'running' : 'monitor'}" }`, 'utf8');
+      const dispatch = makeDispatcher(sentinelCtx(sb));
+      const res = await dispatch(command);
+      expect(res.ok).toBe(true);
+      expect(readState(sb.statePath).sentinel).toBe(expected);
+    } finally { sb.cleanup(); }
+  });
+
+  // Lo state file da solo non basta: se il gate in memoria non viene commutato,
+  // il comando risponde "applicato" mentre il filtro continua a comportarsi come
+  // prima — ed è esattamente il caso in cui serve, cioè quando una regola ha
+  // chiuso fuori qualcuno.
+  test('applica lo stato al gate in memoria, non solo al file', async () => {
+    const sb = makeSandbox(true, 'running');
+    const applied = [];
+    try {
+      const dispatch = makeDispatcher(sentinelCtx(sb, { setSentinelState: (s) => applied.push(s) }));
+      await dispatch('sentinel.monitor');
+      expect(applied).toEqual(['monitor']);
+    } finally { sb.cleanup(); }
+  });
+
+  // L'azione echeggiata deve nominare il COMANDO, non lo stato interno:
+  // 'sentinel.stopped' non è un comando che esista.
+  test.each([
+    ['sentinel.start', 'sentinel.start'],
+    ['sentinel.monitor', 'sentinel.monitor'],
+    ['sentinel.stop', 'sentinel.stop'],
+  ])('%s echeggia l azione %s', async (command, expectedAction) => {
+    const sb = makeSandbox(true, 'running');
+    try {
+      fs.writeFileSync(sb.statePath, '{ "sentinel": "monitor" }', 'utf8');
+      const dispatch = makeDispatcher(sentinelCtx(sb));
+      const res = await dispatch(command);
+      if (!res.noop) expect(res.action).toBe(expectedAction);
+    } finally { sb.cleanup(); }
+  });
+
+  test('nessun riavvio richiesto: è un gate a runtime', async () => {
+    const sb = makeSandbox(true, 'running');
+    try {
+      const dispatch = makeDispatcher(sentinelCtx(sb));
+      const res = await dispatch('sentinel.stop');
+      expect(res.restart).toBe(false);
+    } finally { sb.cleanup(); }
+  });
+
+  test('ripetere lo stesso stato è un noop dichiarato', async () => {
+    const sb = makeSandbox(true, 'running');
+    try {
+      const dispatch = makeDispatcher(sentinelCtx(sb));
+      await dispatch('sentinel.stop');
+      const res = await dispatch('sentinel.stop');
+      expect(res.noop).toBe(true);
+    } finally { sb.cleanup(); }
+  });
+
+  // Come per le altre superfici: writeState normalizza l'oggetto ricevuto, quindi
+  // scrivere solo la chiave toccata riporterebbe le altre al loro default.
+  test('non azzera le altre superfici', async () => {
+    const sb = makeSandbox(true, 'stopped');
+    try {
+      const dispatch = makeDispatcher(sentinelCtx(sb));
+      await dispatch('sentinel.stop');
+      expect(readState(sb.statePath)).toEqual({ public: 'stopped', reserved: 'running', sentinel: 'stopped' });
+    } finally { sb.cleanup(); }
+  });
+
+  // Un gate 'running' senza motore non sta filtrando: mostrarlo come attivo
+  // sarebbe la stessa trappola diagnostica di "admin: running" su un pannello
+  // che risponde 404.
+  test('status distingue lo stato del gate dalla presenza del motore', async () => {
+    const sb = makeSandbox(true, 'running');
+    try {
+      const senzaMotore = await makeDispatcher(sentinelCtx(sb, {
+        getSentinelState: () => 'running', hasSentinelEngine: () => false,
+      }))('status');
+      expect(senzaMotore.data.sentinel).toEqual({ state: 'running', engine: false });
+
+      const conMotore = await makeDispatcher(sentinelCtx(sb, {
+        getSentinelState: () => 'running', hasSentinelEngine: () => true,
+      }))('status');
+      expect(conMotore.data.sentinel).toEqual({ state: 'running', engine: true });
+    } finally { sb.cleanup(); }
+  });
+});
+
+// Il tester vive nel control plane e non in una rotta HTTP perche la domanda
+// che risolve — «perche questa regola non scatta?» — arriva tipicamente in SSH
+// mentre si sta scrivendo il file.
+describe('makeDispatcher sentinel.test', () => {
+  const base = (extra = {}) => ({ startTime: Date.now(), ital8Conf: { httpPort: 3000 }, ...extra });
+
+  test('senza motore lo dice, invece di rispondere il vuoto', async () => {
+    const res = await makeDispatcher(base())('sentinel.test', { spec: { path: '/x' } });
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe('sentinel_unavailable');
+  });
+
+  test('il path e obbligatorio', async () => {
+    const dispatch = makeDispatcher(base({ testSentinelRequest: () => ({}) }));
+    const res = await dispatch('sentinel.test', { spec: {} });
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe('invalid_request');
+  });
+
+  test('inoltra la spec al motore e restituisce il risultato', async () => {
+    let received = null;
+    const dispatch = makeDispatcher(base({
+      testSentinelRequest: (spec) => { received = spec; return { matched: { ruleName: 'php-probe' } }; },
+    }));
+    const res = await dispatch('sentinel.test', { spec: { path: '/a.php', method: 'POST' } });
+    expect(res.ok).toBe(true);
+    expect(received.path).toBe('/a.php');
+    expect(res.data.matched.ruleName).toBe('php-probe');
+  });
+
+  test('un motore che lancia non fa cadere il control plane', async () => {
+    const dispatch = makeDispatcher(base({
+      testSentinelRequest: () => { throw new Error('boom'); },
+    }));
+    const res = await dispatch('sentinel.test', { spec: { path: '/x' } });
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe('test_failed');
+  });
+
+  test('non richiede riavvio: non modifica nulla', async () => {
+    const dispatch = makeDispatcher(base({ testSentinelRequest: () => ({}) }));
+    const res = await dispatch('sentinel.test', { spec: { path: '/x' } });
+    expect(res.restart).toBe(false);
+  });
+});
+
+test('KNOWN_COMMANDS lists all 14 commands', () => {
   expect(KNOWN_COMMANDS.sort()).toEqual([
     'admin.start', 'admin.stop',
     'public.start', 'public.stop',
     'publicOnly.off', 'publicOnly.on',
     'reserved.start', 'reserved.stop',
-    'reset', 'status',
+    'reset',
+    'sentinel.monitor', 'sentinel.start', 'sentinel.stop', 'sentinel.test',
+    'status',
   ]);
 });
 
@@ -322,7 +479,7 @@ describe('makeDispatcher reserved', () => {
       });
       await dispatch('reserved.stop');
       const state = readState(sb.statePath);
-      expect(state).toEqual({ public: 'stopped', reserved: 'stopped' });
+      expect(state).toEqual({ public: 'stopped', reserved: 'stopped', sentinel: 'running' });
     } finally { sb.cleanup(); }
   });
 

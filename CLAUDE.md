@@ -678,6 +678,12 @@ Plugin con documentazione propria:
 - **rateLimiter** — anti brute-force a escalation (short→long block), chiave `IP+ruleName`, guard (oggetto condiviso, invocato nell'handler) + middleware di enforcement, stato persistente cross-restart, audit JSONL. → [`plugins/rateLimiter/README.md`](./plugins/rateLimiter/README.md) · [`EXPLAIN.md`](./plugins/rateLimiter/EXPLAIN.md)
 - **adminRateLimiter** — twin admin GUI (sezione `rateLimiterManagement`): KPI, blocchi attivi, ban/unblock live, editor JSON5 di regole e impostazioni (Tre Viste). → [`plugins/adminRateLimiter/README.md`](./plugins/adminRateLimiter/README.md) · [`EXPLAIN.md`](./plugins/adminRateLimiter/EXPLAIN.md)
 
+### Sentinel (filtro delle richieste)
+
+Filtro delle richieste **pre-router**: classifica il traffico con regole dichiarative (`sentinelRules.json5`), lo registra in un log JSONL proprio (IP pieno) e ne ricava un **fingerprint HTTP passivo**. Lo User-Agent è escluso dal calcolo dell'impronta di proposito: tenendoli indipendenti si coglie il caso «UA dichiara Chrome, la firma dice curl». **All'installazione non blocca nulla** (tutte le regole distribuite sono in `monitor`).
+
+Vive in uno **slot del core** (`createSentinelGate`, montato fra `maintenanceGate` e `reservedGate`) perché i middleware dei plugin girano dopo il router e non vedrebbero mai le rotte API. Il 404 di blocco è quello di `reservedGate.deny()`, non fabbricato localmente. → [`plugins/sentinel/README.it.md`](./plugins/sentinel/README.it.md) · [`EXPLAIN.it.md`](./plugins/sentinel/EXPLAIN.it.md)
+
 ### CSRF Protection · Admin CSRF Protection
 
 Protezione CSRF (difesa in profondità: token sincronizzatore per-sessione + controllo Origin/Referer, enforcement nel route-wrap del core prima del controllo auth) e il suo twin admin GUI. Documentati nei rispettivi doc:
@@ -1055,6 +1061,8 @@ Server su `http://localhost:3000`.
 > `admin start|stop` (attiva/disattiva l'area admin, con riavvio) /
 > `public start|stop` (manutenzione del sito pubblico, senza riavvio) /
 > `reserved start|stop` (superficie riservata, senza riavvio) /
+> `sentinel start|monitor|stop` (filtro delle richieste; `monitor` ferma
+> l'enforcement senza perdere i dati) /
 > `publicOnly on|off` (assetto sito vetrina, con riavvio) /
 > `reset <target>` (offline o `--online`). Config: `ital8Config.json5 → cli` e
 > `maintenance`. Sorgenti: `bin/ital8cms-cli.js` + `core/cliBridge/`.
@@ -1567,6 +1575,10 @@ npm run cli -- public stop     # public site in maintenance: 503 (no restart)
 npm run cli -- public start    # public site back online  (no restart)
 npm run cli -- reserved stop   # everything behind auth (login, admin panel): 404 (no restart)
 npm run cli -- reserved start  # reserved surface reachable again (no restart)
+npm run cli -- sentinel monitor # request filter: observe and log, apply nothing (no restart)
+npm run cli -- sentinel stop   # request filter kill switch: engine not consulted (no restart)
+npm run cli -- sentinel start  # request filter back to its configured behaviour (no restart)
+npm run cli -- sentinel test /wp-login.php   # try a request against the live rules, and explain why
 npm run cli -- publicOnly on   # showcase layout: reserved stop + admin stop (restarts)
 npm run cli -- publicOnly off  # back to the normal layout (restarts)
 npm run cli -- reset <target>  # plugin/theme configs back to defaults (add --theme for themes)

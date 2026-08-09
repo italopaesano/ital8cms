@@ -31,7 +31,7 @@
  */
 
 const { anonymizeIp, getHashedSessionId } = require('./privacyFilter');
-const { detectBot } = require('./botDetector');
+const { detectBot } = require('../../../core/botDetector');
 
 /**
  * Estensioni di file statici da escludere dal tracking.

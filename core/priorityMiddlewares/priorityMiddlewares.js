@@ -29,7 +29,7 @@
 const path = require('path');
 const loadJson5 = require('../loadJson5');
 const { readState } = require('../cliBridge/stateFile');
-const { createMaintenanceGate, createReservedGate } = require('./runtimeGate');
+const { createMaintenanceGate, createReservedGate, createSentinelGate } = require('./runtimeGate');
 
 function priorityMiddleware(app, ital8Conf, options = {}){
 
@@ -125,6 +125,26 @@ function priorityMiddleware(app, ital8Conf, options = {}){
     // Perché dopo il maintenance gate: con entrambi chiusi il 503 uniforme del
     // maintenance ha la precedenza e non lascia trapelare nulla; se solo questo è
     // chiuso, il maintenance lascia passare e qui si applica il 404.
+    // ========== SENTINEL GATE (slot pre-router del filtro richieste) ==========
+    // Montato FRA maintenance e reserved:
+    //   • dopo maintenance → in manutenzione il 503 resta uniforme su tutto. Se
+    //     sentinel rispondesse 404 mentre il resto dà 503, quella differenza
+    //     sarebbe essa stessa un'informazione.
+    //   • prima di reserved → deve poter filtrare (e osservare) anche le
+    //     scansioni dirette al pannello quando la superficie è aperta.
+    //   • prima del router  → altrimenti non vedrebbe mai una rotta API matchata.
+    //
+    // Nasce SENZA motore: lo riceve in index.js dopo pluginSys.initialize(),
+    // dal plugin `sentinel`. Senza plugin resta un pass-through da un `if`.
+    const initialSentinelState = initialState.sentinel || 'running';
+    const sentinelGate = createSentinelGate({
+        ital8Conf,
+        reservedGate,
+        initialState: initialSentinelState,
+    });
+    app.use(sentinelGate.middleware);
+    console.log(`[PriorityMiddleware] ✓ sentinel gate loaded (initial sentinel state: ${initialSentinelState}, engine: pending)`);
+
     app.use(reservedGate.middleware);
     console.log(`[PriorityMiddleware] ✓ reserved gate loaded (initial reserved state: ${initialReservedState})`);
 
@@ -156,7 +176,8 @@ function priorityMiddleware(app, ital8Conf, options = {}){
         bodyParser: bodyParser,
         koaSession: koaSession,  // Null se session disabilitato
         maintenanceGate: maintenanceGate,  // Gate per public stop via CLI
-        reservedGate: reservedGate         // Gate per reserved stop via CLI
+        reservedGate: reservedGate,        // Gate per reserved stop via CLI
+        sentinelGate: sentinelGate         // Slot del filtro richieste (motore iniettato in index.js)
     }
 
 }// function priorityMiddleware(app, ital8Conf)

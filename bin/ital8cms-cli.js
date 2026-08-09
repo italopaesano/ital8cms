@@ -44,6 +44,61 @@ const reserved = program.command('reserved').description('reserved surface contr
 reserved.command('start').description('serve the reserved surface normally').action(() => sendCommand('reserved.start'));
 reserved.command('stop').description('answer 404 on login, authenticated routes and the admin panel').action(() => sendCommand('reserved.stop'));
 
+// Filtro delle richieste in ingresso (plugin `sentinel`). Gate a runtime come
+// public e reserved: nessun riavvio. Tre stati invece di due — `monitor` e la via
+// di fuga da usare quando una regola promossa si rivela sbagliata: ferma
+// l'enforcement ma NON perde i dati che servono a capire cosa e andato storto.
+const sentinel = program.command('sentinel').description('request filter control — the sentinel plugin (no restart)');
+sentinel.command('start').description('filter according to the rules as configured').action(() => sendCommand('sentinel.start'));
+sentinel.command('monitor').description('observe and log, but apply no action (back to phase 1)').action(() => sendCommand('sentinel.monitor'));
+sentinel.command('stop').description('kill switch: the engine is not even consulted').action(() => sendCommand('sentinel.stop'));
+
+// Prova una richiesta contro le regole in vigore, senza inviarla davvero.
+// La domanda che risolve — «perche questa regola non scatta?» — arriva
+// tipicamente in SSH mentre si sta scrivendo il file, non dal pannello.
+sentinel
+  .command('test <path>')
+  .description('try a request against the live rules and explain the outcome')
+  .option('-X, --method <method>', 'HTTP method', 'GET')
+  .option('-A, --user-agent <ua>', 'User-Agent header')
+  .option('-H, --header <name:value>', 'extra header (repeatable)', collectHeader, {})
+  .option('--ip <address>', 'client IP address')
+  .option('--query <string>', 'query string (without the leading ?)')
+  .option('--authenticated', 'simulate an authenticated request')
+  .option('--roles <ids>', 'comma-separated role ids (implies --authenticated)')
+  .option('--status <code>', 'response status, to try outcome rules', (v) => parseInt(v, 10))
+  .option('--browser', 'add the headers a real browser sends (Accept, Sec-Fetch-*, sec-ch-ua, ...)')
+  .option('-v, --verbose', 'show every rule evaluated, not just the matching one')
+  .action((reqPath, cmdOpts) => {
+    const headers = { ...cmdOpts.header };
+    if (cmdOpts.userAgent) headers['User-Agent'] = cmdOpts.userAgent;
+
+    const roles = cmdOpts.roles
+      ? String(cmdOpts.roles).split(',').map((r) => parseInt(r.trim(), 10)).filter(Number.isInteger)
+      : undefined;
+
+    sendCommand('sentinel.test', {
+      spec: {
+        path: reqPath,
+        method: cmdOpts.method,
+        headers,
+        ip: cmdOpts.ip,
+        query: cmdOpts.query,
+        authenticated: !!cmdOpts.authenticated || Array.isArray(roles),
+        roleIds: roles,
+        status: cmdOpts.status,
+        browserProfile: !!cmdOpts.browser,
+      },
+      verbose: !!cmdOpts.verbose,
+    });
+  });
+
+function collectHeader(value, previous) {
+  const at = value.indexOf(':');
+  if (at === -1) bail('client_error', `header non valido: ${value} (attesa la forma "Nome: valore")`);
+  return { ...previous, [value.slice(0, at).trim()]: value.slice(at + 1).trim() };
+}
+
 // Macro: compone le leve esistenti nell'assetto "sito vetrina".
 const publicOnly = program.command('publicOnly').description('showcase preset: public site only (macro over reserved + admin)');
 publicOnly.command('on').description('reserved stop + admin stop (restarts)').action(() => sendCommand('publicOnly.on'));
@@ -322,9 +377,18 @@ function renderHuman(payload, command) {
       `  admin state:   ${d.admin && d.admin.state}${d.admin && d.admin.unreachable ? '  (irraggiungibile: reserved stopped)' : ''}`,
       `  reserved state:${d.reserved ? ' ' + d.reserved.state : ' unknown'}`,
       `  public state:  ${d.public && d.public.state}`,
+      // Due condizioni indipendenti: il gate puo essere 'running' mentre il
+      // motore non e stato caricato (plugin assente, disattivato o incompleto).
+      // In quel caso NON si sta filtrando nulla, e dirlo evita la stessa
+      // trappola diagnostica dell'admin irraggiungibile qui sopra.
+      `  sentinel state:${d.sentinel ? ' ' + d.sentinel.state : ' unknown'}${d.sentinel && !d.sentinel.engine ? '  (motore non caricato: nessun filtro attivo)' : ''}`,
     ];
     if (d.supervisor) lines.push(`  supervisor:    ${d.supervisor}`);
     process.stdout.write(lines.join('\n') + '\n');
+    return;
+  }
+  if (command === 'sentinel.test' && payload.data) {
+    renderSentinelTest(payload.data);
     return;
   }
   // public.start / public.stop have restart:false but still need a one-line confirmation
@@ -333,6 +397,79 @@ function renderHuman(payload, command) {
     return;
   }
   process.stdout.write(`OK ${command}\n`);
+}
+
+/**
+ * Rende leggibile l'esito di `sentinel test`.
+ *
+ * La parte utile non e «quale regola ha vinto» — quello si vede dal log — ma
+ * PERCHE le altre non hanno matchato: per ogni condizione si stampa atteso e
+ * osservato, cosi la ragione del mancato match e sotto gli occhi invece che da
+ * dedurre.
+ */
+function renderSentinelTest(data) {
+  const out = [];
+  const s = data.subject;
+
+  out.push('');
+  out.push(`Richiesta:  ${s.method} ${s.path}${s.query ? '?' + s.query : ''}`);
+  out.push(`  ip:         ${s.ip}`);
+  out.push(`  estensione: ${s.extension || '(nessuna)'}`);
+  out.push(`  user-agent: ${s.userAgent || '(assente)'}`);
+  if (s.authenticated) out.push(`  autenticata: si (ruoli: ${JSON.stringify(s.roleIds)})`);
+  out.push(`  impronta:   ${s.fp}  famiglia=${s.fpClass.family} profilo=${s.fpClass.headerProfile} coerente=${s.fpClass.coherent}`);
+  out.push('');
+
+  if (data.matched) {
+    out.push(`✓ MATCHA: ${data.matched.ruleName}  →  action: ${data.matched.action}  (categoria: ${data.matched.category})`);
+  } else {
+    out.push('✗ NESSUNA REGOLA MATCHA: la richiesta passerebbe senza essere classificata.');
+  }
+  out.push('');
+
+  const verbose = programOptsVerbose();
+  const rows = verbose ? data.evaluated : data.evaluated.filter((r) => r.matched);
+
+  if (rows.length === 0 && !verbose) {
+    out.push('(usa -v per vedere perche ciascuna regola non ha matchato)');
+  }
+
+  for (const rule of rows) {
+    const mark = rule.matched ? '✓' : '·';
+    let suffix = '';
+    if (rule.skipped) suffix = `  [saltata: ${rule.skipped}]`;
+    else if (rule.shortCircuited) suffix = '  [dopo la vincitrice: a runtime non verrebbe valutata]';
+    out.push(`${mark} ${rule.ruleName}${suffix}`);
+    if (rule.entries) out.push(...renderEntries(rule.entries, '    '));
+  }
+
+  out.push('');
+  process.stdout.write(out.join('\n'));
+}
+
+function renderEntries(entries, indent) {
+  const lines = [];
+  for (const e of entries) {
+    const mark = e.matched ? '✓' : '✗';
+    if (e.children) {
+      lines.push(`${indent}${mark} ${e.leaf}`);
+      for (const child of e.children) lines.push(...renderEntries(child, indent + '  '));
+      continue;
+    }
+    lines.push(`${indent}${mark} ${e.leaf}: atteso ${fmt(e.expected)} — osservato ${fmt(e.actual)}`);
+  }
+  return lines;
+}
+
+function fmt(value) {
+  if (value === undefined) return '(assente)';
+  if (value === null) return 'null';
+  if (typeof value === 'string') return value === '' ? '(vuoto)' : value;
+  return JSON.stringify(value);
+}
+
+function programOptsVerbose() {
+  return process.argv.includes('-v') || process.argv.includes('--verbose');
 }
 
 function formatUptime(seconds) {

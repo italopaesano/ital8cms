@@ -89,10 +89,13 @@ Fonte: intervento v2.64.0 (canonizzazione del `.default`).
       Scelta esplicita: **non** si scaffolda `migrations/` per un pacchetto nuovo
       (a `schemaVersion: 1` non c'è nulla da cui migrare), ma la skill deve dire
       cosa fare al primo cambio di struttura.
-- [ ] **`core/priorityMiddlewares/README.md`**: nota legacy di 10 righe, fuori
+- [x] **`core/priorityMiddlewares/README.md`**: nota legacy di 10 righe, fuori
       standard ital8doc, che non documenta né il maintenance gate né gli altri
       priority middleware. Riscrittura come task dedicato.
       *(Fonte: CHANGELOG v2.63.0, "Gap noto".)*
+      → **Fatto** in v2.71.1: ordine completo dei sette middleware con la ragione
+      di ogni posizione, i tre gate a runtime con le loro asimmetrie, il modello
+      dello slot pre-router, e la procedura per aggiungerne uno nuovo.
 - [ ] **Completare la documentazione del plugin `admin`.** `EXPLAIN.it.md` (creato
       in v2.69.0) copre a fondo la sola **installazione da repo Git**; gli altri
       moduli — `pluginsManagment`, `themesManagment`, `pagesManagment`,
