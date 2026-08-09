@@ -25,6 +25,7 @@ che fai tu dopo aver letto i tuoi dati.
 - [Token esca (canary)](#token-esca-canary)
 - [Ban immediato](#ban-immediato-escalateban)
 - [Coerenza di sessione](#coerenza-di-sessione)
+- [`drop` e `tarpit`](#drop-e-tarpit-le-due-azioni-che-costano-anche-a-te)
 - [Il control plane](#il-control-plane)
 - [I dati prodotti](#i-dati-prodotti)
 - [Interconnessioni](#interconnessioni)
@@ -132,6 +133,8 @@ contano di più:
 | `log.maxTotalBytes` | `200 MB` | Tetto di dimensione, oltre alla retention a tempo. |
 | `census.censusIpMode` | `"count"` | `none` / `count` / `full` — vedi [Privacy](#privacy). |
 | `sessionCoherence.enabled` | `true` | Sorveglia se una sessione autenticata continua ad assomigliare a sé stessa. |
+| `tarpit.maxConcurrent` | `20` | Connessioni trattenute contemporaneamente. Oltre il tetto si degrada al 404. |
+| `tarpit.maxSeconds` | `30` | Durata massima. Una regola può chiedere meno, mai di più. |
 | `alertRecipient` | `""` | Email per le allerte operative (richiede il plugin `mailer`). |
 
 ### Due tetti indipendenti sull'enforcement
@@ -228,10 +231,10 @@ trasformerebbe una virgola fuori posto in un blackout.
 | `monitor` | Matcha, registra, **lascia passare**. | ✅ v1 |
 | `block` | **404**, byte-identico a un URL che non è mai esistito. | ✅ v1 |
 | `throttle` | Delega a `rateLimiter` senza bloccare. | ✅ v1 |
-| `drop` | Oggi si comporta come `block`; la chiusura sul socket arriva più avanti. | ◐ v1 |
+| `drop` | **Tronca la connessione** senza rispondere (stile 444 di nginx). | ✅ v1.4 |
 | `decoy` | [Contenuto fittizio](#contenuti-fittizi-decoy) al posto del 404. | ✅ v1.1 |
 | `redirect` | 30x, allowlist per l'esterno, permanenti vietati fuori dal sito. | ✅ v1.1 |
-| `tarpit` | Risposta a goccia. | ⏳ |
+| `tarpit` | [Risposta a goccia](#drop-e-tarpit-le-due-azioni-che-costano-anche-a-te), con tetto di connessioni e di durata. | ✅ v1.4 |
 
 Il 404 di `block` non è fabbricato da questo plugin: è prodotto da
 `reservedGate.deny()`, l'unico punto del progetto che genera il 404 «di
@@ -480,6 +483,72 @@ autenticato**. Devono cadere tre tetti, e i default ne lasciano in piedi due:
 E i ruoli in `enforceExemptRoles` (default `[0, 1]`) restano **osservati ma mai
 bloccati**, in qualsiasi configurazione.
 
+## `drop` e `tarpit`: le due azioni che costano anche a te
+
+Tutte le altre azioni producono una risposta e chiudono. Queste due no, ed è il
+motivo per cui vanno capite prima di usarle.
+
+### `drop` — nessuna risposta
+
+Tronca la connessione, come il `return 444` di nginx.
+
+| | `block` (404) | `drop` |
+|---|---|---|
+| Cosa impara chi bussa | Niente: è il 404 di un URL mai esistito | Che quel percorso è **trattato diversamente** |
+| Costo per lui | Millisecondi | Resta in attesa fino al proprio timeout |
+| Costo per te | Comporre una risposta | Praticamente zero |
+
+Non è «meglio» del blocco: si rinuncia all'**indistinguibilità**, che è la
+qualità principale del 404, in cambio di un costo maggiore per l'altro. Sono due
+strumenti diversi, e il default resta `block`.
+
+> **Dietro un reverse proxy non funziona, e fa peggio.** Il socket troncato è
+> quello verso il **proxy**, non verso il client: il proxy risponde 502 — più
+> rumoroso di un 404 — e si riempie i log di errori. Con `trustProxy: true`
+> dichiarato, `drop` **degrada da sé al blocco**, e il validatore lo avvisa
+> all'avvio.
+
+### `tarpit` — la risposta che non finisce
+
+La connessione resta aperta e il corpo esce un pezzetto alla volta. Uno scanner
+vale per la sua **cadenza**: un 404 gli costa millisecondi, una risposta che non
+finisce mai gli occupa un worker e un socket per decine di secondi.
+
+Dove il decoy gli avvelena i **dati**, il tarpit gli consuma il **tempo**.
+
+```json5
+{
+  name: "scanner-tarpit",
+  action: "tarpit",
+  appliesTo: "anonymous",
+  match: { path: ["/wp-admin/**", "/administrator/**"] },
+  tarpit: { seconds: 20 },     // una RICHIESTA: `maxSeconds` resta il tetto
+}
+```
+
+**È un'arma puntata anche contro di te.** Ogni connessione trattenuta è un
+socket, un descrittore di file e un timer **tuoi**: senza limiti, sotto un flusso
+sostenuto sarebbe il modo più elegante di esaurire i propri descrittori — la
+difesa che diventa il vettore, per la terza volta in questo plugin (le altre due
+sono il censimento e il registro dei canary). Da qui tre limiti, tutti necessari:
+
+1. **Tetto di connessioni** (`maxConcurrent`, default 20). Superato, la richiesta
+   **degrada al 404 comune**: non si accoda e non si aspetta, o il tetto
+   sposterebbe il consumo di risorse invece di fermarlo.
+2. **Durata massima** (`maxSeconds`, default 30). Una regola può chiedere meno,
+   mai di più: una durata scritta a mano nel file non deve poter tenere occupato
+   un socket più a lungo di quanto hai deciso.
+3. **Rilascio immediato alla chiusura.** Se il client stacca — e uno scanner con
+   un timeout aggressivo stacca subito — il posto si libera in quel momento.
+   Senza, basterebbe aprire e chiudere in fretta per saturare il tetto.
+
+Allo spegnimento le connessioni trattenute vengono **troncate**: `gracefulShutdown`
+aspetta le connessioni, e senza quello un riavvio durerebbe quanto il tarpit più
+lungo — un fermo causato dalla propria difesa.
+
+> Dietro un proxy vale l'avvertenza gemella di `drop`: trattieni una connessione
+> del **proxy**, e l'attesa la paga la tua infrastruttura.
+
 ## Il control plane
 
 ```bash
@@ -618,8 +687,8 @@ del filtro.
 
 ## Cosa NON fa (ancora)
 
-Trappole di livello superiore (finto pannello che registra i tentativi), `drop`
-vero, `tarpit`, reputazione locale delle impronte.
+Trappole di livello superiore (finto pannello che registra i tentativi),
+reputazione locale delle impronte, `challenge` (proof-of-work).
 Roadmap completa e stato di avanzamento in [`TODO.md`](./TODO.md).
 
 La lettura dei dati passa dalla GUI di [`adminSentinel`](../adminSentinel/README.it.md);

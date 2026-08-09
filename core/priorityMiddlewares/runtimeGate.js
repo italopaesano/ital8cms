@@ -497,27 +497,41 @@ function createSentinelGate(options) {
       ctx.set('X-Sentinel-Rule', String(verdict.ruleName));
     }
 
-    if (verdict.action === 'block' || verdict.action === 'drop') {
+    if (verdict.action === 'block') {
       deny(ctx);
       return;
     }
 
-    // decoy / redirect / tarpit: il corpo lo produce il plugin, ma solo se non
-    // tradisce la superficie riservata.
+    // drop / decoy / redirect / tarpit: la risposta la produce il plugin, ma solo
+    // se non tradisce la superficie riservata.
+    //
+    // Il controllo vale anche per `drop`, che una risposta non la scrive affatto:
+    // proprio per questo si nota. Se il reserved gate sta chiudendo tutto con un
+    // 404 uniforme e un solo percorso invece tronca la connessione, quel percorso
+    // si è appena distinto dagli altri — che è l'enumerazione che il gate esiste
+    // per impedire.
     if (decorationWouldLeak(ctx) || typeof verdict.respond !== 'function') {
       deny(ctx);
       return;
     }
 
+    // `respond` può RINUNCIARE restituendo `false`: non è un errore, è una
+    // condizione operativa prevista — il tarpit col tetto pieno, il drop dietro
+    // un proxy. In quel caso deve lasciare il contesto intatto, perché qui sotto
+    // ci si scrive il 404 comune. Trattarla come un'eccezione riempirebbe i log
+    // di «risposta fallita» per un funzionamento del tutto normale.
+    let handled = true;
     try {
-      await verdict.respond(ctx);
+      handled = (await verdict.respond(ctx)) !== false;
     } catch (err) {
       if (!engineFailureLogged) {
         console.error(`[sentinelGate] risposta del motore fallita (${err && err.message}); emesso 404`);
         engineFailureLogged = true;
       }
-      deny(ctx);
+      handled = false;
     }
+
+    if (!handled) deny(ctx);
   }
 
   return {

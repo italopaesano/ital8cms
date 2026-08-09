@@ -1,6 +1,6 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "schemaVersion": 3,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 4,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   "active": 1,
 
   // Weight 3: prima di analytics (5) e rateLimiter (5). Conta poco in pratica —
@@ -262,6 +262,35 @@
     // (301/308) verso l'esterno sono sempre vietati: la cache del browser rende
     // irreparabile un falso positivo su un utente reale.
     "allowedRedirectHosts": [],
+
+    // ── Risposta a goccia (azione `tarpit`) ──
+    //
+    // Invece di rispondere e chiudere, la connessione resta aperta e il corpo
+    // esce un pezzetto alla volta. Uno scanner vale per la sua cadenza: un 404
+    // gli costa millisecondi, una risposta che non finisce mai gli occupa un
+    // worker e un socket per decine di secondi.
+    //
+    // ⚠ È un'arma puntata anche contro di noi. Ogni connessione trattenuta è un
+    // socket, un descrittore di file e un timer NOSTRI: senza limiti, sotto un
+    // flusso sostenuto sarebbe il modo più elegante di esaurire i propri
+    // descrittori. Da qui i tre tetti qui sotto, tutti e tre necessari.
+    //
+    // ⚠ Dietro un reverse proxy trattiene una connessione del PROXY, non del
+    // client: l'attesa la paga la tua infrastruttura. Il validatore lo segnala.
+    "tarpit": {
+      // Connessioni trattenute contemporaneamente. Superato il tetto la
+      // richiesta degrada al 404 comune: NON si accoda e non si aspetta, o il
+      // tetto sposterebbe il problema invece di risolverlo.
+      "maxConcurrent": 20,
+
+      // Durata massima. Una regola può chiedere meno, mai di più: una durata
+      // scritta a mano nel file delle regole non deve poter tenere occupato un
+      // socket più a lungo di quanto hai deciso qui.
+      "maxSeconds": 30,
+
+      // Intervallo fra una goccia e l'altra.
+      "intervalMs": 1000,
+    },
 
     // ── Token esca (canary) ──
     //

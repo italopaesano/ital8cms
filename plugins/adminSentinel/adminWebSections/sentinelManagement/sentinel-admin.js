@@ -102,6 +102,7 @@
 
     renderCanary(stats.canary);
     renderSessions(stats.sessions);
+    renderTarpit(stats.tarpit);
     return true;
   }
 
@@ -147,6 +148,24 @@
         + '<td>' + same + '</td>'
         + '</tr>';
     }).join('');
+  }
+
+  // ── Tarpit ────────────────────────────────────────────────────────────────
+  //
+  // Del tarpit interessa una cosa sola in dashboard: se sta RIFIUTANDO. Il
+  // numero di connessioni trattenute è un dato di curiosità; il tetto raggiunto
+  // è una decisione da prendere.
+
+  function renderTarpit(tarpit) {
+    const box = $('tarpitWarning');
+    if (!box) return;
+
+    const refused = tarpit ? tarpit.refused : 0;
+    box.classList.toggle('d-none', !refused);
+    if (refused) {
+      $('tarpitDetail').textContent = ' (' + num(refused) + ' rifiutate, '
+        + num(tarpit.concurrent) + '/' + num(tarpit.maxConcurrent) + ' in corso) ';
+    }
   }
 
   // ── Coerenza di sessione ──────────────────────────────────────────────────

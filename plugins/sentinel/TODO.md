@@ -78,7 +78,7 @@ rende leggibile e governabile quello che c'è, poi si aggiungono le azioni.**
 | ~~**4**~~ | ~~`redirect` + `decoy` L0/L1~~ ✅ | Gate, validatore e non-interferenza erano **già scritti e testati**: mancava solo chi produce il corpo. Miglior rapporto valore/codice nuovo |
 | ~~**5**~~ | ~~Canary (`decoy` L2) + `banClient` + allerte~~ ✅ | Il salto da difesa passiva a **sensore**: certezza di un attaccante attivo, non inferenza |
 | ~~**6**~~ | ~~Coerenza di sessione~~ ✅ | Miglior segnale del blocco autenticato, ma introduce stato e foglie nuove: meglio quando la GUI può mostrarne gli effetti |
-| **7** | `drop` reale e `tarpit` | Le uniche azioni che possono farti male da sole (retry aggressivi, esaurimento di file descriptor) |
+| ~~**7**~~ | ~~`drop` reale e `tarpit`~~ ✅ | Le uniche azioni che possono farti male da sole (retry aggressivi, esaurimento di file descriptor) |
 | **8** | Reputazione locale e apprendimento | Poggia sul censimento, che già raccoglie i dati: qui si aggiunge solo l'inferenza |
 
 I passi **0-3 rendono usabile** quello che c'è. I **4-5** aggiungono l'inganno.
@@ -161,7 +161,18 @@ Due difetti colti strada facendo, entrambi invisibili ai test isolati:
   `backup-….tar.gz` non l'avrebbe mai raggiunta. Ora canary e sessione stanno
   subito dopo la whitelist.
 
-**Passi 7-8.** Vedi §3 e §5.
+**Passo 7 — `drop` reale e `tarpit`.** ✅ Fatto. `lib/tarpit.js` + `serveDrop`,
+esempi commentati nel file di regole distribuito (nessuna delle due è adatta a
+essere attiva di default), avviso del validatore per entrambe dietro proxy,
+banner nella GUI quando il tetto rifiuta.
+
+Ha portato con sé un cambiamento del **contratto del gate**: `respond` può ora
+restituire `false` per rinunciare. Tetto pieno e drop-dietro-proxy sono
+condizioni operative previste, non errori, e trattarle come eccezioni avrebbe
+riempito i log di «risposta fallita» proprio sotto carico. Invariante: chi
+rinuncia lascia il contesto intatto, perché il gate ci scriverà il 404.
+
+**Passo 8.** Vedi §5.
 
 ### Trasversali, da fare quando servono e non come passo a sé
 
@@ -284,10 +295,17 @@ famiglia di richieste.
 - [x] `monitor` — matcha, logga, **lascia passare** (dry-run per-regola)
 - [x] `block` — **404** via `reservedGate.deny()`, byte-identico a un URL inesistente
 - [x] `throttle` — delega a `rateLimiter` senza bloccare subito
-- [ ] `drop` — chiude la connessione senza risposta (stile nginx 444)
+- [x] `drop` — chiude la connessione senza risposta (stile nginx 444).
+      Rinuncia all'indistinguibilità del 404 in cambio di un costo maggiore per
+      chi bussa. **Degrada al blocco con `trustProxy: true`**: dietro un proxy il
+      socket troncato è quello verso il proxy, che risponderebbe 502.
 - [x] `decoy` — contenuto fittizio (vedi §4)
 - [x] `redirect` — 30x, **permanenti vietati** verso l'esterno + allowlist di destinazioni
-- [ ] `tarpit` — risposta a goccia, con cap di connessioni simultanee e timeout massimo
+- [x] `tarpit` — risposta a goccia, con cap di connessioni simultanee e timeout massimo.
+      Tre limiti, tutti necessari: tetto di connessioni (oltre il quale si
+      **degrada** e non si accoda), durata massima non superabile dalla regola,
+      e rilascio immediato alla chiusura del client. `abortAll()` allo
+      spegnimento, o `gracefulShutdown` aspetterebbe il tarpit più lungo.
 - [ ] `challenge` — proof-of-work / cookie challenge *(valutazione futura)*
 
 ### Modalità globale

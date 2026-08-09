@@ -54,6 +54,7 @@ const { setRuleAction: editRuleAction } = require('./lib/rulesFileEditor');
 const { renderDecoy, resolveDecoyPath } = require('./lib/decoyRenderer');
 const { CanaryRegistry, findCanary } = require('./lib/canaryRegistry');
 const { SessionCoherence } = require('./lib/sessionCoherence');
+const { Tarpit } = require('./lib/tarpit');
 const { AlertDispatcher } = require('./lib/alertDispatcher');
 const { SentinelLog } = require('./lib/sentinelLog');
 const { FingerprintCensus, OutcomeCensus } = require('./lib/census');
@@ -76,7 +77,13 @@ let outcomeCensus = null;
 let hitCounter = null;
 let canaryRegistry = null;
 let sessionCoherence = null;
+let tarpit = null;
 let alerts = null;
+
+// Contatori di `drop`. Vivono qui e non in un modulo perché l'azione è tre righe
+// di codice: un file solo per contarle sarebbe cerimonia.
+let dropped = 0;
+let dropDegraded = 0;   // quante volte è degradato a blocco per via del proxy
 let sweepTimer = null;
 let censusSaveTimer = null;
 let gateState = 'running';
@@ -129,6 +136,7 @@ function loadRules() {
   const result = validateRules(rulesData, {
     knownRateLimiterRules: getRateLimiterRuleNames(),
     allowedRedirectHosts: Array.isArray(custom.allowedRedirectHosts) ? custom.allowedRedirectHosts : [],
+    behindProxy: custom.trustProxy === true,
   });
 
   logValidationResults(result, logger, LOG_PREFIX);
@@ -631,6 +639,58 @@ function serveRedirect(ctx, spec) {
 }
 
 /**
+ * Chiude la connessione senza rispondere niente (lo stile del 444 di nginx).
+ *
+ * ─── COSA DA E COSA TOGLIE RISPETTO AL BLOCCO ─────────────────────────────────
+ * Il 404 di `block` è **indistinguibile** da un URL che non è mai esistito: è la
+ * sua qualità principale, e il motivo per cui è il default. Ma è anche una
+ * risposta completa, che costa a noi il lavoro di produrla e a chi bussa quasi
+ * niente.
+ *
+ * Troncare la connessione costa meno a noi e molto di più a lui: senza risposta,
+ * il suo client resta in attesa fino al proprio timeout. In cambio si rinuncia
+ * all'indistinguibilità — una connessione azzerata si nota, e dice che quel
+ * percorso è trattato diversamente dagli altri. Sono due strumenti, non uno
+ * migliore dell'altro.
+ *
+ * ─── DIETRO UN PROXY NON FUNZIONA, E FA PEGGIO ────────────────────────────────
+ * Con un reverse proxy davanti, il socket che tronchiamo è quello **verso il
+ * proxy**, non verso il client: il proxy risponde 502, che è più rumoroso di un
+ * 404 e riempie i suoi log di errori. Per questo, con `trustProxy: true`
+ * dichiarato, `drop` degrada al blocco: è l'unica configurazione in cui sappiamo
+ * con certezza di non stare parlando direttamente col client.
+ */
+function serveDrop(ctx) {
+  if (custom.trustProxy === true) {
+    dropDegraded++;
+    return false;   // il gate scrive il 404 comune
+  }
+
+  ctx.respond = false;
+  const socket = ctx.res && ctx.res.socket;
+  if (socket && !socket.destroyed) {
+    socket.destroy();
+  }
+  dropped++;
+  return true;
+}
+
+/**
+ * Trattiene la connessione a gocce.
+ *
+ * Col tetto pieno **rinuncia** invece di accodare: la richiesta successiva deve
+ * costare quanto un 404 normale, o il tetto sposterebbe il problema invece di
+ * risolverlo. Rinunciando lascia il contesto intatto, così il gate può ancora
+ * scriverci il proprio 404.
+ */
+async function serveTarpit(ctx, spec) {
+  if (!tarpit) return false;
+
+  const outcome = await tarpit.hold(ctx, { seconds: spec && spec.seconds });
+  return outcome.held;
+}
+
+/**
  * Attacca al verdetto la funzione che ne scriverà la risposta.
  *
  * Solo per i verdetti che verranno applicati: senza `respond` il gate degrada al
@@ -642,6 +702,10 @@ function attachResponder(verdict, rule, subject) {
     verdict.respond = (ctx) => serveDecoy(ctx, rule.decoy, subject);
   } else if (rule.action === 'redirect' && rule.redirect) {
     verdict.respond = (ctx) => serveRedirect(ctx, rule.redirect);
+  } else if (rule.action === 'drop') {
+    verdict.respond = (ctx) => serveDrop(ctx);
+  } else if (rule.action === 'tarpit') {
+    verdict.respond = (ctx) => serveTarpit(ctx, rule.tarpit);
   }
 }
 
@@ -825,6 +889,8 @@ module.exports = {
       sessionCoherence = new SessionCoherence(sessionConf);
     }
 
+    tarpit = new Tarpit(custom.tarpit || {});
+
     sentinelLog = new SentinelLog(dataDir, { ...(custom.log || {}), instanceId }, {
       log: (level, message) => log(level, message),
       onAlert: (payload) => sendAlert(payload),
@@ -938,6 +1004,8 @@ module.exports = {
         outcomes: outcomeCensus ? outcomeCensus.getStats() : null,
         canary: canaryRegistry ? canaryRegistry.getStats() : null,
         sessions: sessionCoherence ? sessionCoherence.getStats() : null,
+        tarpit: tarpit ? tarpit.getStats() : null,
+        drop: { dropped, degradedBehindProxy: dropDegraded },
         alerts: alerts ? alerts.getStats() : null,
       }),
       getRuleSummary: () => (hitCounter ? hitCounter.getSummary() : []),
@@ -997,6 +1065,7 @@ module.exports = {
       validateRules: (rulesData) => validateRules(rulesData, {
         knownRateLimiterRules: getRateLimiterRuleNames(),
         allowedRedirectHosts: Array.isArray(custom.allowedRedirectHosts) ? custom.allowedRedirectHosts : [],
+        behindProxy: custom.trustProxy === true,
       }),
 
       // ── Scrittura (usata dal twin adminSentinel) ──
@@ -1066,6 +1135,13 @@ function resolveDataDir(folder, conf) {
 /** Salvataggio finale allo spegnimento: nessun dato perso su un riavvio pulito. */
 function persistAll() {
   try {
+    // PRIMA di tutto il resto: `gracefulShutdown` aspetta che le connessioni
+    // finiscano, e un tarpit da trenta secondi trasformerebbe un riavvio in
+    // un'attesa di trenta secondi causata dalla propria difesa.
+    if (tarpit) {
+      const troncate = tarpit.abortAll();
+      if (troncate > 0) log('info', `spegnimento: ${troncate} connessione/i trattenute troncate`);
+    }
     if (sentinelLog) sentinelLog.flush();
     if (fingerprintCensus) fingerprintCensus.save();
     if (outcomeCensus) outcomeCensus.save();

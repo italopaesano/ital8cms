@@ -505,6 +505,7 @@ function validateRules(rulesData, options = {}) {
   const seenNames = new Set();
   const knownRlRules = options.knownRateLimiterRules || null;
   const allowedHosts = options.allowedRedirectHosts || [];
+  const behindProxy = options.behindProxy === true;
 
   for (let i = 0; i < rawRules.length; i++) {
     const raw = rawRules[i];
@@ -626,6 +627,40 @@ function validateRules(rulesData, options = {}) {
       }
 
       compiled.redirect = { to: redirect.to, status, external: isExternal };
+    }
+
+    if (action === 'tarpit') {
+      const tarpitSpec = raw.tarpit || {};
+      if (tarpitSpec.seconds !== undefined
+          && (!Number.isFinite(tarpitSpec.seconds) || tarpitSpec.seconds <= 0)) {
+        errors.push(`${where} ("${name}"): tarpit.seconds deve essere un numero positivo`);
+        continue;
+      }
+      // La durata dichiarata qui è una RICHIESTA: `custom.tarpit.maxSeconds` la
+      // limita comunque. Una regola non deve poter tenere occupato un socket più
+      // a lungo di quanto l'amministratore abbia deciso.
+      compiled.tarpit = {
+        seconds: Number.isFinite(tarpitSpec.seconds) ? tarpitSpec.seconds : null,
+      };
+    }
+
+    // ── Avvisi sulle due azioni che si comportano diversamente dalle altre ──
+    // Nessuna delle due è un errore: sono configurazioni legittime che però
+    // fanno una cosa diversa da quella che chi le scrive si aspetta, e scoprirlo
+    // dal traffico invece che dall'avvio è il modo peggiore.
+    if (action === 'drop' && behindProxy) {
+      warnings.push(
+        `regola "${name}": action "drop" con custom.trustProxy attivo — il socket ` +
+        'troncato è quello verso il proxy, non verso il client, che riceverebbe un 502. ' +
+        'A runtime degrada al blocco (404)'
+      );
+    }
+    if (action === 'tarpit' && behindProxy) {
+      warnings.push(
+        `regola "${name}": action "tarpit" dietro un proxy trattiene una connessione ` +
+        'del PROXY, non del client; molti proxy chiudono da sé dopo il proprio timeout ' +
+        'e l\'attesa la paga la tua infrastruttura'
+      );
     }
 
     if (raw.escalate !== undefined) {

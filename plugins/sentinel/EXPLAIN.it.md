@@ -355,6 +355,70 @@ vecchie e devono comportarsi identici fra due anni. Una rifattorizzazione futura
 di quel modulo cambierebbe il comportamento di una migrazione già collaudata. La
 duplicazione è deliberata.
 
+## 4-septies. `respond` può rinunciare, e non è un errore
+
+Fino al Passo 6 il contratto del gate era binario: `respond` scrive la risposta,
+oppure lancia e si ripiega sul 404. `drop` e `tarpit` hanno introdotto un terzo
+caso che non è né l'uno né l'altro — **condizioni operative previste** in cui
+l'azione semplicemente non si può applicare:
+
+- il tarpit ha il tetto delle connessioni pieno;
+- il `drop` gira dietro un proxy dichiarato.
+
+Trattarle come eccezioni avrebbe riempito i log di «risposta del motore fallita»
+per un funzionamento del tutto normale — e sotto carico, cioè proprio quando il
+tetto si riempie, quel rumore avrebbe coperto gli errori veri. Quindi `respond`
+può restituire `false`: il gate scrive il suo 404 e non commenta.
+
+L'invariante che rende sicura la rinuncia: **chi rinuncia deve lasciare il
+contesto intatto.** Il tarpit tocca `ctx.respond` solo dopo aver verificato di
+avere posto; il drop controlla il proxy prima di distruggere il socket. Se una
+delle due scrivesse prima di rinunciare, il 404 del gate finirebbe su una
+risposta già iniziata.
+
+## 4-octies. Il tarpit è la terza volta che la difesa può diventare il vettore
+
+Le prime due sono il censimento delle impronte e il registro dei canary: chiavi
+controllate da chi attacca, risolte con `BoundedStore`. Il tarpit è la stessa
+forma di problema in una veste diversa — qui non è la memoria a crescere ma i
+**socket e i descrittori di file**, che sono una risorsa molto più scarsa.
+
+La differenza pratica è che un tarpit senza tetto non «rallenta»: fa cadere il
+sito, e lo fa con la connessione che l'attaccante apre e abbandona. Da qui i tre
+limiti, e in particolare i due meno ovvi:
+
+**Superato il tetto si degrada, non si accoda.** Accodare sposterebbe il consumo
+di risorse invece di fermarlo: la richiesta in eccesso resterebbe comunque
+appesa, solo in una struttura diversa. Verificato dal vivo con
+`maxConcurrent: 2`: due connessioni trattenute 20 secondi, la terza chiusa con un
+404 in **12 millisecondi**.
+
+**Il posto si libera alla chiusura del client, non alla scadenza.** Uno scanner
+con un timeout aggressivo stacca dopo pochi secondi. Se il posto restasse
+occupato fino alla scadenza dichiarata, il tetto si riempirebbe di connessioni
+che non esistono più — e saturarlo costerebbe all'attaccante quanto aprire e
+chiudere in fretta, cioè niente.
+
+### Lo spegnimento
+
+`gracefulShutdown` aspetta che le connessioni finiscano. Con dei tarpit attivi
+aspetterebbe la loro scadenza: un riavvio da trenta secondi causato dalla propria
+difesa. `abortAll()` è chiamata in testa a `persistAll()`, prima ancora dei
+salvataggi. Misurato: con un tarpit da 20 secondi in corso, il processo esce in
+**1,7 secondi**.
+
+### Perché `drop` non è «meglio» di `block`
+
+Il 404 di `block` è indistinguibile da un URL mai esistito, ed è la qualità che
+tutto il resto del plugin protegge (il test byte-per-byte, il reserved gate, la
+regola sulle risposte decorate). `drop` **rinuncia** a quella qualità: una
+connessione azzerata si nota, e dice che quel percorso è trattato diversamente
+dagli altri. In cambio costa quasi nulla a noi e un timeout intero a chi bussa.
+
+Sono due strumenti, e il default resta `block`. Per la stessa ragione `drop` è
+soggetto al controllo `decorationWouldLeak`: sulla superficie riservata chiusa,
+un percorso che tronca invece di rispondere 404 si è appena distinto dagli altri.
+
 ## 5. Il fingerprint: la scelta che sembra un errore
 
 **Lo User-Agent non entra nel calcolo dell'impronta.** Rileggendo
@@ -513,6 +577,7 @@ Emerso provando il plugin sul server reale, non ragionandoci sopra.
 | `lib/decoyRenderer.js` | risoluzione, resa e tipo dei contenuti fittizi |
 | `lib/canaryRegistry.js` | conio dei token esca, memoria del destinatario, riconoscimento |
 | `lib/sessionCoherence.js` | linea di base per sessione autenticata e sue anomalie |
+| `lib/tarpit.js` | risposta a goccia, con tetto di connessioni, di durata e abort |
 | `migrations/` | step che portano le regole nuove sulle installazioni esistenti |
 | `lib/alertDispatcher.js` | canale unico delle allerte, con finestra di silenzio per genere |
 

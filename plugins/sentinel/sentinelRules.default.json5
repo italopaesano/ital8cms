@@ -331,6 +331,49 @@
     //   match: { path: ["/.env", "/.git/**"] },
     //   redirect: { to: "/", status: 302 },
     // },
+    //
+    // ── drop: tronca la connessione senza rispondere (stile 444 di nginx) ────
+    // Il 404 di `block` è INDISTINGUIBILE da un URL mai esistito: è la sua
+    // qualità principale. `drop` rinuncia a quella qualità — una connessione
+    // azzerata si nota — in cambio di un costo maggiore per chi bussa, che resta
+    // in attesa fino al proprio timeout senza ricevere niente.
+    //
+    // ⚠ Dietro un reverse proxy NON funziona: il socket troncato è quello verso
+    // il proxy, che risponderebbe 502 al client — più rumoroso di un 404. Con
+    // `trustProxy: true` degrada da sé al blocco, e il validatore lo avvisa.
+    //
+    // {
+    //   name: "scanner-drop",
+    //   enabled: true,
+    //   category: "scanner",
+    //   description: "Nessuna risposta a chi è già stato riconosciuto ostile.",
+    //   action: "drop",
+    //   appliesTo: "anonymous",
+    //   match: { all: [{ extension: ["php"] }, { fingerprintClass: { coherent: false } }] },
+    // },
+    //
+    // ── tarpit: risposta a goccia ───────────────────────────────────────────
+    // Uno scanner vale per la sua cadenza: un 404 gli costa millisecondi, una
+    // risposta che non finisce mai gli occupa un worker e un socket per decine
+    // di secondi. Dove il decoy gli avvelena i DATI, il tarpit gli consuma il
+    // TEMPO.
+    //
+    // ⚠ È un'arma puntata anche contro di noi: ogni connessione trattenuta è un
+    // socket e un timer NOSTRI. I tetti stanno in `custom.tarpit`
+    // (`maxConcurrent`, `maxSeconds`); oltre il tetto la richiesta degrada al
+    // 404 comune invece di accodarsi. `seconds` qui è una richiesta, mai un
+    // modo di superare `maxSeconds`.
+    //
+    // {
+    //   name: "scanner-tarpit",
+    //   enabled: true,
+    //   category: "scanner",
+    //   description: "Trattiene chi insiste, per rallentargli la scansione.",
+    //   action: "tarpit",
+    //   appliesTo: "anonymous",
+    //   match: { path: ["/wp-admin/**", "/administrator/**"] },
+    //   tarpit: { seconds: 20 },
+    // },
 
   ],
 }

@@ -89,6 +89,23 @@ const TEST_RULES = {
       match: { canary: 'known' },
     },
     {
+      name: 'test-drop',
+      enabled: true,
+      category: 'scanner',
+      description: 'drop: tronca la connessione senza rispondere',
+      action: 'drop',
+      match: { path: '/zzz-drop' },
+    },
+    {
+      name: 'test-tarpit',
+      enabled: true,
+      category: 'scanner',
+      description: 'tarpit: trattiene la connessione a gocce',
+      action: 'tarpit',
+      match: { path: '/zzz-tarpit' },
+      tarpit: { seconds: 1.5 },
+    },
+    {
       name: 'test-decoy-assente',
       enabled: true,
       category: 'cms-probe',
@@ -399,6 +416,58 @@ describe('sentinel — decoy e redirect producono la loro risposta', () => {
     expect(redirect.length).toBeGreaterThan(0);
     expect(redirect[0].ruleName).toBe('test-redirect-interno');
     expect(redirect[0].enforced).toBe(true);
+  });
+});
+
+// Le due azioni che non producono una risposta HTTP normale. Un unit test può
+// dire che il socket viene distrutto e che il corpo esce a pezzi; solo un
+// server vero dice come si comporta il CLIENT davanti a quelle risposte — ed è
+// l'unica cosa che conta, perché il bersaglio è il tempo di chi bussa.
+describe('sentinel — drop e tarpit', () => {
+  test('drop tronca la connessione senza rispondere', async () => {
+    // Non un 404, non un 502, non un corpo vuoto: proprio nessuna risposta. Il
+    // client vede la connessione azzerata.
+    await expect(httpGet('/zzz-drop')).rejects.toMatchObject({ code: 'ECONNRESET' });
+  });
+
+  test('drop è registrato come applicato', async () => {
+    await sleep(300);
+    const evento = eventsFor('/zzz-drop')[0];
+    expect(evento).toBeDefined();
+    expect(evento.ruleName).toBe('test-drop');
+    expect(evento.action).toBe('drop');
+    expect(evento.enforced).toBe(true);
+  });
+
+  test('il tarpit trattiene la connessione per la durata dichiarata', async () => {
+    const startedAt = Date.now();
+    const r = await httpGet('/zzz-tarpit');
+    const elapsed = Date.now() - startedAt;
+
+    expect(r.status).toBe(200);
+    // La regola chiede 1,5 secondi: la risposta non può arrivare subito.
+    expect(elapsed).toBeGreaterThan(1000);
+    expect(r.body).toContain('<!DOCTYPE html>');
+  });
+
+  test('il tarpit non dichiara la lunghezza del corpo', async () => {
+    // È il motivo per cui il client resta in attesa invece di chiudere.
+    const r = await httpGet('/zzz-tarpit');
+    expect(r.headers['content-length']).toBeUndefined();
+  });
+
+  test('il sito continua a rispondere mentre un tarpit è in corso', async () => {
+    // La verifica che conta: il tarpit non deve bloccare l'event loop. Se lo
+    // facesse, la difesa fermerebbe il sito invece dell'attaccante.
+    const trattenuta = httpGet('/zzz-tarpit');
+    await sleep(200);
+
+    const startedAt = Date.now();
+    const normale = await httpGet('/');
+    expect(Date.now() - startedAt).toBeLessThan(1000);
+    expect(normale.status).toBe(200);
+
+    await trattenuta;
   });
 });
 

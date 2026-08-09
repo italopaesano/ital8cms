@@ -172,6 +172,47 @@ describe('parametri delle azioni', () => {
   });
 });
 
+describe('azioni drop e tarpit', () => {
+  test('tarpit senza parametri usa i default del plugin', () => {
+    const r = validateRules({ rules: [rule({ action: 'tarpit' })] });
+    expect(r.valid).toBe(true);
+    expect(r.rules[0].tarpit).toEqual({ seconds: null });
+  });
+
+  test('tarpit.seconds valido viene compilato', () => {
+    const r = validateRules({ rules: [rule({ action: 'tarpit', tarpit: { seconds: 12 } })] });
+    expect(r.valid).toBe(true);
+    expect(r.rules[0].tarpit.seconds).toBe(12);
+  });
+
+  test.each([[0], [-3], ['dieci']])('tarpit.seconds non valido (%p) è rifiutato', (seconds) => {
+    const r = validateRules({ rules: [rule({ action: 'tarpit', tarpit: { seconds } })] });
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/tarpit\.seconds/);
+  });
+
+  // Dietro un proxy il socket troncato è quello verso il proxy, non verso il
+  // client: è una configurazione legittima che fa una cosa diversa da quella
+  // che chi la scrive si aspetta, e va detto all'avvio e non scoperto dal
+  // traffico. Avviso, non errore.
+  test('drop dietro un proxy produce un avviso', () => {
+    const r = validateRules({ rules: [rule({ action: 'drop' })] }, { behindProxy: true });
+    expect(r.valid).toBe(true);
+    expect(r.warnings.join(' ')).toMatch(/502/);
+  });
+
+  test('drop senza proxy non avvisa', () => {
+    const r = validateRules({ rules: [rule({ action: 'drop' })] }, { behindProxy: false });
+    expect(r.warnings.join(' ')).not.toMatch(/502/);
+  });
+
+  test('tarpit dietro un proxy produce un avviso', () => {
+    const r = validateRules({ rules: [rule({ action: 'tarpit' })] }, { behindProxy: true });
+    expect(r.valid).toBe(true);
+    expect(r.warnings.join(' ')).toMatch(/proxy/);
+  });
+});
+
 describe('foglia canary', () => {
   test.each([[true], ['any'], ['known'], ['unknown']])('%s è un valore ammesso', (value) => {
     const r = validateRules({ rules: [rule({ match: { canary: value } })] });

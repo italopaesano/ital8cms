@@ -371,6 +371,20 @@
     impronte. Se sale, qualcuno sta producendo chiavi a raffica per gonfiare gli
     archivi — la contromisura si comporta da rilevatore.
   -->
+  <!-- ── Tarpit al tetto ───────────────────────────────────────────────────
+    Compare solo quando il tetto sta rifiutando. È l'unico dato del tarpit che
+    richiede una decisione: significa che qualcuno ha superato la capienza che
+    hai deciso, e da quel momento le richieste in più ricevono il 404 comune.
+  -->
+  <div id="tarpitWarning" class="alert alert-warning mt-3 d-none">
+    <strong><%= __({it: 'Il tetto delle connessioni trattenute è stato raggiunto.', en: 'The tarpit capacity limit has been reached.'}, passData.ctx) %></strong>
+    <span id="tarpitDetail"></span>
+    <%= __({
+      it: 'Oltre il tetto le richieste degradano al 404 comune invece di essere trattenute — comportamento voluto, perché accodarle sposterebbe il consumo di risorse invece di fermarlo. Se succede spesso, alza `tarpit.maxConcurrent` solo se la macchina regge i socket in più.',
+      en: 'Beyond the limit, requests degrade to the ordinary 404 instead of being held — intended behaviour, since queueing them would move the resource cost rather than stop it. If this happens often, raise `tarpit.maxConcurrent` only if the machine can take the extra sockets.'
+    }, passData.ctx) %>
+  </div>
+
   <div id="evictionWarning" class="alert alert-warning mt-3 d-none">
     <strong><%= __({it: 'Sfratti in corso negli archivi.', en: 'Evictions happening in the aggregates.'}, passData.ctx) %></strong>
     <span id="evictionDetail"></span>
