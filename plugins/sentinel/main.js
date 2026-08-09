@@ -47,6 +47,7 @@ const PatternMatcher = require('../../core/patternMatcher');
 
 const { buildFingerprint } = require('./lib/requestFingerprint');
 const { buildSubject, findFirstMatch } = require('./lib/ruleMatcher');
+const { testRequest } = require('./lib/ruleTracer');
 const { validateRules, logValidationResults } = require('./lib/ruleValidator');
 const setJson5Key = require('../../core/setJson5Key');
 const { setRuleAction: editRuleAction } = require('./lib/rulesFileEditor');
@@ -598,6 +599,25 @@ module.exports = {
       })),
       getSuspectedScanners: (minPaths) => (outcomeCensus ? outcomeCensus.getSuspectedScanners(minPaths) : []),
       getConfig: () => JSON.parse(JSON.stringify(custom)),
+
+      /**
+       * Prova una richiesta contro le regole in vigore, spiegando l'esito.
+       *
+       * Il caso d'uso non è «quale regola scatta» — quello si vede dal log — ma
+       * «ho scritto questa regola e non scatta, perché?». Per questo riporta
+       * TUTTE le regole valutate con atteso vs osservato per ogni condizione,
+       * non solo quella vincente.
+       *
+       * Usa un valutatore separato da quello del percorso caldo: tracciare
+       * costa allocazioni per ogni foglia, e non si fa pagare a tutto il
+       * traffico una funzione usata qualche volta al mese.
+       */
+      testRequest: (spec) => testRequest(
+        spec,
+        isDebugMode ? loadRules() : compiledRules,
+        matcher || new PatternMatcher(),
+        { salt: custom.fingerprintSalt || '', globalPrefix: ital8Conf.globalPrefix || '' },
+      ),
 
       // ── Validazione (prima di un salvataggio dalla GUI) ──
       validateRules: (rulesData) => validateRules(rulesData, {

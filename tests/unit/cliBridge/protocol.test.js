@@ -373,14 +373,60 @@ describe('makeDispatcher sentinel', () => {
   });
 });
 
-test('KNOWN_COMMANDS lists all 13 commands', () => {
+// Il tester vive nel control plane e non in una rotta HTTP perche la domanda
+// che risolve — «perche questa regola non scatta?» — arriva tipicamente in SSH
+// mentre si sta scrivendo il file.
+describe('makeDispatcher sentinel.test', () => {
+  const base = (extra = {}) => ({ startTime: Date.now(), ital8Conf: { httpPort: 3000 }, ...extra });
+
+  test('senza motore lo dice, invece di rispondere il vuoto', async () => {
+    const res = await makeDispatcher(base())('sentinel.test', { spec: { path: '/x' } });
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe('sentinel_unavailable');
+  });
+
+  test('il path e obbligatorio', async () => {
+    const dispatch = makeDispatcher(base({ testSentinelRequest: () => ({}) }));
+    const res = await dispatch('sentinel.test', { spec: {} });
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe('invalid_request');
+  });
+
+  test('inoltra la spec al motore e restituisce il risultato', async () => {
+    let received = null;
+    const dispatch = makeDispatcher(base({
+      testSentinelRequest: (spec) => { received = spec; return { matched: { ruleName: 'php-probe' } }; },
+    }));
+    const res = await dispatch('sentinel.test', { spec: { path: '/a.php', method: 'POST' } });
+    expect(res.ok).toBe(true);
+    expect(received.path).toBe('/a.php');
+    expect(res.data.matched.ruleName).toBe('php-probe');
+  });
+
+  test('un motore che lancia non fa cadere il control plane', async () => {
+    const dispatch = makeDispatcher(base({
+      testSentinelRequest: () => { throw new Error('boom'); },
+    }));
+    const res = await dispatch('sentinel.test', { spec: { path: '/x' } });
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe('test_failed');
+  });
+
+  test('non richiede riavvio: non modifica nulla', async () => {
+    const dispatch = makeDispatcher(base({ testSentinelRequest: () => ({}) }));
+    const res = await dispatch('sentinel.test', { spec: { path: '/x' } });
+    expect(res.restart).toBe(false);
+  });
+});
+
+test('KNOWN_COMMANDS lists all 14 commands', () => {
   expect(KNOWN_COMMANDS.sort()).toEqual([
     'admin.start', 'admin.stop',
     'public.start', 'public.stop',
     'publicOnly.off', 'publicOnly.on',
     'reserved.start', 'reserved.stop',
     'reset',
-    'sentinel.monitor', 'sentinel.start', 'sentinel.stop',
+    'sentinel.monitor', 'sentinel.start', 'sentinel.stop', 'sentinel.test',
     'status',
   ]);
 });

@@ -74,7 +74,7 @@ rende leggibile e governabile quello che c'è, poi si aggiungono le azioni.**
 | ~~**0**~~ | ~~Debito e attriti~~ ✅ | Chiudere le cose piccole già mature prima di aprire fronti nuovi |
 | ~~**1**~~ | ~~`adminSentinel` — Vista Dati~~ ✅ | L'unico passo che aumenta il valore del lavoro già fatto invece di aggiungerne. Stabilizza il contratto dell'oggetto condiviso prima che altre feature ci si appoggino |
 | ~~**2**~~ | ~~Promozione e retrocessione~~ ✅ | Completa le fasi 2 e 3. **La retrocessione conta più della promozione**: un percorso a senso unico invita a non imboccarlo mai |
-| **3** | Tester delle regole | Serve appena si comincia a scrivere regole proprie, ed è il prerequisito per scrivere in sicurezza quelle dei passi successivi |
+| ~~**3**~~ | ~~Tester delle regole~~ ✅ | Serve appena si comincia a scrivere regole proprie, ed è il prerequisito per scrivere in sicurezza quelle dei passi successivi |
 | **4** | `redirect` + `decoy` L0/L1 | Gate, validatore e non-interferenza sono **già scritti e testati**: manca solo chi produce il corpo. Miglior rapporto valore/codice nuovo |
 | **5** | Canary (`decoy` L2) + `banClient` + allerte | Il salto da difesa passiva a **sensore**: certezza di un attaccante attivo, non inferenza |
 | **6** | Coerenza di sessione | Miglior segnale del blocco autenticato, ma introduce stato e foglie nuove: meglio quando la GUI può mostrarne gli effetti |
@@ -229,8 +229,12 @@ famiglia di richieste.
       quanti hit, quanti IP distinti, quota da bot riconosciuti, e soprattutto
       **quanti utenti autenticati sarebbero stati colpiti** (se > 0, non promuovere).
       In `data/ruleHits.json5`, campo `safeToPromote`.
-- [ ] Tester delle regole: data una richiesta d'esempio, dice quale regola matcha
-      e perché (indispensabile per la GUI del twin admin, utile in CLI)
+- [x] Tester delle regole: data una richiesta d'esempio, dice quale regola matcha
+      e perché. Valutatore separato da quello del percorso caldo (tracciare costa
+      allocazioni per ogni condizione), con test di conformità su 200+ casi che
+      impedisce ai due di divergere. Disponibile in GUI e da CLI
+      (`sentinel test <path>`), con `--browser` per non inciampare nel profilo
+      `minimal` di una richiesta sintetica.
 
 > **Nota architetturale.** Il fatto che il default non blocchi *non* rende
 > superfluo lo slot pre-router: per osservare il traffico verso `/api/*` bisogna
@@ -504,7 +508,7 @@ e accumulare statistiche locali sulle firme viste.
 - [x] Editor JSON5 raw di `sentinelRules.json5` (validazione lato server + scrittura atomica,
       backup prima di ogni salvataggio, testo salvato senza riformattazione)
 - [ ] Form strutturato coordinato con l'editor (validatore condiviso col service plugin)
-- [ ] Tester delle regole nella GUI (incolla una richiesta → dice cosa matcherebbe)
+- [x] Tester delle regole nella GUI (incolla una richiesta → dice cosa matcherebbe)
 - [~] Azioni live via oggetto condiviso: promozione/retrocessione e passaggio
       `monitor` ↔ `enforce` **fatti** (senza riavvio); il ban immediato arriva col
       passo 5, insieme ai canary token
@@ -592,8 +596,10 @@ client.
 
 ## 15. Rimandato a versioni future
 
-- [ ] **Lettore da riga di comando** dei dati (`npm run cli -- sentinel report` o
-      script dedicato). In v1 la lettura è compito del twin `adminSentinel`.
+- [~] **Lettore da riga di comando** dei dati (`npm run cli -- sentinel report` o
+      script dedicato). La lettura dei dati resta compito del twin; da CLI c'è
+      però `sentinel test`, che copre il caso più urgente — capire perché una
+      regola non scatta mentre la si sta scrivendo in SSH.
 - [ ] **API di lookup utenti in `adminUsers`** — oggi
       `getObjectToShareToOthersPlugin()` restituisce `{}`. Servirebbe qualcosa come
       `getUsersByRole(roleId)` per risolvere l'email di root senza leggere

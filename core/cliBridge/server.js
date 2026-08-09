@@ -160,6 +160,7 @@ async function start(ital8Conf, options = {}) {
     getSentinelState: options.getSentinelState,
     // Distinta dallo stato: un gate 'running' senza motore non sta filtrando.
     hasSentinelEngine: options.hasSentinelEngine,
+    testSentinelRequest: options.testSentinelRequest,
   });
 
   const server = net.createServer((sock) => handleConnection(sock, dispatcher));

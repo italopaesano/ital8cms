@@ -234,7 +234,42 @@ npm run cli -- sentinel start     # filtra secondo la configurazione
 npm run cli -- sentinel monitor   # osserva e registra, non agisce  ← via di fuga
 npm run cli -- sentinel stop      # kill switch: motore non interrogato
 npm run cli -- status             # mostra stato + se il motore è caricato
+
+npm run cli -- sentinel test <path>   # prova una richiesta senza inviarla
 ```
+
+### Il tester
+
+Risponde alla domanda opposta a quella che sembra. Non «quale regola scatta» —
+quello si vede dal log — ma **«ho scritto questa regola e non scatta, perché?»**.
+Per ogni condizione stampa **atteso accanto a osservato**, anche per le regole
+che non hanno matchato.
+
+```bash
+npm run cli -- sentinel test /wp-login.php
+npm run cli -- sentinel test /a.php -X POST -A "curl/8.5.0" -v
+npm run cli -- sentinel test /admin/ --roles 1        # richiesta autenticata
+npm run cli -- sentinel test /pagina.html --browser   # vedi sotto
+```
+
+Opzioni: `-X` metodo · `-A` User-Agent · `-H "Nome: valore"` (ripetibile) ·
+`--ip` · `--query` · `--authenticated` / `--roles` · `--status` ·
+`-v` per vedere anche le regole che **non** matchano · `--json`.
+
+> **`--browser` non è un dettaglio.** Una richiesta sintetica ha *solo* gli
+> header che le dai, quindi senza quel flag ogni prova ha profilo `minimal` e
+> chiunque scriva `-A "Mozilla/..."` inciampa nella regola
+> `ua-fingerprint-mismatch` senza capire perché. `--browser` aggiunge gli header
+> che un browser manda davvero (`Accept`, `Sec-Fetch-*`, `sec-ch-ua`…), e mostra
+> cosa vedrebbe il filtro davanti a un visitatore vero.
+
+Lo stesso strumento è nella GUI, scheda **Tester** di `adminSentinel`.
+
+**Sotto il cofano** c'è un valutatore *separato* da quello del percorso caldo:
+tracciare costa allocazioni per ogni condizione, e non si fa pagare a tutto il
+traffico una funzione usata qualche volta al mese. Due implementazioni della
+stessa semantica però divergono, quindi un test di **conformità** verifica su
+oltre duecento combinazioni che i due diano sempre lo stesso esito.
 
 Nessun riavvio: sono commutazioni a caldo, come `public` e `reserved`.
 

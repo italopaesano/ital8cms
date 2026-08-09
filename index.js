@@ -146,6 +146,13 @@ cliBridge.start(ital8Conf, {
   getSentinelState: () => sentinelGate ? sentinelGate.getState() : 'running',
   // Distinto dallo stato: un gate 'running' senza motore non sta filtrando nulla.
   hasSentinelEngine: () => sentinelGate ? sentinelGate.hasEngine() : false,
+  // Prova una richiesta contro le regole in vigore, senza inviarla davvero.
+  // Passa dal gate perché è lui a possedere il motore.
+  testSentinelRequest: (spec) => {
+    const engine = sentinelGate ? sentinelGate.getEngine() : null;
+    if (!engine || typeof engine.testRequest !== 'function') return null;
+    return engine.testRequest(spec);
+  },
 }).catch((err) => {
   console.error('[cliBridge] errore inatteso durante l\'avvio:', err && err.message ? err.message : err);
 });

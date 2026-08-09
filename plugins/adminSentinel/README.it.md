@@ -132,6 +132,7 @@ POST /mode                          { mode: "monitor"|"enforce" }
 GET  /rules/raw                     testo del file + elenco dei backup
 POST /rules/validate                { content } — valida senza salvare
 POST /rules/save                    { content } — valida, fa il backup, salva, ricarica
+POST /rules/test                    { spec } — prova una richiesta e spiega l'esito
 ```
 
 Le POST richiedono il token CSRF, iniettato automaticamente nelle pagine admin
@@ -194,8 +195,23 @@ salvataggio.
 Le modifiche entrano in vigore **subito**: il server chiama `reloadRules()` dopo
 la scrittura, nessun riavvio.
 
+## Tester (scheda «Tester»)
+
+Prova una richiesta contro le regole in vigore, **senza inviarla davvero**.
+Modulo per percorso, metodo, IP, User-Agent, query string, autenticazione e
+ruoli; l'esito elenca ogni condizione con **atteso accanto a osservato**.
+
+L'interruttore **«Simula un browser reale»** conta più di quanto sembri: senza,
+la richiesta sintetica ha solo gli header che le dai e appare sempre come un
+client script — chiunque incolli uno User-Agent di Chrome inciampa nella regola
+sull'incoerenza senza capire perché.
+
+Lo stesso strumento è disponibile da riga di comando
+(`npm run cli -- sentinel test <path>`), che è spesso dove serve: la domanda
+«perché questa regola non scatta?» arriva mentre si sta scrivendo il file in SSH.
+
 ## Cosa NON fa ancora
 
-Manca la **Vista C**, il form strutturato campo per campo, e il tester delle
-regole nella GUI (passo 3 del piano di lavoro in
-[`plugins/sentinel/TODO.md`](../sentinel/TODO.md)).
+Manca la **Vista C**, il form strutturato campo per campo — l'unica delle Tre
+Viste non ancora coperta. Vedi il piano di lavoro in
+[`plugins/sentinel/TODO.md`](../sentinel/TODO.md).

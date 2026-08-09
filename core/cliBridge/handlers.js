@@ -207,6 +207,40 @@ function handleSentinelState(ctx, targetLabel) {
   };
 }
 
+/**
+ * Prova una richiesta contro le regole di sentinel, senza inviarla davvero.
+ *
+ * Vive nel control plane e non in una rotta HTTP perché la domanda che risolve —
+ * «perché questa regola non scatta?» — arriva tipicamente in SSH mentre si sta
+ * scrivendo il file, non dal pannello. E perché una rotta in più sulla superficie
+ * riservata è una rotta in più da proteggere.
+ */
+function handleSentinelTest(ctx, request) {
+  const { testSentinelRequest } = ctx;
+
+  if (typeof testSentinelRequest !== 'function') {
+    return { ok: false, error: 'sentinel_unavailable', message: 'il motore sentinel non è installato' };
+  }
+
+  const spec = (request && request.spec) || {};
+  if (typeof spec.path !== 'string' || spec.path === '') {
+    return { ok: false, error: 'invalid_request', message: 'il path è obbligatorio' };
+  }
+
+  let result;
+  try {
+    result = testSentinelRequest(spec);
+  } catch (err) {
+    return { ok: false, error: 'test_failed', message: err.message };
+  }
+
+  if (result === null) {
+    return { ok: false, error: 'sentinel_unavailable', message: 'il motore sentinel non è installato' };
+  }
+
+  return { ok: true, action: 'sentinel.test', restart: false, data: result };
+}
+
 // Reset ONLINE (a caldo via socket): rimuove i config vivi del plugin/tema e
 // richiede un restart. Al riavvio, materializeMissingConfigs li rigenera dai
 // default. Riusa lo stesso resetConfigsToDefault del reset offline.
@@ -349,6 +383,7 @@ function makeDispatcher(ctx) {
       case 'sentinel.start': return handleSentinelState(ctx, 'running');
       case 'sentinel.monitor': return handleSentinelState(ctx, 'monitor');
       case 'sentinel.stop': return handleSentinelState(ctx, 'stopped');
+      case 'sentinel.test': return handleSentinelTest(ctx, request);
       case 'publicOnly.on': return handlePublicOnly(ctx, true);
       case 'publicOnly.off': return handlePublicOnly(ctx, false);
       case 'reset': return handleReset(ctx, request);
@@ -367,7 +402,7 @@ const KNOWN_COMMANDS = [
   'admin.start', 'admin.stop',
   'public.start', 'public.stop',
   'reserved.start', 'reserved.stop',
-  'sentinel.start', 'sentinel.monitor', 'sentinel.stop',
+  'sentinel.start', 'sentinel.monitor', 'sentinel.stop', 'sentinel.test',
   'publicOnly.on', 'publicOnly.off',
   'reset',
 ];

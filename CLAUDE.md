@@ -1578,6 +1578,7 @@ npm run cli -- reserved start  # reserved surface reachable again (no restart)
 npm run cli -- sentinel monitor # request filter: observe and log, apply nothing (no restart)
 npm run cli -- sentinel stop   # request filter kill switch: engine not consulted (no restart)
 npm run cli -- sentinel start  # request filter back to its configured behaviour (no restart)
+npm run cli -- sentinel test /wp-login.php   # try a request against the live rules, and explain why
 npm run cli -- publicOnly on   # showcase layout: reserved stop + admin stop (restarts)
 npm run cli -- publicOnly off  # back to the normal layout (restarts)
 npm run cli -- reset <target>  # plugin/theme configs back to defaults (add --theme for themes)

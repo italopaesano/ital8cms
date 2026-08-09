@@ -530,6 +530,12 @@ function createSentinelGate(options) {
       return !!engine;
     },
     hasEngine() { return !!engine; },
+    /**
+     * Il motore installato, per chi deve interrogarlo fuori dal percorso della
+     * richiesta — oggi il control plane, per `sentinel test`. Restituisce null
+     * quando lo slot è vuoto, così il chiamante non deve conoscere lo stato.
+     */
+    getEngine() { return engine; },
     setState(newState) {
       if (!SENTINEL_STATES.includes(newState)) {
         throw new Error(`sentinelGate: stato non valido ${newState}`);

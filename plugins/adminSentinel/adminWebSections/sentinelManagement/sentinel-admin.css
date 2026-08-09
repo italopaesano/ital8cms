@@ -78,3 +78,44 @@
   .sn-admin .sn-path code,
   .sn-admin .sn-fp { max-width: 11rem; }
 }
+
+/* ── Tester: la traccia delle condizioni ──────────────────────────────────── */
+/* Ogni regola è un blocco a sé; l'indentazione rende visibile l'annidamento dei
+   combinatori senza bisogno di parentesi o simboli. */
+
+.sn-admin .sn-trace-rule {
+  border-left: 3px solid rgba(0, 0, 0, .12);
+  padding: .4rem .6rem;
+  margin-bottom: .4rem;
+  font-size: .85rem;
+}
+
+.sn-admin .sn-trace-hit {
+  border-left-color: var(--bs-success, #198754);
+  background: rgba(25, 135, 84, .05);
+}
+
+.sn-admin .sn-trace-0 { margin-left: 1.2rem; }
+.sn-admin .sn-trace-1 { margin-left: 2.2rem; }
+.sn-admin .sn-trace-2 { margin-left: 3.2rem; }
+.sn-admin .sn-trace-3 { margin-left: 4.2rem; }
+
+.sn-admin .sn-editor {
+  min-height: 32rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .82rem;
+  line-height: 1.45;
+  border: 0;
+  border-radius: 0;
+  resize: vertical;
+}
+
+.sn-admin .sn-editor:focus {
+  box-shadow: none;
+}
+
+/* Promuovere una regola che ha già colpito utenti autenticati è la mossa che
+   chiude fuori qualcuno: il pulsante lo dice prima del dialogo di conferma. */
+.sn-admin .sn-risky {
+  border-style: dashed;
+}

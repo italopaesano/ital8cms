@@ -359,6 +359,39 @@ module.exports = {
         },
       },
 
+      /**
+       * Tester — prova una richiesta contro le regole in vigore.
+       *
+       * Non modifica nulla, ma resta dietro autenticazione come tutto il resto:
+       * dire a un anonimo quali regole ci sono e come aggirarle sarebbe un
+       * regalo notevole.
+       */
+      {
+        method: 'POST',
+        path: '/rules/test',
+        access: pluginAccess,
+        handler: async (ctx) => {
+          const sentinel = getSentinel();
+          if (!sentinel || typeof sentinel.testRequest !== 'function') {
+            ctx.status = 503;
+            ctx.body = serviceUnavailable();
+            return;
+          }
+          const spec = (ctx.request.body && ctx.request.body.spec) || {};
+          if (typeof spec.path !== 'string' || spec.path === '') {
+            ctx.status = 400;
+            ctx.body = { ok: false, error: 'il path è obbligatorio' };
+            return;
+          }
+          try {
+            ctx.body = { ok: true, result: sentinel.testRequest(spec) };
+          } catch (err) {
+            ctx.status = 400;
+            ctx.body = { ok: false, error: err.message };
+          }
+        },
+      },
+
       /** Vista B — lettura del file di regole come testo. */
       {
         method: 'GET',

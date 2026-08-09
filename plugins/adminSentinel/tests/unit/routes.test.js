@@ -85,7 +85,7 @@ describe('contratto delle rotte', () => {
     const paths = routes.map((r) => r.path).sort();
     expect(paths).toEqual([
       '/events', '/fingerprints', '/flush', '/mode',
-      '/rules', '/rules/action', '/rules/raw', '/rules/save', '/rules/validate',
+      '/rules', '/rules/action', '/rules/raw', '/rules/save', '/rules/test', '/rules/validate',
       '/scanners', '/status', '/summary',
     ]);
   });
