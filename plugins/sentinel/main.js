@@ -51,6 +51,7 @@ const { testRequest } = require('./lib/ruleTracer');
 const { validateRules, logValidationResults } = require('./lib/ruleValidator');
 const setJson5Key = require('../../core/setJson5Key');
 const { setRuleAction: editRuleAction } = require('./lib/rulesFileEditor');
+const { renderDecoy, resolveDecoyPath } = require('./lib/decoyRenderer');
 const { SentinelLog } = require('./lib/sentinelLog');
 const { FingerprintCensus, OutcomeCensus } = require('./lib/census');
 const RuleHitCounter = require('./lib/ruleHitCounter');
@@ -75,6 +76,13 @@ let censusSaveTimer = null;
 let gateState = 'running';
 
 let pluginSysRef = null;
+
+// Contenuto dei file di decoy già letti. Un decoy è un file statico servito a
+// traffico ostile: rileggerlo dal disco a ogni richiesta significherebbe che
+// chi sta scandendo il sito detta il ritmo delle nostre letture su disco.
+// In debug la cache resta spenta, come per le regole, così una modifica al file
+// si vede subito.
+const decoyCache = new Map();
 
 // Latch per non ripetere all'infinito lo stesso avviso di configurazione.
 let rulesUnavailableLogged = false;
@@ -123,12 +131,41 @@ function loadRules() {
     throw new Error('[sentinel] validazione di sentinelRules.json5 fallita (strictValidation=true)');
   }
 
+  warnMissingDecoyFiles(result.rules);
+
   return result.rules;
 }
 
-/** Rilegge le regole a caldo (usato dal futuro twin admin dopo un salvataggio). */
+/**
+ * Avvisa se una regola `decoy` punta a un file che non esiste.
+ *
+ * Il validatore non può accorgersene: non conosce la cartella del plugin, e
+ * dev'essere utilizzabile dalla GUI del twin admin per validare un testo che non
+ * è ancora stato salvato. Il controllo sta qui, dove il disco c'è.
+ *
+ * È un avviso e non un errore perché la regola resta legittima — un decoy si
+ * scrive spesso dopo la regola che lo userà — ma senza il file l'azione degrada
+ * al 404 comune, e scoprirlo dal traffico invece che dall'avvio sarebbe la
+ * peggiore delle sorprese: il decoy sembra configurato e non lo è.
+ */
+function warnMissingDecoyFiles(rules) {
+  if (!pluginFolder) return;
+  for (const rule of rules) {
+    if (rule.action !== 'decoy' || !rule.decoy) continue;
+    if (resolveDecoyPath(pluginFolder, rule.decoy.file)) continue;
+    log('warn',
+      `regola "${rule.name}": il decoy "${rule.decoy.file}" non esiste né in ` +
+      'decoys/data/ né in decoys/default/ — l\'azione degraderà al 404 comune');
+  }
+}
+
+/** Rilegge le regole a caldo (usato dal twin admin dopo un salvataggio). */
 function reloadRules() {
   compiledRules = loadRules();
+  // I decoy si modificano insieme alle regole che li usano: tenere in cache il
+  // contenuto vecchio dopo un ricaricamento renderebbe la modifica invisibile
+  // fino al riavvio.
+  decoyCache.clear();
   log('info', `regole ricaricate: ${compiledRules.length} attive`);
   return compiledRules.length;
 }
@@ -138,6 +175,7 @@ function reloadConfig() {
     const cfg = loadJson5(path.join(pluginFolder, 'pluginConfig.json5'));
     custom = cfg.custom || {};
     compiledRules = loadRules();
+    decoyCache.clear();
   } catch (err) {
     log('warn', `reloadConfig fallito: ${err.message}`);
   }
@@ -336,6 +374,79 @@ function escalate(rule, subject) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// RISPOSTE PROPRIE DEL PLUGIN (decoy, redirect)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Il gate produce da sé il 404 di `block`, riusando `reservedGate.deny()` perché
+// quel 404 dev'essere byte-identico a uno autentico. Decoy e redirect invece
+// hanno un corpo che solo il plugin conosce: il verdetto porta con sé la
+// funzione che lo scrive, e il gate la chiama SOLO se l'enforcement è davvero in
+// vigore e se la risposta non tradirebbe la superficie riservata chiusa.
+//
+// Nessuna di queste funzioni chiama `next()`: la richiesta finisce qui.
+
+/**
+ * Scrive un contenuto fittizio sulla risposta.
+ *
+ * L'ordine delle scritture non è casuale: il tipo dedotto dall'estensione viene
+ * PRIMA degli header dichiarati dalla regola, così una regola che vuole un
+ * `Content-Type` diverso da quello dell'estensione può averlo. È la scelta più
+ * specifica a vincere, e gli header pericolosi sono già stati rifiutati al
+ * caricamento.
+ */
+function serveDecoy(ctx, spec, subject) {
+  const rendered = renderDecoy({
+    pluginFolder,
+    spec,
+    vars: { path: subject.path, ip: subject.ip },
+    useCache: !isDebugMode,
+    cache: decoyCache,
+  });
+
+  // File sparito dopo il caricamento (cancellato, permessi cambiati): il gate
+  // intercetta l'eccezione, logga una volta sola e ripiega sul 404 comune.
+  if (!rendered) {
+    throw new Error(`decoy "${spec.file}" non trovato in decoys/data/ né in decoys/default/`);
+  }
+
+  ctx.status = rendered.status;
+  ctx.type = rendered.type;
+  for (const [name, value] of Object.entries(rendered.headers)) ctx.set(name, value);
+  ctx.body = rendered.body;
+}
+
+/**
+ * Manda la richiesta altrove.
+ *
+ * Non si usa `ctx.redirect()`: quello di Koa compone un corpo che riflette
+ * l'URL e varia con l'header Accept, cioè rende la risposta riconoscibile e
+ * diversa da quella di un redirect qualunque. Qui l'unica informazione è il
+ * Location — destinazione e stato sono già stati validati al caricamento
+ * (allowlist per l'esterno, permanenti vietati fuori dal sito).
+ */
+function serveRedirect(ctx, spec) {
+  ctx.status = spec.status;
+  ctx.set('Location', spec.to);
+  ctx.type = 'text/plain; charset=utf-8';
+  ctx.body = '';
+}
+
+/**
+ * Attacca al verdetto la funzione che ne scriverà la risposta.
+ *
+ * Solo per i verdetti che verranno applicati: senza `respond` il gate degrada al
+ * 404 comune, che è esattamente quello che deve succedere quando l'azione è
+ * dichiarata ma l'enforcement non è in vigore.
+ */
+function attachResponder(verdict, rule, subject) {
+  if (rule.action === 'decoy' && rule.decoy) {
+    verdict.respond = (ctx) => serveDecoy(ctx, rule.decoy, subject);
+  } else if (rule.action === 'redirect' && rule.redirect) {
+    verdict.respond = (ctx) => serveRedirect(ctx, rule.redirect);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MOTORE (installato nello slot sentinelGate)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -407,9 +518,11 @@ const engine = {
       enforce: enforced,
     };
 
-    // In v1 decoy/redirect/tarpit non producono ancora un corpo proprio: senza
-    // `respond` il gate degrada al 404 comune. La regola si può già scrivere e
-    // osservare, cambierà solo l'effetto quando la v2 aggiungerà le risposte.
+    // Decoy e redirect portano con sé la propria risposta. `tarpit` non ancora:
+    // senza `respond` il gate degrada al 404 comune, quindi la regola si può già
+    // scrivere e osservare e cambierà solo l'effetto.
+    if (enforced) attachResponder(verdict, rule, subject);
+
     return verdict;
   },
 

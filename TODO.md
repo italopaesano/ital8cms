@@ -63,6 +63,18 @@ Fonte: [`docs/decisions/config-lifecycle.it.md`](./docs/decisions/config-lifecyc
 - [ ] **Cronologia/undo delle modifiche** ai config (backup rotazionale on-write):
       già prototipato in `plugins/adminBootstrapNavbar/lib/navbarFileManager.js`,
       da valutare come promozione a utility del core.
+- [ ] **I tre config core vivi non vengono materializzati al boot.** Il boot
+      materializza `plugins/` e `themes/` (`materializeMissingConfigs`) e
+      *riconcilia* i tre core, ma se `core/admin/adminConfig.json5` o
+      `core/priorityMiddlewares/koaSession.json5` mancano l'avvio muore con uno
+      stack trace grezzo (`Failed to load admin config: file di configurazione non
+      trovato`). A materializzarli è solo il wizard (`scripts/init.js`), quindi il
+      clone fresco è coperto — ma sono file git-ignored dichiarati «rigenerabili
+      dai `.default`», e dopo l'installazione nessuno li rigenera.
+      Correzione naturale: `materializeFromDefault` sulle stesse tre coppie già
+      elencate in `index.js`, prima della riconciliazione, e un box `[CONFIG]`
+      invece dello stack trace. *Fonte: incontrato durante il Passo 4 di
+      `sentinel`, con `adminConfig.json5` assente nel working tree.*
 
 ## 3. Installazione di pacchetti da repo Git
 

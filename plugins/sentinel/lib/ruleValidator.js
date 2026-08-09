@@ -42,6 +42,11 @@ const DECORATING_ACTIONS = ['decoy', 'redirect', 'tarpit'];
 
 const VALID_APPLIES_TO = ['anonymous', 'authenticated', 'any'];
 
+// Stati ammessi per un redirect. 301 e 308 sono permanenti e restano in cache
+// nel browser: verso l'esterno sono vietati più sotto, perché un falso positivo
+// dirotterebbe un utente reale per mesi e non si ripara riavviando.
+const VALID_REDIRECT_STATUSES = [301, 302, 303, 307, 308];
+
 const VALID_FP_CLASS_KEYS = [
   'family', 'claimedBrowser', 'claimedOs', 'headerProfile', 'coherent', 'isBot', 'botName',
 ];
@@ -338,6 +343,105 @@ function compileMatchNode(node, where, errors) {
   return out;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HEADER DICHIARATI DALLE REGOLE (decoy)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Nome di header valido secondo RFC 7230 (token). */
+const HEADER_NAME_RE = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/;
+
+/**
+ * Header che una regola non può dichiarare.
+ *
+ * Due famiglie, per due motivi diversi:
+ *   - `content-length` / `transfer-encoding` descrivono come il corpo è
+ *     inquadrato sul filo. Un valore sbagliato non produce una pagina sbagliata,
+ *     produce una risposta che il client non sa dove finisca: nel migliore dei
+ *     casi la connessione si pianta, nel peggiore il prossimo messaggio sulla
+ *     stessa connessione viene interpretato male (request smuggling).
+ *   - `set-cookie` fa scrivere al decoy nello stesso spazio dove vivono il
+ *     cookie di sessione e quello CSRF. Un contenuto fittizio non deve poter
+ *     toccare lo stato di autenticazione di nessuno.
+ * Gli hop-by-hop restanti sono di competenza del server, non del contenuto.
+ */
+const FORBIDDEN_RESPONSE_HEADERS = [
+  'content-length', 'transfer-encoding', 'connection', 'keep-alive',
+  'upgrade', 'te', 'trailer', 'proxy-authenticate', 'set-cookie',
+];
+
+const MAX_DECLARED_HEADERS = 20;
+const MAX_HEADER_VALUE_LENGTH = 1024;
+
+/**
+ * Valida gli header dichiarati da una regola e li restituisce normalizzati.
+ *
+ * ─── PERCHE UNA REGOLA PUO DICHIARARE HEADER ──────────────────────────────────
+ * Servono alla credibilità del decoy. Un finto `phpinfo()` senza
+ * `X-Powered-By: PHP/8.1.2` è smascherato dal primo scanner che guarda gli
+ * header invece del corpo — e uno scanner che si accorge dell'inganno non è solo
+ * un decoy sprecato: gli ha detto che c'è un filtro.
+ *
+ * ─── PERCHE LA VALIDAZIONE E SEVERA ───────────────────────────────────────────
+ * CR e LF dentro un valore sono response splitting: chiudono l'header e ne
+ * aprono un altro, o aprono direttamente un secondo messaggio HTTP. Node oggi
+ * solleva un'eccezione su header con caratteri illegali, ma affidarsi a quello
+ * significa che un file di regole malformato diventa un 500 a runtime invece di
+ * un errore al caricamento — e con `strictValidation: false` sarebbe un 500 per
+ * ogni richiesta che matcha, scoperto dal traffico e non dall'avvio.
+ *
+ * @returns {object|null} mappa normalizzata, oppure null se ci sono errori
+ */
+function compileResponseHeaders(rawHeaders, where, errors) {
+  if (rawHeaders === undefined || rawHeaders === null) return {};
+
+  if (typeof rawHeaders !== 'object' || Array.isArray(rawHeaders)) {
+    errors.push(`${where}: deve essere un oggetto { "Nome-Header": "valore" }`);
+    return null;
+  }
+
+  const entries = Object.entries(rawHeaders);
+  if (entries.length > MAX_DECLARED_HEADERS) {
+    errors.push(`${where}: troppi header (${entries.length}, massimo ${MAX_DECLARED_HEADERS})`);
+    return null;
+  }
+
+  const out = {};
+  let failed = false;
+
+  for (const [name, value] of entries) {
+    if (!HEADER_NAME_RE.test(name)) {
+      errors.push(`${where}: "${name}" non è un nome di header valido`);
+      failed = true;
+      continue;
+    }
+    if (FORBIDDEN_RESPONSE_HEADERS.includes(name.toLowerCase())) {
+      errors.push(`${where}: l'header "${name}" non può essere dichiarato da una regola`);
+      failed = true;
+      continue;
+    }
+    if (typeof value !== 'string' && typeof value !== 'number') {
+      errors.push(`${where}: il valore di "${name}" deve essere una stringa o un numero`);
+      failed = true;
+      continue;
+    }
+    const text = String(value);
+    if (text.length > MAX_HEADER_VALUE_LENGTH) {
+      errors.push(`${where}: il valore di "${name}" supera ${MAX_HEADER_VALUE_LENGTH} caratteri`);
+      failed = true;
+      continue;
+    }
+    // eslint-disable-next-line no-control-regex
+    if (/[\x00-\x1f\x7f]/.test(text)) {
+      errors.push(`${where}: il valore di "${name}" contiene caratteri di controllo (response splitting)`);
+      failed = true;
+      continue;
+    }
+    out[name] = text;
+  }
+
+  return failed ? null : out;
+}
+
 /**
  * Valida e compila l'intero file delle regole.
  *
@@ -425,7 +529,17 @@ function validateRules(rulesData, options = {}) {
         errors.push(`${where} ("${name}"): decoy.file deve essere un nome di file semplice, senza percorsi`);
         continue;
       }
-      compiled.decoy = { file: decoy.file, status: Number.isInteger(decoy.status) ? decoy.status : 200 };
+      // Uno stato fuori dall'intervallo delle risposte non è un decoy poco
+      // credibile, è una risposta che Node rifiuta di emettere.
+      const decoyStatus = decoy.status === undefined ? 200 : decoy.status;
+      if (!Number.isInteger(decoyStatus) || decoyStatus < 200 || decoyStatus > 599) {
+        errors.push(`${where} ("${name}"): decoy.status deve essere un intero fra 200 e 599`);
+        continue;
+      }
+      const decoyHeaders = compileResponseHeaders(decoy.headers, `${where} ("${name}").decoy.headers`, errors);
+      if (decoyHeaders === null) continue;
+
+      compiled.decoy = { file: decoy.file, status: decoyStatus, headers: decoyHeaders };
     }
 
     if (action === 'redirect') {
@@ -434,15 +548,32 @@ function validateRules(rulesData, options = {}) {
         errors.push(`${where} ("${name}"): action "redirect" richiede redirect.to`);
         continue;
       }
+      // La destinazione finisce nell'header Location: CR, LF e caratteri di
+      // controllo sono response splitting, esattamente come negli header
+      // dichiarati da un decoy.
+      // eslint-disable-next-line no-control-regex
+      if (/[\x00-\x1f\x7f]/.test(redirect.to)) {
+        errors.push(`${where} ("${name}"): redirect.to contiene caratteri di controllo`);
+        continue;
+      }
+
       const isExternal = /^[a-z][a-z0-9+.-]*:\/\//i.test(redirect.to) || redirect.to.startsWith('//');
-      const status = Number.isInteger(redirect.status) ? redirect.status : 302;
+      const status = redirect.status === undefined ? 302 : redirect.status;
+
+      if (!VALID_REDIRECT_STATUSES.includes(status)) {
+        errors.push(
+          `${where} ("${name}"): redirect.status non valido (${status}); ` +
+          `ammessi: ${VALID_REDIRECT_STATUSES.join(', ')}`
+        );
+        continue;
+      }
 
       if (isExternal) {
-        // Il 301 viene messo in cache dal browser in modo persistente: un falso
+        // I redirect permanenti vengono messi in cache dal browser: un falso
         // positivo dirotterebbe un utente reale per mesi, e non si ripara
-        // riavviando. Verso l'esterno è vietato, non sconsigliato.
-        if (status === 301) {
-          errors.push(`${where} ("${name}"): 301 non ammesso verso destinazioni esterne (usa 302)`);
+        // riavviando. Verso l'esterno sono vietati, non sconsigliati.
+        if (status === 301 || status === 308) {
+          errors.push(`${where} ("${name}"): ${status} non ammesso verso destinazioni esterne (usa 302)`);
           continue;
         }
         let host = null;

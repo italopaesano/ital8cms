@@ -75,7 +75,7 @@ rende leggibile e governabile quello che c'è, poi si aggiungono le azioni.**
 | ~~**1**~~ | ~~`adminSentinel` — Vista Dati~~ ✅ | L'unico passo che aumenta il valore del lavoro già fatto invece di aggiungerne. Stabilizza il contratto dell'oggetto condiviso prima che altre feature ci si appoggino |
 | ~~**2**~~ | ~~Promozione e retrocessione~~ ✅ | Completa le fasi 2 e 3. **La retrocessione conta più della promozione**: un percorso a senso unico invita a non imboccarlo mai |
 | ~~**3**~~ | ~~Tester delle regole~~ ✅ | Serve appena si comincia a scrivere regole proprie, ed è il prerequisito per scrivere in sicurezza quelle dei passi successivi |
-| **4** | `redirect` + `decoy` L0/L1 | Gate, validatore e non-interferenza sono **già scritti e testati**: manca solo chi produce il corpo. Miglior rapporto valore/codice nuovo |
+| ~~**4**~~ | ~~`redirect` + `decoy` L0/L1~~ ✅ | Gate, validatore e non-interferenza erano **già scritti e testati**: mancava solo chi produce il corpo. Miglior rapporto valore/codice nuovo |
 | **5** | Canary (`decoy` L2) + `banClient` + allerte | Il salto da difesa passiva a **sensore**: certezza di un attaccante attivo, non inferenza |
 | **6** | Coerenza di sessione | Miglior segnale del blocco autenticato, ma introduce stato e foglie nuove: meglio quando la GUI può mostrarne gli effetti |
 | **7** | `drop` reale e `tarpit` | Le uniche azioni che possono farti male da sole (retry aggressivi, esaurimento di file descriptor) |
@@ -111,11 +111,18 @@ traccia** delle foglie che hanno matchato. Il costo vero è la traccia:
 separata, non con un flag che appesantisca il percorso caldo. Riusabile come
 lettore CLI (`sentinel test <path>`), chiudendo in parte la voce §15.
 
-**Passo 4 — `redirect` + `decoy` L0/L1.** `redirect` è quasi finito (validazione,
-allowlist e divieto del 301 esterno sono già in `ruleValidator`): manca la
-`respond`. Per il decoy: risoluzione con precedenza a `decoys/data/`, servizio
-fuori dalla pipeline EJS, e un corredo distribuito (finto `wp-login.php`, finto
-`phpinfo()`, finto `.env`).
+**Passo 4 — `redirect` + `decoy` L0/L1.** ✅ Fatto. `lib/decoyRenderer.js`
+(risoluzione con precedenza a `decoys/data/`, segnaposto, tipo dall'estensione,
+cache spenta in debug) + `serveDecoy`/`serveRedirect` in `main.js`, attaccate al
+verdetto **solo quando l'enforcement è in vigore**. Il validatore ha imparato
+`decoy.headers` (rifiuta CR/LF, `Content-Length`, `Transfer-Encoding`,
+`Set-Cookie`, hop-by-hop) e gli stati fuori intervallo. Corredo distribuito:
+`wp-login.html`, `phpinfo.html`, `env.txt`, `dir-listing.html`.
+
+Due cose emerse strada facendo, entrambe scoperte da un test:
+- le spiegazioni **non possono stare dentro i file serviti** (vedi §4);
+- `308` verso l'esterno è vietato quanto `301` — è il 301 dei metodi non-GET, con
+  la stessa cache persistente nel browser.
 
 **Passo 5 — Canary.** Token nel decoy + regola trappola + `banClient()` immediato
 + notifica `mailer` (che chiude anche l'allerta sul tasso di eviction, §6).
@@ -251,8 +258,8 @@ famiglia di richieste.
 - [x] `block` — **404** via `reservedGate.deny()`, byte-identico a un URL inesistente
 - [x] `throttle` — delega a `rateLimiter` senza bloccare subito
 - [ ] `drop` — chiude la connessione senza risposta (stile nginx 444)
-- [ ] `decoy` — contenuto fittizio (vedi §4)
-- [ ] `redirect` — 30x, **302 forzato** per l'esterno + allowlist di destinazioni
+- [x] `decoy` — contenuto fittizio (vedi §4)
+- [x] `redirect` — 30x, **permanenti vietati** verso l'esterno + allowlist di destinazioni
 - [ ] `tarpit` — risposta a goccia, con cap di connessioni simultanee e timeout massimo
 - [ ] `challenge` — proof-of-work / cookie challenge *(valutazione futura)*
 
@@ -269,13 +276,21 @@ famiglia di richieste.
 
 Scala progressiva: ogni livello presuppone il precedente.
 
-- [ ] **Livello 0 — Decoy statico.** File preparati serviti al posto dell'errore:
-      finto `wp-login.php`, finto `phpinfo()`, finto `.env`, finto listing.
+- [x] **Livello 0 — Decoy statico.** File preparati serviti al posto dell'errore:
+      `wp-login.html`, `phpinfo.html`, `env.txt`, `dir-listing.html`.
       Servito **fuori dalla pipeline EJS** (né motore di template esposto, né
       markup del tema che renda il decoy riconoscibile).
-- [ ] **Livello 1 — Decoy parametrico.** Versioni, path e timestamp finti generati
+- [x] **Livello 1 — Decoy parametrico.** Versioni, path e timestamp finti generati
       al volo: due richieste non danno risposte identiche, il decoy non è
       riconoscibile da un hash del contenuto.
+      Segnaposto: `{{now}}` `{{today}}` `{{timestamp}}` `{{random:N}}`
+      `{{choice:a|b|c}}` `{{path}}` `{{ip}}` — gli ultimi due escapati nei decoy
+      HTML (sono stringhe scelte dall'attaccante: senza escape è una XSS riflessa
+      a danno di chi riceve da lui il link).
+- [x] **Nessuna spiegazione dentro il file servito.** Un commento che dice
+      «questo è finto» rivela il filtro a chi bussa. Le descrizioni stanno in
+      `decoys/default/README.md`; un test cerca le parole rivelatrici nei file
+      distribuiti.
 - [ ] **Livello 2 — Canary / honeytoken.** Il decoy contiene credenziali o URL
       fasulli; una regola trappola sorveglia quegli URL. Se qualcuno li usa hai la
       **certezza** di un attaccante attivo (non un'inferenza) → ban immediato via
@@ -304,7 +319,7 @@ decoys/
 ```
 
 - [x] `decoys/README.md` che spiega la distinzione
-- [ ] Risoluzione con precedenza a `decoys/data/` sul file omonimo in `decoys/default/`
+- [x] Risoluzione con precedenza a `decoys/data/` sul file omonimo in `decoys/default/`
 - [x] `decoys/data/` git-ignored nel contenuto ma presente nel repo (solo il README)
 - [x] Simmetria con la filosofia `x.default.json5` ↔ `x.json5` del ciclo di vita
       dei config: il default è la fonte di verità versionata, il vivo è dell'utente

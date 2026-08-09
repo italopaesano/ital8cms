@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<style type="text/css">
+body {background-color: #fff; color: #222; font-family: sans-serif;}
+pre {margin: 0; font-family: monospace;}
+a:link, a:visited {color: #009; text-decoration: none; background-color: #fff;}
+a:hover {text-decoration: underline;}
+table {border-collapse: collapse; border: 0; width: 934px; box-shadow: 1px 2px 3px #ccc;}
+.center {text-align: center;}
+.center table {margin: 1em auto; text-align: left;}
+.center th {text-align: center !important;}
+td, th {border: 1px solid #666; font-size: 75%; vertical-align: baseline; padding: 4px 5px;}
+h1 {font-size: 150%;}
+h2 {font-size: 125%;}
+.p {text-align: left;}
+.e {background-color: #ccf; width: 300px; font-weight: bold;}
+.h {background-color: #99c; font-weight: bold;}
+.v {background-color: #ddd; max-width: 300px; overflow-x: auto; word-wrap: break-word;}
+.v i {color: #999;}
+img {float: right; border: 0;}
+hr {width: 934px; background-color: #ccc; border: 0; height: 1px;}
+</style>
+<title>phpinfo()</title></head>
+<body><div class="center">
+<table>
+<tr class="h"><td>
+<h1 class="p">PHP Version 7.4.33</h1>
+</td></tr>
+</table>
+<table>
+<tr><td class="e">System </td><td class="v">Linux web01 5.4.0-150-generic #167-Ubuntu SMP x86_64 </td></tr>
+<tr><td class="e">Build Date </td><td class="v">Nov  2 2022 14:29:44 </td></tr>
+<tr><td class="e">Server API </td><td class="v">FPM/FastCGI </td></tr>
+<tr><td class="e">Virtual Directory Support </td><td class="v">disabled </td></tr>
+<tr><td class="e">Configuration File (php.ini) Path </td><td class="v">/etc/php/7.4/fpm </td></tr>
+<tr><td class="e">Loaded Configuration File </td><td class="v">/etc/php/7.4/fpm/php.ini </td></tr>
+<tr><td class="e">Scan this dir for additional .ini files </td><td class="v">/etc/php/7.4/fpm/conf.d </td></tr>
+<tr><td class="e">PHP API </td><td class="v">20190902 </td></tr>
+<tr><td class="e">PHP Extension </td><td class="v">20190902 </td></tr>
+<tr><td class="e">Zend Extension </td><td class="v">320190902 </td></tr>
+<tr><td class="e">Debug Build </td><td class="v">no </td></tr>
+<tr><td class="e">Thread Safety </td><td class="v">disabled </td></tr>
+<tr><td class="e">Zend Signal Handling </td><td class="v">enabled </td></tr>
+<tr><td class="e">Zend Memory Manager </td><td class="v">enabled </td></tr>
+<tr><td class="e">IPv6 Support </td><td class="v">enabled </td></tr>
+<tr><td class="e">Registered PHP Streams </td><td class="v">https, ftps, compress.zlib, php, file, glob, data, http, ftp, phar </td></tr>
+</table>
+<hr />
+<h1>Configuration</h1>
+<h2>Core</h2>
+<table>
+<tr class="h"><th>Directive</th><th>Local Value</th><th>Master Value</th></tr>
+<tr><td class="e">allow_url_fopen</td><td class="v">On</td><td class="v">On</td></tr>
+<tr><td class="e">allow_url_include</td><td class="v">Off</td><td class="v">Off</td></tr>
+<tr><td class="e">display_errors</td><td class="v">Off</td><td class="v">Off</td></tr>
+<tr><td class="e">doc_root</td><td class="v"><i>no value</i></td><td class="v"><i>no value</i></td></tr>
+<tr><td class="e">error_log</td><td class="v">/var/log/php/error.log</td><td class="v">/var/log/php/error.log</td></tr>
+<tr><td class="e">max_execution_time</td><td class="v">30</td><td class="v">30</td></tr>
+<tr><td class="e">memory_limit</td><td class="v">256M</td><td class="v">128M</td></tr>
+<tr><td class="e">open_basedir</td><td class="v"><i>no value</i></td><td class="v"><i>no value</i></td></tr>
+<tr><td class="e">post_max_size</td><td class="v">32M</td><td class="v">8M</td></tr>
+<tr><td class="e">upload_max_filesize</td><td class="v">32M</td><td class="v">2M</td></tr>
+<tr><td class="e">upload_tmp_dir</td><td class="v">/var/tmp/php</td><td class="v"><i>no value</i></td></tr>
+</table>
+<h2>Environment</h2>
+<table>
+<tr class="h"><th>Variable</th><th>Value</th></tr>
+<tr><td class="e">USER</td><td class="v">www-data</td></tr>
+<tr><td class="e">HOME</td><td class="v">/var/www</td></tr>
+<tr><td class="e">PATH</td><td class="v">/usr/local/bin:/usr/bin:/bin</td></tr>
+</table>
+<h2>PHP Variables</h2>
+<table>
+<tr class="h"><th>Variable</th><th>Value</th></tr>
+<tr><td class="e">$_SERVER['DOCUMENT_ROOT']</td><td class="v">/var/www/html/public</td></tr>
+<tr><td class="e">$_SERVER['REQUEST_URI']</td><td class="v">{{path}}</td></tr>
+<tr><td class="e">$_SERVER['REMOTE_ADDR']</td><td class="v">{{ip}}</td></tr>
+<tr><td class="e">$_SERVER['SCRIPT_FILENAME']</td><td class="v">/var/www/html/public/index.php</td></tr>
+<tr><td class="e">$_SERVER['REQUEST_TIME']</td><td class="v">{{timestamp}}</td></tr>
+</table>
+<hr />
+<table>
+<tr class="v"><td>PHP Credits</td></tr>
+</table>
+</div></body></html>

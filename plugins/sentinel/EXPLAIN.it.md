@@ -136,6 +136,58 @@ struttura — e non introdotta da sentinel. È annotata in [`TODO.md`](./TODO.md
 fra i punti aperti: sistemarla significherebbe toccare il modo in cui la sessione
 viene committata, e va fatto per entrambi i gate insieme o per nessuno.
 
+## 4-bis. Le risposte che il plugin produce da sé
+
+`block` delega, perché deve essere indistinguibile. `decoy` e `redirect` no: il
+loro corpo esiste solo qui. Il verdetto porta con sé una funzione `respond`, e il
+gate la chiama **soltanto** dopo aver verificato tre cose in quest'ordine —
+l'enforcement è davvero in vigore, la risposta non tradirebbe la superficie
+riservata chiusa, `respond` esiste. Se una qualsiasi manca, 404.
+
+L'ultima delle tre è più utile di quanto sembri: è il motivo per cui `tarpit` è
+scrivibile nel file di regole **oggi**, pur non essendo implementato. Una regola
+`tarpit` matcha, viene contata e registrata, e produce un 404: la si può
+osservare per settimane e il giorno in cui l'azione arriverà cambierà solo
+l'effetto, non la configurazione né la storia della regola.
+
+### Perché il renderer sta fuori dal percorso di rendering
+
+I decoy non passano da EJS né dai partial del tema, per due ragioni indipendenti
+che porterebbero alla stessa scelta anche prese una alla volta: non si espone il
+motore di template a un percorso raggiungibile da traffico ostile, e il markup
+del tema renderebbe il decoy riconoscibile a colpo d'occhio — un finto WordPress
+con l'header del tuo sito non inganna nessuno.
+
+### La cosa che è facile sbagliare due volte
+
+**Primo errore: spiegare il decoy dentro il decoy.** Un commento HTML che dice
+«questo file è finto» viene servito insieme al resto. Chi lo legge non solo non è
+stato ingannato: ha appena scoperto che c'è un filtro, che è più di quanto gli
+avrebbe detto un 404. È successo davvero durante lo sviluppo, ed è stato un test
+a scoprirlo — ora `decoyRenderer.test.js` cerca le parole rivelatrici in ogni
+file distribuito, e le spiegazioni stanno in `decoys/default/README.md`.
+
+**Secondo errore: riflettere senza escapare.** `{{path}}` e `{{ip}}` inseriscono
+nel corpo stringhe scelte da chi ha fatto la richiesta. In un decoy HTML è una
+XSS riflessa in piena regola, e il bersaglio non è l'attaccante — che si
+autoinfetterebbe — ma chiunque riceva da lui un link a quell'URL. L'escaping
+dipende dal tipo di contenuto: in un finto `.env` sarebbe rumore visibile che
+tradisce la trappola, e non c'è nessun parser di markup a valle.
+
+### Perché il validatore è severo sugli header di un decoy
+
+Una regola può dichiarare header per credibilità, ma non tutti. `Content-Length`
+e `Transfer-Encoding` non descrivono il contenuto: descrivono **come il corpo è
+inquadrato sul filo**, e un valore sbagliato produce una risposta di cui il
+client non sa dove finisca — nel migliore dei casi la connessione si pianta, nel
+peggiore il messaggio successivo sulla stessa connessione viene interpretato male.
+`Set-Cookie` è escluso perché farebbe scrivere a un contenuto fittizio nello
+stesso spazio dove vivono il cookie di sessione e quello CSRF.
+
+CR e LF nei valori sono rifiutati **al caricamento** e non lasciati a Node, che
+pure solleverebbe un'eccezione: con `strictValidation: false` diventerebbero un
+500 a ogni richiesta che matcha, scoperto dal traffico invece che dall'avvio.
+
 ## 5. Il fingerprint: la scelta che sembra un errore
 
 **Lo User-Agent non entra nel calcolo dell'impronta.** Rileggendo
@@ -289,6 +341,9 @@ Emerso provando il plugin sul server reale, non ragionandoci sopra.
 | `lib/census.js` | censimento impronte + aggregato esiti |
 | `lib/sentinelLog.js` | JSONL, rotazione, retention, tetto di dimensione |
 | `lib/ruleHitCounter.js` | contatori per regola (base della promozione) |
+| `lib/ruleTracer.js` | valutatore che spiega, usato dal tester |
+| `lib/rulesFileEditor.js` | modifica chirurgica dell'`action` preservando i commenti |
+| `lib/decoyRenderer.js` | risoluzione, resa e tipo dei contenuti fittizi |
 
 Nel core: `createSentinelGate` in `core/priorityMiddlewares/runtimeGate.js`,
 montaggio in `priorityMiddlewares.js`, iniezione del motore in `index.js`,

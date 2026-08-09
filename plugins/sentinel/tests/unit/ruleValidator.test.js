@@ -138,6 +138,110 @@ describe('parametri delle azioni', () => {
     expect(r.rules[0].redirect.status).toBe(302);
   });
 
+  // Il 308 è il 301 dei metodi non-GET: stessa cache persistente nel browser,
+  // stesso danno irreparabile su un falso positivo.
+  test('308 verso l esterno è vietato quanto il 301', () => {
+    const r = validateRules(
+      { rules: [rule({ action: 'redirect', redirect: { to: 'https://esempio.test/x', status: 308 } })] },
+      { allowedRedirectHosts: ['esempio.test'] },
+    );
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/308/);
+  });
+
+  test('301 verso una destinazione INTERNA resta ammesso', () => {
+    const r = validateRules({ rules: [rule({ action: 'redirect', redirect: { to: '/altrove', status: 301 } })] });
+    expect(r.valid).toBe(true);
+    expect(r.rules[0].redirect.status).toBe(301);
+  });
+
+  test('uno status che non è un redirect viene rifiutato', () => {
+    const r = validateRules({ rules: [rule({ action: 'redirect', redirect: { to: '/x', status: 200 } })] });
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/redirect\.status/);
+  });
+
+  // La destinazione finisce nell'header Location: un LF la chiude e ne apre un
+  // altro (response splitting).
+  test('redirect.to con caratteri di controllo → rifiutato', () => {
+    const r = validateRules({
+      rules: [rule({ action: 'redirect', redirect: { to: '/x\r\nSet-Cookie: a=b' } })],
+    });
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/caratteri di controllo/);
+  });
+});
+
+describe('header dichiarati da un decoy', () => {
+  const decoyRule = (decoy) => rule({ action: 'decoy', decoy: { file: 'fake.html', ...decoy } });
+
+  test('gli header validi vengono compilati', () => {
+    const r = validateRules({
+      rules: [decoyRule({ headers: { 'X-Powered-By': 'PHP/7.4.33', 'X-Request-Id': 42 } })],
+    });
+    expect(r.valid).toBe(true);
+    // Un numero è comodo da scrivere in JSON5 e diventa comunque una stringa.
+    expect(r.rules[0].decoy.headers).toEqual({ 'X-Powered-By': 'PHP/7.4.33', 'X-Request-Id': '42' });
+  });
+
+  test('senza headers la mappa è vuota, non undefined', () => {
+    const r = validateRules({ rules: [decoyRule({})] });
+    expect(r.valid).toBe(true);
+    expect(r.rules[0].decoy.headers).toEqual({});
+  });
+
+  // CR/LF in un valore chiudono l'header e ne aprono un altro, o aprono un
+  // secondo messaggio HTTP.
+  test.each([
+    ['\r\nSet-Cookie: sid=1'],
+    ['valore\nX-Altro: 1'],
+    ['valore\u0000'],
+  ])('un valore con caratteri di controllo (%j) è rifiutato', (value) => {
+    const r = validateRules({ rules: [decoyRule({ headers: { 'X-Test': value } })] });
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/caratteri di controllo/);
+  });
+
+  test.each([
+    ['Content-Length'],
+    ['content-length'],
+    ['Transfer-Encoding'],
+    ['Set-Cookie'],
+    ['Connection'],
+  ])('%s non può essere dichiarato da una regola', (name) => {
+    const r = validateRules({ rules: [decoyRule({ headers: { [name]: '0' } })] });
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/non può essere dichiarato/);
+  });
+
+  test('Content-Type invece è ammesso: serve alla credibilità', () => {
+    const r = validateRules({ rules: [decoyRule({ headers: { 'Content-Type': 'text/html' } })] });
+    expect(r.valid).toBe(true);
+  });
+
+  test('un nome di header non valido è rifiutato', () => {
+    const r = validateRules({ rules: [decoyRule({ headers: { 'X Powered By': 'php' } })] });
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/nome di header/);
+  });
+
+  test('headers non oggetto è rifiutato', () => {
+    const r = validateRules({ rules: [decoyRule({ headers: ['X-Powered-By: php'] })] });
+    expect(r.valid).toBe(false);
+  });
+
+  test('un decoy.status fuori intervallo è rifiutato', () => {
+    const r = validateRules({ rules: [decoyRule({ status: 999 })] });
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/decoy\.status/);
+  });
+
+  test('un decoy.status plausibile passa (401 per un finto login protetto)', () => {
+    const r = validateRules({ rules: [decoyRule({ status: 401 })] });
+    expect(r.valid).toBe(true);
+    expect(r.rules[0].decoy.status).toBe(401);
+  });
+
   test('escalate verso una regola rateLimiter inesistente → avviso, non errore', () => {
     const r = validateRules(
       { rules: [rule({ escalate: { rateLimiterRule: 'inesistente' } })] },

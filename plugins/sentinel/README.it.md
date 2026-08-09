@@ -21,6 +21,7 @@ che fai tu dopo aver letto i tuoi dati.
 - [Configurazione](#configurazione)
 - [Scrivere una regola](#scrivere-una-regola)
 - [Le azioni](#le-azioni)
+- [Contenuti fittizi (decoy)](#contenuti-fittizi-decoy)
 - [Il control plane](#il-control-plane)
 - [I dati prodotti](#i-dati-prodotti)
 - [Interconnessioni](#interconnessioni)
@@ -202,7 +203,11 @@ che sono le forme in cui i tentativi arrivano davvero.
   backtracking catastrofico, e con Node — che non offre timeout sulle regex —
   una singola richiesta potrebbe bloccare l'event loop, cioè l'intero sito
 - CIDR malformati, `decoy.file` con percorsi (path traversal)
-- `redirect` esterno fuori dall'allowlist, e **`301` verso l'esterno sempre**
+- `redirect` esterno fuori dall'allowlist, e i **permanenti (301/308) verso
+  l'esterno sempre**; uno `status` che non è un redirect
+- header dichiarati da un `decoy` che contengono **CR/LF** (response splitting) o
+  che descrivono il messaggio invece del contenuto (`Content-Length`,
+  `Transfer-Encoding`, `Set-Cookie`, hop-by-hop)
 
 Una regola invalida viene **scartata**, le altre restano in vigore. Un file
 illeggibile lascia il filtro senza regole ma il sito raggiungibile: fail-closed
@@ -216,16 +221,113 @@ trasformerebbe una virgola fuori posto in un blackout.
 | `monitor` | Matcha, registra, **lascia passare**. | ✅ v1 |
 | `block` | **404**, byte-identico a un URL che non è mai esistito. | ✅ v1 |
 | `throttle` | Delega a `rateLimiter` senza bloccare. | ✅ v1 |
-| `drop` | Oggi si comporta come `block`; la chiusura sul socket arriva in v2. | ◐ v1 |
-| `decoy` | Contenuto fittizio. | ⏳ v2 |
-| `redirect` | 30x con allowlist e 302 forzato. | ⏳ v2 |
-| `tarpit` | Risposta a goccia. | ⏳ v3 |
+| `drop` | Oggi si comporta come `block`; la chiusura sul socket arriva più avanti. | ◐ v1 |
+| `decoy` | [Contenuto fittizio](#contenuti-fittizi-decoy) al posto del 404. | ✅ v1.1 |
+| `redirect` | 30x, allowlist per l'esterno, permanenti vietati fuori dal sito. | ✅ v1.1 |
+| `tarpit` | Risposta a goccia. | ⏳ |
 
 Il 404 di `block` non è fabbricato da questo plugin: è prodotto da
 `reservedGate.deny()`, l'unico punto del progetto che genera il 404 «di
 copertura», presidiato da un test che lo confronta byte per byte con un 404
 autentico. Un secondo generatore divergerebbe, e la differenza renderebbe
 enumerabile ciò che il filtro protegge.
+
+## Contenuti fittizi (`decoy`)
+
+Un *decoy* — letteralmente un'esca — è contenuto falso ma credibile servito al
+posto di un errore. Uno scanner chiede `/wp-login.php`; le risposte possibili non
+sono equivalenti:
+
+| Risposta | Cosa impara chi ha bussato |
+|---|---|
+| `404` | «Non è WordPress.» Passa oltre. Gli è costato zero |
+| `403` | «Non è WordPress **e c'è un filtro.**» Gli hai regalato un'informazione |
+| decoy | «È WordPress!» Lancia l'intera batteria di exploit WP contro un sito che PHP non lo esegue nemmeno |
+
+Il valore è **asimmetrico**: a te costa un file statico, a lui costa tempo reale.
+E avvelena i suoi dati — molti scanner alimentano database di bersagli, e da qui
+in poi questo sito ci figura catalogato male.
+
+### Come si scrive la regola
+
+```json5
+{
+  name: "wp-probe-decoy",
+  action: "decoy",
+  appliesTo: "anonymous",
+  match: { path: ["/wp-login.php", "/wp-admin/**"] },
+  decoy: {
+    file: "wp-login.html",                        // nome semplice, senza percorsi
+    status: 200,                                  // 200-599, default 200
+    headers: { "X-Powered-By": "PHP/7.4.33" },    // credibilità
+  },
+}
+```
+
+Gli header dichiarati contano più di quanto sembri: uno scanner che li guarda
+prima del corpo smaschera un finto `phpinfo()` che non dice di essere PHP.
+
+### Dove stanno i file
+
+```
+decoys/
+├── default/    forniti col plugin, VERSIONATI: un aggiornamento li sovrascrive
+└── data/       i tuoi, MAI toccati, esclusi da git
+```
+
+A parità di nome **`data/` vince**: per personalizzare un decoy fornito basta
+copiarlo lì. È la stessa simmetria di `x.default.json5` ↔ `x.json5`.
+
+Distribuiti: `wp-login.html`, `phpinfo.html`, `env.txt`, `dir-listing.html` —
+documentati in [`decoys/default/README.md`](./decoys/default/README.md).
+
+### Segnaposto
+
+Due risposte identiche hanno lo stesso hash, e uno scanner che le confronta si
+accorge che il "sito" restituisce sempre la stessa pagina. I segnaposto rendono
+ogni risposta diversa:
+
+| Segnaposto | Resa |
+|---|---|
+| `{{now}}` | Data e ora ISO |
+| `{{today}}` | `2026-08-09` |
+| `{{timestamp}}` | Secondi Unix |
+| `{{random:N}}` | N caratteri casuali (1–128) |
+| `{{choice:a\|b\|c}}` | Una delle alternative |
+| `{{path}}` `{{ip}}` | Il percorso richiesto e l'indirizzo di chi l'ha chiesto |
+
+Gli ultimi due sono **riflessi**: contengono stringhe scelte da chi ha fatto la
+richiesta, e nei decoy HTML vengono escapati. Senza, sarebbe una XSS riflessa in
+piena regola — e il bersaglio non sarebbe l'attaccante, che si autoinfetterebbe,
+ma chiunque riceva da lui un link a quell'URL.
+
+### Tre regole per chi ne scrive uno
+
+1. **Nessuna spiegazione dentro il file.** Un commento HTML o una riga `#` che
+   dice «questo è finto» viene servita insieme al resto: un decoy che si annuncia
+   è *peggio* di un 404, perché ha appena rivelato che c'è un filtro. Un test
+   tiene le parole rivelatrici fuori dai file distribuiti.
+2. **Niente EJS, niente partial del tema.** I decoy sono serviti fuori dalla
+   pipeline di rendering: non si espone il motore di template a traffico ostile,
+   e il markup del tuo tema renderebbe il decoy riconoscibile a colpo d'occhio.
+3. **Nessun contenuto reale** — nessun nome utente vero, nessun percorso interno
+   vero, nessuna versione vera del software.
+
+### Quando il decoy non viene servito
+
+- **File assente** (cancellato dopo l'avvio, permessi cambiati): la risposta
+  degrada al 404 comune. All'avvio un avviso segnala le regole che puntano a un
+  file inesistente — scoprirlo dal traffico invece che dai log sarebbe la
+  peggiore delle sorprese, perché il decoy *sembra* configurato.
+- **Superficie riservata chiusa** (`sentinel`/`reserved` stop): su un percorso
+  riservato un decoy rivelerebbe che quel percorso esiste, cioè esattamente il
+  canale di enumerazione che il reserved gate chiude. Anche lì: 404.
+- **Enforcement non in vigore**: in `monitor`, o con il gate commutato, l'evento
+  viene registrato e la richiesta prosegue.
+
+Il contenuto dei file è tenuto in memoria dopo la prima lettura — chi scandisce
+il sito non deve poter dettare il ritmo delle nostre letture su disco. In
+`debugMode` la cache è spenta e un ricaricamento delle regole la svuota.
 
 ## Il control plane
 
@@ -357,13 +459,13 @@ dichiaralo nella tua informativa.
 
 ## Cosa NON fa (ancora)
 
-Decoy e contenuti trappola, redirect, tarpit, coerenza di sessione (cambio di
-User-Agent dentro la stessa sessione = sessione rubata), reputazione locale delle
-impronte, e la GUI `adminSentinel`. Roadmap completa e stato di avanzamento in
-[`TODO.md`](./TODO.md).
+Canary token e trappole di livello superiore (finto pannello che registra i
+tentativi), `drop` vero, `tarpit`, coerenza di sessione (cambio di User-Agent
+dentro la stessa sessione = sessione rubata), reputazione locale delle impronte.
+Roadmap completa e stato di avanzamento in [`TODO.md`](./TODO.md).
 
-In v1 la lettura dei dati è manuale (i file in `data/`): il lettore da riga di
-comando e la dashboard arrivano dopo.
+La lettura dei dati passa dalla GUI di [`adminSentinel`](../adminSentinel/README.it.md);
+il lettore da riga di comando arriva dopo.
 
 ---
 

@@ -241,5 +241,58 @@
       // escalate: { rateLimiterRule: "scanner" },
     },
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // CONTENUTO FITTIZIO E DIROTTAMENTO — esempi, non attivi
+    // ─────────────────────────────────────────────────────────────────────────
+    // Restano commentati perché non sono osservazione: agiscono. Il default di
+    // questo file non deve fare NIENTE a nessuno finché non hai guardato i tuoi
+    // dati. Copiane uno e togli i commenti quando sai cosa vuoi ottenere.
+    //
+    // ── decoy: rispondi con un contenuto falso invece che con un 404 ──────────
+    // Uno scanner che chiede /wp-login.php e riceve 404 impara «non è WordPress»
+    // e passa oltre: gli è costato zero. Se riceve un login WordPress credibile
+    // spende minuti a lanciarci contro exploit inutili — e nel suo database di
+    // bersagli questo sito finisce catalogato male.
+    //
+    // I file stanno in decoys/default/ (forniti, sovrascritti dagli update) e
+    // decoys/data/ (tuoi, mai toccati). Il secondo vince sul primo a parità di
+    // nome. Distribuiti: wp-login.html, phpinfo.html, env.txt, dir-listing.html.
+    //
+    // {
+    //   name: "wp-probe-decoy",
+    //   enabled: true,
+    //   category: "cms-probe",
+    //   description: "Finto login WordPress a chi cerca WordPress.",
+    //   action: "decoy",
+    //   appliesTo: "anonymous",
+    //   match: { path: ["/wp-login.php", "/wp-admin/**"] },
+    //   decoy: {
+    //     file: "wp-login.html",
+    //     status: 200,
+    //     // Gli header servono alla credibilità: uno scanner che li guarda prima
+    //     // del corpo smaschererebbe un finto PHP senza X-Powered-By.
+    //     headers: { "X-Powered-By": "PHP/7.4.33" },
+    //   },
+    // },
+    //
+    // ── redirect: manda la richiesta altrove ─────────────────────────────────
+    // Verso l'INTERNO è la forma tranquilla (una pagina di cortesia, la home).
+    // Verso l'ESTERNO serve l'host in custom.allowedRedirectHosts, e i redirect
+    // permanenti (301/308) sono vietati: restano nella cache del browser, e un
+    // falso positivo dirotterebbe un utente vero per mesi senza che riavviare
+    // ripari niente. Rimandare traffico a un terzo che non ha acconsentito
+    // resta comunque un abuso verso di lui: nei suoi log la sorgente sei tu.
+    //
+    // {
+    //   name: "sensitive-file-redirect",
+    //   enabled: true,
+    //   category: "sensitive-file",
+    //   description: "Chi cerca file di configurazione finisce sulla home.",
+    //   action: "redirect",
+    //   appliesTo: "anonymous",
+    //   match: { path: ["/.env", "/.git/**"] },
+    //   redirect: { to: "/", status: 302 },
+    // },
+
   ],
 }

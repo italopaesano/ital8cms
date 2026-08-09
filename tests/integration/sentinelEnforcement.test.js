@@ -58,6 +58,35 @@ function restoreAll() {
 const TEST_RULES = {
   schemaVersion: 1,
   rules: [
+    // Prima di test-block-php di proposito: `/wp-login.php` matcherebbe anche
+    // quella, e con first-match-wins l'ordine è la sola cosa che decide.
+    {
+      name: 'test-decoy-wp',
+      enabled: true,
+      category: 'cms-probe',
+      description: 'decoy: serve il finto login WordPress al posto del 404',
+      action: 'decoy',
+      match: { path: '/wp-login.php' },
+      decoy: { file: 'wp-login.html', headers: { 'X-Powered-By': 'PHP/7.4.33' } },
+    },
+    {
+      name: 'test-decoy-assente',
+      enabled: true,
+      category: 'cms-probe',
+      description: 'decoy che punta a un file inesistente: deve degradare al 404',
+      action: 'decoy',
+      match: { path: '/zzz-decoy-assente' },
+      decoy: { file: 'questo-file-non-esiste.html' },
+    },
+    {
+      name: 'test-redirect-interno',
+      enabled: true,
+      category: 'cms-probe',
+      description: 'redirect: manda altrove invece di rispondere',
+      action: 'redirect',
+      match: { path: '/zzz-redirect' },
+      redirect: { to: '/', status: 302 },
+    },
     {
       name: 'test-block-php',
       enabled: true,
@@ -287,6 +316,70 @@ describe('sentinel — monitor osserva senza agire', () => {
     expect(eventi[0].ruleName).toBe('test-block-php');
     expect(eventi[0].ip).toBeTruthy();      // IP pieno, scelta esplicita
     expect(eventi[0].fp).toBeTruthy();
+  });
+});
+
+// Le azioni che producono un corpo proprio. Un unit test sul renderer dice che
+// il file viene letto e i segnaposto sostituiti; solo un test end-to-end dice
+// che quel corpo arriva davvero al client al posto del 404, con lo stato e gli
+// header giusti e senza che nulla a valle lo tocchi.
+describe('sentinel — decoy e redirect producono la loro risposta', () => {
+  test('il decoy prende il posto del 404, con i suoi header', async () => {
+    const r = await httpGet('/wp-login.php');
+
+    expect(r.status).toBe(200);
+    expect(r.headers['content-type']).toMatch(/text\/html/);
+    expect(r.headers['x-powered-by']).toBe('PHP/7.4.33');
+    expect(r.body).toContain('id="loginform"');
+
+    // Fuori dalla pipeline EJS: nessun frammento del tema del sito, che
+    // renderebbe il decoy riconoscibile a colpo d'occhio.
+    expect(r.body).not.toContain('ital8cms');
+  });
+
+  test('due risposte non sono identiche: il nonce cambia', async () => {
+    // È la ragione del livello 1. Un decoy uguale a se stesso viene riconosciuto
+    // confrontando l'hash di due risposte.
+    const [a, b] = await Promise.all([httpGet('/wp-login.php'), httpGet('/wp-login.php')]);
+    expect(a.body).not.toBe(b.body);
+  });
+
+  test('il decoy scavalca la regola di blocco che lo segue', async () => {
+    // /wp-login.php matcherebbe anche test-block-php: se rispondesse 404
+    // vorrebbe dire che first-match-wins non vale per le azioni decoranti.
+    expect((await httpGet('/wp-login.php')).status).toBe(200);
+    expect((await httpGet('/zzz-altro.php')).status).toBe(404);
+  });
+
+  test('un decoy che punta a un file assente degrada al 404 comune', async () => {
+    // Fallire aperto sarebbe peggio: la regola dice «questa richiesta è ostile».
+    // Fallire con una pagina d'errore diversa dal 404 del sito sarebbe peggio
+    // ancora, perché rivelerebbe il filtro proprio dove è rotto.
+    const degradato = await httpGet('/zzz-decoy-assente');
+    const genuino = await httpGet('/zzz-non-esiste-affatto.ejs');
+    expect(degradato.status).toBe(404);
+    expect(degradato.body).toBe(genuino.body);
+  });
+
+  test('il redirect risponde 302 con Location e senza corpo rivelatore', async () => {
+    const r = await httpGet('/zzz-redirect');
+    expect(r.status).toBe(302);
+    expect(r.headers.location).toBe('/');
+    expect(r.body).toBe('');
+  });
+
+  test('decoy e redirect finiscono nel log come applicati', async () => {
+    await sleep(300);
+    const decoy = eventsFor('/wp-login.php');
+    const redirect = eventsFor('/zzz-redirect');
+
+    expect(decoy.length).toBeGreaterThan(0);
+    expect(decoy[0].ruleName).toBe('test-decoy-wp');
+    expect(decoy[0].enforced).toBe(true);
+
+    expect(redirect.length).toBeGreaterThan(0);
+    expect(redirect[0].ruleName).toBe('test-redirect-interno');
+    expect(redirect[0].enforced).toBe(true);
   });
 });
 
