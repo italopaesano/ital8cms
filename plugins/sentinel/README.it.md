@@ -22,6 +22,8 @@ che fai tu dopo aver letto i tuoi dati.
 - [Scrivere una regola](#scrivere-una-regola)
 - [Le azioni](#le-azioni)
 - [Contenuti fittizi (decoy)](#contenuti-fittizi-decoy)
+- [Token esca (canary)](#token-esca-canary)
+- [Ban immediato](#ban-immediato-escalateban)
 - [Il control plane](#il-control-plane)
 - [I dati prodotti](#i-dati-prodotti)
 - [Interconnessioni](#interconnessioni)
@@ -295,6 +297,7 @@ ogni risposta diversa:
 | `{{random:N}}` | N caratteri casuali (1–128) |
 | `{{choice:a\|b\|c}}` | Una delle alternative |
 | `{{path}}` `{{ip}}` | Il percorso richiesto e l'indirizzo di chi l'ha chiesto |
+| `{{canary}}` | Un [token esca](#token-esca-canary): trasforma il decoy in un sensore |
 
 Gli ultimi due sono **riflessi**: contengono stringhe scelte da chi ha fatto la
 richiesta, e nei decoy HTML vengono escapati. Senza, sarebbe una XSS riflessa in
@@ -312,6 +315,72 @@ ma chiunque riceva da lui un link a quell'URL.
    e il markup del tuo tema renderebbe il decoy riconoscibile a colpo d'occhio.
 3. **Nessun contenuto reale** — nessun nome utente vero, nessun percorso interno
    vero, nessuna versione vera del software.
+
+### Token esca (`{{canary}}`)
+
+Tutto il resto del plugin ragiona per **indizi**: questo UA mente, questo client
+ha collezionato quaranta 404, questo percorso somiglia a una sonda. Sono
+inferenze, ed è per questo che sentinel nasce in osservazione.
+
+Un canary no. Il token esiste **in un solo posto al mondo**: dentro il corpo di
+un decoy servito a un cliente preciso, in un momento preciso. Nessun motore di
+ricerca lo indicizza, nessun link ci porta, nessuno lo digita per sbaglio. Se
+qualcuno lo richiede, ha **letto** il decoy e ha deciso di seguirlo — non è
+un'inferenza, è una certezza. È l'unico segnale del plugin per cui un ban
+immediato è difendibile.
+
+```json5
+// Nel decoy:  TELESCOPE_PATH=telescope-{{canary}}
+// Nelle regole:
+{
+  name: "canary-token-used",
+  action: "block",
+  match: { canary: true },      // true | "known" | "unknown"
+  escalate: { rateLimiterRule: "scanner", ban: true, banSeconds: 86400 },
+}
+```
+
+| Valore | Matcha quando |
+|---|---|
+| `true` (o `"any"`) | La richiesta porta un token, riconosciuto o no |
+| `"known"` | Il token è nostro ed è ancora in registro: **sappiamo a chi l'avevamo dato** |
+| `"unknown"` | Ha la forma giusta ma non è (più) in registro: riavvio, scadenza, o un altro worker in cluster |
+
+**Il confronto vale più del token.** Il registro ricorda a chi era stato
+consegnato, e il log dice chi lo sta usando:
+
+- **stesso client** → uno scanner che segue i link che trova. Automazione.
+- **client diverso** → il contenuto del decoy è passato di mano: chi scandaglia e
+  chi sfrutta sono due macchine, il che descrive un'operazione più strutturata di
+  un bot che gira da solo.
+
+**Il vincolo da non violare scrivendo un decoy:** un token va solo dove serve un
+**gesto deliberato** per richiederlo — testo, o un `<a href>` da cliccare. Mai in
+un `src` o in un `<link rel="stylesheet">`: quelli il browser li scarica da solo,
+la trappola scatterebbe su chiunque apra la pagina, e con `ban: true` il decoy
+diventerebbe un modo di bandire chi lo riceve. Un test tiene i token distribuiti
+fuori da quegli attributi.
+
+La segnalazione (log + allerta) parte **anche se la regola trappola non c'è**:
+legare l'unico segnale certo del plugin alla presenza di una riga in un file
+modificabile dalla GUI sarebbe fragile esattamente dove non ce lo si può
+permettere. E parte **anche in osservazione**: osservare significa non agire
+sulla richiesta, non tacere su ciò che si è visto.
+
+### Ban immediato (`escalate.ban`)
+
+`escalate` ha due intensità, e la differenza non è di grado ma di natura:
+
+| Forma | Effetto | Quando |
+|---|---|---|
+| `{ rateLimiterRule }` | **Conta** un fallimento; sarà `rateLimiter` a decidere dopo quanti tentativi bloccare | Tutto ciò che resta un'inferenza: il singolo evento non prova niente, l'insistenza sì |
+| `{ rateLimiterRule, ban: true }` | **Blocca subito**, saltando il conteggio | Solo dove non c'è niente da accumulare perché il primo evento è già la prova: il canary |
+
+Il ban obbedisce ai tetti dell'enforcement — un sentinel in osservazione che fa
+bandire gente da rateLimiter non sarebbe un osservatorio. Il conteggio invece
+parte anche per una regola in `monitor`: è comportamento storico, ed è il motivo
+per cui il file delle regole raccomanda di non dichiarare `escalate` finché la
+regola è in osservazione.
 
 ### Quando il decoy non viene servito
 
@@ -459,9 +528,9 @@ dichiaralo nella tua informativa.
 
 ## Cosa NON fa (ancora)
 
-Canary token e trappole di livello superiore (finto pannello che registra i
-tentativi), `drop` vero, `tarpit`, coerenza di sessione (cambio di User-Agent
-dentro la stessa sessione = sessione rubata), reputazione locale delle impronte.
+Trappole di livello superiore (finto pannello che registra i tentativi), `drop`
+vero, `tarpit`, coerenza di sessione (cambio di User-Agent dentro la stessa
+sessione = sessione rubata), reputazione locale delle impronte.
 Roadmap completa e stato di avanzamento in [`TODO.md`](./TODO.md).
 
 La lettura dei dati passa dalla GUI di [`adminSentinel`](../adminSentinel/README.it.md);

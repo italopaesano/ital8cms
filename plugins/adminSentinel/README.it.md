@@ -31,6 +31,21 @@ Non «quante ne ho bloccate», che è un numero rassicurante e poco utile, ma di
 cosa è fatto il traffico che bussa: sonde verso CMS estranei, file sensibili,
 metodi anomali, scanner. Aggregato per `category`, con barra proporzionale.
 
+### Token esca (canary)
+
+L'opposto esatto dei sospetti scanner: là ci sono le inferenze, qui le certezze.
+Un token esiste **solo** dentro il decoy consegnato a un client preciso — nessun
+link ci porta, nessuno lo digita per sbaglio — quindi se torna indietro chi l'ha
+usato ha letto il decoy e ha deciso di seguirlo.
+
+La colonna **Stesso client** è quella da guardare: `no` significa che il
+contenuto del decoy è passato di mano, cioè che chi scandaglia e chi sfrutta sono
+due macchine diverse.
+
+La card **resta nascosta** finché nessun token è stato consegnato: una card sempre
+vuota su una dashboard di sicurezza insegna a smettere di guardarla, e questa è
+quella che non si deve smettere di guardare.
+
 ### Sospetti scanner
 
 Client che collezionano molti percorsi distinti falliti. **Non derivano da

@@ -1,6 +1,6 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 2,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   "active": 1,
 
   // Weight 3: prima di analytics (5) e rateLimiter (5). Conta poco in pratica —
@@ -216,10 +216,41 @@
 
     // Host verso cui è ammesso un redirect esterno. VUOTO di default.
     // Rimandare traffico verso un terzo che non ha acconsentito è un abuso verso
-    // di lui, e nei suoi log la sorgente saresti tu. Il 301 verso l'esterno è
-    // sempre vietato: la cache persistente del browser rende irreparabile un
-    // falso positivo su un utente reale.
+    // di lui, e nei suoi log la sorgente saresti tu. I redirect permanenti
+    // (301/308) verso l'esterno sono sempre vietati: la cache del browser rende
+    // irreparabile un falso positivo su un utente reale.
     "allowedRedirectHosts": [],
+
+    // ── Token esca (canary) ──
+    //
+    // Il segnaposto {{canary}} dentro un decoy inserisce un token che esiste solo
+    // in QUELLA risposta. Nessun motore di ricerca lo indicizza, nessun link ci
+    // porta, nessun utente lo digita: se torna indietro, chi l'ha usato ha letto
+    // il decoy e ha deciso di seguirlo. È l'unico segnale del plugin che non è
+    // un'inferenza, e quindi l'unico per cui un ban immediato è difendibile
+    // (si dichiara sulla regola: escalate: { rateLimiterRule, ban: true }).
+    "canary": {
+      // false = nessun token viene coniato; {{canary}} rende comunque una
+      // stringa casuale, ma non registrata (la trappola scatta come "unknown").
+      "enabled": true,
+
+      // Prefisso che rende riconoscibile la FORMA di un token anche quando non è
+      // più in registro (riavvio, scadenza, altro worker in cluster). È un
+      // compromesso dichiarato: rende i token individuabili in una risposta da
+      // chi sappia cosa cercare. Cambiarlo rende inutile quel riconoscimento.
+      // Solo [a-z0-9], da 1 a 8 caratteri.
+      "tokenPrefix": "a7",
+
+      // Ogni risposta con decoy conia un token, e la frequenza la decide chi
+      // bussa: senza tetto, martellare un percorso con decoy sarebbe il modo più
+      // semplice di esaurire la memoria. Sfratto LRU, come il censimento.
+      "maxTokens": 5000,
+
+      // Vita del token dalla CONSEGNA (non dall'ultimo uso: rinfrescarla
+      // lascerebbe all'attaccante il controllo di quanto a lungo occupiamo
+      // memoria per lui). Scaduto, il token resta riconoscibile come "unknown".
+      "ttlHours": 72,
+    },
 
     // ────────────────────────────────────────────────────────────────
     // ALLERTE
@@ -233,6 +264,27 @@
     // l'email dell'account root, e un indirizzo operativo è comunque spesso
     // diverso da quello amministrativo. Vedi TODO.md del plugin.
     "alertRecipient": "",
+
+    "alerts": {
+      // Finestra di silenzio per GENERE di allerta, in minuti.
+      //
+      // Serve perché gli eventi che generano allerte li controlla chi attacca: un
+      // canary lo può richiedere in ciclo. Senza finestra, la notifica diventa il
+      // moltiplicatore dell'attacco — casella satura, SMTP che inizia a
+      // rifiutare, e l'allerta che conta sepolta fra diecimila copie di sé.
+      // Le occorrenze soppresse vengono CONTATE e riportate nel messaggio
+      // successivo: "412 volte nell'ultima ora" vale più di 412 email.
+      //
+      // Il log applicativo non è mai soppresso: la finestra vale solo per la posta.
+      "cooldownMinutes": 60,
+
+      // Sfratti dal censimento delle impronte, per singolo passaggio di sweep,
+      // oltre i quali si viene avvisati. In esercizio normale il traffico vero
+      // converge su poche decine di impronte e gli sfratti restano a zero per
+      // settimane: un tasso improvviso non è capacità da alzare, è la firma di
+      // chi randomizza gli header per gonfiare il censimento. 0 = disattivato.
+      "evictionsPerSweep": 100,
+    },
 
   },
 }

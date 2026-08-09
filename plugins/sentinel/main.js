@@ -52,6 +52,8 @@ const { validateRules, logValidationResults } = require('./lib/ruleValidator');
 const setJson5Key = require('../../core/setJson5Key');
 const { setRuleAction: editRuleAction } = require('./lib/rulesFileEditor');
 const { renderDecoy, resolveDecoyPath } = require('./lib/decoyRenderer');
+const { CanaryRegistry, findCanary } = require('./lib/canaryRegistry');
+const { AlertDispatcher } = require('./lib/alertDispatcher');
 const { SentinelLog } = require('./lib/sentinelLog');
 const { FingerprintCensus, OutcomeCensus } = require('./lib/census');
 const RuleHitCounter = require('./lib/ruleHitCounter');
@@ -71,6 +73,8 @@ let sentinelLog = null;
 let fingerprintCensus = null;
 let outcomeCensus = null;
 let hitCounter = null;
+let canaryRegistry = null;
+let alerts = null;
 let sweepTimer = null;
 let censusSaveTimer = null;
 let gateState = 'running';
@@ -221,20 +225,60 @@ function getRateLimiterRuleNames() {
  * amministrativo. Soluzione provvisoria, annotata nel TODO del plugin.
  */
 function sendAlert(payload) {
-  const recipient = custom && custom.alertRecipient;
-  if (!recipient) return;
+  if (!alerts) return;
+  const { kind, ...rest } = payload || {};
+  alerts.notify(kind || 'diskBudget', rest);
+}
 
-  const mailer = pluginSysRef ? pluginSysRef.getSharedObject('mailer', 'sentinel') : null;
-  if (!mailer || typeof mailer.send !== 'function') return;
+/**
+ * Sorveglia il tasso di sfratto del censimento delle impronte.
+ *
+ * ─── PERCHE UNA CONTROMISURA FA DA SENSORE ────────────────────────────────────
+ * Il tetto del censimento esiste perché la sua chiave — l'impronta — la decide
+ * chi bussa: randomizzare l'ordine degli header genera una firma nuova a ogni
+ * richiesta, e senza tetto la difesa diventerebbe il modo di esaurire la memoria.
+ *
+ * Ma in esercizio normale quel tetto non si tocca mai: il traffico vero converge
+ * su poche decine di impronte, e per settimane gli sfratti restano a zero. Un
+ * tasso di sfratto improvviso non è un problema di capacità da alzare, è la firma
+ * di qualcuno che sta producendo chiavi a raffica — cioè che ha capito come
+ * funziona il censimento e sta provando a gonfiarlo. La contromisura, misurata,
+ * diventa un rilevatore.
+ *
+ * Si guarda il DELTA fra due passaggi, non il totale: il totale cresce e basta,
+ * e dopo un episodio resterebbe sopra soglia per sempre.
+ */
+let lastEvictionCount = 0;
 
+function checkEvictionRate() {
+  if (!fingerprintCensus || !fingerprintCensus.store) return;
+
+  const total = fingerprintCensus.store.evictions || 0;
+  const delta = total - lastEvictionCount;
+  lastEvictionCount = total;
+  if (delta <= 0) return;
+
+  const alertConf = (custom && custom.alerts) || {};
+  const threshold = Number.isFinite(alertConf.evictionsPerSweep) ? alertConf.evictionsPerSweep : 100;
+  if (threshold <= 0 || delta < threshold) return;
+
+  sendAlert({
+    kind: 'evictionRate',
+    evictionsInWindow: delta,
+    evictionsTotal: total,
+    threshold,
+    trackedFingerprints: fingerprintCensus.store.size,
+    hint: 'impronte create a raffica: probabile randomizzazione degli header per gonfiare il censimento',
+  });
+}
+
+/** `mailer`, risolto al momento dell'uso come `rateLimiter`: opzionale, mai una dipendenza. */
+function getMailer() {
+  if (!pluginSysRef) return null;
   try {
-    mailer.send({
-      to: recipient,
-      subject: `[sentinel] ${payload.kind}`,
-      text: JSON.stringify(payload, null, 2),
-    });
-  } catch (err) {
-    log('warn', `invio allerta fallito: ${err.message}`);
+    return pluginSysRef.getSharedObject('mailer', 'sentinel');
+  } catch (_err) {
+    return null;
   }
 }
 
@@ -348,29 +392,130 @@ function buildEvent(ctx, subject, rule, enforced, extra = {}) {
     fpClass: subject.fpClass,
     username: subject.authenticated ? subject.username : null,
     escalated: extra.escalated === true,
+    // Presente solo quando la richiesta portava un token esca: nel log è la riga
+    // che non ha bisogno di essere interpretata.
+    canary: subject.canary
+      ? { token: subject.canary.token, status: subject.canary.status }
+      : null,
   };
 }
 
-/** Alimenta rateLimiter, se la regola lo chiede e il plugin c'è. */
-function escalate(rule, subject) {
+/**
+ * Chiave con cui questo client è noto a rateLimiter.
+ *
+ * Sul traffico autenticato è l'ACCOUNT, non l'indirizzo: un account compromesso
+ * usato da una botnet distribuita su 500 IP alimenta comunque un solo contatore,
+ * e viene colto. L'API di rateLimiter accetta già una chiave esplicita.
+ */
+function clientKeyFor(subject) {
+  return subject.authenticated && subject.username ? `user:${subject.username}` : subject.ip;
+}
+
+/**
+ * Alimenta rateLimiter, se la regola lo chiede e il plugin c'è.
+ *
+ * ─── DUE INTENSITA, UNA SOLA DICHIARAZIONE ────────────────────────────────────
+ * `escalate` senza `ban` **conta un fallimento**: sarà rateLimiter, con la sua
+ * escalation, a decidere dopo quanti tentativi bloccare. È la forma giusta per
+ * tutto ciò che resta un'inferenza — una sonda sospetta, un UA incoerente — dove
+ * il singolo evento non prova niente e l'insistenza sì.
+ *
+ * `escalate: { ban: true }` **blocca subito**, saltando il conteggio. Si
+ * giustifica solo dove non c'è niente da accumulare perché il primo evento è già
+ * la prova: il caso è il canary, un token che esiste solo dentro un decoy e che
+ * nessuno può richiedere senza averlo letto lì.
+ *
+ * ─── IL BAN OBBEDISCE AI TETTI, IL CONTEGGIO NO ───────────────────────────────
+ * Il conteggio parte anche per una regola in `monitor` (comportamento storico,
+ * documentato nel file delle regole: non dichiarare `escalate` finché la regola
+ * è in osservazione). Il ban **no**: forzare un blocco è un'azione, e le azioni
+ * passano dai tetti dell'enforcement. Un sentinel in osservazione che fa bandire
+ * gente da rateLimiter non sarebbe un osservatorio.
+ *
+ * @returns {false|'counted'|'banned'}
+ */
+function escalate(rule, subject, enforced) {
   if (!rule.escalate) return false;
   const rl = getRateLimiter();
-  if (!rl || typeof rl.recordFailure !== 'function') return false;
+  if (!rl) return false;
 
+  const clientId = clientKeyFor(subject);
+  const ruleName = rule.escalate.rateLimiterRule;
+
+  if (rule.escalate.ban && enforced) {
+    if (typeof rl.banClient !== 'function') return false;
+    try {
+      const opts = { tier: 'long' };
+      if (rule.escalate.banSeconds) opts.seconds = rule.escalate.banSeconds;
+      rl.banClient(clientId, ruleName, opts);
+      log('warn', `ban immediato di ${clientId} (regola "${rule.name}" → rateLimiter "${ruleName}")`);
+      return 'banned';
+    } catch (err) {
+      log('warn', `ban immediato fallito: ${err.message}`);
+      return false;
+    }
+  }
+
+  if (typeof rl.recordFailure !== 'function') return false;
   try {
-    // Sul traffico autenticato la chiave è l'ACCOUNT, non l'indirizzo: un account
-    // compromesso usato da una botnet distribuita su 500 IP alimenta comunque un
-    // solo contatore, e viene colto. L'API di rateLimiter accetta già una chiave
-    // esplicita, non serve modificarlo.
-    const clientId = subject.authenticated && subject.username
-      ? `user:${subject.username}`
-      : subject.ip;
-    rl.recordFailure(clientId, rule.escalate.rateLimiterRule);
-    return true;
+    rl.recordFailure(clientId, ruleName);
+    return 'counted';
   } catch (err) {
     log('warn', `escalation verso rateLimiter fallita: ${err.message}`);
     return false;
   }
+}
+
+/**
+ * Registra e segnala l'uso di un token esca.
+ *
+ * ─── IL CONFRONTO CHE VALE PIU DEL TOKEN STESSO ───────────────────────────────
+ * Sapere che un canary è stato usato è già una certezza. Ma il registro sa anche
+ * a CHI era stato consegnato, e il confronto fra consegnatario e utilizzatore
+ * dice una cosa che nessun altro dato del plugin può dire:
+ *
+ *   stesso client   → uno scanner che segue i link che trova. Automazione.
+ *   client DIVERSO  → il contenuto del decoy è passato di mano. Chi scandaglia e
+ *                     chi sfrutta sono due macchine, il che descrive
+ *                     un'operazione più strutturata di un bot che gira da solo.
+ *
+ * Per questo `sameClient` è un campo a sé e non una nota nel testo: è la domanda
+ * a cui si vuole rispondere guardando la dashboard, non una curiosità.
+ */
+function recordCanaryTrigger(subject, rule, enforced, escalation) {
+  const found = subject.canary;
+  const delivered = found.deliveredTo || {};
+  const sameClient = found.status === 'known'
+    ? (delivered.ip === subject.ip || delivered.fp === subject.fp)
+    : null;
+
+  canaryRegistry.recordTrigger({
+    token: found.token,
+    status: found.status,
+    usedByIp: subject.ip,
+    usedByFp: subject.fp,
+    usedOnPath: subject.path,
+    deliveredToIp: delivered.ip || null,
+    deliveredAt: delivered.mintedAt || null,
+    deliveredOnPath: delivered.path || null,
+    sameClient,
+    ruleName: rule ? rule.name : null,
+    enforced,
+  });
+
+  sendAlert({
+    kind: 'canaryTriggered',
+    token: found.token,
+    status: found.status,
+    usedBy: subject.ip,
+    usedOn: subject.path,
+    deliveredTo: delivered.ip || null,
+    deliveredAt: delivered.mintedAt ? new Date(delivered.mintedAt).toISOString() : null,
+    sameClient,
+    rule: rule ? rule.name : '(nessuna regola trappola ha matchato)',
+    enforced,
+    escalation: escalation || 'nessuna',
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -401,6 +546,12 @@ function serveDecoy(ctx, spec, subject) {
     vars: { path: subject.path, ip: subject.ip },
     useCache: !isDebugMode,
     cache: decoyCache,
+    // Il token si conia al momento della consegna e si registra INSIEME a chi lo
+    // riceve: è quel legame — non il token in sé — a rendere il canary più di un
+    // URL improbabile.
+    mintCanary: canaryRegistry
+      ? () => canaryRegistry.mint({ ip: subject.ip, fp: subject.fp, path: subject.path })
+      : undefined,
   });
 
   // File sparito dopo il caricamento (cancellato, permessi cambiati): il gate
@@ -473,6 +624,9 @@ const engine = {
       fingerprint,
       clientIp,
       globalPrefix: ital8Conf.globalPrefix || '',
+      // Cercato UNA volta per richiesta, non una per regola: la scansione tocca
+      // percorso e querystring, e quasi nessuna richiesta contiene un token.
+      canary: findCanary(canaryRegistry, ctx.path, ctx.querystring),
     });
 
     const rule = findFirstMatch(rules, subject, matcher);
@@ -491,10 +645,31 @@ const engine = {
       });
     }
 
-    if (!rule) return null;
+    const enforced = rule ? shouldEnforce(rule, subject) : false;
+    const escalation = rule && (enforced || rule.action === 'monitor')
+      ? escalate(rule, subject, enforced)
+      : false;
+    const escalated = escalation !== false;
 
-    const enforced = shouldEnforce(rule, subject);
-    const escalated = enforced || rule.action === 'monitor' ? escalate(rule, subject) : false;
+    // Un canary usato è l'unico evento del plugin che non ammette interpretazioni,
+    // e si segnala PRIMA di guardare se una regola lo copre.
+    //
+    // Fuori dal `if (rule)` di proposito: il caso in cui nessuna regola matcha è
+    // quello in cui la segnalazione serve di più — significa che il token è stato
+    // usato e la regola trappola è stata cancellata, rinominata o messa dopo una
+    // `allow` che la scavalca. Legare l'unico segnale certo del plugin alla
+    // presenza di una riga in un file modificabile dalla GUI sarebbe fragile
+    // esattamente dove non ce lo si può permettere.
+    //
+    // Si segnala anche in osservazione: osservare significa non agire sulla
+    // richiesta, non tacere su ciò che si è visto. Il dispatcher ha già la
+    // finestra di silenzio che impedisce a chi usa il token in ciclo di
+    // trasformare la notifica nel moltiplicatore del proprio attacco.
+    if (subject.canary && canaryRegistry) {
+      recordCanaryTrigger(subject, rule, enforced, escalation);
+    }
+
+    if (!rule) return null;
 
     if (hitCounter) {
       hitCounter.record(rule.name, {
@@ -581,6 +756,21 @@ module.exports = {
     const dataDir = resolveDataDir(pathPluginFolder, custom);
     const instanceId = custom.instanceId || '';
 
+    // Il dispatcher va creato PRIMA di tutto ciò che può allertare: SentinelLog
+    // emette la soglia del budget disco già durante `init()`.
+    const alertConf = custom.alerts || {};
+    alerts = new AlertDispatcher({
+      log: (level, message) => log(level, message),
+      getRecipient: () => (custom && custom.alertRecipient) || null,
+      getMailer,
+      cooldownMinutes: alertConf.cooldownMinutes,
+    });
+
+    const canaryConf = custom.canary || {};
+    if (canaryConf.enabled !== false) {
+      canaryRegistry = new CanaryRegistry(canaryConf);
+    }
+
     sentinelLog = new SentinelLog(dataDir, { ...(custom.log || {}), instanceId }, {
       log: (level, message) => log(level, message),
       onAlert: (payload) => sendAlert(payload),
@@ -608,7 +798,9 @@ module.exports = {
         try {
           fingerprintCensus.sweep();
           outcomeCensus.sweep();
+          if (canaryRegistry) canaryRegistry.sweep();
           sentinelLog.enforceSizeBudget();
+          checkEvictionRate();
         } catch (err) {
           log('warn', `sweep fallito: ${err.message}`);
         }
@@ -689,6 +881,8 @@ module.exports = {
         pendingLogEvents: sentinelLog ? sentinelLog.pendingSize() : 0,
         fingerprints: fingerprintCensus ? fingerprintCensus.getStats() : null,
         outcomes: outcomeCensus ? outcomeCensus.getStats() : null,
+        canary: canaryRegistry ? canaryRegistry.getStats() : null,
+        alerts: alerts ? alerts.getStats() : null,
       }),
       getRuleSummary: () => (hitCounter ? hitCounter.getSummary() : []),
       getRuleNames: () => compiledRules.map((r) => r.name),
@@ -709,6 +903,10 @@ module.exports = {
         appliesTo: r.appliesTo,
         enabled: r.enabled,
         escalatesTo: r.escalate ? r.escalate.rateLimiterRule : null,
+        // Una regola che bandisce al primo colpo non è "una regola con
+        // escalation": è un'altra cosa, e nella tabella del twin dev'essere
+        // visibile senza aprire il file.
+        bansImmediately: !!(r.escalate && r.escalate.ban),
       })),
       getSuspectedScanners: (minPaths) => (outcomeCensus ? outcomeCensus.getSuspectedScanners(minPaths) : []),
       getConfig: () => JSON.parse(JSON.stringify(custom)),
@@ -729,7 +927,14 @@ module.exports = {
         spec,
         isDebugMode ? loadRules() : compiledRules,
         matcher || new PatternMatcher(),
-        { salt: custom.fingerprintSalt || '', globalPrefix: ital8Conf.globalPrefix || '' },
+        {
+          salt: custom.fingerprintSalt || '',
+          globalPrefix: ital8Conf.globalPrefix || '',
+          // Con il registro vero, incollare nel tester l'URL di un canary appena
+          // scattato risponde alla domanda che si è appena posta chi lo incolla:
+          // «la mia regola trappola lo avrebbe preso?».
+          canaryRegistry,
+        },
       ),
 
       // ── Validazione (prima di un salvataggio dalla GUI) ──

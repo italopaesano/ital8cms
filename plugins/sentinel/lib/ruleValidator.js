@@ -42,6 +42,9 @@ const DECORATING_ACTIONS = ['decoy', 'redirect', 'tarpit'];
 
 const VALID_APPLIES_TO = ['anonymous', 'authenticated', 'any'];
 
+// Valori ammessi dalla foglia `canary` (oltre a `true`, che vale "qualunque").
+const VALID_CANARY_STATES = ['any', 'known', 'unknown'];
+
 // Stati ammessi per un redirect. 301 e 308 sono permanenti e restano in cache
 // nel browser: verso l'esterno sono vietati più sotto, perché un falso positivo
 // dirotterebbe un utente reale per mesi e non si ripara riavviando.
@@ -289,6 +292,21 @@ function compileMatchNode(node, where, errors) {
       set.add(s);
     }
     out.status = set;
+    conditionCount++;
+  }
+
+  if (node.canary !== undefined) {
+    // `true` sta per "qualunque token". Gli stati sono due gradi di certezza:
+    // `known` è un token che abbiamo coniato noi e di cui sappiamo il
+    // destinatario; `unknown` ha la forma giusta ma non è (più) in registro —
+    // riavvio, scadenza, o un worker diverso in cluster.
+    if (node.canary !== true && !VALID_CANARY_STATES.includes(node.canary)) {
+      errors.push(
+        `${where}.canary: atteso true oppure uno fra ${VALID_CANARY_STATES.join(', ')}`
+      );
+      return null;
+    }
+    out.canary = node.canary;
     conditionCount++;
   }
 
@@ -603,7 +621,42 @@ function validateRules(rulesData, options = {}) {
           'protectedRoutes.json5 del plugin rateLimiter (l\'escalation userà i default)'
         );
       }
-      compiled.escalate = { rateLimiterRule: escalate.rateLimiterRule };
+
+      // ── Ban immediato ──
+      // `escalate` senza `ban` CONTA un fallimento e lascia decidere a
+      // rateLimiter dopo quanti tentativi bloccare. Con `ban: true` si salta il
+      // conteggio e si blocca subito: è la risposta giusta a un canary usato —
+      // dove non c'è niente da accumulare, il primo evento è già la prova — e
+      // quella sbagliata ovunque ci sia un margine di inferenza.
+      const ban = escalate.ban === true;
+      if (escalate.ban !== undefined && typeof escalate.ban !== 'boolean') {
+        errors.push(`${where} ("${name}"): escalate.ban deve essere true o false`);
+        continue;
+      }
+      if (escalate.banSeconds !== undefined
+          && (!Number.isInteger(escalate.banSeconds) || escalate.banSeconds <= 0)) {
+        errors.push(`${where} ("${name}"): escalate.banSeconds deve essere un intero positivo`);
+        continue;
+      }
+      if (escalate.banSeconds !== undefined && !ban) {
+        warnings.push(
+          `regola "${name}": escalate.banSeconds è dichiarato ma escalate.ban è falso — ` +
+          'il valore non ha effetto'
+        );
+      }
+      // Un ban su una regola che non agisce non scatterebbe mai (l'enforcement è
+      // la precondizione), e crederlo attivo è peggio che non averlo scritto.
+      if (ban && (action === 'monitor' || action === 'allow')) {
+        warnings.push(
+          `regola "${name}": escalate.ban su una regola "${action}" non avrà mai effetto — ` +
+          'il ban richiede che l\'azione sia applicata'
+        );
+      }
+      compiled.escalate = {
+        rateLimiterRule: escalate.rateLimiterRule,
+        ban,
+        banSeconds: Number.isInteger(escalate.banSeconds) ? escalate.banSeconds : null,
+      };
     }
 
     seenNames.add(name);

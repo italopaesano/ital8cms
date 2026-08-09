@@ -31,6 +31,7 @@
 const { buildSubject, appliesToSubject } = require('./ruleMatcher');
 const { buildFingerprint, fpClassMatches } = require('./requestFingerprint');
 const { ipMatchesAny } = require('./ipMatcher');
+const { findCanary } = require('./canaryRegistry');
 
 /**
  * Insieme di header che un browser moderno manda davvero, nell'ordine in cui li
@@ -176,6 +177,14 @@ function traceLeaf(leaf, node, subject, matcher) {
     case 'status':
       return entry(subject.status !== null && node.status.has(subject.status),
         Array.from(node.status), subject.status === null ? '(non ancora noto)' : subject.status);
+    case 'canary': {
+      const found = subject.canary;
+      const wantAny = node.canary === true || node.canary === 'any';
+      const matched = !!found && (wantAny || found.status === node.canary);
+      return entry(matched,
+        wantAny ? 'un token qualsiasi' : `token ${node.canary}`,
+        found ? `${found.token} (${found.status})` : '(nessun token nella richiesta)');
+    }
     case 'authenticated':
       return entry(subject.authenticated === node.authenticated, node.authenticated, subject.authenticated);
     case 'roleIds':
@@ -192,7 +201,7 @@ function traceLeaf(leaf, node, subject, matcher) {
 
 const LEAF_KEYS = [
   'path', 'extension', 'method', 'userAgent', 'header', 'query',
-  'ip', 'status', 'authenticated', 'roleIds', 'fingerprint', 'fingerprintClass',
+  'ip', 'status', 'canary', 'authenticated', 'roleIds', 'fingerprint', 'fingerprintClass',
 ];
 
 /**
@@ -249,6 +258,7 @@ function traceNode(node, subject, matcher, label = 'match') {
  * @param {object} [options]
  * @param {string} [options.salt]
  * @param {string} [options.globalPrefix]
+ * @param {object} [options.canaryRegistry] - per riconoscere un token nella prova
  * @returns {object}
  */
 function testRequest(spec, rules, matcher, options = {}) {
@@ -258,6 +268,11 @@ function testRequest(spec, rules, matcher, options = {}) {
     fingerprint,
     clientIp: ctx.ip,
     globalPrefix: options.globalPrefix || '',
+    // Il tester deve vedere i token veri: incollare l'URL di un canary appena
+    // scattato e capire perché la regola ha (o non ha) reagito è esattamente il
+    // caso d'uso. Cercarlo qui, e non nel matcher, tiene la ricerca a una sola
+    // volta per prova come a runtime.
+    canary: findCanary(options.canaryRegistry, ctx.path, ctx.querystring),
   });
   if (Number.isInteger(spec.status)) subject.status = spec.status;
 
@@ -306,6 +321,7 @@ function testRequest(spec, rules, matcher, options = {}) {
       authenticated: subject.authenticated,
       roleIds: subject.roleIds,
       status: subject.status,
+      canary: subject.canary,
       fp: subject.fp,
       fpClass: subject.fpClass,
     },

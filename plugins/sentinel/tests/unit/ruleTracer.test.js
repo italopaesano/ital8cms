@@ -3,8 +3,15 @@ const { validateRules } = require('../../lib/ruleValidator');
 const { buildSubject, evaluateNode } = require('../../lib/ruleMatcher');
 const { buildFingerprint } = require('../../lib/requestFingerprint');
 const { testRequest, traceNode, buildSyntheticCtx } = require('../../lib/ruleTracer');
+const { CanaryRegistry, findCanary } = require('../../lib/canaryRegistry');
 
 const matcher = new PatternMatcher();
+
+// Registro condiviso dai test: un token che il registro conosce e uno che ha
+// solo la forma giusta, per coprire entrambi gli stati della foglia `canary`.
+const canaryRegistry = new CanaryRegistry();
+const KNOWN_TOKEN = canaryRegistry.mint({ ip: '203.0.113.9', fp: 'fp-consegna', path: '/backup/' });
+const UNKNOWN_TOKEN = 'a7zzzzzzzzzzzzzzzzzzzzzz';
 
 function compileRules(raw) {
   const result = validateRules({ rules: raw });
@@ -18,6 +25,7 @@ function subjectFor(spec) {
     fingerprint: buildFingerprint(ctx),
     clientIp: ctx.ip,
     globalPrefix: '',
+    canary: findCanary(canaryRegistry, ctx.path, ctx.querystring),
   });
   if (Number.isInteger(spec.status)) s.status = spec.status;
   return s;
@@ -85,6 +93,9 @@ describe('conformità fra il valutatore veloce e quello che racconta', () => {
     { fingerprintClass: { coherent: false } },
     { fingerprintClass: { family: 'curl' } },
     { status: [404] },
+    { canary: true },
+    { canary: 'known' },
+    { canary: 'unknown' },
     { extension: ['php'], method: ['GET'] },
     { all: [{ path: '/a.php' }, { method: ['GET'] }] },
     { any: [{ path: '/nope' }, { extension: ['php'] }] },
@@ -101,6 +112,8 @@ describe('conformità fra il valutatore veloce e quello che racconta', () => {
     { path: '/a.php', authenticated: true, roleIds: [1], headers: { 'User-Agent': 'curl/8' } },
     { path: '/a.php', ip: '10.1.2.3', headers: {} },
     { path: '/a.php', status: 404, headers: {} },
+    { path: `/backup-${KNOWN_TOKEN}.tar.gz`, headers: {} },
+    { path: `/telescope-${UNKNOWN_TOKEN}`, headers: {} },
   ];
 
   for (const node of NODES) {
@@ -124,7 +137,7 @@ describe('testRequest', () => {
     { name: 'spenta', enabled: false, action: 'monitor', match: { path: '/spenta' } },
   ]);
 
-  const run = (spec) => testRequest(spec, rules, matcher, {});
+  const run = (spec) => testRequest(spec, rules, matcher, { canaryRegistry });
 
   test('riporta la regola vincente', () => {
     const r = run({ path: '/x.php' });

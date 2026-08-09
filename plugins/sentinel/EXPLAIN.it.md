@@ -188,6 +188,106 @@ CR e LF nei valori sono rifiutati **al caricamento** e non lasciati a Node, che
 pure solleverebbe un'eccezione: con `strictValidation: false` diventerebbero un
 500 a ogni richiesta che matcha, scoperto dal traffico invece che dall'avvio.
 
+## 4-ter. Il canary: perché è l'unico segnale su cui si può bandire
+
+Il resto del plugin produce **inferenze**. L'UA incoerente è un fortissimo
+indizio, non una prova: esiste il proxy aziendale che riscrive gli header,
+esiste il client esotico. Le sonde `.php` sono quasi sempre ostili — quasi. È il
+motivo per cui l'intera architettura è costruita attorno all'osservare prima e
+promuovere poi.
+
+Il canary rompe questa simmetria. Il token esiste in un solo posto: dentro il
+corpo di un decoy consegnato a un cliente preciso in un istante preciso. Non è
+indicizzato, non è linkato, non è indovinabile (22 caratteri base36 da
+`crypto.randomBytes`, ~113 bit). Non esiste la richiesta accidentale. Perciò
+`escalate: { ban: true }` — che altrove sarebbe una pessima idea — qui è la
+risposta proporzionata, e infatti è l'unico posto del file di regole distribuito
+dove viene suggerito.
+
+### Il campo che vale più del token: `sameClient`
+
+Il registro ricorda **a chi** il token era stato consegnato. Quando torna
+indietro, il confronto dice qualcosa che nessun altro dato del plugin può dire:
+
+| Confronto | Lettura |
+|---|---|
+| Stesso IP o stessa impronta | Uno scanner che segue i link che trova. Automazione ordinaria |
+| Client **diverso** | Il contenuto del decoy è passato di mano: chi scandaglia e chi sfrutta sono due macchine, il che descrive un'operazione più strutturata di un bot che gira da solo |
+
+Per questo `sameClient` è un campo a sé nella dashboard e non una nota nel testo.
+
+### Tre decisioni che sembrano dettagli e non lo sono
+
+**Il token non si consuma, e non si rinfresca.** Non si consuma perché un attaccante
+che lo usa dieci volte deve inciampare dieci volte: l'insistenza è essa stessa un
+segnale, e un token monouso la trasformerebbe in silenzio dopo la prima
+richiesta. Non si rinfresca perché la vita si conta dalla *consegna*: se
+verificarlo ne allungasse la scadenza, basterebbe usarlo a intervalli regolari
+per tenerlo vivo per sempre — cioè lasciare all'attaccante il controllo di quanta
+memoria gli dedichiamo.
+
+**`unknown` non è «non è un canary».** Un token può non essere in registro per
+riavvio, scadenza o perché coniato da un altro worker. In tutti e tre i casi
+resta un token: nessun visitatore reale invia per caso una stringa di quella
+forma. Da qui il prefisso riconoscibile e i tre valori della foglia (`true`,
+`known`, `unknown`) invece di un booleano — sono gradi di certezza diversi, e la
+regola sceglie quale le basta.
+
+**La segnalazione non passa dalle regole.** `recordCanaryTrigger` sta **fuori**
+dal `if (rule)`: il caso in cui nessuna regola matcha è quello in cui la
+segnalazione serve di più, perché significa che la regola trappola è stata
+cancellata, rinominata, o messa dopo una `allow` che la scavalca. Legare l'unico
+segnale certo del plugin alla presenza di una riga in un file modificabile dalla
+GUI sarebbe fragile esattamente dove non ce lo si può permettere.
+
+### Il vincolo di scrittura dei decoy con canary
+
+Un token va solo dove serve un **gesto deliberato** per richiederlo: testo, o un
+`<a href>` da cliccare. Mai in un `src` o in un `<link rel="stylesheet">`.
+
+Quelli il browser li scarica **da solo**: la trappola scatterebbe su chiunque
+apra la pagina, e con `ban: true` il decoy diventerebbe un modo di bandire chi lo
+riceve — la trappola rivolta contro di sé. Un test in `decoyRenderer.test.js`
+scandisce i file distribuiti e fallisce se un `{{canary}}` compare su una riga con
+`src=` o `<link`.
+
+## 4-quater. Le allerte: il problema non è mandarle
+
+Un `mailer.send()` dentro il percorso di un evento sarebbe il moltiplicatore
+dell'attacco. Gli eventi che generano allerte li **controlla chi attacca**: un
+canary lo può richiedere in ciclo, la crescita del log la detta lui. Diecimila
+email saturano la casella, il provider SMTP inizia a rifiutare, e l'allerta che
+conta arriva mescolata a novemilanovecento copie di sé stessa.
+
+`alertDispatcher.js` ha quindi due regole:
+
+1. **Finestra di silenzio per genere** (default 60 minuti). Le occorrenze
+   successive vengono **contate** e riportate nel messaggio dopo. «Canary
+   scattato 412 volte nell'ultima ora» descrive l'attacco meglio di 412 email
+   identiche.
+2. **Il log non è mai soppresso.** La finestra vale solo per la posta. Un'allerta
+   che esiste solo se la posta funziona manca proprio quando serve — e la posta è
+   la prima cosa che smette di funzionare quando la macchina è sotto pressione.
+
+L'invio è deliberatamente **senza `await`**: chi chiama sta servendo una
+richiesta, e l'attesa della coda SMTP non deve entrare nel suo tempo di risposta.
+`mailer` ha una coda persistente propria, quindi il messaggio non si perde; la
+promise viene comunque intercettata, altrimenti un rifiuto diventerebbe un
+unhandled rejection e la rete di sicurezza di processo chiuderebbe il server.
+
+### Il tasso di sfratto come sensore
+
+`checkEvictionRate()` guarda il **delta** fra due passaggi di sweep, non il
+totale — il totale cresce e basta, e dopo un episodio resterebbe sopra soglia per
+sempre.
+
+Il tetto del censimento esiste perché la chiave è l'impronta, che l'attaccante
+controlla. Ma in esercizio normale quel tetto non si tocca mai: il traffico vero
+converge su poche decine di impronte e gli sfratti restano a zero per settimane.
+Un tasso improvviso non è capacità da alzare, è la firma di chi ha capito come
+funziona il censimento e sta provando a gonfiarlo. La contromisura, **misurata**,
+diventa un rilevatore.
+
 ## 5. Il fingerprint: la scelta che sembra un errore
 
 **Lo User-Agent non entra nel calcolo dell'impronta.** Rileggendo
@@ -344,6 +444,8 @@ Emerso provando il plugin sul server reale, non ragionandoci sopra.
 | `lib/ruleTracer.js` | valutatore che spiega, usato dal tester |
 | `lib/rulesFileEditor.js` | modifica chirurgica dell'`action` preservando i commenti |
 | `lib/decoyRenderer.js` | risoluzione, resa e tipo dei contenuti fittizi |
+| `lib/canaryRegistry.js` | conio dei token esca, memoria del destinatario, riconoscimento |
+| `lib/alertDispatcher.js` | canale unico delle allerte, con finestra di silenzio per genere |
 
 Nel core: `createSentinelGate` in `core/priorityMiddlewares/runtimeGate.js`,
 montaggio in `priorityMiddlewares.js`, iniezione del motore in `index.js`,

@@ -76,7 +76,7 @@ rende leggibile e governabile quello che c'è, poi si aggiungono le azioni.**
 | ~~**2**~~ | ~~Promozione e retrocessione~~ ✅ | Completa le fasi 2 e 3. **La retrocessione conta più della promozione**: un percorso a senso unico invita a non imboccarlo mai |
 | ~~**3**~~ | ~~Tester delle regole~~ ✅ | Serve appena si comincia a scrivere regole proprie, ed è il prerequisito per scrivere in sicurezza quelle dei passi successivi |
 | ~~**4**~~ | ~~`redirect` + `decoy` L0/L1~~ ✅ | Gate, validatore e non-interferenza erano **già scritti e testati**: mancava solo chi produce il corpo. Miglior rapporto valore/codice nuovo |
-| **5** | Canary (`decoy` L2) + `banClient` + allerte | Il salto da difesa passiva a **sensore**: certezza di un attaccante attivo, non inferenza |
+| ~~**5**~~ | ~~Canary (`decoy` L2) + `banClient` + allerte~~ ✅ | Il salto da difesa passiva a **sensore**: certezza di un attaccante attivo, non inferenza |
 | **6** | Coerenza di sessione | Miglior segnale del blocco autenticato, ma introduce stato e foglie nuove: meglio quando la GUI può mostrarne gli effetti |
 | **7** | `drop` reale e `tarpit` | Le uniche azioni che possono farti male da sole (retry aggressivi, esaurimento di file descriptor) |
 | **8** | Reputazione locale e apprendimento | Poggia sul censimento, che già raccoglie i dati: qui si aggiunge solo l'inferenza |
@@ -124,8 +124,20 @@ Due cose emerse strada facendo, entrambe scoperte da un test:
 - `308` verso l'esterno è vietato quanto `301` — è il 301 dei metodi non-GET, con
   la stessa cache persistente nel browser.
 
-**Passo 5 — Canary.** Token nel decoy + regola trappola + `banClient()` immediato
-+ notifica `mailer` (che chiude anche l'allerta sul tasso di eviction, §6).
+**Passo 5 — Canary.** ✅ Fatto. `lib/canaryRegistry.js` (conio con
+`crypto.randomBytes`, memoria del destinatario, tetto LRU, riconoscimento anche
+dei token scaduti come `unknown`), segnaposto `{{canary}}`, foglia `canary` nel
+matcher/validatore/tracciatore, `escalate.ban`, `lib/alertDispatcher.js`, card
+Canary nella GUI del twin.
+
+Due decisioni non ovvie prese qui:
+- **`unknown` non è «non è un canary».** Riavvio, scadenza o un altro worker in
+  cluster tolgono il token dal registro, ma nessun visitatore reale invia per caso
+  una stringa di quella forma. Da qui il prefisso riconoscibile e i tre valori
+  della foglia invece di un booleano.
+- **Il ban obbedisce ai tetti, il conteggio no.** Il conteggio resta il
+  comportamento storico (parte anche in `monitor`); forzare un blocco è un'azione,
+  e le azioni passano dai tetti dell'enforcement.
 
 **Passo 6 — Coerenza di sessione.** `BoundedStore` per sessione con tetto e TTL
 (le sessioni costano nulla da creare: altra chiave controllata dall'attaccante),
@@ -291,10 +303,20 @@ Scala progressiva: ogni livello presuppone il precedente.
       «questo è finto» rivela il filtro a chi bussa. Le descrizioni stanno in
       `decoys/default/README.md`; un test cerca le parole rivelatrici nei file
       distribuiti.
-- [ ] **Livello 2 — Canary / honeytoken.** Il decoy contiene credenziali o URL
-      fasulli; una regola trappola sorveglia quegli URL. Se qualcuno li usa hai la
-      **certezza** di un attaccante attivo (non un'inferenza) → ban immediato via
-      `rateLimiter.banClient()`.
+- [x] **Livello 2 — Canary / honeytoken.** Il segnaposto `{{canary}}` conia un
+      token che esiste **solo** in quella risposta e ne registra il destinatario;
+      la foglia `canary` (`true` / `"known"` / `"unknown"`) lo riconosce quando
+      torna indietro. Se qualcuno lo usa hai la **certezza** di un attaccante
+      attivo → ban immediato con `escalate: { ban: true }`.
+      - Il confronto fra chi ha ricevuto il token e chi lo usa (`sameClient`) dice
+        se scansione e sfruttamento sono la stessa macchina.
+      - La segnalazione (log + allerta) parte anche **senza** regola trappola e
+        anche in osservazione: l'unico segnale certo del plugin non deve dipendere
+        da una riga in un file modificabile dalla GUI.
+      - ⚠ **Vincolo:** un token va solo dove serve un gesto deliberato per
+        richiederlo (testo, `<a href>`). Mai in `src` o `<link rel>`: il browser li
+        scarica da solo e la trappola scatterebbe su chi riceve il decoy. Presidiato
+        da un test sui file distribuiti.
 - [ ] **Livello 3 — Finto pannello di amministrazione.** Login fittizio che risponde
       sempre "credenziali errate" e registra i tentativi: rivela quali liste di
       credenziali ti prendono di mira, e se compaiono username reali hai la prova
@@ -430,8 +452,10 @@ e accumulare statistiche locali sulle firme viste.
       oggi restituisce `{}` — non esiste alcuna API per risolvere l'email di root —
       e comunque un indirizzo operativo (monitoraggio, on-call) è spesso diverso
       dall'account amministrativo. Vedi §7 per l'aggancio a `mailer`.
-- [ ] La stessa allerta vale per il tasso di eviction anomalo (§14) e per gli
+- [x] La stessa allerta vale per il tasso di eviction anomalo (§14) e per gli
       eventi gravi (canary scattato): un unico canale di notifica, più soglie.
+      Il tasso di sfratto si guarda come **delta** fra due sweep, non come totale
+      (il totale cresce e basta, e resterebbe sopra soglia per sempre).
 
 ### Osservazione dell'esito (non solo dei blocchi) — **in v1**
 
@@ -456,12 +480,18 @@ e accumulare statistiche locali sulle firme viste.
       (altrimenti rateLimiter assente ⇒ sentinel `incomplete` ⇒ firewall spento)
 - [x] Chiave per account (`user:<username>`) invece dell'IP sul traffico autenticato:
       coglie un account compromesso anche se distribuito su molti IP
-- [ ] `banClient()` immediato per le regole gravi (es. canary token usato)
+- [x] `banClient()` immediato per le regole gravi (es. canary token usato), via
+      `escalate: { rateLimiterRule, ban: true, banSeconds }`. **Obbedisce ai tetti
+      dell'enforcement**, al contrario del semplice conteggio: un sentinel in
+      osservazione che fa bandire gente da rateLimiter non sarebbe un osservatorio.
 
 ### Altre interconnessioni possibili (da valutare)
 
-- [ ] `mailer`: notifica su evento grave (canary scattato, attacco massivo).
-      Stesso modello: lazy, opzionale, nessuna dipendenza dichiarata.
+- [x] `mailer`: notifica su evento grave (canary scattato, tasso di sfratto
+      anomalo, budget disco). Stesso modello: lazy, opzionale, nessuna dipendenza
+      dichiarata. Canale unico in `lib/alertDispatcher.js`, con **finestra di
+      silenzio per genere** — senza, la notifica sarebbe il moltiplicatore
+      dell'attacco, perché gli eventi che la generano li controlla chi attacca.
 - [ ] Fallimenti CSRF ripetuti come segnale di automazione
       (`csrfProtection` enforce nel route-wrap, quindi a valle di sentinel:
       servirebbe un canale dedicato)
@@ -586,11 +616,18 @@ disco. Stessa forma di problema che `rateLimiter` risolve con lo sweep periodico
 - [ ] **Coerenza di sessione** (primo UA/IP visto per sessione): tetto + TTL
 - [x] **Osservazione degli esiti per IP**: tetto + TTL
 - [x] Sweep periodico delle strutture scadute (modello: `rateLimiter` `sweepIntervalSeconds`)
+- [x] **Registro dei token canary**: tetto + TTL. Ogni risposta con decoy conia un
+      token, e la frequenza delle risposte la decide chi bussa: senza tetto,
+      martellare un percorso con decoy sarebbe il modo più semplice di esaurire la
+      memoria — la trappola diventerebbe il vettore
 - [x] Contatore delle eviction esposto nelle statistiche: un tasso di eviction alto
       **è esso stesso il segnale** di un attacco che randomizza le firme
-- [ ] Memoizzazione del fingerprint sul socket: con keep-alive molte richieste
+- [x] Allerta sul tasso di sfratto (delta fra due sweep, soglia
+      `alerts.evictionsPerSweep`): il sensore diventa una notifica, non solo un
+      numero da andare a guardare
+- [x] Memoizzazione del fingerprint sul socket: con keep-alive molte richieste
       condividono la connessione e gli header cambiano poco → si evita di
-      ricalcolare l'hash decine di volte per pagina
+      ricalcolare l'hash decine di volte per pagina *(fatto nel Passo 0)*
 
 ### Salt del fingerprint
 

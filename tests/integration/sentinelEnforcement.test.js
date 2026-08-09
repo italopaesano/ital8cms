@@ -69,6 +69,25 @@ const TEST_RULES = {
       match: { path: '/wp-login.php' },
       decoy: { file: 'wp-login.html', headers: { 'X-Powered-By': 'PHP/7.4.33' } },
     },
+    // Il ciclo completo del canary: questo decoy conia un token, e la regola
+    // trappola più sotto lo riconosce quando torna indietro.
+    {
+      name: 'test-decoy-canary',
+      enabled: true,
+      category: 'sensitive-file',
+      description: 'decoy con token esca: consegna un canary a chi cerca il .env',
+      action: 'decoy',
+      match: { path: '/zzz-canary-source' },
+      decoy: { file: 'env.txt' },
+    },
+    {
+      name: 'test-canary-used',
+      enabled: true,
+      category: 'canary',
+      description: 'trappola: qualcuno ha usato un token consegnato da un decoy',
+      action: 'block',
+      match: { canary: 'known' },
+    },
     {
       name: 'test-decoy-assente',
       enabled: true,
@@ -380,6 +399,65 @@ describe('sentinel — decoy e redirect producono la loro risposta', () => {
     expect(redirect.length).toBeGreaterThan(0);
     expect(redirect[0].ruleName).toBe('test-redirect-interno');
     expect(redirect[0].enforced).toBe(true);
+  });
+});
+
+// Il ciclo completo del token esca, che nessun unit test può coprire: il token
+// nasce dentro la risposta di un decoy, viene registrato insieme al destinatario,
+// e deve essere riconosciuto quando torna indietro su un'ALTRA richiesta. Sono
+// due richieste HTTP separate legate da uno stato in memoria del processo — che
+// è esattamente ciò che un test in-process non prova.
+describe('sentinel — il canary chiude il cerchio', () => {
+  let token = null;
+
+  test('il decoy consegna un token della forma attesa', async () => {
+    const r = await httpGet('/zzz-canary-source');
+    expect(r.status).toBe(200);
+
+    const found = r.body.match(/\ba7[a-z0-9]{22}\b/);
+    expect(found).not.toBeNull();
+    [token] = found;
+
+    // Due consegne, due token diversi: il legame è col singolo destinatario.
+    const second = await httpGet('/zzz-canary-source');
+    expect(second.body).not.toContain(token);
+  });
+
+  test('usare il token fa scattare la trappola', async () => {
+    const r = await httpGet(`/telescope-${token}/requests`);
+    expect(r.status).toBe(404); // action: block
+
+    await sleep(300);
+    const evento = eventsFor(`/telescope-${token}/requests`)[0];
+    expect(evento).toBeDefined();
+    expect(evento.ruleName).toBe('test-canary-used');
+    expect(evento.enforced).toBe(true);
+    expect(evento.canary).toEqual({ token, status: 'known' });
+  });
+
+  test('il token viaggia anche nella querystring', async () => {
+    const r = await httpGet(`/zzz-download?file=${token}`);
+    expect(r.status).toBe(404);
+  });
+
+  test('una stringa della forma giusta ma mai coniata NON è "known"', async () => {
+    // La regola di prova chiede `known`: un token orfano non deve bastare, o la
+    // distinzione fra i due gradi di certezza non varrebbe niente.
+    const orfano = 'a7aaaaaaaaaaaaaaaaaaaaaa';
+    const r = await httpGet(`/telescope-${orfano}/requests`);
+    expect(r.status).toBe(404); // il file non esiste comunque
+
+    await sleep(300);
+    const eventi = eventsFor(`/telescope-${orfano}/requests`);
+    // Nessun evento della regola trappola: al più l'osservazione dell'esito.
+    expect(eventi.filter((e) => e.ruleName === 'test-canary-used')).toHaveLength(0);
+  });
+
+  test('una richiesta normale non porta token', async () => {
+    await httpGet('/zzz-normale');
+    await sleep(300);
+    const eventi = eventsFor('/zzz-normale');
+    for (const e of eventi) expect(e.canary).toBeNull();
   });
 });
 

@@ -134,6 +134,73 @@ describe('renderTemplate — segnaposto', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+describe('{{canary}} — il segnaposto che trasforma il decoy in un sensore', () => {
+  test('usa il token coniato dalla funzione fornita', () => {
+    const out = renderTemplate('url=/x/{{canary}}', {}, false, () => 'a7abcdefgh');
+    expect(out).toBe('url=/x/a7abcdefgh');
+  });
+
+  test('più occorrenze nello stesso file danno lo STESSO token', () => {
+    // Due token diversi nella stessa pagina si contraddirebbero — un backup
+    // nominato in un link e poi con un id diverso è una pagina che non quadra —
+    // e raddoppierebbero le voci di registro per una sola consegna.
+    let coniati = 0;
+    const out = renderTemplate('{{canary}} … {{canary}} … {{canary}}', {}, false, () => {
+      coniati++;
+      return `token${coniati}`;
+    });
+    expect(coniati).toBe(1);
+    expect(out).toBe('token1 … token1 … token1');
+  });
+
+  test('il conio avviene solo se il segnaposto c\'è davvero', () => {
+    let coniati = 0;
+    renderTemplate('nessun segnaposto qui', {}, false, () => { coniati++; return 'x'; });
+    expect(coniati).toBe(0);
+  });
+
+  test('senza funzione di conio rende comunque una stringa, mai il letterale', () => {
+    // Fail-soft: la trappola scatterà come "unknown", ma un `{{canary}}` servito
+    // così com'è rivelerebbe il meccanismo a chi legge il decoy.
+    const out = renderTemplate('url=/x/{{canary}}', {}, false);
+    expect(out).not.toContain('{{canary}}');
+    expect(out).toMatch(/^url=\/x\/[a-z0-9]{24}$/);
+  });
+
+  test('renderDecoy passa la funzione di conio al template', () => {
+    writeDecoy(SHIPPED_SUBDIR, 'trap.txt', 'file=/backup-{{canary}}.tar.gz');
+    const out = renderDecoy({
+      pluginFolder: sandbox,
+      spec: { file: 'trap.txt' },
+      vars: {},
+      mintCanary: () => 'a7deadbeef',
+    });
+    expect(out.body).toBe('file=/backup-a7deadbeef.tar.gz');
+  });
+
+  test('con la cache attiva il token cambia comunque a ogni risposta', () => {
+    // La cache conserva il TEMPLATE, non il risultato: un token in cache sarebbe
+    // lo stesso per tutti, e il legame con il singolo destinatario — che è tutto
+    // il valore del canary — sparirebbe.
+    writeDecoy(SHIPPED_SUBDIR, 'trap.txt', '{{canary}}');
+    const cache = new Map();
+    let n = 0;
+    const opts = {
+      pluginFolder: sandbox,
+      spec: { file: 'trap.txt' },
+      vars: {},
+      useCache: true,
+      cache,
+      mintCanary: () => `token${++n}`,
+    };
+
+    expect(renderDecoy(opts).body).toBe('token1');
+    expect(renderDecoy(opts).body).toBe('token2');
+    expect(cache.size).toBe(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 describe('renderDecoy — resa completa', () => {
   test('rende il file e ne deduce il tipo dall\'estensione', () => {
     writeDecoy(SHIPPED_SUBDIR, 'fake.html', '<p>{{path}}</p>');
@@ -231,9 +298,26 @@ describe('i decoy distribuiti col plugin', () => {
       pluginFolder: pluginRoot,
       spec: { file: fileName },
       vars: { path: '/wp-login.php', ip: '203.0.113.7' },
+      mintCanary: () => 'a7tokendiprova',
     });
     expect(out).not.toBeNull();
-    expect(out.body).not.toMatch(/\{\{(now|today|timestamp|random|choice|path|ip)\b/);
+    expect(out.body).not.toMatch(/\{\{(now|today|timestamp|random|choice|path|ip|canary)\b/);
+  });
+
+  test('nessun decoy distribuito mette un canary dove il client lo scarica da solo', () => {
+    // IL vincolo del livello 2. Un token dentro un `src` o un `<link rel=…>`
+    // verrebbe richiesto AUTOMATICAMENTE dal browser di chiunque apra la pagina:
+    // la trappola scatterebbe da sola, e con `ban: true` il decoy diventerebbe
+    // un modo di bandire chi lo riceve. I token vanno solo dove serve un gesto
+    // deliberato per richiederli — testo, o un `<a href>` da cliccare.
+    for (const fileName of shipped) {
+      const body = fs.readFileSync(path.join(shippedDir, fileName), 'utf8');
+      for (const line of body.split('\n')) {
+        if (!line.includes('{{canary}}')) continue;
+        expect(line).not.toMatch(/\b(src|srcset)\s*=/i);
+        expect(line).not.toMatch(/<link\b/i);
+      }
+    }
   });
 
   test.each(shipped)('%s non si annuncia come falso', (fileName) => {

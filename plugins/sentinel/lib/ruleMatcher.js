@@ -71,6 +71,9 @@ function buildSubject(ctx, deps) {
     fp: fingerprint.fp,
     fpClass: fingerprint.fpClass,
     status: null,          // valorizzato solo nella valutazione post-risposta
+    // Token esca trovato nella richiesta, cercato UNA volta da chi costruisce il
+    // soggetto (il registro dei token non è affare del matcher). `null` = nessuno.
+    canary: deps.canary || null,
     _queryDecoded: undefined, // memo di decodedQuery: una decodifica per richiesta
   };
 }
@@ -170,6 +173,25 @@ function matchQuery(subject, compiled) {
   return false;
 }
 
+/**
+ * La richiesta porta con sé un token esca?
+ *
+ * Il token viene cercato **una volta per richiesta** e memoizzato sul soggetto:
+ * la scansione tocca percorso e querystring, e rifarla per ogni regola sarebbe
+ * un costo pagato da tutto il traffico per una condizione che quasi nessuna
+ * richiesta soddisfa.
+ *
+ * `subject.canary` è `null` (nessun token) oppure
+ * `{ token, status: 'known'|'unknown', deliveredTo }`. Il valore atteso dalla
+ * regola è `true` (qualunque token) o la stringa dello stato richiesto: sono due
+ * gradi di certezza diversi e la regola sceglie quale le basta.
+ */
+function matchCanary(subject, expected) {
+  if (!subject.canary) return false;
+  if (expected === true || expected === 'any') return true;
+  return subject.canary.status === expected;
+}
+
 function matchStatus(subject, compiledSet) {
   // Ha senso solo nella valutazione dell'esito: in `evaluate` lo status non
   // esiste ancora, e una regola che lo nomina non deve matchare per sbaglio.
@@ -212,6 +234,7 @@ function evaluateNode(node, subject, matcher) {
   if (node.query !== undefined && !matchQuery(subject, node.query)) return false;
   if (node.ip !== undefined && !ipMatchesAny(subject.ip, node.ip)) return false;
   if (node.status !== undefined && !matchStatus(subject, node.status)) return false;
+  if (node.canary !== undefined && !matchCanary(subject, node.canary)) return false;
 
   if (node.authenticated !== undefined && subject.authenticated !== node.authenticated) return false;
   if (node.roleIds !== undefined && !node.roleIds.some((id) => subject.roleIds.includes(id))) return false;
@@ -227,7 +250,7 @@ function evaluateNode(node, subject, matcher) {
 const CONDITION_KEYS = [
   'all', 'any', 'not',
   'path', 'extension', 'method', 'userAgent', 'header', 'query', 'ip',
-  'status', 'authenticated', 'roleIds', 'fingerprint', 'fingerprintClass',
+  'status', 'canary', 'authenticated', 'roleIds', 'fingerprint', 'fingerprintClass',
 ];
 
 function hasAnyCondition(node) {

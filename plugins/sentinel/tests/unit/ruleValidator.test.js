@@ -172,6 +172,75 @@ describe('parametri delle azioni', () => {
   });
 });
 
+describe('foglia canary', () => {
+  test.each([[true], ['any'], ['known'], ['unknown']])('%s è un valore ammesso', (value) => {
+    const r = validateRules({ rules: [rule({ match: { canary: value } })] });
+    expect(r.valid).toBe(true);
+    expect(r.rules[0].match.canary).toBe(value);
+  });
+
+  test.each([['sconosciuto'], [false], [1], [null]])('%s è rifiutato', (value) => {
+    const r = validateRules({ rules: [rule({ match: { canary: value } })] });
+    expect(r.valid).toBe(false);
+  });
+
+  test('canary da sola è una condizione sufficiente (il match non è vuoto)', () => {
+    // Se non contasse come condizione, la regola verrebbe scartata con
+    // "nessuna condizione riconosciuta" — e la trappola non esisterebbe.
+    const r = validateRules({ rules: [{ name: 'trappola', action: 'block', match: { canary: true } }] });
+    expect(r.valid).toBe(true);
+  });
+});
+
+describe('escalate.ban — il blocco immediato', () => {
+  const banRule = (over) => rule({ action: 'block', escalate: { rateLimiterRule: 'scanner', ...over } });
+
+  test('senza ban si conta soltanto', () => {
+    const r = validateRules({ rules: [banRule({})] });
+    expect(r.valid).toBe(true);
+    expect(r.rules[0].escalate.ban).toBe(false);
+    expect(r.rules[0].escalate.banSeconds).toBeNull();
+  });
+
+  test('con ban e durata esplicita', () => {
+    const r = validateRules({ rules: [banRule({ ban: true, banSeconds: 86400 })] });
+    expect(r.valid).toBe(true);
+    expect(r.rules[0].escalate).toEqual({ rateLimiterRule: 'scanner', ban: true, banSeconds: 86400 });
+  });
+
+  test('ban non booleano è rifiutato', () => {
+    const r = validateRules({ rules: [banRule({ ban: 'si' })] });
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/escalate\.ban/);
+  });
+
+  test.each([[0], [-1], [1.5], ['3600']])('banSeconds %s è rifiutato', (value) => {
+    const r = validateRules({ rules: [banRule({ ban: true, banSeconds: value })] });
+    expect(r.valid).toBe(false);
+  });
+
+  test('banSeconds senza ban è un avviso, non un errore', () => {
+    const r = validateRules({ rules: [banRule({ banSeconds: 600 })] });
+    expect(r.valid).toBe(true);
+    expect(r.warnings.join(' ')).toMatch(/non ha effetto/);
+  });
+
+  // Il ban richiede l'enforcement: dichiararlo su una regola che non agisce
+  // significa crederlo attivo mentre non scatterà mai.
+  test.each([['monitor'], ['allow']])('ban su una regola "%s" avvisa che non avrà effetto', (action) => {
+    const r = validateRules({
+      rules: [rule({ action, escalate: { rateLimiterRule: 'scanner', ban: true } })],
+    });
+    expect(r.valid).toBe(true);
+    expect(r.warnings.join(' ')).toMatch(/non avrà mai effetto/);
+  });
+
+  test('nessun avviso su una regola che agisce', () => {
+    const r = validateRules({ rules: [banRule({ ban: true })] });
+    expect(r.warnings.join(' ')).not.toMatch(/non avrà mai effetto/);
+  });
+});
+
 describe('header dichiarati da un decoy', () => {
   const decoyRule = (decoy) => rule({ action: 'decoy', decoy: { file: 'fake.html', ...decoy } });
 

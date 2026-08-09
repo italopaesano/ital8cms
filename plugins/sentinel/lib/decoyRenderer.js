@@ -55,6 +55,20 @@ const CONTENT_TYPES = {
   '.css': 'text/css; charset=utf-8',
 };
 
+/**
+ * Stringa casuale per i segnaposto di riempimento.
+ *
+ * `Math.random` basta: questi valori servono a far sembrare vive due risposte
+ * diverse, non a essere imprevedibili. I token canary — quelli che devono
+ * resistere a un tentativo di indovinarli — nascono invece da
+ * `crypto.randomBytes` in `canaryRegistry.js`.
+ */
+function randomString(length) {
+  let out = '';
+  while (out.length < length) out += Math.random().toString(36).slice(2);
+  return out.slice(0, length);
+}
+
 /** Escape HTML minimale, per i segnaposto riflessi dentro un decoy HTML. */
 function escapeHtml(value) {
   return String(value)
@@ -103,29 +117,50 @@ function resolveDecoyPath(pluginFolder, fileName) {
  * bersaglio non sarebbe l'attaccante — che si autoinfetterebbe — ma chiunque
  * riceva da lui un link a quell'URL. Si escapa in base al tipo di contenuto.
  *
+ * ─── IL SEGNAPOSTO `{{canary}}` E DI UN'ALTRA NATURA ──────────────────────────
+ * Gli altri segnaposto rendono il decoy credibile. Questo lo trasforma in un
+ * SENSORE: inserisce un token che esiste solo in questa risposta, e che quindi
+ * nessuno può richiedere se non leggendolo qui. Serve una funzione che lo coni
+ * (`mintCanary`), perché il registro dei token non è affare del renderer.
+ *
+ * Se appare più volte nello stesso file, il token è lo STESSO: due token diversi
+ * nella stessa pagina si contraddirebbero — un finto backup nominato in un link e
+ * poi in un commento con un identificativo diverso è una pagina che non
+ * quadra — e raddoppierebbero le voci di registro per una sola consegna.
+ *
+ * Senza `mintCanary` il segnaposto rende comunque una stringa della forma giusta,
+ * non registrata: la trappola scatta ancora, ma come `unknown`. Fail-soft, mai un
+ * `{{canary}}` letterale servito a chi bussa.
+ *
  * @param {string} template
  * @param {object} vars
  * @param {boolean} isHtml
+ * @param {Function} [mintCanary] - () => string
  * @returns {string}
  */
-function renderTemplate(template, vars, isHtml) {
+function renderTemplate(template, vars, isHtml, mintCanary) {
   const now = new Date();
   const esc = isHtml ? escapeHtml : ((v) => String(v));
+  let canaryToken = null;
 
   return template.replace(/\{\{(\w+)(?::([^}]*))?\}\}/g, (match, name, arg) => {
     switch (name) {
+      case 'canary': {
+        if (canaryToken === null) {
+          canaryToken = typeof mintCanary === 'function'
+            ? String(mintCanary())
+            : randomString(24);
+        }
+        return canaryToken;
+      }
       case 'now':
         return now.toISOString();
       case 'today':
         return now.toISOString().slice(0, 10);
       case 'timestamp':
         return String(Math.floor(now.getTime() / 1000));
-      case 'random': {
-        const length = Math.min(Math.max(parseInt(arg, 10) || 16, 1), 128);
-        let out = '';
-        while (out.length < length) out += Math.random().toString(36).slice(2);
-        return out.slice(0, length);
-      }
+      case 'random':
+        return randomString(Math.min(Math.max(parseInt(arg, 10) || 16, 1), 128));
       case 'choice': {
         const options = String(arg || '').split('|').filter(Boolean);
         return options.length ? options[Math.floor(Math.random() * options.length)] : '';
@@ -150,10 +185,11 @@ function renderTemplate(template, vars, isHtml) {
  * @param {object} options.vars       - { path, ip }
  * @param {boolean} [options.useCache]
  * @param {Map} [options.cache]
+ * @param {Function} [options.mintCanary] - () => string, per il segnaposto {{canary}}
  * @returns {{ ok: boolean, body: string, type: string, status: number, headers: object }|null}
  */
 function renderDecoy(options) {
-  const { pluginFolder, spec, vars, useCache, cache } = options;
+  const { pluginFolder, spec, vars, useCache, cache, mintCanary } = options;
 
   const filePath = resolveDecoyPath(pluginFolder, spec.file);
   if (!filePath) return null;
@@ -176,7 +212,7 @@ function renderDecoy(options) {
 
   return {
     ok: true,
-    body: renderTemplate(template, vars || {}, isHtml),
+    body: renderTemplate(template, vars || {}, isHtml, mintCanary),
     type,
     status: Number.isInteger(spec.status) ? spec.status : 200,
     // Header dichiarati dalla regola: servono alla credibilità. Un finto

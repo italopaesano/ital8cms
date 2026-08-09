@@ -197,6 +197,25 @@
     },
 
     // ─────────────────────────────────────────────────────────────────────────
+    // TOKEN ESCA — il segnale più certo che questo plugin sa produrre
+    // ─────────────────────────────────────────────────────────────────────────
+    {
+      name: "canary-token-used",
+      enabled: true,
+      category: "canary",
+      description:
+        "Qualcuno ha usato un token esca. I token esistono SOLO dentro il corpo di un decoy servito a un client specifico: nessun motore di ricerca li indicizza, nessun link ci porta, nessun utente li digita. Chi ne richiede uno ha letto il decoy e ha deciso di seguirlo. Non è un'inferenza come tutto il resto di questo file: è una certezza, e sta in cima perché non ha senso che un'altra regola la anticipi. Nota: la segnalazione (log + allerta) parte comunque, anche se questa regola viene cancellata o resta in monitor — è l'unico segnale del plugin che non dipende da una riga di questo file.",
+      action: "monitor",
+      match: {
+        canary: true,   // true = qualunque token; "known" = solo quelli ancora in registro
+      },
+      // Quando promuovi questa regola a "block", questo è l'unico posto del file
+      // in cui `ban: true` è difendibile: non c'è insistenza da accumulare,
+      // il primo evento è già la prova. Richiede il plugin rateLimiter attivo.
+      // escalate: { rateLimiterRule: "scanner", ban: true, banSeconds: 86400 },
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
     // ANOMALIE DEL CLIENT
     // ─────────────────────────────────────────────────────────────────────────
     {

@@ -158,6 +158,61 @@
       </div>
     </div>
 
+    <!-- ── Token esca ────────────────────────────────────────────────────────
+      Sta accanto ai sospetti scanner di proposito, perché è il suo opposto
+      esatto: là ci sono le inferenze, qui le certezze. Nascosto finché nessun
+      token è stato consegnato — una card vuota su una dashboard di sicurezza
+      insegna solo a smettere di guardarla.
+    -->
+    <div class="col-12 col-xl-5 d-none" id="canaryCard">
+      <div class="card h-100 border-danger-subtle">
+        <div class="card-header">
+          🕯️ <%= __({it: 'Token esca (canary)', en: 'Canary tokens'}, passData.ctx) %>
+          <div class="small text-muted mt-1">
+            <%= __({
+              it: 'Un token esiste solo dentro il decoy consegnato a un client preciso: nessun link ci porta e nessuno lo digita per sbaglio. Se torna indietro non è un indizio come tutto il resto di questa pagina — è la certezza di qualcuno che ha letto il decoy e ha deciso di seguirlo.',
+              en: 'A token exists only inside the decoy served to one specific client: no link leads there and nobody types it by accident. If it comes back it is not a hint like everything else on this page — it is certainty that someone read the decoy and chose to follow it.'
+            }, passData.ctx) %>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row text-center g-2 mb-3">
+            <div class="col-4">
+              <div class="kpi-value" id="canaryMinted">—</div>
+              <div class="kpi-label"><%= __({it: 'Consegnati', en: 'Delivered'}, passData.ctx) %></div>
+            </div>
+            <div class="col-4">
+              <div class="kpi-value text-danger" id="canaryTriggered">—</div>
+              <div class="kpi-label"><%= __({it: 'Usati', en: 'Used'}, passData.ctx) %></div>
+            </div>
+            <div class="col-4">
+              <div class="kpi-value" id="canaryLive">—</div>
+              <div class="kpi-label"><%= __({it: 'In registro', en: 'In registry'}, passData.ctx) %></div>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm mb-0 sn-table">
+              <thead><tr>
+                <th><%= __({it: 'Quando', en: 'When'}, passData.ctx) %></th>
+                <th><%= __({it: 'Usato da', en: 'Used by'}, passData.ctx) %></th>
+                <th><%= __({it: 'Consegnato a', en: 'Delivered to'}, passData.ctx) %></th>
+                <th><%= __({it: 'Stesso client', en: 'Same client'}, passData.ctx) %></th>
+              </tr></thead>
+              <tbody id="canaryTable">
+                <tr><td colspan="4" class="text-muted p-3"><%= __({it: 'Nessun token ancora usato.', en: 'No token used yet.'}, passData.ctx) %></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="small text-muted mt-2">
+            <%= __({
+              it: '«Stesso client» no significa che il contenuto del decoy è passato di mano: chi scandaglia e chi sfrutta sono due macchine diverse.',
+              en: '“Same client” = no means the decoy content changed hands: scanning and exploitation are two different machines.'
+            }, passData.ctx) %>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Stato delle regole: il cuore della promozione ─────────────────── -->
     <div class="col-12">
       <div class="card">

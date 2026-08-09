@@ -99,7 +99,53 @@
         ? 'gate: ' + stats.gateState
         : 'monitor';
     }
+
+    renderCanary(stats.canary);
     return true;
+  }
+
+  // ── Token esca ────────────────────────────────────────────────────────────
+  //
+  // La card resta nascosta finché nessun token è stato consegnato: una card
+  // sempre vuota su una dashboard di sicurezza insegna a smettere di guardarla,
+  // e questa è quella che non si deve smettere di guardare.
+
+  function renderCanary(canary) {
+    const card = $('canaryCard');
+    if (!card) return;
+
+    if (!canary || (!canary.minted && !canary.triggered)) {
+      card.classList.add('d-none');
+      return;
+    }
+    card.classList.remove('d-none');
+
+    $('canaryMinted').textContent = num(canary.minted);
+    $('canaryTriggered').textContent = num(canary.triggered);
+    $('canaryLive').textContent = num(canary.liveTokens);
+
+    const rows = canary.recentTriggers || [];
+    const body = $('canaryTable');
+    if (rows.length === 0) {
+      body.innerHTML = '<tr><td colspan="4" class="text-muted p-3">Nessun token ancora usato.</td></tr>';
+      return;
+    }
+
+    // esc() su ogni campo: qui si stampano indirizzi e percorsi, cioè
+    // stringhe scelte da chi ha fatto la richiesta.
+    body.innerHTML = rows.map(function (t) {
+      var same = t.sameClient === null || t.sameClient === undefined
+        ? '<span class="text-muted">?</span>'
+        : (t.sameClient
+          ? '<span class="badge bg-secondary">sì</span>'
+          : '<span class="badge bg-danger">no</span>');
+      return '<tr>'
+        + '<td>' + esc(shortTime(t.at)) + '</td>'
+        + '<td><code>' + esc(t.usedByIp || '—') + '</code></td>'
+        + '<td><code>' + esc(t.deliveredToIp || '—') + '</code></td>'
+        + '<td>' + same + '</td>'
+        + '</tr>';
+    }).join('');
   }
 
   // ── Panoramica ────────────────────────────────────────────────────────────
