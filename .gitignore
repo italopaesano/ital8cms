@@ -31,6 +31,7 @@ themes/*/node_modules/
 /core/admin/webPages/mediaManagement
 /core/admin/webPages/rateLimiterManagement
 /core/admin/webPages/csrfManagement
+/core/admin/webPages/sentinelManagement
 
 # Auto-generated runtime data
 /plugins/urlRedirect/redirectHitCount.json5
@@ -54,6 +55,7 @@ themes/*/node_modules/
 /plugins/adminAccessControl/accessControl.json5
 /plugins/rateLimiter/protectedRoutes.json5
 /plugins/sentinel/sentinelRules.json5
+/plugins/adminSentinel/backups/
 /plugins/adminUsers/userAccount.json5
 /plugins/adminUsers/userRole.json5
 # Descrittori vivi (plugin + temi): generati dai .default; isInstalled (stato

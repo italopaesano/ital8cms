@@ -1,0 +1,80 @@
+/* sentinel-admin.css — Vista Dati del filtro delle richieste */
+
+.sn-admin .kpi-card {
+  border: 1px solid rgba(0, 0, 0, .08);
+}
+
+.sn-admin .kpi-value {
+  font-size: 1.6rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.sn-admin .kpi-label {
+  font-size: .75rem;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  opacity: .7;
+}
+
+/* Il KPI dell'incoerenza UA↔impronta è il segnale più affidabile del plugin:
+   merita di distinguersi dagli altri senza gridare. */
+.sn-admin .kpi-highlight {
+  border-color: rgba(255, 193, 7, .55);
+}
+
+.sn-admin .sn-window {
+  width: auto;
+  min-width: 10rem;
+}
+
+.sn-admin .sn-table th {
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+  opacity: .65;
+  font-weight: 600;
+}
+
+.sn-admin .sn-table td {
+  vertical-align: middle;
+}
+
+/* Barra proporzionale sotto la categoria: rende leggibile la composizione a
+   colpo d'occhio, che è l'intera ragione della tabella. */
+.sn-admin .sn-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, .07);
+  margin-top: .35rem;
+  overflow: hidden;
+}
+
+.sn-admin .sn-bar-fill {
+  height: 100%;
+  background: currentColor;
+  opacity: .45;
+}
+
+/* Percorsi e impronte possono essere lunghi e arbitrari: si troncano invece di
+   sfondare la tabella. */
+.sn-admin .sn-path code,
+.sn-admin .sn-fp {
+  display: inline-block;
+  max-width: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.sn-admin .sn-events {
+  max-height: 26rem;
+  overflow-y: auto;
+}
+
+@media (max-width: 575.98px) {
+  .sn-admin .kpi-value { font-size: 1.25rem; }
+  .sn-admin .sn-path code,
+  .sn-admin .sn-fp { max-width: 11rem; }
+}

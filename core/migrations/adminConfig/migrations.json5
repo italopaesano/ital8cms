@@ -1,0 +1,23 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// Migrazioni di core/admin/adminConfig.json5.
+//
+// Il clock è la `schemaVersion` del file stesso (per i config del core non c'è un
+// descrittore separato). Uno step si applica quando il vivo è a `from` e il
+// `.default` è a `to`.
+//
+// Vedi docs/decisions/config-migrations.it.md e core/migrationRunner.js.
+{
+  steps: [
+    {
+      from: 1,
+      to: 2,
+      title: "Sezione admin del filtro sentinel nel menu",
+      automatic: true,
+      script: "from-v1-to-v2.js",
+      touches: ["core/admin/adminConfig.json5"],
+      reason:
+        "Il merge additivo aggiunge `sections.sentinelManagement` (è una chiave  nuova, e la traversata ricorsiva la vede), ma NON tocca gli array:  `menuOrder` è un array, e senza questo script la sezione esisterebbe nel  config vivo senza comparire nel menu, perché adminSystem costruisce il  menu iterando proprio menuOrder. È lo stesso difetto emerso in v2.70.1  con le regole di accessControl, qui colto prima che arrivasse in  produzione. Lo script si limita ad accodare la voce se manca: è  idempotente e non riordina le voci già presenti, così una  personalizzazione dell'ordine fatta dall'amministratore sopravvive.",
+    },
+  ],
+}

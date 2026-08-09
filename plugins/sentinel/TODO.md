@@ -71,8 +71,8 @@ rende leggibile e governabile quello che c'è, poi si aggiungono le azioni.**
 
 | # | Passo | Perché lì |
 |---|---|---|
-| **0** | Debito e attriti | Chiudere le cose piccole già mature prima di aprire fronti nuovi |
-| **1** | `adminSentinel` — Vista Dati | L'unico passo che aumenta il valore del lavoro già fatto invece di aggiungerne. Stabilizza il contratto dell'oggetto condiviso prima che altre feature ci si appoggino |
+| ~~**0**~~ | ~~Debito e attriti~~ ✅ | Chiudere le cose piccole già mature prima di aprire fronti nuovi |
+| ~~**1**~~ | ~~`adminSentinel` — Vista Dati~~ ✅ | L'unico passo che aumenta il valore del lavoro già fatto invece di aggiungerne. Stabilizza il contratto dell'oggetto condiviso prima che altre feature ci si appoggino |
 | **2** | Promozione e retrocessione | Completa le fasi 2 e 3. **La retrocessione conta più della promozione**: un percorso a senso unico invita a non imboccarlo mai |
 | **3** | Tester delle regole | Serve appena si comincia a scrivere regole proprie, ed è il prerequisito per scrivere in sicurezza quelle dei passi successivi |
 | **4** | `redirect` + `decoy` L0/L1 | Gate, validatore e non-interferenza sono **già scritti e testati**: manca solo chi produce il corpo. Miglior rapporto valore/codice nuovo |
@@ -494,12 +494,13 @@ e accumulare statistiche locali sulle firme viste.
 
 ## 11. Twin admin (`adminSentinel`) — fase successiva
 
-- [ ] **Interfaccia costruita sulle tre fasi** (osserva → capisci → promuovi):
-      è la spina dorsale della GUI, non un accessorio. Ogni regola mostra a colpo
-      d'occhio in quale fase si trova e cosa serve per passare alla successiva.
-      Deve restare possibile saltare direttamente alla fase di blocco.
-- [ ] Sezione admin con le **Tre Viste**
-- [ ] Vista Dati: richieste filtrate, top regole, top IP, top fingerprint, timeline
+- [~] **Interfaccia costruita sulle tre fasi** (osserva → capisci → promuovi):
+      è la spina dorsale della GUI, non un accessorio. La Vista Dati mostra in
+      quale fase si trova ogni regola e cosa serve per passare alla successiva
+      (colonna «utenti autenticati» + indicatore di promuovibilità); il *gesto*
+      per promuovere arriva col passo 2.
+- [~] Sezione admin con le **Tre Viste** — Vista Dati fatta, B e C al passo 2
+- [x] Vista Dati: richieste filtrate, top regole, top IP, top fingerprint, timeline
 - [ ] Editor JSON5 raw di `sentinelRules.json5` (validazione lato server + scrittura atomica)
 - [ ] Form strutturato coordinato con l'editor (validatore condiviso col service plugin)
 - [ ] Tester delle regole nella GUI (incolla una richiesta → dice cosa matcherebbe)

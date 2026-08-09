@@ -1,0 +1,42 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "active": 1,
+  "weight": 6,
+
+  // Plugin admin — rilevato automaticamente dal prefisso "admin".
+  // Metadata UI della sezione in /core/admin/adminConfig.json5.
+  "adminSections": [
+    "sentinelManagement"
+  ],
+
+  // Gemello di `sentinel`. Qui la dipendenza dal service È dichiarata, al
+  // contrario di quella che `sentinel` NON dichiara verso rateLimiter: un twin
+  // senza il proprio service non ha nulla da mostrare, mentre un filtro senza
+  // rate limiter funziona benissimo.
+  "dependency": {
+    "sentinel": "^1.0.0",
+    "bootstrap": "^1.0.0",
+    "simpleI18n": "^1.0.0",
+  },
+  "nodeModuleDependency": {},
+
+  "custom": {
+    // Finestra temporale (giorni) usata dalla panoramica.
+    "windowDays": 7,
+
+    // Quanti eventi mostrare nella tabella. Il lettore legge i file dal più
+    // recente all'indietro e si ferma appena ne ha abbastanza: con retention a
+    // 365 giorni caricarli tutti per mostrarne cinquanta sarebbero centinaia di
+    // megabyte in memoria.
+    "eventLimit": 100,
+
+    // Quanti percorsi distinti falliti perché un client sia elencato fra i
+    // sospetti scanner. È la firma della scansione, e non deriva da nessuna
+    // regola: nasce dall'osservazione degli esiti.
+    "scannerThreshold": 20,
+
+    // Intervallo (secondi) dell'auto-aggiornamento. 0 = disattivato.
+    "autoRefreshSeconds": 15,
+  },
+}

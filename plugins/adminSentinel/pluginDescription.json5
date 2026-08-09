@@ -1,0 +1,9 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+{
+  "name": "adminSentinel",
+  "version": "1.0.0",
+  "description": "Admin GUI for the sentinel request filter. Reads what the filter produces — traffic composition by category, rule status with the promotion indicator, HTTP fingerprints, suspected scanners and a timeline — and turns a write-only log into something an administrator can act on.",
+  "author": "Italo Paesano",
+  "email": "italopaesano@protonmail.com",
+  "license": "ISC",
+}

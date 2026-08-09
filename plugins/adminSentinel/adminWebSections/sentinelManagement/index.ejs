@@ -1,0 +1,282 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<link rel="stylesheet" href="/<%= passData.adminPrefix %>/sentinelManagement/sentinel-admin.css">
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
+
+<div class="container mt-4 sn-admin">
+
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <h3 class="mb-0">
+      🔭 <%= __({it: 'Sentinel — filtro delle richieste', en: 'Sentinel — request filter'}, passData.ctx) %>
+      <span id="modeBadge" class="badge bg-secondary align-middle ms-2">—</span>
+    </h3>
+    <div class="d-flex align-items-center gap-3">
+      <select id="windowDays" class="form-select form-select-sm sn-window">
+        <option value="1"><%= __({it: 'Ultime 24 ore', en: 'Last 24 hours'}, passData.ctx) %></option>
+        <option value="7" selected><%= __({it: 'Ultimi 7 giorni', en: 'Last 7 days'}, passData.ctx) %></option>
+        <option value="30"><%= __({it: 'Ultimi 30 giorni', en: 'Last 30 days'}, passData.ctx) %></option>
+        <option value="365"><%= __({it: 'Ultimo anno', en: 'Last year'}, passData.ctx) %></option>
+      </select>
+      <div class="form-check form-switch mb-0">
+        <input class="form-check-input" type="checkbox" role="switch" id="autoRefreshToggle" checked>
+        <label class="form-check-label small" for="autoRefreshToggle">
+          <%= __({it: 'Auto-aggiornamento', en: 'Auto-refresh'}, passData.ctx) %>
+        </label>
+      </div>
+      <button id="btnRefresh" class="btn btn-outline-secondary btn-sm">
+        <span id="loadingSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+        ⟳ <%= __({it: 'Aggiorna', en: 'Refresh'}, passData.ctx) %>
+      </button>
+    </div>
+  </div>
+
+  <div id="globalAlert" class="alert d-none" role="alert"></div>
+
+  <!-- Il service non c'è o è disattivato -->
+  <div id="disabledBanner" class="alert alert-warning d-none">
+    <%= __({
+      it: 'Il plugin sentinel non è attivo. Nessun dato da mostrare.',
+      en: 'The sentinel plugin is not active. Nothing to show.'
+    }, passData.ctx) %>
+  </div>
+
+  <!--
+    Osservazione ≠ enforcement. Distinguere le due cose è il punto dell'intera
+    interfaccia: `mode: enforce` con il gate su `monitor` NON sta bloccando, e
+    mostrare solo il primo dei due sarebbe una trappola diagnostica.
+  -->
+  <div id="observingBanner" class="alert alert-info d-none">
+    <strong><%= __({it: 'Modalità osservazione.', en: 'Observation mode.'}, passData.ctx) %></strong>
+    <%= __({
+      it: 'Sentinel sta classificando e registrando il traffico, ma non blocca nulla. È il comportamento previsto dopo l\'installazione: guarda i dati qui sotto, e promuovi una regola quando i suoi numeri lo giustificano.',
+      en: 'Sentinel is classifying and recording traffic but blocking nothing. This is the expected state after installation: read the data below, and promote a rule when its numbers justify it.'
+    }, passData.ctx) %>
+  </div>
+
+  <!-- ── KPI ────────────────────────────────────────────────────────────── -->
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-value" id="kpiTotal">—</div>
+        <div class="kpi-label"><%= __({it: 'Classificate', en: 'Classified'}, passData.ctx) %></div>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-value text-danger" id="kpiEnforced">—</div>
+        <div class="kpi-label"><%= __({it: 'Applicate', en: 'Enforced'}, passData.ctx) %></div>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-value" id="kpiIps">—</div>
+        <div class="kpi-label"><%= __({it: 'IP distinti', en: 'Distinct IPs'}, passData.ctx) %></div>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-value" id="kpiFingerprints">—</div>
+        <div class="kpi-label"><%= __({it: 'Impronte', en: 'Fingerprints'}, passData.ctx) %></div>
+      </div></div>
+    </div>
+    <!--
+      Il segnale singolo più affidabile: l'UA dichiara un browser ma la forma
+      degli header dice client script. Uno dei due mente, e sappiamo quale.
+    -->
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card text-center kpi-card h-100 kpi-highlight"><div class="card-body py-3">
+        <div class="kpi-value text-warning" id="kpiIncoherent">—</div>
+        <div class="kpi-label"><%= __({it: 'UA incoerenti', en: 'UA mismatch'}, passData.ctx) %></div>
+      </div></div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card text-center kpi-card h-100"><div class="card-body py-3">
+        <div class="kpi-value" id="kpiUnclassified">—</div>
+        <div class="kpi-label"><%= __({it: 'Non classificato', en: 'Unclassified'}, passData.ctx) %></div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+
+    <!-- ── Composizione del traffico ostile ─────────────────────────────── -->
+    <div class="col-12 col-xl-5">
+      <div class="card h-100">
+        <div class="card-header">
+          <%= __({it: 'Composizione per famiglia', en: 'Composition by family'}, passData.ctx) %>
+          <div class="small text-muted mt-1">
+            <%= __({
+              it: 'Non «quante ne ho bloccate», ma di cosa è fatto il traffico che bussa.',
+              en: 'Not “how many did I block”, but what the traffic knocking is made of.'
+            }, passData.ctx) %>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0 sn-table">
+            <tbody id="categoryTable">
+              <tr><td class="text-muted p-3"><%= __({it: 'Caricamento…', en: 'Loading…'}, passData.ctx) %></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Sospetti scanner ─────────────────────────────────────────────── -->
+    <div class="col-12 col-xl-7">
+      <div class="card h-100">
+        <div class="card-header">
+          <%= __({it: 'Sospetti scanner', en: 'Suspected scanners'}, passData.ctx) %>
+          <div class="small text-muted mt-1">
+            <%= __({
+              it: 'Client che collezionano molti percorsi distinti falliti. Non derivano da nessuna regola: nascono dall\'osservazione degli esiti, ed è lì che si scoprono gli attacchi per cui una regola ancora non esiste.',
+              en: 'Clients collecting many distinct failed paths. These come from no rule: they emerge from outcome observation, which is where you find attacks no rule describes yet.'
+            }, passData.ctx) %>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm mb-0 sn-table">
+              <thead><tr>
+                <th><%= __({it: 'Client', en: 'Client'}, passData.ctx) %></th>
+                <th class="text-end"><%= __({it: 'Path distinti', en: 'Distinct paths'}, passData.ctx) %></th>
+                <th class="text-end">404</th>
+                <th class="text-end"><%= __({it: 'Totale', en: 'Total'}, passData.ctx) %></th>
+                <th><%= __({it: 'Ultimo', en: 'Last seen'}, passData.ctx) %></th>
+              </tr></thead>
+              <tbody id="scannerTable">
+                <tr><td colspan="5" class="text-muted p-3"><%= __({it: 'Caricamento…', en: 'Loading…'}, passData.ctx) %></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Stato delle regole: il cuore della promozione ─────────────────── -->
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <%= __({it: 'Regole', en: 'Rules'}, passData.ctx) %>
+          <div class="small text-muted mt-1">
+            <%= __({
+              it: 'La colonna «Utenti autenticati» è il semaforo: se è zero dopo settimane di traffico, promuovere la regola a blocco è sicuro. Se è diversa da zero c\'è un falso positivo non ancora capito.',
+              en: 'The “Authenticated users” column is the traffic light: zero after weeks of real traffic means promoting the rule to block is safe. Anything else means a false positive you have not understood yet.'
+            }, passData.ctx) %>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0 sn-table">
+              <thead><tr>
+                <th><%= __({it: 'Regola', en: 'Rule'}, passData.ctx) %></th>
+                <th class="text-end"><%= __({it: 'Scatti', en: 'Hits'}, passData.ctx) %></th>
+                <th class="text-end"><%= __({it: 'Applicati', en: 'Enforced'}, passData.ctx) %></th>
+                <th class="text-end"><%= __({it: 'IP distinti', en: 'Distinct IPs'}, passData.ctx) %></th>
+                <th class="text-end"><%= __({it: 'Bot', en: 'Bots'}, passData.ctx) %></th>
+                <th class="text-end"><%= __({it: 'Utenti autenticati', en: 'Authenticated users'}, passData.ctx) %></th>
+                <th><%= __({it: 'Promuovibile', en: 'Promotable'}, passData.ctx) %></th>
+              </tr></thead>
+              <tbody id="ruleTable">
+                <tr><td colspan="7" class="text-muted p-3"><%= __({it: 'Caricamento…', en: 'Loading…'}, passData.ctx) %></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Impronte ─────────────────────────────────────────────────────── -->
+    <div class="col-12 col-xl-6">
+      <div class="card h-100">
+        <div class="card-header">
+          <%= __({it: 'Impronte HTTP', en: 'HTTP fingerprints'}, passData.ctx) %>
+          <span id="ipModeBadge" class="badge bg-light text-dark ms-2">—</span>
+          <div class="small text-muted mt-1">
+            <%= __({
+              it: 'Una impronta vista da molti IP distinti è una botnet — e lo si sa senza conservare un solo indirizzo.',
+              en: 'One fingerprint seen from many distinct IPs is a botnet — and you know it without storing a single address.'
+            }, passData.ctx) %>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm mb-0 sn-table">
+              <thead><tr>
+                <th><%= __({it: 'Impronta', en: 'Fingerprint'}, passData.ctx) %></th>
+                <th><%= __({it: 'Famiglia', en: 'Family'}, passData.ctx) %></th>
+                <th class="text-end"><%= __({it: 'Richieste', en: 'Requests'}, passData.ctx) %></th>
+                <th class="text-end">IP</th>
+                <th><%= __({it: 'Coerente', en: 'Coherent'}, passData.ctx) %></th>
+              </tr></thead>
+              <tbody id="fingerprintTable">
+                <tr><td colspan="5" class="text-muted p-3"><%= __({it: 'Caricamento…', en: 'Loading…'}, passData.ctx) %></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Eventi recenti ───────────────────────────────────────────────── -->
+    <div class="col-12 col-xl-6">
+      <div class="card h-100">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <span><%= __({it: 'Eventi recenti', en: 'Recent events'}, passData.ctx) %></span>
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" role="switch" id="enforcedOnlyToggle">
+            <label class="form-check-label small" for="enforcedOnlyToggle">
+              <%= __({it: 'Solo applicati', en: 'Enforced only'}, passData.ctx) %>
+            </label>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive sn-events">
+            <table class="table table-sm mb-0 sn-table">
+              <thead><tr>
+                <th><%= __({it: 'Quando', en: 'When'}, passData.ctx) %></th>
+                <th><%= __({it: 'Percorso', en: 'Path'}, passData.ctx) %></th>
+                <th><%= __({it: 'Regola', en: 'Rule'}, passData.ctx) %></th>
+                <th>IP</th>
+                <th><%= __({it: 'Esito', en: 'Outcome'}, passData.ctx) %></th>
+              </tr></thead>
+              <tbody id="eventTable">
+                <tr><td colspan="5" class="text-muted p-3"><%= __({it: 'Caricamento…', en: 'Loading…'}, passData.ctx) %></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!--
+    Un tasso di sfratto che sale non è una statistica di servizio: in esercizio
+    normale resta a zero, perché il traffico vero converge su poche decine di
+    impronte. Se sale, qualcuno sta producendo chiavi a raffica per gonfiare gli
+    archivi — la contromisura si comporta da rilevatore.
+  -->
+  <div id="evictionWarning" class="alert alert-warning mt-3 d-none">
+    <strong><%= __({it: 'Sfratti in corso negli archivi.', en: 'Evictions happening in the aggregates.'}, passData.ctx) %></strong>
+    <span id="evictionDetail"></span>
+    <%= __({
+      it: 'In esercizio normale questo valore resta a zero: un valore che sale indica che qualcuno sta generando impronte o client nuovi a raffica.',
+      en: 'In normal operation this stays at zero: a rising value means someone is generating new fingerprints or clients in bulk.'
+    }, passData.ctx) %>
+  </div>
+
+  <p class="text-muted small mt-3 mb-0">
+    <%= __({it: 'Sorgente dati:', en: 'Data source:'}, passData.ctx) %>
+    <code id="dataDir">—</code>
+  </p>
+
+</div>
+
+<script>
+  const SN_API = '/<%= passData.apiPrefix %>/adminSentinel';
+  const SN_AUTO_REFRESH_SECONDS = <%= passData.plugin.adminSentinel.autoRefreshSeconds %>;
+  const SN_EVENT_LIMIT = <%= passData.plugin.adminSentinel.eventLimit %>;
+  const SN_DEFAULT_DAYS = <%= passData.plugin.adminSentinel.windowDays %>;
+</script>
+<script src="/<%= passData.adminPrefix %>/sentinelManagement/sentinel-admin.js"></script>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>

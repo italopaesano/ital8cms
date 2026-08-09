@@ -1,6 +1,6 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 2,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   "version": "1.0.0",
 
   // Sezioni dell'interfaccia admin
@@ -132,6 +132,16 @@
       "description": "Monitoraggio blocchi anti brute-force, gestione regole e impostazioni del rate limiter"
     },
 
+    "sentinelManagement": {
+      "type": "plugin",
+      "plugin": "adminSentinel",
+      "enabled": true,
+      "required": false,
+      "label": "Sentinel",
+      "icon": "🔭",
+      "description": "Filtro delle richieste: composizione del traffico ostile, stato delle regole, impronte HTTP e sospetti scanner"
+    },
+
     "csrfManagement": {
       "type": "plugin",
       "plugin": "adminCsrfProtection",
@@ -158,6 +168,7 @@
     "analyticsManagement",
     "analyticsSettings",
     "rateLimiterManagement",
+    "sentinelManagement",
     "csrfManagement"
   ],
 
