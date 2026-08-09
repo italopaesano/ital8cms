@@ -165,6 +165,9 @@ GET  /rules/raw                     testo del file + elenco dei backup
 POST /rules/validate                { content } — valida senza salvare
 POST /rules/save                    { content } — valida, fa il backup, salva, ricarica
 POST /rules/test                    { spec } — prova una richiesta e spiega l'esito
+
+GET  /rules/source                  le regole come stanno sul FILE (per il form)
+POST /rules/fields                  { ruleName, rule } — salva una regola dal form
 ```
 
 Le POST richiedono il token CSRF, iniettato automaticamente nelle pagine admin
@@ -227,6 +230,44 @@ salvataggio.
 Le modifiche entrano in vigore **subito**: il server chiama `reloadRules()` dopo
 la scrittura, nessun riavvio.
 
+## Form strutturato (Vista C)
+
+Scheda **Regole (form)**: le stesse regole dell'editor JSON5, campo per campo.
+Stesso file, stessa validazione — quella del motore, lato server — e nessuna
+cache locale: dopo ogni salvataggio il file viene riletto, così quello che vedi
+è quello che c'è su disco.
+
+### La regola che ha determinato il progetto
+
+**Un form non deve mai distruggere ciò che non sa rappresentare.**
+
+L'albero `match` ammette combinatori annidati (`all` / `any` / `not`) che un form
+piatto non può mostrare. La tentazione sarebbe appiattirli; il risultato sarebbe
+che aprire una regola e salvarla *senza toccare niente* la cambia — il modo più
+efficace di far perdere fiducia a uno strumento.
+
+Qui invece un `match` non rappresentabile viene **conservato alla lettera** e
+mostrato in sola lettura, con un rimando all'editor JSON5. Tutto il resto della
+regola resta modificabile e salvabile senza rischio.
+
+### Cosa si perde salvando dal form
+
+I commenti scritti **dentro quella regola**. Il form conosce i campi, non i
+commenti, e riscrive il blocco testuale della regola che stai salvando. Restano
+intatti i commenti delle altre regole, le cornici di sezione e l'intestazione del
+file.
+
+È una perdita reale, quindi l'interfaccia la dichiara **prima** del salvataggio
+invece di lasciarla scoprire dopo. Per una regola i cui commenti contano, c'è
+l'editor JSON5. Il posto giusto dove spiegare cosa osserva una regola resta
+comunque il campo `description`, che sopravvive al form.
+
+### Cosa il form non lascia fare
+
+**Rinominare.** Il nome è la chiave che lega contatori, righe di log e
+promozioni: cambiarlo azzera la storia della regola. Si può fare, ma
+dall'editor JSON5 — cioè con la consapevolezza di quello che si sta facendo.
+
 ## Tester (scheda «Tester»)
 
 Prova una richiesta contro le regole in vigore, **senza inviarla davvero**.
@@ -249,6 +290,5 @@ Lo stesso strumento è disponibile da riga di comando
 
 ## Cosa NON fa ancora
 
-Manca la **Vista C**, il form strutturato campo per campo — l'unica delle Tre
-Viste non ancora coperta. Vedi il piano di lavoro in
+Le Tre Viste ci sono tutte. Restano aperti i punti del *piano di rifinitura* in
 [`plugins/sentinel/TODO.md`](../sentinel/TODO.md).

@@ -187,6 +187,71 @@ Le due protezioni contano più della funzione:
   no, quindi la quota scende finché l'impronta viene perdonata — per poi essere
   ricondannata. Il censimento tiene ora `judgedCount` accanto a `count`.
 
+### Piano di rifinitura — i tre bordi lasciati aperti
+
+Il piano da 0 a 8 è chiuso. Restano tre cose che non erano *funzionalità
+mancanti* ma **bordi non rifiniti**: una vista incompleta, una differenza nota
+fra due risposte che dovrebbero essere identiche, e un percorso di avvio che
+muore male. Nessuna delle tre aggiunge capacità al filtro; tutte e tre tolgono
+un'asimmetria fra ciò che il progetto dichiara e ciò che fa.
+
+Sono in quest'ordine perché è quello del rischio crescente: la prima non tocca
+il percorso delle richieste, la seconda sì, la terza tocca il boot.
+
+| # | Voce | Perché lì |
+|---|---|---|
+| ~~**R1**~~ ✅ | ~~Vista C — form strutturato in `adminSentinel`~~ | L'unica delle Tre Viste scoperta. Non tocca il motore: si aggiunge una scheda alla GUI e un metodo di scrittura al service |
+| **R2** | Il `Set-Cookie` sul 404 di blocco | Tocca il percorso delle richieste e va fatta **per entrambi i gate insieme o per nessuno**: `reservedGate` ha la stessa struttura |
+| **R3** | I tre config core non materializzati al boot | Tocca l'avvio, cioè l'unica cosa che se si rompe non lascia neanche un log leggibile |
+
+**R1 — Vista C.** Il form campo-per-campo sulle regole, coordinato con l'editor
+JSON5 secondo le regole di CLAUDE.md (*Le Tre Viste*): fonte di verità unica sul
+file, validazione condivisa lato server, switch esplicito fra le viste con
+avviso di modifiche non salvate, scrittura atomica con backup.
+
+Il vincolo che detta il progetto: **un form non deve mai distruggere ciò che non
+sa rappresentare.** L'albero `match` ammette combinatori annidati che un form
+piatto non può mostrare; quelle regole vanno preservate alla lettera e rimandate
+all'editor JSON5, non riscritte in una forma semplificata.
+
+- [x] `replaceRule()` in `rulesFileEditor.js`, con verifica differenziale
+- [x] Serializzazione di una regola in JSON5 con ordine di chiavi stabile
+- [x] Scheda «Form» con elenco regole + editor campo per campo
+- [x] Regole con `match` complesso: preservate e in sola lettura
+- [x] Avviso esplicito: salvando dal form si perdono i commenti **di quella regola**
+- [x] Il nome non è modificabile dal form: è la chiave che lega contatori e log
+- [x] Validazione dell'INSIEME, non della singola regola: nomi duplicati e regole
+      irraggiungibili sono proprietà che esistono solo a livello di file
+
+**R2 — `Set-Cookie` sul 404 di blocco.** Verificato sul campo: corpo e header di
+un blocco coincidono con un 404 autentico *tranne* che quest'ultimo può portare
+un `Set-Cookie` di sessione, perché `csrfProtection` semina il token più a valle
+mentre il gate ritorna prima. È una proprietà **preesistente** del reserved gate,
+non introdotta da sentinel — e va sistemata per entrambi o per nessuno, o si
+sposta soltanto quale dei due gate è distinguibile. Vedi §4 di
+[`EXPLAIN.it.md`](./EXPLAIN.it.md).
+
+- [ ] Decidere **se** chiuderla: la differenza è sfruttabile solo da chi può
+      confrontare due risposte sapendo già cosa cercare
+- [ ] Se sì: un solo intervento su `reservedGate` e `sentinelGate`
+- [ ] Estendere il test byte-per-byte a `set-cookie`, oggi nella lista dei
+      volatili — finché ci resta, il test non può accorgersi della regressione
+
+**R3 — Config core non materializzati al boot.** Il boot materializza
+`plugins/` e `themes/` e *riconcilia* i tre core, ma se
+`core/admin/adminConfig.json5` o `core/priorityMiddlewares/koaSession.json5`
+mancano l'avvio muore con uno stack trace grezzo. A materializzarli è solo il
+wizard, quindi il clone fresco è coperto — ma sono file git-ignored dichiarati
+«rigenerabili dai `.default`», e dopo l'installazione nessuno li rigenera.
+Incontrato durante il Passo 4. La voce vive nel
+[`TODO.md` di progetto](../../TODO.md) §2, perché non è di questo plugin.
+
+- [ ] `materializeFromDefault` sulle tre coppie già elencate in `index.js`,
+      prima della riconciliazione
+- [ ] Box `[CONFIG]` invece dello stack trace
+
+---
+
 ### Trasversali, da fare quando servono e non come passo a sé
 
 | Voce | Quando |

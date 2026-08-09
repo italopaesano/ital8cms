@@ -295,6 +295,71 @@ module.exports = {
       // ─────────────────────────────────────────────────────────────────────
 
       /**
+       * Le regole come stanno sul FILE, per popolare il form della Vista C.
+       *
+       * Diverso da `/rules`, che riporta ciò che il motore sta applicando con il
+       * `match` già compilato: un form popolato da lì riscriverebbe `["php"]`
+       * dove l'amministratore aveva scritto `"php"`.
+       */
+      {
+        method: 'GET',
+        path: '/rules/source',
+        access: pluginAccess,
+        handler: async (ctx) => {
+          const sentinel = getSentinel();
+          if (!sentinel || typeof sentinel.getRulesSource !== 'function') {
+            ctx.body = serviceUnavailable({ rules: [] });
+            return;
+          }
+          try {
+            ctx.body = { enabled: true, rules: sentinel.getRulesSource() };
+          } catch (err) {
+            ctx.status = 500;
+            ctx.body = { enabled: true, rules: [], error: err.message };
+          }
+        },
+      },
+
+      // ── Vista C: salvataggio di una singola regola dal form ──
+      {
+        method: 'POST',
+        path: '/rules/fields',
+        access: pluginAccess,
+        handler: async (ctx) => {
+          const sentinel = getSentinel();
+          if (!sentinel || typeof sentinel.setRuleFields !== 'function') {
+            ctx.status = 503;
+            ctx.body = serviceUnavailable({ error: 'sentinel non disponibile' });
+            return;
+          }
+
+          const body = ctx.request.body || {};
+          const ruleName = typeof body.ruleName === 'string' ? body.ruleName.trim() : '';
+          const rule = body.rule;
+
+          if (!ruleName || !rule || typeof rule !== 'object') {
+            ctx.status = 400;
+            ctx.body = { ok: false, error: 'ruleName e rule sono obbligatori' };
+            return;
+          }
+
+          try {
+            // La validazione la fa il SERVICE, con il validatore del motore:
+            // riusarlo è la sola garanzia che ciò che la GUI accetta e ciò che
+            // il filtro accetta restino la stessa cosa.
+            const result = sentinel.setRuleFields(ruleName, rule);
+            if (!result.valid) ctx.status = 400;
+            ctx.body = { ok: result.valid, ...result, ruleName };
+          } catch (err) {
+            // La sostituzione verifica sé stessa prima di scrivere: se arriva
+            // qui, il file non è stato toccato.
+            ctx.status = 400;
+            ctx.body = { ok: false, error: err.message };
+          }
+        },
+      },
+
+      /**
        * Promuove o retrocede una regola.
        *
        * La scrittura la fa il SERVICE, non questo plugin: lì stanno la

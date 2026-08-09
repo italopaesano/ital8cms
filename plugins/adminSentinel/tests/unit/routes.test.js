@@ -26,6 +26,12 @@ const mockSentinel = {
     outcomes: { tracked: 2, evictions: 0 },
   }),
   getRuleNames: () => ['php-probe', 'mai-scattata'],
+  getRulesSource: () => ([
+    { name: 'php-probe', action: 'monitor', match: { extension: ['php'] } },
+  ]),
+  setRuleFields: jest.fn((ruleName, rule) => (rule.action === 'inventata'
+    ? { changed: false, valid: false, errors: ['azione sconosciuta'], warnings: [] }
+    : { changed: true, valid: true, errors: [], warnings: [] })),
   flushNow: jest.fn(),
 };
 
@@ -85,7 +91,8 @@ describe('contratto delle rotte', () => {
     const paths = routes.map((r) => r.path).sort();
     expect(paths).toEqual([
       '/events', '/fingerprints', '/flush', '/mode',
-      '/rules', '/rules/action', '/rules/raw', '/rules/save', '/rules/test', '/rules/validate',
+      '/rules', '/rules/action', '/rules/fields', '/rules/raw', '/rules/save', '/rules/source',
+      '/rules/test', '/rules/validate',
       '/scanners', '/status', '/summary',
     ]);
   });
@@ -217,5 +224,82 @@ describe('lettura dei dati', () => {
     await runRoute(routeByPath('/flush'), ctx);
     expect(mockSentinel.flushNow).toHaveBeenCalled();
     expect(ctx.body.ok).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VISTA C — form strutturato
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('/rules/source', () => {
+  beforeEach(async () => { await attach(); });
+
+  test('restituisce le regole come stanno sul file, non compilate', () => {
+    // Un form popolato dalla versione compilata riscriverebbe `["php"]` dove
+    // l'amministratore aveva scritto `"php"`.
+    const ctx = createCtxMock();
+    return runRoute(routeByPath('/rules/source'), ctx).then(() => {
+      expect(ctx.body.enabled).toBe(true);
+      expect(ctx.body.rules[0].match).toEqual({ extension: ['php'] });
+    });
+  });
+
+  test('è una GET: è una lettura', () => {
+    expect(routeByPath('/rules/source').method).toBe('GET');
+  });
+});
+
+describe('/rules/fields', () => {
+  beforeEach(async () => { await attach(); mockSentinel.setRuleFields.mockClear(); });
+
+  test('delega la scrittura al service', async () => {
+    const ctx = createCtxMock({ method: 'POST' });
+    ctx.request.body = { ruleName: 'php-probe', rule: { name: 'php-probe', action: 'block', match: { extension: ['php'] } } };
+
+    await runRoute(routeByPath('/rules/fields'), ctx);
+
+    expect(mockSentinel.setRuleFields).toHaveBeenCalledWith('php-probe', expect.objectContaining({ action: 'block' }));
+    expect(ctx.body.ok).toBe(true);
+  });
+
+  test('una regola invalida torna 400 con gli errori del validatore del motore', async () => {
+    // Riusare il validatore del service è la sola garanzia che ciò che la GUI
+    // accetta e ciò che il filtro accetta restino la stessa cosa.
+    const ctx = createCtxMock({ method: 'POST' });
+    ctx.request.body = { ruleName: 'php-probe', rule: { name: 'php-probe', action: 'inventata', match: {} } };
+
+    await runRoute(routeByPath('/rules/fields'), ctx);
+
+    expect(ctx.status).toBe(400);
+    expect(ctx.body.ok).toBe(false);
+    expect(ctx.body.errors).toContain('azione sconosciuta');
+  });
+
+  test.each([
+    [{}],
+    [{ ruleName: 'php-probe' }],
+    [{ rule: { name: 'x' } }],
+    [{ ruleName: '  ', rule: {} }],
+  ])('richiesta incompleta (%j) → 400 senza chiamare il service', async (body) => {
+    const ctx = createCtxMock({ method: 'POST' });
+    ctx.request.body = body;
+
+    await runRoute(routeByPath('/rules/fields'), ctx);
+
+    expect(ctx.status).toBe(400);
+    expect(mockSentinel.setRuleFields).not.toHaveBeenCalled();
+  });
+
+  test('un errore del service non diventa un 500', async () => {
+    // L'editor verifica la propria modifica prima di scrivere: se arriva
+    // un'eccezione, il file non è stato toccato — è un 400, non un guasto.
+    mockSentinel.setRuleFields.mockImplementationOnce(() => { throw new Error('blocco non individuabile'); });
+    const ctx = createCtxMock({ method: 'POST' });
+    ctx.request.body = { ruleName: 'php-probe', rule: { name: 'php-probe', action: 'block', match: { extension: ['php'] } } };
+
+    await runRoute(routeByPath('/rules/fields'), ctx);
+
+    expect(ctx.status).toBe(400);
+    expect(ctx.body.error).toMatch(/blocco non individuabile/);
   });
 });

@@ -196,4 +196,149 @@ function describeDifference(a, b, prefix = '') {
   return out;
 }
 
-module.exports = { setRuleAction, findRuleBlock, countBraces, describeDifference };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SOSTITUZIONE DI UNA REGOLA INTERA (Vista C — form strutturato)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Chiavi di una regola, nell'ordine in cui vanno scritte. */
+const RULE_KEY_ORDER = [
+  'name', 'enabled', 'category', 'description', 'appliesTo', 'action',
+  'match', 'decoy', 'redirect', 'tarpit', 'escalate',
+];
+
+/** Una chiave si può scrivere senza virgolette? Il file distribuito lo fa. */
+const BARE_KEY = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+/**
+ * Serializza un valore in JSON5, nello stile del file distribuito: chiavi senza
+ * virgolette quando sono identificatori, stringhe fra doppi apici, virgola
+ * finale sugli oggetti e sugli array multi-riga.
+ *
+ * Non si usa `JSON.stringify`: produrrebbe chiavi virgolettate ovunque, e questo
+ * file è fatto per essere letto a mano quanto per essere parsato.
+ */
+function serializeValue(value, indent) {
+  const pad = ' '.repeat(indent);
+  const padInner = ' '.repeat(indent + 2);
+
+  if (value === null) return 'null';
+  if (typeof value === 'boolean' || typeof value === 'number') return String(value);
+  if (typeof value === 'string') return JSON.stringify(value);
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '[]';
+    // Array di scalari brevi: su una riga, che è come si leggono meglio.
+    const allScalar = value.every((v) => v === null || typeof v !== 'object');
+    const oneLine = `[${value.map((v) => serializeValue(v, 0)).join(', ')}]`;
+    if (allScalar && oneLine.length <= 76) return oneLine;
+    return `[\n${value.map((v) => padInner + serializeValue(v, indent + 2)).join(',\n')},\n${pad}]`;
+  }
+
+  const keys = Object.keys(value).filter((k) => value[k] !== undefined);
+  if (keys.length === 0) return '{}';
+  const body = keys
+    .map((k) => `${padInner}${BARE_KEY.test(k) ? k : JSON.stringify(k)}: ${serializeValue(value[k], indent + 2)}`)
+    .join(',\n');
+  return `{\n${body},\n${pad}}`;
+}
+
+/**
+ * Serializza una regola come blocco di testo pronto da inserire nel file.
+ *
+ * @param {object} rule
+ * @param {number} indent - spazi di rientro del blocco (di solito 4)
+ * @returns {string} senza newline finale
+ */
+function serializeRule(rule, indent = 4) {
+  const pad = ' '.repeat(indent);
+  const ordered = {};
+  for (const key of RULE_KEY_ORDER) {
+    if (rule[key] !== undefined) ordered[key] = rule[key];
+  }
+  // Chiavi non previste dall'ordine: conservate in coda invece che perse. Una
+  // chiave sconosciuta è quasi sempre un refuso, ma cancellarla in silenzio
+  // sarebbe peggio che lasciarla dov'è e farla vedere.
+  for (const key of Object.keys(rule)) {
+    if (ordered[key] === undefined && rule[key] !== undefined) ordered[key] = rule[key];
+  }
+  return pad + serializeValue(ordered, indent);
+}
+
+/**
+ * Sostituisce una regola intera, lasciando intatto tutto il resto del file.
+ *
+ * ─── COSA SI PERDE, E PERCHE VA DETTO ─────────────────────────────────────────
+ * Il blocco testuale della regola viene RISCRITTO: i commenti scritti **dentro
+ * quella regola** spariscono. Quelli delle altre regole, le cornici di sezione e
+ * l'intestazione del file restano dove sono.
+ *
+ * È una perdita reale e non evitabile con questo approccio — il form conosce i
+ * campi, non i commenti — quindi va dichiarata nell'interfaccia invece che
+ * scoperta dopo. L'alternativa (non offrire il form) costerebbe di più.
+ *
+ * ─── LA RETE ──────────────────────────────────────────────────────────────────
+ * Stessa verifica differenziale di `setRuleAction`, allargata: dopo la
+ * sostituzione ogni differenza deve stare **dentro** `rules[i]`. Se il blocco
+ * individuato fosse quello sbagliato, la differenza spunterebbe altrove e la
+ * scrittura viene annullata prima di toccare il file.
+ *
+ * @param {string} filePath
+ * @param {string} ruleName - la regola da sostituire (il nome NON può cambiare)
+ * @param {object} newRule  - la regola completa, già validata dal chiamante
+ * @returns {{ changed: boolean }}
+ */
+function replaceRule(filePath, ruleName, newRule) {
+  if (!newRule || newRule.name !== ruleName) {
+    // Rinominare azzererebbe la storia della regola: contatori, righe di log e
+    // promozioni sono legati al nome. Si fa dall'editor JSON5, consapevolmente.
+    throw new Error('il nome di una regola non si cambia dal form: è la chiave che lega contatori e log');
+  }
+
+  const original = fs.readFileSync(filePath, 'utf8');
+  const before = json5.parse(original);
+  const rules = Array.isArray(before.rules) ? before.rules : [];
+  const index = rules.findIndex((r) => r && r.name === ruleName);
+  if (index === -1) throw new Error(`regola non trovata: ${ruleName}`);
+
+  const lines = original.split('\n');
+  const block = findRuleBlock(lines, ruleName);
+  if (!block) throw new Error(`blocco testuale della regola "${ruleName}" non individuabile`);
+
+  const indent = (lines[block.start].match(/^\s*/) || [''])[0].length;
+  const hadTrailingComma = /,\s*$/.test(lines[block.end]);
+  const replacement = serializeRule(newRule, indent) + (hadTrailingComma ? ',' : '');
+
+  const updated = [
+    ...lines.slice(0, block.start),
+    ...replacement.split('\n'),
+    ...lines.slice(block.end + 1),
+  ].join('\n');
+
+  let after;
+  try {
+    after = json5.parse(updated);
+  } catch (err) {
+    throw new Error(`la modifica avrebbe prodotto JSON5 non valido: ${err.message}`);
+  }
+
+  const fuori = describeDifference(before, after).filter((pathStr) => !pathStr.startsWith(`rules[${index}]`));
+  if (fuori.length > 0) {
+    throw new Error(
+      `la modifica avrebbe toccato anche ${fuori.join(', ')} — scrittura annullata`);
+  }
+  if ((after.rules || []).length !== rules.length) {
+    throw new Error('la modifica avrebbe cambiato il numero di regole — scrittura annullata');
+  }
+
+  const tempPath = `${filePath}.tmp`;
+  fs.writeFileSync(tempPath, updated, 'utf8');
+  fs.renameSync(tempPath, filePath);
+
+  return { changed: true };
+}
+
+module.exports = {
+  setRuleAction, replaceRule, serializeRule,
+  findRuleBlock, countBraces, describeDifference,
+};

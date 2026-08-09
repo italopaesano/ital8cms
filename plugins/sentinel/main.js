@@ -50,7 +50,7 @@ const { buildSubject, findFirstMatch } = require('./lib/ruleMatcher');
 const { testRequest } = require('./lib/ruleTracer');
 const { validateRules, logValidationResults } = require('./lib/ruleValidator');
 const setJson5Key = require('../../core/setJson5Key');
-const { setRuleAction: editRuleAction } = require('./lib/rulesFileEditor');
+const { setRuleAction: editRuleAction, replaceRule } = require('./lib/rulesFileEditor');
 const { renderDecoy, resolveDecoyPath } = require('./lib/decoyRenderer');
 const { CanaryRegistry, findCanary } = require('./lib/canaryRegistry');
 const { SessionCoherence } = require('./lib/sessionCoherence');
@@ -1054,6 +1054,21 @@ module.exports = {
         // visibile senza aprire il file.
         bansImmediately: !!(r.escalate && r.escalate.ban),
       })),
+      /**
+       * Le regole come stanno SUL FILE, non compilate.
+       *
+       * `getRules()` restituisce ciò che il motore sta applicando, con il
+       * `match` compilato (Set, RegExp): perfetto per una tabella, inutilizzabile
+       * per un form, che deve mostrare esattamente ciò che l'amministratore ha
+       * scritto e riscriverlo senza trasformarlo. Rileggere il file è
+       * l'operazione giusta anche per un secondo motivo: un form popolato dalla
+       * versione compilata riscriverebbe `["php"]` dove c'era `"php"`.
+       */
+      getRulesSource: () => {
+        const rulesData = loadJson5(path.join(pluginFolder, 'sentinelRules.json5'));
+        return Array.isArray(rulesData.rules) ? rulesData.rules : [];
+      },
+
       getSuspectedScanners: (minPaths) => (outcomeCensus ? outcomeCensus.getSuspectedScanners(minPaths) : []),
       getConfig: () => JSON.parse(JSON.stringify(custom)),
 
@@ -1112,6 +1127,51 @@ module.exports = {
           log('info', `regola "${ruleName}": ${result.previous} → ${action}`);
         }
         return result;
+      },
+
+      /**
+       * Sostituisce i campi di una regola (Vista C — form strutturato).
+       *
+       * ─── PERCHE SI VALIDA L'INSIEME E NON LA SINGOLA REGOLA ─────────────
+       * Alcune proprietà esistono solo a livello di file: un nome duplicato,
+       * una regola resa irraggiungibile da una `allow` che la precede. Validare
+       * la sola regola modificata lascerebbe passare proprio gli errori che
+       * nascono dal metterla insieme alle altre — e la GUI direbbe «salvato»
+       * mentre il motore scarta.
+       *
+       * Si sostituisce quindi la regola nella STRUTTURA già parsata, si valida
+       * il risultato con il validatore del motore, e solo se passa si tocca il
+       * testo su disco.
+       *
+       * ⚠ La scrittura riscrive il blocco testuale di QUELLA regola: i commenti
+       * scritti dentro di essa spariscono. Gli altri restano. L'interfaccia lo
+       * dichiara prima del salvataggio invece di lasciarlo scoprire dopo.
+       */
+      setRuleFields: (ruleName, fields) => {
+        const filePath = path.join(pluginFolder, 'sentinelRules.json5');
+        const rulesData = loadJson5(filePath);
+        const rules = Array.isArray(rulesData.rules) ? rulesData.rules : [];
+        const index = rules.findIndex((r) => r && r.name === ruleName);
+        if (index === -1) throw new Error(`regola non trovata: ${ruleName}`);
+
+        // Il nome non è modificabile: lega contatori, righe di log e promozioni.
+        const updated = { ...fields, name: ruleName };
+
+        const candidate = { ...rulesData, rules: rules.map((r, i) => (i === index ? updated : r)) };
+        const verdict = validateRules(candidate, {
+          knownRateLimiterRules: getRateLimiterRuleNames(),
+          allowedRedirectHosts: Array.isArray(custom.allowedRedirectHosts) ? custom.allowedRedirectHosts : [],
+          behindProxy: custom.trustProxy === true,
+        });
+        if (!verdict.valid) {
+          return { changed: false, valid: false, errors: verdict.errors, warnings: verdict.warnings };
+        }
+
+        replaceRule(filePath, ruleName, updated);
+        reloadRules();
+        log('info', `regola "${ruleName}" aggiornata dal form`);
+
+        return { changed: true, valid: true, errors: [], warnings: verdict.warnings };
       },
 
       /**
