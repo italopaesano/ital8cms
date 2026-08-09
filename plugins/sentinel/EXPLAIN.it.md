@@ -288,6 +288,73 @@ Un tasso improvviso non è capacità da alzare, è la firma di chi ha capito com
 funziona il censimento e sta provando a gonfiarlo. La contromisura, **misurata**,
 diventa un rilevatore.
 
+## 4-quinquies. La sessione: due trappole nell'implementazione
+
+Il concetto è semplice — si ricorda com'era la sessione all'inizio e si confronta
+— ma due dettagli hanno fatto la differenza fra un modulo che funziona e uno che
+sembra funzionare.
+
+### `toJSON()` di koa-session scarta le chiavi che iniziano con `_`
+
+La prima versione riponeva l'identificativo in `session._sentinelSid`, seguendo
+la convenzione dell'underscore per i campi interni. `Session.toJSON()` di
+koa-session salta ogni chiave che comincia per underscore («skip private
+stuff»): quel campo non è mai finito nel cookie.
+
+Conseguenza: a ogni richiesta se ne coniava uno nuovo, **ogni richiesta era la
+prima della sua sessione**, e nessuna anomalia poteva essere rilevata. Nessun
+errore, nessun log, tutti i test verdi — il modulo girava e non diceva mai
+niente. È stato colto solo facendo un login vero e guardando gli eventi.
+
+Il secondo vincolo sul nome è arrivato dopo il primo: la sessione viaggia in un
+cookie **firmato ma non cifrato**, quindi il client può decodificarne il
+contenuto. Una chiave `sentinelSid` annuncerebbe l'esistenza del filtro a
+chiunque guardi i propri cookie — la stessa informazione che il 404 di copertura
+esiste per negare. Da qui `sid`, che è quello che scriverebbe un framework
+qualsiasi.
+
+Entrambi i vincoli hanno ora un test che li presidia, e nessuno dei due si vede
+provando il modulo isolatamente.
+
+### Perché non si riusa `_expire`
+
+Sembra l'identificativo naturale: c'è già, è per sessione, e con
+`rolling: false` non cambia. Ma viene **riscritto a ogni salvataggio** della
+sessione, e la sessione si salva ogni volta che qualcosa la modifica — per
+esempio la rotazione del token CSRF al login. Un attaccante che sapesse questo
+avrebbe un modo per **azzerare la propria linea di base a comando**: basta
+provocare una scrittura di sessione. Un identificativo coniato una volta e mai
+più toccato non ha quel problema.
+
+## 4-sexies. Il merge additivo non porta le regole nuove
+
+`reconcileSchemaVersions` riconcilia anche le coppie **secondarie** di un plugin,
+quindi vede `sentinelRules.default.json5`. Ma tratta gli array come valori: e
+`rules` è un array.
+
+Vuol dire che una regola nuova distribuita col plugin **non raggiunge mai
+un'installazione esistente**. È lo stesso difetto di `menuOrder` in v2.72.0, ed è
+il motivo per cui questo plugin ha una cartella `migrations/`.
+
+Due dettagli di quegli step meritano di essere letti prima di scriverne altri:
+
+- **L'inserimento è testuale.** `setJson5Key(path, 'rules', nuovoArray)`
+  riscriverebbe l'intero array da una serializzazione, cancellando cornici di
+  sezione e descrizioni: in questo file i commenti sono metà del valore. Si
+  lavora sul testo con verifica differenziale, come in `lib/rulesFileEditor.js`.
+- **La posizione conta più di quanto sembri.** Accodare non dà errore, ma con
+  first-match-wins una regola in fondo arriva dopo `backup-probe`, che matcha
+  `.tar.gz` — e uno dei decoy distribuiti consegna il token proprio dentro un
+  finto `backup-….tar.gz`. Questo difetto era presente nel file distribuito dal
+  Passo 5 ed è stato corretto qui: canary e sessione stanno subito dopo la
+  whitelist.
+
+Gli script di migrazione **non fanno `require` del codice del plugin**, nemmeno
+di `lib/rulesFileEditor.js` che fa una cosa simile: girano su installazioni
+vecchie e devono comportarsi identici fra due anni. Una rifattorizzazione futura
+di quel modulo cambierebbe il comportamento di una migrazione già collaudata. La
+duplicazione è deliberata.
+
 ## 5. Il fingerprint: la scelta che sembra un errore
 
 **Lo User-Agent non entra nel calcolo dell'impronta.** Rileggendo
@@ -445,6 +512,8 @@ Emerso provando il plugin sul server reale, non ragionandoci sopra.
 | `lib/rulesFileEditor.js` | modifica chirurgica dell'`action` preservando i commenti |
 | `lib/decoyRenderer.js` | risoluzione, resa e tipo dei contenuti fittizi |
 | `lib/canaryRegistry.js` | conio dei token esca, memoria del destinatario, riconoscimento |
+| `lib/sessionCoherence.js` | linea di base per sessione autenticata e sue anomalie |
+| `migrations/` | step che portano le regole nuove sulle installazioni esistenti |
 | `lib/alertDispatcher.js` | canale unico delle allerte, con finestra di silenzio per genere |
 
 Nel core: `createSentinelGate` in `core/priorityMiddlewares/runtimeGate.js`,

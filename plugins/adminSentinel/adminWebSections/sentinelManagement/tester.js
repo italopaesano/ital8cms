@@ -98,14 +98,20 @@
     const roles = ($('tRoles').value || '')
       .split(',').map((r) => parseInt(r.trim(), 10)).filter(Number.isInteger);
 
+    const sessionAnomalies = Array.from($('tSessionAnomaly').selectedOptions).map((o) => o.value);
+
     const spec = {
       path: $('tPath').value.trim(),
       method: $('tMethod').value,
       ip: $('tIp').value.trim() || undefined,
       query: $('tQuery').value.trim() || undefined,
       headers: $('tUa').value.trim() ? { 'User-Agent': $('tUa').value.trim() } : {},
-      authenticated: $('tAuth').checked || roles.length > 0,
+      // Le anomalie di sessione implicano l'autenticazione: a runtime esistono
+      // solo lì, e lasciarle scegliere su una prova anonima farebbe credere che
+      // la regola non scatti per un motivo diverso da quello vero.
+      authenticated: $('tAuth').checked || roles.length > 0 || sessionAnomalies.length > 0,
       roleIds: roles,
+      sessionAnomalies: sessionAnomalies,
       browserProfile: $('tBrowser').checked,
     };
 

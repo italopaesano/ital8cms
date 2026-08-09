@@ -192,6 +192,47 @@ describe('foglia canary', () => {
   });
 });
 
+describe('foglia sessionAnomaly', () => {
+  test('true è ammesso', () => {
+    const r = validateRules({ rules: [rule({ match: { sessionAnomaly: true } })] });
+    expect(r.valid).toBe(true);
+    expect(r.rules[0].match.sessionAnomaly).toBe(true);
+  });
+
+  test('un elenco di anomalie note viene compilato in un Set', () => {
+    const r = validateRules({ rules: [rule({ match: { sessionAnomaly: ['uaChanged', 'scriptClient'] } })] });
+    expect(r.valid).toBe(true);
+    expect(Array.from(r.rules[0].match.sessionAnomaly).sort()).toEqual(['scriptClient', 'uaChanged']);
+  });
+
+  test('una singola anomalia si può scrivere senza array', () => {
+    const r = validateRules({ rules: [rule({ match: { sessionAnomaly: 'uaChanged' } })] });
+    expect(r.valid).toBe(true);
+    expect(r.rules[0].match.sessionAnomaly.has('uaChanged')).toBe(true);
+  });
+
+  test('un\'anomalia inventata è rifiutata, con l\'elenco di quelle valide', () => {
+    // Un refuso qui produrrebbe una regola che non scatta mai, e scoprirlo
+    // richiederebbe di aspettare un attacco che non viene fermato.
+    const r = validateRules({ rules: [rule({ match: { sessionAnomaly: ['uaChanged', 'inventata'] } })] });
+    expect(r.valid).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/inventata/);
+    expect(r.errors.join(' ')).toMatch(/uaChanged/);
+  });
+
+  test.each([[false], [[]], [1]])('%p è rifiutato', (value) => {
+    const r = validateRules({ rules: [rule({ match: { sessionAnomaly: value } })] });
+    expect(r.valid).toBe(false);
+  });
+
+  test('sessionAnomaly da sola è una condizione sufficiente', () => {
+    const r = validateRules({
+      rules: [{ name: 'sessione', action: 'block', appliesTo: 'authenticated', match: { sessionAnomaly: true } }],
+    });
+    expect(r.valid).toBe(true);
+  });
+});
+
 describe('escalate.ban — il blocco immediato', () => {
   const banRule = (over) => rule({ action: 'block', escalate: { rateLimiterRule: 'scanner', ...over } });
 

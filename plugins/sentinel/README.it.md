@@ -24,6 +24,7 @@ che fai tu dopo aver letto i tuoi dati.
 - [Contenuti fittizi (decoy)](#contenuti-fittizi-decoy)
 - [Token esca (canary)](#token-esca-canary)
 - [Ban immediato](#ban-immediato-escalateban)
+- [Coerenza di sessione](#coerenza-di-sessione)
 - [Il control plane](#il-control-plane)
 - [I dati prodotti](#i-dati-prodotti)
 - [Interconnessioni](#interconnessioni)
@@ -130,6 +131,7 @@ contano di più:
 | `log.retentionDays` | `365` | |
 | `log.maxTotalBytes` | `200 MB` | Tetto di dimensione, oltre alla retention a tempo. |
 | `census.censusIpMode` | `"count"` | `none` / `count` / `full` — vedi [Privacy](#privacy). |
+| `sessionCoherence.enabled` | `true` | Sorveglia se una sessione autenticata continua ad assomigliare a sé stessa. |
 | `alertRecipient` | `""` | Email per le allerte operative (richiede il plugin `mailer`). |
 
 ### Due tetti indipendenti sull'enforcement
@@ -184,6 +186,9 @@ espliciti: `all`, `any`, `not`.
 | `roleIds` | `[0, 1]` |
 | `fingerprint` | `["a3f9c2e1b7d4"]` |
 | `fingerprintClass` | `{ coherent: false, family: "curl" }` |
+| `canary` | `true` · `"known"` · `"unknown"` — vedi [token esca](#token-esca-canary) |
+| `sessionAnomaly` | `true` · `["uaChanged", "scriptClient"]` — vedi [coerenza di sessione](#coerenza-di-sessione) |
+| `status` | `[404, 403]` — solo nella valutazione dell'esito |
 
 **I path si scrivono senza `globalPrefix`**, che viene anteposto dal codice —
 stessa convenzione di `maintenance.exemptPaths`.
@@ -398,6 +403,83 @@ Il contenuto dei file è tenuto in memoria dopo la prima lettura — chi scandis
 il sito non deve poter dettare il ritmo delle nostre letture su disco. In
 `debugMode` la cache è spenta e un ricaricamento delle regole la svuota.
 
+## Coerenza di sessione
+
+Un cookie di sessione rubato **funziona**. È tutto il punto del furto: chi lo
+presenta *è* l'utente, per il server. Nessun controllo di password lo ferma,
+nessun controllo di ruolo, nessun rate limit — perché non c'è niente da
+indovinare e niente da forzare.
+
+L'unica cosa che il ladro non eredita insieme al cookie è il **client**. La
+sessione era nata su un Firefox su Linux da un certo indirizzo, e da un certo
+momento arriva da `python-requests`.
+
+```json5
+{
+  name: "session-hijack-signal",
+  action: "monitor",
+  appliesTo: "authenticated",
+  match: { sessionAnomaly: ["uaChanged", "scriptClient"] },   // true = una qualsiasi
+}
+```
+
+| Anomalia | Cosa dice | Rumore |
+|---|---|---|
+| `uaChanged` | Lo User-Agent è cambiato a metà sessione | **Bassissimo**: un browser non lo cambia |
+| `scriptClient` | Un cookie valido in mano a qualcosa che non è un browser. Non è un cambiamento, è uno **stato** | Basso |
+| `fingerprintChanged` | È cambiata la forma degli header | Basso |
+| `networkChanged` | L'indirizzo è passato a un altro blocco (/24 o /48) | Medio |
+| `ipChanged` | L'indirizzo è cambiato | **Alto**: mobile ↔ WiFi |
+
+### La linea di base non si aggiorna mai
+
+La prima richiesta vista per una sessione fissa il riferimento, e da lì non si
+tocca più.
+
+L'alternativa sarebbe inutile: se dopo un'anomalia si adottasse il nuovo valore
+come riferimento, la richiesta successiva del ladro tornerebbe «coerente» e la
+sessione dirottata risulterebbe pulita **per tutto il resto della sua vita** —
+cioè proprio per la parte in cui viene usata davvero. Non aggiornando, una
+sessione che ha cambiato pelle resta segnalata a ogni richiesta finché non scade.
+
+Il prezzo è dichiarato: un utente mobile che passa da rete dati a WiFi resta
+marcato `ipChanged` fino al logout. Per questo la regola distribuita guarda
+`uaChanged` e `scriptClient`, non `ipChanged`.
+
+### Solo sessioni autenticate
+
+Due ragioni che portano allo stesso posto. Una sessione anonima non ha niente da
+rubare, quindi il segnale non descriverebbe nulla; e tracciarla richiederebbe di
+**crearla**, cioè mandare un cookie a ogni visitatore del sito — un cambiamento
+di comportamento con conseguenze (banner, informativa) sproporzionate al segnale.
+
+L'identificativo di sessione è coniato una volta e riposto nella sessione stessa.
+Non si riusa `_expire`: viene riscritto a ogni salvataggio, quindi qualunque cosa
+modifichi la sessione — la rotazione del token CSRF, per dirne una — azzererebbe
+la linea di base, e sarebbe un modo per un attaccante di ripulirsi da solo.
+
+### Limite noto
+
+Lo stato è **in memoria**. Dopo un riavvio le linee di base si perdono e la prima
+richiesta successiva di ogni sessione ne fissa una nuova, su come il client
+appare *in quel momento*: se il riavvio capita a dirottamento già avvenuto, la
+sessione risulterà coerente. Lo stesso fra worker diversi in cluster. È un
+sensore in più, non l'unico presidio sulle sessioni.
+
+### Prima di promuovere a `block`
+
+È la prima regola distribuita che, promossa, può **chiudere fuori un utente
+autenticato**. Devono cadere tre tetti, e i default ne lasciano in piedi due:
+
+| Tetto | Default |
+|---|---|
+| `custom.mode` | `monitor` — nessuna regola agisce |
+| `custom.authenticatedTraffic.mode` | `monitor` — nessuna regola agisce **sugli autenticati** |
+| stato del gate | `running`, commutabile con `npm run cli -- sentinel monitor` |
+
+E i ruoli in `enforceExemptRoles` (default `[0, 1]`) restano **osservati ma mai
+bloccati**, in qualsiasi configurazione.
+
 ## Il control plane
 
 ```bash
@@ -526,11 +608,18 @@ individuale.
 Se attivi `authenticatedTraffic`, stai monitorando **persone identificate**:
 dichiaralo nella tua informativa.
 
+Lo stesso vale, in modo più diretto, per la **coerenza di sessione**: la linea di
+base tiene in memoria User-Agent, impronta e indirizzo di ogni sessione
+autenticata, associati allo username. Non finisce su disco e scade con la
+sessione (`sessionCoherence.ttlHours`, default 24), ma è a tutti gli effetti
+osservazione di una persona identificata mentre naviga. Se l'informativa del sito
+non lo copre, `sessionCoherence.enabled: false` lo spegne senza toccare il resto
+del filtro.
+
 ## Cosa NON fa (ancora)
 
 Trappole di livello superiore (finto pannello che registra i tentativi), `drop`
-vero, `tarpit`, coerenza di sessione (cambio di User-Agent dentro la stessa
-sessione = sessione rubata), reputazione locale delle impronte.
+vero, `tarpit`, reputazione locale delle impronte.
 Roadmap completa e stato di avanzamento in [`TODO.md`](./TODO.md).
 
 La lettura dei dati passa dalla GUI di [`adminSentinel`](../adminSentinel/README.it.md);

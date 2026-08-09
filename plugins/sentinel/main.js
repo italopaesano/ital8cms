@@ -53,6 +53,7 @@ const setJson5Key = require('../../core/setJson5Key');
 const { setRuleAction: editRuleAction } = require('./lib/rulesFileEditor');
 const { renderDecoy, resolveDecoyPath } = require('./lib/decoyRenderer');
 const { CanaryRegistry, findCanary } = require('./lib/canaryRegistry');
+const { SessionCoherence } = require('./lib/sessionCoherence');
 const { AlertDispatcher } = require('./lib/alertDispatcher');
 const { SentinelLog } = require('./lib/sentinelLog');
 const { FingerprintCensus, OutcomeCensus } = require('./lib/census');
@@ -74,6 +75,7 @@ let fingerprintCensus = null;
 let outcomeCensus = null;
 let hitCounter = null;
 let canaryRegistry = null;
+let sessionCoherence = null;
 let alerts = null;
 let sweepTimer = null;
 let censusSaveTimer = null;
@@ -228,6 +230,48 @@ function sendAlert(payload) {
   if (!alerts) return;
   const { kind, ...rest } = payload || {};
   alerts.notify(kind || 'diskBudget', rest);
+}
+
+/**
+ * Confronta la richiesta autenticata con la linea di base della sua sessione.
+ *
+ * Gira **prima** della valutazione delle regole perché il risultato è una
+ * condizione come le altre, e come le altre dev'essere calcolato una volta sola.
+ *
+ * Nessun effetto sul traffico anonimo: una sessione anonima non ha niente da
+ * rubare, e tracciarla richiederebbe di crearla — cioè mandare un cookie a ogni
+ * visitatore, che è un cambiamento di comportamento sproporzionato al segnale.
+ *
+ * Fail-soft: qualunque problema qui restituisce «nessuna anomalia», mai
+ * un'eccezione. Il resto del filtro deve continuare a funzionare.
+ *
+ * @returns {string[]}
+ */
+function inspectSession(ctx, fingerprint, clientIp) {
+  if (!sessionCoherence) return [];
+  const session = ctx.session;
+  if (!session || !session.authenticated) return [];
+
+  try {
+    const sessionId = SessionCoherence.resolveSessionId(session);
+    if (!sessionId) return [];
+
+    const fpClass = fingerprint.fpClass || {};
+    const result = sessionCoherence.observe(sessionId, {
+      userAgent: ctx.get ? (ctx.get('User-Agent') || '') : '',
+      fp: fingerprint.fp,
+      ip: clientIp,
+      username: (session.user && session.user.username) || null,
+      // Un cookie valido in mano a qualcosa che non è un browser. Non è un
+      // cambiamento ma uno stato, ed è già di per sé la descrizione di un
+      // problema anche se quel client ha usato il cookie fin dall'inizio.
+      isScriptClient: fpClass.headerProfile === 'minimal' || fpClass.family === 'script-like',
+    });
+    return result.anomalies;
+  } catch (err) {
+    log('warn', `coerenza di sessione non valutata: ${err.message}`);
+    return [];
+  }
 }
 
 /**
@@ -396,6 +440,10 @@ function buildEvent(ctx, subject, rule, enforced, extra = {}) {
     // che non ha bisogno di essere interpretata.
     canary: subject.canary
       ? { token: subject.canary.token, status: subject.canary.status }
+      : null,
+    // Presente solo quando la sessione ha smesso di assomigliare a sé stessa.
+    sessionAnomalies: subject.sessionAnomalies && subject.sessionAnomalies.length > 0
+      ? subject.sessionAnomalies
       : null,
   };
 }
@@ -627,6 +675,7 @@ const engine = {
       // Cercato UNA volta per richiesta, non una per regola: la scansione tocca
       // percorso e querystring, e quasi nessuna richiesta contiene un token.
       canary: findCanary(canaryRegistry, ctx.path, ctx.querystring),
+      sessionAnomalies: inspectSession(ctx, fingerprint, clientIp),
     });
 
     const rule = findFirstMatch(rules, subject, matcher);
@@ -771,6 +820,11 @@ module.exports = {
       canaryRegistry = new CanaryRegistry(canaryConf);
     }
 
+    const sessionConf = custom.sessionCoherence || {};
+    if (sessionConf.enabled !== false) {
+      sessionCoherence = new SessionCoherence(sessionConf);
+    }
+
     sentinelLog = new SentinelLog(dataDir, { ...(custom.log || {}), instanceId }, {
       log: (level, message) => log(level, message),
       onAlert: (payload) => sendAlert(payload),
@@ -799,6 +853,7 @@ module.exports = {
           fingerprintCensus.sweep();
           outcomeCensus.sweep();
           if (canaryRegistry) canaryRegistry.sweep();
+          if (sessionCoherence) sessionCoherence.sweep();
           sentinelLog.enforceSizeBudget();
           checkEvictionRate();
         } catch (err) {
@@ -882,6 +937,7 @@ module.exports = {
         fingerprints: fingerprintCensus ? fingerprintCensus.getStats() : null,
         outcomes: outcomeCensus ? outcomeCensus.getStats() : null,
         canary: canaryRegistry ? canaryRegistry.getStats() : null,
+        sessions: sessionCoherence ? sessionCoherence.getStats() : null,
         alerts: alerts ? alerts.getStats() : null,
       }),
       getRuleSummary: () => (hitCounter ? hitCounter.getSummary() : []),

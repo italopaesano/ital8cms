@@ -1,6 +1,6 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "schemaVersion": 2,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 3,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   "active": 1,
 
   // Weight 3: prima di analytics (5) e rateLimiter (5). Conta poco in pratica —
@@ -68,6 +68,48 @@
       // Ruoli mai soggetti a ENFORCEMENT (restano sempre osservati).
       // 0 = root, 1 = admin.
       "enforceExemptRoles": [0, 1],
+    },
+
+    // ── Coerenza di sessione ──
+    //
+    // Un cookie di sessione rubato FUNZIONA: chi lo presenta è l'utente, per il
+    // server. Nessuna password da indovinare, nessun rate limit che serva. Ma il
+    // ladro non eredita il CLIENT: la sessione era nata su Firefox/Linux da un
+    // certo indirizzo, e a un certo punto arriva da python-requests.
+    //
+    // La prima richiesta vista per una sessione fissa la linea di base, che poi
+    // NON viene più aggiornata: se lo fosse, la richiesta dopo il dirottamento
+    // tornerebbe "coerente" e la sessione rubata risulterebbe pulita per il resto
+    // della sua vita. Il prezzo è che un utente mobile che passa da rete dati a
+    // WiFi resta marcato `ipChanged` fino al logout — per questo la regola
+    // distribuita guarda `uaChanged` e `scriptClient`, non `ipChanged`.
+    //
+    // Solo sessioni AUTENTICATE: una sessione anonima non ha niente da rubare, e
+    // tracciarla richiederebbe di crearla, cioè mandare un cookie a ogni
+    // visitatore del sito.
+    //
+    // Anomalie riconosciute dalla foglia `sessionAnomaly` nelle regole:
+    //   uaChanged           lo User-Agent è cambiato a metà sessione (il più
+    //                       affidabile: un browser non lo cambia)
+    //   fingerprintChanged  è cambiata la forma degli header
+    //   networkChanged      l'indirizzo è passato a un altro blocco (/24 o /48)
+    //   ipChanged           l'indirizzo è cambiato (rumoroso: mobile ↔ WiFi)
+    //   scriptClient        un cookie valido in mano a qualcosa che non è un
+    //                       browser. Non è un cambiamento, è uno stato.
+    //
+    // LIMITE: lo stato è in memoria. Dopo un riavvio le linee di base si perdono
+    // e la prima richiesta successiva ne fissa una nuova su come il client appare
+    // in quel momento. Se il riavvio capita a dirottamento già avvenuto, la
+    // sessione risulterà coerente. Stessa cosa fra worker diversi in cluster.
+    "sessionCoherence": {
+      "enabled": true,
+
+      // Tetto e scadenza. Le sessioni tracciate sono solo quelle autenticate,
+      // quindi la chiave NON è controllata da chi attacca (servirebbero altrettanti
+      // login validi): la scadenza si conta dall'ultimo uso, al contrario dei
+      // token canary. Il default è allineato al maxAge della sessione (24h).
+      "maxSessions": 5000,
+      "ttlHours": 24,
     },
 
     // ────────────────────────────────────────────────────────────────

@@ -91,6 +91,44 @@
     },
 
     // ─────────────────────────────────────────────────────────────────────────
+    // TOKEN ESCA — il segnale più certo che questo plugin sa produrre
+    // ─────────────────────────────────────────────────────────────────────────
+    {
+      name: "canary-token-used",
+      enabled: true,
+      category: "canary",
+      description:
+        "Qualcuno ha usato un token esca. I token esistono SOLO dentro il corpo di un decoy servito a un client specifico: nessun motore di ricerca li indicizza, nessun link ci porta, nessun utente li digita. Chi ne richiede uno ha letto il decoy e ha deciso di seguirlo. Non è un'inferenza come tutto il resto di questo file: è una certezza, e sta in cima perché non ha senso che un'altra regola la anticipi. Nota: la segnalazione (log + allerta) parte comunque, anche se questa regola viene cancellata o resta in monitor — è l'unico segnale del plugin che non dipende da una riga di questo file.",
+      action: "monitor",
+      match: {
+        canary: true,   // true = qualunque token; "known" = solo quelli ancora in registro
+      },
+      // Quando promuovi questa regola a "block", questo è l'unico posto del file
+      // in cui `ban: true` è difendibile: non c'è insistenza da accumulare,
+      // il primo evento è già la prova. Richiede il plugin rateLimiter attivo.
+      // escalate: { rateLimiterRule: "scanner", ban: true, banSeconds: 86400 },
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SESSIONI AUTENTICATE
+    // ─────────────────────────────────────────────────────────────────────────
+    {
+      name: "session-hijack-signal",
+      enabled: true,
+      category: "session",
+      description:
+        "Una sessione autenticata ha smesso di assomigliare a sé stessa. Un cookie rubato funziona — chi lo presenta È l'utente, per il server — ma il ladro non eredita il client: la sessione era nata su un browser e a un certo punto arriva da uno script, oppure lo User-Agent cambia a metà. Sono i due segnali con meno falsi positivi: un browser non cambia User-Agent, e un cookie valido in mano a python-requests è già di per sé la descrizione di un problema. NON guarda l'indirizzo: cambia da solo passando da rete dati a WiFi, e la linea di base non si aggiorna mai, quindi marcherebbe la sessione fino al logout. Se ti serve, aggiungi \"ipChanged\" o \"networkChanged\" all'elenco.",
+      action: "monitor",
+      appliesTo: "authenticated",
+      match: {
+        sessionAnomaly: ["uaChanged", "scriptClient"],
+      },
+      // Promuovendo questa regola, ricorda che `authenticatedTraffic.mode` è il
+      // tetto: finché resta "monitor" nessuna regola agisce sugli autenticati,
+      // e i ruoli in `enforceExemptRoles` restano esenti in ogni caso.
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
     // FILE SENSIBILI
     // ─────────────────────────────────────────────────────────────────────────
     {
@@ -194,25 +232,6 @@
       match: {
         query: "regex:(\\.\\./|\\.\\.%2f|%2e%2e[/%]|/etc/passwd|c:\\\\windows)",
       },
-    },
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // TOKEN ESCA — il segnale più certo che questo plugin sa produrre
-    // ─────────────────────────────────────────────────────────────────────────
-    {
-      name: "canary-token-used",
-      enabled: true,
-      category: "canary",
-      description:
-        "Qualcuno ha usato un token esca. I token esistono SOLO dentro il corpo di un decoy servito a un client specifico: nessun motore di ricerca li indicizza, nessun link ci porta, nessun utente li digita. Chi ne richiede uno ha letto il decoy e ha deciso di seguirlo. Non è un'inferenza come tutto il resto di questo file: è una certezza, e sta in cima perché non ha senso che un'altra regola la anticipi. Nota: la segnalazione (log + allerta) parte comunque, anche se questa regola viene cancellata o resta in monitor — è l'unico segnale del plugin che non dipende da una riga di questo file.",
-      action: "monitor",
-      match: {
-        canary: true,   // true = qualunque token; "known" = solo quelli ancora in registro
-      },
-      // Quando promuovi questa regola a "block", questo è l'unico posto del file
-      // in cui `ban: true` è difendibile: non c'è insistenza da accumulare,
-      // il primo evento è già la prova. Richiede il plugin rateLimiter attivo.
-      // escalate: { rateLimiterRule: "scanner", ban: true, banSeconds: 86400 },
     },
 
     // ─────────────────────────────────────────────────────────────────────────

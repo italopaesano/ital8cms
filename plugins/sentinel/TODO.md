@@ -77,7 +77,7 @@ rende leggibile e governabile quello che c'è, poi si aggiungono le azioni.**
 | ~~**3**~~ | ~~Tester delle regole~~ ✅ | Serve appena si comincia a scrivere regole proprie, ed è il prerequisito per scrivere in sicurezza quelle dei passi successivi |
 | ~~**4**~~ | ~~`redirect` + `decoy` L0/L1~~ ✅ | Gate, validatore e non-interferenza erano **già scritti e testati**: mancava solo chi produce il corpo. Miglior rapporto valore/codice nuovo |
 | ~~**5**~~ | ~~Canary (`decoy` L2) + `banClient` + allerte~~ ✅ | Il salto da difesa passiva a **sensore**: certezza di un attaccante attivo, non inferenza |
-| **6** | Coerenza di sessione | Miglior segnale del blocco autenticato, ma introduce stato e foglie nuove: meglio quando la GUI può mostrarne gli effetti |
+| ~~**6**~~ | ~~Coerenza di sessione~~ ✅ | Miglior segnale del blocco autenticato, ma introduce stato e foglie nuove: meglio quando la GUI può mostrarne gli effetti |
 | **7** | `drop` reale e `tarpit` | Le uniche azioni che possono farti male da sole (retry aggressivi, esaurimento di file descriptor) |
 | **8** | Reputazione locale e apprendimento | Poggia sul censimento, che già raccoglie i dati: qui si aggiunge solo l'inferenza |
 
@@ -139,12 +139,27 @@ Due decisioni non ovvie prese qui:
   comportamento storico (parte anche in `monitor`); forzare un blocco è un'azione,
   e le azioni passano dai tetti dell'enforcement.
 
-**Passo 6 — Coerenza di sessione.** `BoundedStore` per sessione con tetto e TTL
-(le sessioni costano nulla da creare: altra chiave controllata dall'attaccante),
-foglia `sessionAnomaly`, cadenza per account. **È qui che scatta `migrations/`**:
-aggiungere foglie è additivo e il merge del boot lo copre, ma una rinomina o una
-rimozione va dichiarata *nello stesso passo*, bumpando la `schemaVersion` del
-**descrittore** (regola dell'orologio).
+**Passo 6 — Coerenza di sessione.** ✅ Fatto. `lib/sessionCoherence.js` (linea di
+base per sessione, cinque anomalie, tetto + TTL dall'ultimo uso), foglia
+`sessionAnomaly`, regola distribuita `session-hijack-signal` in monitor, card
+nella GUI, `--session-anomaly` nel tester.
+
+**`migrations/` è scattato**, ma non per il motivo previsto. Non c'è stata nessuna
+rinomina: quello che il merge non sa fare è aggiungere **elementi a un array**, e
+`rules` è un array — quindi le due regole distribuite nei Passi 5 e 6 non
+sarebbero mai arrivate su un'installazione esistente. Stesso difetto di
+`menuOrder` in v2.72.0. Due step, `v1→v2` (canary) e `v2→v3` (sessione), con
+inserimento **testuale** per non perdere i commenti e verifica differenziale
+prima di scrivere.
+
+Due difetti colti strada facendo, entrambi invisibili ai test isolati:
+- `koa-session.toJSON()` **scarta le chiavi che iniziano con `_`**: l'identificativo
+  di sessione non finiva nel cookie, ogni richiesta sembrava la prima della sua
+  sessione, e nessuna anomalia era rilevabile. Colto solo con un login vero.
+- Nel file distribuito dal Passo 5 la regola del canary stava **sotto**
+  `backup-probe`, che matcha `.tar.gz`: il token consegnato dentro un finto
+  `backup-….tar.gz` non l'avrebbe mai raggiunta. Ora canary e sessione stanno
+  subito dopo la whitelist.
 
 **Passi 7-8.** Vedi §3 e §5.
 
@@ -500,13 +515,22 @@ e accumulare statistiche locali sulle firme viste.
 
 ## 8. Monitoraggio del traffico autenticato
 
-- [ ] Osservazione sempre attiva, enforcement disattivato di default
-- [ ] Coerenza di sessione: **cambio di User-Agent** dentro la stessa sessione
+- [x] Osservazione sempre attiva, enforcement disattivato di default
+- [x] Coerenza di sessione: **cambio di User-Agent** dentro la stessa sessione
       (segnale fortissimo di sessione rubata, quasi privo di falsi positivi)
-- [ ] Coerenza di sessione: cambio di IP / rete (più falsi positivi: mobile ↔ WiFi)
-- [ ] UA non-browser su sessione autenticata (`python-requests` con cookie valido)
-- [ ] Cadenza di richiesta per account (via `rateLimiter` con chiave account)
-- [ ] Nota privacy nel README: monitorare account = monitorare persone identificate,
+      → anomalia `uaChanged`
+- [x] Coerenza di sessione: cambio di IP / rete (più falsi positivi: mobile ↔ WiFi)
+      → anomalie `ipChanged` e `networkChanged`, **fuori** dalla regola distribuita
+      proprio per il rumore: la linea di base non si aggiorna mai, quindi un
+      utente mobile resterebbe marcato fino al logout
+- [x] UA non-browser su sessione autenticata (`python-requests` con cookie valido)
+      → anomalia `scriptClient`. Non è un cambiamento ma uno **stato**: vale anche
+      se il client è stato così fin dall'inizio
+- [x] Cadenza di richiesta per account (via `rateLimiter` con chiave account)
+      → già disponibile senza codice nuovo: `escalate` usa `user:<username>` come
+      chiave sul traffico autenticato, quindi basta dichiararlo su una regola con
+      `appliesTo: "authenticated"`
+- [x] Nota privacy nel README: monitorare account = monitorare persone identificate,
       va dichiarato nell'informativa del sito
 
 ---
@@ -596,7 +620,7 @@ e le decisioni che le rendono indolori vanno prese **ora**, non dopo.
       costante e il comportamento è identico a oggi: costo zero adesso, nessuna
       riscrittura dopo.
 - [ ] Lettura = merge di tutti gli shard (il twin admin lo fa già trasparentemente)
-- [ ] Documentare i limiti noti in cluster: stato in memoria per-worker
+- [x] Documentare i limiti noti in cluster: stato in memoria per-worker
       (censimento a caldo, coerenza di sessione) e escalation `rateLimiter`
       per-worker — limitazione che `rateLimiter` ha già oggi
 - [x] `append` di una singola riga JSONL è atomico su POSIX sotto i 4 KB:
@@ -613,7 +637,11 @@ nuova ad ogni richiesta e fa crescere il censimento senza limite, in memoria e s
 disco. Stessa forma di problema che `rateLimiter` risolve con lo sweep periodico.
 
 - [x] **Censimento delle firme**: tetto massimo di firme tracciate + eviction LRU
-- [ ] **Coerenza di sessione** (primo UA/IP visto per sessione): tetto + TTL
+- [x] **Coerenza di sessione** (primo UA/IP visto per sessione): tetto + TTL.
+      Qui la scadenza si conta dall'ULTIMO uso e non dalla creazione, al contrario
+      dei token canary: la chiave non è controllata da chi attacca (servirebbero
+      altrettanti login validi) e una sessione attiva non deve perdere la propria
+      linea di base mentre è in uso
 - [x] **Osservazione degli esiti per IP**: tetto + TTL
 - [x] Sweep periodico delle strutture scadute (modello: `rateLimiter` `sweepIntervalSeconds`)
 - [x] **Registro dei token canary**: tetto + TTL. Ogni risposta con decoy conia un

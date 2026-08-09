@@ -31,6 +31,7 @@
 'use strict';
 
 const { isValidCidr } = require('./ipMatcher');
+const { ANOMALY_KINDS } = require('./sessionCoherence');
 
 const VALID_ACTIONS = [
   'allow', 'monitor', 'block', 'drop', 'decoy', 'redirect', 'throttle', 'tarpit',
@@ -307,6 +308,24 @@ function compileMatchNode(node, where, errors) {
       return null;
     }
     out.canary = node.canary;
+    conditionCount++;
+  }
+
+  if (node.sessionAnomaly !== undefined) {
+    if (node.sessionAnomaly === true) {
+      out.sessionAnomaly = true;
+    } else {
+      const list = Array.isArray(node.sessionAnomaly) ? node.sessionAnomaly : [node.sessionAnomaly];
+      const unknown = list.filter((kind) => !ANOMALY_KINDS.includes(kind));
+      if (list.length === 0 || unknown.length > 0) {
+        errors.push(
+          `${where}.sessionAnomaly: atteso true oppure uno o più fra ${ANOMALY_KINDS.join(', ')}` +
+          (unknown.length ? ` (sconosciute: ${unknown.join(', ')})` : '')
+        );
+        return null;
+      }
+      out.sessionAnomaly = new Set(list);
+    }
     conditionCount++;
   }
 

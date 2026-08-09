@@ -185,6 +185,19 @@ function traceLeaf(leaf, node, subject, matcher) {
         wantAny ? 'un token qualsiasi' : `token ${node.canary}`,
         found ? `${found.token} (${found.status})` : '(nessun token nella richiesta)');
     }
+    case 'sessionAnomaly': {
+      const found = subject.sessionAnomalies || [];
+      const wantAny = node.sessionAnomaly === true;
+      const matched = found.length > 0
+        && (wantAny || found.some((k) => node.sessionAnomaly.has(k)));
+      return entry(matched,
+        wantAny ? 'una anomalia qualsiasi' : Array.from(node.sessionAnomaly),
+        found.length > 0
+          ? found.join(', ')
+          : (subject.authenticated
+            ? '(nessuna anomalia)'
+            : '(richiesta anonima: nessuna sessione da confrontare)'));
+    }
     case 'authenticated':
       return entry(subject.authenticated === node.authenticated, node.authenticated, subject.authenticated);
     case 'roleIds':
@@ -201,7 +214,8 @@ function traceLeaf(leaf, node, subject, matcher) {
 
 const LEAF_KEYS = [
   'path', 'extension', 'method', 'userAgent', 'header', 'query',
-  'ip', 'status', 'canary', 'authenticated', 'roleIds', 'fingerprint', 'fingerprintClass',
+  'ip', 'status', 'canary', 'sessionAnomaly',
+  'authenticated', 'roleIds', 'fingerprint', 'fingerprintClass',
 ];
 
 /**
@@ -273,6 +287,14 @@ function testRequest(spec, rules, matcher, options = {}) {
     // caso d'uso. Cercarlo qui, e non nel matcher, tiene la ricerca a una sola
     // volta per prova come a runtime.
     canary: findCanary(options.canaryRegistry, ctx.path, ctx.querystring),
+    // Le anomalie di sessione si DICHIARANO nella prova, non si calcolano: la
+    // domanda del tester è «se questa sessione avesse cambiato User-Agent, la
+    // mia regola la prenderebbe?», e per rispondere non serve — né sarebbe
+    // possibile — riprodurre la storia di una sessione vera.
+    // Restano vincolate all'autenticazione, come a runtime.
+    sessionAnomalies: spec.authenticated && Array.isArray(spec.sessionAnomalies)
+      ? spec.sessionAnomalies
+      : [],
   });
   if (Number.isInteger(spec.status)) subject.status = spec.status;
 
@@ -322,6 +344,7 @@ function testRequest(spec, rules, matcher, options = {}) {
       roleIds: subject.roleIds,
       status: subject.status,
       canary: subject.canary,
+      sessionAnomalies: subject.sessionAnomalies,
       fp: subject.fp,
       fpClass: subject.fpClass,
     },

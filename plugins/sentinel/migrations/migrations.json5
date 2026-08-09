@@ -1,0 +1,42 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// Migrazioni del plugin sentinel.
+//
+// Il clock è la `schemaVersion` del DESCRITTORE (`pluginConfig.default.json5`),
+// che è la versione di struttura dell'intero pacchetto: uno step si applica
+// quando il descrittore vivo è a `from` e il `.default` è a `to`. Entrambi gli
+// step qui sotto modificano però un config SECONDARIO — `sentinelRules.json5` —
+// ed è proprio per questo che il descrittore va bumpato insieme: è la regola
+// dell'orologio, senza la quale il runner non partirebbe mai.
+//
+// `sentinelRules.default.json5` conserva la propria `schemaVersion: 1` di
+// proposito. Bumparla farebbe scattare la riconciliazione additiva su quella
+// coppia, che non ha nulla da aggiungere (le chiavi di primo livello sono già
+// tutte lì) e segnalerebbe un `unresolved` fuorviante: il lavoro lo fanno questi
+// script, non il merge.
+//
+// Vedi docs/decisions/config-migrations.it.md e core/migrationRunner.js.
+{
+  steps: [
+    {
+      from: 1,
+      to: 2,
+      title: "Regola del token esca (canary)",
+      automatic: true,
+      script: "from-v1-to-v2.js",
+      touches: ["plugins/sentinel/sentinelRules.json5"],
+      reason:
+        "Il merge additivo del boot riconcilia anche le coppie secondarie del  plugin, quindi vede sentinelRules.default.json5, ma tratta gli ARRAY come  valori — scelta giusta, perché fonderli significherebbe indovinare la  posizione e sovrascrivere l'ordine deciso dall'amministratore. `rules` è  un array: una regola nuova distribuita col plugin non raggiunge mai  un'installazione esistente. Senza questo step il codice dei token esca ci  sarebbe e la regola che li intercetta no. Stesso difetto di `menuOrder` in  v2.72.0. L'inserimento è testuale (i commenti dentro `rules` sono metà del  valore del file), idempotente, e va SUBITO DOPO LA WHITELIST e non in  fondo: con first-match-wins una regola accodata arriverebbe dopo  `backup-probe`, che matcha .tar.gz, e uno dei decoy distribuiti consegna  il token proprio dentro un finto backup-....tar.gz.",
+    },
+    {
+      from: 2,
+      to: 3,
+      title: "Regola sulla coerenza di sessione",
+      automatic: true,
+      script: "from-v2-to-v3.js",
+      touches: ["plugins/sentinel/sentinelRules.json5"],
+      reason:
+        "Stessa ragione dello step precedente: `rules` è un array e il merge non  lo tocca. Senza questo step, su un'installazione esistente le anomalie di  sessione verrebbero calcolate a ogni richiesta autenticata e buttate via,  perché nessuna regola le guarderebbe. La regola viene inserita DOPO  `canary-token-used` (ancora esplicita) e non semplicemente dopo la  whitelist: senza l'ancora finirebbe sopra quella dello step precedente, e  l'ordine di un'installazione migrata differirebbe da quello di una nuova.",
+    },
+  ],
+}

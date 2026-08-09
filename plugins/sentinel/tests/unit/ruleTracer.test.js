@@ -26,6 +26,9 @@ function subjectFor(spec) {
     clientIp: ctx.ip,
     globalPrefix: '',
     canary: findCanary(canaryRegistry, ctx.path, ctx.querystring),
+    sessionAnomalies: spec.authenticated && Array.isArray(spec.sessionAnomalies)
+      ? spec.sessionAnomalies
+      : [],
   });
   if (Number.isInteger(spec.status)) s.status = spec.status;
   return s;
@@ -96,6 +99,9 @@ describe('conformità fra il valutatore veloce e quello che racconta', () => {
     { canary: true },
     { canary: 'known' },
     { canary: 'unknown' },
+    { sessionAnomaly: true },
+    { sessionAnomaly: ['uaChanged'] },
+    { sessionAnomaly: ['ipChanged', 'scriptClient'] },
     { extension: ['php'], method: ['GET'] },
     { all: [{ path: '/a.php' }, { method: ['GET'] }] },
     { any: [{ path: '/nope' }, { extension: ['php'] }] },
@@ -114,6 +120,12 @@ describe('conformità fra il valutatore veloce e quello che racconta', () => {
     { path: '/a.php', status: 404, headers: {} },
     { path: `/backup-${KNOWN_TOKEN}.tar.gz`, headers: {} },
     { path: `/telescope-${UNKNOWN_TOKEN}`, headers: {} },
+    { path: '/pannello', authenticated: true, sessionAnomalies: ['uaChanged'], headers: {} },
+    { path: '/pannello', authenticated: true, headers: {} },
+    // Anomalie dichiarate su una richiesta ANONIMA: devono essere ignorate da
+    // entrambi i valutatori allo stesso modo, o la foglia scatterebbe dove
+    // sessione non c'è.
+    { path: '/pannello', sessionAnomalies: ['uaChanged'], headers: {} },
   ];
 
   for (const node of NODES) {

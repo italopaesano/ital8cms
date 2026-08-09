@@ -46,6 +46,23 @@ La card **resta nascosta** finché nessun token è stato consegnato: una card se
 vuota su una dashboard di sicurezza insegna a smettere di guardarla, e questa è
 quella che non si deve smettere di guardare.
 
+### Coerenza delle sessioni
+
+Le sessioni autenticate che hanno smesso di assomigliare a sé stesse: la linea di
+base è come la sessione appariva alla **prima** richiesta, e non viene mai
+aggiornata.
+
+Le due anomalie in rosso — `uaChanged` e `scriptClient` — sono quelle con meno
+falsi positivi: un browser non cambia User-Agent a metà sessione, e un cookie
+valido in mano a `python-requests` descrive già un problema. Quelle in grigio
+(`ipChanged`, `networkChanged`) sono rumorose per via del mobile.
+
+Il contatore **Con anomalie** conta le *sessioni*, non le richieste: una sessione
+dirottata produce l'anomalia a ogni richiesta successiva, e sommarle direbbe
+quanto è stata attiva, non quante sessioni sono compromesse.
+
+Anche questa card resta nascosta finché non c'è niente da mostrare.
+
 ### Sospetti scanner
 
 Client che collezionano molti percorsi distinti falliti. **Non derivano da
@@ -220,6 +237,11 @@ L'interruttore **«Simula un browser reale»** conta più di quanto sembri: senz
 la richiesta sintetica ha solo gli header che le dai e appare sempre come un
 client script — chiunque incolli uno User-Agent di Chrome inciampa nella regola
 sull'incoerenza senza capire perché.
+
+Le **anomalie di sessione** si dichiarano invece di essere calcolate: la domanda
+è «se questa sessione avesse cambiato client, la mia regola la prenderebbe?», e
+riprodurre la storia di una sessione vera in una prova sintetica non avrebbe
+senso. Valgono solo con «Richiesta autenticata» attiva, come a runtime.
 
 Lo stesso strumento è disponibile da riga di comando
 (`npm run cli -- sentinel test <path>`), che è spesso dove serve: la domanda

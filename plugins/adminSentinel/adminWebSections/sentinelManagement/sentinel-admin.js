@@ -101,6 +101,7 @@
     }
 
     renderCanary(stats.canary);
+    renderSessions(stats.sessions);
     return true;
   }
 
@@ -144,6 +145,48 @@
         + '<td><code>' + esc(t.usedByIp || '—') + '</code></td>'
         + '<td><code>' + esc(t.deliveredToIp || '—') + '</code></td>'
         + '<td>' + same + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  // ── Coerenza di sessione ──────────────────────────────────────────────────
+
+  function renderSessions(sessions) {
+    const card = $('sessionCard');
+    if (!card) return;
+
+    if (!sessions || !sessions.tracked) {
+      card.classList.add('d-none');
+      return;
+    }
+    card.classList.remove('d-none');
+
+    $('sessTracked').textContent = num(sessions.tracked);
+    $('sessFlagged').textContent = num(sessions.flagged);
+    $('sessLive').textContent = num(sessions.live);
+
+    const rows = sessions.recent || [];
+    const body = $('sessionTable');
+    if (rows.length === 0) {
+      body.innerHTML = '<tr><td colspan="4" class="text-muted p-3">Nessuna anomalia rilevata.</td></tr>';
+      return;
+    }
+
+    body.innerHTML = rows.map(function (r) {
+      // L'indirizzo si mostra solo quando è cambiato: su un'anomalia di
+      // User-Agent la colonna direbbe due volte lo stesso valore.
+      var cambio = (r.baselineIp && r.currentIp && r.baselineIp !== r.currentIp)
+        ? esc(r.baselineIp) + ' → ' + esc(r.currentIp)
+        : '<span class="text-muted">—</span>';
+      var badges = (r.anomalies || []).map(function (a) {
+        var tono = (a === 'uaChanged' || a === 'scriptClient') ? 'bg-danger' : 'bg-secondary';
+        return '<span class="badge ' + tono + ' me-1">' + esc(a) + '</span>';
+      }).join('');
+      return '<tr>'
+        + '<td>' + esc(shortTime(r.at)) + '</td>'
+        + '<td><code>' + esc(r.username || '—') + '</code></td>'
+        + '<td>' + badges + '</td>'
+        + '<td><code>' + cambio + '</code></td>'
         + '</tr>';
     }).join('');
   }
