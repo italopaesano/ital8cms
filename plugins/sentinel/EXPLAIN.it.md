@@ -124,17 +124,38 @@ Il commento in testa a quella sezione di `runtimeGate.js` lo dice già: i punti 
 enforcement devono rispondere in modo *identico*, e un solo posto che produce il
 404 è l'unico modo di garantirlo.
 
-### Differenza nota: `Set-Cookie`
+### `Set-Cookie`: la differenza che c'era, e dove stava davvero
 
-Verificato sul server reale: il corpo e tutti gli header di un blocco sentinel
-coincidono con quelli di un 404 autentico, **tranne** che il 404 autentico può
-portare un `Set-Cookie` di sessione (`csrfProtection` semina un token nella
-sessione più a valle) mentre la risposta di blocco, che ritorna prima, no.
+Per un periodo il blocco è stato riconoscibile con **una sola richiesta**, e non
+dal corpo — quello era byte-identico — ma contando gli header: un 404 autentico
+rispondeva con **2** `Set-Cookie`, il 404 di sentinel con **0**.
 
-È una proprietà **preesistente** del reserved gate — che ha esattamente la stessa
-struttura — e non introdotta da sentinel. È annotata in [`TODO.md`](./TODO.md)
-fra i punti aperti: sistemarla significherebbe toccare il modo in cui la sessione
-viene committata, e va fatto per entrambi i gate insieme o per nessuno.
+La prima diagnosi è stata sbagliata, e vale la pena tenerne traccia. Sembrava una
+proprietà del *reserved gate* — stessa struttura, stesso ritorno anticipato — da
+sistemare «per entrambi i gate o per nessuno». Misurandola, il confine si è
+rivelato un altro: non passa fra i due gate, passa fra **chi risponde prima e chi
+risponde dopo la catena dei middleware dei plugin**. La causa era il middleware
+di `csrfProtection`, il cui corpo intero era `if (ctx.session) ensureToken(ctx)`:
+girando dopo il router toccava la sessione di ogni richiesta che arrivasse fin lì
+— asset, crawler, 404 — mentre un gate pre-router non ci passa mai.
+
+Il rimedio non poteva stare qui. Perché sentinel emettesse lo stesso `Set-Cookie`
+avrebbe dovuto **creare una sessione per ogni scanner bloccato**: firmare un
+cookie per traffico ostile, in contraddizione con la scelta già presa altrove in
+questo plugin (vedi `sessionCoherence.js`) di non mandare cookie a chi non ne ha.
+È stato corretto all'origine: il middleware, ridondante rispetto all'hook `head`
+e agli helper `csrfField()`/`csrfToken()`, è stato rimosso, e l'hook non conia più
+per gli anonimi. Nessun gate è stato toccato.
+
+Esito misurato: 404 vero e 404 di blocco rispondono entrambi **0** `Set-Cookie`,
+con e senza cookie di sessione del client. In più i **decoy** — che non passavano
+di lì e quindi rispondevano 0 mentre una pagina vera rispondeva 2 — hanno ora la
+stessa forma di una pagina vera.
+
+`set-cookie` è stato tolto dai volatili del test byte-per-byte, dove la sua
+presenza rendeva il test cieco proprio al canale che aveva rivelato il filtro, e
+c'è un test dedicato sulla parità del conteggio. Verificato che fallisce se il
+middleware torna.
 
 ## 4-bis. Le risposte che il plugin produce da sé
 

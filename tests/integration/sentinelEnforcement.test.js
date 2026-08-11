@@ -301,10 +301,38 @@ describe('sentinel — il 404 di blocco è indistinguibile da un 404 autentico',
     expect(blocked.status).toBe(genuine.status);
     expect(blocked.body).toBe(genuine.body);
 
-    const VOLATILE = new Set(['date', 'set-cookie', 'connection', 'keep-alive']);
+    // `set-cookie` NON è fra i volatili, ed è una correzione: escluderlo qui
+    // rendeva questo test cieco proprio al canale che ha poi rivelato il filtro
+    // dal vivo. Il 404 di sentinel esce da uno slot PRE-ROUTER, quello autentico
+    // attraversa tutta la catena; finché un middleware toccava la sessione dei
+    // visitatori senza cookie, il primo rispondeva con zero `Set-Cookie` e il
+    // secondo con due. Il corpo era identico e nessun test se ne accorgeva.
+    const VOLATILE = new Set(['date', 'connection', 'keep-alive']);
     const stable = (h) => Object.fromEntries(
       Object.entries(h).filter(([name]) => !VOLATILE.has(name.toLowerCase())));
     expect(stable(blocked.headers)).toEqual(stable(genuine.headers));
+  });
+
+  // Presidio esplicito del difetto misurato: un client SENZA cookie non deve
+  // poter separare le due risposte contando gli header. È un test a sé perché
+  // la parità sopra è un `toEqual` su un oggetto — questo dice cosa cercare a
+  // chi legge il fallimento.
+  test.each([
+    ['/zzz-sentinel.php',             '/zzz-non-esiste-affatto.ejs'],
+    ['/api/adminUsers/zzz.php',       '/api/adminUsers/zzz-non-esiste'],
+  ])('%s e %s emettono lo stesso numero di Set-Cookie', async (blockedPath, genuinePath) => {
+    const blocked = await httpGet(blockedPath);
+    const genuine = await httpGet(genuinePath);
+
+    const countCookies = (h) => {
+      const raw = h['set-cookie'];
+      if (raw === undefined) return 0;
+      return Array.isArray(raw) ? raw.length : 1;
+    };
+    expect(countCookies(blocked.headers)).toBe(countCookies(genuine.headers));
+    // E il numero atteso è zero: nessuna delle due risposte ha motivo di aprire
+    // una sessione per chi non ne ha una.
+    expect(countCookies(genuine.headers)).toBe(0);
   });
 
   test('sotto /api la forma è quella di Koa, non la pagina HTML', async () => {

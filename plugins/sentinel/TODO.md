@@ -201,7 +201,7 @@ il percorso delle richieste, la seconda sì, la terza tocca il boot.
 | # | Voce | Perché lì |
 |---|---|---|
 | ~~**R1**~~ ✅ | ~~Vista C — form strutturato in `adminSentinel`~~ | L'unica delle Tre Viste scoperta. Non tocca il motore: si aggiunge una scheda alla GUI e un metodo di scrittura al service |
-| **R2** | Il `Set-Cookie` sul 404 di blocco | Tocca il percorso delle richieste e va fatta **per entrambi i gate insieme o per nessuno**: `reservedGate` ha la stessa struttura |
+| ~~**R2**~~ ✅ | ~~Il `Set-Cookie` sul 404 di blocco~~ | Risolta all'origine, in `csrfProtection`: nessun gate toccato |
 | **R3** | I tre config core non materializzati al boot | Tocca l'avvio, cioè l'unica cosa che se si rompe non lascia neanche un log leggibile |
 
 **R1 — Vista C.** Il form campo-per-campo sulle regole, coordinato con l'editor
@@ -223,19 +223,30 @@ all'editor JSON5, non riscritte in una forma semplificata.
 - [x] Validazione dell'INSIEME, non della singola regola: nomi duplicati e regole
       irraggiungibili sono proprietà che esistono solo a livello di file
 
-**R2 — `Set-Cookie` sul 404 di blocco.** Verificato sul campo: corpo e header di
-un blocco coincidono con un 404 autentico *tranne* che quest'ultimo può portare
-un `Set-Cookie` di sessione, perché `csrfProtection` semina il token più a valle
-mentre il gate ritorna prima. È una proprietà **preesistente** del reserved gate,
-non introdotta da sentinel — e va sistemata per entrambi o per nessuno, o si
-sposta soltanto quale dei due gate è distinguibile. Vedi §4 di
-[`EXPLAIN.it.md`](./EXPLAIN.it.md).
+**R2 — `Set-Cookie` sul 404 di blocco.** ✅ **Chiusa, e senza toccare alcun gate.**
 
-- [ ] Decidere **se** chiuderla: la differenza è sfruttabile solo da chi può
-      confrontare due risposte sapendo già cosa cercare
-- [ ] Se sì: un solo intervento su `reservedGate` e `sentinelGate`
-- [ ] Estendere il test byte-per-byte a `set-cookie`, oggi nella lista dei
-      volatili — finché ci resta, il test non può accorgersi della regressione
+Misurato: 404 vero → **2** `Set-Cookie`, 404 di sentinel → **0**. Bastava contare
+gli header per separarli, con una sola richiesta, mentre il corpo era byte-identico.
+
+La causa non era nei gate: era il middleware di `csrfProtection`, il cui corpo
+intero era `if (ctx.session) ensureToken(ctx)`. Girando dopo il router toccava la
+sessione di ogni richiesta che arrivasse fin lì — asset, crawler, 404 — mentre
+sentinel risponde da uno slot pre-router e non ci passa mai. Ed era **ridondante**:
+l'hook `head` e gli helper `csrfField()`/`csrfToken()` coniano già per conto
+proprio. Rimosso: le due risposte tornano identiche (0 cookie entrambe), e con
+l'hook che non conia più per gli anonimi anche i **decoy** hanno ora la stessa
+forma di una pagina vera, invece di 0 cookie contro 2.
+
+L'ipotesi iniziale — «va fatta per entrambi i gate o per nessuno» — era sbagliata:
+il confine non passa fra i due gate, passa fra *chi risponde prima* e *chi risponde
+dopo* la catena dei middleware. Risolto a monte, entrambi i gate ne beneficiano
+senza modifiche.
+
+- [x] Diagnosi: la differenza nasce a valle, non nei gate
+- [x] Correzione in `csrfProtection` (middleware rimosso, hook che non conia per gli anonimi)
+- [x] `set-cookie` tolto dai volatili nel test byte-per-byte
+- [x] Test dedicato sulla parità dei `Set-Cookie` fra 404 vero e 404 di blocco
+      (verificato che fallisce se il middleware torna)
 
 **R3 — Config core non materializzati al boot.** Il boot materializza
 `plugins/` e `themes/` e *riconcilia* i tre core, ma se

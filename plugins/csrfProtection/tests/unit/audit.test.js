@@ -30,6 +30,31 @@ describe('csrfProtection · audit / stats / simulate (API per il twin admin)', (
       expect(s.originCheckEnabled).toBe(true);
       expect(s.totalBlocks).toBe(0);
       expect(s.blocksByReason).toEqual({ missing_or_invalid_token: 0, origin_mismatch: 0 });
+      expect(s.blocksByScope).toEqual({ authenticated: 0, authEntryPoint: 0, public: 0 });
+    });
+
+    // A parità di `reason` l'ambito cambia la diagnosi: un blocco su un varco di
+    // autenticazione è quasi sempre qualcuno che bussa al login senza token
+    // (scanner, client mal configurato); un blocco su una rotta pubblica è quasi
+    // sempre una pagina rotta da riparare.
+    test('il blocco è contato anche per ambito, e l\'ambito finisce nell\'audit', () => {
+      const ctx = createCtxMock({ method: 'POST', path: '/api/adminUsers/login', session: {}, headers: {}, host: 'localhost:3000' });
+      csrf._internals.validateRequest(ctx, { requiresAuth: false, isAuthEntryPoint: true });
+
+      const s = csrf._internals.getStats();
+      expect(s.blocksByScope).toEqual({ authenticated: 0, authEntryPoint: 1, public: 0 });
+      expect(csrf._internals.getRecentBlocks()[0]).toMatchObject({
+        path: '/api/adminUsers/login',
+        reason: 'missing_or_invalid_token',
+        scope: 'authEntryPoint',
+      });
+    });
+
+    test('senza access dichiarato il blocco è registrato con scope null', () => {
+      const ctx = createCtxMock({ method: 'POST', path: '/api/x', session: {}, headers: {}, host: 'localhost:3000' });
+      csrf._internals.validateRequest(ctx);
+      expect(csrf._internals.getStats().blocksByScope).toEqual({ authenticated: 0, authEntryPoint: 0, public: 0 });
+      expect(csrf._internals.getRecentBlocks()[0].scope).toBeNull();
     });
 
     test('una POST senza token incrementa il contatore missing_or_invalid_token', () => {

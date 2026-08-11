@@ -124,6 +124,9 @@ module.exports = {
             siteOrigin: body.siteOrigin,
             requestOrigin: body.requestOrigin,
             tokenProvided: body.tokenProvided === true || body.tokenProvided === 'true',
+            // Ambito derivato: nel tester si sceglie a mano, perché non c'è una
+            // rotta vera da cui leggerlo. Valore ignoto → simulate lo scarta.
+            scope: typeof body.scope === 'string' ? body.scope : undefined,
           });
           ctx.body = { success: true, verdict };
         },

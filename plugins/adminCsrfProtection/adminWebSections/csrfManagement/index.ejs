@@ -94,6 +94,18 @@
           <input type="text" id="simReqOrigin" class="form-control form-control-sm" placeholder="https://evil.com">
         </div>
         <div class="col-6 col-md-2">
+          <label for="simScope" class="form-label small mb-0" title="<%= __({
+            it: 'Derivato dall\'access della rotta: requiresAuth, isAuthEntryPoint, o nessuno dei due',
+            en: 'Derived from the route access: requiresAuth, isAuthEntryPoint, or neither'
+          }, passData.ctx) %>"><%= __({it: 'Ambito', en: 'Scope'}, passData.ctx) %></label>
+          <select id="simScope" class="form-select form-select-sm">
+            <option value="">—</option>
+            <option value="authenticated">authenticated</option>
+            <option value="authEntryPoint">authEntryPoint</option>
+            <option value="public">public</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
           <div class="form-check mt-3">
             <input class="form-check-input" type="checkbox" id="simToken" checked>
             <label class="form-check-label small" for="simToken"><%= __({it: 'Token valido', en: 'Valid token'}, passData.ctx) %></label>
@@ -123,11 +135,15 @@
               <th><%= __({it: 'Metodo', en: 'Method'}, passData.ctx) %></th>
               <th>Path</th>
               <th><%= __({it: 'Motivo', en: 'Reason'}, passData.ctx) %></th>
+              <th title="<%= __({
+                it: 'Ambito derivato da access: dove sta la rotta rispetto all\'autenticazione',
+                en: 'Scope derived from access: where the route sits relative to authentication'
+              }, passData.ctx) %>"><%= __({it: 'Ambito', en: 'Scope'}, passData.ctx) %></th>
               <th>IP</th>
             </tr>
           </thead>
           <tbody id="recentBody">
-            <tr><td colspan="5" class="text-center text-muted py-3">—</td></tr>
+            <tr><td colspan="6" class="text-center text-muted py-3">—</td></tr>
           </tbody>
         </table>
       </div>
