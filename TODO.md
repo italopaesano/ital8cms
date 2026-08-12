@@ -180,18 +180,25 @@ Da affrontare in una review dedicata:
 
 Fonte: `docs/roadmap.it.md` punto 16 — aggiornamenti rinviati dal bulk del 2026-05-19.
 
-- [ ] **`ccxt`** (plugin `ccxt`): verificare se è ancora usato e se la superficie API
-      è cambiata fra le minor; testare le rotte prima del bump.
-      *Escluso dagli update di routine per policy (CLAUDE.md regola 12).*
-- [ ] **`inquirer` 8.2.7 → 13.x**: dalla v9 è **ESM-only** con API rinominata
-      (`inquirer.prompt` → import named di `@inquirer/prompts`). Richiede il rewrite
-      di `scripts/init.js`, `scripts/lib/configWizard.js`,
-      `scripts/lib/pluginInitRunner.js`. Nessuna urgenza di sicurezza: le CVE di
-      lodash transitivo sono già chiuse.
+**Ultimo giro di routine: 2026-08-12** (v2.84.0) — `npm outdated` pulito e
+`npm audit` a **0 vulnerabilità**, con la sola esclusione di `ccxt` per policy.
+
+- [ ] **`ccxt`** (plugin `ccxt`), `4.5.58` → `4.5.73`: verificare se è ancora usato e
+      se la superficie API è cambiata fra le minor; testare le rotte prima del bump.
+      *Escluso dagli update di routine per policy (CLAUDE.md regola 12): release molto
+      frequenti legate alle API degli exchange.*
+- [x] ~~**`inquirer` 8.2.7 → 13.x**~~ — **già fatto in un intervento precedente**: la
+      dipendenza dichiarata è `^14.0.2` (installata `14.0.2`). Il passaggio è avvenuto
+      senza il rewrite verso `@inquirer/prompts` che questa voce dava per necessario:
+      `scripts/init.js` e `scripts/lib/configWizard.js` usano
+      `require('inquirer').default` e continuano a chiamare `inquirer.prompt([...])`,
+      cioè l'interop CommonJS del pacchetto ESM. Voce rimasta indietro rispetto al
+      codice.
 - [ ] **`better-sqlite3`** (plugin `dbApi`, oggi `active: 0`): alla riattivazione,
       valutare la versione corrente (range del plugin `^9.2.2`, latest 12.x con
       cambi di ABI) con install e test mirati.
-      *Escluso dagli update di routine per policy (CLAUDE.md regola 12).*
+      *Escluso dagli update di routine per policy (CLAUDE.md regola 12): build nativa
+      e plugin disabilitato.*
 
 ### 🐞 `koa-classic-server` — `dirListing.enabled: false` disabilitava anche la risoluzione del file indice → **CORRETTO in v5.2.0**
 

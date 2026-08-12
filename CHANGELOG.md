@@ -3,6 +3,22 @@
 
 Storico delle modifiche del progetto e della documentazione (voci dalla più recente).
 
+- v2.84.0 (2026-08-12): **DEPS — giro di aggiornamento delle dipendenze: `npm outdated` pulito e `npm audit` a zero** - Aggiornato tutto ciò che la policy consente, incluse le due vulnerabilità high che vivevano in dipendenze transitive.
+
+  | Pacchetto | Da → A | Note |
+  |---|---|---|
+  | `nodemailer` | 9.0.3 → **9.0.5** | Correzioni MIME (surrogati spaiati, escape nel `Content-Type`). Supera il PR Dependabot #345, che si fermava alla 9.0.4 |
+  | `@playwright/test` (dev) | 1.61.1 → **1.62.1** | Supera il PR Dependabot #340 |
+  | `brace-expansion` (override) | ^5.0.7 → **^5.0.9** | 🔴 2 advisory high (DoS per espansione illimitata). Transitiva di `nodemon → minimatch`, quindi solo dev |
+  | `js-yaml` (override) | ^4.3.0 → **^5.2.3** | 🔴 1 advisory high (consumo CPU quadratico su `!!omap`). Transitiva di `jest → babel-plugin-istanbul → @istanbuljs/load-nyc-config`, solo dev. **Salto di major**, quindi verificato invece che assunto |
+  | `ccxt` | 4.5.58 → 4.5.73 | **NON aggiornato**, policy (CLAUDE.md regola 12) |
+
+  - **Il salto di major di `js-yaml` è l'unico che meritava una verifica vera.** L'advisory si chiude solo passando alla 5.x, e `@istanbuljs/load-nyc-config` dichiara la 4.x: l'override lo forza. Il ramo che consuma js-yaml è quello della configurazione nyc in YAML, che il progetto non esercita da sé (non c'è alcun `.nycrc.yml`), quindi un semplice «i test passano» non avrebbe dimostrato niente. È stato esercitato di proposito, creando un `.nycrc.yml` temporaneo e invocando `loadNycConfig()`: config letta correttamente. In più `jest --coverage` gira senza errori, il che copre il percorso di `babel-plugin-istanbul`.
+  - **`inquirer`: voce del TODO rimasta indietro rispetto al codice.** `TODO.md` §7 chiedeva `8.2.7 → 13.x` descrivendolo come un rewrite verso `@inquirer/prompts`. La dipendenza è in realtà già `^14.0.2`, e il passaggio è avvenuto **senza** quel rewrite: `scripts/init.js` e `configWizard.js` usano `require('inquirer').default` con `inquirer.prompt([...])`, cioè l'interop CommonJS del pacchetto ESM. Voce chiusa.
+  - **Modello ibrido per-plugin verificato:** `plugins/adminMedia` (unico pacchetto self-contained) non ha dipendenze scadute, e `npm run deps-sync` riporta `1 self-contained, 0 legacy, 0 realign`.
+  - **Verifica:** suite Jest **131 suite / 3851 test verdi**; e2e Playwright **95 passed** e globalPrefix **17 passed** con la 1.62.1. *(Nota d'ambiente: questo container ha chromium build 1194 mentre Playwright ne cerca una più recente, quindi gli e2e sono stati eseguiti puntando all'eseguibile presente. Su una macchina normale serve `npx playwright install` dopo il bump.)*
+  - **Files Modified:** `/package.json`, `/package-lock.json`, `/TODO.md`, `/CHANGELOG.md`.
+
 - v2.83.0 (2026-08-12): **FEAT — il directory listing torna configurabile, e di default è SPENTO** - Riattivazione delle parti rimaste bloccate dal bug di `koa-classic-server`, ora corretto in 5.2.0. Con una deviazione dal progetto originale su due punti, entrambi decisi guardando i dati.
   - **Il default è `false`, non `true`.** Il piano diceva di reintrodurre la chiave col valore storico. Misurando cosa fa davvero un'installazione con l'elenco acceso, la scelta si è rovesciata: `GET /` su un sito senza `index.ejs` restituisce `<title>Index of /</title>` con `.gitkeep`, `media/`, `robots.txt`, `sitemap.xml`, e `GET /media/2026/` enumera per nome ogni file caricato — la cartella media sta sotto `wwwPath` e non è fra le `urlsReserved` del server statico di `/www`, quindi ci ricade per costruzione. Sono nomi di bozze, allegati e materiale non linkato. Un default che espone quello non è «conservativo», è un enumeratore acceso su ogni installazione che non ha guardato.
   - **Come si legge la chiave:** `ital8Conf.dirListing?.wwwPath === true`, non `!== false`. Chiave assente ⇒ spento: una chiave di sicurezza non deve accendersi per omissione.
