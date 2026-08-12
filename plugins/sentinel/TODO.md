@@ -198,11 +198,13 @@ un'asimmetria fra ciò che il progetto dichiara e ciò che fa.
 Sono in quest'ordine perché è quello del rischio crescente: la prima non tocca
 il percorso delle richieste, la seconda sì, la terza tocca il boot.
 
+**Piano chiuso:** tutte e tre completate.
+
 | # | Voce | Perché lì |
 |---|---|---|
 | ~~**R1**~~ ✅ | ~~Vista C — form strutturato in `adminSentinel`~~ | L'unica delle Tre Viste scoperta. Non tocca il motore: si aggiunge una scheda alla GUI e un metodo di scrittura al service |
 | ~~**R2**~~ ✅ | ~~Il `Set-Cookie` sul 404 di blocco~~ | Risolta all'origine, in `csrfProtection`: nessun gate toccato |
-| **R3** | I tre config core non materializzati al boot | Tocca l'avvio, cioè l'unica cosa che se si rompe non lascia neanche un log leggibile |
+| ~~**R3**~~ ✅ | ~~I config core non materializzati al boot~~ | Erano **due**, non tre: `ital8Config` resta escluso di proposito |
 
 **R1 — Vista C.** Il form campo-per-campo sulle regole, coordinato con l'editor
 JSON5 secondo le regole di CLAUDE.md (*Le Tre Viste*): fonte di verità unica sul
@@ -248,18 +250,32 @@ senza modifiche.
 - [x] Test dedicato sulla parità dei `Set-Cookie` fra 404 vero e 404 di blocco
       (verificato che fallisce se il middleware torna)
 
-**R3 — Config core non materializzati al boot.** Il boot materializza
-`plugins/` e `themes/` e *riconcilia* i tre core, ma se
-`core/admin/adminConfig.json5` o `core/priorityMiddlewares/koaSession.json5`
-mancano l'avvio muore con uno stack trace grezzo. A materializzarli è solo il
-wizard, quindi il clone fresco è coperto — ma sono file git-ignored dichiarati
-«rigenerabili dai `.default`», e dopo l'installazione nessuno li rigenera.
-Incontrato durante il Passo 4. La voce vive nel
-[`TODO.md` di progetto](../../TODO.md) §2, perché non è di questo plugin.
+**R3 — Config core non materializzati al boot.** ✅ **Chiusa**, con due
+correzioni a come la voce era scritta.
 
-- [ ] `materializeFromDefault` sulle tre coppie già elencate in `index.js`,
-      prima della riconciliazione
-- [ ] Box `[CONFIG]` invece dello stack trace
+I vivi dei core sono git-ignored e dichiarati «rigenerabili dai `.default`» come
+tutti gli altri, ma a crearli era solo il wizard: dopo l'installazione un
+`git clean -X` o un ripristino parziale da backup li faceva sparire per sempre, e
+l'avvio moriva con uno stack trace grezzo. Incontrato durante il Passo 4, con
+`adminConfig.json5` assente.
+
+Le due correzioni:
+
+1. **Le coppie sono due, non tre.** `ital8Config.json5` va lasciato fuori: la sua
+   assenza è il gate `[INIT]`, e materializzarlo in silenzio farebbe partire coi
+   default un progetto mai configurato, scavalcando il wizard. C'è ora un test
+   che presidia proprio questo.
+2. **«Prima della riconciliazione» non bastava.** `koaSession.json5` è letto dal
+   montaggio dei priority middleware, che in `index.js` gira a livello di modulo —
+   prima ancora che `startApp()` parta. Serve quindi una materializzazione
+   sincrona in quel punto (`materializeFromDefault.sync`), mentre per
+   `adminConfig.json5`, letto da `adminSystem.initialize()`, `startApp()` va bene.
+
+- [x] `materializeFromDefault.sync` su `koaSession`, prima dei priority middleware
+- [x] `materializeFromDefault` su `adminConfig`, in `startApp()`
+- [x] `ital8Config` escluso, con test che lo presidia
+- [x] Box `[CONFIG]` + `exit 1` quando manca anche il `.default`
+- [x] Test d'integrazione sul boot reale (verificato che falliscono senza la correzione)
 
 ---
 

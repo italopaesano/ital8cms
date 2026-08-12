@@ -63,18 +63,18 @@ Fonte: [`docs/decisions/config-lifecycle.it.md`](./docs/decisions/config-lifecyc
 - [ ] **Cronologia/undo delle modifiche** ai config (backup rotazionale on-write):
       già prototipato in `plugins/adminBootstrapNavbar/lib/navbarFileManager.js`,
       da valutare come promozione a utility del core.
-- [ ] **I tre config core vivi non vengono materializzati al boot.** Il boot
-      materializza `plugins/` e `themes/` (`materializeMissingConfigs`) e
-      *riconcilia* i tre core, ma se `core/admin/adminConfig.json5` o
-      `core/priorityMiddlewares/koaSession.json5` mancano l'avvio muore con uno
-      stack trace grezzo (`Failed to load admin config: file di configurazione non
-      trovato`). A materializzarli è solo il wizard (`scripts/init.js`), quindi il
-      clone fresco è coperto — ma sono file git-ignored dichiarati «rigenerabili
-      dai `.default`», e dopo l'installazione nessuno li rigenera.
-      Correzione naturale: `materializeFromDefault` sulle stesse tre coppie già
-      elencate in `index.js`, prima della riconciliazione, e un box `[CONFIG]`
-      invece dello stack trace. *Fonte: incontrato durante il Passo 4 di
-      `sentinel`, con `adminConfig.json5` assente nel working tree.*
+- [x] ~~**I tre config core vivi non vengono materializzati al boot.**~~ **RISOLTO.**
+      Il boot ora materializza `core/priorityMiddlewares/koaSession.json5` e
+      `core/admin/adminConfig.json5` dai rispettivi `.default`; se manca anche il
+      `.default` esce con un box `[CONFIG]` invece dello stack trace.
+      Due precisazioni rispetto a come la voce era scritta: le coppie sono **due**,
+      non tre — `ital8Config.json5` resta escluso di proposito, perché la sua
+      assenza è il gate `[INIT]` e rigenerarlo scavalcherebbe il wizard — e
+      `koaSession` non poteva essere materializzato «prima della riconciliazione»,
+      perché lo legge il montaggio dei priority middleware, che gira a livello di
+      modulo: di qui la variante sincrona `materializeFromDefault.sync`.
+      *Fonte: incontrato durante il Passo 4 di `sentinel`. Chiuso come R3 del
+      «Piano di rifinitura».*
 
 ## 3. Installazione di pacchetti da repo Git
 

@@ -95,11 +95,45 @@ function warnSentinelEngineMissing(pluginState) {
   ].join('\n'));
 }
 
+const materializeFromDefault = require('./core/materializeFromDefault');
 const materializeMissingConfigs = require('./core/materializeMissingConfigs');
 const reconcileSchemaVersions = require('./core/reconcileSchemaVersions');
 const { reportPendingMigrations } = require('./core/migrationRunner');
 const ensureThemesInstalled = require('./core/ensureThemesInstalled');
 const httpsManager = require('./core/httpsManager');
+
+// ── Materializzazione dei config VIVI del core ──────────────────────────────
+// I config vivi sono tutti git-ignored e dichiarati «rigenerabili dai .default»
+// (config-lifecycle §1). Per `plugins/` e `themes/` la rigenerazione avviene in
+// startApp() (materializeMissingConfigs); per i core, invece, a crearli era solo
+// il wizard — quindi il clone fresco era coperto, ma dopo l'installazione nessuno
+// li rigenerava più: bastava un `git clean -X` o un ripristino parziale da backup
+// e l'avvio moriva con uno stack trace grezzo.
+//
+// `ital8Config.json5` resta ESCLUSO di proposito: la sua assenza è il gate [INIT]
+// qui sopra, che indirizza al wizard. Materializzarlo in silenzio farebbe partire
+// coi default un progetto mai configurato, saltando l'inizializzazione.
+//
+// Se manca ANCHE il `.default` non c'è nulla da cui rigenerare: è un'installazione
+// incompleta, e si esce con un box [CONFIG] invece di un errore criptico più
+// avanti (o, peggio, di un avvio a metà).
+function materializeCoreConfig(label, defaultPath, livePath) {
+  try {
+    const result = materializeFromDefault.sync(defaultPath, livePath);
+    if (result.created) console.log(`[materialize] core: creato ${label} dal suo .default`);
+  } catch (materializeError) {
+    loadJson5.warnConfigError(`${label} (rigenerazione dal .default)`, materializeError);
+    process.exit(1);
+  }
+}
+
+// koaSession va materializzato QUI e non in startApp(): lo legge il montaggio dei
+// priority middleware, poche righe più sotto, che gira a livello di modulo.
+materializeCoreConfig(
+  'core/priorityMiddlewares/koaSession.json5',
+  path.join(__dirname, 'core/priorityMiddlewares/koaSession.default.json5'),
+  path.join(__dirname, 'core/priorityMiddlewares/koaSession.json5'),
+);
 
 // Log discreto se la sezione admin è stata disabilitata via CLI (o a mano).
 if (!ital8Conf.enableAdmin) {
@@ -166,6 +200,17 @@ let servers = [];
 // invocata in fondo al file, dopo aver registrato gracefulShutdown e i signal handler;
 // un suo fallimento → messaggio [BOOT] + exit 1.
 async function startApp() {
+
+  // ── Config vivo del core: adminConfig ──────────────────────────────────────
+  // Gemello della materializzazione di koaSession fatta a livello di modulo (vedi
+  // materializeCoreConfig): qui basta startApp() perché adminConfig.json5 viene
+  // letto più tardi, da adminSystem.initialize(). Si materializza anche con
+  // `enableAdmin: false`, così riattivare l'admin da CLI non richiede altro.
+  materializeCoreConfig(
+    'core/admin/adminConfig.json5',
+    path.join(__dirname, 'core/admin/adminConfig.default.json5'),
+    path.join(__dirname, 'core/admin/adminConfig.json5'),
+  );
 
   // ── Materializzazione dei config di plugin/temi dai loro .default ──────────
   // Clone fresco o post-reset: i x.json5 vivi mancanti vengono rigenerati dai

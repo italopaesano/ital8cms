@@ -150,6 +150,83 @@ describe('boot — ciclo di vita config (integration)', () => {
     expect(res.code).toBe(1);
     expect(res.started).toBe(false);
     expect(res.output).toMatch(/\[INIT\]/);
+
+    // ital8Config.json5 è l'UNICO config del core deliberatamente NON
+    // materializzato: la sua assenza è il gate di init. Se un domani finisse
+    // nell'elenco dei config rigenerati al boot, il wizard verrebbe scavalcato in
+    // silenzio e il progetto partirebbe coi default — con questo test verde.
+    expect(fs.existsSync(path.join(dir, 'ital8Config.json5'))).toBe(false);
+  });
+
+  // I config vivi del core sono git-ignored e dichiarati «rigenerabili dai
+  // .default» come tutti gli altri, ma a crearli era solo il wizard: dopo
+  // l'installazione un `git clean -X` o un ripristino parziale da backup li
+  // faceva sparire per sempre, e l'avvio moriva con uno stack trace grezzo.
+  describe('config vivi del core rigenerati dai .default', () => {
+    const CORE_PAIRS = [
+      ['core/priorityMiddlewares/koaSession.json5', 'letto dal montaggio dei priority middleware, prima di startApp()'],
+      ['core/admin/adminConfig.json5', 'letto da adminSystem.initialize(), dentro startApp()'],
+    ];
+
+    test.each(CORE_PAIRS)('%s mancante → rigenerato al boot, server avviato', async (relLive) => {
+      const { dir } = await buildFixture();
+      const live = path.join(dir, relLive);
+      const dflt = live.replace(/\.json5$/, '.default.json5');
+      fs.rmSync(live);
+      expect(fs.existsSync(dflt)).toBe(true);
+
+      const res = await runBoot(dir);
+
+      expect(res.timedOut).toBeFalsy();
+      expect(res.started).toBe(true);
+      expect(fs.existsSync(live)).toBe(true);
+      // Copia byte-fedele: il vivo nasce identico al default, commenti inclusi.
+      expect(fs.readFileSync(live, 'utf8')).toBe(fs.readFileSync(dflt, 'utf8'));
+    });
+
+    test('entrambi mancanti → entrambi rigenerati nello stesso boot', async () => {
+      const { dir } = await buildFixture();
+      const lives = CORE_PAIRS.map(([rel]) => path.join(dir, rel));
+      lives.forEach((live) => fs.rmSync(live));
+
+      const res = await runBoot(dir);
+
+      expect(res.started).toBe(true);
+      lives.forEach((live) => expect(fs.existsSync(live)).toBe(true));
+    });
+
+    // Senza il .default non c'è nulla da cui rigenerare: è un'installazione
+    // incompleta, e va detto subito invece di lasciar morire il boot più avanti
+    // con un errore criptico (o, peggio, di avviarsi a metà).
+    test.each(CORE_PAIRS)('%s: manca anche il .default → box [CONFIG] + exit 1', async (relLive) => {
+      const { dir } = await buildFixture();
+      const live = path.join(dir, relLive);
+      const dflt = live.replace(/\.json5$/, '.default.json5');
+      fs.rmSync(live);
+      fs.rmSync(dflt);
+
+      const res = await runBoot(dir);
+
+      expect(res.exited).toBe(true);
+      expect(res.code).toBe(1);
+      expect(res.started).toBe(false);
+      expect(res.output).toMatch(/\[CONFIG\]/);
+      expect(res.output).toContain(path.basename(relLive));
+    });
+
+    // Il caso normale (sviluppo, vivi presenti) deve restare un no-op: i file
+    // dell'utente non vanno mai sovrascritti dal loro default.
+    test('vivi già presenti → non toccati', async () => {
+      const { dir } = await buildFixture();
+      const live = path.join(dir, 'core/admin/adminConfig.json5');
+      const marker = fs.readFileSync(live, 'utf8') + '\n// marcatore del test\n';
+      fs.writeFileSync(live, marker, 'utf8');
+
+      const res = await runBoot(dir);
+
+      expect(res.started).toBe(true);
+      expect(fs.readFileSync(live, 'utf8')).toBe(marker);
+    });
   });
 
   test('fresh-clone: descrittori vivi rigenerati dai .default + isInstalled persistito → server avviato', async () => {
