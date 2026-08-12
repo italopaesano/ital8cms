@@ -176,4 +176,79 @@ describe('materializeFromDefault', () => {
       await expect(materializeFromDefault('def.json5', 42)).rejects.toThrow();
     });
   });
+
+  // ─── Variante sincrona ─────────────────────────────────────────────────────
+  // Esiste perché koaSession.json5 è letto dal montaggio dei priority middleware,
+  // che in index.js gira a livello di modulo: niente top-level await. Deve
+  // comportarsi ESATTAMENTE come l'asincrona — di qui il test di equivalenza.
+  describe('materializeFromDefault.sync', () => {
+    test('creates the live file from the default, byte-faithfully', () => {
+      const defaultPath = writeDefault();
+      const livePath = path.join(tmpDir, 'x.json5');
+
+      const result = materializeFromDefault.sync(defaultPath, livePath);
+
+      expect(result).toEqual({ created: true, reason: 'materialized' });
+      expect(fs.readFileSync(livePath, 'utf8')).toBe(DEFAULT_RAW);
+      expect(loadJson5(livePath)).toEqual(loadJson5(defaultPath));
+    });
+
+    test('does not overwrite an existing live file', () => {
+      const defaultPath = writeDefault();
+      const livePath = path.join(tmpDir, 'x.json5');
+      const userContent = '// modificato a mano\n{ "active": 0 }\n';
+      fs.writeFileSync(livePath, userContent, 'utf8');
+
+      const result = materializeFromDefault.sync(defaultPath, livePath);
+
+      expect(result).toEqual({ created: false, reason: 'already-exists' });
+      expect(fs.readFileSync(livePath, 'utf8')).toBe(userContent);
+    });
+
+    test('does not leave a temp file after materialization', () => {
+      const defaultPath = writeDefault();
+      const livePath = path.join(tmpDir, 'x.json5');
+
+      materializeFromDefault.sync(defaultPath, livePath);
+
+      expect(fs.existsSync(livePath + '.tmp')).toBe(false);
+    });
+
+    test('throws with code ENOENT when the default is missing', () => {
+      const livePath = path.join(tmpDir, 'x.json5');
+
+      // Il boot distingue proprio su `.code`: ENOENT = installazione incompleta.
+      expect(() => materializeFromDefault.sync(path.join(tmpDir, 'assente.default.json5'), livePath))
+        .toThrow(expect.objectContaining({ code: 'ENOENT' }));
+      expect(fs.existsSync(livePath)).toBe(false);
+    });
+
+    test('throws on invalid JSON5 in the default, without writing the live', () => {
+      const defaultPath = writeDefault('// broken\n{ "active": :: }\n');
+      const livePath = path.join(tmpDir, 'x.json5');
+
+      expect(() => materializeFromDefault.sync(defaultPath, livePath)).toThrow();
+      expect(fs.existsSync(livePath)).toBe(false);
+      expect(fs.existsSync(livePath + '.tmp')).toBe(false);
+    });
+
+    test('throws on invalid arguments', () => {
+      expect(() => materializeFromDefault.sync('', 'live.json5')).toThrow();
+      expect(() => materializeFromDefault.sync('def.json5', '')).toThrow();
+      expect(() => materializeFromDefault.sync(null, 'live.json5')).toThrow();
+      expect(() => materializeFromDefault.sync('def.json5', 42)).toThrow();
+    });
+
+    test('produce lo stesso risultato della variante asincrona', async () => {
+      const defaultPath = writeDefault();
+      const liveAsync = path.join(tmpDir, 'async.json5');
+      const liveSync = path.join(tmpDir, 'sync.json5');
+
+      const resAsync = await materializeFromDefault(defaultPath, liveAsync);
+      const resSync = materializeFromDefault.sync(defaultPath, liveSync);
+
+      expect(resSync).toEqual(resAsync);
+      expect(fs.readFileSync(liveSync, 'utf8')).toBe(fs.readFileSync(liveAsync, 'utf8'));
+    });
+  });
 });

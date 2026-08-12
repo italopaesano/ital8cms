@@ -12,10 +12,12 @@ Gira nello **stesso processo** di `csrfProtection`: tira dati/azioni live via og
 
 | Pagina | Vista | Contenuto |
 |--------|-------|-----------|
-| `index.ejs` | **A — Dati** | KPI (origin-check, blocchi totali, blocchi per motivo, esenzioni) + tabella **blocchi CSRF recenti** + **CSRF tester** (simula una richiesta); auto-refresh |
+| `index.ejs` | **A — Dati** | KPI (origin-check, blocchi totali, blocchi per motivo, esenzioni) + tabella **blocchi CSRF recenti** (con la colonna **Ambito**) + **CSRF tester** (simula una richiesta); auto-refresh |
 | `settings.ejs` | **B — Editor JSON5** | `pluginConfig.json5 → custom` (Valida / Salva / Salva e riavvia) + riferimento campi |
 
-Il **CSRF tester** (`simulate`) permette di inserire metodo + path + Origin della richiesta + token-presente e vedere il verdetto esatto (`allowed` / `blocked` + motivo) — istruttivo per capire esenzioni e layer Origin.
+Il **CSRF tester** (`simulate`) permette di inserire metodo + path + Origin della richiesta + token-presente + **ambito** e vedere il verdetto esatto (`allowed` / `blocked` + motivo) — istruttivo per capire esenzioni e layer Origin.
+
+La colonna **Ambito** (`authenticated` / `authEntryPoint` / `public`) è derivata dall'`access` della rotta e non si configura da nessuna parte. Serve alla diagnosi: a parità di motivo, un blocco su `authEntryPoint` è quasi sempre qualcuno che bussa al login senza token (scanner o client mal configurato), mentre uno su `public` è quasi sempre una pagina rotta da riparare. Vedi [`plugins/csrfProtection/EXPLAIN.it.md`](../csrfProtection/EXPLAIN.it.md).
 
 ## API (route, ruoli `[0, 1]`)
 

@@ -31,6 +31,7 @@
 const { buildSubject, appliesToSubject } = require('./ruleMatcher');
 const { buildFingerprint, fpClassMatches } = require('./requestFingerprint');
 const { ipMatchesAny } = require('./ipMatcher');
+const { findCanary } = require('./canaryRegistry');
 
 /**
  * Insieme di header che un browser moderno manda davvero, nell'ordine in cui li
@@ -176,6 +177,46 @@ function traceLeaf(leaf, node, subject, matcher) {
     case 'status':
       return entry(subject.status !== null && node.status.has(subject.status),
         Array.from(node.status), subject.status === null ? '(non ancora noto)' : subject.status);
+    case 'canary': {
+      const found = subject.canary;
+      const wantAny = node.canary === true || node.canary === 'any';
+      const matched = !!found && (wantAny || found.status === node.canary);
+      return entry(matched,
+        wantAny ? 'un token qualsiasi' : `token ${node.canary}`,
+        found ? `${found.token} (${found.status})` : '(nessun token nella richiesta)');
+    }
+    case 'sessionAnomaly': {
+      const found = subject.sessionAnomalies || [];
+      const wantAny = node.sessionAnomaly === true;
+      const matched = found.length > 0
+        && (wantAny || found.some((k) => node.sessionAnomaly.has(k)));
+      return entry(matched,
+        wantAny ? 'una anomalia qualsiasi' : Array.from(node.sessionAnomaly),
+        found.length > 0
+          ? found.join(', ')
+          : (subject.authenticated
+            ? '(nessuna anomalia)'
+            : '(richiesta anonima: nessuna sessione da confrontare)'));
+    }
+    case 'reputation': {
+      const rep = subject.reputation;
+      const found = (rep && rep.levels) || [];
+      const wantAny = node.reputation === true;
+      const matched = found.length > 0 && (wantAny || found.some((l) => node.reputation.has(l)));
+      let osservato;
+      if (found.length > 0) {
+        osservato = found.join(', ');
+      } else if (rep && rep.protected) {
+        // Il motivo più probabile per cui una regola di reputazione "non
+        // scatta": l'impronta sembra un browser vero, e quelle sono protette.
+        osservato = '(impronta da browser: protetta dal giudizio)';
+      } else if (rep) {
+        osservato = `(nessun giudizio — ${rep.requests} richieste, quota blocchi ${rep.blockedShare})`;
+      } else {
+        osservato = '(censimento non disponibile)';
+      }
+      return entry(matched, wantAny ? 'un giudizio qualsiasi' : Array.from(node.reputation), osservato);
+    }
     case 'authenticated':
       return entry(subject.authenticated === node.authenticated, node.authenticated, subject.authenticated);
     case 'roleIds':
@@ -192,7 +233,8 @@ function traceLeaf(leaf, node, subject, matcher) {
 
 const LEAF_KEYS = [
   'path', 'extension', 'method', 'userAgent', 'header', 'query',
-  'ip', 'status', 'authenticated', 'roleIds', 'fingerprint', 'fingerprintClass',
+  'ip', 'status', 'canary', 'sessionAnomaly', 'reputation',
+  'authenticated', 'roleIds', 'fingerprint', 'fingerprintClass',
 ];
 
 /**
@@ -249,6 +291,7 @@ function traceNode(node, subject, matcher, label = 'match') {
  * @param {object} [options]
  * @param {string} [options.salt]
  * @param {string} [options.globalPrefix]
+ * @param {object} [options.canaryRegistry] - per riconoscere un token nella prova
  * @returns {object}
  */
 function testRequest(spec, rules, matcher, options = {}) {
@@ -258,6 +301,24 @@ function testRequest(spec, rules, matcher, options = {}) {
     fingerprint,
     clientIp: ctx.ip,
     globalPrefix: options.globalPrefix || '',
+    // Il tester deve vedere i token veri: incollare l'URL di un canary appena
+    // scattato e capire perché la regola ha (o non ha) reagito è esattamente il
+    // caso d'uso. Cercarlo qui, e non nel matcher, tiene la ricerca a una sola
+    // volta per prova come a runtime.
+    canary: findCanary(options.canaryRegistry, ctx.path, ctx.querystring),
+    // Le anomalie di sessione si DICHIARANO nella prova, non si calcolano: la
+    // domanda del tester è «se questa sessione avesse cambiato User-Agent, la
+    // mia regola la prenderebbe?», e per rispondere non serve — né sarebbe
+    // possibile — riprodurre la storia di una sessione vera.
+    // Restano vincolate all'autenticazione, come a runtime.
+    sessionAnomalies: spec.authenticated && Array.isArray(spec.sessionAnomalies)
+      ? spec.sessionAnomalies
+      : [],
+    // Come le anomalie di sessione, il giudizio di reputazione si DICHIARA nella
+    // prova: dipende da mesi di censimento, e una richiesta sintetica non ne ha.
+    reputation: Array.isArray(spec.reputation)
+      ? { levels: spec.reputation, requests: 0, blockedShare: 0, ageSeconds: 0, protected: false }
+      : null,
   });
   if (Number.isInteger(spec.status)) subject.status = spec.status;
 
@@ -306,6 +367,9 @@ function testRequest(spec, rules, matcher, options = {}) {
       authenticated: subject.authenticated,
       roleIds: subject.roleIds,
       status: subject.status,
+      canary: subject.canary,
+      sessionAnomalies: subject.sessionAnomalies,
+      reputation: subject.reputation,
       fp: subject.fp,
       fpClass: subject.fpClass,
     },

@@ -99,7 +99,115 @@
         ? 'gate: ' + stats.gateState
         : 'monitor';
     }
+
+    renderCanary(stats.canary);
+    renderSessions(stats.sessions);
+    renderTarpit(stats.tarpit);
     return true;
+  }
+
+  // ── Token esca ────────────────────────────────────────────────────────────
+  //
+  // La card resta nascosta finché nessun token è stato consegnato: una card
+  // sempre vuota su una dashboard di sicurezza insegna a smettere di guardarla,
+  // e questa è quella che non si deve smettere di guardare.
+
+  function renderCanary(canary) {
+    const card = $('canaryCard');
+    if (!card) return;
+
+    if (!canary || (!canary.minted && !canary.triggered)) {
+      card.classList.add('d-none');
+      return;
+    }
+    card.classList.remove('d-none');
+
+    $('canaryMinted').textContent = num(canary.minted);
+    $('canaryTriggered').textContent = num(canary.triggered);
+    $('canaryLive').textContent = num(canary.liveTokens);
+
+    const rows = canary.recentTriggers || [];
+    const body = $('canaryTable');
+    if (rows.length === 0) {
+      body.innerHTML = '<tr><td colspan="4" class="text-muted p-3">Nessun token ancora usato.</td></tr>';
+      return;
+    }
+
+    // esc() su ogni campo: qui si stampano indirizzi e percorsi, cioè
+    // stringhe scelte da chi ha fatto la richiesta.
+    body.innerHTML = rows.map(function (t) {
+      var same = t.sameClient === null || t.sameClient === undefined
+        ? '<span class="text-muted">?</span>'
+        : (t.sameClient
+          ? '<span class="badge bg-secondary">sì</span>'
+          : '<span class="badge bg-danger">no</span>');
+      return '<tr>'
+        + '<td>' + esc(shortTime(t.at)) + '</td>'
+        + '<td><code>' + esc(t.usedByIp || '—') + '</code></td>'
+        + '<td><code>' + esc(t.deliveredToIp || '—') + '</code></td>'
+        + '<td>' + same + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  // ── Tarpit ────────────────────────────────────────────────────────────────
+  //
+  // Del tarpit interessa una cosa sola in dashboard: se sta RIFIUTANDO. Il
+  // numero di connessioni trattenute è un dato di curiosità; il tetto raggiunto
+  // è una decisione da prendere.
+
+  function renderTarpit(tarpit) {
+    const box = $('tarpitWarning');
+    if (!box) return;
+
+    const refused = tarpit ? tarpit.refused : 0;
+    box.classList.toggle('d-none', !refused);
+    if (refused) {
+      $('tarpitDetail').textContent = ' (' + num(refused) + ' rifiutate, '
+        + num(tarpit.concurrent) + '/' + num(tarpit.maxConcurrent) + ' in corso) ';
+    }
+  }
+
+  // ── Coerenza di sessione ──────────────────────────────────────────────────
+
+  function renderSessions(sessions) {
+    const card = $('sessionCard');
+    if (!card) return;
+
+    if (!sessions || !sessions.tracked) {
+      card.classList.add('d-none');
+      return;
+    }
+    card.classList.remove('d-none');
+
+    $('sessTracked').textContent = num(sessions.tracked);
+    $('sessFlagged').textContent = num(sessions.flagged);
+    $('sessLive').textContent = num(sessions.live);
+
+    const rows = sessions.recent || [];
+    const body = $('sessionTable');
+    if (rows.length === 0) {
+      body.innerHTML = '<tr><td colspan="4" class="text-muted p-3">Nessuna anomalia rilevata.</td></tr>';
+      return;
+    }
+
+    body.innerHTML = rows.map(function (r) {
+      // L'indirizzo si mostra solo quando è cambiato: su un'anomalia di
+      // User-Agent la colonna direbbe due volte lo stesso valore.
+      var cambio = (r.baselineIp && r.currentIp && r.baselineIp !== r.currentIp)
+        ? esc(r.baselineIp) + ' → ' + esc(r.currentIp)
+        : '<span class="text-muted">—</span>';
+      var badges = (r.anomalies || []).map(function (a) {
+        var tono = (a === 'uaChanged' || a === 'scriptClient') ? 'bg-danger' : 'bg-secondary';
+        return '<span class="badge ' + tono + ' me-1">' + esc(a) + '</span>';
+      }).join('');
+      return '<tr>'
+        + '<td>' + esc(shortTime(r.at)) + '</td>'
+        + '<td><code>' + esc(r.username || '—') + '</code></td>'
+        + '<td>' + badges + '</td>'
+        + '<td><code>' + cambio + '</code></td>'
+        + '</tr>';
+    }).join('');
   }
 
   // ── Panoramica ────────────────────────────────────────────────────────────

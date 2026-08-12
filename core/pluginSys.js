@@ -766,9 +766,14 @@ class pluginSys{
       // assente/disattivo getSharedObject ritorna null e la validazione viene
       // saltata (degradazione graziosa). La logica (metodi mutanti, esenzioni,
       // token, Origin) è interamente nel plugin: qui rispettiamo solo il verdetto.
+      //
+      // `access` viene passato perché il plugin ne DERIVA l'ambito CSRF
+      // (`requiresAuth` / `isAuthEntryPoint` / nessuno dei due) invece di
+      // richiedere un marcatore proprio sulle rotte — stessa fonte da cui la
+      // superficie riservata deriva il proprio perimetro, tre righe più sopra.
       const csrf = this.getSharedObject('csrfProtection');
       if (csrf && typeof csrf.validateRequest === 'function') {
-        const verdict = csrf.validateRequest(ctx);
+        const verdict = csrf.validateRequest(ctx, access);
         if (verdict && verdict.ok === false) {
           ctx.status = verdict.status || 403;
           ctx.body = { error: verdict.error || 'CSRF validation failed' };

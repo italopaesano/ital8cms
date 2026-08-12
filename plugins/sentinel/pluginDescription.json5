@@ -1,7 +1,7 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
   "name": "sentinel",
-  "version": "1.0.0",
+  "version": "1.5.0",
   "description": "Incoming request filter. Classifies traffic with declarative rules before the router, records what it sees in its own JSONL log, and derives a passive HTTP fingerprint used to tell a client that lies about its User-Agent from one that does not. Ships in observation mode: out of the box it blocks nothing.",
   "author": "Italo Paesano",
   "email": "italopaesano@protonmail.com",

@@ -11,9 +11,13 @@ Difende da **Cross-Site Request Forgery** su ogni rotta che modifica stato (POST
 - **Token sincronizzatore (per sessione):** token casuale 256-bit in `ctx.session.csrfToken` (cookie firmato → non falsificabile, non leggibile cross-origin), **ruotato al login**.
 - **Controllo Origin/Referer:** same-origin dinamico (ricostruito dall'Host della richiesta, proxy-aware), con allowlist opzionale; **fallback al token** quando entrambi gli header sono assenti.
 - **Enforcement centrale:** validato dentro il route-wrap del core, **prima** del controllo di autenticazione → copre anche rotte pubbliche che modificano stato come `POST /login`.
+- **Nessun cookie per chi legge e basta:** il token nasce solo dove serve — sessione autenticata, token già presente, o una pagina che chiama `csrfField()`/`csrfToken()`. Un visitatore anonimo che naviga il sito non riceve alcun cookie.
+- **Ambito derivato, zero marcatori:** l'ambito CSRF di una rotta (`authenticated` / `authEntryPoint` / `public`) si ricava dal suo `access`, lo stesso da cui la superficie riservata deriva il proprio perimetro. Oggi tutti e tre sono protetti allo stesso modo; l'ambito serve alla diagnosi.
 - **Integrazione client trasparente:** un page-hook inietta un `<meta>` col token + un interceptor che patcha **sia `fetch` sia `XMLHttpRequest`** per aggiungere `X-CSRF-Token` sulle richieste mutanti same-origin; helper globali `csrfField()`/`csrfToken()` per i form classici.
 - **Opzionale e graceful:** se disabilitato, l'oggetto condiviso è `null` e il route-wrap salta la validazione.
 - **Esenzioni:** `exemptPaths` (pattern via `core/patternMatcher.js`) per futuri webhook / API server-to-server.
+
+> ⚠️ **Se scrivi una pagina ANONIMA con una `fetch` mutante** (POST/PUT/DELETE/PATCH), chiama `csrfToken(passData)` **in cima alla pagina**, prima di includere i partial del tema. Altrimenti il `<meta>` col token non viene iniettato — l'head si renderizza prima del corpo — e la richiesta finisce in 403. Le pagine autenticate e i form classici con `csrfField()` non richiedono nulla.
 
 ## Configurazione (`pluginConfig.json5` → `custom`)
 
@@ -34,9 +38,19 @@ Difende da **Cross-Site Request Forgery** su ogni rotta che modifica stato (POST
 
 ## API dell'oggetto condiviso (pull via `pluginSys.getSharedObject('csrfProtection')`)
 
-- `validateRequest(ctx)` → `{ ok, status?, error?, reason? }` (usato dal route-wrap del core)
+- `validateRequest(ctx, access)` → `{ ok, status?, error?, reason?, scope? }` (usato dal route-wrap del core; `access` è il blocco della rotta, da cui si deriva `scope`)
 - `ensureToken(ctx)` · `rotateToken(ctx)` · `getToken(ctx)`
-- Per il twin admin (`adminCsrfProtection`): `getStats()` (contatori + flag), `getRecentBlocks(limit)` (audit in memoria), `simulate(input)` (CSRF tester), `getConfig()`, `validateConfig(newCustom)`, `reloadConfig()` (hot-reload dopo un salvataggio).
+- Per il twin admin (`adminCsrfProtection`): `getStats()` (contatori per motivo **e per ambito**), `getRecentBlocks(limit)` (audit in memoria, con `scope` per riga), `simulate(input)` (CSRF tester, accetta `scope`), `getConfig()`, `validateConfig(newCustom)`, `reloadConfig()` (hot-reload dopo un salvataggio).
+
+## Ambito CSRF (derivato da `access`)
+
+| La rotta dichiara | Ambito | Protetta? |
+|---|---|---|
+| `requiresAuth: true` | `authenticated` | sì |
+| `isAuthEntryPoint: true` | `authEntryPoint` | sì — è qui che vive il CSRF anonimo che conta (login, logout) |
+| nessuno dei due | `public` | sì (scelta sicura per default) |
+
+Non c'è nulla da dichiarare in più: `access` è già obbligatorio su ogni rotta. L'ambito compare nell'audit e nella GUI perché a parità di motivo cambia la diagnosi. Deep-dive e punto in cui rilassare la policy: [`EXPLAIN.it.md`](./EXPLAIN.it.md).
 
 ## Helper per i template
 
@@ -57,10 +71,10 @@ Entrambi sono in whitelist in `ital8Config.json5 → globalFunctionsWhitelist` (
 
 | File | Scopo |
 |------|-------|
-| `main.js` | Lifecycle, middleware (ensure token), head hook, oggetto condiviso, helper globali |
+| `main.js` | Lifecycle, head hook (conio condizionale), oggetto condiviso, helper globali, audit. **Nessun middleware** — vedi `EXPLAIN.it.md` |
 | `lib/tokenManager.js` | Generazione token (base64url 256-bit) + confronto a tempo costante |
 | `lib/originValidator.js` | Validazione Origin/Referer (proxy-aware) |
-| `lib/requestGuard.js` | Logica di validazione pura `evaluate(ctx, custom, matcher)` |
+| `lib/requestGuard.js` | Logica di validazione pura `evaluate(ctx, custom, matcher, access)` + `scopeOf(access)` |
 | `lib/configValidator.js` | Validazione config al boot |
 | `lib/clientInterceptor.js` | Script inline che patcha fetch + XMLHttpRequest |
 

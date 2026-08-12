@@ -63,6 +63,18 @@ Fonte: [`docs/decisions/config-lifecycle.it.md`](./docs/decisions/config-lifecyc
 - [ ] **Cronologia/undo delle modifiche** ai config (backup rotazionale on-write):
       già prototipato in `plugins/adminBootstrapNavbar/lib/navbarFileManager.js`,
       da valutare come promozione a utility del core.
+- [x] ~~**I tre config core vivi non vengono materializzati al boot.**~~ **RISOLTO.**
+      Il boot ora materializza `core/priorityMiddlewares/koaSession.json5` e
+      `core/admin/adminConfig.json5` dai rispettivi `.default`; se manca anche il
+      `.default` esce con un box `[CONFIG]` invece dello stack trace.
+      Due precisazioni rispetto a come la voce era scritta: le coppie sono **due**,
+      non tre — `ital8Config.json5` resta escluso di proposito, perché la sua
+      assenza è il gate `[INIT]` e rigenerarlo scavalcherebbe il wizard — e
+      `koaSession` non poteva essere materializzato «prima della riconciliazione»,
+      perché lo legge il montaggio dei priority middleware, che gira a livello di
+      modulo: di qui la variante sincrona `materializeFromDefault.sync`.
+      *Fonte: incontrato durante il Passo 4 di `sentinel`. Chiuso come R3 del
+      «Piano di rifinitura».*
 
 ## 3. Installazione di pacchetti da repo Git
 

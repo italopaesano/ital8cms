@@ -31,6 +31,8 @@
 'use strict';
 
 const { isValidCidr } = require('./ipMatcher');
+const { ANOMALY_KINDS } = require('./sessionCoherence');
+const { LEVELS: REPUTATION_LEVELS } = require('./reputation');
 
 const VALID_ACTIONS = [
   'allow', 'monitor', 'block', 'drop', 'decoy', 'redirect', 'throttle', 'tarpit',
@@ -41,6 +43,14 @@ const VALID_ACTIONS = [
 const DECORATING_ACTIONS = ['decoy', 'redirect', 'tarpit'];
 
 const VALID_APPLIES_TO = ['anonymous', 'authenticated', 'any'];
+
+// Valori ammessi dalla foglia `canary` (oltre a `true`, che vale "qualunque").
+const VALID_CANARY_STATES = ['any', 'known', 'unknown'];
+
+// Stati ammessi per un redirect. 301 e 308 sono permanenti e restano in cache
+// nel browser: verso l'esterno sono vietati più sotto, perché un falso positivo
+// dirotterebbe un utente reale per mesi e non si ripara riavviando.
+const VALID_REDIRECT_STATUSES = [301, 302, 303, 307, 308];
 
 const VALID_FP_CLASS_KEYS = [
   'family', 'claimedBrowser', 'claimedOs', 'headerProfile', 'coherent', 'isBot', 'botName',
@@ -119,6 +129,20 @@ function compileStringMatcher(value, where, errors) {
 
   errors.push(`${where}: valore non valido (attesa stringa, "empty" o array)`);
   return null;
+}
+
+/**
+ * L'albero delle condizioni contiene, a qualsiasi profondità, una foglia
+ * `reputation`? Serve al motore per non far contare a una regola di reputazione
+ * i blocchi che alimenterebbero la reputazione stessa.
+ */
+function nodeUsesReputation(node) {
+  if (!node || typeof node !== 'object') return false;
+  if (node.reputation !== undefined) return true;
+  if (Array.isArray(node.all) && node.all.some(nodeUsesReputation)) return true;
+  if (Array.isArray(node.any) && node.any.some(nodeUsesReputation)) return true;
+  if (node.not !== undefined && nodeUsesReputation(node.not)) return true;
+  return false;
 }
 
 /**
@@ -287,6 +311,57 @@ function compileMatchNode(node, where, errors) {
     conditionCount++;
   }
 
+  if (node.canary !== undefined) {
+    // `true` sta per "qualunque token". Gli stati sono due gradi di certezza:
+    // `known` è un token che abbiamo coniato noi e di cui sappiamo il
+    // destinatario; `unknown` ha la forma giusta ma non è (più) in registro —
+    // riavvio, scadenza, o un worker diverso in cluster.
+    if (node.canary !== true && !VALID_CANARY_STATES.includes(node.canary)) {
+      errors.push(
+        `${where}.canary: atteso true oppure uno fra ${VALID_CANARY_STATES.join(', ')}`
+      );
+      return null;
+    }
+    out.canary = node.canary;
+    conditionCount++;
+  }
+
+  if (node.sessionAnomaly !== undefined) {
+    if (node.sessionAnomaly === true) {
+      out.sessionAnomaly = true;
+    } else {
+      const list = Array.isArray(node.sessionAnomaly) ? node.sessionAnomaly : [node.sessionAnomaly];
+      const unknown = list.filter((kind) => !ANOMALY_KINDS.includes(kind));
+      if (list.length === 0 || unknown.length > 0) {
+        errors.push(
+          `${where}.sessionAnomaly: atteso true oppure uno o più fra ${ANOMALY_KINDS.join(', ')}` +
+          (unknown.length ? ` (sconosciute: ${unknown.join(', ')})` : '')
+        );
+        return null;
+      }
+      out.sessionAnomaly = new Set(list);
+    }
+    conditionCount++;
+  }
+
+  if (node.reputation !== undefined) {
+    if (node.reputation === true) {
+      out.reputation = true;
+    } else {
+      const list = Array.isArray(node.reputation) ? node.reputation : [node.reputation];
+      const unknown = list.filter((level) => !REPUTATION_LEVELS.includes(level));
+      if (list.length === 0 || unknown.length > 0) {
+        errors.push(
+          `${where}.reputation: atteso true oppure uno o più fra ${REPUTATION_LEVELS.join(', ')}` +
+          (unknown.length ? ` (sconosciuti: ${unknown.join(', ')})` : '')
+        );
+        return null;
+      }
+      out.reputation = new Set(list);
+    }
+    conditionCount++;
+  }
+
   if (node.authenticated !== undefined) {
     if (typeof node.authenticated !== 'boolean') {
       errors.push(`${where}.authenticated: atteso boolean`);
@@ -338,6 +413,105 @@ function compileMatchNode(node, where, errors) {
   return out;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HEADER DICHIARATI DALLE REGOLE (decoy)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Nome di header valido secondo RFC 7230 (token). */
+const HEADER_NAME_RE = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/;
+
+/**
+ * Header che una regola non può dichiarare.
+ *
+ * Due famiglie, per due motivi diversi:
+ *   - `content-length` / `transfer-encoding` descrivono come il corpo è
+ *     inquadrato sul filo. Un valore sbagliato non produce una pagina sbagliata,
+ *     produce una risposta che il client non sa dove finisca: nel migliore dei
+ *     casi la connessione si pianta, nel peggiore il prossimo messaggio sulla
+ *     stessa connessione viene interpretato male (request smuggling).
+ *   - `set-cookie` fa scrivere al decoy nello stesso spazio dove vivono il
+ *     cookie di sessione e quello CSRF. Un contenuto fittizio non deve poter
+ *     toccare lo stato di autenticazione di nessuno.
+ * Gli hop-by-hop restanti sono di competenza del server, non del contenuto.
+ */
+const FORBIDDEN_RESPONSE_HEADERS = [
+  'content-length', 'transfer-encoding', 'connection', 'keep-alive',
+  'upgrade', 'te', 'trailer', 'proxy-authenticate', 'set-cookie',
+];
+
+const MAX_DECLARED_HEADERS = 20;
+const MAX_HEADER_VALUE_LENGTH = 1024;
+
+/**
+ * Valida gli header dichiarati da una regola e li restituisce normalizzati.
+ *
+ * ─── PERCHE UNA REGOLA PUO DICHIARARE HEADER ──────────────────────────────────
+ * Servono alla credibilità del decoy. Un finto `phpinfo()` senza
+ * `X-Powered-By: PHP/8.1.2` è smascherato dal primo scanner che guarda gli
+ * header invece del corpo — e uno scanner che si accorge dell'inganno non è solo
+ * un decoy sprecato: gli ha detto che c'è un filtro.
+ *
+ * ─── PERCHE LA VALIDAZIONE E SEVERA ───────────────────────────────────────────
+ * CR e LF dentro un valore sono response splitting: chiudono l'header e ne
+ * aprono un altro, o aprono direttamente un secondo messaggio HTTP. Node oggi
+ * solleva un'eccezione su header con caratteri illegali, ma affidarsi a quello
+ * significa che un file di regole malformato diventa un 500 a runtime invece di
+ * un errore al caricamento — e con `strictValidation: false` sarebbe un 500 per
+ * ogni richiesta che matcha, scoperto dal traffico e non dall'avvio.
+ *
+ * @returns {object|null} mappa normalizzata, oppure null se ci sono errori
+ */
+function compileResponseHeaders(rawHeaders, where, errors) {
+  if (rawHeaders === undefined || rawHeaders === null) return {};
+
+  if (typeof rawHeaders !== 'object' || Array.isArray(rawHeaders)) {
+    errors.push(`${where}: deve essere un oggetto { "Nome-Header": "valore" }`);
+    return null;
+  }
+
+  const entries = Object.entries(rawHeaders);
+  if (entries.length > MAX_DECLARED_HEADERS) {
+    errors.push(`${where}: troppi header (${entries.length}, massimo ${MAX_DECLARED_HEADERS})`);
+    return null;
+  }
+
+  const out = {};
+  let failed = false;
+
+  for (const [name, value] of entries) {
+    if (!HEADER_NAME_RE.test(name)) {
+      errors.push(`${where}: "${name}" non è un nome di header valido`);
+      failed = true;
+      continue;
+    }
+    if (FORBIDDEN_RESPONSE_HEADERS.includes(name.toLowerCase())) {
+      errors.push(`${where}: l'header "${name}" non può essere dichiarato da una regola`);
+      failed = true;
+      continue;
+    }
+    if (typeof value !== 'string' && typeof value !== 'number') {
+      errors.push(`${where}: il valore di "${name}" deve essere una stringa o un numero`);
+      failed = true;
+      continue;
+    }
+    const text = String(value);
+    if (text.length > MAX_HEADER_VALUE_LENGTH) {
+      errors.push(`${where}: il valore di "${name}" supera ${MAX_HEADER_VALUE_LENGTH} caratteri`);
+      failed = true;
+      continue;
+    }
+    // eslint-disable-next-line no-control-regex
+    if (/[\x00-\x1f\x7f]/.test(text)) {
+      errors.push(`${where}: il valore di "${name}" contiene caratteri di controllo (response splitting)`);
+      failed = true;
+      continue;
+    }
+    out[name] = text;
+  }
+
+  return failed ? null : out;
+}
+
 /**
  * Valida e compila l'intero file delle regole.
  *
@@ -364,6 +538,7 @@ function validateRules(rulesData, options = {}) {
   const seenNames = new Set();
   const knownRlRules = options.knownRateLimiterRules || null;
   const allowedHosts = options.allowedRedirectHosts || [];
+  const behindProxy = options.behindProxy === true;
 
   for (let i = 0; i < rawRules.length; i++) {
     const raw = rawRules[i];
@@ -425,7 +600,17 @@ function validateRules(rulesData, options = {}) {
         errors.push(`${where} ("${name}"): decoy.file deve essere un nome di file semplice, senza percorsi`);
         continue;
       }
-      compiled.decoy = { file: decoy.file, status: Number.isInteger(decoy.status) ? decoy.status : 200 };
+      // Uno stato fuori dall'intervallo delle risposte non è un decoy poco
+      // credibile, è una risposta che Node rifiuta di emettere.
+      const decoyStatus = decoy.status === undefined ? 200 : decoy.status;
+      if (!Number.isInteger(decoyStatus) || decoyStatus < 200 || decoyStatus > 599) {
+        errors.push(`${where} ("${name}"): decoy.status deve essere un intero fra 200 e 599`);
+        continue;
+      }
+      const decoyHeaders = compileResponseHeaders(decoy.headers, `${where} ("${name}").decoy.headers`, errors);
+      if (decoyHeaders === null) continue;
+
+      compiled.decoy = { file: decoy.file, status: decoyStatus, headers: decoyHeaders };
     }
 
     if (action === 'redirect') {
@@ -434,15 +619,32 @@ function validateRules(rulesData, options = {}) {
         errors.push(`${where} ("${name}"): action "redirect" richiede redirect.to`);
         continue;
       }
+      // La destinazione finisce nell'header Location: CR, LF e caratteri di
+      // controllo sono response splitting, esattamente come negli header
+      // dichiarati da un decoy.
+      // eslint-disable-next-line no-control-regex
+      if (/[\x00-\x1f\x7f]/.test(redirect.to)) {
+        errors.push(`${where} ("${name}"): redirect.to contiene caratteri di controllo`);
+        continue;
+      }
+
       const isExternal = /^[a-z][a-z0-9+.-]*:\/\//i.test(redirect.to) || redirect.to.startsWith('//');
-      const status = Number.isInteger(redirect.status) ? redirect.status : 302;
+      const status = redirect.status === undefined ? 302 : redirect.status;
+
+      if (!VALID_REDIRECT_STATUSES.includes(status)) {
+        errors.push(
+          `${where} ("${name}"): redirect.status non valido (${status}); ` +
+          `ammessi: ${VALID_REDIRECT_STATUSES.join(', ')}`
+        );
+        continue;
+      }
 
       if (isExternal) {
-        // Il 301 viene messo in cache dal browser in modo persistente: un falso
+        // I redirect permanenti vengono messi in cache dal browser: un falso
         // positivo dirotterebbe un utente reale per mesi, e non si ripara
-        // riavviando. Verso l'esterno è vietato, non sconsigliato.
-        if (status === 301) {
-          errors.push(`${where} ("${name}"): 301 non ammesso verso destinazioni esterne (usa 302)`);
+        // riavviando. Verso l'esterno sono vietati, non sconsigliati.
+        if (status === 301 || status === 308) {
+          errors.push(`${where} ("${name}"): ${status} non ammesso verso destinazioni esterne (usa 302)`);
           continue;
         }
         let host = null;
@@ -460,6 +662,40 @@ function validateRules(rulesData, options = {}) {
       compiled.redirect = { to: redirect.to, status, external: isExternal };
     }
 
+    if (action === 'tarpit') {
+      const tarpitSpec = raw.tarpit || {};
+      if (tarpitSpec.seconds !== undefined
+          && (!Number.isFinite(tarpitSpec.seconds) || tarpitSpec.seconds <= 0)) {
+        errors.push(`${where} ("${name}"): tarpit.seconds deve essere un numero positivo`);
+        continue;
+      }
+      // La durata dichiarata qui è una RICHIESTA: `custom.tarpit.maxSeconds` la
+      // limita comunque. Una regola non deve poter tenere occupato un socket più
+      // a lungo di quanto l'amministratore abbia deciso.
+      compiled.tarpit = {
+        seconds: Number.isFinite(tarpitSpec.seconds) ? tarpitSpec.seconds : null,
+      };
+    }
+
+    // ── Avvisi sulle due azioni che si comportano diversamente dalle altre ──
+    // Nessuna delle due è un errore: sono configurazioni legittime che però
+    // fanno una cosa diversa da quella che chi le scrive si aspetta, e scoprirlo
+    // dal traffico invece che dall'avvio è il modo peggiore.
+    if (action === 'drop' && behindProxy) {
+      warnings.push(
+        `regola "${name}": action "drop" con custom.trustProxy attivo — il socket ` +
+        'troncato è quello verso il proxy, non verso il client, che riceverebbe un 502. ' +
+        'A runtime degrada al blocco (404)'
+      );
+    }
+    if (action === 'tarpit' && behindProxy) {
+      warnings.push(
+        `regola "${name}": action "tarpit" dietro un proxy trattiene una connessione ` +
+        'del PROXY, non del client; molti proxy chiudono da sé dopo il proprio timeout ' +
+        'e l\'attesa la paga la tua infrastruttura'
+      );
+    }
+
     if (raw.escalate !== undefined) {
       const escalate = raw.escalate || {};
       if (typeof escalate.rateLimiterRule !== 'string' || escalate.rateLimiterRule === '') {
@@ -472,8 +708,51 @@ function validateRules(rulesData, options = {}) {
           'protectedRoutes.json5 del plugin rateLimiter (l\'escalation userà i default)'
         );
       }
-      compiled.escalate = { rateLimiterRule: escalate.rateLimiterRule };
+
+      // ── Ban immediato ──
+      // `escalate` senza `ban` CONTA un fallimento e lascia decidere a
+      // rateLimiter dopo quanti tentativi bloccare. Con `ban: true` si salta il
+      // conteggio e si blocca subito: è la risposta giusta a un canary usato —
+      // dove non c'è niente da accumulare, il primo evento è già la prova — e
+      // quella sbagliata ovunque ci sia un margine di inferenza.
+      const ban = escalate.ban === true;
+      if (escalate.ban !== undefined && typeof escalate.ban !== 'boolean') {
+        errors.push(`${where} ("${name}"): escalate.ban deve essere true o false`);
+        continue;
+      }
+      if (escalate.banSeconds !== undefined
+          && (!Number.isInteger(escalate.banSeconds) || escalate.banSeconds <= 0)) {
+        errors.push(`${where} ("${name}"): escalate.banSeconds deve essere un intero positivo`);
+        continue;
+      }
+      if (escalate.banSeconds !== undefined && !ban) {
+        warnings.push(
+          `regola "${name}": escalate.banSeconds è dichiarato ma escalate.ban è falso — ` +
+          'il valore non ha effetto'
+        );
+      }
+      // Un ban su una regola che non agisce non scatterebbe mai (l'enforcement è
+      // la precondizione), e crederlo attivo è peggio che non averlo scritto.
+      if (ban && (action === 'monitor' || action === 'allow')) {
+        warnings.push(
+          `regola "${name}": escalate.ban su una regola "${action}" non avrà mai effetto — ` +
+          'il ban richiede che l\'azione sia applicata'
+        );
+      }
+      compiled.escalate = {
+        rateLimiterRule: escalate.rateLimiterRule,
+        ban,
+        banSeconds: Number.isInteger(escalate.banSeconds) ? escalate.banSeconds : null,
+      };
     }
+
+    // ── Marcatura anti-anello ──
+    // Se il giudizio di reputazione si basasse anche sui blocchi decisi DA una
+    // regola di reputazione, il primo inciampo di un'impronta la condannerebbe
+    // per sempre: bloccata → quota di blocchi più alta → più bloccata. Il motore
+    // esclude dal contatore i blocchi delle regole marcate qui, così il giudizio
+    // poggia solo su prove raccolte da altre regole.
+    compiled.usesReputation = nodeUsesReputation(match);
 
     seenNames.add(name);
     rules.push(compiled);

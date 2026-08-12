@@ -1,6 +1,6 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 5,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   "active": 1,
 
   // Weight 3: prima di analytics (5) e rateLimiter (5). Conta poco in pratica —
@@ -68,6 +68,48 @@
       // Ruoli mai soggetti a ENFORCEMENT (restano sempre osservati).
       // 0 = root, 1 = admin.
       "enforceExemptRoles": [0, 1],
+    },
+
+    // ── Coerenza di sessione ──
+    //
+    // Un cookie di sessione rubato FUNZIONA: chi lo presenta è l'utente, per il
+    // server. Nessuna password da indovinare, nessun rate limit che serva. Ma il
+    // ladro non eredita il CLIENT: la sessione era nata su Firefox/Linux da un
+    // certo indirizzo, e a un certo punto arriva da python-requests.
+    //
+    // La prima richiesta vista per una sessione fissa la linea di base, che poi
+    // NON viene più aggiornata: se lo fosse, la richiesta dopo il dirottamento
+    // tornerebbe "coerente" e la sessione rubata risulterebbe pulita per il resto
+    // della sua vita. Il prezzo è che un utente mobile che passa da rete dati a
+    // WiFi resta marcato `ipChanged` fino al logout — per questo la regola
+    // distribuita guarda `uaChanged` e `scriptClient`, non `ipChanged`.
+    //
+    // Solo sessioni AUTENTICATE: una sessione anonima non ha niente da rubare, e
+    // tracciarla richiederebbe di crearla, cioè mandare un cookie a ogni
+    // visitatore del sito.
+    //
+    // Anomalie riconosciute dalla foglia `sessionAnomaly` nelle regole:
+    //   uaChanged           lo User-Agent è cambiato a metà sessione (il più
+    //                       affidabile: un browser non lo cambia)
+    //   fingerprintChanged  è cambiata la forma degli header
+    //   networkChanged      l'indirizzo è passato a un altro blocco (/24 o /48)
+    //   ipChanged           l'indirizzo è cambiato (rumoroso: mobile ↔ WiFi)
+    //   scriptClient        un cookie valido in mano a qualcosa che non è un
+    //                       browser. Non è un cambiamento, è uno stato.
+    //
+    // LIMITE: lo stato è in memoria. Dopo un riavvio le linee di base si perdono
+    // e la prima richiesta successiva ne fissa una nuova su come il client appare
+    // in quel momento. Se il riavvio capita a dirottamento già avvenuto, la
+    // sessione risulterà coerente. Stessa cosa fra worker diversi in cluster.
+    "sessionCoherence": {
+      "enabled": true,
+
+      // Tetto e scadenza. Le sessioni tracciate sono solo quelle autenticate,
+      // quindi la chiave NON è controllata da chi attacca (servirebbero altrettanti
+      // login validi): la scadenza si conta dall'ultimo uso, al contrario dei
+      // token canary. Il default è allineato al maxAge della sessione (24h).
+      "maxSessions": 5000,
+      "ttlHours": 24,
     },
 
     // ────────────────────────────────────────────────────────────────
@@ -193,6 +235,19 @@
       // contatore di richieste travestito).
       "maxIpsPerFingerprint": 256,
 
+      // Giorni di conservazione DEGLI INDIRIZZI, distinta da `ttlDays` che
+      // riguarda le voci. Ha effetto solo con censusIpMode "full", l'unico caso
+      // in cui gli indirizzi finiscono su disco.
+      //
+      // Serve perché `ttlDays` si conta dall'ULTIMO uso: un'impronta sempre
+      // attiva non scadrebbe mai, e il suo elenco di indirizzi resterebbe lì per
+      // sempre — un archivio di dati personali senza scadenza.
+      //
+      // Scadono gli INDIRIZZI, non il CONTEGGIO: `ipCount` è una statistica
+      // ("questa impronta arriva da 500 origini", il segnale botnet), non un
+      // dato personale, e non ha ragione di sparire con loro. 0 = disattivata.
+      "ipRetentionDays": 30,
+
       // Secondi fra un salvataggio del censimento e il successivo.
       "saveIntervalSeconds": 60,
 
@@ -201,6 +256,51 @@
         "maxClients": 5000,
         "ttlHours": 24,
       },
+    },
+
+    // ────────────────────────────────────────────────────────────────
+    // REPUTAZIONE LOCALE DELLE IMPRONTE
+    // ────────────────────────────────────────────────────────────────
+    //
+    // Il censimento accumula da mesi; questo blocco trasforma quella storia in
+    // un giudizio usabile in una regola, con la foglia `reputation`:
+    //
+    //   burst    impronta mai vista prima e già a raffica
+    //   suspect  quota di blocchi oltre `suspectShare`
+    //   bad      quota di blocchi oltre `badShare`
+    //
+    // ⚠ DUE AVVERTENZE, ENTRAMBE IMPORTANTI.
+    //
+    // 1. UN'IMPRONTA NON È UNA PERSONA, è una FAMIGLIA di client: "Chrome 120 su
+    //    Linux" è la stessa per tutti quelli che usano quel browser. Condannare
+    //    un'impronta da browser vero significa chiudere fuori tutti i suoi
+    //    utenti — il modo più probabile in cui questa funzione rovina un sito.
+    //    Da qui `protectBrowserFingerprints`, attiva di default.
+    //
+    // 2. L'IMPRONTA LA CONTROLLA CHI BUSSA: chi randomizza l'ordine degli header
+    //    ha un'impronta nuova a ogni richiesta, quindi reputazione sempre
+    //    pulita. Questa funzione ferma l'attaccante PIGRO, non quello
+    //    determinato — e non è un buco silenzioso: randomizzare fa esplodere il
+    //    tasso di sfratto del censimento, che ha la sua allerta.
+    "reputation": {
+      // Sotto questa soglia non si giudica: una quota calcolata su tre richieste
+      // è rumore, e condannare per rumore è come si producono i falsi positivi.
+      "minRequests": 20,
+
+      // Quote di blocchi (sul totale delle richieste dell'impronta) per i due
+      // giudizi. I blocchi decisi DA una regola di reputazione non contano, o il
+      // giudizio alimenterebbe sé stesso.
+      "suspectShare": 0.2,
+      "badShare": 0.5,
+
+      // `burst`: mai vista fino a `burstWindowSeconds` fa e già a
+      // `burstMinRequests` richieste. Un visitatore nuovo carica una pagina e le
+      // sue risorse; decine di richieste nei primi secondi sono una scansione.
+      "burstWindowSeconds": 60,
+      "burstMinRequests": 30,
+
+      // Non disattivarla senza aver capito l'avvertenza 1 qui sopra.
+      "protectBrowserFingerprints": true,
     },
 
     // ── Contatori per regola ──
@@ -216,10 +316,70 @@
 
     // Host verso cui è ammesso un redirect esterno. VUOTO di default.
     // Rimandare traffico verso un terzo che non ha acconsentito è un abuso verso
-    // di lui, e nei suoi log la sorgente saresti tu. Il 301 verso l'esterno è
-    // sempre vietato: la cache persistente del browser rende irreparabile un
-    // falso positivo su un utente reale.
+    // di lui, e nei suoi log la sorgente saresti tu. I redirect permanenti
+    // (301/308) verso l'esterno sono sempre vietati: la cache del browser rende
+    // irreparabile un falso positivo su un utente reale.
     "allowedRedirectHosts": [],
+
+    // ── Risposta a goccia (azione `tarpit`) ──
+    //
+    // Invece di rispondere e chiudere, la connessione resta aperta e il corpo
+    // esce un pezzetto alla volta. Uno scanner vale per la sua cadenza: un 404
+    // gli costa millisecondi, una risposta che non finisce mai gli occupa un
+    // worker e un socket per decine di secondi.
+    //
+    // ⚠ È un'arma puntata anche contro di noi. Ogni connessione trattenuta è un
+    // socket, un descrittore di file e un timer NOSTRI: senza limiti, sotto un
+    // flusso sostenuto sarebbe il modo più elegante di esaurire i propri
+    // descrittori. Da qui i tre tetti qui sotto, tutti e tre necessari.
+    //
+    // ⚠ Dietro un reverse proxy trattiene una connessione del PROXY, non del
+    // client: l'attesa la paga la tua infrastruttura. Il validatore lo segnala.
+    "tarpit": {
+      // Connessioni trattenute contemporaneamente. Superato il tetto la
+      // richiesta degrada al 404 comune: NON si accoda e non si aspetta, o il
+      // tetto sposterebbe il problema invece di risolverlo.
+      "maxConcurrent": 20,
+
+      // Durata massima. Una regola può chiedere meno, mai di più: una durata
+      // scritta a mano nel file delle regole non deve poter tenere occupato un
+      // socket più a lungo di quanto hai deciso qui.
+      "maxSeconds": 30,
+
+      // Intervallo fra una goccia e l'altra.
+      "intervalMs": 1000,
+    },
+
+    // ── Token esca (canary) ──
+    //
+    // Il segnaposto {{canary}} dentro un decoy inserisce un token che esiste solo
+    // in QUELLA risposta. Nessun motore di ricerca lo indicizza, nessun link ci
+    // porta, nessun utente lo digita: se torna indietro, chi l'ha usato ha letto
+    // il decoy e ha deciso di seguirlo. È l'unico segnale del plugin che non è
+    // un'inferenza, e quindi l'unico per cui un ban immediato è difendibile
+    // (si dichiara sulla regola: escalate: { rateLimiterRule, ban: true }).
+    "canary": {
+      // false = nessun token viene coniato; {{canary}} rende comunque una
+      // stringa casuale, ma non registrata (la trappola scatta come "unknown").
+      "enabled": true,
+
+      // Prefisso che rende riconoscibile la FORMA di un token anche quando non è
+      // più in registro (riavvio, scadenza, altro worker in cluster). È un
+      // compromesso dichiarato: rende i token individuabili in una risposta da
+      // chi sappia cosa cercare. Cambiarlo rende inutile quel riconoscimento.
+      // Solo [a-z0-9], da 1 a 8 caratteri.
+      "tokenPrefix": "a7",
+
+      // Ogni risposta con decoy conia un token, e la frequenza la decide chi
+      // bussa: senza tetto, martellare un percorso con decoy sarebbe il modo più
+      // semplice di esaurire la memoria. Sfratto LRU, come il censimento.
+      "maxTokens": 5000,
+
+      // Vita del token dalla CONSEGNA (non dall'ultimo uso: rinfrescarla
+      // lascerebbe all'attaccante il controllo di quanto a lungo occupiamo
+      // memoria per lui). Scaduto, il token resta riconoscibile come "unknown".
+      "ttlHours": 72,
+    },
 
     // ────────────────────────────────────────────────────────────────
     // ALLERTE
@@ -233,6 +393,27 @@
     // l'email dell'account root, e un indirizzo operativo è comunque spesso
     // diverso da quello amministrativo. Vedi TODO.md del plugin.
     "alertRecipient": "",
+
+    "alerts": {
+      // Finestra di silenzio per GENERE di allerta, in minuti.
+      //
+      // Serve perché gli eventi che generano allerte li controlla chi attacca: un
+      // canary lo può richiedere in ciclo. Senza finestra, la notifica diventa il
+      // moltiplicatore dell'attacco — casella satura, SMTP che inizia a
+      // rifiutare, e l'allerta che conta sepolta fra diecimila copie di sé.
+      // Le occorrenze soppresse vengono CONTATE e riportate nel messaggio
+      // successivo: "412 volte nell'ultima ora" vale più di 412 email.
+      //
+      // Il log applicativo non è mai soppresso: la finestra vale solo per la posta.
+      "cooldownMinutes": 60,
+
+      // Sfratti dal censimento delle impronte, per singolo passaggio di sweep,
+      // oltre i quali si viene avvisati. In esercizio normale il traffico vero
+      // converge su poche decine di impronte e gli sfratti restano a zero per
+      // settimane: un tasso improvviso non è capacità da alzare, è la firma di
+      // chi randomizza gli header per gonfiare il censimento. 0 = disattivato.
+      "evictionsPerSweep": 100,
+    },
 
   },
 }

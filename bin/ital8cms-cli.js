@@ -67,6 +67,8 @@ sentinel
   .option('--authenticated', 'simulate an authenticated request')
   .option('--roles <ids>', 'comma-separated role ids (implies --authenticated)')
   .option('--status <code>', 'response status, to try outcome rules', (v) => parseInt(v, 10))
+  .option('--session-anomaly <kinds>', 'comma-separated session anomalies to simulate '
+    + '(uaChanged, fingerprintChanged, networkChanged, ipChanged, scriptClient); implies --authenticated')
   .option('--browser', 'add the headers a real browser sends (Accept, Sec-Fetch-*, sec-ch-ua, ...)')
   .option('-v, --verbose', 'show every rule evaluated, not just the matching one')
   .action((reqPath, cmdOpts) => {
@@ -77,6 +79,13 @@ sentinel
       ? String(cmdOpts.roles).split(',').map((r) => parseInt(r.trim(), 10)).filter(Number.isInteger)
       : undefined;
 
+    // Le anomalie di sessione si DICHIARANO: la domanda è «se questa sessione
+    // avesse cambiato User-Agent, la mia regola la prenderebbe?», e non c'è modo
+    // di riprodurre la storia di una sessione vera in una prova sintetica.
+    const sessionAnomalies = cmdOpts.sessionAnomaly
+      ? String(cmdOpts.sessionAnomaly).split(',').map((k) => k.trim()).filter(Boolean)
+      : undefined;
+
     sendCommand('sentinel.test', {
       spec: {
         path: reqPath,
@@ -84,8 +93,9 @@ sentinel
         headers,
         ip: cmdOpts.ip,
         query: cmdOpts.query,
-        authenticated: !!cmdOpts.authenticated || Array.isArray(roles),
+        authenticated: !!cmdOpts.authenticated || Array.isArray(roles) || Array.isArray(sessionAnomalies),
         roleIds: roles,
+        sessionAnomalies,
         status: cmdOpts.status,
         browserProfile: !!cmdOpts.browser,
       },
@@ -417,6 +427,10 @@ function renderSentinelTest(data) {
   out.push(`  estensione: ${s.extension || '(nessuna)'}`);
   out.push(`  user-agent: ${s.userAgent || '(assente)'}`);
   if (s.authenticated) out.push(`  autenticata: si (ruoli: ${JSON.stringify(s.roleIds)})`);
+  if (s.sessionAnomalies && s.sessionAnomalies.length) {
+    out.push(`  sessione:   anomalie simulate → ${s.sessionAnomalies.join(', ')}`);
+  }
+  if (s.canary) out.push(`  canary:     ${s.canary.token} (${s.canary.status})`);
   out.push(`  impronta:   ${s.fp}  famiglia=${s.fpClass.family} profilo=${s.fpClass.headerProfile} coerente=${s.fpClass.coherent}`);
   out.push('');
 

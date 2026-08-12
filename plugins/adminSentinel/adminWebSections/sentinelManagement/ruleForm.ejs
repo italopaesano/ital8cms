@@ -1,0 +1,263 @@
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs', passData ) ) %>
+<link rel="stylesheet" href="/<%= passData.adminPrefix %>/sentinelManagement/sentinel-admin.css">
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs', passData ) ) %>
+
+<div class="container mt-4 sn-admin">
+
+  <ul class="nav nav-pills mb-3">
+    <li class="nav-item"><a class="nav-link" href="/<%= passData.adminPrefix %>/sentinelManagement/index.ejs"><%= __({it: 'Panoramica', en: 'Overview'}, passData.ctx) %></a></li>
+    <li class="nav-item"><a class="nav-link active" href="/<%= passData.adminPrefix %>/sentinelManagement/ruleForm.ejs"><%= __({it: 'Regole (form)', en: 'Rules (form)'}, passData.ctx) %></a></li>
+    <li class="nav-item"><a class="nav-link" href="/<%= passData.adminPrefix %>/sentinelManagement/rules.ejs"><%= __({it: 'Regole (JSON5)', en: 'Rules (JSON5)'}, passData.ctx) %></a></li>
+    <li class="nav-item"><a class="nav-link" href="/<%= passData.adminPrefix %>/sentinelManagement/tester.ejs"><%= __({it: 'Tester', en: 'Tester'}, passData.ctx) %></a></li>
+  </ul>
+
+  <h3 class="mb-3">📝 <%= __({it: 'Regole, campo per campo', en: 'Rules, field by field'}, passData.ctx) %></h3>
+
+  <div class="alert alert-secondary small">
+    <%= __({
+      it: 'Stesso file dell\'editor JSON5, altra strada per arrivarci. La fonte di verità resta sempre sentinelRules.json5 su disco, e la validazione è la stessa che usa il motore: quello che questo form accetta è esattamente quello che il filtro accetterà.',
+      en: 'Same file as the JSON5 editor, a different way to reach it. The source of truth stays sentinelRules.json5 on disk, and validation is the very one the engine uses: what this form accepts is exactly what the filter will accept.'
+    }, passData.ctx) %>
+  </div>
+
+  <div id="formAlert" class="alert d-none" role="alert"></div>
+
+  <div class="row g-3">
+
+    <!-- ── Elenco delle regole ─────────────────────────────────────────────── -->
+    <div class="col-12 col-xl-4">
+      <div class="card">
+        <div class="card-header"><%= __({it: 'Regole', en: 'Rules'}, passData.ctx) %></div>
+        <div class="list-group list-group-flush sn-rule-list" id="ruleList">
+          <div class="list-group-item text-muted small"><%= __({it: 'Caricamento…', en: 'Loading…'}, passData.ctx) %></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Form ────────────────────────────────────────────────────────────── -->
+    <div class="col-12 col-xl-8">
+      <div class="card" id="formCard" style="display:none">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><code id="fName">—</code></span>
+          <span class="badge bg-light text-dark" id="fPosition"></span>
+        </div>
+        <div class="card-body">
+
+          <div class="alert alert-warning small py-2">
+            <%= __({
+              it: 'Salvando dal form, i commenti scritti dentro QUESTA regola vengono persi: il form conosce i campi, non i commenti. Quelli delle altre regole, le cornici di sezione e l\'intestazione del file restano intatti.',
+              en: 'Saving from the form drops the comments written inside THIS rule: the form knows fields, not comments. Comments of other rules, section headers and the file preamble stay untouched.'
+            }, passData.ctx) %>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label class="form-label small mb-1"><%= __({it: 'Categoria', en: 'Category'}, passData.ctx) %></label>
+              <input id="fCategory" class="form-control form-control-sm" spellcheck="false">
+              <div class="form-text small"><%= __({it: 'Aggrega il log per famiglia.', en: 'Groups the log by family.'}, passData.ctx) %></div>
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label small mb-1"><%= __({it: 'Si applica a', en: 'Applies to'}, passData.ctx) %></label>
+              <select id="fAppliesTo" class="form-select form-select-sm">
+                <option value="any">any</option>
+                <option value="anonymous">anonymous</option>
+                <option value="authenticated">authenticated</option>
+              </select>
+            </div>
+            <div class="col-6 col-md-3 d-flex align-items-end">
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" role="switch" id="fEnabled">
+                <label class="form-check-label small" for="fEnabled"><%= __({it: 'Attiva', en: 'Enabled'}, passData.ctx) %></label>
+              </div>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label small mb-1"><%= __({it: 'Descrizione', en: 'Description'}, passData.ctx) %></label>
+              <textarea id="fDescription" class="form-control form-control-sm" rows="3" spellcheck="false"></textarea>
+              <div class="form-text small">
+                <%= __({
+                  it: 'È qui che va spiegato cosa osserva la regola: sopravvive al salvataggio dal form, al contrario di un commento.',
+                  en: 'This is where to explain what the rule watches: it survives a form save, unlike a comment.'
+                }, passData.ctx) %>
+              </div>
+            </div>
+
+            <!-- ── Azione ─────────────────────────────────────────────────── -->
+            <div class="col-12"><hr class="my-1"></div>
+            <div class="col-12 col-md-4">
+              <label class="form-label small mb-1"><%= __({it: 'Azione', en: 'Action'}, passData.ctx) %></label>
+              <select id="fAction" class="form-select form-select-sm">
+                <option value="allow">allow</option>
+                <option value="monitor">monitor</option>
+                <option value="block">block</option>
+                <option value="drop">drop</option>
+                <option value="decoy">decoy</option>
+                <option value="redirect">redirect</option>
+                <option value="throttle">throttle</option>
+                <option value="tarpit">tarpit</option>
+              </select>
+            </div>
+            <div class="col-12 col-md-8" id="actionParams"></div>
+
+            <!-- ── Escalation ─────────────────────────────────────────────── -->
+            <div class="col-12"><hr class="my-1"></div>
+            <div class="col-12 col-md-5">
+              <label class="form-label small mb-1"><%= __({it: 'Escalation verso rateLimiter', en: 'Escalate to rateLimiter'}, passData.ctx) %></label>
+              <input id="fEscalateRule" class="form-control form-control-sm" placeholder="(nessuna)" spellcheck="false">
+            </div>
+            <div class="col-6 col-md-3 d-flex align-items-end">
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" role="switch" id="fEscalateBan">
+                <label class="form-check-label small" for="fEscalateBan"><%= __({it: 'Ban immediato', en: 'Ban at once'}, passData.ctx) %></label>
+              </div>
+            </div>
+            <div class="col-6 col-md-4">
+              <label class="form-label small mb-1"><%= __({it: 'Durata ban (s)', en: 'Ban seconds'}, passData.ctx) %></label>
+              <input id="fEscalateSeconds" type="number" min="1" class="form-control form-control-sm" placeholder="default">
+            </div>
+
+            <!-- ── Condizioni ─────────────────────────────────────────────── -->
+            <div class="col-12"><hr class="my-1"></div>
+            <div class="col-12">
+              <h6 class="mb-2"><%= __({it: 'Condizioni', en: 'Conditions'}, passData.ctx) %></h6>
+
+              <!--
+                Il vincolo che ha determinato questa parte: un form non deve MAI
+                distruggere ciò che non sa rappresentare. Un `match` con
+                combinatori annidati viene mostrato in sola lettura e rimandato
+                all'editor JSON5, non riscritto in una forma semplificata.
+              -->
+              <div id="matchComplex" class="alert alert-info small d-none">
+                <strong><%= __({it: 'Condizioni non rappresentabili in un form.', en: 'Conditions this form cannot represent.'}, passData.ctx) %></strong>
+                <%= __({
+                  it: 'Questa regola usa combinatori (all / any / not) o foglie che il form non copre. Vengono conservate ESATTAMENTE come sono: puoi modificare tutto il resto e salvare senza rischio, e per cambiarle usa l\'editor JSON5.',
+                  en: 'This rule uses combinators (all / any / not) or leaves the form does not cover. They are preserved EXACTLY as they are: you can edit everything else and save safely, and use the JSON5 editor to change them.'
+                }, passData.ctx) %>
+                <pre class="mt-2 mb-0 small sn-pre" id="matchPreview"></pre>
+              </div>
+
+              <div id="matchSimple" class="row g-3">
+                <div class="col-12 col-md-6">
+                  <label class="form-label small mb-1">path</label>
+                  <textarea id="mPath" class="form-control form-control-sm" rows="2" spellcheck="false" placeholder="/wp-admin/**&#10;regex:^/wp-"></textarea>
+                  <div class="form-text small"><%= __({it: 'Uno per riga.', en: 'One per line.'}, passData.ctx) %></div>
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label small mb-1">extension</label>
+                  <input id="mExtension" class="form-control form-control-sm" placeholder="php, sql" spellcheck="false">
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label small mb-1">method</label>
+                  <input id="mMethod" class="form-control form-control-sm" placeholder="TRACE, PROPFIND" spellcheck="false">
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label class="form-label small mb-1">userAgent</label>
+                  <input id="mUserAgent" class="form-control form-control-sm" placeholder="regex:^curl/  ·  empty  ·  curl, wget" spellcheck="false">
+                </div>
+                <div class="col-12 col-md-6">
+                  <label class="form-label small mb-1">query</label>
+                  <input id="mQuery" class="form-control form-control-sm" placeholder="regex:union\s+select" spellcheck="false">
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label class="form-label small mb-1">ip</label>
+                  <input id="mIp" class="form-control form-control-sm" placeholder="10.0.0.0/8, 2001:db8::/32" spellcheck="false">
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label small mb-1">status</label>
+                  <input id="mStatus" class="form-control form-control-sm" placeholder="404, 403" spellcheck="false">
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label small mb-1">roleIds</label>
+                  <input id="mRoleIds" class="form-control form-control-sm" placeholder="0, 1" spellcheck="false">
+                </div>
+
+                <div class="col-6 col-md-3">
+                  <label class="form-label small mb-1">authenticated</label>
+                  <select id="mAuthenticated" class="form-select form-select-sm">
+                    <option value=""><%= __({it: '(non guardare)', en: '(ignore)'}, passData.ctx) %></option>
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                  </select>
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label small mb-1">canary</label>
+                  <select id="mCanary" class="form-select form-select-sm">
+                    <option value=""><%= __({it: '(non guardare)', en: '(ignore)'}, passData.ctx) %></option>
+                    <option value="true">true</option>
+                    <option value="known">known</option>
+                    <option value="unknown">unknown</option>
+                  </select>
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label small mb-1">sessionAnomaly</label>
+                  <select id="mSessionAnomaly" class="form-select form-select-sm" multiple size="5">
+                    <option value="uaChanged">uaChanged</option>
+                    <option value="fingerprintChanged">fingerprintChanged</option>
+                    <option value="networkChanged">networkChanged</option>
+                    <option value="ipChanged">ipChanged</option>
+                    <option value="scriptClient">scriptClient</option>
+                  </select>
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label small mb-1">reputation</label>
+                  <select id="mReputation" class="form-select form-select-sm" multiple size="3">
+                    <option value="burst">burst</option>
+                    <option value="suspect">suspect</option>
+                    <option value="bad">bad</option>
+                  </select>
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label small mb-1">fingerprintClass</label>
+                  <div class="row g-2">
+                    <div class="col-6 col-md-3">
+                      <select id="mFpCoherent" class="form-select form-select-sm">
+                        <option value="">coherent: <%= __({it: '(non guardare)', en: '(ignore)'}, passData.ctx) %></option>
+                        <option value="true">coherent: true</option>
+                        <option value="false">coherent: false</option>
+                      </select>
+                    </div>
+                    <div class="col-6 col-md-3">
+                      <input id="mFpFamily" class="form-control form-control-sm" placeholder="family (curl, python…)" spellcheck="false">
+                    </div>
+                    <div class="col-6 col-md-3">
+                      <input id="mFpProfile" class="form-control form-control-sm" placeholder="headerProfile (browser, minimal)" spellcheck="false">
+                    </div>
+                    <div class="col-6 col-md-3">
+                      <input id="mFpOs" class="form-control form-control-sm" placeholder="claimedOs (linux, windows…)" spellcheck="false">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2 mt-3">
+            <button id="btnSave" class="btn btn-primary btn-sm">💾 <%= __({it: 'Salva la regola', en: 'Save rule'}, passData.ctx) %></button>
+            <button id="btnReload" class="btn btn-outline-secondary btn-sm">↺ <%= __({it: 'Ricarica dal file', en: 'Reload from file'}, passData.ctx) %></button>
+            <a class="btn btn-outline-secondary btn-sm ms-auto" href="/<%= passData.adminPrefix %>/sentinelManagement/rules.ejs">
+              <%= __({it: 'Apri l\'editor JSON5', en: 'Open the JSON5 editor'}, passData.ctx) %>
+            </a>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="card" id="emptyCard">
+        <div class="card-body text-muted small">
+          <%= __({it: 'Scegli una regola dall\'elenco per modificarla.', en: 'Pick a rule from the list to edit it.'}, passData.ctx) %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const SN_API = '/<%= passData.apiPrefix %>/adminSentinel';
+</script>
+<script src="/<%= passData.adminPrefix %>/sentinelManagement/rule-form.js"></script>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>

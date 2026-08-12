@@ -6,6 +6,7 @@
 
   <ul class="nav nav-pills mb-3">
     <li class="nav-item"><a class="nav-link" href="/<%= passData.adminPrefix %>/sentinelManagement/index.ejs"><%= __({it: 'Panoramica', en: 'Overview'}, passData.ctx) %></a></li>
+    <li class="nav-item"><a class="nav-link" href="/<%= passData.adminPrefix %>/sentinelManagement/ruleForm.ejs"><%= __({it: 'Regole (form)', en: 'Rules (form)'}, passData.ctx) %></a></li>
     <li class="nav-item"><a class="nav-link" href="/<%= passData.adminPrefix %>/sentinelManagement/rules.ejs"><%= __({it: 'Regole (JSON5)', en: 'Rules (JSON5)'}, passData.ctx) %></a></li>
     <li class="nav-item"><a class="nav-link active" href="/<%= passData.adminPrefix %>/sentinelManagement/tester.ejs"><%= __({it: 'Tester', en: 'Tester'}, passData.ctx) %></a></li>
   </ul>
@@ -67,6 +68,24 @@
           <div class="mb-3">
             <label class="form-label small mb-1"><%= __({it: 'Ruoli (separati da virgola)', en: 'Roles (comma separated)'}, passData.ctx) %></label>
             <input id="tRoles" class="form-control form-control-sm" placeholder="1" spellcheck="false">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small mb-1">
+              <%= __({it: 'Anomalie di sessione da simulare', en: 'Session anomalies to simulate'}, passData.ctx) %>
+            </label>
+            <select id="tSessionAnomaly" class="form-select form-select-sm" multiple size="5">
+              <option value="uaChanged">uaChanged</option>
+              <option value="fingerprintChanged">fingerprintChanged</option>
+              <option value="networkChanged">networkChanged</option>
+              <option value="ipChanged">ipChanged</option>
+              <option value="scriptClient">scriptClient</option>
+            </select>
+            <div class="form-text small">
+              <%= __({
+                it: 'Si dichiarano, non si calcolano: la domanda è «se questa sessione avesse cambiato client, la mia regola la prenderebbe?». Valgono solo con «Richiesta autenticata» attiva.',
+                en: 'These are declared, not computed: the question is “if this session had changed client, would my rule catch it?”. They only apply with “Authenticated request” on.'
+              }, passData.ctx) %>
+            </div>
           </div>
           <div class="form-check form-switch mb-3">
             <input class="form-check-input" type="checkbox" id="tVerbose" checked>

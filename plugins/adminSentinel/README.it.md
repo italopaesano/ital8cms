@@ -31,6 +31,38 @@ Non «quante ne ho bloccate», che è un numero rassicurante e poco utile, ma di
 cosa è fatto il traffico che bussa: sonde verso CMS estranei, file sensibili,
 metodi anomali, scanner. Aggregato per `category`, con barra proporzionale.
 
+### Token esca (canary)
+
+L'opposto esatto dei sospetti scanner: là ci sono le inferenze, qui le certezze.
+Un token esiste **solo** dentro il decoy consegnato a un client preciso — nessun
+link ci porta, nessuno lo digita per sbaglio — quindi se torna indietro chi l'ha
+usato ha letto il decoy e ha deciso di seguirlo.
+
+La colonna **Stesso client** è quella da guardare: `no` significa che il
+contenuto del decoy è passato di mano, cioè che chi scandaglia e chi sfrutta sono
+due macchine diverse.
+
+La card **resta nascosta** finché nessun token è stato consegnato: una card sempre
+vuota su una dashboard di sicurezza insegna a smettere di guardarla, e questa è
+quella che non si deve smettere di guardare.
+
+### Coerenza delle sessioni
+
+Le sessioni autenticate che hanno smesso di assomigliare a sé stesse: la linea di
+base è come la sessione appariva alla **prima** richiesta, e non viene mai
+aggiornata.
+
+Le due anomalie in rosso — `uaChanged` e `scriptClient` — sono quelle con meno
+falsi positivi: un browser non cambia User-Agent a metà sessione, e un cookie
+valido in mano a `python-requests` descrive già un problema. Quelle in grigio
+(`ipChanged`, `networkChanged`) sono rumorose per via del mobile.
+
+Il contatore **Con anomalie** conta le *sessioni*, non le richieste: una sessione
+dirottata produce l'anomalia a ogni richiesta successiva, e sommarle direbbe
+quanto è stata attiva, non quante sessioni sono compromesse.
+
+Anche questa card resta nascosta finché non c'è niente da mostrare.
+
 ### Sospetti scanner
 
 Client che collezionano molti percorsi distinti falliti. **Non derivano da
@@ -133,6 +165,9 @@ GET  /rules/raw                     testo del file + elenco dei backup
 POST /rules/validate                { content } — valida senza salvare
 POST /rules/save                    { content } — valida, fa il backup, salva, ricarica
 POST /rules/test                    { spec } — prova una richiesta e spiega l'esito
+
+GET  /rules/source                  le regole come stanno sul FILE (per il form)
+POST /rules/fields                  { ruleName, rule } — salva una regola dal form
 ```
 
 Le POST richiedono il token CSRF, iniettato automaticamente nelle pagine admin
@@ -195,6 +230,44 @@ salvataggio.
 Le modifiche entrano in vigore **subito**: il server chiama `reloadRules()` dopo
 la scrittura, nessun riavvio.
 
+## Form strutturato (Vista C)
+
+Scheda **Regole (form)**: le stesse regole dell'editor JSON5, campo per campo.
+Stesso file, stessa validazione — quella del motore, lato server — e nessuna
+cache locale: dopo ogni salvataggio il file viene riletto, così quello che vedi
+è quello che c'è su disco.
+
+### La regola che ha determinato il progetto
+
+**Un form non deve mai distruggere ciò che non sa rappresentare.**
+
+L'albero `match` ammette combinatori annidati (`all` / `any` / `not`) che un form
+piatto non può mostrare. La tentazione sarebbe appiattirli; il risultato sarebbe
+che aprire una regola e salvarla *senza toccare niente* la cambia — il modo più
+efficace di far perdere fiducia a uno strumento.
+
+Qui invece un `match` non rappresentabile viene **conservato alla lettera** e
+mostrato in sola lettura, con un rimando all'editor JSON5. Tutto il resto della
+regola resta modificabile e salvabile senza rischio.
+
+### Cosa si perde salvando dal form
+
+I commenti scritti **dentro quella regola**. Il form conosce i campi, non i
+commenti, e riscrive il blocco testuale della regola che stai salvando. Restano
+intatti i commenti delle altre regole, le cornici di sezione e l'intestazione del
+file.
+
+È una perdita reale, quindi l'interfaccia la dichiara **prima** del salvataggio
+invece di lasciarla scoprire dopo. Per una regola i cui commenti contano, c'è
+l'editor JSON5. Il posto giusto dove spiegare cosa osserva una regola resta
+comunque il campo `description`, che sopravvive al form.
+
+### Cosa il form non lascia fare
+
+**Rinominare.** Il nome è la chiave che lega contatori, righe di log e
+promozioni: cambiarlo azzera la storia della regola. Si può fare, ma
+dall'editor JSON5 — cioè con la consapevolezza di quello che si sta facendo.
+
 ## Tester (scheda «Tester»)
 
 Prova una richiesta contro le regole in vigore, **senza inviarla davvero**.
@@ -206,12 +279,16 @@ la richiesta sintetica ha solo gli header che le dai e appare sempre come un
 client script — chiunque incolli uno User-Agent di Chrome inciampa nella regola
 sull'incoerenza senza capire perché.
 
+Le **anomalie di sessione** si dichiarano invece di essere calcolate: la domanda
+è «se questa sessione avesse cambiato client, la mia regola la prenderebbe?», e
+riprodurre la storia di una sessione vera in una prova sintetica non avrebbe
+senso. Valgono solo con «Richiesta autenticata» attiva, come a runtime.
+
 Lo stesso strumento è disponibile da riga di comando
 (`npm run cli -- sentinel test <path>`), che è spesso dove serve: la domanda
 «perché questa regola non scatta?» arriva mentre si sta scrivendo il file in SSH.
 
 ## Cosa NON fa ancora
 
-Manca la **Vista C**, il form strutturato campo per campo — l'unica delle Tre
-Viste non ancora coperta. Vedi il piano di lavoro in
+Le Tre Viste ci sono tutte. Restano aperti i punti del *piano di rifinitura* in
 [`plugins/sentinel/TODO.md`](../sentinel/TODO.md).

@@ -91,6 +91,44 @@
     },
 
     // ─────────────────────────────────────────────────────────────────────────
+    // TOKEN ESCA — il segnale più certo che questo plugin sa produrre
+    // ─────────────────────────────────────────────────────────────────────────
+    {
+      name: "canary-token-used",
+      enabled: true,
+      category: "canary",
+      description:
+        "Qualcuno ha usato un token esca. I token esistono SOLO dentro il corpo di un decoy servito a un client specifico: nessun motore di ricerca li indicizza, nessun link ci porta, nessun utente li digita. Chi ne richiede uno ha letto il decoy e ha deciso di seguirlo. Non è un'inferenza come tutto il resto di questo file: è una certezza, e sta in cima perché non ha senso che un'altra regola la anticipi. Nota: la segnalazione (log + allerta) parte comunque, anche se questa regola viene cancellata o resta in monitor — è l'unico segnale del plugin che non dipende da una riga di questo file.",
+      action: "monitor",
+      match: {
+        canary: true,   // true = qualunque token; "known" = solo quelli ancora in registro
+      },
+      // Quando promuovi questa regola a "block", questo è l'unico posto del file
+      // in cui `ban: true` è difendibile: non c'è insistenza da accumulare,
+      // il primo evento è già la prova. Richiede il plugin rateLimiter attivo.
+      // escalate: { rateLimiterRule: "scanner", ban: true, banSeconds: 86400 },
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SESSIONI AUTENTICATE
+    // ─────────────────────────────────────────────────────────────────────────
+    {
+      name: "session-hijack-signal",
+      enabled: true,
+      category: "session",
+      description:
+        "Una sessione autenticata ha smesso di assomigliare a sé stessa. Un cookie rubato funziona — chi lo presenta È l'utente, per il server — ma il ladro non eredita il client: la sessione era nata su un browser e a un certo punto arriva da uno script, oppure lo User-Agent cambia a metà. Sono i due segnali con meno falsi positivi: un browser non cambia User-Agent, e un cookie valido in mano a python-requests è già di per sé la descrizione di un problema. NON guarda l'indirizzo: cambia da solo passando da rete dati a WiFi, e la linea di base non si aggiorna mai, quindi marcherebbe la sessione fino al logout. Se ti serve, aggiungi \"ipChanged\" o \"networkChanged\" all'elenco.",
+      action: "monitor",
+      appliesTo: "authenticated",
+      match: {
+        sessionAnomaly: ["uaChanged", "scriptClient"],
+      },
+      // Promuovendo questa regola, ricorda che `authenticatedTraffic.mode` è il
+      // tetto: finché resta "monitor" nessuna regola agisce sugli autenticati,
+      // e i ruoli in `enforceExemptRoles` restano esenti in ogni caso.
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
     // FILE SENSIBILI
     // ─────────────────────────────────────────────────────────────────────────
     {
@@ -240,6 +278,151 @@
       // alimenterebbe rateLimiter senza che tu ne abbia visto i dati.
       // escalate: { rateLimiterRule: "scanner" },
     },
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // CONTENUTO FITTIZIO E DIROTTAMENTO — esempi, non attivi
+    // ─────────────────────────────────────────────────────────────────────────
+    // Restano commentati perché non sono osservazione: agiscono. Il default di
+    // questo file non deve fare NIENTE a nessuno finché non hai guardato i tuoi
+    // dati. Copiane uno e togli i commenti quando sai cosa vuoi ottenere.
+    //
+    // ── decoy: rispondi con un contenuto falso invece che con un 404 ──────────
+    // Uno scanner che chiede /wp-login.php e riceve 404 impara «non è WordPress»
+    // e passa oltre: gli è costato zero. Se riceve un login WordPress credibile
+    // spende minuti a lanciarci contro exploit inutili — e nel suo database di
+    // bersagli questo sito finisce catalogato male.
+    //
+    // I file stanno in decoys/default/ (forniti, sovrascritti dagli update) e
+    // decoys/data/ (tuoi, mai toccati). Il secondo vince sul primo a parità di
+    // nome. Distribuiti: wp-login.html, phpinfo.html, env.txt, dir-listing.html.
+    //
+    // {
+    //   name: "wp-probe-decoy",
+    //   enabled: true,
+    //   category: "cms-probe",
+    //   description: "Finto login WordPress a chi cerca WordPress.",
+    //   action: "decoy",
+    //   appliesTo: "anonymous",
+    //   match: { path: ["/wp-login.php", "/wp-admin/**"] },
+    //   decoy: {
+    //     file: "wp-login.html",
+    //     status: 200,
+    //     // Gli header servono alla credibilità: uno scanner che li guarda prima
+    //     // del corpo smaschererebbe un finto PHP senza X-Powered-By.
+    //     headers: { "X-Powered-By": "PHP/7.4.33" },
+    //   },
+    // },
+    //
+    // ── redirect: manda la richiesta altrove ─────────────────────────────────
+    // Verso l'INTERNO è la forma tranquilla (una pagina di cortesia, la home).
+    // Verso l'ESTERNO serve l'host in custom.allowedRedirectHosts, e i redirect
+    // permanenti (301/308) sono vietati: restano nella cache del browser, e un
+    // falso positivo dirotterebbe un utente vero per mesi senza che riavviare
+    // ripari niente. Rimandare traffico a un terzo che non ha acconsentito
+    // resta comunque un abuso verso di lui: nei suoi log la sorgente sei tu.
+    //
+    // {
+    //   name: "sensitive-file-redirect",
+    //   enabled: true,
+    //   category: "sensitive-file",
+    //   description: "Chi cerca file di configurazione finisce sulla home.",
+    //   action: "redirect",
+    //   appliesTo: "anonymous",
+    //   match: { path: ["/.env", "/.git/**"] },
+    //   redirect: { to: "/", status: 302 },
+    // },
+    //
+    // ── drop: tronca la connessione senza rispondere (stile 444 di nginx) ────
+    // Il 404 di `block` è INDISTINGUIBILE da un URL mai esistito: è la sua
+    // qualità principale. `drop` rinuncia a quella qualità — una connessione
+    // azzerata si nota — in cambio di un costo maggiore per chi bussa, che resta
+    // in attesa fino al proprio timeout senza ricevere niente.
+    //
+    // ⚠ Dietro un reverse proxy NON funziona: il socket troncato è quello verso
+    // il proxy, che risponderebbe 502 al client — più rumoroso di un 404. Con
+    // `trustProxy: true` degrada da sé al blocco, e il validatore lo avvisa.
+    //
+    // {
+    //   name: "scanner-drop",
+    //   enabled: true,
+    //   category: "scanner",
+    //   description: "Nessuna risposta a chi è già stato riconosciuto ostile.",
+    //   action: "drop",
+    //   appliesTo: "anonymous",
+    //   match: { all: [{ extension: ["php"] }, { fingerprintClass: { coherent: false } }] },
+    // },
+    //
+    // ── reputazione: agisci su ciò che il censimento ha già visto ───────────
+    // Il censimento accumula da mesi. La foglia `reputation` trasforma quella
+    // storia in una condizione:
+    //   burst    impronta mai vista prima e già a raffica
+    //   suspect  quota di blocchi oltre custom.reputation.suspectShare
+    //   bad      quota di blocchi oltre custom.reputation.badShare
+    //
+    // ⚠ UN'IMPRONTA NON È UNA PERSONA, è una FAMIGLIA di client: "Chrome 120 su
+    // Linux" è la stessa per tutti quelli che usano quel browser. Le impronte da
+    // browser vero sono perciò PROTETTE dal giudizio
+    // (`protectBrowserFingerprints`), e chi emula bene un browser è immune alla
+    // reputazione. È il prezzo giusto: meglio perdere l'attaccante capace che
+    // chiudere fuori tutti gli utenti di un browser.
+    //
+    // ⚠ L'impronta la controlla chi bussa: randomizzando gli header ne ha una
+    // nuova a ogni richiesta. Questa è una vittoria facile contro lo scanner
+    // pigro, non una difesa da un avversario determinato — che però, provandoci,
+    // fa scattare l'allerta sul tasso di sfratto del censimento.
+    //
+    // {
+    //   name: "known-bad-fingerprint",
+    //   enabled: true,
+    //   category: "reputation",
+    //   description: "Impronta che nel nostro censimento ha una storia di blocchi.",
+    //   action: "block",
+    //   appliesTo: "anonymous",
+    //   match: { reputation: ["bad"] },
+    // },
+    //
+    // ── filtro d'AUDIENCE, non confine di sicurezza ─────────────────────────
+    // Lo scenario "sito riservato a un solo ecosistema" si scrive con
+    // `fingerprintClass`, ma va capito per quello che è: l'OS dichiarato si
+    // falsifica in un secondo, quindi questa non tiene fuori nessuno che non
+    // voglia esserlo. Serve a orientare un pubblico, non a difendersi.
+    //
+    // Tienila in "monitor" per settimane prima di promuoverla: il numero che
+    // conta è quanti visitatori REALI verrebbero esclusi, e lo si sa solo
+    // guardando i contatori.
+    //
+    // {
+    //   name: "solo-ecosistema-linux",
+    //   enabled: true,
+    //   category: "audience",
+    //   description: "Sito destinato al solo mondo Linux. FILTRO D'AUDIENCE: l'OS dichiarato è falsificabile, non è un confine di sicurezza.",
+    //   action: "monitor",
+    //   appliesTo: "anonymous",
+    //   match: { not: { fingerprintClass: { claimedOs: "linux" } } },
+    // },
+    //
+    // ── tarpit: risposta a goccia ───────────────────────────────────────────
+    // Uno scanner vale per la sua cadenza: un 404 gli costa millisecondi, una
+    // risposta che non finisce mai gli occupa un worker e un socket per decine
+    // di secondi. Dove il decoy gli avvelena i DATI, il tarpit gli consuma il
+    // TEMPO.
+    //
+    // ⚠ È un'arma puntata anche contro di noi: ogni connessione trattenuta è un
+    // socket e un timer NOSTRI. I tetti stanno in `custom.tarpit`
+    // (`maxConcurrent`, `maxSeconds`); oltre il tetto la richiesta degrada al
+    // 404 comune invece di accodarsi. `seconds` qui è una richiesta, mai un
+    // modo di superare `maxSeconds`.
+    //
+    // {
+    //   name: "scanner-tarpit",
+    //   enabled: true,
+    //   category: "scanner",
+    //   description: "Trattiene chi insiste, per rallentargli la scansione.",
+    //   action: "tarpit",
+    //   appliesTo: "anonymous",
+    //   match: { path: ["/wp-admin/**", "/administrator/**"] },
+    //   tarpit: { seconds: 20 },
+    // },
 
   ],
 }

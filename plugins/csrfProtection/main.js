@@ -14,15 +14,29 @@
  *   avvolge OGNI rotta API), PRIMA del controllo auth → copre anche le rotte
  *   pubbliche come POST /login. Il core tira l'oggetto condiviso on-demand:
  *       const csrf = pluginSys.getSharedObject('csrfProtection');
- *       if (csrf) { const v = csrf.validateRequest(ctx); if (!v.ok) ...403... }
+ *       if (csrf) { const v = csrf.validateRequest(ctx, access); if (!v.ok) ...403... }
  *   Il plugin è OPZIONALE: se disabilitato getSharedObject ritorna null e il
  *   wrap salta la validazione (degradazione graziosa).
  *
- * MOTIVAZIONE ARCHITETTURALE (perché NON solo un middleware):
+ * MOTIVAZIONE ARCHITETTURALE (perché NON un middleware):
  *   I middleware dei plugin sono montati DOPO il router (vedi index.js), quindi
  *   non possono pre-bloccare una rotta API già matchata come POST /login. La
  *   validazione va invocata dentro il wrap del core (che gira nel router).
- *   Il middleware del plugin serve solo a generare il token per le pagine.
+ *   Questo plugin NON registra alcun middleware: vedi getMiddlewareToAdd() per
+ *   il perché quello che c'era è stato rimosso.
+ *
+ * AMBITO DERIVATO (nessun marcatore nuovo):
+ *   Il core passa il blocco `access` della rotta e il plugin ne ricava l'ambito
+ *   (`authenticated` / `authEntryPoint` / `public`) dagli stessi campi da cui la
+ *   superficie riservata deriva il proprio perimetro. Oggi tutti e tre gli ambiti
+ *   sono protetti allo stesso modo: l'ambito serve alla DIAGNOSI (audit e GUI) e
+ *   dà un punto solo dove rilassare la policy, se un giorno servisse.
+ *   Vedi lib/requestGuard.js → scopeOf().
+ *
+ * DOVE NASCE IL TOKEN (e dove NON nasce):
+ *   Solo dove serve — sessione autenticata, token già presente, oppure una pagina
+ *   che chiama csrfField()/csrfToken(). Un anonimo che si limita a leggere il
+ *   sito non riceve alcun cookie. Vedi getHooksPage().
  *
  * INTEGRAZIONE CLIENT:
  *   • Hook 'head' inietta <meta name="csrf-token"> + interceptor fetch/XHR che
@@ -56,6 +70,16 @@ const MAX_RECENT_BLOCKS = 200;
 let recentBlocks = [];
 let totalBlocks = 0;
 let blocksByReason = { missing_or_invalid_token: 0, origin_mismatch: 0 };
+// Blocchi per AMBITO derivato (vedi requestGuard.scopeOf): dice se il blocco ha
+// colpito la superficie riservata, un varco di autenticazione o una rotta
+// pubblica. Diagnosi diverse a parità di `reason`.
+//
+// I contatori partono da zero su TUTTI gli ambiti — anche quelli mai colpiti —
+// così la GUI mostra «0» invece di una chiave assente, e l'elenco degli ambiti
+// vive in un posto solo (`requestGuard.SCOPES`).
+const zeroedScopeCounters = () =>
+  Object.fromEntries(requestGuard.SCOPES.map((scope) => [scope, 0]));
+let blocksByScope = zeroedScopeCounters();
 
 // ── Gestione token in sessione ───────────────────────────────────────────
 
@@ -77,10 +101,15 @@ function rotateToken(ctx) {
 
 /**
  * Valida una richiesta. Chiamato dal route-wrap del core sui metodi mutanti.
- * @returns {{ ok: boolean, status?: number, error?: string, reason?: string }}
+ *
+ * @param {object} ctx - Koa context
+ * @param {object} [access] - il blocco `access` della rotta. Il core ce l'ha già
+ *   in mano al punto di enforcement e da lì si DERIVA l'ambito CSRF, senza alcun
+ *   marcatore nuovo da apporre alle rotte (vedi requestGuard.scopeOf).
+ * @returns {{ ok: boolean, status?: number, error?: string, reason?: string, scope?: string }}
  */
-function validateRequest(ctx) {
-  const verdict = requestGuard.evaluate(ctx, custom, matcher);
+function validateRequest(ctx, access) {
+  const verdict = requestGuard.evaluate(ctx, custom, matcher, access);
   if (!verdict.ok) {
     recordBlock(ctx, verdict);
     if (custom && custom.enableLogging) {
@@ -98,11 +127,15 @@ function recordBlock(ctx, verdict) {
     ? 'origin_mismatch'
     : 'missing_or_invalid_token';
   blocksByReason[reasonKey] = (blocksByReason[reasonKey] || 0) + 1;
+  if (verdict.scope) {
+    blocksByScope[verdict.scope] = (blocksByScope[verdict.scope] || 0) + 1;
+  }
   recentBlocks.push({
     ts: new Date().toISOString(),
     method: ctx && ctx.method,
     path: ctx && ctx.path,
     reason: verdict.reason,
+    scope: verdict.scope || null,
     ip: (ctx && ctx.ip) || 'unknown',
   });
   if (recentBlocks.length > MAX_RECENT_BLOCKS) {
@@ -119,6 +152,7 @@ function getStats() {
     exemptCount: (custom && Array.isArray(custom.exemptPaths)) ? custom.exemptPaths.length : 0,
     totalBlocks,
     blocksByReason: { ...blocksByReason },
+    blocksByScope: { ...blocksByScope },
   };
 }
 
@@ -141,10 +175,20 @@ function reloadConfig() {
 }
 
 /**
+ * `access` sintetico per ciascun ambito, usato dal tester della GUI: lì l'ambito
+ * si sceglie da un menu invece di essere letto da una rotta vera.
+ */
+const ACCESS_BY_SCOPE = {
+  authenticated: { requiresAuth: true, allowedRoles: [] },
+  authEntryPoint: { requiresAuth: false, allowedRoles: [], isAuthEntryPoint: true },
+  public: { requiresAuth: false, allowedRoles: [] },
+};
+
+/**
  * "CSRF tester": valuta una richiesta sintetica contro la policy corrente.
- * Utile nella GUI per capire come metodo/path/origin/token si combinano.
- * @param {object} input - { method, path, siteOrigin, requestOrigin, tokenProvided }
- * @returns {{ ok, skipped?, reason?, status? }}
+ * Utile nella GUI per capire come metodo/path/origin/token/ambito si combinano.
+ * @param {object} input - { method, path, siteOrigin, requestOrigin, tokenProvided, scope }
+ * @returns {{ ok, skipped?, reason?, status?, scope? }}
  */
 function simulate(input = {}) {
   const method = String(input.method || 'POST');
@@ -171,7 +215,7 @@ function simulate(input = {}) {
     request: { body: {} },
     get: (name) => headers[String(name).toLowerCase()],
   };
-  return requestGuard.evaluate(fakeCtx, custom, matcher);
+  return requestGuard.evaluate(fakeCtx, custom, matcher, ACCESS_BY_SCOPE[input.scope]);
 }
 
 // ── Markup helpers per i template ─────────────────────────────────────────
@@ -243,24 +287,61 @@ module.exports = {
   },
 
   /**
-   * Middleware: assicura che ogni navigazione (pagina) abbia un token in sessione,
-   * così è disponibile per l'iniezione nel <meta>/form e per le successive POST.
-   * Gira DOPO il router (come ogni middleware plugin) ma PRIMA degli static server,
-   * quindi prima del rendering delle pagine.
+   * NESSUN MIDDLEWARE — e la sua assenza è la scelta, non una dimenticanza.
+   *
+   * Qui c'era un middleware il cui corpo intero era `if (ctx.session)
+   * ensureToken(ctx)`, per garantire che il token esistesse prima del rendering
+   * delle pagine. Era RIDONDANTE: ogni consumatore del token lo conia già per
+   * conto proprio — l'hook `head` qui sotto, `csrfFieldFor()`, `csrfTokenGlobal()`
+   * — e la validazione rifiuta correttamente quando il token in sessione manca
+   * (senza token in sessione nessun token valido può essere mai stato emesso).
+   *
+   * E costava molto. Girando dopo il router ma prima degli static server toccava
+   * la sessione di OGNI richiesta che arrivasse fin lì: asset, crawler, 404. Per
+   * un visitatore senza cookie significava due `Set-Cookie` su ogni risposta —
+   * anche su un 404, anche su un'immagine. Da cui tre difetti:
+   *
+   *   1. una risposta con `Set-Cookie` è tipicamente non cacheabile da CDN e
+   *      proxy condivisi;
+   *   2. un token CSRF coniato per un anonimo che non invierà mai nulla è la
+   *      forma più difficile da difendere di cookie "tecnico";
+   *   3. — il più grave — rendeva RICONOSCIBILE il 404 di blocco del plugin
+   *      `sentinel`. Il suo corpo è byte-identico a un 404 autentico (c'è un test
+   *      che lo presidia), ma sentinel risponde da uno slot PRE-ROUTER, quindi
+   *      non passa mai di qui: 404 vero → 2 `Set-Cookie`, 404 di sentinel → 0.
+   *      Bastava contare gli header per separarli, con una sola richiesta.
+   *
+   * Misurato sul server reale, togliendolo: 404 vero e 404 di sentinel tornano
+   * identici (0 cookie entrambi), la pagina di login continua a coniare
+   * regolarmente, il giro completo del token resta verde.
    */
   getMiddlewareToAdd() {
-    if (custom && custom.enabled === false) return [];
-    return [
-      async (ctx, next) => {
-        if (ctx.session) ensureToken(ctx);
-        await next();
-      },
-    ];
+    return [];
   },
 
   /**
-   * Hook 'head': inietta <meta> col token + interceptor fetch/XHR in ogni pagina
+   * Hook 'head': inietta <meta> col token + interceptor fetch/XHR
    * (i temi chiamano pluginSys.hookPage('head', passData) dentro head.ejs).
+   *
+   * NON CONIA PER GLI ANONIMI. L'hook è montato su ogni pagina a tema, quindi
+   * coniare qui significherebbe dare un cookie a chiunque legga una qualunque
+   * pagina del sito — compreso chi non invierà mai un form in vita sua.
+   *
+   * Il token nasce quindi solo dove serve davvero:
+   *   • sessione autenticata      → l'utente è dentro la superficie riservata e
+   *                                 un cookie ce l'ha già comunque;
+   *   • token già in sessione     → qualcuno l'ha coniato prima, si riusa;
+   *   • `csrfField()`/`csrfToken()` chiamate dalla pagina → è la pagina stessa a
+   *                                 dichiarare «qui c'è un form». È così che la
+   *                                 pagina di login (anonima per necessità)
+   *                                 ottiene il suo token, senza che il resto del
+   *                                 sito debba pagare un cookie.
+   *
+   * ⚠ CONTRATTO PER CHI SCRIVE PAGINE: una pagina ANONIMA che faccia una `fetch`
+   * mutante non trova il <meta>, perché l'head si renderizza prima del corpo e
+   * quindi prima di qualsiasi `csrfField()`. Se ti serve, chiama `csrfToken()`
+   * in cima alla pagina, PRIMA di includere i partial del tema: il token esiste
+   * già quando l'hook gira, e meta e interceptor compaiono entrambi.
    */
   getHooksPage() {
     const map = new Map();
@@ -268,8 +349,11 @@ module.exports = {
 
     map.set('head', (passData) => {
       const ctx = passData && passData.ctx;
-      const token = ensureToken(ctx);
-      if (!token) return ''; // sessione assente → niente token, niente iniezione
+      if (!ctx || !ctx.session) return ''; // sessione assente → niente da fare
+      // Riusa se c'è; conia solo per chi è già autenticato.
+      const token = ctx.session.csrfToken
+        || (ctx.session.authenticated === true ? ensureToken(ctx) : null);
+      if (!token) return '';
       const metaName = (custom && custom.metaName) || 'csrf-token';
       const headerName = (custom && custom.tokenHeaderName) || 'X-CSRF-Token';
       const meta = `<meta name="${escapeHtml(metaName)}" content="${escapeHtml(token)}">`;
@@ -321,6 +405,7 @@ module.exports = {
       recentBlocks = [];
       totalBlocks = 0;
       blocksByReason = { missing_or_invalid_token: 0, origin_mismatch: 0 };
+      blocksByScope = zeroedScopeCounters();
     },
   },
 };

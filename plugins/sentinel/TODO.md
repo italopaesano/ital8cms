@@ -75,11 +75,11 @@ rende leggibile e governabile quello che c'è, poi si aggiungono le azioni.**
 | ~~**1**~~ | ~~`adminSentinel` — Vista Dati~~ ✅ | L'unico passo che aumenta il valore del lavoro già fatto invece di aggiungerne. Stabilizza il contratto dell'oggetto condiviso prima che altre feature ci si appoggino |
 | ~~**2**~~ | ~~Promozione e retrocessione~~ ✅ | Completa le fasi 2 e 3. **La retrocessione conta più della promozione**: un percorso a senso unico invita a non imboccarlo mai |
 | ~~**3**~~ | ~~Tester delle regole~~ ✅ | Serve appena si comincia a scrivere regole proprie, ed è il prerequisito per scrivere in sicurezza quelle dei passi successivi |
-| **4** | `redirect` + `decoy` L0/L1 | Gate, validatore e non-interferenza sono **già scritti e testati**: manca solo chi produce il corpo. Miglior rapporto valore/codice nuovo |
-| **5** | Canary (`decoy` L2) + `banClient` + allerte | Il salto da difesa passiva a **sensore**: certezza di un attaccante attivo, non inferenza |
-| **6** | Coerenza di sessione | Miglior segnale del blocco autenticato, ma introduce stato e foglie nuove: meglio quando la GUI può mostrarne gli effetti |
-| **7** | `drop` reale e `tarpit` | Le uniche azioni che possono farti male da sole (retry aggressivi, esaurimento di file descriptor) |
-| **8** | Reputazione locale e apprendimento | Poggia sul censimento, che già raccoglie i dati: qui si aggiunge solo l'inferenza |
+| ~~**4**~~ | ~~`redirect` + `decoy` L0/L1~~ ✅ | Gate, validatore e non-interferenza erano **già scritti e testati**: mancava solo chi produce il corpo. Miglior rapporto valore/codice nuovo |
+| ~~**5**~~ | ~~Canary (`decoy` L2) + `banClient` + allerte~~ ✅ | Il salto da difesa passiva a **sensore**: certezza di un attaccante attivo, non inferenza |
+| ~~**6**~~ | ~~Coerenza di sessione~~ ✅ | Miglior segnale del blocco autenticato, ma introduce stato e foglie nuove: meglio quando la GUI può mostrarne gli effetti |
+| ~~**7**~~ | ~~`drop` reale e `tarpit`~~ ✅ | Le uniche azioni che possono farti male da sole (retry aggressivi, esaurimento di file descriptor) |
+| ~~**8**~~ | ~~Reputazione locale e apprendimento~~ ✅ | Poggia sul censimento, che già raccoglie i dati: qui si aggiunge solo l'inferenza |
 
 I passi **0-3 rendono usabile** quello che c'è. I **4-5** aggiungono l'inganno.
 Il **6** copre gli account. I **7-8** sono raffinamento.
@@ -111,23 +111,222 @@ traccia** delle foglie che hanno matchato. Il costo vero è la traccia:
 separata, non con un flag che appesantisca il percorso caldo. Riusabile come
 lettore CLI (`sentinel test <path>`), chiudendo in parte la voce §15.
 
-**Passo 4 — `redirect` + `decoy` L0/L1.** `redirect` è quasi finito (validazione,
-allowlist e divieto del 301 esterno sono già in `ruleValidator`): manca la
-`respond`. Per il decoy: risoluzione con precedenza a `decoys/data/`, servizio
-fuori dalla pipeline EJS, e un corredo distribuito (finto `wp-login.php`, finto
-`phpinfo()`, finto `.env`).
+**Passo 4 — `redirect` + `decoy` L0/L1.** ✅ Fatto. `lib/decoyRenderer.js`
+(risoluzione con precedenza a `decoys/data/`, segnaposto, tipo dall'estensione,
+cache spenta in debug) + `serveDecoy`/`serveRedirect` in `main.js`, attaccate al
+verdetto **solo quando l'enforcement è in vigore**. Il validatore ha imparato
+`decoy.headers` (rifiuta CR/LF, `Content-Length`, `Transfer-Encoding`,
+`Set-Cookie`, hop-by-hop) e gli stati fuori intervallo. Corredo distribuito:
+`wp-login.html`, `phpinfo.html`, `env.txt`, `dir-listing.html`.
 
-**Passo 5 — Canary.** Token nel decoy + regola trappola + `banClient()` immediato
-+ notifica `mailer` (che chiude anche l'allerta sul tasso di eviction, §6).
+Due cose emerse strada facendo, entrambe scoperte da un test:
+- le spiegazioni **non possono stare dentro i file serviti** (vedi §4);
+- `308` verso l'esterno è vietato quanto `301` — è il 301 dei metodi non-GET, con
+  la stessa cache persistente nel browser.
 
-**Passo 6 — Coerenza di sessione.** `BoundedStore` per sessione con tetto e TTL
-(le sessioni costano nulla da creare: altra chiave controllata dall'attaccante),
-foglia `sessionAnomaly`, cadenza per account. **È qui che scatta `migrations/`**:
-aggiungere foglie è additivo e il merge del boot lo copre, ma una rinomina o una
-rimozione va dichiarata *nello stesso passo*, bumpando la `schemaVersion` del
-**descrittore** (regola dell'orologio).
+**Passo 5 — Canary.** ✅ Fatto. `lib/canaryRegistry.js` (conio con
+`crypto.randomBytes`, memoria del destinatario, tetto LRU, riconoscimento anche
+dei token scaduti come `unknown`), segnaposto `{{canary}}`, foglia `canary` nel
+matcher/validatore/tracciatore, `escalate.ban`, `lib/alertDispatcher.js`, card
+Canary nella GUI del twin.
 
-**Passi 7-8.** Vedi §3 e §5.
+Due decisioni non ovvie prese qui:
+- **`unknown` non è «non è un canary».** Riavvio, scadenza o un altro worker in
+  cluster tolgono il token dal registro, ma nessun visitatore reale invia per caso
+  una stringa di quella forma. Da qui il prefisso riconoscibile e i tre valori
+  della foglia invece di un booleano.
+- **Il ban obbedisce ai tetti, il conteggio no.** Il conteggio resta il
+  comportamento storico (parte anche in `monitor`); forzare un blocco è un'azione,
+  e le azioni passano dai tetti dell'enforcement.
+
+**Passo 6 — Coerenza di sessione.** ✅ Fatto. `lib/sessionCoherence.js` (linea di
+base per sessione, cinque anomalie, tetto + TTL dall'ultimo uso), foglia
+`sessionAnomaly`, regola distribuita `session-hijack-signal` in monitor, card
+nella GUI, `--session-anomaly` nel tester.
+
+**`migrations/` è scattato**, ma non per il motivo previsto. Non c'è stata nessuna
+rinomina: quello che il merge non sa fare è aggiungere **elementi a un array**, e
+`rules` è un array — quindi le due regole distribuite nei Passi 5 e 6 non
+sarebbero mai arrivate su un'installazione esistente. Stesso difetto di
+`menuOrder` in v2.72.0. Due step, `v1→v2` (canary) e `v2→v3` (sessione), con
+inserimento **testuale** per non perdere i commenti e verifica differenziale
+prima di scrivere.
+
+Due difetti colti strada facendo, entrambi invisibili ai test isolati:
+- `koa-session.toJSON()` **scarta le chiavi che iniziano con `_`**: l'identificativo
+  di sessione non finiva nel cookie, ogni richiesta sembrava la prima della sua
+  sessione, e nessuna anomalia era rilevabile. Colto solo con un login vero.
+- Nel file distribuito dal Passo 5 la regola del canary stava **sotto**
+  `backup-probe`, che matcha `.tar.gz`: il token consegnato dentro un finto
+  `backup-….tar.gz` non l'avrebbe mai raggiunta. Ora canary e sessione stanno
+  subito dopo la whitelist.
+
+**Passo 7 — `drop` reale e `tarpit`.** ✅ Fatto. `lib/tarpit.js` + `serveDrop`,
+esempi commentati nel file di regole distribuito (nessuna delle due è adatta a
+essere attiva di default), avviso del validatore per entrambe dietro proxy,
+banner nella GUI quando il tetto rifiuta.
+
+Ha portato con sé un cambiamento del **contratto del gate**: `respond` può ora
+restituire `false` per rinunciare. Tetto pieno e drop-dietro-proxy sono
+condizioni operative previste, non errori, e trattarle come eccezioni avrebbe
+riempito i log di «risposta fallita» proprio sotto carico. Invariante: chi
+rinuncia lascia il contesto intatto, perché il gate ci scriverà il 404.
+
+**Passo 8 — Reputazione locale.** ✅ Fatto. `lib/reputation.js` + foglia
+`reputation` (`burst` / `suspect` / `bad`), retention degli indirizzi nel
+censimento, filtro d'audience documentato.
+
+Le due protezioni contano più della funzione:
+- **Un'impronta non è una persona, è una famiglia di client.** Condannare
+  un'impronta da browser vero chiude fuori tutti quelli che usano quel browser:
+  `protectBrowserFingerprints` lo impedisce, al prezzo dichiarato di rendere
+  immune chi emula bene un browser.
+- **Il giudizio non deve alimentarsi da solo.** Escludere i blocchi decisi dalla
+  reputazione non bastava, e si è visto solo dal vivo: mentre il giudizio è in
+  vigore la sua regola scatta per prima, il numeratore si ferma e il denominatore
+  no, quindi la quota scende finché l'impronta viene perdonata — per poi essere
+  ricondannata. Il censimento tiene ora `judgedCount` accanto a `count`.
+
+### Piano di rifinitura — i tre bordi lasciati aperti
+
+Il piano da 0 a 8 è chiuso. Restano tre cose che non erano *funzionalità
+mancanti* ma **bordi non rifiniti**: una vista incompleta, una differenza nota
+fra due risposte che dovrebbero essere identiche, e un percorso di avvio che
+muore male. Nessuna delle tre aggiunge capacità al filtro; tutte e tre tolgono
+un'asimmetria fra ciò che il progetto dichiara e ciò che fa.
+
+Sono in quest'ordine perché è quello del rischio crescente: la prima non tocca
+il percorso delle richieste, la seconda sì, la terza tocca il boot.
+
+**Piano chiuso:** tutte e tre completate.
+
+| # | Voce | Perché lì |
+|---|---|---|
+| ~~**R1**~~ ✅ | ~~Vista C — form strutturato in `adminSentinel`~~ | L'unica delle Tre Viste scoperta. Non tocca il motore: si aggiunge una scheda alla GUI e un metodo di scrittura al service |
+| ~~**R2**~~ ✅ | ~~Il `Set-Cookie` sul 404 di blocco~~ | Risolta all'origine, in `csrfProtection`: nessun gate toccato |
+| ~~**R3**~~ ✅ | ~~I config core non materializzati al boot~~ | Erano **due**, non tre: `ital8Config` resta escluso di proposito |
+
+**R1 — Vista C.** Il form campo-per-campo sulle regole, coordinato con l'editor
+JSON5 secondo le regole di CLAUDE.md (*Le Tre Viste*): fonte di verità unica sul
+file, validazione condivisa lato server, switch esplicito fra le viste con
+avviso di modifiche non salvate, scrittura atomica con backup.
+
+Il vincolo che detta il progetto: **un form non deve mai distruggere ciò che non
+sa rappresentare.** L'albero `match` ammette combinatori annidati che un form
+piatto non può mostrare; quelle regole vanno preservate alla lettera e rimandate
+all'editor JSON5, non riscritte in una forma semplificata.
+
+- [x] `replaceRule()` in `rulesFileEditor.js`, con verifica differenziale
+- [x] Serializzazione di una regola in JSON5 con ordine di chiavi stabile
+- [x] Scheda «Form» con elenco regole + editor campo per campo
+- [x] Regole con `match` complesso: preservate e in sola lettura
+- [x] Avviso esplicito: salvando dal form si perdono i commenti **di quella regola**
+- [x] Il nome non è modificabile dal form: è la chiave che lega contatori e log
+- [x] Validazione dell'INSIEME, non della singola regola: nomi duplicati e regole
+      irraggiungibili sono proprietà che esistono solo a livello di file
+
+**R2 — `Set-Cookie` sul 404 di blocco.** ✅ **Chiusa, e senza toccare alcun gate.**
+
+Misurato: 404 vero → **2** `Set-Cookie`, 404 di sentinel → **0**. Bastava contare
+gli header per separarli, con una sola richiesta, mentre il corpo era byte-identico.
+
+La causa non era nei gate: era il middleware di `csrfProtection`, il cui corpo
+intero era `if (ctx.session) ensureToken(ctx)`. Girando dopo il router toccava la
+sessione di ogni richiesta che arrivasse fin lì — asset, crawler, 404 — mentre
+sentinel risponde da uno slot pre-router e non ci passa mai. Ed era **ridondante**:
+l'hook `head` e gli helper `csrfField()`/`csrfToken()` coniano già per conto
+proprio. Rimosso: le due risposte tornano identiche (0 cookie entrambe), e con
+l'hook che non conia più per gli anonimi anche i **decoy** hanno ora la stessa
+forma di una pagina vera, invece di 0 cookie contro 2.
+
+L'ipotesi iniziale — «va fatta per entrambi i gate o per nessuno» — era sbagliata:
+il confine non passa fra i due gate, passa fra *chi risponde prima* e *chi risponde
+dopo* la catena dei middleware. Risolto a monte, entrambi i gate ne beneficiano
+senza modifiche.
+
+- [x] Diagnosi: la differenza nasce a valle, non nei gate
+- [x] Correzione in `csrfProtection` (middleware rimosso, hook che non conia per gli anonimi)
+- [x] `set-cookie` tolto dai volatili nel test byte-per-byte
+- [x] Test dedicato sulla parità dei `Set-Cookie` fra 404 vero e 404 di blocco
+      (verificato che fallisce se il middleware torna)
+
+**R3 — Config core non materializzati al boot.** ✅ **Chiusa**, con due
+correzioni a come la voce era scritta.
+
+I vivi dei core sono git-ignored e dichiarati «rigenerabili dai `.default`» come
+tutti gli altri, ma a crearli era solo il wizard: dopo l'installazione un
+`git clean -X` o un ripristino parziale da backup li faceva sparire per sempre, e
+l'avvio moriva con uno stack trace grezzo. Incontrato durante il Passo 4, con
+`adminConfig.json5` assente.
+
+Le due correzioni:
+
+1. **Le coppie sono due, non tre.** `ital8Config.json5` va lasciato fuori: la sua
+   assenza è il gate `[INIT]`, e materializzarlo in silenzio farebbe partire coi
+   default un progetto mai configurato, scavalcando il wizard. C'è ora un test
+   che presidia proprio questo.
+2. **«Prima della riconciliazione» non bastava.** `koaSession.json5` è letto dal
+   montaggio dei priority middleware, che in `index.js` gira a livello di modulo —
+   prima ancora che `startApp()` parta. Serve quindi una materializzazione
+   sincrona in quel punto (`materializeFromDefault.sync`), mentre per
+   `adminConfig.json5`, letto da `adminSystem.initialize()`, `startApp()` va bene.
+
+- [x] `materializeFromDefault.sync` su `koaSession`, prima dei priority middleware
+- [x] `materializeFromDefault` su `adminConfig`, in `startApp()`
+- [x] `ital8Config` escluso, con test che lo presidia
+- [x] Box `[CONFIG]` + `exit 1` quando manca anche il `.default`
+- [x] Test d'integrazione sul boot reale (verificato che falliscono senza la correzione)
+
+---
+
+### Aperto — `fingerprintChanged` mente per costruzione
+
+Emerso analizzando l'interazione fra sentinel e `csrfProtection` (v2.81.0). Non
+è un bug con un sintomo: è una foglia che **non può funzionare come promette**,
+e oggi non fa danno solo perché la regola distribuita non la usa.
+
+`sessionCoherence` fissa una linea di base al primo avvistamento di una sessione
+autenticata e la confronta con ogni richiesta successiva. Ma l'impronta descrive
+la **forma di una richiesta**, non il client: una navigazione e una `fetch` dallo
+stesso identico browser hanno `accept` diverso e `upgrade-insecure-requests`
+presente solo nella prima, quindi impronte diverse. Misurato, stesso Chrome:
+
+```
+navigazione            fp = 3ba1e6a0…
+fetch POST  CON csrf   fp = 8ef61e86…
+fetch POST SENZA csrf  fp = 51a933d8…
+```
+
+Tutte e tre diverse. Ne segue che **ogni sessione admin che mescoli navigazioni
+e AJAX — cioè ogni sessione admin — produce `fingerprintChanged` di continuo**, e
+la linea di base non si aggiorna mai, quindi la marcatura resta fino al logout.
+
+Perché non è innocuo pur non essendo attivo:
+- la regola `session-hijack-signal` usa `uaChanged` e `scriptClient`, ma la sua
+  **descrizione invita** ad aggiungere altre anomalie. Chi aggiunge
+  `fingerprintChanged` e promuove la regola a `block` si chiude fuori dal proprio
+  pannello alla prima POST;
+- i contatori che l'amministratore guarda per decidere se promuovere
+  (`byKind.fingerprintChanged`, `flagged`) sono gonfiati da rumore strutturale.
+  Un semaforo che segna rosso sempre non è un semaforo.
+
+Non è una correzione: è una **domanda di progetto**, e le risposte plausibili si
+escludono a vicenda.
+
+- [ ] Decidere fra: (a) **linea di base per forma di richiesta** — una per le
+      navigazioni, una per le AJAX, confrontando ciascuna con la propria;
+      (b) **confronto sulla sola `fpClass`** invece che sull'hash — `family`,
+      `claimedBrowser`, `claimedOs` non cambiano fra navigazione e fetch, e il
+      segnale che interessa («la sessione è passata da browser a script») vive lì;
+      (c) **rimuovere `fingerprintChanged`** e lasciare `scriptClient`, che già
+      copre il caso che conta senza il rumore.
+- [ ] `x-csrf-token` fra i `VOLATILE_HEADERS` di `requestFingerprint`: toglie *una*
+      delle divergenze e va fatto comunque, ma da solo **non** risolve — la
+      divergenza navigazione/fetch resta.
+- [ ] Finché non è deciso: la descrizione della regola distribuita non dovrebbe
+      invitare ad aggiungere `fingerprintChanged` senza un avvertimento.
+
+---
 
 ### Trasversali, da fare quando servono e non come passo a sé
 
@@ -250,10 +449,17 @@ famiglia di richieste.
 - [x] `monitor` — matcha, logga, **lascia passare** (dry-run per-regola)
 - [x] `block` — **404** via `reservedGate.deny()`, byte-identico a un URL inesistente
 - [x] `throttle` — delega a `rateLimiter` senza bloccare subito
-- [ ] `drop` — chiude la connessione senza risposta (stile nginx 444)
-- [ ] `decoy` — contenuto fittizio (vedi §4)
-- [ ] `redirect` — 30x, **302 forzato** per l'esterno + allowlist di destinazioni
-- [ ] `tarpit` — risposta a goccia, con cap di connessioni simultanee e timeout massimo
+- [x] `drop` — chiude la connessione senza risposta (stile nginx 444).
+      Rinuncia all'indistinguibilità del 404 in cambio di un costo maggiore per
+      chi bussa. **Degrada al blocco con `trustProxy: true`**: dietro un proxy il
+      socket troncato è quello verso il proxy, che risponderebbe 502.
+- [x] `decoy` — contenuto fittizio (vedi §4)
+- [x] `redirect` — 30x, **permanenti vietati** verso l'esterno + allowlist di destinazioni
+- [x] `tarpit` — risposta a goccia, con cap di connessioni simultanee e timeout massimo.
+      Tre limiti, tutti necessari: tetto di connessioni (oltre il quale si
+      **degrada** e non si accoda), durata massima non superabile dalla regola,
+      e rilascio immediato alla chiusura del client. `abortAll()` allo
+      spegnimento, o `gracefulShutdown` aspetterebbe il tarpit più lungo.
 - [ ] `challenge` — proof-of-work / cookie challenge *(valutazione futura)*
 
 ### Modalità globale
@@ -269,17 +475,35 @@ famiglia di richieste.
 
 Scala progressiva: ogni livello presuppone il precedente.
 
-- [ ] **Livello 0 — Decoy statico.** File preparati serviti al posto dell'errore:
-      finto `wp-login.php`, finto `phpinfo()`, finto `.env`, finto listing.
+- [x] **Livello 0 — Decoy statico.** File preparati serviti al posto dell'errore:
+      `wp-login.html`, `phpinfo.html`, `env.txt`, `dir-listing.html`.
       Servito **fuori dalla pipeline EJS** (né motore di template esposto, né
       markup del tema che renda il decoy riconoscibile).
-- [ ] **Livello 1 — Decoy parametrico.** Versioni, path e timestamp finti generati
+- [x] **Livello 1 — Decoy parametrico.** Versioni, path e timestamp finti generati
       al volo: due richieste non danno risposte identiche, il decoy non è
       riconoscibile da un hash del contenuto.
-- [ ] **Livello 2 — Canary / honeytoken.** Il decoy contiene credenziali o URL
-      fasulli; una regola trappola sorveglia quegli URL. Se qualcuno li usa hai la
-      **certezza** di un attaccante attivo (non un'inferenza) → ban immediato via
-      `rateLimiter.banClient()`.
+      Segnaposto: `{{now}}` `{{today}}` `{{timestamp}}` `{{random:N}}`
+      `{{choice:a|b|c}}` `{{path}}` `{{ip}}` — gli ultimi due escapati nei decoy
+      HTML (sono stringhe scelte dall'attaccante: senza escape è una XSS riflessa
+      a danno di chi riceve da lui il link).
+- [x] **Nessuna spiegazione dentro il file servito.** Un commento che dice
+      «questo è finto» rivela il filtro a chi bussa. Le descrizioni stanno in
+      `decoys/default/README.md`; un test cerca le parole rivelatrici nei file
+      distribuiti.
+- [x] **Livello 2 — Canary / honeytoken.** Il segnaposto `{{canary}}` conia un
+      token che esiste **solo** in quella risposta e ne registra il destinatario;
+      la foglia `canary` (`true` / `"known"` / `"unknown"`) lo riconosce quando
+      torna indietro. Se qualcuno lo usa hai la **certezza** di un attaccante
+      attivo → ban immediato con `escalate: { ban: true }`.
+      - Il confronto fra chi ha ricevuto il token e chi lo usa (`sameClient`) dice
+        se scansione e sfruttamento sono la stessa macchina.
+      - La segnalazione (log + allerta) parte anche **senza** regola trappola e
+        anche in osservazione: l'unico segnale certo del plugin non deve dipendere
+        da una riga in un file modificabile dalla GUI.
+      - ⚠ **Vincolo:** un token va solo dove serve un gesto deliberato per
+        richiederlo (testo, `<a href>`). Mai in `src` o `<link rel>`: il browser li
+        scarica da solo e la trappola scatterebbe su chi riceve il decoy. Presidiato
+        da un test sui file distribuiti.
 - [ ] **Livello 3 — Finto pannello di amministrazione.** Login fittizio che risponde
       sempre "credenziali errate" e registra i tentativi: rivela quali liste di
       credenziali ti prendono di mira, e se compaiono username reali hai la prova
@@ -304,7 +528,7 @@ decoys/
 ```
 
 - [x] `decoys/README.md` che spiega la distinzione
-- [ ] Risoluzione con precedenza a `decoys/data/` sul file omonimo in `decoys/default/`
+- [x] Risoluzione con precedenza a `decoys/data/` sul file omonimo in `decoys/default/`
 - [x] `decoys/data/` git-ignored nel contenuto ma presente nel repo (solo il README)
 - [x] Simmetria con la filosofia `x.default.json5` ↔ `x.json5` del ciclo di vita
       dei config: il default è la fonte di verità versionata, il vivo è dell'utente
@@ -351,21 +575,31 @@ e accumulare statistiche locali sulle firme viste.
       - `count` → solo il **numero** di IP distinti per firma: dà già il segnale
         botnet (una firma su 500 IP) senza conservare alcun indirizzo
       - `full` → elenco degli IP per firma: correlazione completa firma↔IP
-- [ ] Se `censusIpMode: "full"`, il censimento diventa un archivio di dati
+- [x] Se `censusIpMode: "full"`, il censimento diventa un archivio di dati
       personali a lunga conservazione → **serve una retention anche per il
-      censimento**, non solo per il log eventi
-- [ ] Firma mai vista prima + alta cadenza = sospetto
-- [ ] Reputazione locale: firma con quota di blocchi elevata → escalation automatica *(v3)*
+      censimento**, non solo per il log eventi.
+      `census.ipRetentionDays` (default 30). Il TTL della voce si conta
+      dall'ULTIMO uso, quindi un'impronta sempre attiva non scadeva mai e il suo
+      elenco di indirizzi restava per sempre. Scadono **gli indirizzi, non il
+      conteggio**: `ipCount` è una statistica (il segnale botnet), non un dato
+      personale.
+- [x] Firma mai vista prima + alta cadenza = sospetto → livello `burst` della
+      foglia `reputation`
+- [x] Reputazione locale: firma con quota di blocchi elevata → livelli `suspect`
+      e `bad` della foglia `reputation`, usabili in una regola come qualsiasi
+      altra condizione (anche con `escalate`).
 
 ### Enforcement per firma
 
 - [x] Regole che matchano su `fp` esatto
 - [x] Regole che matchano su `fpClass` / componenti (l'equivalente utile del
       concetto di "range": gli hash non hanno intervalli, le **classi** sì)
-- [ ] Scenario "sito riservato a un solo ecosistema" (es. solo Linux):
+- [x] Scenario "sito riservato a un solo ecosistema" (es. solo Linux):
       filtro d'**audience**, non confine di sicurezza — l'OS dichiarato è
       falsificabile in un secondo. Da usare in `monitor` prima di `enforce`,
       per misurare quanti visitatori reali verrebbero esclusi.
+      Non serviva codice: si scrive con `fingerprintClass`. Documentato come
+      esempio commentato nel file di regole e nel README, con l'avvertenza.
 
 ### Fuori scope (motivato)
 
@@ -415,8 +649,10 @@ e accumulare statistiche locali sulle firme viste.
       oggi restituisce `{}` — non esiste alcuna API per risolvere l'email di root —
       e comunque un indirizzo operativo (monitoraggio, on-call) è spesso diverso
       dall'account amministrativo. Vedi §7 per l'aggancio a `mailer`.
-- [ ] La stessa allerta vale per il tasso di eviction anomalo (§14) e per gli
+- [x] La stessa allerta vale per il tasso di eviction anomalo (§14) e per gli
       eventi gravi (canary scattato): un unico canale di notifica, più soglie.
+      Il tasso di sfratto si guarda come **delta** fra due sweep, non come totale
+      (il totale cresce e basta, e resterebbe sopra soglia per sempre).
 
 ### Osservazione dell'esito (non solo dei blocchi) — **in v1**
 
@@ -441,12 +677,18 @@ e accumulare statistiche locali sulle firme viste.
       (altrimenti rateLimiter assente ⇒ sentinel `incomplete` ⇒ firewall spento)
 - [x] Chiave per account (`user:<username>`) invece dell'IP sul traffico autenticato:
       coglie un account compromesso anche se distribuito su molti IP
-- [ ] `banClient()` immediato per le regole gravi (es. canary token usato)
+- [x] `banClient()` immediato per le regole gravi (es. canary token usato), via
+      `escalate: { rateLimiterRule, ban: true, banSeconds }`. **Obbedisce ai tetti
+      dell'enforcement**, al contrario del semplice conteggio: un sentinel in
+      osservazione che fa bandire gente da rateLimiter non sarebbe un osservatorio.
 
 ### Altre interconnessioni possibili (da valutare)
 
-- [ ] `mailer`: notifica su evento grave (canary scattato, attacco massivo).
-      Stesso modello: lazy, opzionale, nessuna dipendenza dichiarata.
+- [x] `mailer`: notifica su evento grave (canary scattato, tasso di sfratto
+      anomalo, budget disco). Stesso modello: lazy, opzionale, nessuna dipendenza
+      dichiarata. Canale unico in `lib/alertDispatcher.js`, con **finestra di
+      silenzio per genere** — senza, la notifica sarebbe il moltiplicatore
+      dell'attacco, perché gli eventi che la generano li controlla chi attacca.
 - [ ] Fallimenti CSRF ripetuti come segnale di automazione
       (`csrfProtection` enforce nel route-wrap, quindi a valle di sentinel:
       servirebbe un canale dedicato)
@@ -455,13 +697,22 @@ e accumulare statistiche locali sulle firme viste.
 
 ## 8. Monitoraggio del traffico autenticato
 
-- [ ] Osservazione sempre attiva, enforcement disattivato di default
-- [ ] Coerenza di sessione: **cambio di User-Agent** dentro la stessa sessione
+- [x] Osservazione sempre attiva, enforcement disattivato di default
+- [x] Coerenza di sessione: **cambio di User-Agent** dentro la stessa sessione
       (segnale fortissimo di sessione rubata, quasi privo di falsi positivi)
-- [ ] Coerenza di sessione: cambio di IP / rete (più falsi positivi: mobile ↔ WiFi)
-- [ ] UA non-browser su sessione autenticata (`python-requests` con cookie valido)
-- [ ] Cadenza di richiesta per account (via `rateLimiter` con chiave account)
-- [ ] Nota privacy nel README: monitorare account = monitorare persone identificate,
+      → anomalia `uaChanged`
+- [x] Coerenza di sessione: cambio di IP / rete (più falsi positivi: mobile ↔ WiFi)
+      → anomalie `ipChanged` e `networkChanged`, **fuori** dalla regola distribuita
+      proprio per il rumore: la linea di base non si aggiorna mai, quindi un
+      utente mobile resterebbe marcato fino al logout
+- [x] UA non-browser su sessione autenticata (`python-requests` con cookie valido)
+      → anomalia `scriptClient`. Non è un cambiamento ma uno **stato**: vale anche
+      se il client è stato così fin dall'inizio
+- [x] Cadenza di richiesta per account (via `rateLimiter` con chiave account)
+      → già disponibile senza codice nuovo: `escalate` usa `user:<username>` come
+      chiave sul traffico autenticato, quindi basta dichiararlo su una regola con
+      `appliesTo: "authenticated"`
+- [x] Nota privacy nel README: monitorare account = monitorare persone identificate,
       va dichiarato nell'informativa del sito
 
 ---
@@ -551,7 +802,7 @@ e le decisioni che le rendono indolori vanno prese **ora**, non dopo.
       costante e il comportamento è identico a oggi: costo zero adesso, nessuna
       riscrittura dopo.
 - [ ] Lettura = merge di tutti gli shard (il twin admin lo fa già trasparentemente)
-- [ ] Documentare i limiti noti in cluster: stato in memoria per-worker
+- [x] Documentare i limiti noti in cluster: stato in memoria per-worker
       (censimento a caldo, coerenza di sessione) e escalation `rateLimiter`
       per-worker — limitazione che `rateLimiter` ha già oggi
 - [x] `append` di una singola riga JSONL è atomico su POSIX sotto i 4 KB:
@@ -568,14 +819,25 @@ nuova ad ogni richiesta e fa crescere il censimento senza limite, in memoria e s
 disco. Stessa forma di problema che `rateLimiter` risolve con lo sweep periodico.
 
 - [x] **Censimento delle firme**: tetto massimo di firme tracciate + eviction LRU
-- [ ] **Coerenza di sessione** (primo UA/IP visto per sessione): tetto + TTL
+- [x] **Coerenza di sessione** (primo UA/IP visto per sessione): tetto + TTL.
+      Qui la scadenza si conta dall'ULTIMO uso e non dalla creazione, al contrario
+      dei token canary: la chiave non è controllata da chi attacca (servirebbero
+      altrettanti login validi) e una sessione attiva non deve perdere la propria
+      linea di base mentre è in uso
 - [x] **Osservazione degli esiti per IP**: tetto + TTL
 - [x] Sweep periodico delle strutture scadute (modello: `rateLimiter` `sweepIntervalSeconds`)
+- [x] **Registro dei token canary**: tetto + TTL. Ogni risposta con decoy conia un
+      token, e la frequenza delle risposte la decide chi bussa: senza tetto,
+      martellare un percorso con decoy sarebbe il modo più semplice di esaurire la
+      memoria — la trappola diventerebbe il vettore
 - [x] Contatore delle eviction esposto nelle statistiche: un tasso di eviction alto
       **è esso stesso il segnale** di un attacco che randomizza le firme
-- [ ] Memoizzazione del fingerprint sul socket: con keep-alive molte richieste
+- [x] Allerta sul tasso di sfratto (delta fra due sweep, soglia
+      `alerts.evictionsPerSweep`): il sensore diventa una notifica, non solo un
+      numero da andare a guardare
+- [x] Memoizzazione del fingerprint sul socket: con keep-alive molte richieste
       condividono la connessione e gli header cambiano poco → si evita di
-      ricalcolare l'hash decine di volte per pagina
+      ricalcolare l'hash decine di volte per pagina *(fatto nel Passo 0)*
 
 ### Salt del fingerprint
 

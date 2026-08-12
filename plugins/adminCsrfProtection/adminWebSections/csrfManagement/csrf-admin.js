@@ -43,6 +43,18 @@
     return `<span class="badge bg-light text-dark">${esc(r || '—')}</span>`;
   }
 
+  // Ambito derivato da `access` (requiresAuth / isAuthEntryPoint / nessuno dei
+  // due). A parità di motivo cambia la diagnosi: `authEntryPoint` è qualcuno che
+  // bussa al login senza token — scanner o client mal configurato; `public` è
+  // quasi sempre una pagina rotta da riparare.
+  function scopeBadge(scope) {
+    const s = String(scope || '');
+    if (s === 'authenticated') return '<span class="badge bg-secondary">authenticated</span>';
+    if (s === 'authEntryPoint') return '<span class="badge bg-info text-dark">authEntryPoint</span>';
+    if (s === 'public') return '<span class="badge bg-light text-dark">public</span>';
+    return '<span class="text-muted">—</span>';
+  }
+
   // ── Fetch + render ──────────────────────────────────────────────────────────
 
   async function fetchStatus() {
@@ -82,7 +94,7 @@
 
     const body = el('recentBody');
     if (!blocks.length) {
-      body.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">${esc(i18n.noBlocks)}</td></tr>`;
+      body.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">${esc(i18n.noBlocks)}</td></tr>`;
       return;
     }
     body.innerHTML = blocks.map((b) => `
@@ -91,6 +103,7 @@
         <td><code>${esc(b.method || '—')}</code></td>
         <td class="text-break">${esc(b.path || '—')}</td>
         <td>${reasonBadge(b.reason)}</td>
+        <td>${scopeBadge(b.scope)}</td>
         <td><code>${esc(b.ip || '—')}</code></td>
       </tr>`).join('');
   }
@@ -132,6 +145,7 @@
           siteOrigin: el('simSiteOrigin').value,
           requestOrigin: el('simReqOrigin').value.trim(),
           tokenProvided: el('simToken').checked,
+          scope: el('simScope').value,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -140,11 +154,12 @@
         return;
       }
       const v = data.verdict || {};
+      const scopeNote = v.scope ? ` ${scopeBadge(v.scope)}` : '';
       if (v.ok) {
         const label = v.skipped ? `${i18n.skipped} (${esc(v.skipped)})` : i18n.pass;
-        result.innerHTML = `<div class="alert alert-success py-2 mb-0">✓ ${esc(label)}</div>`;
+        result.innerHTML = `<div class="alert alert-success py-2 mb-0">✓ ${esc(label)}${scopeNote}</div>`;
       } else {
-        result.innerHTML = `<div class="alert alert-danger py-2 mb-0">⛔ ${esc(i18n.blocked)} — <code>${esc(v.reason || '')}</code> (HTTP ${Number(v.status) || 403})</div>`;
+        result.innerHTML = `<div class="alert alert-danger py-2 mb-0">⛔ ${esc(i18n.blocked)} — <code>${esc(v.reason || '')}</code> (HTTP ${Number(v.status) || 403})${scopeNote}</div>`;
       }
     } catch (err) {
       showAlert(err.message, 'danger');

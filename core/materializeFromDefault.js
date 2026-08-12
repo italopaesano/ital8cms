@@ -28,19 +28,39 @@
  *     - { created: false, reason: 'already-exists' } se il vivo c'era già.
  *     - { created: true,  reason: 'materialized'  } se è stato generato.
  *
+ *   materializeFromDefault.sync(defaultPath, livePath) → { created, reason }
+ *     Stesso contratto, versione sincrona. Serve ai config che vengono letti
+ *     PRIMA che il boot entri in codice asincrono: `koaSession.json5` è letto dal
+ *     montaggio dei priority middleware, che in index.js gira a livello di modulo
+ *     (CommonJS, niente top-level await) e quindi non può attendere una Promise.
+ *     Il suffisso segue la convenzione di Node (`readFileSync`, `renameSync`).
+ *
  * Throws su:
  *   - argomenti non validi (path non stringa o vuoti);
  *   - default mancante o non leggibile;
  *   - default con sintassi JSON5 non valida.
- *   In caso di default non valido, il file vivo NON viene scritto (saveJson5
- *   valida prima di toccare il disco).
+ *   In caso di default non valido, il file vivo NON viene scritto (la validazione
+ *   precede sempre la scrittura).
  */
 
 'use strict';
 
-const fs = require('fs').promises;
+const fsSync = require('fs');
+const fs = fsSync.promises;
+const path = require('path');
+const json5 = require('json5');
 const loadJson5 = require('./loadJson5');
 const saveJson5 = require('./saveJson5');
+
+/** Validazione degli argomenti, condivisa dalle due varianti. */
+function assertPaths(defaultPath, livePath) {
+  if (typeof defaultPath !== 'string' || defaultPath.length === 0) {
+    throw new Error('materializeFromDefault: defaultPath must be a non-empty string');
+  }
+  if (typeof livePath !== 'string' || livePath.length === 0) {
+    throw new Error('materializeFromDefault: livePath must be a non-empty string');
+  }
+}
 
 /**
  * Materializza un file di config vivo dal suo sidecar di default, se manca.
@@ -51,12 +71,7 @@ const saveJson5 = require('./saveJson5');
  * @throws {Error} Se gli argomenti non sono validi, o il default manca/è JSON5 non valido.
  */
 async function materializeFromDefault(defaultPath, livePath) {
-  if (typeof defaultPath !== 'string' || defaultPath.length === 0) {
-    throw new Error('materializeFromDefault: defaultPath must be a non-empty string');
-  }
-  if (typeof livePath !== 'string' || livePath.length === 0) {
-    throw new Error('materializeFromDefault: livePath must be a non-empty string');
-  }
+  assertPaths(defaultPath, livePath);
 
   // 1. Il file vivo esiste già? → no-op, non sovrascrivere mai i dati utente.
   let liveExists = false;
@@ -85,4 +100,46 @@ async function materializeFromDefault(defaultPath, livePath) {
   return { created: true, reason: 'materialized' };
 }
 
+/**
+ * Variante SINCRONA di materializeFromDefault, stesso contratto e stessa
+ * semantica (no-op se il vivo esiste, copia byte-fedele, scrittura atomica).
+ *
+ * Esiste perché alcuni config del core vengono letti prima che il boot entri in
+ * codice asincrono: `koaSession.json5` è letto dal montaggio dei priority
+ * middleware, che in `index.js` gira a livello di modulo. Node non offre una
+ * versione sincrona di `fs.promises`, quindi le poche righe di I/O sono
+ * necessariamente duplicate; la validazione (argomenti + parse del default) è
+ * invece condivisa, così le due varianti non possono divergere sulle regole.
+ *
+ * @param {string} defaultPath - Path del `x.default.json5` (fonte di verità).
+ * @param {string} livePath    - Path del `x.json5` vivo (destinazione).
+ * @returns {{created: boolean, reason: string}}
+ * @throws {Error} Se gli argomenti non sono validi, o il default manca/è JSON5 non valido.
+ */
+function materializeFromDefaultSync(defaultPath, livePath) {
+  assertPaths(defaultPath, livePath);
+
+  if (fsSync.existsSync(livePath)) {
+    return { created: false, reason: 'already-exists' };
+  }
+
+  // Stessa validazione della variante async: messaggi chiari ("file non trovato"
+  // / "sintassi JSON5 non valida") e `.code` propagato, che il chiamante usa per
+  // distinguere l'installazione rotta dall'errore di sintassi.
+  loadJson5(defaultPath);
+
+  const raw = fsSync.readFileSync(defaultPath, 'utf8');
+  json5.parse(raw); // ri-valida la stringa esatta che sta per essere scritta
+
+  const resolved = path.isAbsolute(livePath) ? livePath : path.resolve(process.cwd(), livePath);
+  const tempPath = resolved + '.tmp';
+  fsSync.writeFileSync(tempPath, raw, 'utf8');
+  fsSync.renameSync(tempPath, resolved);
+
+  return { created: true, reason: 'materialized' };
+}
+
 module.exports = materializeFromDefault;
+// Agganciata alla funzione principale come `loadJson5.warnConfigError`:
+// al punto di chiamata si legge `materializeFromDefault.sync(...)`.
+module.exports.sync = materializeFromDefaultSync;

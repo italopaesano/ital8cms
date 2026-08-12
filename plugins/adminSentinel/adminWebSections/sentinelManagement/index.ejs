@@ -6,6 +6,7 @@
 
   <ul class="nav nav-pills mb-3">
     <li class="nav-item"><a class="nav-link active" href="/<%= passData.adminPrefix %>/sentinelManagement/index.ejs"><%= __({it: 'Panoramica', en: 'Overview'}, passData.ctx) %></a></li>
+    <li class="nav-item"><a class="nav-link" href="/<%= passData.adminPrefix %>/sentinelManagement/ruleForm.ejs"><%= __({it: 'Regole (form)', en: 'Rules (form)'}, passData.ctx) %></a></li>
     <li class="nav-item"><a class="nav-link" href="/<%= passData.adminPrefix %>/sentinelManagement/rules.ejs"><%= __({it: 'Regole (JSON5)', en: 'Rules (JSON5)'}, passData.ctx) %></a></li>
     <li class="nav-item"><a class="nav-link" href="/<%= passData.adminPrefix %>/sentinelManagement/tester.ejs"><%= __({it: 'Tester', en: 'Tester'}, passData.ctx) %></a></li>
   </ul>
@@ -158,6 +159,114 @@
       </div>
     </div>
 
+    <!-- ── Token esca ────────────────────────────────────────────────────────
+      Sta accanto ai sospetti scanner di proposito, perché è il suo opposto
+      esatto: là ci sono le inferenze, qui le certezze. Nascosto finché nessun
+      token è stato consegnato — una card vuota su una dashboard di sicurezza
+      insegna solo a smettere di guardarla.
+    -->
+    <div class="col-12 col-xl-5 d-none" id="canaryCard">
+      <div class="card h-100 border-danger-subtle">
+        <div class="card-header">
+          🕯️ <%= __({it: 'Token esca (canary)', en: 'Canary tokens'}, passData.ctx) %>
+          <div class="small text-muted mt-1">
+            <%= __({
+              it: 'Un token esiste solo dentro il decoy consegnato a un client preciso: nessun link ci porta e nessuno lo digita per sbaglio. Se torna indietro non è un indizio come tutto il resto di questa pagina — è la certezza di qualcuno che ha letto il decoy e ha deciso di seguirlo.',
+              en: 'A token exists only inside the decoy served to one specific client: no link leads there and nobody types it by accident. If it comes back it is not a hint like everything else on this page — it is certainty that someone read the decoy and chose to follow it.'
+            }, passData.ctx) %>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row text-center g-2 mb-3">
+            <div class="col-4">
+              <div class="kpi-value" id="canaryMinted">—</div>
+              <div class="kpi-label"><%= __({it: 'Consegnati', en: 'Delivered'}, passData.ctx) %></div>
+            </div>
+            <div class="col-4">
+              <div class="kpi-value text-danger" id="canaryTriggered">—</div>
+              <div class="kpi-label"><%= __({it: 'Usati', en: 'Used'}, passData.ctx) %></div>
+            </div>
+            <div class="col-4">
+              <div class="kpi-value" id="canaryLive">—</div>
+              <div class="kpi-label"><%= __({it: 'In registro', en: 'In registry'}, passData.ctx) %></div>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm mb-0 sn-table">
+              <thead><tr>
+                <th><%= __({it: 'Quando', en: 'When'}, passData.ctx) %></th>
+                <th><%= __({it: 'Usato da', en: 'Used by'}, passData.ctx) %></th>
+                <th><%= __({it: 'Consegnato a', en: 'Delivered to'}, passData.ctx) %></th>
+                <th><%= __({it: 'Stesso client', en: 'Same client'}, passData.ctx) %></th>
+              </tr></thead>
+              <tbody id="canaryTable">
+                <tr><td colspan="4" class="text-muted p-3"><%= __({it: 'Nessun token ancora usato.', en: 'No token used yet.'}, passData.ctx) %></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="small text-muted mt-2">
+            <%= __({
+              it: '«Stesso client» no significa che il contenuto del decoy è passato di mano: chi scandaglia e chi sfrutta sono due macchine diverse.',
+              en: '“Same client” = no means the decoy content changed hands: scanning and exploitation are two different machines.'
+            }, passData.ctx) %>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Coerenza di sessione ──────────────────────────────────────────────
+      Nascosta finché nessuna sessione autenticata è stata osservata. Sopra un
+      sito senza area riservata attiva non ha niente da dire.
+    -->
+    <div class="col-12 col-xl-7 d-none" id="sessionCard">
+      <div class="card h-100">
+        <div class="card-header">
+          🔐 <%= __({it: 'Coerenza delle sessioni', en: 'Session coherence'}, passData.ctx) %>
+          <div class="small text-muted mt-1">
+            <%= __({
+              it: 'Un cookie rubato funziona: chi lo presenta È l\'utente, per il server. Ma il ladro non eredita il client — la sessione era nata su un browser e a un certo punto arriva da uno script. La linea di base è come la sessione appariva alla prima richiesta, e non viene mai aggiornata.',
+              en: 'A stolen cookie works: whoever presents it IS the user, as far as the server knows. But the thief does not inherit the client — the session started on a browser and at some point arrives from a script. The baseline is how the session looked on its first request, and is never updated.'
+            }, passData.ctx) %>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row text-center g-2 mb-3">
+            <div class="col-4">
+              <div class="kpi-value" id="sessTracked">—</div>
+              <div class="kpi-label"><%= __({it: 'Sessioni viste', en: 'Sessions seen'}, passData.ctx) %></div>
+            </div>
+            <div class="col-4">
+              <div class="kpi-value text-warning" id="sessFlagged">—</div>
+              <div class="kpi-label"><%= __({it: 'Con anomalie', en: 'With anomalies'}, passData.ctx) %></div>
+            </div>
+            <div class="col-4">
+              <div class="kpi-value" id="sessLive">—</div>
+              <div class="kpi-label"><%= __({it: 'Attive', en: 'Live'}, passData.ctx) %></div>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm mb-0 sn-table">
+              <thead><tr>
+                <th><%= __({it: 'Quando', en: 'When'}, passData.ctx) %></th>
+                <th><%= __({it: 'Account', en: 'Account'}, passData.ctx) %></th>
+                <th><%= __({it: 'Anomalia', en: 'Anomaly'}, passData.ctx) %></th>
+                <th><%= __({it: 'Da → a', en: 'From → to'}, passData.ctx) %></th>
+              </tr></thead>
+              <tbody id="sessionTable">
+                <tr><td colspan="4" class="text-muted p-3"><%= __({it: 'Nessuna anomalia rilevata.', en: 'No anomaly detected.'}, passData.ctx) %></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="small text-muted mt-2">
+            <%= __({
+              it: 'Lo stato è in memoria: dopo un riavvio le linee di base ripartono da come il client appare in quel momento. È un sensore in più, non l\'unico presidio sulle sessioni.',
+              en: 'State lives in memory: after a restart, baselines start again from how the client looks at that moment. This is one more sensor, not the only safeguard on sessions.'
+            }, passData.ctx) %>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Stato delle regole: il cuore della promozione ─────────────────── -->
     <div class="col-12">
       <div class="card">
@@ -263,6 +372,20 @@
     impronte. Se sale, qualcuno sta producendo chiavi a raffica per gonfiare gli
     archivi — la contromisura si comporta da rilevatore.
   -->
+  <!-- ── Tarpit al tetto ───────────────────────────────────────────────────
+    Compare solo quando il tetto sta rifiutando. È l'unico dato del tarpit che
+    richiede una decisione: significa che qualcuno ha superato la capienza che
+    hai deciso, e da quel momento le richieste in più ricevono il 404 comune.
+  -->
+  <div id="tarpitWarning" class="alert alert-warning mt-3 d-none">
+    <strong><%= __({it: 'Il tetto delle connessioni trattenute è stato raggiunto.', en: 'The tarpit capacity limit has been reached.'}, passData.ctx) %></strong>
+    <span id="tarpitDetail"></span>
+    <%= __({
+      it: 'Oltre il tetto le richieste degradano al 404 comune invece di essere trattenute — comportamento voluto, perché accodarle sposterebbe il consumo di risorse invece di fermarlo. Se succede spesso, alza `tarpit.maxConcurrent` solo se la macchina regge i socket in più.',
+      en: 'Beyond the limit, requests degrade to the ordinary 404 instead of being held — intended behaviour, since queueing them would move the resource cost rather than stop it. If this happens often, raise `tarpit.maxConcurrent` only if the machine can take the extra sockets.'
+    }, passData.ctx) %>
+  </div>
+
   <div id="evictionWarning" class="alert alert-warning mt-3 d-none">
     <strong><%= __({it: 'Sfratti in corso negli archivi.', en: 'Evictions happening in the aggregates.'}, passData.ctx) %></strong>
     <span id="evictionDetail"></span>

@@ -119,3 +119,17 @@
 .sn-admin .sn-risky {
   border-style: dashed;
 }
+
+/* ── Vista C: elenco delle regole e anteprima del match non rappresentabile ── */
+.sn-rule-list {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.sn-pre {
+  background: rgba(0, 0, 0, .05);
+  padding: .5rem;
+  border-radius: .25rem;
+  max-height: 14rem;
+  overflow: auto;
+  white-space: pre;
+}

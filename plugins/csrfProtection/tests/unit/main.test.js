@@ -77,15 +77,34 @@ describe('csrfProtection · main (integrazione plugin)', () => {
   });
 
   describe('hook head (meta + interceptor)', () => {
-    test('inietta <meta> col token e lo <script> interceptor', () => {
+    test('per una sessione AUTENTICATA conia, inietta <meta> e interceptor', () => {
       const hooks = csrf.getHooksPage();
       expect(hooks.has('head')).toBe(true);
-      const ctx = createCtxMock({ session: {} });
+      const ctx = createCtxMock({ session: { authenticated: true } });
       const html = hooks.get('head')({ ctx });
       expect(html).toMatch(/<meta name="csrf-token" content="[A-Za-z0-9_-]{43}">/);
       expect(html).toContain(ctx.session.csrfToken);
       expect(html).toContain('<script>');
       expect(html).toMatch(/window\.fetch/);
+    });
+
+    test('riusa un token già presente in sessione senza rigenerarlo', () => {
+      const hooks = csrf.getHooksPage();
+      const ctx = createCtxMock({ session: {} });
+      const token = csrf._internals.ensureToken(ctx); // es. coniato da csrfField()
+      const html = hooks.get('head')({ ctx });
+      expect(html).toContain(token);
+      expect(ctx.session.csrfToken).toBe(token); // invariato
+    });
+
+    // Il cuore della modifica: l'hook è montato su OGNI pagina a tema, quindi
+    // coniare qui darebbe un cookie a chiunque legga il sito. Vedi anche il test
+    // d'integrazione sulla parità dei Set-Cookie fra 404 vero e 404 di sentinel.
+    test('per un ANONIMO senza token non conia e non inietta nulla', () => {
+      const hooks = csrf.getHooksPage();
+      const ctx = createCtxMock({ session: {} });
+      expect(hooks.get('head')({ ctx })).toBe('');
+      expect(ctx.session.csrfToken).toBeUndefined();
     });
 
     test('senza sessione non inietta nulla', () => {
@@ -125,15 +144,14 @@ describe('csrfProtection · main (integrazione plugin)', () => {
     });
   });
 
-  describe('middleware ensure-token', () => {
-    test('imposta il token in sessione e chiama next()', async () => {
-      const mws = csrf.getMiddlewareToAdd();
-      expect(mws).toHaveLength(1);
-      const ctx = createCtxMock({ session: {} });
-      const next = jest.fn(async () => {});
-      await mws[0](ctx, next);
-      expect(ctx.session.csrfToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
-      expect(next).toHaveBeenCalledTimes(1);
+  // Il plugin NON registra middleware, ed è deliberato: quello che c'era coniava
+  // il token su ogni richiesta che arrivasse alla catena (asset, crawler, 404),
+  // era ridondante rispetto all'hook e agli helper, e rendeva riconoscibile il
+  // 404 di blocco di sentinel — che risponde pre-router e quindi senza cookie.
+  // Il test presidia l'assenza: se qualcuno rimette un middleware qui, fallisce.
+  describe('nessun middleware registrato', () => {
+    test('getMiddlewareToAdd ritorna un array vuoto', () => {
+      expect(csrf.getMiddlewareToAdd()).toEqual([]);
     });
   });
 

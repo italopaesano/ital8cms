@@ -58,6 +58,71 @@ function restoreAll() {
 const TEST_RULES = {
   schemaVersion: 1,
   rules: [
+    // Prima di test-block-php di proposito: `/wp-login.php` matcherebbe anche
+    // quella, e con first-match-wins l'ordine è la sola cosa che decide.
+    {
+      name: 'test-decoy-wp',
+      enabled: true,
+      category: 'cms-probe',
+      description: 'decoy: serve il finto login WordPress al posto del 404',
+      action: 'decoy',
+      match: { path: '/wp-login.php' },
+      decoy: { file: 'wp-login.html', headers: { 'X-Powered-By': 'PHP/7.4.33' } },
+    },
+    // Il ciclo completo del canary: questo decoy conia un token, e la regola
+    // trappola più sotto lo riconosce quando torna indietro.
+    {
+      name: 'test-decoy-canary',
+      enabled: true,
+      category: 'sensitive-file',
+      description: 'decoy con token esca: consegna un canary a chi cerca il .env',
+      action: 'decoy',
+      match: { path: '/zzz-canary-source' },
+      decoy: { file: 'env.txt' },
+    },
+    {
+      name: 'test-canary-used',
+      enabled: true,
+      category: 'canary',
+      description: 'trappola: qualcuno ha usato un token consegnato da un decoy',
+      action: 'block',
+      match: { canary: 'known' },
+    },
+    {
+      name: 'test-drop',
+      enabled: true,
+      category: 'scanner',
+      description: 'drop: tronca la connessione senza rispondere',
+      action: 'drop',
+      match: { path: '/zzz-drop' },
+    },
+    {
+      name: 'test-tarpit',
+      enabled: true,
+      category: 'scanner',
+      description: 'tarpit: trattiene la connessione a gocce',
+      action: 'tarpit',
+      match: { path: '/zzz-tarpit' },
+      tarpit: { seconds: 1.5 },
+    },
+    {
+      name: 'test-decoy-assente',
+      enabled: true,
+      category: 'cms-probe',
+      description: 'decoy che punta a un file inesistente: deve degradare al 404',
+      action: 'decoy',
+      match: { path: '/zzz-decoy-assente' },
+      decoy: { file: 'questo-file-non-esiste.html' },
+    },
+    {
+      name: 'test-redirect-interno',
+      enabled: true,
+      category: 'cms-probe',
+      description: 'redirect: manda altrove invece di rispondere',
+      action: 'redirect',
+      match: { path: '/zzz-redirect' },
+      redirect: { to: '/', status: 302 },
+    },
     {
       name: 'test-block-php',
       enabled: true,
@@ -236,10 +301,38 @@ describe('sentinel — il 404 di blocco è indistinguibile da un 404 autentico',
     expect(blocked.status).toBe(genuine.status);
     expect(blocked.body).toBe(genuine.body);
 
-    const VOLATILE = new Set(['date', 'set-cookie', 'connection', 'keep-alive']);
+    // `set-cookie` NON è fra i volatili, ed è una correzione: escluderlo qui
+    // rendeva questo test cieco proprio al canale che ha poi rivelato il filtro
+    // dal vivo. Il 404 di sentinel esce da uno slot PRE-ROUTER, quello autentico
+    // attraversa tutta la catena; finché un middleware toccava la sessione dei
+    // visitatori senza cookie, il primo rispondeva con zero `Set-Cookie` e il
+    // secondo con due. Il corpo era identico e nessun test se ne accorgeva.
+    const VOLATILE = new Set(['date', 'connection', 'keep-alive']);
     const stable = (h) => Object.fromEntries(
       Object.entries(h).filter(([name]) => !VOLATILE.has(name.toLowerCase())));
     expect(stable(blocked.headers)).toEqual(stable(genuine.headers));
+  });
+
+  // Presidio esplicito del difetto misurato: un client SENZA cookie non deve
+  // poter separare le due risposte contando gli header. È un test a sé perché
+  // la parità sopra è un `toEqual` su un oggetto — questo dice cosa cercare a
+  // chi legge il fallimento.
+  test.each([
+    ['/zzz-sentinel.php',             '/zzz-non-esiste-affatto.ejs'],
+    ['/api/adminUsers/zzz.php',       '/api/adminUsers/zzz-non-esiste'],
+  ])('%s e %s emettono lo stesso numero di Set-Cookie', async (blockedPath, genuinePath) => {
+    const blocked = await httpGet(blockedPath);
+    const genuine = await httpGet(genuinePath);
+
+    const countCookies = (h) => {
+      const raw = h['set-cookie'];
+      if (raw === undefined) return 0;
+      return Array.isArray(raw) ? raw.length : 1;
+    };
+    expect(countCookies(blocked.headers)).toBe(countCookies(genuine.headers));
+    // E il numero atteso è zero: nessuna delle due risposte ha motivo di aprire
+    // una sessione per chi non ne ha una.
+    expect(countCookies(genuine.headers)).toBe(0);
   });
 
   test('sotto /api la forma è quella di Koa, non la pagina HTML', async () => {
@@ -287,6 +380,181 @@ describe('sentinel — monitor osserva senza agire', () => {
     expect(eventi[0].ruleName).toBe('test-block-php');
     expect(eventi[0].ip).toBeTruthy();      // IP pieno, scelta esplicita
     expect(eventi[0].fp).toBeTruthy();
+  });
+});
+
+// Le azioni che producono un corpo proprio. Un unit test sul renderer dice che
+// il file viene letto e i segnaposto sostituiti; solo un test end-to-end dice
+// che quel corpo arriva davvero al client al posto del 404, con lo stato e gli
+// header giusti e senza che nulla a valle lo tocchi.
+describe('sentinel — decoy e redirect producono la loro risposta', () => {
+  test('il decoy prende il posto del 404, con i suoi header', async () => {
+    const r = await httpGet('/wp-login.php');
+
+    expect(r.status).toBe(200);
+    expect(r.headers['content-type']).toMatch(/text\/html/);
+    expect(r.headers['x-powered-by']).toBe('PHP/7.4.33');
+    expect(r.body).toContain('id="loginform"');
+
+    // Fuori dalla pipeline EJS: nessun frammento del tema del sito, che
+    // renderebbe il decoy riconoscibile a colpo d'occhio.
+    expect(r.body).not.toContain('ital8cms');
+  });
+
+  test('due risposte non sono identiche: il nonce cambia', async () => {
+    // È la ragione del livello 1. Un decoy uguale a se stesso viene riconosciuto
+    // confrontando l'hash di due risposte.
+    const [a, b] = await Promise.all([httpGet('/wp-login.php'), httpGet('/wp-login.php')]);
+    expect(a.body).not.toBe(b.body);
+  });
+
+  test('il decoy scavalca la regola di blocco che lo segue', async () => {
+    // /wp-login.php matcherebbe anche test-block-php: se rispondesse 404
+    // vorrebbe dire che first-match-wins non vale per le azioni decoranti.
+    expect((await httpGet('/wp-login.php')).status).toBe(200);
+    expect((await httpGet('/zzz-altro.php')).status).toBe(404);
+  });
+
+  test('un decoy che punta a un file assente degrada al 404 comune', async () => {
+    // Fallire aperto sarebbe peggio: la regola dice «questa richiesta è ostile».
+    // Fallire con una pagina d'errore diversa dal 404 del sito sarebbe peggio
+    // ancora, perché rivelerebbe il filtro proprio dove è rotto.
+    const degradato = await httpGet('/zzz-decoy-assente');
+    const genuino = await httpGet('/zzz-non-esiste-affatto.ejs');
+    expect(degradato.status).toBe(404);
+    expect(degradato.body).toBe(genuino.body);
+  });
+
+  test('il redirect risponde 302 con Location e senza corpo rivelatore', async () => {
+    const r = await httpGet('/zzz-redirect');
+    expect(r.status).toBe(302);
+    expect(r.headers.location).toBe('/');
+    expect(r.body).toBe('');
+  });
+
+  test('decoy e redirect finiscono nel log come applicati', async () => {
+    await sleep(300);
+    const decoy = eventsFor('/wp-login.php');
+    const redirect = eventsFor('/zzz-redirect');
+
+    expect(decoy.length).toBeGreaterThan(0);
+    expect(decoy[0].ruleName).toBe('test-decoy-wp');
+    expect(decoy[0].enforced).toBe(true);
+
+    expect(redirect.length).toBeGreaterThan(0);
+    expect(redirect[0].ruleName).toBe('test-redirect-interno');
+    expect(redirect[0].enforced).toBe(true);
+  });
+});
+
+// Le due azioni che non producono una risposta HTTP normale. Un unit test può
+// dire che il socket viene distrutto e che il corpo esce a pezzi; solo un
+// server vero dice come si comporta il CLIENT davanti a quelle risposte — ed è
+// l'unica cosa che conta, perché il bersaglio è il tempo di chi bussa.
+describe('sentinel — drop e tarpit', () => {
+  test('drop tronca la connessione senza rispondere', async () => {
+    // Non un 404, non un 502, non un corpo vuoto: proprio nessuna risposta. Il
+    // client vede la connessione azzerata.
+    await expect(httpGet('/zzz-drop')).rejects.toMatchObject({ code: 'ECONNRESET' });
+  });
+
+  test('drop è registrato come applicato', async () => {
+    await sleep(300);
+    const evento = eventsFor('/zzz-drop')[0];
+    expect(evento).toBeDefined();
+    expect(evento.ruleName).toBe('test-drop');
+    expect(evento.action).toBe('drop');
+    expect(evento.enforced).toBe(true);
+  });
+
+  test('il tarpit trattiene la connessione per la durata dichiarata', async () => {
+    const startedAt = Date.now();
+    const r = await httpGet('/zzz-tarpit');
+    const elapsed = Date.now() - startedAt;
+
+    expect(r.status).toBe(200);
+    // La regola chiede 1,5 secondi: la risposta non può arrivare subito.
+    expect(elapsed).toBeGreaterThan(1000);
+    expect(r.body).toContain('<!DOCTYPE html>');
+  });
+
+  test('il tarpit non dichiara la lunghezza del corpo', async () => {
+    // È il motivo per cui il client resta in attesa invece di chiudere.
+    const r = await httpGet('/zzz-tarpit');
+    expect(r.headers['content-length']).toBeUndefined();
+  });
+
+  test('il sito continua a rispondere mentre un tarpit è in corso', async () => {
+    // La verifica che conta: il tarpit non deve bloccare l'event loop. Se lo
+    // facesse, la difesa fermerebbe il sito invece dell'attaccante.
+    const trattenuta = httpGet('/zzz-tarpit');
+    await sleep(200);
+
+    const startedAt = Date.now();
+    const normale = await httpGet('/');
+    expect(Date.now() - startedAt).toBeLessThan(1000);
+    expect(normale.status).toBe(200);
+
+    await trattenuta;
+  });
+});
+
+// Il ciclo completo del token esca, che nessun unit test può coprire: il token
+// nasce dentro la risposta di un decoy, viene registrato insieme al destinatario,
+// e deve essere riconosciuto quando torna indietro su un'ALTRA richiesta. Sono
+// due richieste HTTP separate legate da uno stato in memoria del processo — che
+// è esattamente ciò che un test in-process non prova.
+describe('sentinel — il canary chiude il cerchio', () => {
+  let token = null;
+
+  test('il decoy consegna un token della forma attesa', async () => {
+    const r = await httpGet('/zzz-canary-source');
+    expect(r.status).toBe(200);
+
+    const found = r.body.match(/\ba7[a-z0-9]{22}\b/);
+    expect(found).not.toBeNull();
+    [token] = found;
+
+    // Due consegne, due token diversi: il legame è col singolo destinatario.
+    const second = await httpGet('/zzz-canary-source');
+    expect(second.body).not.toContain(token);
+  });
+
+  test('usare il token fa scattare la trappola', async () => {
+    const r = await httpGet(`/telescope-${token}/requests`);
+    expect(r.status).toBe(404); // action: block
+
+    await sleep(300);
+    const evento = eventsFor(`/telescope-${token}/requests`)[0];
+    expect(evento).toBeDefined();
+    expect(evento.ruleName).toBe('test-canary-used');
+    expect(evento.enforced).toBe(true);
+    expect(evento.canary).toEqual({ token, status: 'known' });
+  });
+
+  test('il token viaggia anche nella querystring', async () => {
+    const r = await httpGet(`/zzz-download?file=${token}`);
+    expect(r.status).toBe(404);
+  });
+
+  test('una stringa della forma giusta ma mai coniata NON è "known"', async () => {
+    // La regola di prova chiede `known`: un token orfano non deve bastare, o la
+    // distinzione fra i due gradi di certezza non varrebbe niente.
+    const orfano = 'a7aaaaaaaaaaaaaaaaaaaaaa';
+    const r = await httpGet(`/telescope-${orfano}/requests`);
+    expect(r.status).toBe(404); // il file non esiste comunque
+
+    await sleep(300);
+    const eventi = eventsFor(`/telescope-${orfano}/requests`);
+    // Nessun evento della regola trappola: al più l'osservazione dell'esito.
+    expect(eventi.filter((e) => e.ruleName === 'test-canary-used')).toHaveLength(0);
+  });
+
+  test('una richiesta normale non porta token', async () => {
+    await httpGet('/zzz-normale');
+    await sleep(300);
+    const eventi = eventsFor('/zzz-normale');
+    for (const e of eventi) expect(e.canary).toBeNull();
   });
 });
 

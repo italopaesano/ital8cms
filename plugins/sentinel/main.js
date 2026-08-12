@@ -50,7 +50,13 @@ const { buildSubject, findFirstMatch } = require('./lib/ruleMatcher');
 const { testRequest } = require('./lib/ruleTracer');
 const { validateRules, logValidationResults } = require('./lib/ruleValidator');
 const setJson5Key = require('../../core/setJson5Key');
-const { setRuleAction: editRuleAction } = require('./lib/rulesFileEditor');
+const { setRuleAction: editRuleAction, replaceRule } = require('./lib/rulesFileEditor');
+const { renderDecoy, resolveDecoyPath } = require('./lib/decoyRenderer');
+const { CanaryRegistry, findCanary } = require('./lib/canaryRegistry');
+const { SessionCoherence } = require('./lib/sessionCoherence');
+const { Tarpit } = require('./lib/tarpit');
+const { classify: classifyReputation } = require('./lib/reputation');
+const { AlertDispatcher } = require('./lib/alertDispatcher');
 const { SentinelLog } = require('./lib/sentinelLog');
 const { FingerprintCensus, OutcomeCensus } = require('./lib/census');
 const RuleHitCounter = require('./lib/ruleHitCounter');
@@ -70,11 +76,27 @@ let sentinelLog = null;
 let fingerprintCensus = null;
 let outcomeCensus = null;
 let hitCounter = null;
+let canaryRegistry = null;
+let sessionCoherence = null;
+let tarpit = null;
+let alerts = null;
+
+// Contatori di `drop`. Vivono qui e non in un modulo perché l'azione è tre righe
+// di codice: un file solo per contarle sarebbe cerimonia.
+let dropped = 0;
+let dropDegraded = 0;   // quante volte è degradato a blocco per via del proxy
 let sweepTimer = null;
 let censusSaveTimer = null;
 let gateState = 'running';
 
 let pluginSysRef = null;
+
+// Contenuto dei file di decoy già letti. Un decoy è un file statico servito a
+// traffico ostile: rileggerlo dal disco a ogni richiesta significherebbe che
+// chi sta scandendo il sito detta il ritmo delle nostre letture su disco.
+// In debug la cache resta spenta, come per le regole, così una modifica al file
+// si vede subito.
+const decoyCache = new Map();
 
 // Latch per non ripetere all'infinito lo stesso avviso di configurazione.
 let rulesUnavailableLogged = false;
@@ -115,6 +137,7 @@ function loadRules() {
   const result = validateRules(rulesData, {
     knownRateLimiterRules: getRateLimiterRuleNames(),
     allowedRedirectHosts: Array.isArray(custom.allowedRedirectHosts) ? custom.allowedRedirectHosts : [],
+    behindProxy: custom.trustProxy === true,
   });
 
   logValidationResults(result, logger, LOG_PREFIX);
@@ -123,12 +146,41 @@ function loadRules() {
     throw new Error('[sentinel] validazione di sentinelRules.json5 fallita (strictValidation=true)');
   }
 
+  warnMissingDecoyFiles(result.rules);
+
   return result.rules;
 }
 
-/** Rilegge le regole a caldo (usato dal futuro twin admin dopo un salvataggio). */
+/**
+ * Avvisa se una regola `decoy` punta a un file che non esiste.
+ *
+ * Il validatore non può accorgersene: non conosce la cartella del plugin, e
+ * dev'essere utilizzabile dalla GUI del twin admin per validare un testo che non
+ * è ancora stato salvato. Il controllo sta qui, dove il disco c'è.
+ *
+ * È un avviso e non un errore perché la regola resta legittima — un decoy si
+ * scrive spesso dopo la regola che lo userà — ma senza il file l'azione degrada
+ * al 404 comune, e scoprirlo dal traffico invece che dall'avvio sarebbe la
+ * peggiore delle sorprese: il decoy sembra configurato e non lo è.
+ */
+function warnMissingDecoyFiles(rules) {
+  if (!pluginFolder) return;
+  for (const rule of rules) {
+    if (rule.action !== 'decoy' || !rule.decoy) continue;
+    if (resolveDecoyPath(pluginFolder, rule.decoy.file)) continue;
+    log('warn',
+      `regola "${rule.name}": il decoy "${rule.decoy.file}" non esiste né in ` +
+      'decoys/data/ né in decoys/default/ — l\'azione degraderà al 404 comune');
+  }
+}
+
+/** Rilegge le regole a caldo (usato dal twin admin dopo un salvataggio). */
 function reloadRules() {
   compiledRules = loadRules();
+  // I decoy si modificano insieme alle regole che li usano: tenere in cache il
+  // contenuto vecchio dopo un ricaricamento renderebbe la modifica invisibile
+  // fino al riavvio.
+  decoyCache.clear();
   log('info', `regole ricaricate: ${compiledRules.length} attive`);
   return compiledRules.length;
 }
@@ -138,6 +190,7 @@ function reloadConfig() {
     const cfg = loadJson5(path.join(pluginFolder, 'pluginConfig.json5'));
     custom = cfg.custom || {};
     compiledRules = loadRules();
+    decoyCache.clear();
   } catch (err) {
     log('warn', `reloadConfig fallito: ${err.message}`);
   }
@@ -183,20 +236,102 @@ function getRateLimiterRuleNames() {
  * amministrativo. Soluzione provvisoria, annotata nel TODO del plugin.
  */
 function sendAlert(payload) {
-  const recipient = custom && custom.alertRecipient;
-  if (!recipient) return;
+  if (!alerts) return;
+  const { kind, ...rest } = payload || {};
+  alerts.notify(kind || 'diskBudget', rest);
+}
 
-  const mailer = pluginSysRef ? pluginSysRef.getSharedObject('mailer', 'sentinel') : null;
-  if (!mailer || typeof mailer.send !== 'function') return;
+/**
+ * Confronta la richiesta autenticata con la linea di base della sua sessione.
+ *
+ * Gira **prima** della valutazione delle regole perché il risultato è una
+ * condizione come le altre, e come le altre dev'essere calcolato una volta sola.
+ *
+ * Nessun effetto sul traffico anonimo: una sessione anonima non ha niente da
+ * rubare, e tracciarla richiederebbe di crearla — cioè mandare un cookie a ogni
+ * visitatore, che è un cambiamento di comportamento sproporzionato al segnale.
+ *
+ * Fail-soft: qualunque problema qui restituisce «nessuna anomalia», mai
+ * un'eccezione. Il resto del filtro deve continuare a funzionare.
+ *
+ * @returns {string[]}
+ */
+function inspectSession(ctx, fingerprint, clientIp) {
+  if (!sessionCoherence) return [];
+  const session = ctx.session;
+  if (!session || !session.authenticated) return [];
 
   try {
-    mailer.send({
-      to: recipient,
-      subject: `[sentinel] ${payload.kind}`,
-      text: JSON.stringify(payload, null, 2),
+    const sessionId = SessionCoherence.resolveSessionId(session);
+    if (!sessionId) return [];
+
+    const fpClass = fingerprint.fpClass || {};
+    const result = sessionCoherence.observe(sessionId, {
+      userAgent: ctx.get ? (ctx.get('User-Agent') || '') : '',
+      fp: fingerprint.fp,
+      ip: clientIp,
+      username: (session.user && session.user.username) || null,
+      // Un cookie valido in mano a qualcosa che non è un browser. Non è un
+      // cambiamento ma uno stato, ed è già di per sé la descrizione di un
+      // problema anche se quel client ha usato il cookie fin dall'inizio.
+      isScriptClient: fpClass.headerProfile === 'minimal' || fpClass.family === 'script-like',
     });
+    return result.anomalies;
   } catch (err) {
-    log('warn', `invio allerta fallito: ${err.message}`);
+    log('warn', `coerenza di sessione non valutata: ${err.message}`);
+    return [];
+  }
+}
+
+/**
+ * Sorveglia il tasso di sfratto del censimento delle impronte.
+ *
+ * ─── PERCHE UNA CONTROMISURA FA DA SENSORE ────────────────────────────────────
+ * Il tetto del censimento esiste perché la sua chiave — l'impronta — la decide
+ * chi bussa: randomizzare l'ordine degli header genera una firma nuova a ogni
+ * richiesta, e senza tetto la difesa diventerebbe il modo di esaurire la memoria.
+ *
+ * Ma in esercizio normale quel tetto non si tocca mai: il traffico vero converge
+ * su poche decine di impronte, e per settimane gli sfratti restano a zero. Un
+ * tasso di sfratto improvviso non è un problema di capacità da alzare, è la firma
+ * di qualcuno che sta producendo chiavi a raffica — cioè che ha capito come
+ * funziona il censimento e sta provando a gonfiarlo. La contromisura, misurata,
+ * diventa un rilevatore.
+ *
+ * Si guarda il DELTA fra due passaggi, non il totale: il totale cresce e basta,
+ * e dopo un episodio resterebbe sopra soglia per sempre.
+ */
+let lastEvictionCount = 0;
+
+function checkEvictionRate() {
+  if (!fingerprintCensus || !fingerprintCensus.store) return;
+
+  const total = fingerprintCensus.store.evictions || 0;
+  const delta = total - lastEvictionCount;
+  lastEvictionCount = total;
+  if (delta <= 0) return;
+
+  const alertConf = (custom && custom.alerts) || {};
+  const threshold = Number.isFinite(alertConf.evictionsPerSweep) ? alertConf.evictionsPerSweep : 100;
+  if (threshold <= 0 || delta < threshold) return;
+
+  sendAlert({
+    kind: 'evictionRate',
+    evictionsInWindow: delta,
+    evictionsTotal: total,
+    threshold,
+    trackedFingerprints: fingerprintCensus.store.size,
+    hint: 'impronte create a raffica: probabile randomizzazione degli header per gonfiare il censimento',
+  });
+}
+
+/** `mailer`, risolto al momento dell'uso come `rateLimiter`: opzionale, mai una dipendenza. */
+function getMailer() {
+  if (!pluginSysRef) return null;
+  try {
+    return pluginSysRef.getSharedObject('mailer', 'sentinel');
+  } catch (_err) {
+    return null;
   }
 }
 
@@ -310,28 +445,272 @@ function buildEvent(ctx, subject, rule, enforced, extra = {}) {
     fpClass: subject.fpClass,
     username: subject.authenticated ? subject.username : null,
     escalated: extra.escalated === true,
+    // Presente solo quando la richiesta portava un token esca: nel log è la riga
+    // che non ha bisogno di essere interpretata.
+    canary: subject.canary
+      ? { token: subject.canary.token, status: subject.canary.status }
+      : null,
+    // Presente solo quando la sessione ha smesso di assomigliare a sé stessa.
+    sessionAnomalies: subject.sessionAnomalies && subject.sessionAnomalies.length > 0
+      ? subject.sessionAnomalies
+      : null,
+    // Giudizio sulla storia locale dell'impronta, quando c'è.
+    reputation: subject.reputation && subject.reputation.levels.length > 0
+      ? subject.reputation.levels
+      : null,
   };
 }
 
-/** Alimenta rateLimiter, se la regola lo chiede e il plugin c'è. */
-function escalate(rule, subject) {
+/**
+ * Chiave con cui questo client è noto a rateLimiter.
+ *
+ * Sul traffico autenticato è l'ACCOUNT, non l'indirizzo: un account compromesso
+ * usato da una botnet distribuita su 500 IP alimenta comunque un solo contatore,
+ * e viene colto. L'API di rateLimiter accetta già una chiave esplicita.
+ */
+function clientKeyFor(subject) {
+  return subject.authenticated && subject.username ? `user:${subject.username}` : subject.ip;
+}
+
+/**
+ * Alimenta rateLimiter, se la regola lo chiede e il plugin c'è.
+ *
+ * ─── DUE INTENSITA, UNA SOLA DICHIARAZIONE ────────────────────────────────────
+ * `escalate` senza `ban` **conta un fallimento**: sarà rateLimiter, con la sua
+ * escalation, a decidere dopo quanti tentativi bloccare. È la forma giusta per
+ * tutto ciò che resta un'inferenza — una sonda sospetta, un UA incoerente — dove
+ * il singolo evento non prova niente e l'insistenza sì.
+ *
+ * `escalate: { ban: true }` **blocca subito**, saltando il conteggio. Si
+ * giustifica solo dove non c'è niente da accumulare perché il primo evento è già
+ * la prova: il caso è il canary, un token che esiste solo dentro un decoy e che
+ * nessuno può richiedere senza averlo letto lì.
+ *
+ * ─── IL BAN OBBEDISCE AI TETTI, IL CONTEGGIO NO ───────────────────────────────
+ * Il conteggio parte anche per una regola in `monitor` (comportamento storico,
+ * documentato nel file delle regole: non dichiarare `escalate` finché la regola
+ * è in osservazione). Il ban **no**: forzare un blocco è un'azione, e le azioni
+ * passano dai tetti dell'enforcement. Un sentinel in osservazione che fa bandire
+ * gente da rateLimiter non sarebbe un osservatorio.
+ *
+ * @returns {false|'counted'|'banned'}
+ */
+function escalate(rule, subject, enforced) {
   if (!rule.escalate) return false;
   const rl = getRateLimiter();
-  if (!rl || typeof rl.recordFailure !== 'function') return false;
+  if (!rl) return false;
 
+  const clientId = clientKeyFor(subject);
+  const ruleName = rule.escalate.rateLimiterRule;
+
+  if (rule.escalate.ban && enforced) {
+    if (typeof rl.banClient !== 'function') return false;
+    try {
+      const opts = { tier: 'long' };
+      if (rule.escalate.banSeconds) opts.seconds = rule.escalate.banSeconds;
+      rl.banClient(clientId, ruleName, opts);
+      log('warn', `ban immediato di ${clientId} (regola "${rule.name}" → rateLimiter "${ruleName}")`);
+      return 'banned';
+    } catch (err) {
+      log('warn', `ban immediato fallito: ${err.message}`);
+      return false;
+    }
+  }
+
+  if (typeof rl.recordFailure !== 'function') return false;
   try {
-    // Sul traffico autenticato la chiave è l'ACCOUNT, non l'indirizzo: un account
-    // compromesso usato da una botnet distribuita su 500 IP alimenta comunque un
-    // solo contatore, e viene colto. L'API di rateLimiter accetta già una chiave
-    // esplicita, non serve modificarlo.
-    const clientId = subject.authenticated && subject.username
-      ? `user:${subject.username}`
-      : subject.ip;
-    rl.recordFailure(clientId, rule.escalate.rateLimiterRule);
-    return true;
+    rl.recordFailure(clientId, ruleName);
+    return 'counted';
   } catch (err) {
     log('warn', `escalation verso rateLimiter fallita: ${err.message}`);
     return false;
+  }
+}
+
+/**
+ * Registra e segnala l'uso di un token esca.
+ *
+ * ─── IL CONFRONTO CHE VALE PIU DEL TOKEN STESSO ───────────────────────────────
+ * Sapere che un canary è stato usato è già una certezza. Ma il registro sa anche
+ * a CHI era stato consegnato, e il confronto fra consegnatario e utilizzatore
+ * dice una cosa che nessun altro dato del plugin può dire:
+ *
+ *   stesso client   → uno scanner che segue i link che trova. Automazione.
+ *   client DIVERSO  → il contenuto del decoy è passato di mano. Chi scandaglia e
+ *                     chi sfrutta sono due macchine, il che descrive
+ *                     un'operazione più strutturata di un bot che gira da solo.
+ *
+ * Per questo `sameClient` è un campo a sé e non una nota nel testo: è la domanda
+ * a cui si vuole rispondere guardando la dashboard, non una curiosità.
+ */
+function recordCanaryTrigger(subject, rule, enforced, escalation) {
+  const found = subject.canary;
+  const delivered = found.deliveredTo || {};
+  const sameClient = found.status === 'known'
+    ? (delivered.ip === subject.ip || delivered.fp === subject.fp)
+    : null;
+
+  canaryRegistry.recordTrigger({
+    token: found.token,
+    status: found.status,
+    usedByIp: subject.ip,
+    usedByFp: subject.fp,
+    usedOnPath: subject.path,
+    deliveredToIp: delivered.ip || null,
+    deliveredAt: delivered.mintedAt || null,
+    deliveredOnPath: delivered.path || null,
+    sameClient,
+    ruleName: rule ? rule.name : null,
+    enforced,
+  });
+
+  sendAlert({
+    kind: 'canaryTriggered',
+    token: found.token,
+    status: found.status,
+    usedBy: subject.ip,
+    usedOn: subject.path,
+    deliveredTo: delivered.ip || null,
+    deliveredAt: delivered.mintedAt ? new Date(delivered.mintedAt).toISOString() : null,
+    sameClient,
+    rule: rule ? rule.name : '(nessuna regola trappola ha matchato)',
+    enforced,
+    escalation: escalation || 'nessuna',
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RISPOSTE PROPRIE DEL PLUGIN (decoy, redirect)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Il gate produce da sé il 404 di `block`, riusando `reservedGate.deny()` perché
+// quel 404 dev'essere byte-identico a uno autentico. Decoy e redirect invece
+// hanno un corpo che solo il plugin conosce: il verdetto porta con sé la
+// funzione che lo scrive, e il gate la chiama SOLO se l'enforcement è davvero in
+// vigore e se la risposta non tradirebbe la superficie riservata chiusa.
+//
+// Nessuna di queste funzioni chiama `next()`: la richiesta finisce qui.
+
+/**
+ * Scrive un contenuto fittizio sulla risposta.
+ *
+ * L'ordine delle scritture non è casuale: il tipo dedotto dall'estensione viene
+ * PRIMA degli header dichiarati dalla regola, così una regola che vuole un
+ * `Content-Type` diverso da quello dell'estensione può averlo. È la scelta più
+ * specifica a vincere, e gli header pericolosi sono già stati rifiutati al
+ * caricamento.
+ */
+function serveDecoy(ctx, spec, subject) {
+  const rendered = renderDecoy({
+    pluginFolder,
+    spec,
+    vars: { path: subject.path, ip: subject.ip },
+    useCache: !isDebugMode,
+    cache: decoyCache,
+    // Il token si conia al momento della consegna e si registra INSIEME a chi lo
+    // riceve: è quel legame — non il token in sé — a rendere il canary più di un
+    // URL improbabile.
+    mintCanary: canaryRegistry
+      ? () => canaryRegistry.mint({ ip: subject.ip, fp: subject.fp, path: subject.path })
+      : undefined,
+  });
+
+  // File sparito dopo il caricamento (cancellato, permessi cambiati): il gate
+  // intercetta l'eccezione, logga una volta sola e ripiega sul 404 comune.
+  if (!rendered) {
+    throw new Error(`decoy "${spec.file}" non trovato in decoys/data/ né in decoys/default/`);
+  }
+
+  ctx.status = rendered.status;
+  ctx.type = rendered.type;
+  for (const [name, value] of Object.entries(rendered.headers)) ctx.set(name, value);
+  ctx.body = rendered.body;
+}
+
+/**
+ * Manda la richiesta altrove.
+ *
+ * Non si usa `ctx.redirect()`: quello di Koa compone un corpo che riflette
+ * l'URL e varia con l'header Accept, cioè rende la risposta riconoscibile e
+ * diversa da quella di un redirect qualunque. Qui l'unica informazione è il
+ * Location — destinazione e stato sono già stati validati al caricamento
+ * (allowlist per l'esterno, permanenti vietati fuori dal sito).
+ */
+function serveRedirect(ctx, spec) {
+  ctx.status = spec.status;
+  ctx.set('Location', spec.to);
+  ctx.type = 'text/plain; charset=utf-8';
+  ctx.body = '';
+}
+
+/**
+ * Chiude la connessione senza rispondere niente (lo stile del 444 di nginx).
+ *
+ * ─── COSA DA E COSA TOGLIE RISPETTO AL BLOCCO ─────────────────────────────────
+ * Il 404 di `block` è **indistinguibile** da un URL che non è mai esistito: è la
+ * sua qualità principale, e il motivo per cui è il default. Ma è anche una
+ * risposta completa, che costa a noi il lavoro di produrla e a chi bussa quasi
+ * niente.
+ *
+ * Troncare la connessione costa meno a noi e molto di più a lui: senza risposta,
+ * il suo client resta in attesa fino al proprio timeout. In cambio si rinuncia
+ * all'indistinguibilità — una connessione azzerata si nota, e dice che quel
+ * percorso è trattato diversamente dagli altri. Sono due strumenti, non uno
+ * migliore dell'altro.
+ *
+ * ─── DIETRO UN PROXY NON FUNZIONA, E FA PEGGIO ────────────────────────────────
+ * Con un reverse proxy davanti, il socket che tronchiamo è quello **verso il
+ * proxy**, non verso il client: il proxy risponde 502, che è più rumoroso di un
+ * 404 e riempie i suoi log di errori. Per questo, con `trustProxy: true`
+ * dichiarato, `drop` degrada al blocco: è l'unica configurazione in cui sappiamo
+ * con certezza di non stare parlando direttamente col client.
+ */
+function serveDrop(ctx) {
+  if (custom.trustProxy === true) {
+    dropDegraded++;
+    return false;   // il gate scrive il 404 comune
+  }
+
+  ctx.respond = false;
+  const socket = ctx.res && ctx.res.socket;
+  if (socket && !socket.destroyed) {
+    socket.destroy();
+  }
+  dropped++;
+  return true;
+}
+
+/**
+ * Trattiene la connessione a gocce.
+ *
+ * Col tetto pieno **rinuncia** invece di accodare: la richiesta successiva deve
+ * costare quanto un 404 normale, o il tetto sposterebbe il problema invece di
+ * risolverlo. Rinunciando lascia il contesto intatto, così il gate può ancora
+ * scriverci il proprio 404.
+ */
+async function serveTarpit(ctx, spec) {
+  if (!tarpit) return false;
+
+  const outcome = await tarpit.hold(ctx, { seconds: spec && spec.seconds });
+  return outcome.held;
+}
+
+/**
+ * Attacca al verdetto la funzione che ne scriverà la risposta.
+ *
+ * Solo per i verdetti che verranno applicati: senza `respond` il gate degrada al
+ * 404 comune, che è esattamente quello che deve succedere quando l'azione è
+ * dichiarata ma l'enforcement non è in vigore.
+ */
+function attachResponder(verdict, rule, subject) {
+  if (rule.action === 'decoy' && rule.decoy) {
+    verdict.respond = (ctx) => serveDecoy(ctx, rule.decoy, subject);
+  } else if (rule.action === 'redirect' && rule.redirect) {
+    verdict.respond = (ctx) => serveRedirect(ctx, rule.redirect);
+  } else if (rule.action === 'drop') {
+    verdict.respond = (ctx) => serveDrop(ctx);
+  } else if (rule.action === 'tarpit') {
+    verdict.respond = (ctx) => serveTarpit(ctx, rule.tarpit);
   }
 }
 
@@ -362,28 +741,69 @@ const engine = {
       fingerprint,
       clientIp,
       globalPrefix: ital8Conf.globalPrefix || '',
+      // Cercato UNA volta per richiesta, non una per regola: la scansione tocca
+      // percorso e querystring, e quasi nessuna richiesta contiene un token.
+      canary: findCanary(canaryRegistry, ctx.path, ctx.querystring),
+      sessionAnomalies: inspectSession(ctx, fingerprint, clientIp),
+      // Sulla voce di censimento com'era PRIMA di questa richiesta: registrarla
+      // per prima farebbe influenzare alla richiesta il giudizio su sé stessa.
+      reputation: fingerprintCensus
+        ? classifyReputation(
+          fingerprintCensus.getEntry(fingerprint.fp),
+          fingerprint.fpClass,
+          custom.reputation || {},
+        )
+        : null,
     });
 
     const rule = findFirstMatch(rules, subject, matcher);
+
+    const enforced = rule ? shouldEnforce(rule, subject) : false;
 
     // Censimento: registra SEMPRE la comparsa dell'impronta, anche quando nessuna
     // regola ha matchato. È il traffico non classificato a dire quali regole
     // mancano; contarlo solo quando una regola scatta significherebbe vedere solo
     // ciò che si sa già riconoscere.
+    //
+    // Gira DOPO il calcolo di `enforced` perché la quota di blocchi è il dato su
+    // cui poggia la reputazione, e senza il verdetto non la si saprebbe. I
+    // blocchi decisi da una regola che USA la reputazione sono però esclusi: se
+    // contassero, il primo inciampo di un'impronta la condannerebbe per sempre —
+    // bloccata, quindi quota più alta, quindi più bloccata.
     if (fingerprintCensus) {
       fingerprintCensus.record(fingerprint.fp, {
         fpClass: fingerprint.fpClass,
         ip: subject.ip,
         path: subject.path,
         matched: !!rule,
-        blocked: false,
+        judged: !(rule && rule.usesReputation),
+        blocked: enforced && !(rule && rule.usesReputation),
       });
+    }
+    const escalation = rule && (enforced || rule.action === 'monitor')
+      ? escalate(rule, subject, enforced)
+      : false;
+    const escalated = escalation !== false;
+
+    // Un canary usato è l'unico evento del plugin che non ammette interpretazioni,
+    // e si segnala PRIMA di guardare se una regola lo copre.
+    //
+    // Fuori dal `if (rule)` di proposito: il caso in cui nessuna regola matcha è
+    // quello in cui la segnalazione serve di più — significa che il token è stato
+    // usato e la regola trappola è stata cancellata, rinominata o messa dopo una
+    // `allow` che la scavalca. Legare l'unico segnale certo del plugin alla
+    // presenza di una riga in un file modificabile dalla GUI sarebbe fragile
+    // esattamente dove non ce lo si può permettere.
+    //
+    // Si segnala anche in osservazione: osservare significa non agire sulla
+    // richiesta, non tacere su ciò che si è visto. Il dispatcher ha già la
+    // finestra di silenzio che impedisce a chi usa il token in ciclo di
+    // trasformare la notifica nel moltiplicatore del proprio attacco.
+    if (subject.canary && canaryRegistry) {
+      recordCanaryTrigger(subject, rule, enforced, escalation);
     }
 
     if (!rule) return null;
-
-    const enforced = shouldEnforce(rule, subject);
-    const escalated = enforced || rule.action === 'monitor' ? escalate(rule, subject) : false;
 
     if (hitCounter) {
       hitCounter.record(rule.name, {
@@ -407,9 +827,11 @@ const engine = {
       enforce: enforced,
     };
 
-    // In v1 decoy/redirect/tarpit non producono ancora un corpo proprio: senza
-    // `respond` il gate degrada al 404 comune. La regola si può già scrivere e
-    // osservare, cambierà solo l'effetto quando la v2 aggiungerà le risposte.
+    // Decoy e redirect portano con sé la propria risposta. `tarpit` non ancora:
+    // senza `respond` il gate degrada al 404 comune, quindi la regola si può già
+    // scrivere e osservare e cambierà solo l'effetto.
+    if (enforced) attachResponder(verdict, rule, subject);
+
     return verdict;
   },
 
@@ -468,6 +890,28 @@ module.exports = {
     const dataDir = resolveDataDir(pathPluginFolder, custom);
     const instanceId = custom.instanceId || '';
 
+    // Il dispatcher va creato PRIMA di tutto ciò che può allertare: SentinelLog
+    // emette la soglia del budget disco già durante `init()`.
+    const alertConf = custom.alerts || {};
+    alerts = new AlertDispatcher({
+      log: (level, message) => log(level, message),
+      getRecipient: () => (custom && custom.alertRecipient) || null,
+      getMailer,
+      cooldownMinutes: alertConf.cooldownMinutes,
+    });
+
+    const canaryConf = custom.canary || {};
+    if (canaryConf.enabled !== false) {
+      canaryRegistry = new CanaryRegistry(canaryConf);
+    }
+
+    const sessionConf = custom.sessionCoherence || {};
+    if (sessionConf.enabled !== false) {
+      sessionCoherence = new SessionCoherence(sessionConf);
+    }
+
+    tarpit = new Tarpit(custom.tarpit || {});
+
     sentinelLog = new SentinelLog(dataDir, { ...(custom.log || {}), instanceId }, {
       log: (level, message) => log(level, message),
       onAlert: (payload) => sendAlert(payload),
@@ -495,7 +939,10 @@ module.exports = {
         try {
           fingerprintCensus.sweep();
           outcomeCensus.sweep();
+          if (canaryRegistry) canaryRegistry.sweep();
+          if (sessionCoherence) sessionCoherence.sweep();
           sentinelLog.enforceSizeBudget();
+          checkEvictionRate();
         } catch (err) {
           log('warn', `sweep fallito: ${err.message}`);
         }
@@ -576,6 +1023,12 @@ module.exports = {
         pendingLogEvents: sentinelLog ? sentinelLog.pendingSize() : 0,
         fingerprints: fingerprintCensus ? fingerprintCensus.getStats() : null,
         outcomes: outcomeCensus ? outcomeCensus.getStats() : null,
+        canary: canaryRegistry ? canaryRegistry.getStats() : null,
+        sessions: sessionCoherence ? sessionCoherence.getStats() : null,
+        tarpit: tarpit ? tarpit.getStats() : null,
+        drop: { dropped, degradedBehindProxy: dropDegraded },
+        reputation: custom.reputation || {},
+        alerts: alerts ? alerts.getStats() : null,
       }),
       getRuleSummary: () => (hitCounter ? hitCounter.getSummary() : []),
       getRuleNames: () => compiledRules.map((r) => r.name),
@@ -596,7 +1049,26 @@ module.exports = {
         appliesTo: r.appliesTo,
         enabled: r.enabled,
         escalatesTo: r.escalate ? r.escalate.rateLimiterRule : null,
+        // Una regola che bandisce al primo colpo non è "una regola con
+        // escalation": è un'altra cosa, e nella tabella del twin dev'essere
+        // visibile senza aprire il file.
+        bansImmediately: !!(r.escalate && r.escalate.ban),
       })),
+      /**
+       * Le regole come stanno SUL FILE, non compilate.
+       *
+       * `getRules()` restituisce ciò che il motore sta applicando, con il
+       * `match` compilato (Set, RegExp): perfetto per una tabella, inutilizzabile
+       * per un form, che deve mostrare esattamente ciò che l'amministratore ha
+       * scritto e riscriverlo senza trasformarlo. Rileggere il file è
+       * l'operazione giusta anche per un secondo motivo: un form popolato dalla
+       * versione compilata riscriverebbe `["php"]` dove c'era `"php"`.
+       */
+      getRulesSource: () => {
+        const rulesData = loadJson5(path.join(pluginFolder, 'sentinelRules.json5'));
+        return Array.isArray(rulesData.rules) ? rulesData.rules : [];
+      },
+
       getSuspectedScanners: (minPaths) => (outcomeCensus ? outcomeCensus.getSuspectedScanners(minPaths) : []),
       getConfig: () => JSON.parse(JSON.stringify(custom)),
 
@@ -616,13 +1088,21 @@ module.exports = {
         spec,
         isDebugMode ? loadRules() : compiledRules,
         matcher || new PatternMatcher(),
-        { salt: custom.fingerprintSalt || '', globalPrefix: ital8Conf.globalPrefix || '' },
+        {
+          salt: custom.fingerprintSalt || '',
+          globalPrefix: ital8Conf.globalPrefix || '',
+          // Con il registro vero, incollare nel tester l'URL di un canary appena
+          // scattato risponde alla domanda che si è appena posta chi lo incolla:
+          // «la mia regola trappola lo avrebbe preso?».
+          canaryRegistry,
+        },
       ),
 
       // ── Validazione (prima di un salvataggio dalla GUI) ──
       validateRules: (rulesData) => validateRules(rulesData, {
         knownRateLimiterRules: getRateLimiterRuleNames(),
         allowedRedirectHosts: Array.isArray(custom.allowedRedirectHosts) ? custom.allowedRedirectHosts : [],
+        behindProxy: custom.trustProxy === true,
       }),
 
       // ── Scrittura (usata dal twin adminSentinel) ──
@@ -647,6 +1127,51 @@ module.exports = {
           log('info', `regola "${ruleName}": ${result.previous} → ${action}`);
         }
         return result;
+      },
+
+      /**
+       * Sostituisce i campi di una regola (Vista C — form strutturato).
+       *
+       * ─── PERCHE SI VALIDA L'INSIEME E NON LA SINGOLA REGOLA ─────────────
+       * Alcune proprietà esistono solo a livello di file: un nome duplicato,
+       * una regola resa irraggiungibile da una `allow` che la precede. Validare
+       * la sola regola modificata lascerebbe passare proprio gli errori che
+       * nascono dal metterla insieme alle altre — e la GUI direbbe «salvato»
+       * mentre il motore scarta.
+       *
+       * Si sostituisce quindi la regola nella STRUTTURA già parsata, si valida
+       * il risultato con il validatore del motore, e solo se passa si tocca il
+       * testo su disco.
+       *
+       * ⚠ La scrittura riscrive il blocco testuale di QUELLA regola: i commenti
+       * scritti dentro di essa spariscono. Gli altri restano. L'interfaccia lo
+       * dichiara prima del salvataggio invece di lasciarlo scoprire dopo.
+       */
+      setRuleFields: (ruleName, fields) => {
+        const filePath = path.join(pluginFolder, 'sentinelRules.json5');
+        const rulesData = loadJson5(filePath);
+        const rules = Array.isArray(rulesData.rules) ? rulesData.rules : [];
+        const index = rules.findIndex((r) => r && r.name === ruleName);
+        if (index === -1) throw new Error(`regola non trovata: ${ruleName}`);
+
+        // Il nome non è modificabile: lega contatori, righe di log e promozioni.
+        const updated = { ...fields, name: ruleName };
+
+        const candidate = { ...rulesData, rules: rules.map((r, i) => (i === index ? updated : r)) };
+        const verdict = validateRules(candidate, {
+          knownRateLimiterRules: getRateLimiterRuleNames(),
+          allowedRedirectHosts: Array.isArray(custom.allowedRedirectHosts) ? custom.allowedRedirectHosts : [],
+          behindProxy: custom.trustProxy === true,
+        });
+        if (!verdict.valid) {
+          return { changed: false, valid: false, errors: verdict.errors, warnings: verdict.warnings };
+        }
+
+        replaceRule(filePath, ruleName, updated);
+        reloadRules();
+        log('info', `regola "${ruleName}" aggiornata dal form`);
+
+        return { changed: true, valid: true, errors: [], warnings: verdict.warnings };
       },
 
       /**
@@ -692,6 +1217,13 @@ function resolveDataDir(folder, conf) {
 /** Salvataggio finale allo spegnimento: nessun dato perso su un riavvio pulito. */
 function persistAll() {
   try {
+    // PRIMA di tutto il resto: `gracefulShutdown` aspetta che le connessioni
+    // finiscano, e un tarpit da trenta secondi trasformerebbe un riavvio in
+    // un'attesa di trenta secondi causata dalla propria difesa.
+    if (tarpit) {
+      const troncate = tarpit.abortAll();
+      if (troncate > 0) log('info', `spegnimento: ${troncate} connessione/i trattenute troncate`);
+    }
     if (sentinelLog) sentinelLog.flush();
     if (fingerprintCensus) fingerprintCensus.save();
     if (outcomeCensus) outcomeCensus.save();

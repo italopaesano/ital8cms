@@ -119,6 +119,61 @@ describe('csrfProtection · requestGuard.evaluate', () => {
     });
   });
 
+  // ── Ambito derivato ────────────────────────────────────────────────────────
+  // Non esiste un marcatore CSRF: l'ambito si legge dallo stesso `access` da cui
+  // la superficie riservata deriva il proprio perimetro. Una rotta nuova eredita
+  // il comportamento senza dichiarare nulla.
+  describe('ambito derivato da access (scope)', () => {
+    test('scopeOf mappa le dichiarazioni sui tre ambiti', () => {
+      expect(requestGuard.scopeOf({ requiresAuth: true })).toBe('authenticated');
+      expect(requestGuard.scopeOf({ requiresAuth: false, isAuthEntryPoint: true })).toBe('authEntryPoint');
+      expect(requestGuard.scopeOf({ requiresAuth: false })).toBe('public');
+      expect(requestGuard.scopeOf({})).toBe('public');
+    });
+
+    test('requiresAuth vince su isAuthEntryPoint se entrambi presenti', () => {
+      expect(requestGuard.scopeOf({ requiresAuth: true, isAuthEntryPoint: true })).toBe('authenticated');
+    });
+
+    test('senza access dichiarato non si inventa un ambito', () => {
+      expect(requestGuard.scopeOf(undefined)).toBeNull();
+      expect(requestGuard.scopeOf(null)).toBeNull();
+      expect(requestGuard.scopeOf('authenticated')).toBeNull();
+      // ...e il verdetto resta privo del campo, invece di dichiarare il falso
+      expect(requestGuard.evaluate(validPostCtx(), baseCustom(), matcher)).toEqual({ ok: true });
+    });
+
+    test('l\'ambito accompagna i verdetti positivi, negativi e gli skip', () => {
+      const access = { requiresAuth: false, isAuthEntryPoint: true };
+
+      expect(requestGuard.evaluate(validPostCtx(), baseCustom(), matcher, access))
+        .toEqual({ ok: true, scope: 'authEntryPoint' });
+
+      const noToken = validPostCtx({ headers: { origin: 'http://localhost:3000' } });
+      expect(requestGuard.evaluate(noToken, baseCustom(), matcher, access))
+        .toMatchObject({ ok: false, reason: 'missing_or_invalid_token', scope: 'authEntryPoint' });
+
+      const get = createCtxMock({ method: 'GET', path: '/x' });
+      expect(requestGuard.evaluate(get, baseCustom(), matcher, access))
+        .toMatchObject({ ok: true, skipped: 'non-mutating', scope: 'authEntryPoint' });
+    });
+
+    // POLICY ATTUALE (sicura per default): l'ambito classifica, non esenta.
+    // Se un domani `public` verrà rilassato, è questo test a doverlo dire.
+    test('tutti e tre gli ambiti sono protetti allo stesso modo', () => {
+      const senzaToken = { method: 'POST', path: '/api/x', session: {}, headers: { origin: 'http://localhost:3000' } };
+      for (const access of [
+        { requiresAuth: true },
+        { requiresAuth: false, isAuthEntryPoint: true },
+        { requiresAuth: false },
+      ]) {
+        const verdict = requestGuard.evaluate(createCtxMock(senzaToken), baseCustom(), matcher, access);
+        expect(verdict.ok).toBe(false);
+        expect(verdict.reason).toBe('missing_or_invalid_token');
+      }
+    });
+  });
+
   describe('helper interni', () => {
     test('isMutatingMethod normalizza DEL→DELETE e ignora GET', () => {
       expect(requestGuard.isMutatingMethod('post', ['POST'])).toBe(true);
