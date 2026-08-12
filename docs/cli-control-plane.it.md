@@ -442,13 +442,33 @@ che restano usabili anche singolarmente.
 Resta pienamente funzionante tutto ciò che è pubblico: pagine, form contatti,
 `mailer`, `csrfProtection`, `rateLimiter`, i18n, SEO.
 
-> ⚠️ **Terzo passo ancora mancante: il directory listing.** Spegnere il listing di
-> `/www` fa parte del progetto dell'assetto vetrina — un listing pubblico rivela
-> nomi di file, bozze e materiale non linkato — ma è **bloccato da un bug di
-> `koa-classic-server` v5.1.0**: disabilitare il listing fa rispondere **404 alla
-> radice del sito** anche quando un file indice è configurato ed esiste. Poiché il
-> modulo è mantenuto dal team, il passo verrà aggiunto **dopo la release corretta**
-> invece di essere aggirato (vedi [`TODO.md`](../TODO.md) → *Dipendenze*).
+### Il directory listing non è (e non sarà) un passo di questa macro
+
+Un elenco pubblico rivela nomi di file, bozze e materiale non linkato, quindi
+spegnerlo in assetto vetrina sembra ovvio — e infatti faceva parte del progetto
+iniziale. **È stato tolto deliberatamente**, e non per il bug di
+`koa-classic-server` che a lungo lo bloccava: quello è corretto dalla **v5.2.0**.
+
+`enableAdmin` e la superficie riservata sono **stato di superficie**: esistono solo
+dentro il dominio di questa macro, sono già comandabili singolarmente e sono
+pienamente reversibili. `dirListing.wwwPath` è invece una **preferenza del sito**,
+della stessa famiglia di `hideExtension` e `browserCacheEnabled`, e non esiste alcun
+comando `listing on|off` di cui `publicOnly` sarebbe la composizione.
+
+Una macro reversibile che modifica in modo permanente una chiave che non possiede ha
+solo brutte uscite: o non la ripristina — e allora `off` non riporta l'installazione
+dov'era, con una modifica silenziosa e definitiva che `status` nemmeno riporta —
+oppure la ripristina a un valore fisso, e allora può **accendere** l'elenco su un
+sito dove l'amministratore l'aveva spento apposta. La seconda è una regressione di
+sicurezza causata dal ripristino.
+
+Quindi: **la chiave vale quello che dice il file, sempre.** Nessun comando la tocca.
+
+> 💡 Non c'è comunque nulla da fare in assetto vetrina: il default di
+> `ital8Config.json5 → dirListing.wwwPath` è **`false`**. Spegnere l'elenco è giusto
+> in produzione a prescindere dall'assetto — con `true` la radice di un sito senza
+> `index.ejs` diventa essa stessa un elenco, e `/media/` enumera per nome ogni file
+> caricato. L'accesso diretto ai file non cambia in nessuno dei due casi.
 
 ## `reset <target>` (config di plugin/temi)
 

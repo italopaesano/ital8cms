@@ -304,14 +304,30 @@ async function handleReset(ctx, request) {
 //   on  → reserved stop + admin stop
 //   off → reserved start + admin start
 //
-// ⚠ TERZO PASSO MANCANTE — spegnere il directory listing pubblico faceva parte
-// del progetto, ma e' BLOCCATO da un bug di koa-classic-server v5.1.0: in
-// index.cjs la ricerca del file indice vive dentro il ramo
-// `if (options.dirListing.enabled)`, quindi disabilitare il listing fa
-// rispondere 404 alla radice del sito anche con `index: ["index.ejs"]`
-// configurato e il file presente. Il modulo e' mantenuto dal team: il passo
-// verra' aggiunto qui dopo la release corretta, non aggirato.
-// Vedi TODO.md §Dipendenze e index.js (static server di /www).
+// PERCHE NON C'E UN TERZO PASSO SUL DIRECTORY LISTING — spegnere l'elenco di
+// `/www` faceva parte del progetto iniziale di questo assetto. E' stato tolto
+// deliberatamente, e non per il bug di koa-classic-server che lo bloccava (quello
+// e' corretto dalla 5.2.0).
+//
+// I due passi qui sotto toccano STATO DI SUPERFICIE: `enableAdmin` e la superficie
+// riservata esistono solo dentro il dominio di questa macro, sono gia comandabili
+// singolarmente (`admin start|stop`, `reserved start|stop`) e sono pienamente
+// reversibili. `dirListing.wwwPath` e' di natura diversa: e' una PREFERENZA DEL
+// SITO, della stessa famiglia di `hideExtension` e `browserCacheEnabled`, e non
+// esiste alcun comando `listing on|off` di cui questa macro sia la composizione.
+//
+// Una macro reversibile che modifica in modo permanente una chiave che non possiede
+// ha solo brutte uscite: o non la ripristina — e allora `off` non riporta
+// l'installazione dov'era, con un edit silenzioso e definitivo che `status`
+// nemmeno riporta — oppure la ripristina a un valore fisso, e allora puo'
+// ACCENDERE l'elenco su un sito dove l'amministratore l'aveva spento apposta.
+// La seconda e' una regressione di sicurezza causata dal ripristino.
+//
+// Quindi la chiave vale quello che dice il file, sempre: nessun comando la tocca.
+// Il default e' comunque `false` (vedi ital8Config.default.json5), percio' un sito
+// vetrina non ha nulla da fare — e spegnere l'elenco e' giusto in produzione a
+// prescindere dall'assetto, non un corollario di questa macro.
+// Vedi docs/cli-control-plane.it.md → "Assetto sito vetrina".
 async function handlePublicOnly(ctx, turnOn) {
   const { configPath, requestRestart } = ctx;
   const action = `publicOnly.${turnOn ? 'on' : 'off'}`;

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 4,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 5,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
 
   // ── Migrazioni dei file di configurazione ──────────────────────────────────
   // Quando un plugin/tema evolve la struttura dei suoi config, la cartella
@@ -288,6 +288,26 @@
     "wwwPath":           ["index.ejs"],
     "pluginPagesPrefix": ["index.ejs"],
     "adminPrefix":       ["index.ejs"]
+  },
+
+  // Elenco automatico del contenuto di una directory che NON ha un file indice.
+  //
+  // Default `false`, ed è una scelta ragionata: con l'elenco acceso la radice di
+  // un sito senza `index.ejs` diventa essa stessa un elenco, e `/media/` enumera
+  // per nome ogni file caricato — la cartella media sta sotto `wwwPath` e non è
+  // fra le `urlsReserved` del server statico di `/www`, quindi ci ricade per
+  // costruzione. Sono nomi di bozze, allegati e materiale non linkato: informazione
+  // che non si intendeva pubblicare, esposta senza che nessuno l'abbia deciso.
+  //
+  // Con `false` una directory senza indice risponde 404. L'accesso DIRETTO ai file
+  // non cambia: `/media/2026/foto.jpg` continua a funzionare, e il plugin `media`
+  // (che serve per path) non se ne accorge.
+  //
+  // Mettilo a `true` se usi `/www` anche come cartella di scarico da sfogliare.
+  // Nessun comando della CLI tocca questa chiave: `publicOnly` compone leve di
+  // superficie, questa è una preferenza del sito e resta come la scrivi qui.
+  "dirListing": {
+    "wwwPath": false
   },
 
   "globalFunctionsWhitelist": {

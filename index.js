@@ -425,14 +425,16 @@ async function startApp() {
       (opt = {
         index: ital8Conf.indexFiles.wwwPath,
         urlPrefix: `${ital8Conf.globalPrefix}`,
-        // ⚠ BLOCCATO da un bug di koa-classic-server v5.1.0 — vedi TODO.md §Dipendenze.
-        // Rendere questo valore configurabile (per spegnere il listing in produzione e
-        // nell'assetto `publicOnly`) e' pronto ma NON attivabile: in index.cjs la
-        // ricerca del file indice vive DENTRO il ramo `if (options.dirListing.enabled)`,
-        // quindi `enabled: false` risponde 404 alla radice del sito anche quando
-        // `index: ["index.ejs"]` e' configurato e il file esiste. Riattivare qui la
-        // lettura da `ital8Conf.dirListing.wwwPath` dopo la release corretta del modulo.
-        dirListing: { enabled: true },
+        // Elenco automatico di una directory senza file indice. Richiede
+        // koa-classic-server >= 5.2.0: fino alla 5.1.0 la ricerca del file indice
+        // viveva DENTRO il ramo `if (options.dirListing.enabled)`, quindi spegnere
+        // l'elenco faceva rispondere 404 anche alla radice del sito con
+        // `index: ["index.ejs"]` configurato e il file presente. Corretto nel modulo
+        // (mantenuto dal team) invece di essere aggirato qui.
+        //
+        // Assente → SPENTO, coerente col default del config: una chiave di sicurezza
+        // non deve accendersi per omissione. Solo un `true` esplicito accende.
+        dirListing: { enabled: ital8Conf.dirListing?.wwwPath === true },
         // urlsReserved è RELATIVO a urlPrefix: koa-classic-server toglie prima urlPrefix
         // dalla richiesta, poi confronta il PRIMO segmento rimanente con questi valori.
         // Quindi NON includere globalPrefix qui (urlPrefix lo contiene già): se i reserved

@@ -120,6 +120,17 @@ Fonte: intervento v2.64.0 (canonizzazione del `.default`).
       `setJson5Key` senza duplicarlo. Rinominabile senza impatto esterno.
 - [ ] **Riempire gli stub `.md` inglesi** (plugin, temi, core EXPLAIN, guide) alla
       prima pubblicazione importante. *(Fonte: `docs/roadmap.it.md`.)*
+- [ ] **Pagina segnaposto di primo avvio per `/www`.** Su un'installazione
+      `production` pulita `www/` è vuota per progetto (git-ignored, il wizard non ci
+      mette nulla: «www vuota» è una scelta dichiarata in `scripts/init.js`). Da
+      quando `dirListing.wwwPath` è `false` di default, `GET /` risponde **404**: più
+      onesto di prima — l'elenco mostrava `.gitkeep` — ma il primo avvio perde il suo
+      «funziona!» accidentale, e un 404 alla radice si legge come «è rotto».
+      Da valutare: un `index.ejs` di benvenuto seminato dal wizard nel solo profilo
+      `production` (il profilo `demo` già popola `www` da `.demoData/`), oppure una
+      pagina di cortesia servita solo quando `www` è priva di indice.
+      *Fonte: emerso riattivando `dirListing` dopo la release 5.2.0 di
+      `koa-classic-server`.*
 
 ## 5. Testing
 
@@ -200,19 +211,34 @@ Fonte: intervento *superficie riservata / assetto vetrina*.
         /senza-indice/ (nessun indice)   —       404 ✅ (nessun listing: lo switch fa
                                                          ancora il suo mestiere)
 
-**Restano da riattivare** le tre parti già pronte e volutamente disattivate:
+**Riattivazione completata**, con una deviazione dal progetto originale:
 
-- [ ] `index.js`, static server di `/www`: tornare a
-      `dirListing: { enabled: ital8Conf.dirListing?.wwwPath !== false }` (oggi `true` fisso)
-- [ ] `ital8Config.default.json5`: reintrodurre la chiave `dirListing: { wwwPath: true }`
-      (+ bump di `schemaVersion` 4 → 5). Aggiunta **top-level**, quindi il merge additivo
-      del boot la propaga alle installazioni esistenti: nessuna migrazione necessaria.
-- [ ] `core/cliBridge/handlers.js` → `handlePublicOnly`: reintrodurre il terzo passo
-      (`setJson5Key(configPath, ['dirListing','wwwPath'], false)`, solo su `on`;
-      `off` **non** lo riaccende) e rimettere `dirListingChanged` nel calcolo di
-      `needsRestart`
-- [ ] `docs/cli-control-plane.it.md` (§*Assetto sito vetrina*, l'avviso a riga ~445):
-      sostituire l'avviso con il comportamento reale
+- [x] `index.js`, static server di `/www`: legge la chiave invece del `true` cablato.
+      Forma scelta: `ital8Conf.dirListing?.wwwPath === true` (non `!== false`) — chiave
+      assente ⇒ spento, coerente col default: una chiave di sicurezza non si accende
+      per omissione.
+- [x] `ital8Config.default.json5`: chiave `dirListing: { wwwPath: false }`,
+      `schemaVersion` 4 → 5. **Default `false`, non `true`**: con l'elenco acceso la
+      radice di un sito senza `index.ejs` è essa stessa un elenco e `/media/` enumera
+      ogni file caricato (misurato). Aggiunta top-level ⇒ il merge additivo la propaga
+      alle installazioni esistenti, nessuna migrazione.
+- [x] ~~`handlePublicOnly`: terzo passo~~ → **NON si fa, ed è la decisione**. `admin` e
+      `reserved` sono *stato di superficie*; `dirListing.wwwPath` è una *preferenza del
+      sito* che la macro non possiede. Una macro reversibile che modifica in modo
+      permanente una chiave altrui o non la ripristina (e `off` non riporta
+      l'installazione dov'era) o la ripristina a un valore fisso (e può **accendere**
+      l'elenco dove era stato spento apposta). Il default `false` rende comunque il
+      passo inutile in vetrina. Motivazione scritta nel codice e nel doc.
+- [x] `docs/cli-control-plane.it.md`: l'avviso è diventato la spiegazione del perché
+      quel passo non esiste.
+- [x] `tests/integration/dirListing.test.js` (+8): entrambi i valori, su server reale,
+      interrogando sia directory **con** indice sia **senza** — «l'indice è tornato» e
+      «l'elenco è stato riacceso» sono esiti diversi e solo il primo è voluto.
+
+**Conseguenza da valutare a parte:** su un'installazione `production` pulita `www/` è
+vuota per progetto (git-ignored, il wizard non ci mette nulla), quindi ora `GET /`
+risponde **404** invece dell'elenco di `.gitkeep`. Più onesto, ma il primo avvio perde
+il suo "funziona!" accidentale. Vedi §4 → *pagina segnaposto di primo avvio*.
 
 **Root cause** — in `node_modules/koa-classic-server/index.cjs`, ramo directory:
 

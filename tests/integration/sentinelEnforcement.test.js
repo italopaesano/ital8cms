@@ -487,11 +487,17 @@ describe('sentinel — drop e tarpit', () => {
   test('il sito continua a rispondere mentre un tarpit è in corso', async () => {
     // La verifica che conta: il tarpit non deve bloccare l'event loop. Se lo
     // facesse, la difesa fermerebbe il sito invece dell'attaccante.
+    //
+    // La sonda NON è `/`: `www/` è git-ignored e su un clone pulito è vuota,
+    // quindi la radice non ha un file indice. Rispondeva 200 solo perché serviva
+    // l'ELENCO della directory — un 200 accidentale, che è sparito quando
+    // `dirListing.wwwPath` è diventato `false` di default. Serve una pagina che
+    // esista sempre nel repository: quella di login lo è, ed è pubblica.
     const trattenuta = httpGet('/zzz-tarpit');
     await sleep(200);
 
     const startedAt = Date.now();
-    const normale = await httpGet('/');
+    const normale = await httpGet('/pluginPages/adminUsers/login.ejs');
     expect(Date.now() - startedAt).toBeLessThan(1000);
     expect(normale.status).toBe(200);
 
