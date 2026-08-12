@@ -182,23 +182,37 @@ Fonte: `docs/roadmap.it.md` punto 16 — aggiornamenti rinviati dal bulk del 202
       cambi di ABI) con install e test mirati.
       *Escluso dagli update di routine per policy (CLAUDE.md regola 12).*
 
-### 🐞 `koa-classic-server` v5.1.0 — `dirListing.enabled: false` disabilita anche la risoluzione del file indice
+### 🐞 `koa-classic-server` — `dirListing.enabled: false` disabilitava anche la risoluzione del file indice → **CORRETTO in v5.2.0**
 
 Fonte: intervento *superficie riservata / assetto vetrina*.
-**Dipendenza mantenuta dal team → da correggere nel modulo, NON da aggirare (CLAUDE.md regola 4).**
+**Dipendenza mantenuta dal team → corretta nel modulo, NON aggirata (CLAUDE.md regola 4).**
 
-- [ ] **Segnalare al maintainer** (Italo Paesano) e attendere la release corretta.
-- [ ] Dopo il fix: `npm install koa-classic-server@<versione>`, poi **riattivare** le
-      due parti già pronte e volutamente disattivate:
-  - [ ] `index.js`, static server di `/www`: tornare a
-        `dirListing: { enabled: ital8Conf.dirListing?.wwwPath !== false }`
-  - [ ] `ital8Config.default.json5`: reintrodurre la chiave `dirListing: { wwwPath: true }`
-        (+ bump di `schemaVersion` 4 → 5)
-  - [ ] `core/cliBridge/handlers.js` → `handlePublicOnly`: reintrodurre il terzo passo
-        (`setJson5Key(configPath, ['dirListing','wwwPath'], false)`, solo su `on`;
-        `off` **non** lo riaccende) e rimettere `dirListingChanged` nel calcolo di
-        `needsRestart`
-  - [ ] `docs/cli-control-plane.it.md`: sostituire l'avviso con il comportamento reale
+- [x] **Segnalato al maintainer** (Italo Paesano) → **release `5.2.0`**.
+- [x] `npm install koa-classic-server@5.2.0` (`package.json` → `^5.2.0`). Suite completa verde.
+- [x] **Fix verificato in entrambe le direzioni** con una riproduzione mirata, prima sulla
+      5.1.0 e poi sulla 5.2.0 (cartella con indice + cartella senza, così si distingue
+      «l'indice è tornato» da «il listing è stato riacceso», che sarebbe una regressione):
+
+      dirListing.enabled: false        5.1.0    5.2.0
+        /            (con indice)       404  →   200 ✅
+        /sotto/      (con indice)       404  →   200 ✅
+        /pagina.ejs  (file diretto)     200      200
+        /senza-indice/ (nessun indice)   —       404 ✅ (nessun listing: lo switch fa
+                                                         ancora il suo mestiere)
+
+**Restano da riattivare** le tre parti già pronte e volutamente disattivate:
+
+- [ ] `index.js`, static server di `/www`: tornare a
+      `dirListing: { enabled: ital8Conf.dirListing?.wwwPath !== false }` (oggi `true` fisso)
+- [ ] `ital8Config.default.json5`: reintrodurre la chiave `dirListing: { wwwPath: true }`
+      (+ bump di `schemaVersion` 4 → 5). Aggiunta **top-level**, quindi il merge additivo
+      del boot la propaga alle installazioni esistenti: nessuna migrazione necessaria.
+- [ ] `core/cliBridge/handlers.js` → `handlePublicOnly`: reintrodurre il terzo passo
+      (`setJson5Key(configPath, ['dirListing','wwwPath'], false)`, solo su `on`;
+      `off` **non** lo riaccende) e rimettere `dirListingChanged` nel calcolo di
+      `needsRestart`
+- [ ] `docs/cli-control-plane.it.md` (§*Assetto sito vetrina*, l'avviso a riga ~445):
+      sostituire l'avviso con il comportamento reale
 
 **Root cause** — in `node_modules/koa-classic-server/index.cjs`, ramo directory:
 
