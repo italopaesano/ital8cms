@@ -838,12 +838,32 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
     "adminPrefix":        { "enabled": false, "ext": ".ejs" }
   },
 
+  // Elenco automatico di una directory senza file indice (richiede koa-classic-server 5.2.0+)
+  "dirListing": {
+    "wwwPath": false                // default false: vedi "Directory listing" sotto
+  },
+
   // Priority Middlewares Configuration
   "priorityMiddlewares": {
     "session": true             // Optional middleware (true=enabled, false=disabled)
   }
 }
 ```
+
+### Directory listing (`dirListing.wwwPath`)
+
+Elenco automatico del contenuto di una directory di `/www` che **non ha un file indice**. Richiede `koa-classic-server` **5.2.0+**: fino alla 5.1.0 la risoluzione del file indice viveva dentro il ramo dell'elenco, quindi spegnerlo faceva rispondere 404 anche alla radice del sito (bug corretto nel modulo, non aggirato — regola 4).
+
+**Default `false`.** Con l'elenco acceso la radice di un sito senza `index.ejs` diventa essa stessa un elenco, e `/media/` enumera per nome ogni file caricato: la cartella media sta sotto `wwwPath` e non è fra le `urlsReserved` del server statico di `/www`, quindi ci ricade per costruzione. Sono nomi di bozze, allegati e materiale non linkato.
+
+| Valore | Directory **con** indice | Directory **senza** indice | File diretto |
+|---|---|---|---|
+| `false` (default) | serve l'indice | **404**, nessun elenco | invariato |
+| `true` | serve l'indice | elenco | invariato |
+
+La chiave assente equivale a `false`: solo un `true` esplicito accende (`ital8Conf.dirListing?.wwwPath === true` in `index.js`) — una chiave di sicurezza non deve accendersi per omissione.
+
+> ⚠️ **Nessun comando della CLI tocca questa chiave**, `publicOnly` incluso. `admin` e `reserved` sono *stato di superficie*, comandabile e reversibile; `dirListing.wwwPath` è una *preferenza del sito* che appartiene all'amministratore. Una macro reversibile che modifica in modo permanente una chiave che non possiede o non la ripristina (e allora `off` non riporta l'installazione dov'era) o la ripristina a un valore fisso (e allora può **accendere** l'elenco dove era stato spento apposta). Vedi [`docs/cli-control-plane.it.md`](./docs/cli-control-plane.it.md) → *Assetto sito vetrina*.
 
 ### Hide Extension (Clean URLs)
 
