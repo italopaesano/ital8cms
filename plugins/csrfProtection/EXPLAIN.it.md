@@ -100,6 +100,7 @@ E2E helper in `tests/e2e/csrfHelper.js` (estrazione token + `postWithCsrf`). I t
 ## Limitazioni e sviluppi futuri
 
 - [x] **Twin admin `adminCsrfProtection`** — GUI (Data view + editor JSON5) — *implementato*.
+- [ ] **Il `403` è una firma dello stack.** `POST /api/adminUsers/login` senza token risponde `403 CSRF validation failed`: a uno scanner dice «questo endpoint esiste ed è protetto da un synchronizer token», cioè più di quanto direbbe un login fallito. È in tensione con la postura del resto del progetto — il 404 di `reservedGate` è presidiato da un test byte-per-byte proprio per non far trapelare nulla, e da v2.81.0 nemmeno il `Set-Cookie` distingue più un blocco da un 404 autentico. Non è una svista di questo plugin (il `403` è il default sensato di un layer CSRF), ma va deciso: rispondere come farebbe la rotta senza token — cioè un login fallito — costerebbe la diagnosticabilità, che è esattamente ciò che rende utile la GUI di audit. Le due cose non si sommano, va scelta una. *Emerso nell'analisi di v2.81.0.*
 - [ ] **Rotazione del token per-richiesta** (oggi per-sessione) come modalità opt-in più stretta.
 - [ ] **Prefisso cookie `__Host-`** come opt-in per deployment solo-HTTPS.
 - [ ] **Delivery CSP-friendly** — opzione per servire l'interceptor come script esterno (per `Content-Security-Policy` strette senza script inline).

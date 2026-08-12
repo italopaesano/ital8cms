@@ -279,6 +279,55 @@ Le due correzioni:
 
 ---
 
+### Aperto — `fingerprintChanged` mente per costruzione
+
+Emerso analizzando l'interazione fra sentinel e `csrfProtection` (v2.81.0). Non
+è un bug con un sintomo: è una foglia che **non può funzionare come promette**,
+e oggi non fa danno solo perché la regola distribuita non la usa.
+
+`sessionCoherence` fissa una linea di base al primo avvistamento di una sessione
+autenticata e la confronta con ogni richiesta successiva. Ma l'impronta descrive
+la **forma di una richiesta**, non il client: una navigazione e una `fetch` dallo
+stesso identico browser hanno `accept` diverso e `upgrade-insecure-requests`
+presente solo nella prima, quindi impronte diverse. Misurato, stesso Chrome:
+
+```
+navigazione            fp = 3ba1e6a0…
+fetch POST  CON csrf   fp = 8ef61e86…
+fetch POST SENZA csrf  fp = 51a933d8…
+```
+
+Tutte e tre diverse. Ne segue che **ogni sessione admin che mescoli navigazioni
+e AJAX — cioè ogni sessione admin — produce `fingerprintChanged` di continuo**, e
+la linea di base non si aggiorna mai, quindi la marcatura resta fino al logout.
+
+Perché non è innocuo pur non essendo attivo:
+- la regola `session-hijack-signal` usa `uaChanged` e `scriptClient`, ma la sua
+  **descrizione invita** ad aggiungere altre anomalie. Chi aggiunge
+  `fingerprintChanged` e promuove la regola a `block` si chiude fuori dal proprio
+  pannello alla prima POST;
+- i contatori che l'amministratore guarda per decidere se promuovere
+  (`byKind.fingerprintChanged`, `flagged`) sono gonfiati da rumore strutturale.
+  Un semaforo che segna rosso sempre non è un semaforo.
+
+Non è una correzione: è una **domanda di progetto**, e le risposte plausibili si
+escludono a vicenda.
+
+- [ ] Decidere fra: (a) **linea di base per forma di richiesta** — una per le
+      navigazioni, una per le AJAX, confrontando ciascuna con la propria;
+      (b) **confronto sulla sola `fpClass`** invece che sull'hash — `family`,
+      `claimedBrowser`, `claimedOs` non cambiano fra navigazione e fetch, e il
+      segnale che interessa («la sessione è passata da browser a script») vive lì;
+      (c) **rimuovere `fingerprintChanged`** e lasciare `scriptClient`, che già
+      copre il caso che conta senza il rumore.
+- [ ] `x-csrf-token` fra i `VOLATILE_HEADERS` di `requestFingerprint`: toglie *una*
+      delle divergenze e va fatto comunque, ma da solo **non** risolve — la
+      divergenza navigazione/fetch resta.
+- [ ] Finché non è deciso: la descrizione della regola distribuita non dovrebbe
+      invitare ad aggiungere `fingerprintChanged` senza un avvertimento.
+
+---
+
 ### Trasversali, da fare quando servono e non come passo a sé
 
 | Voce | Quando |
