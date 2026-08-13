@@ -44,10 +44,16 @@
 /**
  * I tre giudizi, in ordine di gravità.
  *
- * `burst` non è un giudizio sulla storia — è l'assenza di storia unita alla
- * fretta: un'impronta mai vista che nei primi secondi ha già fatto decine di
- * richieste. Sta qui perché si ricava dagli stessi dati e perché in una regola
- * si usa allo stesso modo.
+ * `burst` non guarda la storia — guarda la sua assenza unita alla fretta: un
+ * impronta mai vista che nei primi secondi ha già fatto decine di richieste.
+ *
+ * Resta però un GIUDIZIO NEGATIVO come gli altri due, e la distinzione ha
+ * importanza perché per un periodo ha portato fuori strada: si era ragionato che
+ * «una constatazione di cadenza non condanna nessuno da sola», e su quella base
+ * `burst` era stato lasciato fuori dalla protezione delle impronte condivise.
+ * Ma in una regola `burst` si usa esattamente come gli altri —
+ * `match: { reputation: ['burst'] }, action: 'block'` è la forma che il file di
+ * regole distribuito suggerisce — quindi condanna eccome, e da solo.
  */
 const LEVELS = ['burst', 'suspect', 'bad'];
 
@@ -100,21 +106,35 @@ function classify(entry, fpClass, config = {}) {
 
   const levels = [];
 
-  // ── burst: comparsa adesso, e già a raffica ──
-  // Un client legittimo nuovo carica una pagina e le sue risorse: qualche
-  // richiesta. Decine nei primi secondi da un'impronta mai vista prima non è il
-  // profilo di una visita, è il profilo di una scansione.
-  if (ageSeconds <= conf.burstWindowSeconds && requests >= conf.burstMinRequests) {
-    levels.push('burst');
-  }
+  // La protezione delle impronte condivise copre TUTTI i livelli, `burst`
+  // compreso: è una guardia sola perché la promessa in testa a questo file è una
+  // sola — «un'impronta coerente e con profilo da browser non può ricevere un
+  // giudizio negativo».
+  //
+  // Su `burst` la protezione è anzi quella che serve di più, perché lì scatta da
+  // sé senza bisogno di una storia sporca: su un'installazione nuova il PRIMO
+  // visitatore reale carica una pagina e i suoi asset — decine di richieste in
+  // pochi secondi, tutte sotto l'unica impronta condivisa del suo browser, mai
+  // vista prima per definizione. Con `burst` fuori dalla guardia, una regola
+  // `reputation: ['burst']` chiudeva fuori ogni utente di quel browser al primo
+  // giorno di vita del sito.
+  if (!protectedFp) {
+    // ── burst: comparsa adesso, e già a raffica ──
+    // Un client legittimo nuovo carica una pagina e le sue risorse: qualche
+    // richiesta. Decine nei primi secondi da un'impronta mai vista prima non è il
+    // profilo di una visita, è il profilo di una scansione.
+    if (ageSeconds <= conf.burstWindowSeconds && requests >= conf.burstMinRequests) {
+      levels.push('burst');
+    }
 
-  // ── suspect / bad: la storia dei blocchi ──
-  // Sotto `minRequests` non si giudica: una quota calcolata su tre richieste è
-  // rumore, e condannare per rumore è esattamente come si ottengono i falsi
-  // positivi che questo plugin è costruito per evitare.
-  if (!protectedFp && requests >= conf.minRequests) {
-    if (blockedShare >= conf.badShare) levels.push('bad');
-    else if (blockedShare >= conf.suspectShare) levels.push('suspect');
+    // ── suspect / bad: la storia dei blocchi ──
+    // Sotto `minRequests` non si giudica: una quota calcolata su tre richieste è
+    // rumore, e condannare per rumore è esattamente come si ottengono i falsi
+    // positivi che questo plugin è costruito per evitare.
+    if (requests >= conf.minRequests) {
+      if (blockedShare >= conf.badShare) levels.push('bad');
+      else if (blockedShare >= conf.suspectShare) levels.push('suspect');
+    }
   }
 
   return { levels, requests, blockedShare: Math.round(blockedShare * 1000) / 1000, ageSeconds, protected: protectedFp };

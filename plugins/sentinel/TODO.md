@@ -309,7 +309,7 @@ certo, locale e già dannoso; poi il cuore del motore; le decisioni per ultime.
 | # | Step | Rilievi | Rischio | Perché lì |
 |---|---|---|---|---|
 | ~~**C1**~~ ✅ | ~~Le azioni che non mantengono il contratto~~ | 3 | basso | Locali e indipendenti, ma **agivano male** su chi aveva già acceso `enforce` |
-| **C2** | Il giudizio non deve toccare le impronte condivise | 1 | basso | Una riga, chiude una promessa scritta a caratteri cubitali |
+| ~~**C2**~~ ✅ | ~~Il giudizio non deve toccare le impronte condivise~~ | 1 | basso | Una riga, chiude una promessa scritta a caratteri cubitali |
 | **C3** | Decoy: perimetro di scrittura e contesto di escape | 2 | basso | Nessuno tocca il percorso delle richieste normali |
 | **C4** | L'identità del client dietro proxy | 1 | medio | Cambia la chiave di ban, censimento ed escalation: va misurato |
 | **C5** | La catena delle migrazioni | 1 | basso | Nessun codice a runtime, ma sblocca le installazioni esistenti |
@@ -365,9 +365,9 @@ che intende.
       codice bloccava. Ora dice cosa fa davvero, incluse le due conseguenze
       (`enforced: false`, niente `escalate.ban`)
 
-#### C2 — Il giudizio non deve toccare le impronte condivise
+#### C2 — Il giudizio non deve toccare le impronte condivise ✅
 
-- [ ] **`burst` è fuori dalla guardia `protectBrowserFingerprints`** *(verificato)*.
+- [x] **`burst` è fuori dalla guardia `protectBrowserFingerprints`** *(verificato)*.
       `levels.push('burst')` non è protetto, mentre `suspect`/`bad` lo sono. Al
       primo visitatore reale una pagina con i suoi asset produce decine di
       richieste in secondi sotto l'unica impronta condivisa «Chrome su Linux» →
@@ -375,8 +375,28 @@ che intende.
       regole distribuito — chiude fuori ogni utente di quel browser. È il caso che
       l'intestazione di `reputation.js` dichiara impossibile.
 
-Accettazione: un test che classifica un'impronta da browser con `requests` sopra
-la soglia e `ageSeconds` sotto la finestra, e pretende `levels: []`.
+**Esito.** Come per la cache dell'impronta (C7), **c'era un test che difendeva il
+difetto**: `'la protezione non tocca burst'`, motivato con «`burst` non è un
+giudizio sulla condotta ma una constatazione di cadenza, e non condanna nessuno da
+solo». È il ragionamento che aveva lasciato `burst` fuori dalla guardia, e non
+regge: in una regola `burst` si usa come gli altri livelli, e
+`match: { reputation: ['burst'] }, action: 'block'` è proprio la forma che il file
+di regole distribuito suggerisce.
+
+La guardia è ora una sola attorno a tutti e tre i livelli, perché la promessa in
+testa al file è una sola. La documentazione non andava corretta — README e
+`pluginConfig.default.json5` promettevano già che un'impronta da browser non
+riceve **mai** un giudizio negativo: era il codice a non mantenerlo. Vi ho aggiunto
+solo la menzione esplicita di `burst`, perché un lettore che ricorda il vecchio
+comportamento non resti nel dubbio.
+
+- [x] Guardia unica attorno a burst + suspect/bad
+- [x] Riscritto il test che asseriva il comportamento difettoso
+- [x] Test dello scenario reale: primo visitatore di un sito nuovo, 42 richieste
+      in 3 secondi da impronta browser → `levels: []`; stesso traffico da impronta
+      script → `burst`
+- [x] Test che la disattivazione esplicita riaccende burst anche sui browser
+- [x] Verificato che **2 test falliscono** ripristinando il difetto
 
 #### C3 — Decoy: perimetro di scrittura e contesto di escape
 

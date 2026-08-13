@@ -578,6 +578,12 @@ una condizione utilizzabile in una regola.
 | `suspect` | Quota di blocchi oltre `suspectShare` (default 20%) |
 | `bad` | Quota di blocchi oltre `badShare` (default 50%) |
 
+Tutti e tre sono **giudizi negativi**, e la protezione dell'avvertenza 1 qui sotto
+li copre tutti — `burst` compreso, dove anzi serve di più: scatta senza bisogno di
+una storia sporca, quindi su un sito appena installato il primo visitatore vero
+(una pagina e i suoi asset, decine di richieste in pochi secondi, impronta mai
+vista per definizione) lo farebbe scattare da solo.
+
 ```json5
 {
   name: "known-bad-fingerprint",

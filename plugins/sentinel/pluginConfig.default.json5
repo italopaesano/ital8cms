@@ -299,6 +299,10 @@
       "burstWindowSeconds": 60,
       "burstMinRequests": 30,
 
+      // Copre TUTTI E TRE i giudizi, `burst` incluso — dove anzi serve di più,
+      // perché scatta senza una storia sporca alle spalle: su un sito appena
+      // installato il primo visitatore vero carica una pagina e i suoi asset,
+      // cioè decine di richieste in pochi secondi da un'impronta mai vista.
       // Non disattivarla senza aver capito l'avvertenza 1 qui sopra.
       "protectBrowserFingerprints": true,
     },
