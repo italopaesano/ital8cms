@@ -319,10 +319,14 @@ class OutcomeCensus {
   /**
    * Registra come sono finite le richieste LASCIATE PASSARE, per client.
    *
-   * Solo esiti non-2xx: un 200 non è un segnale, e filtrarli via toglie circa il
-   * 99% delle chiamate. È il pezzo che permette a sentinel di accorgersi di
-   * attacchi per cui NON esiste ancora una regola — senza, il filtro saprebbe
-   * solo ciò che gli è già stato insegnato a riconoscere.
+   * Solo esiti **dal 400 in su**: è il pezzo che permette a sentinel di
+   * accorgersi di attacchi per cui NON esiste ancora una regola — senza, il
+   * filtro saprebbe solo ciò che gli è già stato insegnato a riconoscere.
+   *
+   * Il 2xx è escluso dal gate (non è un segnale, e toglie il 99% delle
+   * chiamate); il **3xx** è escluso da `observeOutcome`, dove sta la ragione per
+   * esteso: un redirect non è una richiesta fallita, e contarlo manda fra i
+   * «sospetti scanner» chi segue i redirect di un sito che ne ha molti.
    */
   constructor(dataDir, config, deps = {}) {
     this.filePath = path.join(dataDir, `outcomeCensus${config.instanceId ? '.' + config.instanceId : ''}.json5`);

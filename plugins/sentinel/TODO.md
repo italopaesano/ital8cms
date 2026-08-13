@@ -316,7 +316,7 @@ certo, locale e già dannoso; poi il cuore del motore; le decisioni per ultime.
 | ~~**C5**~~ ✅ | ~~La catena delle migrazioni~~ | 1 | basso | Nessun codice a runtime, ma sblocca le installazioni esistenti |
 | ~~**C6**~~ ✅ | ~~Vista C: le due perdite silenziose del form~~ | 2 | basso | Solo GUI; l'invariante da ripristinare è scritta nel form stesso |
 | ~~**C7**~~ ✅ | ~~L'impronta: cache per connessione~~ | 1 + test | **alto** | Percorso caldo di ogni richiesta, e va riscritto un test che oggi codifica il difetto |
-| **C8** | I contatori che mentono | 2 | basso | Non cambiano decisioni, cambiano ciò che l'amministratore legge per prenderle |
+| ~~**C8**~~ ✅ | ~~I contatori che mentono~~ | 2 | basso | Non cambiano decisioni, cambiano ciò che l'amministratore legge per prenderle |
 | **C9** | Le due decisioni rimaste | 2 | — | Non sono correzioni: richiedono una scelta tua |
 
 ---
@@ -669,17 +669,56 @@ due ragioni: serve un **nome nuovo** per la chiave sul socket (regola 3 del
 CLAUDE.md), e reintrodurre una cache nello stesso file dove ne è appena stata
 tolta una vuole essere una decisione, non un residuo dello stesso intervento.
 
-#### C8 — I contatori che mentono
+#### C8 — I contatori che mentono ✅
 
-- [ ] **Il censimento degli esiti conta 304 e 3xx** *(da riverificare)*. Un
-      visitatore che ricarica una pagina con 25 asset in cache produce 25 path
-      distinti e finisce fra i «sospetti scanner», che è il pannello nato per
-      mostrare gli attacchi senza regola.
-- [ ] **`ruleHitCounter` distrugge lo storico degli IP distinti** *(verificato)*.
-      `_load` ricrea un `Set` vuoto e il primo `save` riscrive quel conteggio sopra
-      il valore storico. Il commento dice «il totale storico resta nel file»: il
-      percorso di salvataggio lo contraddice. Serve uno scalare separato, oppure
-      non riscrivere la chiave quando il `Set` è vuoto.
+- [x] **Il censimento degli esiti conta i 3xx.** Il gate filtra i 2xx e passa
+      tutto il resto; `observeOutcome` accettava qualunque non-2xx, quindi ogni
+      redirect finiva fra i percorsi falliti distinti da cui si ricavano i
+      «sospetti scanner» — il pannello nato per mostrare gli attacchi senza
+      regola. Ora si conta **dal 400 in su**.
+
+      **Riverificato, e il rilievo era giusto per la ragione sbagliata.** Lo
+      scenario descritto — il visitatore che ricarica 25 asset in cache — **non
+      si verifica in questo stack**: misurato sull'istanza viva, nessuna delle
+      istanze di `koa-classic-server` gestisce le richieste condizionali (né
+      `ETag` né `Last-Modified` in risposta; `If-None-Match` e
+      `If-Modified-Since` ricevono 200), e le risorse dei temi vanno
+      esplicitamente in `Cache-Control: no-store`. **Nessun 304 esiste.**
+
+      Lo scenario che si verifica davvero è un altro, e pesa di più: l'area
+      admin risponde **302 verso la pagina di login a ogni richiesta non
+      autenticata** (verificato: `/admin/`, `/admin/usersManagment` → 302). E
+      soprattutto, il caso peggiore è un sito con `urlRedirect` o
+      `hideExtension` attivi, dove un crawler legittimo che segue duecento link
+      vecchi colleziona duecento percorsi distinti e viene classificato come
+      scanner — cioè proprio il tipo di sito che quei plugin li installa.
+- [x] **`ruleHitCounter` distrugge lo storico degli IP distinti** *(verificato)*.
+      `_load` ricreava un `Set` vuoto e `getSummary()` ne leggeva `size`: il
+      primo flush dopo un riavvio riscriveva quel valore sopra lo storico. E non
+      solo per la regola toccata — `save()` riscrive il payload **per intero**,
+      quindi bastava un hit su una qualunque regola per azzerare il conteggio di
+      tutte. Il commento accanto affermava l'opposto («il totale storico resta
+      nel file»).
+
+      **Scelta: un pavimento, non gli indirizzi.** Il valore letto dal file
+      diventa il minimo, e `getSummary()` restituisce il massimo fra quello e
+      l'insieme della sessione corrente. Il numero è così monotono e ha un
+      significato dichiarabile — **il massimo osservato in una singola
+      esecuzione** — che è un limite inferiore onesto e risponde alla domanda per
+      cui il campo esiste: «questa regola scatta su una persona sola o su
+      molte?». L'alternativa (persistere gli indirizzi per ricostruire l'insieme)
+      è stata scartata: farebbe di `ruleHits.json5` un archivio di dati personali
+      senza che nessuno l'abbia chiesto — esattamente ciò che `censusIpMode`
+      esiste per rendere una scelta esplicita. Un test verifica che nessun
+      indirizzo finisca sul file.
+
+**Nome introdotto:** `distinctIpsBaseline`, proprietà **interna** all'entry in
+memoria (il formato del file non cambia: resta la sola chiave `distinctIps`).
+Alternative valutate: `distinctIpsAtLoad`, `distinctIpsHighWater`. Se preferisci
+una delle altre due è una sostituzione di due righe.
+
+**Test:** `tests/unit/counters.test.js`, 26 test — i **primi** per entrambi i
+moduli, che non ne avevano nessuno. Ripristinando i due difetti, 12 falliscono.
 
 #### C9 — Le due decisioni rimaste
 

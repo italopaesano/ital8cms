@@ -61,10 +61,17 @@ traffico e a registrarlo in `data/sentinel-YYYY-MM-DD.jsonl`.
 "php-probe": {
   hits: 4127,               // quante volte ha matchato
   authenticatedHits: 0,     // ← IL SEMAFORO
-  distinctIps: 512,
+  distinctIps: 512,        // ← massimo per esecuzione, vedi sotto
   safeToPromote: true,
 }
 ```
+
+> `distinctIps` è il **massimo osservato in una singola esecuzione**, non la
+> somma storica: sommarla richiederebbe di conservare gli indirizzi, cioè di
+> fare di questo file un archivio di dati personali che nessuno ha chiesto —
+> è la stessa scelta che `census.censusIpMode` rende esplicita altrove. Serve
+> la domanda per cui il campo esiste: «questa regola scatta su una persona
+> sola o su molte?».
 
 `authenticatedHits` è il campo che decide. Se dopo settimane di traffico reale
 quella regola non ha **mai** toccato un utente autenticato, promuoverla è sicuro.
@@ -129,7 +136,7 @@ contano di più:
 | `strictValidation` | `false` | Se `true`, una regola invalida impedisce l'avvio del plugin. |
 | `trustProxy` | `false` | Leggere `X-Forwarded-For`. **Attivare solo dietro un proxy fidato.** |
 | `fingerprintSalt` | `""` | Vuoto = impronte confrontabili fra installazioni. Valorizzato = locali. |
-| `observeOutcomes` | `true` | Osserva come finiscono le richieste lasciate passare (solo non-2xx). |
+| `observeOutcomes` | `true` | Osserva come finiscono le richieste lasciate passare (**solo dal 400 in su**: un redirect non è un fallimento). |
 | `log.retentionDays` | `365` | |
 | `log.maxTotalBytes` | `200 MB` | Tetto di dimensione, oltre alla retention a tempo. |
 | `census.censusIpMode` | `"count"` | `none` / `count` / `full` — vedi [Privacy](#privacy). |
@@ -722,7 +729,7 @@ server serve `plugins/`, e `sentinel` non ha una directory `webPages/`).
 |---|---|
 | `sentinel-YYYY-MM-DD.jsonl` | Un evento per riga. **IP pieno.** |
 | `fingerprintCensus.json5` | Aggregato per impronta: quante volte, da quanti IP, quota bloccata. |
-| `outcomeCensus.json5` | Come finiscono le richieste lasciate passare (solo non-2xx). |
+| `outcomeCensus.json5` | Come finiscono le richieste lasciate passare (solo dal **400** in su). |
 | `ruleHits.json5` | Contatori per regola — la base della promozione. |
 
 I nomi dei campi dell'evento coincidono con quelli di `analytics` dove il
