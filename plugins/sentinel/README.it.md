@@ -234,11 +234,25 @@ trasformerebbe una virgola fuori posto in un blackout.
 | `allow` | Esenzione esplicita. Contata ma non registrata. | ✅ v1 |
 | `monitor` | Matcha, registra, **lascia passare**. | ✅ v1 |
 | `block` | **404**, byte-identico a un URL che non è mai esistito. | ✅ v1 |
-| `throttle` | Delega a `rateLimiter` senza bloccare. | ✅ v1 |
+| `throttle` | Delega a `rateLimiter`, **lascia passare** la richiesta. | ✅ v1 |
 | `drop` | **Tronca la connessione** senza rispondere (stile 444 di nginx). | ✅ v1.4 |
 | `decoy` | [Contenuto fittizio](#contenuti-fittizi-decoy) al posto del 404. | ✅ v1.1 |
 | `redirect` | 30x, allowlist per l'esterno, permanenti vietati fuori dal sito. | ✅ v1.1 |
 | `tarpit` | [Risposta a goccia](#drop-e-tarpit-le-due-azioni-che-costano-anche-a-te), con tetto di connessioni e di durata. | ✅ v1.4 |
+
+`throttle` è l'unica azione che **agisce senza rispondere**: la sua azione è
+l'escalation verso `rateLimiter`, non il destino della richiesta, che prosegue
+esattamente come con `monitor`. Ne discendono due conseguenze da conoscere:
+
+- nel log vale `enforced: false`, e nella dashboard compare fra gli **osservati**
+  — perché quel campo significa «ha alterato la risposta», ed è lo stesso da cui
+  il censimento delle impronte ricava la quota di blocchi su cui poggia la
+  reputazione. Un throttle contato come blocco farebbe condannare impronte per
+  blocchi mai avvenuti;
+- `escalate.ban` **non scatta** su una regola `throttle`. Il ban è un'azione, e le
+  azioni passano dai tetti dell'enforcement; un throttle che bandisce sarebbe una
+  contraddizione nei termini. Se vuoi il ban, la regola va promossa a un'azione
+  che risponde.
 
 Il 404 di `block` non è fabbricato da questo plugin: è prodotto da
 `reservedGate.deny()`, l'unico punto del progetto che genera il 404 «di

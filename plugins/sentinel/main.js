@@ -388,7 +388,19 @@ function resolveClientIp(ctx) {
  * @returns {boolean}
  */
 function shouldEnforce(rule, subject) {
-  if (rule.action === 'allow' || rule.action === 'monitor') return false;
+  // Azioni che NON producono una risposta: la richiesta prosegue comunque.
+  //
+  // `throttle` è il caso non ovvio, ed è qui perché AGISCE senza rispondere: la
+  // sua azione è l'escalation verso rateLimiter, non il destino di questa
+  // richiesta. Considerarlo enforcement rompeva tre cose insieme —
+  //   • il gate, non trovando un `respond`, degradava al 404 comune: una regola
+  //     documentata come «delega a rateLimiter SENZA bloccare» bloccava tutto;
+  //   • il censimento delle impronte lo contava come blocco (`blocked:` più
+  //     sotto), quindi la reputazione condannava per blocchi mai avvenuti;
+  //   • la dashboard lo mostrava nella colonna «enforced» invece che fra gli
+  //     osservati.
+  // L'escalation resta e parte lo stesso: vedi la condizione in `evaluate`.
+  if (rule.action === 'allow' || rule.action === 'monitor' || rule.action === 'throttle') return false;
 
   // Tetto globale: in "monitor" nulla agisce, nemmeno una regola `block`.
   if (custom.mode !== 'enforce') return false;
@@ -671,11 +683,22 @@ function serveDrop(ctx) {
     return false;   // il gate scrive il 404 comune
   }
 
-  ctx.respond = false;
+  // L'ORDINE CONTA. `ctx.respond = false` dice a Koa «non finalizzare tu»: se lo
+  // si assegna prima di sapere che c'è un socket da troncare, e il socket non
+  // c'è (HTTP/2, un adapter che lo stacca, una connessione smontata fra il router
+  // e questo punto), nessuno risponde più — né noi né Koa — e restituendo `true`
+  // il gate crede che sia stato gestito e salta il 404 di ripiego. La richiesta
+  // resta appesa fino al timeout del client, e il contatore registra un drop mai
+  // avvenuto. Senza socket si RINUNCIA, come si fa dietro proxy: contesto intatto,
+  // il gate scrive il 404 comune.
   const socket = ctx.res && ctx.res.socket;
-  if (socket && !socket.destroyed) {
-    socket.destroy();
+  if (!socket) {
+    dropDegraded++;
+    return false;
   }
+
+  ctx.respond = false;
+  if (!socket.destroyed) socket.destroy();
   dropped++;
   return true;
 }
@@ -780,7 +803,13 @@ const engine = {
         blocked: enforced && !(rule && rule.usesReputation),
       });
     }
-    const escalation = rule && (enforced || rule.action === 'monitor')
+    // `monitor` e `throttle` alimentano rateLimiter pur non essendo enforcement:
+    // il primo per scelta storica (contare mentre si osserva), il secondo perché
+    // contare È la sua azione. In entrambi i casi `enforced` è false, quindi
+    // `escalate.ban` non scatta: il ban è un'azione e le azioni passano dai tetti
+    // dell'enforcement. Un throttle che bandisce sarebbe una contraddizione nei
+    // termini, oltre che una sorpresa.
+    const escalation = rule && (enforced || rule.action === 'monitor' || rule.action === 'throttle')
       ? escalate(rule, subject, enforced)
       : false;
     const escalated = escalation !== false;
@@ -1238,5 +1267,6 @@ function persistAll() {
 module.exports._internals = {
   resolveClientIp: (ctx, conf) => { const prev = custom; custom = conf || custom; const r = resolveClientIp(ctx); custom = prev; return r; },
   shouldEnforce: (rule, subject, conf) => { const prev = custom; custom = conf || custom; const r = shouldEnforce(rule, subject); custom = prev; return r; },
+  serveDrop: (ctx, conf) => { const prev = custom; custom = conf || custom; const r = serveDrop(ctx); custom = prev; return r; },
   resolveDataDir,
 };

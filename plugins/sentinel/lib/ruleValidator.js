@@ -628,6 +628,27 @@ function validateRules(rulesData, options = {}) {
         continue;
       }
 
+      // `/\host` è protocol-relative travestita: inizia con `/`, quindi il ramo
+      // "interno" più sotto la accetterebbe, ma i browser la normalizzano in
+      // `//host` e vanno fuori sito. Senza questo controllo è un OPEN REDIRECT che
+      // salta sia l'allowlist degli host sia il divieto dei permanenti.
+      //
+      // Si RIFIUTA invece di normalizzarla: nessuno scrive `/\` per caso, quindi
+      // la sola forma utile è dire all'autore di scrivere ciò che intende — un
+      // percorso interno `/...` oppure un URL assoluto autorizzato. È la stessa
+      // coppia di forme che `getSafeRedirectUrl` di adminUsers respinge; quel
+      // helper qui non è riusabile (là si sanifica un valore a runtime, qui si
+      // valida una regola al boot), quindi questo controllo è l'unica guardia e
+      // deve coprire quanto copre lui. Vedi CLAUDE.md §Prevenzione Open Redirect.
+      if (/^\/\\/.test(redirect.to)) {
+        errors.push(
+          `${where} ("${name}"): redirect.to "${redirect.to}" usa la forma "/\\", che i browser ` +
+          'trattano come "//" (destinazione esterna mascherata); scrivi un percorso interno "/..." ' +
+          'oppure un URL assoluto fra custom.allowedRedirectHosts'
+        );
+        continue;
+      }
+
       const isExternal = /^[a-z][a-z0-9+.-]*:\/\//i.test(redirect.to) || redirect.to.startsWith('//');
       const status = redirect.status === undefined ? 302 : redirect.status;
 

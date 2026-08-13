@@ -138,6 +138,28 @@ describe('parametri delle azioni', () => {
     expect(r.rules[0].redirect.status).toBe(302);
   });
 
+  // OPEN REDIRECT. `//host` è protocol-relative dichiarata e finisce nel ramo
+  // esterno; `/\host` è la stessa cosa travestita — inizia con `/`, quindi senza
+  // un controllo esplicito passa come INTERNA, saltando allowlist degli host e
+  // divieto dei permanenti, e il browser la normalizza andando fuori sito.
+  test.each([
+    ['//evil.test/x'],
+    ['/\\evil.test/x'],
+    ['/\\\\evil.test/x'],
+  ])('la destinazione protocol-relative "%s" non passa come interna', (to) => {
+    const r = validateRules({ rules: [rule({ action: 'redirect', redirect: { to } })] });
+    expect(r.valid).toBe(false);
+    expect(r.rules).toHaveLength(0);
+  });
+
+  // Il percorso interno legittimo non deve essere toccato dalla guardia sopra:
+  // un backslash PIÙ AVANTI nel path non è protocol-relative.
+  test('un backslash non iniziale non rende esterna la destinazione', () => {
+    const r = validateRules({ rules: [rule({ action: 'redirect', redirect: { to: '/cartella\\strana' } })] });
+    expect(r.valid).toBe(true);
+    expect(r.rules[0].redirect.external).toBe(false);
+  });
+
   // Il 308 è il 301 dei metodi non-GET: stessa cache persistente nel browser,
   // stesso danno irreparabile su un falso positivo.
   test('308 verso l esterno è vietato quanto il 301', () => {

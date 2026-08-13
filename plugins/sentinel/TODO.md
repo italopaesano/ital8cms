@@ -308,7 +308,7 @@ certo, locale e già dannoso; poi il cuore del motore; le decisioni per ultime.
 
 | # | Step | Rilievi | Rischio | Perché lì |
 |---|---|---|---|---|
-| **C1** | Le azioni che non mantengono il contratto | 3 | basso | Locali e indipendenti, ma **agiscono male adesso** su chi ha già acceso `enforce` |
+| ~~**C1**~~ ✅ | ~~Le azioni che non mantengono il contratto~~ | 3 | basso | Locali e indipendenti, ma **agivano male** su chi aveva già acceso `enforce` |
 | **C2** | Il giudizio non deve toccare le impronte condivise | 1 | basso | Una riga, chiude una promessa scritta a caratteri cubitali |
 | **C3** | Decoy: perimetro di scrittura e contesto di escape | 2 | basso | Nessuno tocca il percorso delle richieste normali |
 | **C4** | L'identità del client dietro proxy | 1 | medio | Cambia la chiave di ban, censimento ed escalation: va misurato |
@@ -320,19 +320,19 @@ certo, locale e già dannoso; poi il cuore del motore; le decisioni per ultime.
 
 ---
 
-#### C1 — Le azioni che non mantengono il contratto
+#### C1 — Le azioni che non mantengono il contratto ✅
 
-- [ ] **`throttle` risponde 404** *(verificato)*. È in `VALID_ACTIONS` e il README
+- [x] **`throttle` risponde 404** *(verificato)*. È in `VALID_ACTIONS` e il README
       lo documenta come «delega a rateLimiter **senza bloccare**», ma
       `shouldEnforce` esclude solo `allow`/`monitor`, `attachResponder` non ha un
       ramo per lui, e il gate cade su `deny()`. Chi scrive una regola `throttle` e
       passa a `enforce` blocca tutto credendo di contare soltanto.
-- [ ] **`serveDrop` può lasciare la richiesta appesa** *(verificato)*.
+- [x] **`serveDrop` può lasciare la richiesta appesa** *(verificato)*.
       `ctx.respond = false` è assegnato **prima** del controllo sul socket e la
       funzione ritorna `true` comunque: senza socket nessuno risponde e il gate
       non scrive il 404 di ripiego. L'assegnazione va dopo il controllo, con
       `return false` quando il socket non c'è.
-- [ ] **Open redirect via backslash** *(verificato)*. `ruleValidator.js:631`
+- [x] **Open redirect via backslash** *(verificato)*. `ruleValidator.js:631`
       considera esterno solo `scheme://` o `//`; la riga 657 rifiuta solo ciò che
       non inizia con `/`. Quindi `to: '/\evil.com'` passa **come interno**,
       saltando allowlist degli host e divieto di 301/308 — e i browser lo
@@ -340,7 +340,30 @@ certo, locale e già dannoso; poi il cuore del motore; le decisioni per ultime.
       di rifiutare entrambe le forme, e `getSafeRedirectUrl` lo fa: qui non è usato
       e questo validatore è l'unica guardia.
 
-Accettazione: un test per azione, più un caso `/\` nel validatore.
+**Esito.** Il difetto di `throttle` era più largo di come la revisione l'aveva
+descritto: `enforced` non alimenta solo il gate, ma anche il **conteggio dei
+blocchi del censimento delle impronte** (`main.js`, campo `blocked:`) — da cui la
+reputazione ricava `suspect`/`bad` — e la colonna enforced/observed della
+dashboard. Metterlo a false solo nel verdetto avrebbe corretto il 404 lasciando in
+piedi impronte condannate per blocchi mai avvenuti. La correzione è quindi in
+`shouldEnforce`, con l'escalation spostata su una condizione propria: `throttle`
+conta sempre, e `escalate.ban` non scatta più su di lui (documentato).
+
+Per `serveDrop` la rinuncia senza socket riusa `dropDegraded`, lo stesso contatore
+del degrado dietro proxy: in entrambi i casi il significato è «non ho potuto
+troncare, risponde il gate».
+
+Per il redirect si **rifiuta** la forma `/\` invece di normalizzarla: nessuno la
+scrive per caso, quindi l'unica risposta utile è dire all'autore di scrivere ciò
+che intende.
+
+- [x] +15 test unitari (`engineActions.test.js`, che mette finalmente in uso
+      `_internals`, esportato e mai usato da nessuno) + 4 sul validatore + 2
+      d'integrazione su server reale
+- [x] Verificato che **9 test falliscono** ripristinando i tre difetti
+- [x] `README.it.md`: la riga di `throttle` diceva «senza bloccare» mentre il
+      codice bloccava. Ora dice cosa fa davvero, incluse le due conseguenze
+      (`enforced: false`, niente `escalate.ban`)
 
 #### C2 — Il giudizio non deve toccare le impronte condivise
 

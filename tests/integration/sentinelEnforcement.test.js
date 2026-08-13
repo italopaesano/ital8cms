@@ -139,6 +139,25 @@ const TEST_RULES = {
       action: 'monitor',
       match: { path: '/.env' },
     },
+    // `throttle` AGISCE (alimenta rateLimiter) ma non risponde: la richiesta deve
+    // proseguire. Senza il ramo corretto il gate non trova un `respond` e degrada
+    // al 404 comune, cioè la regola blocca invece di contare.
+    //
+    // Punta su una pagina che ESISTE, di proposito: su un percorso inesistente il
+    // 404 del file server e il 404 del blocco sono byte-identici — è la promessa
+    // centrale del plugin — quindi la risposta non distinguerebbe le due cose.
+    // Con una pagina vera, «200» è la prova diretta che il filtro l'ha lasciata
+    // passare. La pagina di login è pubblica ed è nel repository, quindi c'è
+    // sempre; le altre asserzioni su `/pluginPages/adminUsers/` usano percorsi
+    // diversi (`z.php`, `zzz.ejs`) e non la incrociano.
+    {
+      name: 'test-throttle',
+      enabled: true,
+      category: 'scanner',
+      description: 'throttle: conta senza bloccare',
+      action: 'throttle',
+      match: { path: '/pluginPages/adminUsers/login.ejs' },
+    },
   ],
 };
 
@@ -355,6 +374,37 @@ describe('sentinel — il 404 di blocco è indistinguibile da un 404 autentico',
     if (Number(json5.parse(fs.readFileSync(CONFIG_PATH, 'utf8')).debugMode) < 1) {
       expect(rivelatori).toEqual([]);
     }
+  });
+});
+
+// `throttle` è l'unica azione che agisce senza produrre una risposta, ed è
+// esattamente per questo che era rotta: il gate, non trovando `respond`, cadeva
+// sul proprio 404. Il README la documenta come «delega a rateLimiter SENZA
+// bloccare», quindi il test verifica la promessa, non l'implementazione.
+describe('sentinel — throttle conta senza bloccare', () => {
+  const COPERTA = '/pluginPages/adminUsers/login.ejs';
+
+  test('la pagina coperta dalla regola continua a essere servita', async () => {
+    // LA PROVA. Prima della correzione questa rispondeva 404: il verdetto
+    // chiedeva enforcement, il gate non trovava un `respond` e cadeva sul 404
+    // comune. Con `mode: enforce` attivo, un 200 qui significa che il filtro ha
+    // riconosciuto la regola e ha lasciato proseguire.
+    const r = await httpGet(COPERTA);
+    expect(r.status).toBe(200);
+  });
+
+  test('la regola ha comunque agito: l evento è registrato, ma non come blocco', async () => {
+    await httpGet(COPERTA);
+    await sleep(300);
+    const eventi = eventsFor(COPERTA);
+    expect(eventi.length).toBeGreaterThan(0);
+    expect(eventi[0].ruleName).toBe('test-throttle');
+    // `enforced` è il campo in cui il difetto si vedeva: vale insieme «ho
+    // bloccato» per la colonna della dashboard e «conta come blocco» per il
+    // censimento delle impronte, da cui la reputazione ricava suspect/bad.
+    // Un throttle che lo mette a true fa condannare impronte per blocchi mai
+    // avvenuti.
+    expect(eventi[0].enforced).toBe(false);
   });
 });
 
