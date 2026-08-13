@@ -172,3 +172,63 @@ describe('getWritablePaths — solo ciò che si scrive davvero', () => {
     }
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// L'identità del client dietro proxy (consolidamento C4).
+//
+// Da questo valore dipendono l'IP nel log, la chiave del censimento, la chiave di
+// escalation verso rateLimiter e il confronto `sameClient` del canary: se lo
+// sceglie chi bussa, i ban finiscono su indirizzi innocenti e si evadono ruotando
+// un header.
+describe('resolveClientIp — quale voce della catena è fidata', () => {
+  const { resolveClientIp } = sentinel._internals;
+  const req = (xff, peer) => ({ headers: xff === null ? {} : { 'x-forwarded-for': xff }, ip: peer });
+  const conf = (over = {}) => ({ trustProxy: true, trustedProxyCount: 1, ...over });
+
+  test('senza trustProxy l header è ignorato del tutto', () => {
+    expect(resolveClientIp(req('1.2.3.4', '203.0.113.9'), { trustProxy: false }))
+      .toBe('203.0.113.9');
+  });
+
+  // Ogni proxy APPENDE il peer da cui ha ricevuto: con un proxy la catena
+  // legittima ha una voce sola, ed è il client.
+  test('un proxy, catena legittima → la voce scritta dal proxy', () => {
+    expect(resolveClientIp(req('203.0.113.9', '10.0.0.1'), conf())).toBe('203.0.113.9');
+  });
+
+  // Il caso classico: il client precompila l'header, il proxy accoda il suo vero
+  // indirizzo. Contando da destra la bugia resta a sinistra e non viene letta.
+  test('un proxy, client che mente → si legge comunque il vero indirizzo', () => {
+    expect(resolveClientIp(req('1.2.3.4, 203.0.113.9', '10.0.0.1'), conf())).toBe('203.0.113.9');
+  });
+
+  test('due proxy, catena legittima → la prima voce, che qui è il client', () => {
+    expect(resolveClientIp(req('203.0.113.9, 10.0.0.2', '10.0.0.1'), conf({ trustedProxyCount: 2 })))
+      .toBe('203.0.113.9');
+  });
+
+  // IL DIFETTO. `Math.max(0, length - hops)` clampava a zero, cioè restituiva la
+  // voce PIÙ A SINISTRA — quella che nessun proxy ha scritto. Bastava raggiungere
+  // l'app direttamente, scavalcando il proxy, con un trustedProxyCount corretto.
+  test.each([
+    ['catena più corta dei proxy dichiarati', '1.2.3.4', 3],
+    ['catena di due, tre proxy dichiarati', '1.2.3.4, 5.6.7.8', 3],
+  ])('%s → si ricade sul socket, non sulla voce del client', (_nome, xff, hops) => {
+    const out = resolveClientIp(req(xff, '203.0.113.9'), conf({ trustedProxyCount: hops }));
+    expect(out).toBe('203.0.113.9');
+    expect(out).not.toBe('1.2.3.4');
+  });
+
+  test('header assente o vuoto → indirizzo del socket', () => {
+    expect(resolveClientIp(req(null, '203.0.113.9'), conf())).toBe('203.0.113.9');
+    expect(resolveClientIp(req('', '203.0.113.9'), conf())).toBe('203.0.113.9');
+    expect(resolveClientIp(req('  ,  ', '203.0.113.9'), conf())).toBe('203.0.113.9');
+  });
+
+  test('trustedProxyCount non valido vale 1', () => {
+    for (const bad of [0, -3, 1.5, 'due', null, undefined]) {
+      expect(resolveClientIp(req('1.2.3.4, 203.0.113.9', '10.0.0.1'), conf({ trustedProxyCount: bad })))
+        .toBe('203.0.113.9');
+    }
+  });
+});

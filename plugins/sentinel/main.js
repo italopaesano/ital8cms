@@ -100,6 +100,10 @@ const decoyCache = new Map();
 
 // Latch per non ripetere all'infinito lo stesso avviso di configurazione.
 let rulesUnavailableLogged = false;
+// Idem per la catena X-Forwarded-For più corta dei proxy dichiarati: la
+// condizione è provocabile da chi bussa, quindi un log per richiesta sarebbe
+// un attacco al disco travestito da diagnostica.
+let shortProxyChainLogged = false;
 
 function log(level, message) {
   if (typeof logger[level] === 'function') logger[level](LOG_PREFIX, message);
@@ -345,34 +349,69 @@ function getMailer() {
  * `X-Forwarded-For` è falsificabile dal client: si legge SOLO con `trustProxy`
  * attivo, cioè solo quando davanti c'è un proxy che lo imposta davvero.
  *
- * Con `trustedProxyCount` si prende la voce giusta contando DA DESTRA. La catena
- * è "client, proxy1, proxy2" e solo le ultime voci sono state scritte da proxy
- * fidati: prendere la prima da sinistra — la scelta comoda — significa leggere
- * un valore che il client controlla, quindi permettergli di attribuire i propri
- * blocchi a un indirizzo altrui o di aggirare un ban cambiando header a ogni
- * richiesta.
+ * Con `trustedProxyCount` si prende la voce giusta contando DA DESTRA. Ogni proxy
+ * APPENDE l'indirizzo da cui ha ricevuto, quindi con due proxy fidati la catena
+ * legittima è `client, proxy1` e l'indice giusto è `length - hops`. Prendere la
+ * prima voce da sinistra — la scelta comoda — significa leggere un valore che il
+ * client controlla, quindi permettergli di attribuire i propri blocchi a un
+ * indirizzo altrui o di aggirare un ban cambiando header a ogni richiesta.
+ *
+ * ─── LA CATENA PIU CORTA DEL PREVISTO NON SI USA ──────────────────────────────
+ * Qui c'era `Math.max(0, chain.length - hops)`, cioè: se la catena è più corta di
+ * quanto dichiarato, prendi la prima voce. È il caso in cui la prima voce è
+ * proprio quella che NON è stata scritta da un proxy fidato.
+ *
+ * E non serve una configurazione sbagliata per arrivarci — bastava quella, ma
+ * c'è di peggio. Con `trustedProxyCount: 1` perfettamente corretto, chi raggiunge
+ * l'app **direttamente** (porta aperta sulla rete, proxy scavalcato) manda
+ * `X-Forwarded-For: 1.2.3.4`: la catena ha un solo elemento, nessun proxy l'ha
+ * toccata, e il vecchio calcolo restituiva `1.2.3.4`. Misurato. Da lì in poi IP
+ * di ban, chiave del censimento, escalation verso rateLimiter e confronto
+ * `sameClient` del canary erano tutti scelti da chi bussa.
+ *
+ * Se la catena è più corta di `hops`, la richiesta non ha attraversato i proxy
+ * dichiarati: non esiste una voce fidata da leggere, e si ricade sul **peer del
+ * socket**, che non è falsificabile. Si perde granularità — dietro un proxy vero
+ * il peer è il proxy — ma non si crede a un valore inventato.
+ *
+ * ⚠ Il ripiego vale finché `app.proxy` di Koa resta disattivato (oggi lo è, e non
+ * è impostato da nessuna parte): con `app.proxy: true` sarebbe Koa stessa a
+ * leggere l'XFF e a restituirne la prima voce, reintroducendo il problema dentro
+ * `ctx.ip`. È fra le voci di vigilanza del TODO del plugin.
  *
  * @param {object} ctx
  * @returns {string}
  */
 function resolveClientIp(ctx) {
   const trustProxy = custom.trustProxy === true;
+  const peerIp = normalizeIp((ctx && (ctx.ip || (ctx.request && ctx.request.ip))) || '');
 
   if (trustProxy && ctx.headers) {
     const raw = ctx.headers['x-forwarded-for'];
     if (typeof raw === 'string' && raw.length > 0) {
       const chain = raw.split(',').map((s) => s.trim()).filter(Boolean);
-      if (chain.length > 0) {
-        const hops = Number.isInteger(custom.trustedProxyCount) && custom.trustedProxyCount > 0
-          ? custom.trustedProxyCount
-          : 1;
-        const index = Math.max(0, chain.length - hops);
-        return normalizeIp(chain[index] || chain[0]);
+      const hops = Number.isInteger(custom.trustedProxyCount) && custom.trustedProxyCount > 0
+        ? custom.trustedProxyCount
+        : 1;
+
+      if (chain.length >= hops) return normalizeIp(chain[chain.length - hops]);
+
+      // Catena più corta dei proxy dichiarati: o la topologia non è quella
+      // configurata, o qualcuno sta parlando all'app senza passare dai proxy.
+      // Entrambe le cose vanno sapute, ma una sola volta: il caso è provocabile
+      // da chi bussa, e un log per richiesta sarebbe un attacco al disco.
+      if (!shortProxyChainLogged) {
+        log('warn',
+          `X-Forwarded-For con ${chain.length} voce/i ma trustedProxyCount=${hops}: ` +
+          'la richiesta non ha attraversato i proxy dichiarati. Uso l\'indirizzo del ' +
+          'socket. Controlla trustedProxyCount, e che l\'app non sia raggiungibile ' +
+          'direttamente scavalcando il proxy.');
+        shortProxyChainLogged = true;
       }
     }
   }
 
-  return normalizeIp((ctx && (ctx.ip || (ctx.request && ctx.request.ip))) || '');
+  return peerIp;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

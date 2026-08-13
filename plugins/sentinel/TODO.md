@@ -311,7 +311,7 @@ certo, locale e già dannoso; poi il cuore del motore; le decisioni per ultime.
 | ~~**C1**~~ ✅ | ~~Le azioni che non mantengono il contratto~~ | 3 | basso | Locali e indipendenti, ma **agivano male** su chi aveva già acceso `enforce` |
 | ~~**C2**~~ ✅ | ~~Il giudizio non deve toccare le impronte condivise~~ | 1 | basso | Una riga, chiude una promessa scritta a caratteri cubitali |
 | ~~**C3**~~ ✅ | ~~Decoy: perimetro di scrittura e contesto di escape~~ | 2 | basso | Nessuno tocca il percorso delle richieste normali |
-| **C4** | L'identità del client dietro proxy | 1 | medio | Cambia la chiave di ban, censimento ed escalation: va misurato |
+| ~~**C4**~~ ✅ | ~~L'identità del client dietro proxy~~ | 1 | medio | Chiuso il sottoinsieme rilevabile; il resto è di rete, non di codice |
 | **C5** | La catena delle migrazioni | 1 | basso | Nessun codice a runtime, ma sblocca le installazioni esistenti |
 | **C6** | Vista C: le due perdite silenziose del form | 2 | basso | Solo GUI; l'invariante da ripristinare è scritta nel form stesso |
 | **C7** | L'impronta: cache per connessione | 1 + test | **alto** | Percorso caldo di ogni richiesta, e va riscritto un test che oggi codifica il difetto |
@@ -441,9 +441,9 @@ HTML»* a essere sbagliato, non quel caso.
       riguarda
 - [x] Verificato che **6 test falliscono** ripristinando i due difetti
 
-#### C4 — L'identità del client dietro proxy
+#### C4 — L'identità del client dietro proxy ✅
 
-- [ ] **`resolveClientIp` clampa l'indice XFF a 0** *(da riverificare)*. Con
+- [x] **`resolveClientIp` clampa l'indice XFF a 0** *(riverificato e misurato: confermato, e con un caso peggiore di quello segnalato)*. Con
       `trustedProxyCount` maggiore della catena reale, `Math.max(0, len - hops)`
       restituisce la voce **più a sinistra**, cioè quella scritta dal client. IP di
       ban, chiave del censimento, escalation verso rateLimiter e confronto
@@ -452,8 +452,52 @@ HTML»* a essere sbagliato, non quel caso.
       scritto. *(Nota: `chain[index] || chain[0]` è anche codice morto — `chain` è
       già filtrata.)*
 
-Accettazione: test con catena più corta di `trustedProxyCount`, e un avviso al
-boot quando il valore configurato eccede quanto osservato.
+**Esito, e il limite di quanto è correggibile qui.** Misurato con sei topologie:
+
+```
+                                  hops   prima      dopo
+1 proxy, catena corretta            1   203.0.113.9  203.0.113.9  ✓
+1 proxy, client che mente           1   203.0.113.9  203.0.113.9  ✓
+2 proxy, catena corretta            2   203.0.113.9  203.0.113.9  ✓
+hops=3, catena di 1                 3   1.2.3.4 ✗    203.0.113.9  ✓ (corretto)
+hops=2 ma 1 solo proxy reale        2   1.2.3.4 ✗    1.2.3.4      ✗ (NON correggibile)
+hops=1, connessione DIRETTA         1   1.2.3.4 ✗    1.2.3.4      ✗ (NON correggibile)
+```
+
+**Il caso peggiore non era quello segnalato.** La revisione parlava di un
+off-by-one nella configurazione; ma la riga 5 mostra che con
+`trustedProxyCount: 1` **perfettamente corretto**, chi raggiunge l'app
+direttamente scavalcando il proxy manda `X-Forwarded-For: 1.2.3.4` e ottiene
+esattamente quello. Non serve sbagliare la configurazione: serve che la porta
+dell'app sia raggiungibile.
+
+**Perché le ultime due non si correggono a questo livello.** Nei tre casi
+legittimi la catena ha `length >= hops` e l'indice `length - hops` è corretto per
+costruzione. Nei due residui la catena ha *esattamente* la lunghezza attesa —
+perché l'attaccante l'ha imbottita, o perché non è passata da alcun proxy — ed è
+**indistinguibile dall'header soltanto** da una catena legittima. L'unico
+discriminante è se il peer del socket sia davvero un proxy fidato, e per saperlo
+servirebbe un elenco di indirizzi, che oggi non esiste (`trustedProxyCount` è un
+numero). Vedi il seguito proposto qui sotto.
+
+- [x] `chain.length < hops` → ripiego sul peer del socket, che non è falsificabile
+- [x] Avviso una volta sola (latch): la condizione è provocabile da chi bussa, e
+      un log per richiesta sarebbe un attacco al disco travestito da diagnostica
+- [x] Rimosso `chain[index] || chain[0]`, morto: `chain` è già filtrata
+- [x] +8 test sulle sei topologie. Verificato che **2 falliscono** ripristinando
+      il clamp
+- [x] `pluginConfig.default.json5`: le due avvertenze che mancavano — il numero
+      dev'essere **esatto**, e `trustProxy: true` è **una promessa** («all'app si
+      arriva solo dal proxy») il cui rimedio è di rete, non di configurazione
+
+**Seguito proposto — `trustedProxies` come elenco invece che come numero.**
+Sostituire (o affiancare) il conteggio con un elenco di indirizzi/CIDR dei proxy
+fidati permetterebbe di verificare che il peer del socket sia davvero uno di
+loro, chiudendo anche le due righe rosse qui sopra. Non è stato fatto dentro C4
+perché è una **chiave di configurazione nuova** — quindi una decisione di naming e
+di compatibilità che spetta al maintainer — e perché va coordinata con la voce
+trasversale `keyResolver in core/`: rateLimiter risolve l'IP per conto suo, e due
+elenchi di proxy che possono divergere sarebbero peggio di uno approssimativo.
 
 #### C5 — La catena delle migrazioni
 

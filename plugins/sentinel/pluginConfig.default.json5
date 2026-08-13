@@ -122,10 +122,25 @@
     // altrui o aggirare un ban cambiandolo a ogni richiesta.
     "trustProxy": false,
 
-    // Quanti proxy fidati ci sono davanti. La voce del client si conta DA DESTRA:
-    // la catena è "client, proxy1, proxy2" e solo le ultime voci sono state
-    // scritte da proxy fidati. Prendere la prima da sinistra — la scelta comoda —
-    // significa leggere un valore che il client controlla.
+    // Quanti proxy fidati ci sono davanti. Ogni proxy APPENDE l'indirizzo da cui
+    // ha ricevuto, quindi la catena legittima è "client, proxy1, proxy2" e la voce
+    // del client si conta DA DESTRA. Prendere la prima da sinistra — la scelta
+    // comoda — significa leggere un valore che il client controlla.
+    //
+    // ⚠ IL NUMERO DEV'ESSERE ESATTO. Dichiararne più di quanti ce ne sono davvero
+    // sposta la lettura a sinistra, dentro la parte di catena che il client
+    // scrive: un `trustedProxyCount: 2` con un solo proxy reale restituisce
+    // l'indirizzo che l'attaccante ha messo lui nell'header. Se la catena arriva
+    // più corta di questo numero il plugin se ne accorge, avvisa una volta e
+    // ricade sull'indirizzo del socket; se arriva della lunghezza giusta perché
+    // l'attaccante l'ha imbottita, non c'è modo di distinguerla dall'header.
+    //
+    // ⚠ E `trustProxy: true` È UNA PROMESSA: che all'app si arrivi SOLO passando
+    // dal proxy. Se la porta dell'applicazione è raggiungibile anche direttamente,
+    // chi la raggiunge scrive l'X-Forwarded-For che vuole e nessun conteggio può
+    // accorgersene — vale per questo plugin come per `app.proxy` di Koa o
+    // `trust proxy` di Express. Il rimedio è di rete (bind su localhost, firewall),
+    // non di configurazione.
     "trustedProxyCount": 1,
 
     // ────────────────────────────────────────────────────────────────
