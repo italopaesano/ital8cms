@@ -312,7 +312,7 @@ certo, locale e già dannoso; poi il cuore del motore; le decisioni per ultime.
 | ~~**C2**~~ ✅ | ~~Il giudizio non deve toccare le impronte condivise~~ | 1 | basso | Una riga, chiude una promessa scritta a caratteri cubitali |
 | ~~**C3**~~ ✅ | ~~Decoy: perimetro di scrittura e contesto di escape~~ | 2 | basso | Nessuno tocca il percorso delle richieste normali |
 | ~~**C4**~~ ✅ | ~~L'identità del client dietro proxy~~ | 1 | medio | Chiuso il sottoinsieme rilevabile; il resto è di rete, non di codice |
-| **C5** | La catena delle migrazioni | 1 | basso | Nessun codice a runtime, ma sblocca le installazioni esistenti |
+| ~~**C5**~~ ✅ | ~~La catena delle migrazioni~~ | 1 | basso | Nessun codice a runtime, ma sblocca le installazioni esistenti |
 | **C6** | Vista C: le due perdite silenziose del form | 2 | basso | Solo GUI; l'invariante da ripristinare è scritta nel form stesso |
 | **C7** | L'impronta: cache per connessione | 1 + test | **alto** | Percorso caldo di ogni richiesta, e va riscritto un test che oggi codifica il difetto |
 | **C8** | I contatori che mentono | 2 | basso | Non cambiano decisioni, cambiano ciò che l'amministratore legge per prenderle |
@@ -499,9 +499,9 @@ di compatibilità che spetta al maintainer — e perché va coordinata con la vo
 trasversale `keyResolver in core/`: rateLimiter risolve l'IP per conto suo, e due
 elenchi di proxy che possono divergere sarebbero peggio di uno approssimativo.
 
-#### C5 — La catena delle migrazioni
+#### C5 — La catena delle migrazioni ✅
 
-- [ ] **`schemaVersion: 5` ma step solo fino a 3** *(verificato)*. Il runner calcola
+- [x] **`schemaVersion: 5` ma step solo fino a 3** *(verificato)*. Il runner calcola
       `covered = pending.length === (target - liveVersion)`: non torna mai, quindi
       box `[MIGRATE]` di errore a ogni boot che nulla può chiudere e
       `migrate sentinel` che si rifiuta di girare — **anche per i due step veri**.
@@ -509,6 +509,33 @@ elenchi di proxy che possono divergere sarebbero peggio di uno approssimativo.
       `session-hijack-signal`, e continuano a calcolare dati che nessuna regola
       legge. Servono due step `automatic: true` senza script, 3→4 e 4→5, con la
       `reason` che spiega perché sono vuoti.
+
+**Esito.** I due bump erano stati fatti nel giusto convincimento che il merge
+additivo bastasse — e bastava: il passo 7 ha aggiunto `custom.tarpit`, il passo 8
+`custom.reputation` e `census.ipRetentionDays`, tutte chiavi dentro oggetti. Anche
+le 43 e 49 righe aggiunte al file delle regole in quegli interventi sono
+**tutte commenti** (verificato: gli esempi di `drop`, `tarpit` e reputazione
+restano commentati per scelta), quindi `rules` non è cambiato.
+
+L'errore non è stato non scrivere uno script: è stato non dichiarare lo **step**.
+Il runner non guarda se serva uno script, guarda se la catena copre il salto.
+
+**Provato end-to-end** su un'installazione simulata a v1: `readPlan` passava da
+`incomplete-chain` («la catena non copre l'intero salto v1 → v5») a `ok`, e
+`npm run cli -- migrate sentinel -y` ha applicato **4 step su 4** portando il vivo
+a v5, con `custom.tarpit` e `custom.reputation` presenti e le due regole al loro
+posto (gli step sono idempotenti: «già presente, nessuna modifica»).
+
+- [x] Due step `automatic: true` senza script, con `reason` che spiega perché
+      sono vuoti e perché esistono lo stesso
+- [x] `from-v3-to-v4.md` e `from-v4-to-v5.md`, più le voci nel CHANGELOG delle
+      migrazioni. Il secondo avvisa su `protectBrowserFingerprints`: arriva a
+      `true`, ma il merge non sovrascrive un valore già presente
+- [x] **`migrationsChain.test.js`**: la catena deve coprire per intero il salto
+      fino alla `schemaVersion` del descrittore, ogni salto dev'essere unitario e
+      contiguo, ogni step motivato, ogni script esistente, ogni salto documentato.
+      È il promemoria eseguibile che mancava — il difetto è invisibile a mano
+      (due file lontani da confrontare) e si ripresenta a **ogni** bump
 
 #### C6 — Vista C: le due perdite silenziose del form
 
