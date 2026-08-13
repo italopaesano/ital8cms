@@ -88,9 +88,10 @@ Il **6** copre gli account. I **7-8** sono raffinamento.
 
 **Passo 0 — Debito e attriti.** Riscrittura di `core/priorityMiddlewares/README.md`;
 test di identità byte-per-byte per il blocco di sentinel (esiste per il reserved
-gate, non per questo); memoizzazione del fingerprint sul socket; chiusura per
-**decisione** — non per implementazione — delle voci §9 *prefissi admin* e §16
-*hideExtension*.
+gate, non per questo); memoizzazione del fingerprint sul socket (~~fatta~~ →
+**rimossa** in C7: era un errore di categoria, vedi il piano di consolidamento);
+chiusura per **decisione** — non per implementazione — delle voci §9 *prefissi
+admin* e §16 *hideExtension*.
 
 **Passo 1 — `adminSentinel`, Vista Dati.** Plugin twin con `dependency:
 { sentinel: "^1.0.0" }` — qui la dipendenza **è** legittima, al contrario di
@@ -279,11 +280,449 @@ Le due correzioni:
 
 ---
 
+### Piano di consolidamento — quello che il codice promette e non mantiene
+
+> ⚠️ **DA APPROVARE.** Piano proposto dopo la revisione completa dei due plugin
+> (2026-08-12, `/code-review` a livello `max` su `plugins/sentinel` e
+> `plugins/adminSentinel`, più lo slot `sentinelGate` del core). **Nessuno step è
+> stato eseguito.** Anche il nome del piano è da confermare: alternative proposte
+> *Piano di consolidamento* / *Piano di rientro* / *Piano post-revisione*.
+
+15 rilievi. Nove riverificati leggendo il codice riga per riga; per gli altri sei
+la fonte è l'analisi della revisione, indicata voce per voce con *(da riverificare)*.
+
+**Due schemi ricorrenti**, che contano più dei singoli difetti perché guidano le
+correzioni:
+
+1. **L'impronta è trattata come se identificasse un client, mentre identifica la
+   forma di una richiesta.** Da qui C7 e C9, e in parte C2. Finché la confusione
+   resta, ogni funzione costruita sull'impronta la eredita.
+2. **I commenti più sicuri di sé stanno esattamente dove sono i difetti.** «Un
+   client non cambia libreria a metà connessione», «un'impronta da browser non
+   può ricevere un giudizio negativo», «il totale storico resta nel file», «le tre
+   difese, tutte necessarie»: quattro affermazioni scritte dall'intenzione che il
+   codice non mantiene. Vanno corrette **insieme** al codice, o la prossima
+   lettura si fiderà di nuovo.
+
+**Ordine: rischio crescente**, come per il piano di rifinitura. Prima ciò che è
+certo, locale e già dannoso; poi il cuore del motore; le decisioni per ultime.
+
+| # | Step | Rilievi | Rischio | Perché lì |
+|---|---|---|---|---|
+| ~~**C1**~~ ✅ | ~~Le azioni che non mantengono il contratto~~ | 3 | basso | Locali e indipendenti, ma **agivano male** su chi aveva già acceso `enforce` |
+| ~~**C2**~~ ✅ | ~~Il giudizio non deve toccare le impronte condivise~~ | 1 | basso | Una riga, chiude una promessa scritta a caratteri cubitali |
+| ~~**C3**~~ ✅ | ~~Decoy: perimetro di scrittura e contesto di escape~~ | 2 | basso | Nessuno tocca il percorso delle richieste normali |
+| ~~**C4**~~ ✅ | ~~L'identità del client dietro proxy~~ | 1 | medio | Chiuso il sottoinsieme rilevabile; il resto è di rete, non di codice |
+| ~~**C5**~~ ✅ | ~~La catena delle migrazioni~~ | 1 | basso | Nessun codice a runtime, ma sblocca le installazioni esistenti |
+| ~~**C6**~~ ✅ | ~~Vista C: le due perdite silenziose del form~~ | 2 | basso | Solo GUI; l'invariante da ripristinare è scritta nel form stesso |
+| ~~**C7**~~ ✅ | ~~L'impronta: cache per connessione~~ | 1 + test | **alto** | Percorso caldo di ogni richiesta, e va riscritto un test che oggi codifica il difetto |
+| **C8** | I contatori che mentono | 2 | basso | Non cambiano decisioni, cambiano ciò che l'amministratore legge per prenderle |
+| **C9** | Le due decisioni rimaste | 2 | — | Non sono correzioni: richiedono una scelta tua |
+
+---
+
+#### C1 — Le azioni che non mantengono il contratto ✅
+
+- [x] **`throttle` risponde 404** *(verificato)*. È in `VALID_ACTIONS` e il README
+      lo documenta come «delega a rateLimiter **senza bloccare**», ma
+      `shouldEnforce` esclude solo `allow`/`monitor`, `attachResponder` non ha un
+      ramo per lui, e il gate cade su `deny()`. Chi scrive una regola `throttle` e
+      passa a `enforce` blocca tutto credendo di contare soltanto.
+- [x] **`serveDrop` può lasciare la richiesta appesa** *(verificato)*.
+      `ctx.respond = false` è assegnato **prima** del controllo sul socket e la
+      funzione ritorna `true` comunque: senza socket nessuno risponde e il gate
+      non scrive il 404 di ripiego. L'assegnazione va dopo il controllo, con
+      `return false` quando il socket non c'è.
+- [x] **Open redirect via backslash** *(verificato)*. `ruleValidator.js:631`
+      considera esterno solo `scheme://` o `//`; la riga 657 rifiuta solo ciò che
+      non inizia con `/`. Quindi `to: '/\evil.com'` passa **come interno**,
+      saltando allowlist degli host e divieto di 301/308 — e i browser lo
+      normalizzano in `//evil.com`. CLAUDE.md §*Prevenzione Open Redirect* impone
+      di rifiutare entrambe le forme, e `getSafeRedirectUrl` lo fa: qui non è usato
+      e questo validatore è l'unica guardia.
+
+**Esito.** Il difetto di `throttle` era più largo di come la revisione l'aveva
+descritto: `enforced` non alimenta solo il gate, ma anche il **conteggio dei
+blocchi del censimento delle impronte** (`main.js`, campo `blocked:`) — da cui la
+reputazione ricava `suspect`/`bad` — e la colonna enforced/observed della
+dashboard. Metterlo a false solo nel verdetto avrebbe corretto il 404 lasciando in
+piedi impronte condannate per blocchi mai avvenuti. La correzione è quindi in
+`shouldEnforce`, con l'escalation spostata su una condizione propria: `throttle`
+conta sempre, e `escalate.ban` non scatta più su di lui (documentato).
+
+Per `serveDrop` la rinuncia senza socket riusa `dropDegraded`, lo stesso contatore
+del degrado dietro proxy: in entrambi i casi il significato è «non ho potuto
+troncare, risponde il gate».
+
+Per il redirect si **rifiuta** la forma `/\` invece di normalizzarla: nessuno la
+scrive per caso, quindi l'unica risposta utile è dire all'autore di scrivere ciò
+che intende.
+
+- [x] +15 test unitari (`engineActions.test.js`, che mette finalmente in uso
+      `_internals`, esportato e mai usato da nessuno) + 4 sul validatore + 2
+      d'integrazione su server reale
+- [x] Verificato che **9 test falliscono** ripristinando i tre difetti
+- [x] `README.it.md`: la riga di `throttle` diceva «senza bloccare» mentre il
+      codice bloccava. Ora dice cosa fa davvero, incluse le due conseguenze
+      (`enforced: false`, niente `escalate.ban`)
+
+#### C2 — Il giudizio non deve toccare le impronte condivise ✅
+
+- [x] **`burst` è fuori dalla guardia `protectBrowserFingerprints`** *(verificato)*.
+      `levels.push('burst')` non è protetto, mentre `suspect`/`bad` lo sono. Al
+      primo visitatore reale una pagina con i suoi asset produce decine di
+      richieste in secondi sotto l'unica impronta condivisa «Chrome su Linux» →
+      `burst`. Una regola `reputation: ['burst']` — forma suggerita dal file di
+      regole distribuito — chiude fuori ogni utente di quel browser. È il caso che
+      l'intestazione di `reputation.js` dichiara impossibile.
+
+**Esito.** Come per la cache dell'impronta (C7), **c'era un test che difendeva il
+difetto**: `'la protezione non tocca burst'`, motivato con «`burst` non è un
+giudizio sulla condotta ma una constatazione di cadenza, e non condanna nessuno da
+solo». È il ragionamento che aveva lasciato `burst` fuori dalla guardia, e non
+regge: in una regola `burst` si usa come gli altri livelli, e
+`match: { reputation: ['burst'] }, action: 'block'` è proprio la forma che il file
+di regole distribuito suggerisce.
+
+La guardia è ora una sola attorno a tutti e tre i livelli, perché la promessa in
+testa al file è una sola. La documentazione non andava corretta — README e
+`pluginConfig.default.json5` promettevano già che un'impronta da browser non
+riceve **mai** un giudizio negativo: era il codice a non mantenerlo. Vi ho aggiunto
+solo la menzione esplicita di `burst`, perché un lettore che ricorda il vecchio
+comportamento non resti nel dubbio.
+
+- [x] Guardia unica attorno a burst + suspect/bad
+- [x] Riscritto il test che asseriva il comportamento difettoso
+- [x] Test dello scenario reale: primo visitatore di un sito nuovo, 42 richieste
+      in 3 secondi da impronta browser → `levels: []`; stesso traffico da impronta
+      script → `burst`
+- [x] Test che la disattivazione esplicita riaccende burst anche sui browser
+- [x] Verificato che **2 test falliscono** ripristinando il difetto
+
+#### C3 — Decoy: perimetro di scrittura e contesto di escape ✅
+
+- [x] **`getWritablePaths` dichiara `decoys/data`** *(verificato: zero scritture in
+      tutto il codice — solo `existsSync` + `readFileSync`)*. Su un deploy con
+      filesystem immutabile il gate di storage salta **l'intero plugin di
+      sicurezza** per una cartella da cui si legge soltanto, ed è proprio lo
+      scenario che il box `[SENTINEL]` esiste per rendere visibile. Va dichiarata
+      solo la data dir.
+- [x] **`decoyRenderer` escapa solo in contesto HTML** *(riverificato: confermato il meccanismo, ridimensionata la gravità — vedi esito)*.
+      `const esc = isHtml ? escapeHtml : String` — un decoy `.js` o `.json`
+      riflette `{{path}}`/`{{ip}}` grezzi.
+
+**Esito.** Il meccanismo è confermato, la gravità **ridimensionata rispetto alla
+revisione**, che parlava di codice «eseguibile nell'origin del sito». Non regge
+per il `.js`: un `<script src>` cross-origin esegue nell'origin di CHI INCLUDE,
+quindi l'attaccante infetterebbe sé stesso, e una navigazione diretta a
+`application/javascript` non esegue affatto. Il caso con conseguenze vere è
+invece **`.xml`**, che i browser renderizzano e che può portare XHTML in
+namespace. Per `.json` e `.js` il danno reale è un altro e non è banale: una
+virgoletta nel percorso rompe il documento, e **un decoy malformato non inganna
+nessuno** — fallisce nell'unica cosa per cui esiste.
+
+Nessun decoy distribuito è in un formato a rischio (sono `.html` e `.txt`), quindi
+l'esposizione riguardava solo i decoy scritti dall'amministratore.
+
+La correzione sostituisce il booleano `isHtml` con una **tabella per estensione**:
+markup → entità, JSON → escape di stringa JSON, JS → come JSON più l'apostrofo
+(che in JSON sarebbe una sequenza non valida), CSS → esadecimale. `text/plain`
+resta senza escape, e la motivazione originale — «in un finto `.env` l'escaping
+HTML sarebbe rumore visibile» — era ed è giusta: era il *«tutto ciò che non è
+HTML»* a essere sbagliato, non quel caso.
+
+- [x] Tabella `REFLECT_ESCAPERS` + `reflectEscaperFor(ext)`; `renderTemplate`
+      riceve l'escaper invece di un booleano
+- [x] Test che pretende una scelta esplicita per **ogni** tipo di CONTENT_TYPES,
+      così aggiungerne uno senza decidere l'escape non passa in silenzio
+- [x] Il test del `.js` verifica la proprietà vera — il valore riflesso torna
+      indietro intatto eseguendo davvero il decoy — invece di cercare un carattere
+- [x] `decoys/data` tolta da `getWritablePaths`, con la regola generale scritta
+      accanto: si dichiara una directory se e solo se esiste una scrittura che la
+      riguarda
+- [x] Verificato che **6 test falliscono** ripristinando i due difetti
+
+#### C4 — L'identità del client dietro proxy ✅
+
+- [x] **`resolveClientIp` clampa l'indice XFF a 0** *(riverificato e misurato: confermato, e con un caso peggiore di quello segnalato)*. Con
+      `trustedProxyCount` maggiore della catena reale, `Math.max(0, len - hops)`
+      restituisce la voce **più a sinistra**, cioè quella scritta dal client. IP di
+      ban, chiave del censimento, escalation verso rateLimiter e confronto
+      `sameClient` del canary diventano tutti scelti dall'attaccante. Non si deve
+      mai indicizzare a sinistra di ciò che i proxy fidati hanno effettivamente
+      scritto. *(Nota: `chain[index] || chain[0]` è anche codice morto — `chain` è
+      già filtrata.)*
+
+**Esito, e il limite di quanto è correggibile qui.** Misurato con sei topologie:
+
+```
+                                  hops   prima      dopo
+1 proxy, catena corretta            1   203.0.113.9  203.0.113.9  ✓
+1 proxy, client che mente           1   203.0.113.9  203.0.113.9  ✓
+2 proxy, catena corretta            2   203.0.113.9  203.0.113.9  ✓
+hops=3, catena di 1                 3   1.2.3.4 ✗    203.0.113.9  ✓ (corretto)
+hops=2 ma 1 solo proxy reale        2   1.2.3.4 ✗    1.2.3.4      ✗ (NON correggibile)
+hops=1, connessione DIRETTA         1   1.2.3.4 ✗    1.2.3.4      ✗ (NON correggibile)
+```
+
+**Il caso peggiore non era quello segnalato.** La revisione parlava di un
+off-by-one nella configurazione; ma la riga 5 mostra che con
+`trustedProxyCount: 1` **perfettamente corretto**, chi raggiunge l'app
+direttamente scavalcando il proxy manda `X-Forwarded-For: 1.2.3.4` e ottiene
+esattamente quello. Non serve sbagliare la configurazione: serve che la porta
+dell'app sia raggiungibile.
+
+**Perché le ultime due non si correggono a questo livello.** Nei tre casi
+legittimi la catena ha `length >= hops` e l'indice `length - hops` è corretto per
+costruzione. Nei due residui la catena ha *esattamente* la lunghezza attesa —
+perché l'attaccante l'ha imbottita, o perché non è passata da alcun proxy — ed è
+**indistinguibile dall'header soltanto** da una catena legittima. L'unico
+discriminante è se il peer del socket sia davvero un proxy fidato, e per saperlo
+servirebbe un elenco di indirizzi, che oggi non esiste (`trustedProxyCount` è un
+numero). Vedi il seguito proposto qui sotto.
+
+- [x] `chain.length < hops` → ripiego sul peer del socket, che non è falsificabile
+- [x] Avviso una volta sola (latch): la condizione è provocabile da chi bussa, e
+      un log per richiesta sarebbe un attacco al disco travestito da diagnostica
+- [x] Rimosso `chain[index] || chain[0]`, morto: `chain` è già filtrata
+- [x] +8 test sulle sei topologie. Verificato che **2 falliscono** ripristinando
+      il clamp
+- [x] `pluginConfig.default.json5`: le due avvertenze che mancavano — il numero
+      dev'essere **esatto**, e `trustProxy: true` è **una promessa** («all'app si
+      arriva solo dal proxy») il cui rimedio è di rete, non di configurazione
+
+**Seguito proposto — `trustedProxies` come elenco invece che come numero.**
+Sostituire (o affiancare) il conteggio con un elenco di indirizzi/CIDR dei proxy
+fidati permetterebbe di verificare che il peer del socket sia davvero uno di
+loro, chiudendo anche le due righe rosse qui sopra. Non è stato fatto dentro C4
+perché è una **chiave di configurazione nuova** — quindi una decisione di naming e
+di compatibilità che spetta al maintainer — e perché va coordinata con la voce
+trasversale `keyResolver in core/`: rateLimiter risolve l'IP per conto suo, e due
+elenchi di proxy che possono divergere sarebbero peggio di uno approssimativo.
+
+#### C5 — La catena delle migrazioni ✅
+
+- [x] **`schemaVersion: 5` ma step solo fino a 3** *(verificato)*. Il runner calcola
+      `covered = pending.length === (target - liveVersion)`: non torna mai, quindi
+      box `[MIGRATE]` di errore a ogni boot che nulla può chiudere e
+      `migrate sentinel` che si rifiuta di girare — **anche per i due step veri**.
+      Le installazioni esistenti non ricevono mai `canary-token-used` né
+      `session-hijack-signal`, e continuano a calcolare dati che nessuna regola
+      legge. Servono due step `automatic: true` senza script, 3→4 e 4→5, con la
+      `reason` che spiega perché sono vuoti.
+
+**Esito.** I due bump erano stati fatti nel giusto convincimento che il merge
+additivo bastasse — e bastava: il passo 7 ha aggiunto `custom.tarpit`, il passo 8
+`custom.reputation` e `census.ipRetentionDays`, tutte chiavi dentro oggetti. Anche
+le 43 e 49 righe aggiunte al file delle regole in quegli interventi sono
+**tutte commenti** (verificato: gli esempi di `drop`, `tarpit` e reputazione
+restano commentati per scelta), quindi `rules` non è cambiato.
+
+L'errore non è stato non scrivere uno script: è stato non dichiarare lo **step**.
+Il runner non guarda se serva uno script, guarda se la catena copre il salto.
+
+**Provato end-to-end** su un'installazione simulata a v1: `readPlan` passava da
+`incomplete-chain` («la catena non copre l'intero salto v1 → v5») a `ok`, e
+`npm run cli -- migrate sentinel -y` ha applicato **4 step su 4** portando il vivo
+a v5, con `custom.tarpit` e `custom.reputation` presenti e le due regole al loro
+posto (gli step sono idempotenti: «già presente, nessuna modifica»).
+
+- [x] Due step `automatic: true` senza script, con `reason` che spiega perché
+      sono vuoti e perché esistono lo stesso
+- [x] `from-v3-to-v4.md` e `from-v4-to-v5.md`, più le voci nel CHANGELOG delle
+      migrazioni. Il secondo avvisa su `protectBrowserFingerprints`: arriva a
+      `true`, ma il merge non sovrascrive un valore già presente
+- [x] **`migrationsChain.test.js`**: la catena deve coprire per intero il salto
+      fino alla `schemaVersion` del descrittore, ogni salto dev'essere unitario e
+      contiguo, ogni step motivato, ogni script esistente, ogni salto documentato.
+      È il promemoria eseguibile che mancava — il difetto è invisibile a mano
+      (due file lontani da confrontare) e si ripresenta a **ogni** bump
+
+#### C6 — Vista C: le due perdite silenziose del form ✅
+
+- [x] **`sessionAnomaly: true` e `reputation: true` spariscono** *(riverificato: confermato)*.
+      `fillMatch` traduce la forma booleana in «niente selezionato» e `collectMatch`
+      non riscrive la chiave: aprire una regola, cambiare la descrizione e salvare
+      la **allarga** da «solo sessioni anomale» a «tutte». Continua a validare,
+      quindi nulla se ne accorge.
+- [x] **Un `query` array viene appiattito in stringa** *(riverificato: confermato, e la correzione ovvia era sbagliata — vedi esito)*.
+      `['union select', 'sleep(']` diventa il letterale `union select,sleep(` e la
+      regola smette di rilevare entrambi i pattern. `mUserAgent` gestisce già il
+      caso array correttamente: è il modello da seguire.
+
+Entrambi violano l'invariante scritta nell'intestazione del form: *«un form non
+deve MAI distruggere ciò che non sa rappresentare»*.
+
+**Esito.**
+
+`true` significa «qualunque», e la cura è renderlo **rappresentabile** invece di
+tollerarlo: i due elenchi hanno ora una voce **«qualunque (true)»** con valore
+sentinella `*` — che non può collidere, visto che anomalie e livelli sono nomi.
+Selezionandola insieme ad altre voci vince lei, perché è la più larga.
+
+Per `query` la correzione ovvia era **sbagliata**: copiare il trattamento di
+`userAgent`, cioè separare per virgola. Nella querystring la virgola è un
+carattere normale (`?ids=1,2,3`), quindi `"ids=1,2,3"` — un pattern singolo
+perfettamente legittimo — sarebbe stato spezzato in tre. È diventata invece
+un'**area di testo con un pattern per riga**, come `path`: l'unica forma che
+regge sia l'array sia la stringa con virgole.
+
+**Verificato dal vivo**, con login vero e giro completo attraverso l'API della
+GUI su una regola `{ sessionAnomaly: true, query: ['union select','sleep('],
+path: '/admin/**' }`:
+
+```
+prima (vecchia mappatura) → {"path":"/admin/**","query":"union select,sleep("}
+dopo  (giro no-op reale)  → identica all'originale ✓
+```
+
+- [x] Voce «qualunque» nei due elenchi + mappatura nei due versi
+- [x] `mQuery` da input a textarea, un pattern per riga
+- [x] Le quattro mappature estratte come **funzioni pure** ed esportate sotto
+      `typeof module` (ramo che in browser non esiste): sono l'unica parte
+      testabile senza un DOM, che il progetto non allestisce da nessuna parte, e
+      sono esattamente dove il form ha perso dati due volte
+- [x] +18 test sul giro completo file → form → file. Verificato che **6
+      falliscono** ripristinando le vecchie mappature
+- [x] `adminSentinel/README.it.md`: la sezione sull'invariante ora dice che
+      valeva anche per i casi piccoli, con la tabella di cosa si perdeva
+
+**Sibling non toccato, per scelta.** `userAgent` ha lo stesso difetto latente:
+separa per virgola, quindi una stringa singola che ne contiene una verrebbe
+spezzata. Non l'ho cambiato perché a differenza di `query` il round-trip degli
+array lì **funziona**, e passare a textarea cambierebbe il significato di ciò che
+è già scritto su una riga sola (`curl, wget` da due pattern a uno). È una
+decisione di interfaccia su un campo che nessuno ha segnalato: la lascio a te.
+
+#### C7 — L'impronta: cache per connessione ✅
+
+- [x] **La memoizzazione sul socket annulla le due regole di punta** *(verificato)*.
+      `buildFingerprint` memoizza sul socket TCP con chiave il solo salt. Il
+      razionale — «un client non cambia libreria HTTP a metà connessione» — vale
+      per la libreria, ma la `fpClass` contiene anche `headerProfile` e `coherent`,
+      che si ricavano dagli header **di quella richiesta**. Su keep-alive una
+      richiesta di riscaldamento con header da browser fissa
+      `{coherent: true, headerProfile: 'browser'}` per tutta la connessione:
+      `ua-fingerprint-mismatch` e `auth-surface-noise` si aggirano con una
+      richiesta. Colpisce anche il traffico legittimo — il primo asset di una
+      connessione detta il profilo di tutta la pagina.
+- [x] **Riscrivere il test che codifica il difetto.**
+      `requestFingerprint.test.js:128` mandava `CURL_HEADERS` e poi
+      `CHROME_HEADERS` sullo stesso socket e pretendeva `expect(second).toBe(first)`.
+      Non bastava correggere il codice: quel test difendeva il bug.
+
+**Esito: la cache è stata rimossa, non ristretta.** La direzione ipotizzata
+(memoizzare solo ciò che è stabile per connessione) si è rivelata un vicolo cieco
+una volta misurata: *nulla* di ciò che serve è stabile per connessione tranne la
+versione HTTP, che è una lettura di proprietà e non costa niente. Il resto —
+ordine e valori degli header, `headerProfile`, `coherent` — dipende dalla singola
+richiesta per costruzione.
+
+**Le due misure che hanno deciso.** Server HTTP autonomo che calcola l'impronta
+con e senza cache, pilotato da Chromium su una pagina con CSS, immagine, script
+e `fetch` POST:
+
+```
+sock  url          impronta VERA     impronta RESA
+1     /            bc13ff8a825ba577  bc13ff8a825ba577
+1     /a.css       2c96521fe4b2f813  bc13ff8a825ba577 ✗
+1     /c.js        14b440b9e2667937  bc13ff8a825ba577 ✗
+1     /d.json      e582bd022cc792a6  bc13ff8a825ba577 ✗   (POST)
+→ 3 richieste su 7 con l'impronta di un'altra
+```
+
+e l'aggiramento, con due richieste a socket grezzo sulla stessa connessione:
+
+```
+1  /index.html        vera: browser coerente=true    resa: browser coerente=true
+2  /admin/config.php  vera: minimal coerente=false   resa: browser coerente=true ✗
+→ `ua-fingerprint-mismatch` muto dopo una richiesta di riscaldamento
+```
+
+Dopo la correzione entrambe le misure danno **0 richieste sbagliate**.
+
+**Il costo, misurato invece che temuto.** `buildFingerprint` costa ~11,5 µs per
+una navigazione Chrome (sha256 2,0 · `detectBot` 2,8 · le 24 regex sull'UA il
+resto; l'ordine degli header 0,4, il profilo 0,09). Una richiesta end-to-end
+attraverso il CMS ne costa ~1000-1300, con una varianza fra due esecuzioni
+identiche di ±150 µs: l'effetto della rimozione è **venti volte più piccolo del
+rumore di misura**, e non è osservabile end-to-end. In assoluto: a 1000
+richieste al secondo, l'1% di un core.
+
+Una memoizzazione *corretta* resterebbe possibile e non è stata fatta: la parte
+cara è quella derivata dall'UA (~70%), che si potrebbe memoizzare **con l'UA
+stesso come chiave** — verificando invece di assumere, che è precisamente ciò che
+mancava. Richiederebbe un nome nuovo (regola 3 del CLAUDE.md) e vale ~8 µs: se lo
+si vuole, è una richiesta a sé.
+
+> La morale, che vale oltre questo file: una cache **per connessione** di una
+> proprietà **per richiesta** non è un'ottimizzazione aggressiva, è un errore di
+> categoria — ed è lo schema n°1 della revisione («l'impronta trattata come se
+> identificasse un client») nella sua forma più pura.
+
+**Seguito proposto — memoizzare la sola parte derivata dall'User-Agent.** Vale
+~8 µs su 11,5 e sarebbe corretta per costruzione, perché la chiave sarebbe l'UA
+stesso (troncato a `MAX_UA_LENGTH`, quindi confronto limitato) e i cinque valori
+che ne dipendono — `declaredFamily`, `claimedBrowser`, `claimedOs`, `isBot`,
+`botName` — sono funzioni pure di quella sola stringa. Non fatta dentro C7 per
+due ragioni: serve un **nome nuovo** per la chiave sul socket (regola 3 del
+CLAUDE.md), e reintrodurre una cache nello stesso file dove ne è appena stata
+tolta una vuole essere una decisione, non un residuo dello stesso intervento.
+
+#### C8 — I contatori che mentono
+
+- [ ] **Il censimento degli esiti conta 304 e 3xx** *(da riverificare)*. Un
+      visitatore che ricarica una pagina con 25 asset in cache produce 25 path
+      distinti e finisce fra i «sospetti scanner», che è il pannello nato per
+      mostrare gli attacchi senza regola.
+- [ ] **`ruleHitCounter` distrugge lo storico degli IP distinti** *(verificato)*.
+      `_load` ricrea un `Set` vuoto e il primo `save` riscrive quel conteggio sopra
+      il valore storico. Il commento dice «il totale storico resta nel file»: il
+      percorso di salvataggio lo contraddice. Serve uno scalare separato, oppure
+      non riscrivere la chiave quando il `Set` è vuoto.
+
+#### C9 — Le due decisioni rimaste
+
+Non sono correzioni: richiedono una scelta, e vanno affrontate dopo C7 perché il
+suo esito cambia i termini della prima.
+
+- [ ] **`fingerprintChanged`** — vedi la sezione *Aperto* qui sotto, che resta la
+      descrizione di riferimento. Le tre risposte si escludono a vicenda.
+      **C7 ha chiuso la domanda che teneva aperta questa decisione**: quanto
+      rumore resti tolta la cache. Risposta misurata su Chromium, una pagina
+      sola: **quattro impronte distinte** (navigazione `bc13ff8a`, foglio di
+      stile `2c96521f`, script e `fetch` GET `14b440b9`, `fetch` POST
+      `e582bd02`). Il rumore non cala, cambia natura — da casuale (dipendeva da
+      quale richiesta apriva la connessione) a **deterministico**: la foglia
+      scatta a ogni alternanza navigazione↔asset↔AJAX, sempre, per chiunque.
+      Il che è una buona notizia per la decisione: il fenomeno ora è
+      riproducibile e non c'è più nulla da misurare prima di scegliere.
+- [ ] **Onestà sulle difese ReDoS** *(verificato)*. `evaluate(ctx)` è **sincrono**,
+      quindi il `Promise.race` con timeout 250 ms nel gate non può interromperlo:
+      una regex catastrofica blocca l'event loop e il `setTimeout` non scatta mai.
+      `ruleValidator` lo elenca fra «le tre difese, tutte necessarie». Delle due
+      l'una: o la valutazione esce dall'event loop (intervento grosso), o il
+      commento smette di contare una difesa che non esiste e si rafforzano le due
+      vere (troncamento dell'input, rifiuto dei pattern).
+
+---
+
 ### Aperto — `fingerprintChanged` mente per costruzione
+
+> Confluita nel *Piano di consolidamento* come **C9**, che ne stabilisce anche il
+> momento: dopo C7, perché la correzione della cache per connessione cambia quanto
+> rumore resta. Questa sezione resta la descrizione di riferimento.
 
 Emerso analizzando l'interazione fra sentinel e `csrfProtection` (v2.81.0). Non
 è un bug con un sintomo: è una foglia che **non può funzionare come promette**,
 e oggi non fa danno solo perché la regola distribuita non la usa.
+
+La revisione completa dei due plugin (2026-08-12) ha aggiunto un pezzo: la
+memoizzazione dell'impronta sul socket (**C7**) **peggiorava** il quadro, perché
+il profilo del primo asset di una connessione restava appiccicato a tutte le
+richieste successive di quella connessione. ✅ **Rimossa.** Il rumore ora è quello
+vero, e si è rivelato deterministico invece che casuale: quattro impronte per una
+pagina, sempre le stesse (vedi C7).
 
 `sessionCoherence` fissa una linea di base al primo avvistamento di una sessione
 autenticata e la confronta con ogni richiesta successiva. Ma l'impronta descrive

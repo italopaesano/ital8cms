@@ -157,7 +157,12 @@
                 </div>
                 <div class="col-12 col-md-6">
                   <label class="form-label small mb-1">query</label>
-                  <input id="mQuery" class="form-control form-control-sm" placeholder="regex:union\s+select" spellcheck="false">
+                  <%# Una riga per pattern, come `path` e NON come gli altri campi a
+                      virgole: nella querystring la virgola è un carattere normale
+                      (`?ids=1,2,3`), quindi separare per virgola spezzerebbe in due un
+                      pattern singolo che ne contiene una. %>
+                  <textarea id="mQuery" class="form-control form-control-sm" rows="2" spellcheck="false" placeholder="regex:union\s+select&#10;../"></textarea>
+                  <div class="form-text small"><%= __({it: 'Una riga per pattern.', en: 'One pattern per line.'}, passData.ctx) %></div>
                 </div>
 
                 <div class="col-12 col-md-6">
@@ -192,7 +197,11 @@
                 </div>
                 <div class="col-6 col-md-3">
                   <label class="form-label small mb-1">sessionAnomaly</label>
-                  <select id="mSessionAnomaly" class="form-select form-select-sm" multiple size="5">
+                  <select id="mSessionAnomaly" class="form-select form-select-sm" multiple size="6">
+                    <%# `true` nel file significa «qualunque anomalia». Senza questa voce
+                        la forma booleana si presentava come "niente selezionato" e alla
+                        prima risalvata la chiave spariva, allargando la regola. %>
+                    <option value="*"><%= __({it: 'qualunque (true)', en: 'any (true)'}, passData.ctx) %></option>
                     <option value="uaChanged">uaChanged</option>
                     <option value="fingerprintChanged">fingerprintChanged</option>
                     <option value="networkChanged">networkChanged</option>
@@ -202,7 +211,8 @@
                 </div>
                 <div class="col-6 col-md-3">
                   <label class="form-label small mb-1">reputation</label>
-                  <select id="mReputation" class="form-select form-select-sm" multiple size="3">
+                  <select id="mReputation" class="form-select form-select-sm" multiple size="4">
+                    <option value="*"><%= __({it: 'qualunque (true)', en: 'any (true)'}, passData.ctx) %></option>
                     <option value="burst">burst</option>
                     <option value="suspect">suspect</option>
                     <option value="bad">bad</option>

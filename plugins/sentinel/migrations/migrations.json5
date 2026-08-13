@@ -38,5 +38,37 @@
       reason:
         "Stessa ragione dello step precedente: `rules` è un array e il merge non  lo tocca. Senza questo step, su un'installazione esistente le anomalie di  sessione verrebbero calcolate a ogni richiesta autenticata e buttate via,  perché nessuna regola le guarderebbe. La regola viene inserita DOPO  `canary-token-used` (ancora esplicita) e non semplicemente dopo la  whitelist: senza l'ancora finirebbe sopra quella dello step precedente, e  l'ordine di un'installazione migrata differirebbe da quello di una nuova.",
     },
+    // ── I due step senza script ────────────────────────────────────────────
+    // Dichiarati DOPO, nel consolidamento C5, e non insieme ai bump che li hanno
+    // resi necessari: i passi 7 e 8 avevano bumpato la `schemaVersion` del
+    // descrittore convinti — a ragione — che il merge additivo bastasse, e non
+    // avevano dichiarato nulla. Ma il runner non guarda se serva uno script:
+    // guarda se la CATENA copre il salto (`pending.length === target - live`).
+    // Con il descrittore a 5 e gli step fermi a 3, ogni installazione riceveva un
+    // box [MIGRATE] di errore a ogni boot che nulla poteva chiudere, e
+    // `migrate sentinel` si rifiutava di girare — bloccando anche i due step veri
+    // qui sopra. Una catena bucata non ferma solo sé stessa: ferma tutto.
+    //
+    // `automatic: true` senza `script` è il caso più frequente e più tranquillo:
+    // basta il merge additivo ricorsivo del boot. `reason` resta obbligatorio,
+    // perché dichiarare che un salto è sicuro non è la stessa cosa che motivarlo.
+    {
+      from: 3,
+      to: 4,
+      title: "Tetti di drop e tarpit",
+      automatic: true,
+      touches: ["plugins/sentinel/pluginConfig.json5"],
+      reason:
+        "Il passo 7 ha aggiunto il blocco `custom.tarpit` (maxConcurrent,  maxSeconds, intervalMs) al descrittore. Sono chiavi nuove DENTRO un  oggetto, che il merge additivo ricorsivo del boot sa aggiungere da sé:  nessuno script. `sentinelRules.default.json5` è cresciuto di 43 righe nello  stesso intervento, ma sono tutte COMMENTI — gli esempi di regola per drop e  tarpit restano commentati per scelta, quindi l'array `rules` non è cambiato  e non c'è nulla da inserire. Questo step esiste perché la catena sia  contigua, non perché ci sia lavoro da fare.",
+    },
+    {
+      from: 4,
+      to: 5,
+      title: "Reputazione locale delle impronte",
+      automatic: true,
+      touches: ["plugins/sentinel/pluginConfig.json5"],
+      reason:
+        "Il passo 8 ha aggiunto `custom.reputation` (minRequests, suspectShare,  badShare, burstWindowSeconds, burstMinRequests,  protectBrowserFingerprints) e `custom.census.ipRetentionDays`. Anche qui  solo chiavi dentro oggetti, coperte dal merge additivo; e anche qui le  regole di esempio aggiunte al file distribuito sono commentate, quindi  `rules` non cambia. Attenzione a un valore in particolare:  `protectBrowserFingerprints` arriva a `true`, ed è il default giusto —  un'impronta da browser è condivisa da tutti i suoi utenti, e condannarla  significa chiudere fuori loro. Il merge non sovrascrive un valore già  presente, quindi chi l'avesse messo a false resta a false: se non è  intenzionale, va rivisto a mano.",
+    },
   ],
 }

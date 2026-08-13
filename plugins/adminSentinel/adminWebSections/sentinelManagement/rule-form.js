@@ -73,6 +73,53 @@
   /** Un array di un solo elemento torna scalare: com'è più naturale scriverlo. */
   const collapse = (arr) => (Array.isArray(arr) && arr.length === 1 ? arr[0] : arr);
 
+  // ── Le due mappature che hanno perso dati ─────────────────────────────────
+  // Estratte come funzioni PURE perché è qui che il form ha distrutto due volte
+  // ciò che non sapeva rappresentare, ed è l'unica parte che si possa mettere
+  // sotto test senza un DOM. Vedi ruleFormMapping.test.js.
+
+  // Valore sentinella della voce «qualunque» nei due multi-select. Non può
+  // collidere con un valore vero: le anomalie sono nomi (uaChanged, …) e i
+  // livelli di reputazione anche (burst, suspect, bad).
+  const ANY = '*';
+
+  /**
+   * `true` (= qualunque) ⇄ voce sentinella; array ⇄ sé stesso.
+   * Senza la voce sentinella la forma booleana si presentava come «niente
+   * selezionato», e alla prima risalvata la chiave spariva del tutto: una regola
+   * `{ sessionAnomaly: true, path: '/admin/**' }` diventava `{ path: '/admin/**' }`
+   * — da «solo le sessioni anomale» a «tutte».
+   */
+  function anyOrListToSelection(value) {
+    if (value === true) return [ANY];
+    return asArray(value);
+  }
+
+  /** Il verso opposto: `['*']` → true, `[]` → undefined (la chiave sparisce). */
+  function selectionToAnyOrList(values) {
+    const scelti = asArray(values);
+    if (scelti.indexOf(ANY) !== -1) return true;   // il più largo vince
+    return scelti.length ? scelti : undefined;
+  }
+
+  /**
+   * Pattern multipli in un'area di testo, UNO PER RIGA.
+   *
+   * Non separati da virgola come extension/method/ip, perché lì la virgola non
+   * può comparire dentro un valore mentre in una querystring è un carattere
+   * normale (`?ids=1,2,3`): separare per virgola spezzerebbe in due un pattern
+   * singolo che ne contiene una. Prima il campo era una riga sola e un valore
+   * array vi finiva schiacciato da `String(...)`, per poi tornare sul file come
+   * l'unica stringa improbabile `"a,b"`.
+   */
+  const patternsToText = (value) => asArray(value).join('\n');
+
+  function textToPatterns(text) {
+    const righe = String(text || '').split('\n').map((s) => s.trim()).filter(Boolean);
+    if (righe.length === 0) return undefined;
+    return collapse(righe);
+  }
+
   /** Il match è rappresentabile dal form? */
   function isSimpleMatch(match) {
     if (!match || typeof match !== 'object') return false;
@@ -198,14 +245,14 @@
     $('mExtension').value = asArray(m.extension).join(', ');
     $('mMethod').value = asArray(m.method).join(', ');
     $('mUserAgent').value = Array.isArray(m.userAgent) ? m.userAgent.join(', ') : (m.userAgent || '');
-    $('mQuery').value = m.query || '';
+    $('mQuery').value = patternsToText(m.query);
     $('mIp').value = asArray(m.ip).join(', ');
     $('mStatus').value = asArray(m.status).join(', ');
     $('mRoleIds').value = asArray(m.roleIds).join(', ');
     $('mAuthenticated').value = m.authenticated === undefined ? '' : String(m.authenticated);
     $('mCanary').value = m.canary === undefined ? '' : String(m.canary);
-    setMulti($('mSessionAnomaly'), m.sessionAnomaly === true ? [] : m.sessionAnomaly);
-    setMulti($('mReputation'), m.reputation === true ? [] : m.reputation);
+    setMulti($('mSessionAnomaly'), anyOrListToSelection(m.sessionAnomaly));
+    setMulti($('mReputation'), anyOrListToSelection(m.reputation));
 
     const fp = m.fingerprintClass || {};
     $('mFpCoherent').value = fp.coherent === undefined ? '' : String(fp.coherent);
@@ -232,8 +279,8 @@
     const ua = String($('mUserAgent').value || '').trim();
     if (ua) m.userAgent = ua.indexOf('regex:') === 0 || ua === 'empty' ? ua : collapse(listOf(ua));
 
-    const query = String($('mQuery').value || '').trim();
-    if (query) m.query = query;
+    const query = textToPatterns($('mQuery').value);
+    if (query !== undefined) m.query = query;
     const ip = listOf($('mIp').value);
     if (ip) m.ip = ip;
     const status = intListOf($('mStatus').value);
@@ -244,10 +291,10 @@
     if ($('mAuthenticated').value) m.authenticated = $('mAuthenticated').value === 'true';
     if ($('mCanary').value) m.canary = $('mCanary').value === 'true' ? true : $('mCanary').value;
 
-    const anomalie = getMulti($('mSessionAnomaly'));
-    if (anomalie.length) m.sessionAnomaly = anomalie;
-    const reputazione = getMulti($('mReputation'));
-    if (reputazione.length) m.reputation = reputazione;
+    const anomalie = selectionToAnyOrList(getMulti($('mSessionAnomaly')));
+    if (anomalie !== undefined) m.sessionAnomaly = anomalie;
+    const reputazione = selectionToAnyOrList(getMulti($('mReputation')));
+    if (reputazione !== undefined) m.reputation = reputazione;
 
     const fp = {};
     if ($('mFpCoherent').value) fp.coherent = $('mFpCoherent').value === 'true';
@@ -341,6 +388,19 @@
     el.addEventListener('input', () => { dirty = true; });
     el.addEventListener('change', () => { dirty = true; });
   }
+
+  // ── Esportazione per i test ───────────────────────────────────────────────
+  // Le quattro funzioni qui sotto sono pure e sono ESATTAMENTE il punto in cui il
+  // form ha perso dati due volte. In browser `module` non esiste e questo ramo
+  // non gira; sotto Node permette di verificare il giro completo file → form →
+  // file senza allestire un DOM, che questo progetto non fa da nessuna parte.
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { ANY, anyOrListToSelection, selectionToAnyOrList, patternsToText, textToPatterns };
+  }
+
+  // Sotto Node non c'è un `document` da agganciare: il file viene richiesto solo
+  // per le funzioni pure qui sopra.
+  if (typeof document === 'undefined') return;
 
   document.addEventListener('DOMContentLoaded', function () {
     Array.from(document.querySelectorAll('#formCard input, #formCard select, #formCard textarea'))

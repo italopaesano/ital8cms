@@ -250,6 +250,23 @@ Qui invece un `match` non rappresentabile viene **conservato alla lettera** e
 mostrato in sola lettura, con un rimando all'editor JSON5. Tutto il resto della
 regola resta modificabile e salvabile senza rischio.
 
+La regola vale anche per i **casi piccoli**, ed è lì che era stata infranta due
+volte (corretto nel consolidamento C6). Due forme legittime del file tornavano
+indietro diverse da come erano entrate:
+
+| Nel file | Come si presentava | Come tornava indietro |
+|---|---|---|
+| `sessionAnomaly: true` (= qualunque) | niente selezionato | la chiave **spariva** |
+| `reputation: true` | niente selezionato | la chiave **spariva** |
+| `query: ["union select", "sleep("]` | `union select,sleep(` | l'unica stringa `"union select,sleep("` |
+
+La prima **allargava** la regola senza dirlo — da «solo le sessioni anomale» a
+«tutte» — e continuava a validare, quindi nulla se ne accorgeva. Ora `true` ha la
+sua voce **«qualunque»** nei due elenchi, e `query` è un'area di testo con **un
+pattern per riga** come `path`: non separata da virgole, perché in una querystring
+la virgola è un carattere normale (`?ids=1,2,3`) e spezzerebbe in due un pattern
+che ne contiene una.
+
 ### Cosa si perde salvando dal form
 
 I commenti scritti **dentro quella regola**. Il form conosce i campi, non i

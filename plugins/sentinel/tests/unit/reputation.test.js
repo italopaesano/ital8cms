@@ -142,10 +142,35 @@ describe('la protezione delle impronte da browser', () => {
     expect(r.protected).toBe(false);
   });
 
-  test('la protezione non tocca burst', () => {
-    // `burst` non è un giudizio sulla condotta ma una constatazione di cadenza:
-    // vale anche per un browser, e non condanna nessuno da solo.
+  // Questo test asseriva l'opposto, sulla base che «burst non è un giudizio sulla
+  // condotta ma una constatazione di cadenza, e non condanna nessuno da solo».
+  // Non regge: in una regola `burst` si usa come gli altri livelli, e
+  // `match: { reputation: ['burst'] }, action: 'block'` è proprio la forma che il
+  // file di regole distribuito suggerisce. Condanna, e da solo.
+  test('la protezione copre anche burst', () => {
     const r = classify(entry({ count: 100, blockedCount: 0, ageSeconds: 5 }), BROWSER_FP);
+    expect(r.levels).toEqual([]);
+    expect(r.protected).toBe(true);
+  });
+
+  // LO SCENARIO REALE, che è anche il più banale: installazione nuova, primo
+  // visitatore vero. Una pagina con i suoi asset sono decine di richieste in
+  // pochi secondi, tutte sotto l'unica impronta condivisa del suo browser — mai
+  // vista prima, per definizione. Senza la guardia su burst, una regola di
+  // reputazione chiude fuori ogni utente di quel browser al primo giorno di vita
+  // del sito.
+  test('il primo visitatore di un sito nuovo non viene giudicato', () => {
+    const primaVisita = entry({ count: 42, blockedCount: 0, ageSeconds: 3 });
+    expect(classify(primaVisita, BROWSER_FP).levels).toEqual([]);
+    // Lo stesso profilo di traffico da un client script resta invece un burst:
+    // la differenza è solo «questa impronta è condivisa».
+    expect(classify(primaVisita, SCRIPT_FP).levels).toContain('burst');
+  });
+
+  // La disattivazione esplicita continua a valere per tutti i livelli.
+  test('disattivando la protezione, burst torna a scattare anche sui browser', () => {
+    const r = classify(entry({ count: 100, blockedCount: 0, ageSeconds: 5 }), BROWSER_FP,
+      { protectBrowserFingerprints: false });
     expect(r.levels).toContain('burst');
   });
 

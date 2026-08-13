@@ -234,11 +234,25 @@ trasformerebbe una virgola fuori posto in un blackout.
 | `allow` | Esenzione esplicita. Contata ma non registrata. | ✅ v1 |
 | `monitor` | Matcha, registra, **lascia passare**. | ✅ v1 |
 | `block` | **404**, byte-identico a un URL che non è mai esistito. | ✅ v1 |
-| `throttle` | Delega a `rateLimiter` senza bloccare. | ✅ v1 |
+| `throttle` | Delega a `rateLimiter`, **lascia passare** la richiesta. | ✅ v1 |
 | `drop` | **Tronca la connessione** senza rispondere (stile 444 di nginx). | ✅ v1.4 |
 | `decoy` | [Contenuto fittizio](#contenuti-fittizi-decoy) al posto del 404. | ✅ v1.1 |
 | `redirect` | 30x, allowlist per l'esterno, permanenti vietati fuori dal sito. | ✅ v1.1 |
 | `tarpit` | [Risposta a goccia](#drop-e-tarpit-le-due-azioni-che-costano-anche-a-te), con tetto di connessioni e di durata. | ✅ v1.4 |
+
+`throttle` è l'unica azione che **agisce senza rispondere**: la sua azione è
+l'escalation verso `rateLimiter`, non il destino della richiesta, che prosegue
+esattamente come con `monitor`. Ne discendono due conseguenze da conoscere:
+
+- nel log vale `enforced: false`, e nella dashboard compare fra gli **osservati**
+  — perché quel campo significa «ha alterato la risposta», ed è lo stesso da cui
+  il censimento delle impronte ricava la quota di blocchi su cui poggia la
+  reputazione. Un throttle contato come blocco farebbe condannare impronte per
+  blocchi mai avvenuti;
+- `escalate.ban` **non scatta** su una regola `throttle`. Il ban è un'azione, e le
+  azioni passano dai tetti dell'enforcement; un throttle che bandisce sarebbe una
+  contraddizione nei termini. Se vuoi il ban, la regola va promossa a un'azione
+  che risponde.
 
 Il 404 di `block` non è fabbricato da questo plugin: è prodotto da
 `reservedGate.deny()`, l'unico punto del progetto che genera il 404 «di
@@ -311,10 +325,28 @@ ogni risposta diversa:
 | `{{path}}` `{{ip}}` | Il percorso richiesto e l'indirizzo di chi l'ha chiesto |
 | `{{canary}}` | Un [token esca](#token-esca-canary): trasforma il decoy in un sensore |
 
-Gli ultimi due sono **riflessi**: contengono stringhe scelte da chi ha fatto la
-richiesta, e nei decoy HTML vengono escapati. Senza, sarebbe una XSS riflessa in
-piena regola — e il bersaglio non sarebbe l'attaccante, che si autoinfetterebbe,
-ma chiunque riceva da lui un link a quell'URL.
+`{{path}}` e `{{ip}}` sono **riflessi**: contengono stringhe scelte da chi ha
+fatto la richiesta, quindi vanno escapati o sarebbero un'iniezione. L'escape
+dipende dal formato del file di decoy, perché i contesti sono diversi:
+
+| Estensione | Escape |
+|---|---|
+| `.html` `.htm` `.xml` | entità (`&lt;` `&gt;` `&amp;` `&quot;` `&#39;`) |
+| `.json` | escape di stringa JSON |
+| `.js` | come JSON, più l'apostrofo (in JSON `\'` non è valido) |
+| `.css` | esadecimale per ciò che chiude stringhe e `url()` |
+| `.txt` e sconosciute | **nessuno**, ed è corretto: non c'è contesto in cui iniettare, e l'escaping HTML in un finto `.env` sarebbe rumore visibile che tradisce la finzione |
+
+Nel markup l'assenza di escape sarebbe una XSS riflessa in piena regola, e il
+bersaglio non sarebbe l'attaccante — che si autoinfetterebbe — ma chiunque riceva
+da lui un link a quell'URL. Nei formati strutturati la posta in gioco è diversa
+ma non trascurabile: una virgoletta nel percorso richiesto rompe il documento, e
+un decoy malformato non inganna nessuno, cioè fallisce nell'unica cosa per cui
+esiste.
+
+> Aggiungendo un formato servibile va decisa anche la sua colonna di questa
+> tabella (`REFLECT_ESCAPERS` in `lib/decoyRenderer.js`). C'è un test che lo
+> pretende.
 
 ### Tre regole per chi ne scrive uno
 
@@ -563,6 +595,12 @@ una condizione utilizzabile in una regola.
 | `burst` | Impronta mai vista fino a poco fa, e già a decine di richieste |
 | `suspect` | Quota di blocchi oltre `suspectShare` (default 20%) |
 | `bad` | Quota di blocchi oltre `badShare` (default 50%) |
+
+Tutti e tre sono **giudizi negativi**, e la protezione dell'avvertenza 1 qui sotto
+li copre tutti — `burst` compreso, dove anzi serve di più: scatta senza bisogno di
+una storia sporca, quindi su un sito appena installato il primo visitatore vero
+(una pagina e i suoi asset, decine di richieste in pochi secondi, impronta mai
+vista per definizione) lo farebbe scattare da solo.
 
 ```json5
 {

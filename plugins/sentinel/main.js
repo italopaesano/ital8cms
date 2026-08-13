@@ -100,6 +100,10 @@ const decoyCache = new Map();
 
 // Latch per non ripetere all'infinito lo stesso avviso di configurazione.
 let rulesUnavailableLogged = false;
+// Idem per la catena X-Forwarded-For più corta dei proxy dichiarati: la
+// condizione è provocabile da chi bussa, quindi un log per richiesta sarebbe
+// un attacco al disco travestito da diagnostica.
+let shortProxyChainLogged = false;
 
 function log(level, message) {
   if (typeof logger[level] === 'function') logger[level](LOG_PREFIX, message);
@@ -345,34 +349,69 @@ function getMailer() {
  * `X-Forwarded-For` è falsificabile dal client: si legge SOLO con `trustProxy`
  * attivo, cioè solo quando davanti c'è un proxy che lo imposta davvero.
  *
- * Con `trustedProxyCount` si prende la voce giusta contando DA DESTRA. La catena
- * è "client, proxy1, proxy2" e solo le ultime voci sono state scritte da proxy
- * fidati: prendere la prima da sinistra — la scelta comoda — significa leggere
- * un valore che il client controlla, quindi permettergli di attribuire i propri
- * blocchi a un indirizzo altrui o di aggirare un ban cambiando header a ogni
- * richiesta.
+ * Con `trustedProxyCount` si prende la voce giusta contando DA DESTRA. Ogni proxy
+ * APPENDE l'indirizzo da cui ha ricevuto, quindi con due proxy fidati la catena
+ * legittima è `client, proxy1` e l'indice giusto è `length - hops`. Prendere la
+ * prima voce da sinistra — la scelta comoda — significa leggere un valore che il
+ * client controlla, quindi permettergli di attribuire i propri blocchi a un
+ * indirizzo altrui o di aggirare un ban cambiando header a ogni richiesta.
+ *
+ * ─── LA CATENA PIU CORTA DEL PREVISTO NON SI USA ──────────────────────────────
+ * Qui c'era `Math.max(0, chain.length - hops)`, cioè: se la catena è più corta di
+ * quanto dichiarato, prendi la prima voce. È il caso in cui la prima voce è
+ * proprio quella che NON è stata scritta da un proxy fidato.
+ *
+ * E non serve una configurazione sbagliata per arrivarci — bastava quella, ma
+ * c'è di peggio. Con `trustedProxyCount: 1` perfettamente corretto, chi raggiunge
+ * l'app **direttamente** (porta aperta sulla rete, proxy scavalcato) manda
+ * `X-Forwarded-For: 1.2.3.4`: la catena ha un solo elemento, nessun proxy l'ha
+ * toccata, e il vecchio calcolo restituiva `1.2.3.4`. Misurato. Da lì in poi IP
+ * di ban, chiave del censimento, escalation verso rateLimiter e confronto
+ * `sameClient` del canary erano tutti scelti da chi bussa.
+ *
+ * Se la catena è più corta di `hops`, la richiesta non ha attraversato i proxy
+ * dichiarati: non esiste una voce fidata da leggere, e si ricade sul **peer del
+ * socket**, che non è falsificabile. Si perde granularità — dietro un proxy vero
+ * il peer è il proxy — ma non si crede a un valore inventato.
+ *
+ * ⚠ Il ripiego vale finché `app.proxy` di Koa resta disattivato (oggi lo è, e non
+ * è impostato da nessuna parte): con `app.proxy: true` sarebbe Koa stessa a
+ * leggere l'XFF e a restituirne la prima voce, reintroducendo il problema dentro
+ * `ctx.ip`. È fra le voci di vigilanza del TODO del plugin.
  *
  * @param {object} ctx
  * @returns {string}
  */
 function resolveClientIp(ctx) {
   const trustProxy = custom.trustProxy === true;
+  const peerIp = normalizeIp((ctx && (ctx.ip || (ctx.request && ctx.request.ip))) || '');
 
   if (trustProxy && ctx.headers) {
     const raw = ctx.headers['x-forwarded-for'];
     if (typeof raw === 'string' && raw.length > 0) {
       const chain = raw.split(',').map((s) => s.trim()).filter(Boolean);
-      if (chain.length > 0) {
-        const hops = Number.isInteger(custom.trustedProxyCount) && custom.trustedProxyCount > 0
-          ? custom.trustedProxyCount
-          : 1;
-        const index = Math.max(0, chain.length - hops);
-        return normalizeIp(chain[index] || chain[0]);
+      const hops = Number.isInteger(custom.trustedProxyCount) && custom.trustedProxyCount > 0
+        ? custom.trustedProxyCount
+        : 1;
+
+      if (chain.length >= hops) return normalizeIp(chain[chain.length - hops]);
+
+      // Catena più corta dei proxy dichiarati: o la topologia non è quella
+      // configurata, o qualcuno sta parlando all'app senza passare dai proxy.
+      // Entrambe le cose vanno sapute, ma una sola volta: il caso è provocabile
+      // da chi bussa, e un log per richiesta sarebbe un attacco al disco.
+      if (!shortProxyChainLogged) {
+        log('warn',
+          `X-Forwarded-For con ${chain.length} voce/i ma trustedProxyCount=${hops}: ` +
+          'la richiesta non ha attraversato i proxy dichiarati. Uso l\'indirizzo del ' +
+          'socket. Controlla trustedProxyCount, e che l\'app non sia raggiungibile ' +
+          'direttamente scavalcando il proxy.');
+        shortProxyChainLogged = true;
       }
     }
   }
 
-  return normalizeIp((ctx && (ctx.ip || (ctx.request && ctx.request.ip))) || '');
+  return peerIp;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -388,7 +427,19 @@ function resolveClientIp(ctx) {
  * @returns {boolean}
  */
 function shouldEnforce(rule, subject) {
-  if (rule.action === 'allow' || rule.action === 'monitor') return false;
+  // Azioni che NON producono una risposta: la richiesta prosegue comunque.
+  //
+  // `throttle` è il caso non ovvio, ed è qui perché AGISCE senza rispondere: la
+  // sua azione è l'escalation verso rateLimiter, non il destino di questa
+  // richiesta. Considerarlo enforcement rompeva tre cose insieme —
+  //   • il gate, non trovando un `respond`, degradava al 404 comune: una regola
+  //     documentata come «delega a rateLimiter SENZA bloccare» bloccava tutto;
+  //   • il censimento delle impronte lo contava come blocco (`blocked:` più
+  //     sotto), quindi la reputazione condannava per blocchi mai avvenuti;
+  //   • la dashboard lo mostrava nella colonna «enforced» invece che fra gli
+  //     osservati.
+  // L'escalation resta e parte lo stesso: vedi la condizione in `evaluate`.
+  if (rule.action === 'allow' || rule.action === 'monitor' || rule.action === 'throttle') return false;
 
   // Tetto globale: in "monitor" nulla agisce, nemmeno una regola `block`.
   if (custom.mode !== 'enforce') return false;
@@ -671,11 +722,22 @@ function serveDrop(ctx) {
     return false;   // il gate scrive il 404 comune
   }
 
-  ctx.respond = false;
+  // L'ORDINE CONTA. `ctx.respond = false` dice a Koa «non finalizzare tu»: se lo
+  // si assegna prima di sapere che c'è un socket da troncare, e il socket non
+  // c'è (HTTP/2, un adapter che lo stacca, una connessione smontata fra il router
+  // e questo punto), nessuno risponde più — né noi né Koa — e restituendo `true`
+  // il gate crede che sia stato gestito e salta il 404 di ripiego. La richiesta
+  // resta appesa fino al timeout del client, e il contatore registra un drop mai
+  // avvenuto. Senza socket si RINUNCIA, come si fa dietro proxy: contesto intatto,
+  // il gate scrive il 404 comune.
   const socket = ctx.res && ctx.res.socket;
-  if (socket && !socket.destroyed) {
-    socket.destroy();
+  if (!socket) {
+    dropDegraded++;
+    return false;
   }
+
+  ctx.respond = false;
+  if (!socket.destroyed) socket.destroy();
   dropped++;
   return true;
 }
@@ -780,7 +842,13 @@ const engine = {
         blocked: enforced && !(rule && rule.usesReputation),
       });
     }
-    const escalation = rule && (enforced || rule.action === 'monitor')
+    // `monitor` e `throttle` alimentano rateLimiter pur non essendo enforcement:
+    // il primo per scelta storica (contare mentre si osserva), il secondo perché
+    // contare È la sua azione. In entrambi i casi `enforced` è false, quindi
+    // `escalate.ban` non scatta: il ban è un'azione e le azioni passano dai tetti
+    // dell'enforcement. Un throttle che bandisce sarebbe una contraddizione nei
+    // termini, oltre che una sorpresa.
+    const escalation = rule && (enforced || rule.action === 'monitor' || rule.action === 'throttle')
       ? escalate(rule, subject, enforced)
       : false;
     const escalated = escalation !== false;
@@ -980,6 +1048,18 @@ module.exports = {
    * saltato con un box [STORAGE] invece di far emergere il problema alla prima
    * scrittura. Il path va risolto OFFLINE dal config, perché questo metodo gira
    * prima di loadPlugin.
+   *
+   * ⚠ SOLO CIO CHE SI SCRIVE DAVVERO. Qui compariva anche `decoys/data`, che il
+   * plugin non scrive mai — `resolveDecoyPath` fa `existsSync` e `readFileSync`,
+   * e in tutto il codice non c'è una scrittura verso quella cartella. Su un
+   * deploy con filesystem immutabile, o con `ReadWritePaths=` di systemd limitato
+   * alla sola data dir, la sonda falliva e il gate saltava L'INTERO PLUGIN DI
+   * SICUREZZA per una cartella da cui si legge soltanto. È lo scenario che il box
+   * [SENTINEL] di index.js esiste per rendere visibile, provocato da noi.
+   *
+   * La regola che ne discende, per chi aggiungerà voci: una directory va
+   * dichiarata qui se e solo se esiste una scrittura che la riguarda. «Serve al
+   * plugin» non basta — leggere non richiede il permesso di scrivere.
    */
   getWritablePaths(pluginSys, pathPluginFolder) {
     const folder = pathPluginFolder || __dirname;
@@ -993,7 +1073,6 @@ module.exports = {
     }
     return [
       { path: resolveDataDir(folder, conf), purpose: 'sentinel event log and aggregates (JSONL + JSON5)' },
-      { path: path.resolve(folder, 'decoys', 'data'), purpose: 'user-provided decoy files' },
     ];
   },
 
@@ -1238,5 +1317,6 @@ function persistAll() {
 module.exports._internals = {
   resolveClientIp: (ctx, conf) => { const prev = custom; custom = conf || custom; const r = resolveClientIp(ctx); custom = prev; return r; },
   shouldEnforce: (rule, subject, conf) => { const prev = custom; custom = conf || custom; const r = shouldEnforce(rule, subject); custom = prev; return r; },
+  serveDrop: (ctx, conf) => { const prev = custom; custom = conf || custom; const r = serveDrop(ctx); custom = prev; return r; },
   resolveDataDir,
 };

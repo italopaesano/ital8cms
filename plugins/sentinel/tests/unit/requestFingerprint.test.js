@@ -116,40 +116,100 @@ describe('buildFingerprint — indipendenza dallo User-Agent', () => {
   });
 });
 
-describe('buildFingerprint — memoizzazione sul socket', () => {
-  // Con keep-alive una pagina porta decine di richieste sulla stessa
-  // connessione, e un client non cambia libreria HTTP a metà connessione.
+/**
+ * ─── L'IMPRONTA SEGUE LA RICHIESTA, NON LA CONNESSIONE ────────────────────────
+ *
+ * Questo blocco verificava l'esatto contrario: `expect(second).toBe(first)` su
+ * due richieste con header diversi, «stessa connessione → stesso oggetto, senza
+ * ricalcolo (header ignorati)». Difendeva una memoizzazione sul socket nata da
+ * una premessa vera — un client non cambia libreria HTTP a metà connessione —
+ * e da una conclusione sbagliata, perché l'impronta descrive la FORMA DI UNA
+ * RICHIESTA, non il client.
+ *
+ * Misurato con Chromium su una pagina con un CSS, un'immagine, uno script e una
+ * POST: 3 richieste su 7 ricevevano l'impronta di un'altra. La cache è stata
+ * rimossa (piano di consolidamento, C7) e questi test ora fissano la proprietà
+ * giusta, così che rimetterla senza chiave completa non passi in silenzio.
+ */
+describe('buildFingerprint — l impronta segue la richiesta, non la connessione', () => {
   function ctxWithSocket(headerPairs, socket) {
     const ctx = makeCtx(headerPairs);
     ctx.req.socket = socket;
     return ctx;
   }
 
-  test('la seconda richiesta sulla stessa connessione riusa l impronta', () => {
+  test('due richieste diverse sulla stessa connessione hanno impronte diverse', () => {
     const socket = {};
-    const first = buildFingerprint(ctxWithSocket(CURL_HEADERS, socket));
-    const second = buildFingerprint(ctxWithSocket(CHROME_HEADERS, socket));
-    // Stessa connessione → stesso oggetto, senza ricalcolo (header ignorati).
-    expect(second).toBe(first);
+    const primo = buildFingerprint(ctxWithSocket(CURL_HEADERS, socket));
+    const secondo = buildFingerprint(ctxWithSocket(CHROME_HEADERS, socket));
+    expect(secondo.fp).not.toBe(primo.fp);
   });
 
-  test('connessioni diverse non condividono la cache', () => {
-    const a = buildFingerprint(ctxWithSocket(CURL_HEADERS, {}));
+  // Il caso legittimo, e il più frequente dei due: lo stesso browser sulla
+  // stessa connessione manda header diversi per la pagina e per il foglio di
+  // stile. Con la cache, il CSS ereditava l'impronta della navigazione.
+  test('navigazione e asset dello stesso browser non si contaminano', () => {
+    const socket = {};
+    const navigazione = buildFingerprint(ctxWithSocket(CHROME_HEADERS, socket));
+    const foglioDiStile = buildFingerprint(ctxWithSocket([
+      ['Host', 'example.com'],
+      ['Connection', 'keep-alive'],
+      ['User-Agent', CHROME_HEADERS.find(([n]) => n === 'User-Agent')[1]],
+      ['Accept', 'text/css,*/*;q=0.1'],
+      ['Sec-Fetch-Site', 'same-origin'],
+      ['Sec-Fetch-Mode', 'no-cors'],
+      ['Sec-Fetch-Dest', 'style'],
+      ['Accept-Encoding', 'gzip, deflate, br'],
+      ['Accept-Language', 'it-IT,it;q=0.9'],
+    ], socket));
+    expect(foglioDiStile.fp).not.toBe(navigazione.fp);
+  });
+
+  // L'aggiramento che la cache regalava: una richiesta di riscaldamento con
+  // header da browser, e per il resto della connessione tutto risultava
+  // `{ headerProfile: 'browser', coherent: true }`. Bastava quella per rendere
+  // muti `ua-fingerprint-mismatch` e `auth-surface-noise`.
+  test('una richiesta di riscaldamento non rende coerente cio che non lo e', () => {
+    const socket = {};
+    const riscaldamento = buildFingerprint(ctxWithSocket(CHROME_HEADERS, socket));
+    expect(riscaldamento.fpClass.coherent).toBe(true);
+    expect(riscaldamento.fpClass.headerProfile).toBe('browser');
+
+    const scansione = buildFingerprint(ctxWithSocket([
+      ['Host', 'example.com'],
+      ['Connection', 'keep-alive'],
+      ['User-Agent', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'],
+      ['Accept', '*/*'],
+    ], socket));
+    expect(scansione.fpClass.headerProfile).toBe('minimal');
+    expect(scansione.fpClass.coherent).toBe(false);
+  });
+
+  // Nessuno stato sul socket: è la prova che la memoizzazione non è tornata di
+  // soppiatto. Un socket congelato non è più un caso da tollerare — non lo si
+  // tocca affatto.
+  test('non viene scritto nulla sul socket', () => {
+    const socket = {};
+    buildFingerprint(ctxWithSocket(CHROME_HEADERS, socket));
+    expect(Object.keys(socket)).toHaveLength(0);
+    expect(Object.getOwnPropertySymbols(socket)).toHaveLength(0);
+
+    const congelato = Object.freeze({});
+    expect(() => buildFingerprint(ctxWithSocket(CURL_HEADERS, congelato))).not.toThrow();
+  });
+
+  test('richieste identiche su connessioni diverse danno la stessa impronta', () => {
+    const a = buildFingerprint(ctxWithSocket(CHROME_HEADERS, {}));
     const b = buildFingerprint(ctxWithSocket(CHROME_HEADERS, {}));
-    expect(b).not.toBe(a);
-    expect(b.fp).not.toBe(a.fp);
+    expect(b.fp).toBe(a.fp);
   });
 
-  test('un salt cambiato a caldo invalida la cache', () => {
+  // Il salt può cambiare a caldo (reloadConfig) e deve avere effetto subito.
+  test('un salt cambiato a caldo ha effetto sulla richiesta successiva', () => {
     const socket = {};
     const primo = buildFingerprint(ctxWithSocket(CURL_HEADERS, socket), { salt: 'a' });
     const dopo = buildFingerprint(ctxWithSocket(CURL_HEADERS, socket), { salt: 'b' });
     expect(dopo.fp).not.toBe(primo.fp);
-  });
-
-  test('un socket non estendibile non fa fallire nulla', () => {
-    const socket = Object.freeze({});
-    expect(() => buildFingerprint(ctxWithSocket(CURL_HEADERS, socket))).not.toThrow();
   });
 });
 

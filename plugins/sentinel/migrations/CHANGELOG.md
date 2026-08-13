@@ -8,6 +8,38 @@ che è la versione di struttura dell'intero pacchetto.
 
 ---
 
+## v4 → v5 — reputazione locale delle impronte
+
+**Nessuno script:** `custom.reputation` e `custom.census.ipRetentionDays` sono
+chiavi dentro oggetti, coperte dal merge additivo del boot. Le regole di esempio
+aggiunte al file distribuito sono commentate, quindi `rules` non cambia.
+
+Dichiarato **retroattivamente** nel consolidamento C5, insieme allo step
+precedente: vedi lì il perché.
+
+⚠ `protectBrowserFingerprints` arriva a `true` ed è il default giusto; il merge
+non sovrascrive un valore già presente, quindi chi l'avesse a `false` resta a
+`false`.
+
+→ [`from-v4-to-v5.md`](./from-v4-to-v5.md)
+
+## v3 → v4 — tetti di drop e tarpit
+
+**Nessuno script:** `custom.tarpit` è un blocco di chiavi nuove dentro un
+oggetto, coperto dal merge additivo del boot. Le 43 righe aggiunte al file delle
+regole sono tutte commenti (gli esempi di `drop` e `tarpit` restano commentati per
+scelta), quindi `rules` non cambia.
+
+Dichiarato **retroattivamente** nel consolidamento C5. I passi 7 e 8 avevano
+bumpato la `schemaVersion` del descrittore senza dichiarare nulla, convinti — a
+ragione — che il merge bastasse. Ma il runner non guarda se serva uno script:
+guarda se la catena **copre il salto**. Con il descrittore a v5 e gli step fermi a
+v3, ogni installazione riceveva un box `[MIGRATE]` di errore a ogni avvio che
+nulla poteva chiudere, e `migrate sentinel` si rifiutava di girare **inclusi i due
+step veri**. Una catena bucata non ferma solo sé stessa.
+
+→ [`from-v3-to-v4.md`](./from-v3-to-v4.md)
+
 ## v2 → v3 — regola sulla coerenza di sessione
 
 **Aggiunge** `session-hijack-signal` a `sentinelRules.json5`, dopo
