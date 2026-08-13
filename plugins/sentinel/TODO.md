@@ -88,9 +88,10 @@ Il **6** copre gli account. I **7-8** sono raffinamento.
 
 **Passo 0 — Debito e attriti.** Riscrittura di `core/priorityMiddlewares/README.md`;
 test di identità byte-per-byte per il blocco di sentinel (esiste per il reserved
-gate, non per questo); memoizzazione del fingerprint sul socket; chiusura per
-**decisione** — non per implementazione — delle voci §9 *prefissi admin* e §16
-*hideExtension*.
+gate, non per questo); memoizzazione del fingerprint sul socket (~~fatta~~ →
+**rimossa** in C7: era un errore di categoria, vedi il piano di consolidamento);
+chiusura per **decisione** — non per implementazione — delle voci §9 *prefissi
+admin* e §16 *hideExtension*.
 
 **Passo 1 — `adminSentinel`, Vista Dati.** Plugin twin con `dependency:
 { sentinel: "^1.0.0" }` — qui la dipendenza **è** legittima, al contrario di
@@ -314,7 +315,7 @@ certo, locale e già dannoso; poi il cuore del motore; le decisioni per ultime.
 | ~~**C4**~~ ✅ | ~~L'identità del client dietro proxy~~ | 1 | medio | Chiuso il sottoinsieme rilevabile; il resto è di rete, non di codice |
 | ~~**C5**~~ ✅ | ~~La catena delle migrazioni~~ | 1 | basso | Nessun codice a runtime, ma sblocca le installazioni esistenti |
 | ~~**C6**~~ ✅ | ~~Vista C: le due perdite silenziose del form~~ | 2 | basso | Solo GUI; l'invariante da ripristinare è scritta nel form stesso |
-| **C7** | L'impronta: cache per connessione | 1 + test | **alto** | Percorso caldo di ogni richiesta, e va riscritto un test che oggi codifica il difetto |
+| ~~**C7**~~ ✅ | ~~L'impronta: cache per connessione~~ | 1 + test | **alto** | Percorso caldo di ogni richiesta, e va riscritto un test che oggi codifica il difetto |
 | **C8** | I contatori che mentono | 2 | basso | Non cambiano decisioni, cambiano ciò che l'amministratore legge per prenderle |
 | **C9** | Le due decisioni rimaste | 2 | — | Non sono correzioni: richiedono una scelta tua |
 
@@ -593,9 +594,9 @@ array lì **funziona**, e passare a textarea cambierebbe il significato di ciò 
 è già scritto su una riga sola (`curl, wget` da due pattern a uno). È una
 decisione di interfaccia su un campo che nessuno ha segnalato: la lascio a te.
 
-#### C7 — L'impronta: cache per connessione
+#### C7 — L'impronta: cache per connessione ✅
 
-- [ ] **La memoizzazione sul socket annulla le due regole di punta** *(verificato)*.
+- [x] **La memoizzazione sul socket annulla le due regole di punta** *(verificato)*.
       `buildFingerprint` memoizza sul socket TCP con chiave il solo salt. Il
       razionale — «un client non cambia libreria HTTP a metà connessione» — vale
       per la libreria, ma la `fpClass` contiene anche `headerProfile` e `coherent`,
@@ -605,16 +606,68 @@ decisione di interfaccia su un campo che nessuno ha segnalato: la lascio a te.
       `ua-fingerprint-mismatch` e `auth-surface-noise` si aggirano con una
       richiesta. Colpisce anche il traffico legittimo — il primo asset di una
       connessione detta il profilo di tutta la pagina.
-- [ ] **Riscrivere il test che codifica il difetto.**
-      `requestFingerprint.test.js:128` manda `CURL_HEADERS` e poi `CHROME_HEADERS`
-      sullo stesso socket e pretende `expect(second).toBe(first)`. Non basta
-      correggere il codice: oggi quel test difende il bug.
+- [x] **Riscrivere il test che codifica il difetto.**
+      `requestFingerprint.test.js:128` mandava `CURL_HEADERS` e poi
+      `CHROME_HEADERS` sullo stesso socket e pretendeva `expect(second).toBe(first)`.
+      Non bastava correggere il codice: quel test difendeva il bug.
 
-Direzione probabile: memoizzare **solo** ciò che è davvero stabile per connessione
-(versione HTTP, e nient'altro di certo) e ricalcolare a ogni richiesta la parte
-che dipende dagli header. Da misurare il costo: la memoizzazione esisteva per non
-ricalcolare un hash quaranta volte per pagina, e quella ragione resta valida —
-va soppesata contro un segnale che oggi non funziona.
+**Esito: la cache è stata rimossa, non ristretta.** La direzione ipotizzata
+(memoizzare solo ciò che è stabile per connessione) si è rivelata un vicolo cieco
+una volta misurata: *nulla* di ciò che serve è stabile per connessione tranne la
+versione HTTP, che è una lettura di proprietà e non costa niente. Il resto —
+ordine e valori degli header, `headerProfile`, `coherent` — dipende dalla singola
+richiesta per costruzione.
+
+**Le due misure che hanno deciso.** Server HTTP autonomo che calcola l'impronta
+con e senza cache, pilotato da Chromium su una pagina con CSS, immagine, script
+e `fetch` POST:
+
+```
+sock  url          impronta VERA     impronta RESA
+1     /            bc13ff8a825ba577  bc13ff8a825ba577
+1     /a.css       2c96521fe4b2f813  bc13ff8a825ba577 ✗
+1     /c.js        14b440b9e2667937  bc13ff8a825ba577 ✗
+1     /d.json      e582bd022cc792a6  bc13ff8a825ba577 ✗   (POST)
+→ 3 richieste su 7 con l'impronta di un'altra
+```
+
+e l'aggiramento, con due richieste a socket grezzo sulla stessa connessione:
+
+```
+1  /index.html        vera: browser coerente=true    resa: browser coerente=true
+2  /admin/config.php  vera: minimal coerente=false   resa: browser coerente=true ✗
+→ `ua-fingerprint-mismatch` muto dopo una richiesta di riscaldamento
+```
+
+Dopo la correzione entrambe le misure danno **0 richieste sbagliate**.
+
+**Il costo, misurato invece che temuto.** `buildFingerprint` costa ~11,5 µs per
+una navigazione Chrome (sha256 2,0 · `detectBot` 2,8 · le 24 regex sull'UA il
+resto; l'ordine degli header 0,4, il profilo 0,09). Una richiesta end-to-end
+attraverso il CMS ne costa ~1000-1300, con una varianza fra due esecuzioni
+identiche di ±150 µs: l'effetto della rimozione è **venti volte più piccolo del
+rumore di misura**, e non è osservabile end-to-end. In assoluto: a 1000
+richieste al secondo, l'1% di un core.
+
+Una memoizzazione *corretta* resterebbe possibile e non è stata fatta: la parte
+cara è quella derivata dall'UA (~70%), che si potrebbe memoizzare **con l'UA
+stesso come chiave** — verificando invece di assumere, che è precisamente ciò che
+mancava. Richiederebbe un nome nuovo (regola 3 del CLAUDE.md) e vale ~8 µs: se lo
+si vuole, è una richiesta a sé.
+
+> La morale, che vale oltre questo file: una cache **per connessione** di una
+> proprietà **per richiesta** non è un'ottimizzazione aggressiva, è un errore di
+> categoria — ed è lo schema n°1 della revisione («l'impronta trattata come se
+> identificasse un client») nella sua forma più pura.
+
+**Seguito proposto — memoizzare la sola parte derivata dall'User-Agent.** Vale
+~8 µs su 11,5 e sarebbe corretta per costruzione, perché la chiave sarebbe l'UA
+stesso (troncato a `MAX_UA_LENGTH`, quindi confronto limitato) e i cinque valori
+che ne dipendono — `declaredFamily`, `claimedBrowser`, `claimedOs`, `isBot`,
+`botName` — sono funzioni pure di quella sola stringa. Non fatta dentro C7 per
+due ragioni: serve un **nome nuovo** per la chiave sul socket (regola 3 del
+CLAUDE.md), e reintrodurre una cache nello stesso file dove ne è appena stata
+tolta una vuole essere una decisione, non un residuo dello stesso intervento.
 
 #### C8 — I contatori che mentono
 
@@ -635,6 +688,15 @@ suo esito cambia i termini della prima.
 
 - [ ] **`fingerprintChanged`** — vedi la sezione *Aperto* qui sotto, che resta la
       descrizione di riferimento. Le tre risposte si escludono a vicenda.
+      **C7 ha chiuso la domanda che teneva aperta questa decisione**: quanto
+      rumore resti tolta la cache. Risposta misurata su Chromium, una pagina
+      sola: **quattro impronte distinte** (navigazione `bc13ff8a`, foglio di
+      stile `2c96521f`, script e `fetch` GET `14b440b9`, `fetch` POST
+      `e582bd02`). Il rumore non cala, cambia natura — da casuale (dipendeva da
+      quale richiesta apriva la connessione) a **deterministico**: la foglia
+      scatta a ogni alternanza navigazione↔asset↔AJAX, sempre, per chiunque.
+      Il che è una buona notizia per la decisione: il fenomeno ora è
+      riproducibile e non c'è più nulla da misurare prima di scegliere.
 - [ ] **Onestà sulle difese ReDoS** *(verificato)*. `evaluate(ctx)` è **sincrono**,
       quindi il `Promise.race` con timeout 250 ms nel gate non può interromperlo:
       una regex catastrofica blocca l'event loop e il `setTimeout` non scatta mai.
@@ -656,9 +718,11 @@ Emerso analizzando l'interazione fra sentinel e `csrfProtection` (v2.81.0). Non
 e oggi non fa danno solo perché la regola distribuita non la usa.
 
 La revisione completa dei due plugin (2026-08-12) ha aggiunto un pezzo: la
-memoizzazione dell'impronta sul socket (**C7**) **peggiora** il quadro, perché il
-profilo del primo asset di una connessione resta appiccicato a tutte le richieste
-successive di quella connessione.
+memoizzazione dell'impronta sul socket (**C7**) **peggiorava** il quadro, perché
+il profilo del primo asset di una connessione restava appiccicato a tutte le
+richieste successive di quella connessione. ✅ **Rimossa.** Il rumore ora è quello
+vero, e si è rivelato deterministico invece che casuale: quattro impronte per una
+pagina, sempre le stesse (vedi C7).
 
 `sessionCoherence` fissa una linea di base al primo avvistamento di una sessione
 autenticata e la confronta con ogni richiesta successiva. Ma l'impronta descrive

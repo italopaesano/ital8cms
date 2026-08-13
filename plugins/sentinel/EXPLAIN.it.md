@@ -518,6 +518,40 @@ UA dichiara Chrome  +  firma da client script  →  uno dei due mente
 E sappiamo quale: l'UA è l'unico dei due che si cambia con un flag. Il test
 `cambiare SOLO lo User-Agent non cambia l'impronta` presidia questa proprietà.
 
+### L'impronta è di una richiesta, non di un client
+
+Il nome inganna, e l'errore che ne discende è costato una funzione intera.
+«Impronta» suggerisce l'identità di chi bussa; il valore calcolato è invece la
+**forma di una singola richiesta**. Lo stesso browser, sulla stessa connessione,
+ne produce quante sono le cose che chiede. Misurato con Chromium su una pagina
+con un CSS, uno script, un'immagine e una `fetch`:
+
+| Richiesta | `accept` | `sec-fetch-dest` | impronta |
+|---|---|---|---|
+| navigazione | `text/html,…` | `document` | `bc13ff8a825ba577` |
+| foglio di stile | `text/css,*/*;q=0.1` | `style` | `2c96521fe4b2f813` |
+| script / `fetch` GET | `*/*` | `script`, `empty` | `14b440b9e2667937` |
+| `fetch` POST | `*/*` | `empty` | `e582bd022cc792a6` |
+
+Quattro impronte, un browser, una pagina. Non è rumore da correggere: è ciò che
+la firma misura, e la ragione per cui `fingerprintChanged` non può funzionare
+come sembra promettere (vedi `TODO.md`).
+
+`buildFingerprint` ha avuto per un periodo una memoizzazione sul socket, scritta
+sulla premessa — vera — che un client non cambi libreria HTTP a metà connessione.
+La premessa non regge la conclusione, perché ciò che si stava memoizzando non
+dipendeva dalla libreria ma dagli header di quella richiesta. Con la cache, sulla
+stessa pagina **3 richieste su 7 ricevevano l'impronta di un'altra**, e una
+richiesta di riscaldamento con header da browser rendeva `coherent: true` tutto
+il resto della connessione: `ua-fingerprint-mismatch` e `auth-surface-noise` si
+aggiravano con una richiesta sola.
+
+La cache è stata rimossa. Il ricalcolo integrale costa ~11 µs su una richiesta
+che ne costa ~1000 end-to-end — a 1000 richieste al secondo, l'1% di un core.
+Una memoizzazione *corretta* resta possibile: la parte cara è quella derivata
+dall'UA (~70% del totale), e avrebbe come chiave l'UA stesso — cioè verificherebbe
+invece di assumere. Non si è pagata quella complessità per quel margine.
+
 ### Perché solo il livello HTTP
 
 | Livello | Perché non c'è |
