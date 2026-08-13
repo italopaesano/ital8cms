@@ -26,10 +26,18 @@ const {
   renderDecoy,
   resolveDecoyPath,
   renderTemplate,
+  reflectEscaperFor,
+  REFLECT_ESCAPERS,
+  CONTENT_TYPES,
   DECOY_DIR,
   USER_SUBDIR,
   SHIPPED_SUBDIR,
 } = require('../../lib/decoyRenderer');
+
+// Escaper per i contesti usati nei test: `renderTemplate` non deduce più il
+// contesto da un booleano, lo riceve.
+const PLAIN = reflectEscaperFor('.txt');
+const HTML = reflectEscaperFor('.html');
 
 let sandbox;
 
@@ -87,56 +95,123 @@ describe('resolveDecoyPath — le due cartelle', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('renderTemplate — segnaposto', () => {
   test('{{today}} è una data ISO e {{timestamp}} un intero', () => {
-    const out = renderTemplate('{{today}}|{{timestamp}}', {}, false);
+    const out = renderTemplate('{{today}}|{{timestamp}}', {}, PLAIN);
     const [today, ts] = out.split('|');
     expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(Number.isInteger(Number(ts))).toBe(true);
   });
 
   test('{{random:N}} produce esattamente N caratteri', () => {
-    expect(renderTemplate('{{random:32}}', {}, false)).toHaveLength(32);
-    expect(renderTemplate('{{random:1}}', {}, false)).toHaveLength(1);
+    expect(renderTemplate('{{random:32}}', {}, PLAIN)).toHaveLength(32);
+    expect(renderTemplate('{{random:1}}', {}, PLAIN)).toHaveLength(1);
   });
 
   test('due rese dello stesso template non coincidono', () => {
     // È la ragione d'essere del livello 1: un decoy identico a se stesso viene
     // riconosciuto da un hash del contenuto, e smette di ingannare.
     const template = 'key={{random:40}}';
-    expect(renderTemplate(template, {}, false)).not.toBe(renderTemplate(template, {}, false));
+    expect(renderTemplate(template, {}, PLAIN)).not.toBe(renderTemplate(template, {}, PLAIN));
   });
 
   test('{{choice:a|b|c}} sceglie fra le alternative dichiarate', () => {
     const seen = new Set();
-    for (let i = 0; i < 60; i++) seen.add(renderTemplate('{{choice:7.4.33|8.1.2}}', {}, false));
+    for (let i = 0; i < 60; i++) seen.add(renderTemplate('{{choice:7.4.33|8.1.2}}', {}, PLAIN));
     for (const value of seen) expect(['7.4.33', '8.1.2']).toContain(value);
     expect(seen.size).toBe(2); // 60 estrazioni su 2 valori: la probabilità di mancarne uno è ~1e-18
   });
 
   test('un segnaposto sconosciuto resta com\'è', () => {
-    expect(renderTemplate('{{inesistente}}', {}, false)).toBe('{{inesistente}}');
+    expect(renderTemplate('{{inesistente}}', {}, PLAIN)).toBe('{{inesistente}}');
   });
 
   test('{{path}} e {{ip}} sono escapati nel contesto HTML', () => {
-    const out = renderTemplate('{{path}}', { path: '/<script>alert(1)</script>' }, true);
+    const out = renderTemplate('{{path}}', { path: '/<script>alert(1)</script>' }, HTML);
     expect(out).not.toContain('<script>');
     expect(out).toContain('&lt;script&gt;');
   });
 
-  test('{{path}} NON è escapato fuori dal contesto HTML', () => {
+  test('{{path}} NON è escapato nel testo semplice', () => {
     // In un finto .env o in un log finto l'escaping HTML sarebbe rumore visibile
     // che tradisce la trappola, e non c'è nessun parser di markup a valle.
-    expect(renderTemplate('{{path}}', { path: '/a&b' }, false)).toBe('/a&b');
+    // Questa resta la scelta giusta — per il testo semplice.
+    expect(renderTemplate('{{path}}', { path: '/a&b' }, PLAIN)).toBe('/a&b');
+  });
+
+  // ── Escape per contesto ────────────────────────────────────────────────────
+  // Il codice aveva due soli casi, «HTML» e «niente», e questo test asseriva che
+  // fuori dall'HTML non si escapasse NULLA. Per il testo semplice è corretto (vedi
+  // sopra); per i formati strutturati no, ed erano tutti nel ramo «niente».
+  describe('i formati strutturati hanno ciascuno il proprio escape', () => {
+    const PAYLOAD = '/x";alert(1);//';
+
+    test('.xml riceve le entità come l\'HTML: i browser lo renderizzano', () => {
+      // Il caso con conseguenze vere: un XML può portare XHTML in namespace, e
+      // lì lo script viene eseguito.
+      const out = renderTemplate('<p>{{path}}</p>', { path: '/<script>alert(1)</script>' },
+        reflectEscaperFor('.xml'));
+      expect(out).not.toContain('<script>');
+      expect(out).toContain('&lt;script&gt;');
+    });
+
+    test('.json produce una stringa ancora parsabile', () => {
+      const body = renderTemplate('{"uri": "{{path}}"}', { path: PAYLOAD },
+        reflectEscaperFor('.json'));
+      expect(() => JSON.parse(body)).not.toThrow();
+      // E il valore arriva intatto: l'escape protegge la sintassi, non falsifica
+      // il dato — un decoy che mostra un percorso sbagliato è meno credibile.
+      expect(JSON.parse(body).uri).toBe(PAYLOAD);
+    });
+
+    // La proprietà da verificare non è «l'apostrofo non compare» — compare, come
+    // `\'` — ma «il valore non esce dalla stringa». Si prova eseguendo davvero il
+    // decoy risultante: se l'escape fosse insufficiente, `p` non tornerebbe uguale
+    // all'originale (o il codice non compilerebbe affatto).
+    test.each([["'"], ['"']])('.js: il valore riflesso resta dentro la stringa (apice %s)', (q) => {
+      const payload = `/x'; alert(1); //" + (`;
+      const js = renderTemplate(`var p = ${q}{{path}}${q};`, { path: payload },
+        reflectEscaperFor('.js'));
+      // eslint-disable-next-line no-new-func
+      expect(new Function(`${js} return p;`)()).toBe(payload);
+    });
+
+    test('.json lascia l\'apostrofo letterale, che in JSON non va escapato', () => {
+      // `\'` è una sequenza di escape NON valida in JSON: "salvare" l'apostrofo
+      // romperebbe il documento invece di proteggerlo. È il motivo per cui i due
+      // escaper restano distinti.
+      const body = renderTemplate('{"uri": "{{path}}"}', { path: "/l'ora" },
+        reflectEscaperFor('.json'));
+      expect(body).toContain("'");
+      expect(JSON.parse(body).uri).toBe("/l'ora");
+    });
+
+    test('.css neutralizza ciò che chiude una stringa o una url()', () => {
+      const out = renderTemplate('{{path}}', { path: '/a"b\'c(d)' }, reflectEscaperFor('.css'));
+      for (const ch of ['"', "'", '(', ')']) expect(out).not.toContain(ch);
+    });
+
+    test('un\'estensione sconosciuta ricade sul testo semplice, come il suo content-type', () => {
+      expect(reflectEscaperFor('.qualunque')).toBe(reflectEscaperFor('.txt'));
+    });
+
+    // La tabella degli escaper e quella dei content-type devono restare
+    // allineate: aggiungere un tipo servibile senza decidere come escaparlo
+    // riaprirebbe esattamente il buco appena chiuso.
+    test('ogni content-type servibile ha una scelta di escape esplicita', () => {
+      for (const ext of Object.keys(CONTENT_TYPES)) {
+        expect(REFLECT_ESCAPERS[ext]).toBeDefined();
+      }
+    });
   });
 
   test('un valore riflesso assente diventa stringa vuota, non "undefined"', () => {
-    expect(renderTemplate('[{{ip}}]', {}, true)).toBe('[]');
+    expect(renderTemplate('[{{ip}}]', {}, HTML)).toBe('[]');
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('{{canary}} — il segnaposto che trasforma il decoy in un sensore', () => {
   test('usa il token coniato dalla funzione fornita', () => {
-    const out = renderTemplate('url=/x/{{canary}}', {}, false, () => 'a7abcdefgh');
+    const out = renderTemplate('url=/x/{{canary}}', {}, PLAIN, () => 'a7abcdefgh');
     expect(out).toBe('url=/x/a7abcdefgh');
   });
 
@@ -145,7 +220,7 @@ describe('{{canary}} — il segnaposto che trasforma il decoy in un sensore', ()
     // nominato in un link e poi con un id diverso è una pagina che non quadra —
     // e raddoppierebbero le voci di registro per una sola consegna.
     let coniati = 0;
-    const out = renderTemplate('{{canary}} … {{canary}} … {{canary}}', {}, false, () => {
+    const out = renderTemplate('{{canary}} … {{canary}} … {{canary}}', {}, PLAIN, () => {
       coniati++;
       return `token${coniati}`;
     });
@@ -155,14 +230,14 @@ describe('{{canary}} — il segnaposto che trasforma il decoy in un sensore', ()
 
   test('il conio avviene solo se il segnaposto c\'è davvero', () => {
     let coniati = 0;
-    renderTemplate('nessun segnaposto qui', {}, false, () => { coniati++; return 'x'; });
+    renderTemplate('nessun segnaposto qui', {}, PLAIN, () => { coniati++; return 'x'; });
     expect(coniati).toBe(0);
   });
 
   test('senza funzione di conio rende comunque una stringa, mai il letterale', () => {
     // Fail-soft: la trappola scatterà come "unknown", ma un `{{canary}}` servito
     // così com'è rivelerebbe il meccanismo a chi legge il decoy.
-    const out = renderTemplate('url=/x/{{canary}}', {}, false);
+    const out = renderTemplate('url=/x/{{canary}}', {}, PLAIN);
     expect(out).not.toContain('{{canary}}');
     expect(out).toMatch(/^url=\/x\/[a-z0-9]{24}$/);
   });

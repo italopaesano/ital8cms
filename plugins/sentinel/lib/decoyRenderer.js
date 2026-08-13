@@ -80,6 +80,77 @@ function escapeHtml(value) {
 }
 
 /**
+ * Escape per una stringa JSON: virgolette, backslash e caratteri di controllo.
+ * `JSON.stringify` fa esattamente questo lavoro; si tolgono le virgolette esterne
+ * perché il segnaposto sta già dentro le virgolette scritte dall'autore del decoy.
+ */
+function escapeJsonString(value) {
+  return JSON.stringify(String(value)).slice(1, -1);
+}
+
+/**
+ * Come sopra, ma anche l'apostrofo: JavaScript ammette le stringhe fra apici
+ * singoli, e un decoy `.js` può usarli. In JSON `\'` sarebbe invece una sequenza
+ * NON valida, ed è il motivo per cui i due escaper restano distinti invece di
+ * essere uno solo più severo.
+ */
+function escapeJsString(value) {
+  return escapeJsonString(value).replace(/'/g, "\\'");
+}
+
+/**
+ * Escape per una stringa CSS: si neutralizzano i caratteri che chiudono una
+ * stringa o una `url()`, nella forma esadecimale con spazio finale che è quella
+ * canonica del linguaggio.
+ */
+function escapeCssString(value) {
+  return String(value).replace(
+    /[\\"'()\n\r\f]/g,
+    (c) => `\\${c.charCodeAt(0).toString(16).padStart(2, '0')} `,
+  );
+}
+
+/**
+ * Escape dei segnaposto riflessi, per estensione del file di decoy.
+ *
+ * ─── PERCHE UNA TABELLA E NON UN BOOLEANO ─────────────────────────────────────
+ * Qui c'era `isHtml ? escapeHtml : String`, cioè due soli casi: markup, oppure
+ * niente. Il commento diceva «si escapa in base al tipo di contenuto», ma il tipo
+ * di contenuto era uno solo. I formati strutturati restavano scoperti:
+ *
+ *   • `.xml` è markup come l'HTML e i browser lo RENDERIZZANO — con XHTML in
+ *     namespace ci si esegue script. È il caso con conseguenze vere;
+ *   • `.json` e `.js` sono sintassi: una virgoletta nel percorso richiesto rompe
+ *     il documento, e un decoy malformato non inganna nessuno — cioè fallisce
+ *     nell'unica cosa per cui esiste;
+ *   • `.css` ha stringhe e `url()`, entrambe chiudibili.
+ *
+ * `text/plain` resta senza escape ed è corretto: non c'è alcun contesto in cui
+ * iniettare, e in un finto `.env` o in un log finto l'escaping HTML sarebbe
+ * rumore visibile che tradisce la finzione.
+ *
+ * ⚠ Aggiungendo un tipo a CONTENT_TYPES va aggiunta una voce anche qui. C'è un
+ * test che lo pretende, così la dimenticanza non passa in silenzio.
+ */
+const REFLECT_ESCAPERS = {
+  '.html': escapeHtml,
+  '.htm': escapeHtml,
+  '.xml': escapeHtml,          // stesse cinque entità dell'HTML
+  '.json': escapeJsonString,
+  '.js': escapeJsString,
+  '.css': escapeCssString,
+  '.txt': (v) => String(v),    // nessun contesto: si riflette com'è
+};
+
+/**
+ * L'escaper per un'estensione. Sconosciuta → il file è servito come `text/plain`
+ * (vedi CONTENT_TYPES), quindi vale la stessa scelta del `.txt`.
+ */
+function reflectEscaperFor(ext) {
+  return REFLECT_ESCAPERS[ext] || REFLECT_ESCAPERS['.txt'];
+}
+
+/**
  * Risolve il file di decoy, con precedenza alla versione dell'utente.
  *
  * @param {string} pluginFolder
@@ -115,7 +186,9 @@ function resolveDecoyPath(pluginFolder, fileName) {
  * `{{path}}` e `{{ip}}` inseriscono nel corpo dati scelti da chi ha fatto la
  * richiesta. In un decoy HTML sarebbe una XSS riflessa in piena regola: il
  * bersaglio non sarebbe l'attaccante — che si autoinfetterebbe — ma chiunque
- * riceva da lui un link a quell'URL. Si escapa in base al tipo di contenuto.
+ * riceva da lui un link a quell'URL. L'escaper dipende dal tipo di contenuto e
+ * si sceglie da `REFLECT_ESCAPERS`: markup, sintassi strutturata e testo semplice
+ * hanno bisogno di tre trattamenti diversi, e il testo semplice di nessuno.
  *
  * ─── IL SEGNAPOSTO `{{canary}}` E DI UN'ALTRA NATURA ──────────────────────────
  * Gli altri segnaposto rendono il decoy credibile. Questo lo trasforma in un
@@ -134,13 +207,15 @@ function resolveDecoyPath(pluginFolder, fileName) {
  *
  * @param {string} template
  * @param {object} vars
- * @param {boolean} isHtml
+ * @param {Function} escapeReflected - escaper per `{{path}}`/`{{ip}}`, scelto in
+ *   base al tipo di contenuto (vedi `reflectEscaperFor`). È un parametro e non un
+ *   booleano perché i contesti sono più di due.
  * @param {Function} [mintCanary] - () => string
  * @returns {string}
  */
-function renderTemplate(template, vars, isHtml, mintCanary) {
+function renderTemplate(template, vars, escapeReflected, mintCanary) {
   const now = new Date();
-  const esc = isHtml ? escapeHtml : ((v) => String(v));
+  const esc = typeof escapeReflected === 'function' ? escapeReflected : ((v) => String(v));
   let canaryToken = null;
 
   return template.replace(/\{\{(\w+)(?::([^}]*))?\}\}/g, (match, name, arg) => {
@@ -165,7 +240,7 @@ function renderTemplate(template, vars, isHtml, mintCanary) {
         const options = String(arg || '').split('|').filter(Boolean);
         return options.length ? options[Math.floor(Math.random() * options.length)] : '';
       }
-      // ── Riflessi: sempre escapati nel contesto HTML ──
+      // ── Riflessi: scelti da chi bussa, escapati per il contesto ──
       case 'path':
         return esc(vars.path || '');
       case 'ip':
@@ -208,11 +283,10 @@ function renderDecoy(options) {
 
   const ext = path.extname(filePath).toLowerCase();
   const type = CONTENT_TYPES[ext] || 'text/plain; charset=utf-8';
-  const isHtml = type.startsWith('text/html');
 
   return {
     ok: true,
-    body: renderTemplate(template, vars || {}, isHtml, mintCanary),
+    body: renderTemplate(template, vars || {}, reflectEscaperFor(ext), mintCanary),
     type,
     status: Number.isInteger(spec.status) ? spec.status : 200,
     // Header dichiarati dalla regola: servono alla credibilità. Un finto
@@ -227,6 +301,11 @@ module.exports = {
   resolveDecoyPath,
   renderTemplate,
   escapeHtml,
+  escapeJsonString,
+  escapeJsString,
+  escapeCssString,
+  reflectEscaperFor,
+  REFLECT_ESCAPERS,
   CONTENT_TYPES,
   DECOY_DIR,
   USER_SUBDIR,

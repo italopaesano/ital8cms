@@ -310,7 +310,7 @@ certo, locale e già dannoso; poi il cuore del motore; le decisioni per ultime.
 |---|---|---|---|---|
 | ~~**C1**~~ ✅ | ~~Le azioni che non mantengono il contratto~~ | 3 | basso | Locali e indipendenti, ma **agivano male** su chi aveva già acceso `enforce` |
 | ~~**C2**~~ ✅ | ~~Il giudizio non deve toccare le impronte condivise~~ | 1 | basso | Una riga, chiude una promessa scritta a caratteri cubitali |
-| **C3** | Decoy: perimetro di scrittura e contesto di escape | 2 | basso | Nessuno tocca il percorso delle richieste normali |
+| ~~**C3**~~ ✅ | ~~Decoy: perimetro di scrittura e contesto di escape~~ | 2 | basso | Nessuno tocca il percorso delle richieste normali |
 | **C4** | L'identità del client dietro proxy | 1 | medio | Cambia la chiave di ban, censimento ed escalation: va misurato |
 | **C5** | La catena delle migrazioni | 1 | basso | Nessun codice a runtime, ma sblocca le installazioni esistenti |
 | **C6** | Vista C: le due perdite silenziose del form | 2 | basso | Solo GUI; l'invariante da ripristinare è scritta nel form stesso |
@@ -398,19 +398,48 @@ comportamento non resti nel dubbio.
 - [x] Test che la disattivazione esplicita riaccende burst anche sui browser
 - [x] Verificato che **2 test falliscono** ripristinando il difetto
 
-#### C3 — Decoy: perimetro di scrittura e contesto di escape
+#### C3 — Decoy: perimetro di scrittura e contesto di escape ✅
 
-- [ ] **`getWritablePaths` dichiara `decoys/data`** *(verificato: zero scritture in
+- [x] **`getWritablePaths` dichiara `decoys/data`** *(verificato: zero scritture in
       tutto il codice — solo `existsSync` + `readFileSync`)*. Su un deploy con
       filesystem immutabile il gate di storage salta **l'intero plugin di
       sicurezza** per una cartella da cui si legge soltanto, ed è proprio lo
       scenario che il box `[SENTINEL]` esiste per rendere visibile. Va dichiarata
       solo la data dir.
-- [ ] **`decoyRenderer` escapa solo in contesto HTML** *(da riverificare)*.
+- [x] **`decoyRenderer` escapa solo in contesto HTML** *(riverificato: confermato il meccanismo, ridimensionata la gravità — vedi esito)*.
       `const esc = isHtml ? escapeHtml : String` — un decoy `.js` o `.json`
-      riflette `{{path}}`/`{{ip}}` grezzi, quindi il path scelto da chi bussa
-      finisce eseguibile nell'origin del sito. O si escapa per contesto, o si
-      rifiutano quei due segnaposto fuori da HTML e testo.
+      riflette `{{path}}`/`{{ip}}` grezzi.
+
+**Esito.** Il meccanismo è confermato, la gravità **ridimensionata rispetto alla
+revisione**, che parlava di codice «eseguibile nell'origin del sito». Non regge
+per il `.js`: un `<script src>` cross-origin esegue nell'origin di CHI INCLUDE,
+quindi l'attaccante infetterebbe sé stesso, e una navigazione diretta a
+`application/javascript` non esegue affatto. Il caso con conseguenze vere è
+invece **`.xml`**, che i browser renderizzano e che può portare XHTML in
+namespace. Per `.json` e `.js` il danno reale è un altro e non è banale: una
+virgoletta nel percorso rompe il documento, e **un decoy malformato non inganna
+nessuno** — fallisce nell'unica cosa per cui esiste.
+
+Nessun decoy distribuito è in un formato a rischio (sono `.html` e `.txt`), quindi
+l'esposizione riguardava solo i decoy scritti dall'amministratore.
+
+La correzione sostituisce il booleano `isHtml` con una **tabella per estensione**:
+markup → entità, JSON → escape di stringa JSON, JS → come JSON più l'apostrofo
+(che in JSON sarebbe una sequenza non valida), CSS → esadecimale. `text/plain`
+resta senza escape, e la motivazione originale — «in un finto `.env` l'escaping
+HTML sarebbe rumore visibile» — era ed è giusta: era il *«tutto ciò che non è
+HTML»* a essere sbagliato, non quel caso.
+
+- [x] Tabella `REFLECT_ESCAPERS` + `reflectEscaperFor(ext)`; `renderTemplate`
+      riceve l'escaper invece di un booleano
+- [x] Test che pretende una scelta esplicita per **ogni** tipo di CONTENT_TYPES,
+      così aggiungerne uno senza decidere l'escape non passa in silenzio
+- [x] Il test del `.js` verifica la proprietà vera — il valore riflesso torna
+      indietro intatto eseguendo davvero il decoy — invece di cercare un carattere
+- [x] `decoys/data` tolta da `getWritablePaths`, con la regola generale scritta
+      accanto: si dichiara una directory se e solo se esiste una scrittura che la
+      riguarda
+- [x] Verificato che **6 test falliscono** ripristinando i due difetti
 
 #### C4 — L'identità del client dietro proxy
 

@@ -1,10 +1,10 @@
 /**
  * engineActions.test.js
  *
- * Le azioni che il motore decide di applicare, e la forma della risposta che ne
- * consegue. Copre i due difetti trovati nella revisione completa del plugin
- * (piano di consolidamento, step C1) in cui un'azione faceva il contrario di
- * quanto documentato:
+ * Le azioni che il motore decide di applicare, la forma della risposta che ne
+ * consegue, e il perimetro di scrittura che il plugin dichiara al boot. Copre i
+ * difetti trovati nella revisione completa (piano di consolidamento, step C1 e C3)
+ * in cui il plugin faceva il contrario di quanto documentato:
  *
  *   • `throttle` finiva classificato come enforcement, e il gate — non trovando
  *     una funzione `respond` da chiamare — degradava al 404 comune. Una regola
@@ -12,6 +12,9 @@
  *   • `serveDrop` assegnava `ctx.respond = false` prima di sapere se ci fosse un
  *     socket da troncare, e ritornava `true` comunque: senza socket la richiesta
  *     restava appesa, perché né il plugin né Koa né il gate rispondevano più.
+ *   • `getWritablePaths` dichiarava scrivibile `decoys/data`, da cui il plugin
+ *     legge soltanto: su un filesystem immutabile il gate di scrivibilità saltava
+ *     l'intero plugin di sicurezza per una cartella di sola lettura.
  *
  * Si usa `module.exports._internals`, che inietta la config nel modulo attorno
  * alla chiamata (il motore tiene `custom` a livello di modulo).
@@ -19,6 +22,7 @@
 
 'use strict';
 
+const path = require('path');
 const sentinel = require('../../main');
 
 const { shouldEnforce, serveDrop } = sentinel._internals;
@@ -135,5 +139,36 @@ describe('serveDrop — troncare la connessione, o rinunciare', () => {
     expect(serveDrop(ctx, { trustProxy: true })).toBe(false);
     expect(calls).toBe(0);
     expect(ctx.respond).toBeUndefined();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Il perimetro di scrittura dichiarato al boot (consolidamento C3).
+//
+// `getWritablePaths` è sondato dal gate di scrivibilità con una scrittura VERA:
+// una directory dichiarata e non scrivibile fa saltare l'intero plugin con un box
+// [STORAGE]. Dichiarare più del necessario significa quindi poter perdere il
+// filtro di sicurezza per una cartella da cui si legge soltanto — ed era il caso
+// di `decoys/data`, mai scritta da nessuna parte del codice.
+describe('getWritablePaths — solo ciò che si scrive davvero', () => {
+  const folder = path.join(__dirname, '..', '..');
+
+  test('dichiara la sola data dir', () => {
+    const paths = sentinel.getWritablePaths(null, folder);
+    expect(paths).toHaveLength(1);
+    expect(paths[0].path).toBe(sentinel._internals.resolveDataDir(folder, {}));
+  });
+
+  test('non dichiara decoys/data, che il plugin non scrive mai', () => {
+    const dichiarati = sentinel.getWritablePaths(null, folder).map((p) => p.path);
+    expect(dichiarati.some((p) => p.includes(path.join('decoys', 'data')))).toBe(false);
+  });
+
+  test('ogni voce dichiarata ha uno scopo leggibile', () => {
+    for (const voce of sentinel.getWritablePaths(null, folder)) {
+      expect(typeof voce.path).toBe('string');
+      expect(voce.purpose).toEqual(expect.any(String));
+      expect(voce.purpose.length).toBeGreaterThan(0);
+    }
   });
 });

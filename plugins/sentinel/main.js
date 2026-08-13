@@ -1009,6 +1009,18 @@ module.exports = {
    * saltato con un box [STORAGE] invece di far emergere il problema alla prima
    * scrittura. Il path va risolto OFFLINE dal config, perché questo metodo gira
    * prima di loadPlugin.
+   *
+   * ⚠ SOLO CIO CHE SI SCRIVE DAVVERO. Qui compariva anche `decoys/data`, che il
+   * plugin non scrive mai — `resolveDecoyPath` fa `existsSync` e `readFileSync`,
+   * e in tutto il codice non c'è una scrittura verso quella cartella. Su un
+   * deploy con filesystem immutabile, o con `ReadWritePaths=` di systemd limitato
+   * alla sola data dir, la sonda falliva e il gate saltava L'INTERO PLUGIN DI
+   * SICUREZZA per una cartella da cui si legge soltanto. È lo scenario che il box
+   * [SENTINEL] di index.js esiste per rendere visibile, provocato da noi.
+   *
+   * La regola che ne discende, per chi aggiungerà voci: una directory va
+   * dichiarata qui se e solo se esiste una scrittura che la riguarda. «Serve al
+   * plugin» non basta — leggere non richiede il permesso di scrivere.
    */
   getWritablePaths(pluginSys, pathPluginFolder) {
     const folder = pathPluginFolder || __dirname;
@@ -1022,7 +1034,6 @@ module.exports = {
     }
     return [
       { path: resolveDataDir(folder, conf), purpose: 'sentinel event log and aggregates (JSONL + JSON5)' },
-      { path: path.resolve(folder, 'decoys', 'data'), purpose: 'user-provided decoy files' },
     ];
   },
 

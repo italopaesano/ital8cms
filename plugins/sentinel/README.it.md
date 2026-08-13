@@ -325,10 +325,28 @@ ogni risposta diversa:
 | `{{path}}` `{{ip}}` | Il percorso richiesto e l'indirizzo di chi l'ha chiesto |
 | `{{canary}}` | Un [token esca](#token-esca-canary): trasforma il decoy in un sensore |
 
-Gli ultimi due sono **riflessi**: contengono stringhe scelte da chi ha fatto la
-richiesta, e nei decoy HTML vengono escapati. Senza, sarebbe una XSS riflessa in
-piena regola — e il bersaglio non sarebbe l'attaccante, che si autoinfetterebbe,
-ma chiunque riceva da lui un link a quell'URL.
+`{{path}}` e `{{ip}}` sono **riflessi**: contengono stringhe scelte da chi ha
+fatto la richiesta, quindi vanno escapati o sarebbero un'iniezione. L'escape
+dipende dal formato del file di decoy, perché i contesti sono diversi:
+
+| Estensione | Escape |
+|---|---|
+| `.html` `.htm` `.xml` | entità (`&lt;` `&gt;` `&amp;` `&quot;` `&#39;`) |
+| `.json` | escape di stringa JSON |
+| `.js` | come JSON, più l'apostrofo (in JSON `\'` non è valido) |
+| `.css` | esadecimale per ciò che chiude stringhe e `url()` |
+| `.txt` e sconosciute | **nessuno**, ed è corretto: non c'è contesto in cui iniettare, e l'escaping HTML in un finto `.env` sarebbe rumore visibile che tradisce la finzione |
+
+Nel markup l'assenza di escape sarebbe una XSS riflessa in piena regola, e il
+bersaglio non sarebbe l'attaccante — che si autoinfetterebbe — ma chiunque riceva
+da lui un link a quell'URL. Nei formati strutturati la posta in gioco è diversa
+ma non trascurabile: una virgoletta nel percorso richiesto rompe il documento, e
+un decoy malformato non inganna nessuno, cioè fallisce nell'unica cosa per cui
+esiste.
+
+> Aggiungendo un formato servibile va decisa anche la sua colonna di questa
+> tabella (`REFLECT_ESCAPERS` in `lib/decoyRenderer.js`). C'è un test che lo
+> pretende.
 
 ### Tre regole per chi ne scrive uno
 
