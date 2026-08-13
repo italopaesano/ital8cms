@@ -279,11 +279,202 @@ Le due correzioni:
 
 ---
 
+### Piano di consolidamento — quello che il codice promette e non mantiene
+
+> ⚠️ **DA APPROVARE.** Piano proposto dopo la revisione completa dei due plugin
+> (2026-08-12, `/code-review` a livello `max` su `plugins/sentinel` e
+> `plugins/adminSentinel`, più lo slot `sentinelGate` del core). **Nessuno step è
+> stato eseguito.** Anche il nome del piano è da confermare: alternative proposte
+> *Piano di consolidamento* / *Piano di rientro* / *Piano post-revisione*.
+
+15 rilievi. Nove riverificati leggendo il codice riga per riga; per gli altri sei
+la fonte è l'analisi della revisione, indicata voce per voce con *(da riverificare)*.
+
+**Due schemi ricorrenti**, che contano più dei singoli difetti perché guidano le
+correzioni:
+
+1. **L'impronta è trattata come se identificasse un client, mentre identifica la
+   forma di una richiesta.** Da qui C7 e C9, e in parte C2. Finché la confusione
+   resta, ogni funzione costruita sull'impronta la eredita.
+2. **I commenti più sicuri di sé stanno esattamente dove sono i difetti.** «Un
+   client non cambia libreria a metà connessione», «un'impronta da browser non
+   può ricevere un giudizio negativo», «il totale storico resta nel file», «le tre
+   difese, tutte necessarie»: quattro affermazioni scritte dall'intenzione che il
+   codice non mantiene. Vanno corrette **insieme** al codice, o la prossima
+   lettura si fiderà di nuovo.
+
+**Ordine: rischio crescente**, come per il piano di rifinitura. Prima ciò che è
+certo, locale e già dannoso; poi il cuore del motore; le decisioni per ultime.
+
+| # | Step | Rilievi | Rischio | Perché lì |
+|---|---|---|---|---|
+| **C1** | Le azioni che non mantengono il contratto | 3 | basso | Locali e indipendenti, ma **agiscono male adesso** su chi ha già acceso `enforce` |
+| **C2** | Il giudizio non deve toccare le impronte condivise | 1 | basso | Una riga, chiude una promessa scritta a caratteri cubitali |
+| **C3** | Decoy: perimetro di scrittura e contesto di escape | 2 | basso | Nessuno tocca il percorso delle richieste normali |
+| **C4** | L'identità del client dietro proxy | 1 | medio | Cambia la chiave di ban, censimento ed escalation: va misurato |
+| **C5** | La catena delle migrazioni | 1 | basso | Nessun codice a runtime, ma sblocca le installazioni esistenti |
+| **C6** | Vista C: le due perdite silenziose del form | 2 | basso | Solo GUI; l'invariante da ripristinare è scritta nel form stesso |
+| **C7** | L'impronta: cache per connessione | 1 + test | **alto** | Percorso caldo di ogni richiesta, e va riscritto un test che oggi codifica il difetto |
+| **C8** | I contatori che mentono | 2 | basso | Non cambiano decisioni, cambiano ciò che l'amministratore legge per prenderle |
+| **C9** | Le due decisioni rimaste | 2 | — | Non sono correzioni: richiedono una scelta tua |
+
+---
+
+#### C1 — Le azioni che non mantengono il contratto
+
+- [ ] **`throttle` risponde 404** *(verificato)*. È in `VALID_ACTIONS` e il README
+      lo documenta come «delega a rateLimiter **senza bloccare**», ma
+      `shouldEnforce` esclude solo `allow`/`monitor`, `attachResponder` non ha un
+      ramo per lui, e il gate cade su `deny()`. Chi scrive una regola `throttle` e
+      passa a `enforce` blocca tutto credendo di contare soltanto.
+- [ ] **`serveDrop` può lasciare la richiesta appesa** *(verificato)*.
+      `ctx.respond = false` è assegnato **prima** del controllo sul socket e la
+      funzione ritorna `true` comunque: senza socket nessuno risponde e il gate
+      non scrive il 404 di ripiego. L'assegnazione va dopo il controllo, con
+      `return false` quando il socket non c'è.
+- [ ] **Open redirect via backslash** *(verificato)*. `ruleValidator.js:631`
+      considera esterno solo `scheme://` o `//`; la riga 657 rifiuta solo ciò che
+      non inizia con `/`. Quindi `to: '/\evil.com'` passa **come interno**,
+      saltando allowlist degli host e divieto di 301/308 — e i browser lo
+      normalizzano in `//evil.com`. CLAUDE.md §*Prevenzione Open Redirect* impone
+      di rifiutare entrambe le forme, e `getSafeRedirectUrl` lo fa: qui non è usato
+      e questo validatore è l'unica guardia.
+
+Accettazione: un test per azione, più un caso `/\` nel validatore.
+
+#### C2 — Il giudizio non deve toccare le impronte condivise
+
+- [ ] **`burst` è fuori dalla guardia `protectBrowserFingerprints`** *(verificato)*.
+      `levels.push('burst')` non è protetto, mentre `suspect`/`bad` lo sono. Al
+      primo visitatore reale una pagina con i suoi asset produce decine di
+      richieste in secondi sotto l'unica impronta condivisa «Chrome su Linux» →
+      `burst`. Una regola `reputation: ['burst']` — forma suggerita dal file di
+      regole distribuito — chiude fuori ogni utente di quel browser. È il caso che
+      l'intestazione di `reputation.js` dichiara impossibile.
+
+Accettazione: un test che classifica un'impronta da browser con `requests` sopra
+la soglia e `ageSeconds` sotto la finestra, e pretende `levels: []`.
+
+#### C3 — Decoy: perimetro di scrittura e contesto di escape
+
+- [ ] **`getWritablePaths` dichiara `decoys/data`** *(verificato: zero scritture in
+      tutto il codice — solo `existsSync` + `readFileSync`)*. Su un deploy con
+      filesystem immutabile il gate di storage salta **l'intero plugin di
+      sicurezza** per una cartella da cui si legge soltanto, ed è proprio lo
+      scenario che il box `[SENTINEL]` esiste per rendere visibile. Va dichiarata
+      solo la data dir.
+- [ ] **`decoyRenderer` escapa solo in contesto HTML** *(da riverificare)*.
+      `const esc = isHtml ? escapeHtml : String` — un decoy `.js` o `.json`
+      riflette `{{path}}`/`{{ip}}` grezzi, quindi il path scelto da chi bussa
+      finisce eseguibile nell'origin del sito. O si escapa per contesto, o si
+      rifiutano quei due segnaposto fuori da HTML e testo.
+
+#### C4 — L'identità del client dietro proxy
+
+- [ ] **`resolveClientIp` clampa l'indice XFF a 0** *(da riverificare)*. Con
+      `trustedProxyCount` maggiore della catena reale, `Math.max(0, len - hops)`
+      restituisce la voce **più a sinistra**, cioè quella scritta dal client. IP di
+      ban, chiave del censimento, escalation verso rateLimiter e confronto
+      `sameClient` del canary diventano tutti scelti dall'attaccante. Non si deve
+      mai indicizzare a sinistra di ciò che i proxy fidati hanno effettivamente
+      scritto. *(Nota: `chain[index] || chain[0]` è anche codice morto — `chain` è
+      già filtrata.)*
+
+Accettazione: test con catena più corta di `trustedProxyCount`, e un avviso al
+boot quando il valore configurato eccede quanto osservato.
+
+#### C5 — La catena delle migrazioni
+
+- [ ] **`schemaVersion: 5` ma step solo fino a 3** *(verificato)*. Il runner calcola
+      `covered = pending.length === (target - liveVersion)`: non torna mai, quindi
+      box `[MIGRATE]` di errore a ogni boot che nulla può chiudere e
+      `migrate sentinel` che si rifiuta di girare — **anche per i due step veri**.
+      Le installazioni esistenti non ricevono mai `canary-token-used` né
+      `session-hijack-signal`, e continuano a calcolare dati che nessuna regola
+      legge. Servono due step `automatic: true` senza script, 3→4 e 4→5, con la
+      `reason` che spiega perché sono vuoti.
+
+#### C6 — Vista C: le due perdite silenziose del form
+
+- [ ] **`sessionAnomaly: true` e `reputation: true` spariscono** *(da riverificare)*.
+      `fillMatch` traduce la forma booleana in «niente selezionato» e `collectMatch`
+      non riscrive la chiave: aprire una regola, cambiare la descrizione e salvare
+      la **allarga** da «solo sessioni anomale» a «tutte». Continua a validare,
+      quindi nulla se ne accorge.
+- [ ] **Un `query` array viene appiattito in stringa** *(da riverificare)*.
+      `['union select', 'sleep(']` diventa il letterale `union select,sleep(` e la
+      regola smette di rilevare entrambi i pattern. `mUserAgent` gestisce già il
+      caso array correttamente: è il modello da seguire.
+
+Entrambi violano l'invariante scritta nell'intestazione del form: *«un form non
+deve MAI distruggere ciò che non sa rappresentare»*.
+
+#### C7 — L'impronta: cache per connessione
+
+- [ ] **La memoizzazione sul socket annulla le due regole di punta** *(verificato)*.
+      `buildFingerprint` memoizza sul socket TCP con chiave il solo salt. Il
+      razionale — «un client non cambia libreria HTTP a metà connessione» — vale
+      per la libreria, ma la `fpClass` contiene anche `headerProfile` e `coherent`,
+      che si ricavano dagli header **di quella richiesta**. Su keep-alive una
+      richiesta di riscaldamento con header da browser fissa
+      `{coherent: true, headerProfile: 'browser'}` per tutta la connessione:
+      `ua-fingerprint-mismatch` e `auth-surface-noise` si aggirano con una
+      richiesta. Colpisce anche il traffico legittimo — il primo asset di una
+      connessione detta il profilo di tutta la pagina.
+- [ ] **Riscrivere il test che codifica il difetto.**
+      `requestFingerprint.test.js:128` manda `CURL_HEADERS` e poi `CHROME_HEADERS`
+      sullo stesso socket e pretende `expect(second).toBe(first)`. Non basta
+      correggere il codice: oggi quel test difende il bug.
+
+Direzione probabile: memoizzare **solo** ciò che è davvero stabile per connessione
+(versione HTTP, e nient'altro di certo) e ricalcolare a ogni richiesta la parte
+che dipende dagli header. Da misurare il costo: la memoizzazione esisteva per non
+ricalcolare un hash quaranta volte per pagina, e quella ragione resta valida —
+va soppesata contro un segnale che oggi non funziona.
+
+#### C8 — I contatori che mentono
+
+- [ ] **Il censimento degli esiti conta 304 e 3xx** *(da riverificare)*. Un
+      visitatore che ricarica una pagina con 25 asset in cache produce 25 path
+      distinti e finisce fra i «sospetti scanner», che è il pannello nato per
+      mostrare gli attacchi senza regola.
+- [ ] **`ruleHitCounter` distrugge lo storico degli IP distinti** *(verificato)*.
+      `_load` ricrea un `Set` vuoto e il primo `save` riscrive quel conteggio sopra
+      il valore storico. Il commento dice «il totale storico resta nel file»: il
+      percorso di salvataggio lo contraddice. Serve uno scalare separato, oppure
+      non riscrivere la chiave quando il `Set` è vuoto.
+
+#### C9 — Le due decisioni rimaste
+
+Non sono correzioni: richiedono una scelta, e vanno affrontate dopo C7 perché il
+suo esito cambia i termini della prima.
+
+- [ ] **`fingerprintChanged`** — vedi la sezione *Aperto* qui sotto, che resta la
+      descrizione di riferimento. Le tre risposte si escludono a vicenda.
+- [ ] **Onestà sulle difese ReDoS** *(verificato)*. `evaluate(ctx)` è **sincrono**,
+      quindi il `Promise.race` con timeout 250 ms nel gate non può interromperlo:
+      una regex catastrofica blocca l'event loop e il `setTimeout` non scatta mai.
+      `ruleValidator` lo elenca fra «le tre difese, tutte necessarie». Delle due
+      l'una: o la valutazione esce dall'event loop (intervento grosso), o il
+      commento smette di contare una difesa che non esiste e si rafforzano le due
+      vere (troncamento dell'input, rifiuto dei pattern).
+
+---
+
 ### Aperto — `fingerprintChanged` mente per costruzione
+
+> Confluita nel *Piano di consolidamento* come **C9**, che ne stabilisce anche il
+> momento: dopo C7, perché la correzione della cache per connessione cambia quanto
+> rumore resta. Questa sezione resta la descrizione di riferimento.
 
 Emerso analizzando l'interazione fra sentinel e `csrfProtection` (v2.81.0). Non
 è un bug con un sintomo: è una foglia che **non può funzionare come promette**,
 e oggi non fa danno solo perché la regola distribuita non la usa.
+
+La revisione completa dei due plugin (2026-08-12) ha aggiunto un pezzo: la
+memoizzazione dell'impronta sul socket (**C7**) **peggiora** il quadro, perché il
+profilo del primo asset di una connessione resta appiccicato a tutte le richieste
+successive di quella connessione.
 
 `sessionCoherence` fissa una linea di base al primo avvistamento di una sessione
 autenticata e la confronta con ogni richiesta successiva. Ma l'impronta descrive
