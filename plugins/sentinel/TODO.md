@@ -313,7 +313,7 @@ certo, locale e già dannoso; poi il cuore del motore; le decisioni per ultime.
 | ~~**C3**~~ ✅ | ~~Decoy: perimetro di scrittura e contesto di escape~~ | 2 | basso | Nessuno tocca il percorso delle richieste normali |
 | ~~**C4**~~ ✅ | ~~L'identità del client dietro proxy~~ | 1 | medio | Chiuso il sottoinsieme rilevabile; il resto è di rete, non di codice |
 | ~~**C5**~~ ✅ | ~~La catena delle migrazioni~~ | 1 | basso | Nessun codice a runtime, ma sblocca le installazioni esistenti |
-| **C6** | Vista C: le due perdite silenziose del form | 2 | basso | Solo GUI; l'invariante da ripristinare è scritta nel form stesso |
+| ~~**C6**~~ ✅ | ~~Vista C: le due perdite silenziose del form~~ | 2 | basso | Solo GUI; l'invariante da ripristinare è scritta nel form stesso |
 | **C7** | L'impronta: cache per connessione | 1 + test | **alto** | Percorso caldo di ogni richiesta, e va riscritto un test che oggi codifica il difetto |
 | **C8** | I contatori che mentono | 2 | basso | Non cambiano decisioni, cambiano ciò che l'amministratore legge per prenderle |
 | **C9** | Le due decisioni rimaste | 2 | — | Non sono correzioni: richiedono una scelta tua |
@@ -537,20 +537,61 @@ posto (gli step sono idempotenti: «già presente, nessuna modifica»).
       È il promemoria eseguibile che mancava — il difetto è invisibile a mano
       (due file lontani da confrontare) e si ripresenta a **ogni** bump
 
-#### C6 — Vista C: le due perdite silenziose del form
+#### C6 — Vista C: le due perdite silenziose del form ✅
 
-- [ ] **`sessionAnomaly: true` e `reputation: true` spariscono** *(da riverificare)*.
+- [x] **`sessionAnomaly: true` e `reputation: true` spariscono** *(riverificato: confermato)*.
       `fillMatch` traduce la forma booleana in «niente selezionato» e `collectMatch`
       non riscrive la chiave: aprire una regola, cambiare la descrizione e salvare
       la **allarga** da «solo sessioni anomale» a «tutte». Continua a validare,
       quindi nulla se ne accorge.
-- [ ] **Un `query` array viene appiattito in stringa** *(da riverificare)*.
+- [x] **Un `query` array viene appiattito in stringa** *(riverificato: confermato, e la correzione ovvia era sbagliata — vedi esito)*.
       `['union select', 'sleep(']` diventa il letterale `union select,sleep(` e la
       regola smette di rilevare entrambi i pattern. `mUserAgent` gestisce già il
       caso array correttamente: è il modello da seguire.
 
 Entrambi violano l'invariante scritta nell'intestazione del form: *«un form non
 deve MAI distruggere ciò che non sa rappresentare»*.
+
+**Esito.**
+
+`true` significa «qualunque», e la cura è renderlo **rappresentabile** invece di
+tollerarlo: i due elenchi hanno ora una voce **«qualunque (true)»** con valore
+sentinella `*` — che non può collidere, visto che anomalie e livelli sono nomi.
+Selezionandola insieme ad altre voci vince lei, perché è la più larga.
+
+Per `query` la correzione ovvia era **sbagliata**: copiare il trattamento di
+`userAgent`, cioè separare per virgola. Nella querystring la virgola è un
+carattere normale (`?ids=1,2,3`), quindi `"ids=1,2,3"` — un pattern singolo
+perfettamente legittimo — sarebbe stato spezzato in tre. È diventata invece
+un'**area di testo con un pattern per riga**, come `path`: l'unica forma che
+regge sia l'array sia la stringa con virgole.
+
+**Verificato dal vivo**, con login vero e giro completo attraverso l'API della
+GUI su una regola `{ sessionAnomaly: true, query: ['union select','sleep('],
+path: '/admin/**' }`:
+
+```
+prima (vecchia mappatura) → {"path":"/admin/**","query":"union select,sleep("}
+dopo  (giro no-op reale)  → identica all'originale ✓
+```
+
+- [x] Voce «qualunque» nei due elenchi + mappatura nei due versi
+- [x] `mQuery` da input a textarea, un pattern per riga
+- [x] Le quattro mappature estratte come **funzioni pure** ed esportate sotto
+      `typeof module` (ramo che in browser non esiste): sono l'unica parte
+      testabile senza un DOM, che il progetto non allestisce da nessuna parte, e
+      sono esattamente dove il form ha perso dati due volte
+- [x] +18 test sul giro completo file → form → file. Verificato che **6
+      falliscono** ripristinando le vecchie mappature
+- [x] `adminSentinel/README.it.md`: la sezione sull'invariante ora dice che
+      valeva anche per i casi piccoli, con la tabella di cosa si perdeva
+
+**Sibling non toccato, per scelta.** `userAgent` ha lo stesso difetto latente:
+separa per virgola, quindi una stringa singola che ne contiene una verrebbe
+spezzata. Non l'ho cambiato perché a differenza di `query` il round-trip degli
+array lì **funziona**, e passare a textarea cambierebbe il significato di ciò che
+è già scritto su una riga sola (`curl, wget` da due pattern a uno). È una
+decisione di interfaccia su un campo che nessuno ha segnalato: la lascio a te.
 
 #### C7 — L'impronta: cache per connessione
 
