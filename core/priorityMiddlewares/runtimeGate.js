@@ -376,10 +376,17 @@ const SENTINEL_STATES = ['running', 'monitor', 'stopped'];
 // precondizione, non una decisione che si possa cancellare per distrazione.
 const SENTINEL_HARD_EXEMPT_PREFIXES = ['/.well-known/'];
 
-// Tetto di tempo per una valutazione del motore. Un motore che si impianta (una
-// regex catastrofica sfuggita al validatore, un decoy su un filesystem lento)
-// non deve poter trascinare con sé la richiesta: scaduto il tempo si lascia
-// passare. Vedi anche il fail-open su eccezione.
+// Tetto di tempo per una valutazione del motore. Un motore che si impianta in
+// modo ASINCRONO — un decoy su un filesystem lento, una lettura di rete — non
+// deve trascinare con sé la richiesta: scaduto il tempo si lascia passare. Vedi
+// anche il fail-open su eccezione.
+//
+// ⚠ NON è una difesa contro le regex catastrofiche, e per un periodo è stato
+// contato come tale. `engine.evaluate(ctx)` è **sincrona**: `Promise.resolve()`
+// la esegue per intero prima che la corsa cominci, quindi non c'è nulla da
+// interrompere. E se una regex sta ciclando è l'event loop a essere fermo: il
+// `setTimeout` non può scattare comunque. Quella famiglia la ferma solo il
+// rifiuto del pattern a monte — vedi `plugins/sentinel/lib/ruleValidator.js`.
 const ENGINE_TIMEOUT_MS = 250;
 
 function createSentinelGate(options) {

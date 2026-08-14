@@ -22,10 +22,28 @@
  * dall'attaccante. Un pattern con backtracking catastrofico — la forma classica è
  * un quantificatore dentro un quantificatore, `(a+)+` — contro un input costruito
  * ad arte blocca l'event loop, cioè l'INTERO sito, con una singola richiesta.
- * Node non offre timeout sulle regex. Le tre difese, tutte necessarie:
- *   1. rifiuto dei pattern con quantificatori annidati (qui);
- *   2. troncamento degli input prima del test (requestFingerprint / ruleMatcher);
- *   3. tetto di tempo sulla valutazione complessiva (sentinelGate).
+ * Node non offre timeout sulle regex.
+ *
+ * **C'è una difesa sola, ed è questa.** Il rifiuto del pattern a monte, in
+ * `hasCatastrophicBacktracking`. Per un periodo qui se ne sono elencate tre,
+ * «tutte necessarie»; delle altre due, una era parziale e l'altra non esisteva:
+ *
+ *   • *«troncamento degli input prima del test»* — copre il solo User-Agent, e
+ *     contro un pattern esponenziale è comunque irrilevante: misurato, `(a|a)*$`
+ *     impiega **29 secondi su trenta caratteri**. Estenderlo a percorso e query
+ *     è stato valutato e scartato, perché regalerebbe un'evasione a chiunque
+ *     (imbottisci, poi appendi il payload). La nota per esteso sta in
+ *     `ruleMatcher.js`.
+ *   • *«tetto di tempo sulla valutazione»* — il `Promise.race` a 250 ms nel gate
+ *     **non può interrompere una regex**. `engine.evaluate(ctx)` è sincrona:
+ *     quando la corsa comincia la funzione è già interamente girata, e se una
+ *     regex sta ciclando è l'event loop a essere fermo, quindi il `setTimeout`
+ *     non scatta comunque. Quel tetto protegge da un `evaluate` lento in modo
+ *     *asincrono*, che è un caso diverso e più raro. Vedi il commento accanto a
+ *     `ENGINE_TIMEOUT_MS` in `core/priorityMiddlewares/runtimeGate.js`.
+ *
+ * Sapere che la difesa è una sola cambia dove si guarda quando se ne cerca una
+ * seconda: non nella lunghezza degli input, ma nella copertura dell'euristica.
  */
 
 'use strict';
@@ -59,18 +77,39 @@ const VALID_FP_CLASS_KEYS = [
 /**
  * Riconosce i pattern a rischio backtracking catastrofico.
  *
- * Euristica deliberatamente GROSSOLANA: cerca un quantificatore applicato a un
- * gruppo che a sua volta contiene un quantificatore. Non riconosce ogni forma
- * patologica (il problema in generale è indecidibile) e rifiuta qualche pattern
- * innocuo, ma copre la famiglia che compare davvero nelle regole scritte a mano.
- * Un falso rifiuto costa una riscrittura; un falso permesso costa il sito.
+ * Euristica deliberatamente GROSSOLANA: un quantificatore applicato a un gruppo
+ * il cui contenuto è già ripetibile. «Già ripetibile» in due forme, e per un
+ * periodo se ne è riconosciuta una sola:
+ *
+ *   1. il gruppo contiene un altro quantificatore — `(a+)+`, la forma da manuale;
+ *   2. il gruppo contiene un'**alternanza** — `(a|a)*`, `(a|ab)*`, `(\s|\s)*`.
+ *
+ * La seconda è tanto pericolosa quanto la prima e non veniva vista. Misurata:
+ * `/(a|a)*$/` contro **trenta caratteri** blocca l'event loop per **29 secondi**,
+ * e a quel punto è il sito intero a essere fermo. È il motivo per cui il
+ * troncamento degli input non è la difesa che sembra (vedi `ruleMatcher.js`):
+ * con una crescita esponenziale nessun tetto sulla lunghezza salva niente.
+ *
+ * L'euristica rifiuta anche alternanze innocue — `(foo|bar)+` non ha rami
+ * sovrapposti e non esplode — e non riconosce ogni forma patologica: il problema
+ * in generale è indecidibile. La direzione dell'errore è però scelta, ed è la
+ * stessa dichiarata da sempre in testa a questo file: **un falso rifiuto costa
+ * una riscrittura, un falso permesso costa il sito.**
+ *
+ * Nessuna delle regole distribuite è toccata: usano l'alternanza — `(rsa|dsa|…)$`,
+ * `(c99|r57|…)\.` — ma nessuna la quantifica, che è la condizione richiesta qui.
  *
  * @param {string} source
  * @returns {boolean} true se sospetto
  */
-function hasNestedQuantifier(source) {
-  // (...)+ / (...)* / (...){n,} dove il gruppo contiene già + * {n,}
-  return /\((?:[^()]*[+*}][^()]*)\)\s*[+*]|\((?:[^()]*[+*}][^()]*)\)\s*\{\d+,/.test(source);
+function hasCatastrophicBacktracking(source) {
+  // Contenuto di gruppo "già ripetibile": porta un quantificatore (+ * {n,})
+  // oppure un'alternanza (|). Il gruppo non deve contenerne altri annidati —
+  // in quel caso è quello interno a essere riconosciuto.
+  const ripetibile = '[^()]*[+*}|][^()]*';
+  // ...seguito da + * oppure {n,}
+  return new RegExp(`\\((?:${ripetibile})\\)\\s*[+*]|\\((?:${ripetibile})\\)\\s*\\{\\d+,`)
+    .test(source);
 }
 
 /**
@@ -83,8 +122,8 @@ function hasNestedQuantifier(source) {
  */
 function compileRegex(raw, where, errors) {
   const source = raw.slice('regex:'.length);
-  if (hasNestedQuantifier(source)) {
-    errors.push(`${where}: regex con quantificatori annidati, rifiutata per rischio ReDoS (${source})`);
+  if (hasCatastrophicBacktracking(source)) {
+    errors.push(`${where}: regex a rischio backtracking catastrofico (ReDoS), rifiutata (${source})`);
     return null;
   }
   try {
@@ -192,8 +231,8 @@ function compileMatchNode(node, where, errors) {
         errors.push(`${where}.path: pattern non valido`);
         return null;
       }
-      if (p.startsWith('regex:') && hasNestedQuantifier(p.slice(6))) {
-        errors.push(`${where}.path: regex con quantificatori annidati, rifiutata per rischio ReDoS`);
+      if (p.startsWith('regex:') && hasCatastrophicBacktracking(p.slice(6))) {
+        errors.push(`${where}.path: regex a rischio backtracking catastrofico (ReDoS), rifiutata`);
         return null;
       }
       if (!p.startsWith('regex:') && !p.startsWith('/')) {
@@ -824,7 +863,7 @@ function logValidationResults(result, logger, prefix) {
 module.exports = {
   validateRules,
   compileMatchNode,
-  hasNestedQuantifier,
+  hasCatastrophicBacktracking,
   logValidationResults,
   VALID_ACTIONS,
   DECORATING_ACTIONS,

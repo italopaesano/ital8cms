@@ -68,6 +68,7 @@ class RuleHitCounter {
         authenticatedHits: 0,
         botHits: 0,
         distinctIps: new Set(),
+        distinctIpsBaseline: 0,
         firstHit: null,
         lastHit: null,
       };
@@ -100,7 +101,8 @@ class RuleHitCounter {
         enforcedHits: entry.enforcedHits,
         authenticatedHits: entry.authenticatedHits,
         botHits: entry.botHits,
-        distinctIps: entry.distinctIps.size,
+        // Massimo storico, non conteggio della sessione corrente: vedi `_load`.
+        distinctIps: Math.max(entry.distinctIpsBaseline || 0, entry.distinctIps.size),
         firstHit: entry.firstHit,
         lastHit: entry.lastHit,
         // Solo un'indicazione, non un permesso: chi promuove è l'amministratore.
@@ -151,10 +153,28 @@ class RuleHitCounter {
         enforcedHits: raw.enforcedHits || 0,
         authenticatedHits: raw.authenticatedHits || 0,
         botHits: raw.botHits || 0,
-        // Il numero di IP distinti sopravvive al riavvio come valore, ma
-        // l'insieme no: ricostruirlo darebbe l'illusione di una precisione che
-        // non c'è. Si riparte a contare, il totale storico resta nel file.
+        // ── IP DISTINTI: PERCHE UN NUMERO E UN INSIEME VUOTO ──
+        // L'insieme non si ricostruisce dal file, e non per pigrizia: gli
+        // indirizzi non ci sono. Conservarli qui vorrebbe dire fare di
+        // `ruleHits.json5` un archivio di dati personali senza chiederlo a
+        // nessuno — esattamente ciò che `censusIpMode` esiste per rendere una
+        // scelta esplicita (default `count`: quanti, non quali).
+        //
+        // Il valore letto resta però come PAVIMENTO. Il commento precedente
+        // diceva «il totale storico resta nel file» e il codice faceva il
+        // contrario: `getSummary()` leggeva `size` di un insieme vuoto e il
+        // primo flush lo riscriveva sopra lo storico — bastava un solo hit su
+        // una qualunque regola perché il salvataggio azzerasse il conteggio di
+        // TUTTE (il payload si riscrive per intero). Un riavvio, e mesi di
+        // «questa regola arriva da 500 origini» diventavano zero.
+        //
+        // Con il pavimento il numero è monotono e ha un significato dichiarabile:
+        // **il massimo osservato in una singola esecuzione**. Non è la somma
+        // storica dei distinti — quella richiederebbe gli indirizzi — ma è un
+        // limite inferiore onesto, e serve la domanda per cui il campo esiste:
+        // «questa regola scatta su una persona sola o su molte?».
         distinctIps: new Set(),
+        distinctIpsBaseline: raw.distinctIps || 0,
         firstHit: raw.firstHit || null,
         lastHit: raw.lastHit || null,
       });

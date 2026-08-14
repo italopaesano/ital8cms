@@ -86,6 +86,53 @@ const ANOMALY_KINDS = [
 ];
 
 /**
+ * Campi dell'impronta il cui cambiamento significa «è cambiata la CLASSE del
+ * client», ed è ciò che `fingerprintChanged` confronta.
+ *
+ * ─── PERCHE NON L'HASH ────────────────────────────────────────────────────────
+ * L'hash dell'impronta descrive la **forma di una richiesta**, non il client:
+ * una navigazione, un foglio di stile e una `fetch` dallo stesso identico
+ * browser hanno `accept` diversi e `sec-fetch-dest` diversi, quindi hash diversi.
+ * Confrontandolo, ogni sessione admin che mescoli navigazioni e AJAX — cioè ogni
+ * sessione admin — produceva l'anomalia in continuazione, e siccome la linea di
+ * base non si aggiorna mai la marcatura restava fino al logout. Un semaforo
+ * sempre rosso non è un semaforo: gonfiava `byKind` e `flagged`, cioè proprio i
+ * numeri che si guardano per decidere se promuovere una regola.
+ *
+ * ─── PERCHE QUESTI TRE CAMPI ──────────────────────────────────────────────────
+ * Misurato con Chromium su una pagina con CSS, font, immagine, iframe, script,
+ * `fetch` GET e POST, XHR, `sendBeacon` e submit di form: **13 richieste, 9
+ * impronte distinte, e ogni campo di `fpClass` costante.** La classe è stabile
+ * dove l'hash non lo è.
+ *
+ * Dei sette campi disponibili si confrontano solo questi tre, che sono quelli in
+ * cui la forma degli header *entra*:
+ *   • `headerProfile` — browser / partial / minimal: il segnale grezzo;
+ *   • `family` — browser-like / script-like / curl / python…: cosa sembra essere;
+ *   • `coherent` — se l'UA e la forma degli header raccontano la stessa storia.
+ *
+ * `claimedBrowser`, `claimedOs`, `isBot` e `botName` sono derivati dal solo
+ * User-Agent: se cambiano è cambiato l'UA, e a dirlo c'è già `uaChanged`.
+ * Includerli renderebbe questa foglia un duplicato di quella.
+ *
+ * Il caso che si vuole cogliere resta intero: una sessione nata su un browser
+ * che continua da qualcosa che browser non è. Misurato: `{browser, true,
+ * browser-like}` → `{minimal, false, script-like}`.
+ */
+const CLIENT_CLASS_FIELDS = ['headerProfile', 'family', 'coherent'];
+
+/**
+ * Proiezione confrontabile della classe di un client.
+ *
+ * @param {object} fpClass - decomposizione dell'impronta
+ * @returns {string} stringa stabile, vuota se la classe non è disponibile
+ */
+function clientClassOf(fpClass) {
+  if (!fpClass || typeof fpClass !== 'object') return '';
+  return CLIENT_CLASS_FIELDS.map((k) => `${k}:${fpClass[k]}`).join('|');
+}
+
+/**
  * Blocco di rete dell'indirizzo: /24 per IPv4, /48 per IPv6.
  *
  * Serve a separare «l'operatore mobile mi ha cambiato indirizzo» — che dentro lo
@@ -156,11 +203,12 @@ class SessionCoherence {
    * Confronta la richiesta con la linea di base della sua sessione.
    *
    * @param {string} sessionId
-   * @param {object} observation - { userAgent, fp, ip, isScriptClient, username }
+   * @param {object} observation - { userAgent, fpClass, ip, isScriptClient, username }
    * @returns {{ anomalies: string[], firstSeenMs: number, requests: number }}
    */
   observe(sessionId, observation) {
     const existing = this.store.get(sessionId);
+    const clientClass = clientClassOf(observation.fpClass);
 
     if (!existing) {
       // Prima comparsa: fissa il riferimento. Per costruzione non può essere
@@ -169,7 +217,7 @@ class SessionCoherence {
       this.store.touch(sessionId, {
         firstSeenMs: Date.now(),
         userAgent: observation.userAgent || '',
-        fp: observation.fp || '',
+        clientClass,
         ip: observation.ip || '',
         network: networkOf(observation.ip),
         username: observation.username || null,
@@ -181,7 +229,8 @@ class SessionCoherence {
 
     const anomalies = [];
     if ((observation.userAgent || '') !== existing.userAgent) anomalies.push('uaChanged');
-    if ((observation.fp || '') !== existing.fp) anomalies.push('fingerprintChanged');
+    // Confronta la CLASSE, non l'hash: vedi CLIENT_CLASS_FIELDS.
+    if (clientClass !== existing.clientClass) anomalies.push('fingerprintChanged');
     if (networkOf(observation.ip) !== existing.network) anomalies.push('networkChanged');
     if ((observation.ip || '') !== existing.ip) anomalies.push('ipChanged');
     if (observation.isScriptClient) anomalies.push('scriptClient');
@@ -238,5 +287,7 @@ module.exports = {
   SessionCoherence,
   ANOMALY_KINDS,
   SESSION_ID_KEY,
+  CLIENT_CLASS_FIELDS,
   networkOf,
+  clientClassOf,
 };

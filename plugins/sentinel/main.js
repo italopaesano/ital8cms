@@ -272,7 +272,9 @@ function inspectSession(ctx, fingerprint, clientIp) {
     const fpClass = fingerprint.fpClass || {};
     const result = sessionCoherence.observe(sessionId, {
       userAgent: ctx.get ? (ctx.get('User-Agent') || '') : '',
-      fp: fingerprint.fp,
+      // La CLASSE dell'impronta, non l'hash: l'hash cambia fra una navigazione e
+      // una fetch dello stesso browser. Vedi CLIENT_CLASS_FIELDS.
+      fpClass,
       ip: clientIp,
       username: (session.user && session.user.username) || null,
       // Un cookie valido in mano a qualcosa che non è un browser. Non è un
@@ -905,15 +907,35 @@ const engine = {
 
   /**
    * Osserva come è finita una richiesta lasciata passare.
-   * Il gate chiama questo metodo solo per gli esiti NON-2xx: un 200 non è un
-   * segnale, e il filtro toglie circa il 99% delle chiamate.
    *
-   * È qui che sentinel scopre gli attacchi per cui non esiste ancora una regola.
+   * È qui che sentinel scopre gli attacchi per cui non esiste ancora una regola:
+   * il classico «quaranta percorsi diversi falliti in un minuto», che nessuna
+   * regola scritta a mano avrebbe intercettato.
+   *
+   * ─── PERCHE SOLO DAL 400 IN SU ────────────────────────────────────────────
+   * Il gate filtra i 2xx (un 200 non è un segnale, e così si evita al motore il
+   * 99% delle chiamate), ma il suo filtro è «non-2xx» — cioè comprende anche i
+   * **3xx**, che qui sarebbero rumore travestito da segnale.
+   *
+   * Un redirect non è una richiesta fallita: è il sito che risponde come deve.
+   * E i redirect non sono rari — la sola area admin ne emette uno per ogni
+   * richiesta non autenticata, verso la pagina di login. Il caso peggiore è un
+   * sito con `urlRedirect` o `hideExtension` attivi: un crawler legittimo che
+   * segue duecento link vecchi colleziona duecento percorsi distinti e finisce
+   * fra i «sospetti scanner» — cioè nel pannello che esiste per mostrare gli
+   * attacchi privi di regola. Ed è proprio il tipo di sito che quei due plugin
+   * li installa.
+   *
+   * (Il 304 sarebbe il caso da manuale, ma qui non si presenta: nessuna delle
+   * istanze di `koa-classic-server` gestisce le richieste condizionali, e le
+   * risorse dei temi vanno esplicitamente in `no-store`. Verificato.)
+   *
    * Fail-soft assoluto: la risposta è già stata emessa.
    */
   observeOutcome(ctx, info) {
     if (!custom || custom.observeOutcomes === false) return;
     if (!outcomeCensus) return;
+    if (!(ctx.status >= 400)) return;
 
     const clientIp = resolveClientIp(ctx);
     outcomeCensus.record(clientIp, ctx.status, ctx.path);
@@ -1318,5 +1340,12 @@ module.exports._internals = {
   resolveClientIp: (ctx, conf) => { const prev = custom; custom = conf || custom; const r = resolveClientIp(ctx); custom = prev; return r; },
   shouldEnforce: (rule, subject, conf) => { const prev = custom; custom = conf || custom; const r = shouldEnforce(rule, subject); custom = prev; return r; },
   serveDrop: (ctx, conf) => { const prev = custom; custom = conf || custom; const r = serveDrop(ctx); custom = prev; return r; },
+  observeOutcome: (ctx, conf, census) => {
+    const prevConf = custom;
+    const prevCensus = outcomeCensus;
+    custom = conf || custom;
+    outcomeCensus = census || outcomeCensus;
+    try { engine.observeOutcome(ctx, {}); } finally { custom = prevConf; outcomeCensus = prevCensus; }
+  },
   resolveDataDir,
 };

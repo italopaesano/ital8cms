@@ -1,4 +1,4 @@
-const { validateRules, hasNestedQuantifier } = require('../../lib/ruleValidator');
+const { validateRules, hasCatastrophicBacktracking } = require('../../lib/ruleValidator');
 const path = require('path');
 const loadJson5 = require('../../../../core/loadJson5');
 
@@ -33,19 +33,41 @@ describe('identità della regola', () => {
 });
 
 describe('guardrail ReDoS', () => {
+  // Dopo C9 questa è la difesa UNICA, non la prima di tre: il troncamento degli
+  // input copre il solo UA ed è comunque irrilevante contro un pattern
+  // esponenziale (misurato: `(a|a)*$` impiega 29 secondi su TRENTA caratteri),
+  // e il tetto di 250 ms nel gate non può interrompere una regex perché
+  // `evaluate` è sincrona e l'event loop è fermo.
   test.each([
+    // Famiglia 1 — un quantificatore dentro un quantificatore.
     ['(a+)+', true],
     ['(x*)*', true],
     ['([a-z]+)+b', true],
+    ['(?:a+)+', true],
+    ['(a{2,})+', true],
+    // Famiglia 2 — un'ALTERNANZA quantificata. Non veniva riconosciuta, ed è
+    // dove vive il pattern più pericoloso che si scrive per sbaglio.
+    ['(a|a)*', true],
+    ['(a|ab)*', true],
+    ['(\\s|\\s)*$', true],
+    ['(a|b){2,}', true],
+    // Innocui: nessun quantificatore SUL GRUPPO. Sono le forme che compaiono
+    // nelle regole distribuite, e devono continuare a passare.
     ['^curl/', false],
     ['/wp-(admin|login)', false],
     ['\\.php$', false],
-  ])('hasNestedQuantifier(%s) → %s', (source, expected) => {
-    expect(hasNestedQuantifier(source)).toBe(expected);
+    ['/id_(rsa|dsa|ecdsa|ed25519)$', false],
+    ['(\\.\\./|\\.\\.%2f)', false],
+    ['(a|b)?', false],
+  ])('hasCatastrophicBacktracking(%s) → %s', (source, expected) => {
+    expect(hasCatastrophicBacktracking(source)).toBe(expected);
   });
 
-  test('una regex con quantificatori annidati viene rifiutata', () => {
-    const r = validateRules({ rules: [rule({ match: { userAgent: 'regex:(a+)+b' } })] });
+  test.each([
+    ['quantificatori annidati', 'regex:(a+)+b'],
+    ['alternanza quantificata', 'regex:(a|a)*b'],
+  ])('una regex con %s viene rifiutata', (_titolo, pattern) => {
+    const r = validateRules({ rules: [rule({ match: { userAgent: pattern } })] });
     expect(r.valid).toBe(false);
     expect(r.errors.join(' ')).toMatch(/ReDoS/);
   });

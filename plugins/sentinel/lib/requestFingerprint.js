@@ -72,6 +72,13 @@ const VOLATILE_HEADERS = new Set([
   'if-none-match', 'if-modified-since', 'range', 'authorization',
   'user-agent', // ← escluso per progetto: vedi l'intestazione del file
   'x-forwarded-for', 'x-real-ip', 'x-forwarded-proto', 'x-forwarded-host',
+  // Token CSRF: presente solo sulle richieste mutanti intercettate dal client
+  // di `csrfProtection`, quindi la sua PRESENZA divide in due le richieste dello
+  // stesso browser. È entropia pura in una firma che deve restare a bassa
+  // entropia — e in una chiave di censimento, dove moltiplica le voci senza
+  // aggiungere segnale. (Il nome dell'header è configurabile in csrfProtection,
+  // ma il default è l'unico che si incontra: qui si copre quello.)
+  'x-csrf-token',
 ]);
 
 /**

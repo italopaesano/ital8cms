@@ -316,8 +316,8 @@ certo, locale e già dannoso; poi il cuore del motore; le decisioni per ultime.
 | ~~**C5**~~ ✅ | ~~La catena delle migrazioni~~ | 1 | basso | Nessun codice a runtime, ma sblocca le installazioni esistenti |
 | ~~**C6**~~ ✅ | ~~Vista C: le due perdite silenziose del form~~ | 2 | basso | Solo GUI; l'invariante da ripristinare è scritta nel form stesso |
 | ~~**C7**~~ ✅ | ~~L'impronta: cache per connessione~~ | 1 + test | **alto** | Percorso caldo di ogni richiesta, e va riscritto un test che oggi codifica il difetto |
-| **C8** | I contatori che mentono | 2 | basso | Non cambiano decisioni, cambiano ciò che l'amministratore legge per prenderle |
-| **C9** | Le due decisioni rimaste | 2 | — | Non sono correzioni: richiedono una scelta tua |
+| ~~**C8**~~ ✅ | ~~I contatori che mentono~~ | 2 | basso | Non cambiano decisioni, cambiano ciò che l'amministratore legge per prenderle |
+| ~~**C9**~~ ✅ | ~~Le due decisioni rimaste~~ | 2 | — | Non sono correzioni: richiedono una scelta tua |
 
 ---
 
@@ -669,49 +669,161 @@ due ragioni: serve un **nome nuovo** per la chiave sul socket (regola 3 del
 CLAUDE.md), e reintrodurre una cache nello stesso file dove ne è appena stata
 tolta una vuole essere una decisione, non un residuo dello stesso intervento.
 
-#### C8 — I contatori che mentono
+#### C8 — I contatori che mentono ✅
 
-- [ ] **Il censimento degli esiti conta 304 e 3xx** *(da riverificare)*. Un
-      visitatore che ricarica una pagina con 25 asset in cache produce 25 path
-      distinti e finisce fra i «sospetti scanner», che è il pannello nato per
-      mostrare gli attacchi senza regola.
-- [ ] **`ruleHitCounter` distrugge lo storico degli IP distinti** *(verificato)*.
-      `_load` ricrea un `Set` vuoto e il primo `save` riscrive quel conteggio sopra
-      il valore storico. Il commento dice «il totale storico resta nel file»: il
-      percorso di salvataggio lo contraddice. Serve uno scalare separato, oppure
-      non riscrivere la chiave quando il `Set` è vuoto.
+- [x] **Il censimento degli esiti conta i 3xx.** Il gate filtra i 2xx e passa
+      tutto il resto; `observeOutcome` accettava qualunque non-2xx, quindi ogni
+      redirect finiva fra i percorsi falliti distinti da cui si ricavano i
+      «sospetti scanner» — il pannello nato per mostrare gli attacchi senza
+      regola. Ora si conta **dal 400 in su**.
 
-#### C9 — Le due decisioni rimaste
+      **Riverificato, e il rilievo era giusto per la ragione sbagliata.** Lo
+      scenario descritto — il visitatore che ricarica 25 asset in cache — **non
+      si verifica in questo stack**: misurato sull'istanza viva, nessuna delle
+      istanze di `koa-classic-server` gestisce le richieste condizionali (né
+      `ETag` né `Last-Modified` in risposta; `If-None-Match` e
+      `If-Modified-Since` ricevono 200), e le risorse dei temi vanno
+      esplicitamente in `Cache-Control: no-store`. **Nessun 304 esiste.**
 
-Non sono correzioni: richiedono una scelta, e vanno affrontate dopo C7 perché il
-suo esito cambia i termini della prima.
+      Lo scenario che si verifica davvero è un altro, e pesa di più: l'area
+      admin risponde **302 verso la pagina di login a ogni richiesta non
+      autenticata** (verificato: `/admin/`, `/admin/usersManagment` → 302). E
+      soprattutto, il caso peggiore è un sito con `urlRedirect` o
+      `hideExtension` attivi, dove un crawler legittimo che segue duecento link
+      vecchi colleziona duecento percorsi distinti e viene classificato come
+      scanner — cioè proprio il tipo di sito che quei plugin li installa.
+- [x] **`ruleHitCounter` distrugge lo storico degli IP distinti** *(verificato)*.
+      `_load` ricreava un `Set` vuoto e `getSummary()` ne leggeva `size`: il
+      primo flush dopo un riavvio riscriveva quel valore sopra lo storico. E non
+      solo per la regola toccata — `save()` riscrive il payload **per intero**,
+      quindi bastava un hit su una qualunque regola per azzerare il conteggio di
+      tutte. Il commento accanto affermava l'opposto («il totale storico resta
+      nel file»).
 
-- [ ] **`fingerprintChanged`** — vedi la sezione *Aperto* qui sotto, che resta la
-      descrizione di riferimento. Le tre risposte si escludono a vicenda.
-      **C7 ha chiuso la domanda che teneva aperta questa decisione**: quanto
-      rumore resti tolta la cache. Risposta misurata su Chromium, una pagina
-      sola: **quattro impronte distinte** (navigazione `bc13ff8a`, foglio di
-      stile `2c96521f`, script e `fetch` GET `14b440b9`, `fetch` POST
-      `e582bd02`). Il rumore non cala, cambia natura — da casuale (dipendeva da
-      quale richiesta apriva la connessione) a **deterministico**: la foglia
-      scatta a ogni alternanza navigazione↔asset↔AJAX, sempre, per chiunque.
-      Il che è una buona notizia per la decisione: il fenomeno ora è
-      riproducibile e non c'è più nulla da misurare prima di scegliere.
-- [ ] **Onestà sulle difese ReDoS** *(verificato)*. `evaluate(ctx)` è **sincrono**,
-      quindi il `Promise.race` con timeout 250 ms nel gate non può interromperlo:
-      una regex catastrofica blocca l'event loop e il `setTimeout` non scatta mai.
-      `ruleValidator` lo elenca fra «le tre difese, tutte necessarie». Delle due
-      l'una: o la valutazione esce dall'event loop (intervento grosso), o il
-      commento smette di contare una difesa che non esiste e si rafforzano le due
-      vere (troncamento dell'input, rifiuto dei pattern).
+      **Scelta: un pavimento, non gli indirizzi.** Il valore letto dal file
+      diventa il minimo, e `getSummary()` restituisce il massimo fra quello e
+      l'insieme della sessione corrente. Il numero è così monotono e ha un
+      significato dichiarabile — **il massimo osservato in una singola
+      esecuzione** — che è un limite inferiore onesto e risponde alla domanda per
+      cui il campo esiste: «questa regola scatta su una persona sola o su
+      molte?». L'alternativa (persistere gli indirizzi per ricostruire l'insieme)
+      è stata scartata: farebbe di `ruleHits.json5` un archivio di dati personali
+      senza che nessuno l'abbia chiesto — esattamente ciò che `censusIpMode`
+      esiste per rendere una scelta esplicita. Un test verifica che nessun
+      indirizzo finisca sul file.
+
+**Nome introdotto:** `distinctIpsBaseline`, proprietà **interna** all'entry in
+memoria (il formato del file non cambia: resta la sola chiave `distinctIps`).
+Alternative valutate: `distinctIpsAtLoad`, `distinctIpsHighWater`. Se preferisci
+una delle altre due è una sostituzione di due righe.
+
+**Test:** `tests/unit/counters.test.js`, 26 test — i **primi** per entrambi i
+moduli, che non ne avevano nessuno. Ripristinando i due difetti, 12 falliscono.
+
+#### C9 — Le due decisioni rimaste ✅
+
+Non erano correzioni: erano scelte. Decise dal maintainer il 2026-08-14 sulle
+raccomandazioni **(b)** e **(B)**.
+
+##### Decisione 1 — `fingerprintChanged` confronta la CLASSE, non l'hash
+
+- [x] **Scelta la (b):** confronto su `fpClass` invece che sull'hash. Scartate la
+      (a) — una linea di base per forma di richiesta, che aggiunge stato e una
+      classificazione nuova da mantenere — e la (c), rimuovere la foglia, che
+      avrebbe perso l'unica cosa che `scriptClient` non dice: la **transizione**
+      («questa sessione era un browser e non lo è più») invece dello stato
+      («questa richiesta è script-like»).
+
+**Quali campi, e perché tre su sette.** `headerProfile`, `family`, `coherent` —
+i tre in cui la forma degli header *entra*. Fuori `claimedBrowser`, `claimedOs`,
+`isBot`, `botName`: derivano dal solo User-Agent, quindi se cambiano lo dice già
+`uaChanged`, e includerli avrebbe reso questa foglia un duplicato di quella.
+
+**La misura che ha scelto i campi.** Chromium su una pagina con CSS, font,
+immagine, iframe, script, `fetch` GET e POST, XHR, `sendBeacon` e submit di
+form: **13 richieste, 9 impronte distinte, e tutti e sei i campi di `fpClass`
+costanti**. La classe è stabile esattamente dove l'hash non lo è.
+
+**Il prima/dopo, sull'istanza viva.** Sessione admin vera (login col form,
+token dal campo `_csrf`), 6 navigazioni + 6 AJAX + 1 POST, poi la stessa sessione
+che prosegue da uno script con l'UA che mente:
+
+| | traffico admin normale | dopo il dirottamento |
+|---|---|---|
+| **prima** (hash) | `flagged=1`, `fingerprintChanged=1` | `fingerprintChanged=1` — **invariato** |
+| **dopo** (classe) | `flagged=0`, `fingerprintChanged=0` | `flagged=1`, `fingerprintChanged=1`, `scriptClient=1` |
+
+La riga che conta è la prima, a destra: con il confronto sull'hash l'allarme era
+**già acceso prima dell'attacco**, quindi l'attacco non cambiava nulla di
+osservabile. Non era un semaforo rumoroso, era un semaforo inutile.
+
+- [x] **`x-csrf-token` fra i `VOLATILE_HEADERS`.** Va fatto comunque, e ora ha una
+      ragione in più: la sua sola presenza divideva in due le richieste dello
+      stesso browser, moltiplicando le voci del **censimento** senza aggiungere
+      segnale.
+- [x] **La descrizione della regola distribuita** non invita ad aggiungere
+      `fingerprintChanged` — verificato: cita `ipChanged`/`networkChanged` e già
+      con la sua avvertenza. Nulla da correggere, e il file delle regole non è
+      stato toccato (per raggiungere le installazioni esistenti servirebbe una
+      migrazione, sproporzionata per un testo).
+
+**Il nome resta `fingerprintChanged`.** Un rename in `clientClassChanged` sarebbe
+più preciso ma è un'altra decisione: tocca `ANOMALY_KINDS`, il validatore, i due
+`<select>` della GUI, la CLI, e soprattutto vorrebbe una **migrazione** per le
+regole che un amministratore avesse già scritto. Annotato qui se un giorno lo si
+vuole.
+
+##### Decisione 2 — le difese ReDoS erano tre sulla carta e una sola nei fatti
+
+- [x] **Scelta la (B):** il commento smette di contare una difesa che non esiste,
+      e si rafforza quella vera. Scartata la (A), portare la valutazione fuori
+      dall'event loop: `evaluate` ha bisogno di `ctx`, delle regole compilate,
+      dei censimenti e della sessione — serializzare tutto a un worker per ogni
+      richiesta costerebbe più di quanto protegge.
+
+**Cosa è risultato falso, misurando.**
+
+1. *«tetto di tempo sulla valutazione (sentinelGate)»* — non esiste come difesa
+   ReDoS. `engine.evaluate(ctx)` è **sincrona**: `Promise.resolve()` la esegue
+   per intero prima che la corsa cominci, e se una regex sta ciclando è l'event
+   loop a essere fermo, quindi il `setTimeout` non scatta comunque. Il tetto
+   resta — protegge da un `evaluate` lento in modo *asincrono* — con il commento
+   che ora dice quale caso copre.
+2. *«troncamento degli input prima del test»* — copriva il solo User-Agent.
+   Estenderlo a percorso e query è stato **valutato e scartato**, ed è la
+   sorpresa di questo step: (i) contro un pattern esponenziale è irrilevante,
+   misurato — `/(a|a)*$/` impiega **29 secondi su TRENTA caratteri**, quindi
+   nessun tetto sulla lunghezza salva niente; (ii) tagliare la coda regala
+   un'evasione universale — imbottisci il percorso con 2 KB di spazzatura e ci
+   appendi `/config.php`, e una regola `**/config.php` non matcha più. Si
+   scambierebbe un rischio *condizionato* con una falla *incondizionata*.
+
+**Il rinforzo vero: l'euristica aveva un buco dove vive il pericolo.**
+`hasNestedQuantifier` riconosceva `(a+)+`, `(a*)*`, `(?:a+)+`, `(a{2,})+` — e
+**non** l'alternanza quantificata: `(a|a)*`, `(a|ab)*`, `(\s|\s)*` passavano.
+Misurato, `(a|a)*$` contro 30 caratteri: 29 secondi di sito fermo. La funzione ora
+riconosce entrambe le famiglie e si chiama **`hasCatastrophicBacktracking`** (il
+vecchio nome sarebbe diventato una bugia). Alternative valutate:
+`isBacktrackingRisk`, `hasRiskyQuantifier`.
+
+Rifiuta anche alternanze innocue (`(foo|bar)+` non ha rami sovrapposti), ed è la
+direzione d'errore già dichiarata in testa a quel file: *un falso rifiuto costa
+una riscrittura, un falso permesso costa il sito*. **Nessuna regola distribuita è
+toccata**: usano l'alternanza — `(rsa|dsa|…)$`, `(c99|r57|…)\.` — ma nessuna la
+quantifica.
 
 ---
 
-### Aperto — `fingerprintChanged` mente per costruzione
+### ~~Aperto~~ ✅ CHIUSA — `fingerprintChanged` mentiva per costruzione
 
-> Confluita nel *Piano di consolidamento* come **C9**, che ne stabilisce anche il
-> momento: dopo C7, perché la correzione della cache per connessione cambia quanto
-> rumore resta. Questa sezione resta la descrizione di riferimento.
+> **Risolta in C9** (2026-08-14) con la risposta (b): il confronto è passato
+> dall'hash alla **classe** dell'impronta — `headerProfile`, `family`,
+> `coherent`. Verificato dal vivo: sessione admin che mescola 6 navigazioni,
+> 6 AJAX e una POST → `flagged=0`; la stessa sessione che prosegue da uno script
+> → `flagged=1`. Prima, l'allarme era già acceso *prima* dell'attacco.
+>
+> Questa sezione resta come descrizione del problema e del perché la scelta è
+> caduta lì. Il seguito del ragionamento è in **C9**, sopra.
 
 Emerso analizzando l'interazione fra sentinel e `csrfProtection` (v2.81.0). Non
 è un bug con un sintomo: è una foglia che **non può funzionare come promette**,
