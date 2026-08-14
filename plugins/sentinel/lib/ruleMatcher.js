@@ -27,6 +27,39 @@ const { ipMatchesAny, normalizeIp } = require('./ipMatcher');
 const { fpClassMatches, MAX_UA_LENGTH } = require('./requestFingerprint');
 
 /**
+ * ─── PERCHE SOLO L'UA E TRONCATO, E IL PERCORSO NO ────────────────────────────
+ *
+ * Le regex arrivano dall'amministratore e si applicano a stringhe che sceglie
+ * chi bussa. Sembra ovvio troncarle tutte, e per un po' è sembrato ovvio anche
+ * qui — il percorso e la querystring arrivano nelle stesse regex **interi**, e
+ * misurato sull'istanza viva una querystring di **16.300 caratteri** viene
+ * servita normalmente (a 16.500 è Node a rifiutare con 431): trentadue volte il
+ * tetto applicato all'UA, sulla foglia che le regole di iniezione usano di più.
+ *
+ * Due misure hanno però ribaltato la conclusione.
+ *
+ * **1. Il troncamento non ferma la classe che fa danno.** Contro un pattern con
+ * backtracking esponenziale — `/(a|a)*$/`, che il validatore oggi lascia
+ * passare — bastano **30 caratteri per 29 secondi** di event loop bloccato. Un
+ * tetto a 2048, o a 512, o a 64, è ugualmente irrilevante: quella famiglia la
+ * ferma solo il rifiuto del pattern a monte, mai la lunghezza dell'input.
+ *
+ * **2. Il troncamento regalerebbe un'evasione universale.** Tagliare la coda
+ * significa che chi imbottisce il percorso con 2048 caratteri di spazzatura e ci
+ * appende `/config.php` non matcha più una regola `**\/config.php`. Vale per
+ * qualunque tetto e qualunque foglia: la coda tagliata è la coda che non si
+ * osserva. Si scambierebbe un rischio **condizionato** (l'amministratore ha
+ * scritto un pattern catastrofico che è sopravvissuto alla validazione) con una
+ * falla **incondizionata**, disponibile a chiunque contro ogni installazione.
+ *
+ * L'UA resta troncato perché è un caso diverso: 512 caratteri sono già il doppio
+ * del più lungo UA legittimo che esista, la stessa stringa troncata alimenta
+ * l'impronta (dove il tetto serve comunque), e non è la foglia dove si nascondono
+ * i payload. Anche lì la coda tagliata è cieca — imbottire l'UA fino a 512 per
+ * nascondere una firma funziona — ed è una scelta, non una svista.
+ */
+
+/**
  * Costruisce il soggetto da valutare, una volta per richiesta.
  *
  * @param {object} ctx - Contesto Koa
@@ -56,11 +89,14 @@ function buildSubject(ctx, deps) {
   const session = ctx.session || null;
 
   return {
+    // Percorso e querystring NON sono troncati, di proposito: vedi la nota in
+    // testa al file. Tagliare la coda regalerebbe un'evasione a chiunque, e non
+    // fermerebbe comunque la classe di pattern che fa danno.
     path: comparablePath,
     method: (ctx.method || '').toUpperCase(),
     extension,
-    // Troncato: è la stringa che finisce nelle regex, e un UA smisurato contro un
-    // pattern sfavorevole bloccherebbe l'event loop dell'intero sito.
+    // L'UA sì: 512 caratteri sono il doppio del più lungo UA legittimo, e la
+    // stessa stringa troncata alimenta l'impronta.
     userAgent: rawUa.length > MAX_UA_LENGTH ? rawUa.slice(0, MAX_UA_LENGTH) : rawUa,
     headers: ctx.headers || {},
     query: ctx.querystring || '',

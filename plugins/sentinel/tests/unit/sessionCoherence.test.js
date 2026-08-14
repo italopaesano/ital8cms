@@ -22,11 +22,22 @@ const {
   ANOMALY_KINDS,
   SESSION_ID_KEY,
   networkOf,
+  clientClassOf,
 } = require('../../lib/sessionCoherence');
+
+/** La classe di un browser vero, e quella di un client script che lo finge. */
+const CLASSE_BROWSER = {
+  headerProfile: 'browser', family: 'browser-like', coherent: true,
+  claimedBrowser: 'firefox', claimedOs: 'linux', isBot: false, botName: null,
+};
+const CLASSE_SCRIPT = {
+  headerProfile: 'minimal', family: 'script-like', coherent: false,
+  claimedBrowser: 'firefox', claimedOs: 'linux', isBot: false, botName: null,
+};
 
 const BASE = {
   userAgent: 'Mozilla/5.0 (X11; Linux x86_64) Firefox/121.0',
-  fp: 'fp-browser',
+  fpClass: CLASSE_BROWSER,
   ip: '203.0.113.7',
   username: 'mario',
   isScriptClient: false,
@@ -50,10 +61,10 @@ describe('linea di base', () => {
     // l'account invece della sessione, sarebbe subito un falso positivo.
     const sc = new SessionCoherence();
     sc.observe('portatile', BASE);
-    sc.observe('telefono', { ...BASE, userAgent: 'Safari iPhone', fp: 'fp-safari' });
+    sc.observe('telefono', { ...BASE, userAgent: 'Safari iPhone' });
 
     expect(sc.observe('portatile', BASE).anomalies).toEqual([]);
-    expect(sc.observe('telefono', { ...BASE, userAgent: 'Safari iPhone', fp: 'fp-safari' }).anomalies)
+    expect(sc.observe('telefono', { ...BASE, userAgent: 'Safari iPhone' }).anomalies)
       .toEqual([]);
   });
 });
@@ -71,9 +82,86 @@ describe('rilevamento delle anomalie', () => {
     expect(r.anomalies).toContain('uaChanged');
   });
 
-  test('fingerprintChanged: cambia la forma degli header', () => {
-    expect(sc.observe('s1', { ...BASE, fp: 'fp-diverso' }).anomalies)
+  test('fingerprintChanged: la CLASSE del client cambia', () => {
+    expect(sc.observe('s1', { ...BASE, fpClass: CLASSE_SCRIPT }).anomalies)
       .toContain('fingerprintChanged');
+  });
+
+  /**
+   * ─── IL RUMORE CHE LA FOGLIA PRODUCEVA (C9) ─────────────────────────────────
+   * Il confronto avveniva sull'HASH dell'impronta, che descrive la forma di una
+   * RICHIESTA e non il client: misurato con Chromium su una pagina con CSS,
+   * font, immagine, iframe, script, fetch GET e POST, XHR, sendBeacon e submit
+   * di form, **13 richieste producono 9 hash distinti** — e ogni campo di
+   * `fpClass` resta costante.
+   *
+   * Ne seguiva che ogni sessione admin che mescoli navigazioni e AJAX — cioè
+   * ogni sessione admin — produceva l'anomalia in continuazione. E siccome la
+   * linea di base non si aggiorna mai (ed è giusto così), la marcatura restava
+   * fino al logout: `byKind.fingerprintChanged` e `flagged` sempre accesi,
+   * cioè i numeri che si guardano per decidere una promozione.
+   */
+  describe('non scatta sul traffico normale dello stesso browser', () => {
+    // Le nove impronte misurate hanno hash diversi ma la stessa classe: qui si
+    // verifica che la foglia guardi la seconda cosa e non la prima.
+    test.each([
+      ['navigazione → foglio di stile'],
+      ['navigazione → fetch GET'],
+      ['navigazione → fetch POST'],
+      ['navigazione → submit di form'],
+    ])('%s: nessuna anomalia', () => {
+      expect(sc.observe('s1', { ...BASE, fpClass: { ...CLASSE_BROWSER } }).anomalies)
+        .not.toContain('fingerprintChanged');
+    });
+
+    // I campi derivati dal SOLO User-Agent non entrano nel confronto: se
+    // cambiano è cambiato l'UA, e a dirlo c'è già `uaChanged`. Includerli
+    // avrebbe reso questa foglia un duplicato di quella.
+    test('un aggiornamento del browser non la fa scattare due volte', () => {
+      const r = sc.observe('s1', {
+        ...BASE,
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) Firefox/122.0',   // 121 → 122
+        fpClass: { ...CLASSE_BROWSER, claimedBrowser: 'firefox' },
+      });
+      expect(r.anomalies).toContain('uaChanged');
+      expect(r.anomalies).not.toContain('fingerprintChanged');
+    });
+
+    test('nemmeno se cambiano isBot o claimedOs, che vengono dall UA', () => {
+      const r = sc.observe('s1', {
+        ...BASE,
+        fpClass: { ...CLASSE_BROWSER, isBot: true, botName: 'Googlebot', claimedOs: 'windows' },
+      });
+      expect(r.anomalies).not.toContain('fingerprintChanged');
+    });
+  });
+
+  // ...e il caso per cui la foglia esiste resta intero.
+  describe('scatta quando la classe cambia davvero', () => {
+    test.each([
+      ['la forma degli header crolla a minimal', { headerProfile: 'minimal' }],
+      ['l UA smette di essere coerente con gli header', { coherent: false }],
+      ['la famiglia diventa script-like', { family: 'script-like' }],
+      ['la famiglia diventa un tool dichiarato', { family: 'curl' }],
+    ])('%s', (_titolo, delta) => {
+      expect(sc.observe('s1', { ...BASE, fpClass: { ...CLASSE_BROWSER, ...delta } }).anomalies)
+        .toContain('fingerprintChanged');
+    });
+
+    // Anche il caso intermedio: una sessione che PARTE da browser e degrada a
+    // `partial` ha comunque smesso di mandare i segnali che mandava.
+    test('browser → partial è un cambiamento, non un dettaglio', () => {
+      expect(sc.observe('s1', { ...BASE, fpClass: { ...CLASSE_BROWSER, headerProfile: 'partial' } })
+        .anomalies).toContain('fingerprintChanged');
+    });
+  });
+
+  test('clientClassOf ignora i campi che vengono dal solo User-Agent', () => {
+    expect(clientClassOf(CLASSE_BROWSER))
+      .toBe(clientClassOf({ ...CLASSE_BROWSER, claimedBrowser: 'chrome', claimedOs: 'macos', isBot: true }));
+    expect(clientClassOf(CLASSE_BROWSER)).not.toBe(clientClassOf(CLASSE_SCRIPT));
+    expect(clientClassOf(null)).toBe('');
+    expect(clientClassOf(undefined)).toBe('');
   });
 
   test('ipChanged senza networkChanged dentro lo stesso blocco', () => {
@@ -99,7 +187,7 @@ describe('rilevamento delle anomalie', () => {
   test('il dirottamento completo produce più anomalie insieme', () => {
     const r = sc.observe('s1', {
       userAgent: 'python-requests/2.31.0',
-      fp: 'fp-script',
+      fpClass: CLASSE_SCRIPT,
       ip: '198.51.100.4',
       isScriptClient: true,
     });
@@ -115,7 +203,7 @@ describe('rilevamento delle anomalie', () => {
     const s = new SessionCoherence();
     s.observe('x', BASE);
     for (const a of s.observe('x', {
-      userAgent: 'altro', fp: 'altro', ip: '10.0.0.1', isScriptClient: true,
+      userAgent: 'altro', fpClass: CLASSE_SCRIPT, ip: '10.0.0.1', isScriptClient: true,
     }).anomalies) prodotte.add(a);
     expect(Array.from(prodotte).sort()).toEqual([...ANOMALY_KINDS].sort());
   });

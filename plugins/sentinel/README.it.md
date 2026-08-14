@@ -473,7 +473,7 @@ momento arriva da `python-requests`.
 |---|---|---|
 | `uaChanged` | Lo User-Agent è cambiato a metà sessione | **Bassissimo**: un browser non lo cambia |
 | `scriptClient` | Un cookie valido in mano a qualcosa che non è un browser. Non è un cambiamento, è uno **stato** | Basso |
-| `fingerprintChanged` | È cambiata la forma degli header | Basso |
+| `fingerprintChanged` | È cambiata la **classe** del client: profilo degli header, famiglia, coerenza UA↔header. *Non* l'hash dell'impronta — quello cambia fra una navigazione e una `fetch` dello stesso browser | Basso |
 | `networkChanged` | L'indirizzo è passato a un altro blocco (/24 o /48) | Medio |
 | `ipChanged` | L'indirizzo è cambiato | **Alto**: mobile ↔ WiFi |
 

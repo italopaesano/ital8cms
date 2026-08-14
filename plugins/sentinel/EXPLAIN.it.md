@@ -534,8 +534,18 @@ con un CSS, uno script, un'immagine e una `fetch`:
 | `fetch` POST | `*/*` | `empty` | `e582bd022cc792a6` |
 
 Quattro impronte, un browser, una pagina. Non è rumore da correggere: è ciò che
-la firma misura, e la ragione per cui `fingerprintChanged` non può funzionare
-come sembra promettere (vedi `TODO.md`).
+la firma misura.
+
+**Da qui discende come `fingerprintChanged` confronta.** Quella foglia guardava
+l'hash, quindi scattava a ogni alternanza navigazione↔asset↔AJAX — cioè in
+continuazione, su ogni sessione admin — e siccome la linea di base non si
+aggiorna mai la marcatura restava fino al logout. Ora confronta la **classe**:
+`headerProfile`, `family`, `coherent`. Misurato su tredici forme di richiesta di
+uno stesso Chromium (CSS, font, immagine, iframe, script, `fetch` GET e POST,
+XHR, `sendBeacon`, submit di form): **nove hash distinti, ogni campo di `fpClass`
+costante**. `claimedBrowser`, `claimedOs`, `isBot` e `botName` restano fuori dal
+confronto perché derivano dal solo User-Agent — se cambiano lo dice già
+`uaChanged`. Vedi `CLIENT_CLASS_FIELDS` in `lib/sessionCoherence.js`.
 
 `buildFingerprint` ha avuto per un periodo una memoizzazione sul socket, scritta
 sulla premessa — vera — che un client non cambi libreria HTTP a metà connessione.

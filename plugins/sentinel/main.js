@@ -272,7 +272,9 @@ function inspectSession(ctx, fingerprint, clientIp) {
     const fpClass = fingerprint.fpClass || {};
     const result = sessionCoherence.observe(sessionId, {
       userAgent: ctx.get ? (ctx.get('User-Agent') || '') : '',
-      fp: fingerprint.fp,
+      // La CLASSE dell'impronta, non l'hash: l'hash cambia fra una navigazione e
+      // una fetch dello stesso browser. Vedi CLIENT_CLASS_FIELDS.
+      fpClass,
       ip: clientIp,
       username: (session.user && session.user.username) || null,
       // Un cookie valido in mano a qualcosa che non è un browser. Non è un

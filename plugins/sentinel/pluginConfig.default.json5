@@ -91,7 +91,11 @@
     // Anomalie riconosciute dalla foglia `sessionAnomaly` nelle regole:
     //   uaChanged           lo User-Agent è cambiato a metà sessione (il più
     //                       affidabile: un browser non lo cambia)
-    //   fingerprintChanged  è cambiata la forma degli header
+    //   fingerprintChanged  è cambiata la CLASSE del client: il profilo degli
+    //                       header, la famiglia, la coerenza fra UA e header.
+    //                       NON l'hash dell'impronta: quello descrive la forma
+    //                       di una richiesta, e cambia fra una navigazione e una
+    //                       fetch dello stesso identico browser.
     //   networkChanged      l'indirizzo è passato a un altro blocco (/24 o /48)
     //   ipChanged           l'indirizzo è cambiato (rumoroso: mobile ↔ WiFi)
     //   scriptClient        un cookie valido in mano a qualcosa che non è un
