@@ -881,11 +881,12 @@ escludono a vicenda.
 
 ### Piano di rifinitura II — quello che la revisione del 2026-08-15 ha trovato
 
-> ⚠️ **Il nome del piano è da confermare**: alternative proposte *Piano di
-> rifinitura II* / *Piano di allineamento* / *Piano post-revisione II*.
 > **Piano chiuso:** applicata la parte che non richiedeva decisioni (v2.86.1) e,
 > sulle raccomandazioni accettate dal maintainer, tutte e quattro le voci da
 > decidere (v2.87.0). 10 rilievi su 10.
+>
+> Nome confermato dal maintainer (alternative valutate: *Piano di allineamento*,
+> *Piano post-revisione II*).
 
 Revisione completa del plugin (main + 16 moduli `lib/`, config, regole,
 migrazioni, doc), successiva al piano di consolidamento. Nessun rilievo critico:
