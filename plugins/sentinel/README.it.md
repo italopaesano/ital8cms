@@ -131,7 +131,7 @@ contano di più:
 | Campo | Default | Cosa fa |
 |---|---|---|
 | `mode` | `"monitor"` | `"monitor"` impedisce a **qualsiasi** regola di agire, anche a quelle `block`. È un tetto, non un override. |
-| `authenticatedTraffic.mode` | `"monitor"` | Gli utenti autenticati sono osservati ma non bloccati. |
+| `authenticatedTraffic.mode` | `"monitor"` | `"monitor"` osserva ma non blocca; `"enforce"` applica come agli anonimi; `"exempt"` **non guarda affatto** — vedi sotto. |
 | `authenticatedTraffic.enforceExemptRoles` | `[0, 1]` | Root e admin non sono mai soggetti a enforcement (restano osservati). |
 | `strictValidation` | `false` | Se `true`, una regola invalida impedisce l'avvio del plugin. |
 | `trustProxy` | `false` | Leggere `X-Forwarded-For`. **Attivare solo dietro un proxy fidato.** |
@@ -202,10 +202,26 @@ espliciti: `all`, `any`, `not`.
 | `canary` | `true` · `"known"` · `"unknown"` — vedi [token esca](#token-esca-canary) |
 | `sessionAnomaly` | `true` · `["uaChanged", "scriptClient"]` — vedi [coerenza di sessione](#coerenza-di-sessione) |
 | `reputation` | `true` · `["burst", "suspect", "bad"]` — vedi [reputazione](#reputazione-locale-delle-impronte) |
-| `status` | `[404, 403]` — solo nella valutazione dell'esito |
+| `status` | `[404, 403]` — ⚠️ **oggi non scatta mai**, vedi sotto |
+
+> ⚠️ **La foglia `status` non scatta mai, oggi.** Il filtro gira **prima del
+> router**: quando le regole vengono valutate, lo stato della risposta non
+> esiste ancora. La foglia era stata prevista per una *valutazione
+> post-risposta* che non è mai stata implementata — quella fase oggi si limita
+> ad aggregare (è da lì che nascono i [sospetti scanner](#osservazione-dellesito)).
+>
+> La foglia resta accettata perché la regola sia già scrivibile il giorno in cui
+> quella fase ci sarà, ma **il validatore avvisa all'avvio** e il tester la
+> dichiara non valutabile invece di darla per vincente. Se cerchi «bloccami chi
+> colleziona 404», la risposta di oggi sono i sospetti scanner, non questa
+> foglia.
 
 **I path si scrivono senza `globalPrefix`**, che viene anteposto dal codice —
 stessa convenzione di `maintenance.exemptPaths`.
+
+**I path si scrivono invece *con* `apiPrefix` e `pluginPagesPrefix`** — quelli
+non vengono anteposti dal codice. Sono configurabili in `ital8Config.json5`: se
+li cambi, le regole che li nominano smettono di matchare in silenzio.
 
 **Con `hideExtension` attivo** le regole per `extension` non cambiano — una sonda
 `.php` arriva sempre con l'estensione, perché i clean URL riguardano solo le
@@ -260,6 +276,12 @@ esattamente come con `monitor`. Ne discendono due conseguenze da conoscere:
   azioni passano dai tetti dell'enforcement; un throttle che bandisce sarebbe una
   contraddizione nei termini. Se vuoi il ban, la regola va promossa a un'azione
   che risponde.
+
+Ne discende che **un `throttle` senza `escalate` non fa assolutamente niente**:
+se la sua azione è la delega, senza destinatario non resta nulla, e la regola
+diventa una `monitor` scritta da chi credeva di star limitando qualcosa. Il
+validatore lo dice all'avvio con un avviso, invece di lasciarlo scoprire
+guardando un contatore che sale senza che cambi mai niente.
 
 Il 404 di `block` non è fabbricato da questo plugin: è prodotto da
 `reservedGate.deny()`, l'unico punto del progetto che genera il 404 «di
@@ -449,6 +471,12 @@ Il contenuto dei file è tenuto in memoria dopo la prima lettura — chi scandis
 il sito non deve poter dettare il ritmo delle nostre letture su disco. In
 `debugMode` la cache è spenta e un ricaricamento delle regole la svuota.
 
+> **In `debugMode` le regole si ricaricano quando il file cambia**, non a ogni
+> richiesta. L'effetto per chi le sta scrivendo è lo stesso — si salva e si
+> prova — ma il gate sta prima del router, quindi rivalidare a ogni richiesta
+> significava ricompilare tutte le regex anche per ogni immagine servita, e
+> riemettere ogni avviso di validazione sul log una volta per richiesta.
+
 ## Coerenza di sessione
 
 Un cookie di sessione rubato **funziona**. È tutto il punto del furto: chi lo
@@ -525,6 +553,27 @@ autenticato**. Devono cadere tre tetti, e i default ne lasciano in piedi due:
 
 E i ruoli in `enforceExemptRoles` (default `[0, 1]`) restano **osservati ma mai
 bloccati**, in qualsiasi configurazione.
+
+### `authenticatedTraffic.mode: "exempt"` — non osservare affatto
+
+Le altre due modalità decidono se **agire** su ciò che una regola ha trovato.
+`exempt` dice di non cercare: nessun match, quindi nessuna riga di log (che
+porterebbe lo **username**), nessun contatore per regola, nessuna escalation
+verso `rateLimiter`.
+
+È la scelta giusta se hai molti utenti registrati e non vuoi tenere un registro
+del loro traffico. Restano attivi tre sensori che non nominano l'utente, e che
+esentare sarebbe controproducente:
+
+| Resta attivo | Perché |
+|---|---|
+| Coerenza di sessione | È la difesa contro il **cookie rubato**: chi esenta gli autenticati dal filtro non sta chiedendo di smettere di accorgersi che un account è stato dirottato. |
+| Token esca (canary) | È l'unico segnale certo del plugin. Tacerlo perché chi l'ha usato è loggato sarebbe il contrario di ciò che serve. |
+| Censimento delle impronte | La sua chiave è il **client**, non la persona. Spegnerlo accecherebbe la reputazione per tutti, anonimi compresi. |
+
+> Fino alla v2.86.1 questo valore era documentato e **non implementato**: si
+> comportava esattamente come `monitor`. Chi lo aveva impostato stava ancora
+> registrando righe di log con lo username.
 
 ## `drop` e `tarpit`: le due azioni che costano anche a te
 
@@ -746,6 +795,18 @@ anche di quello che nessuna regola descrive:
 > minuti.»
 
 È la firma della scansione, e non richiede nessuna regola scritta a mano.
+
+**Il conteggio ha un tetto, e lo dichiara.** Riconoscere un percorso già visto
+richiede di ricordarlo, e la chiave la sceglie chi bussa: senza tetto, generare
+percorsi a caso sarebbe il modo di far crescere la memoria per client. Superato
+il tetto il conteggio si **ferma** e la tabella mostra `1024+` invece di un
+numero esatto — il valore è un limite inferiore.
+
+È una distinzione che vale la pena leggere: prima il contatore non si fermava ma
+smetteva di riconoscere i duplicati, quindi continuava a salire contando
+**ripetizioni dello stesso percorso**. Un client con 257 percorsi veri e molte
+ripetizioni compariva con `5256`, cioè con un numero che non misurava più ciò
+che il suo nome dice. Meglio «almeno 1024» di «5256» che significa altro.
 
 ### Tetti e sfratti
 

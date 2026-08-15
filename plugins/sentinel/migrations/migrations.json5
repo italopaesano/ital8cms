@@ -70,5 +70,16 @@
       reason:
         "Il passo 8 ha aggiunto `custom.reputation` (minRequests, suspectShare,  badShare, burstWindowSeconds, burstMinRequests,  protectBrowserFingerprints) e `custom.census.ipRetentionDays`. Anche qui  solo chiavi dentro oggetti, coperte dal merge additivo; e anche qui le  regole di esempio aggiunte al file distribuito sono commentate, quindi  `rules` non cambia. Attenzione a un valore in particolare:  `protectBrowserFingerprints` arriva a `true`, ed è il default giusto —  un'impronta da browser è condivisa da tutti i suoi utenti, e condannarla  significa chiudere fuori loro. Il merge non sovrascrive un valore già  presente, quindi chi l'avesse messo a false resta a false: se non è  intenzionale, va rivisto a mano.",
     },
+    // ── Il primo step che MODIFICA una regola invece di aggiungerla ─────────
+    {
+      from: 5,
+      to: 6,
+      title: "shell-probe richiede un'estensione eseguibile",
+      automatic: true,
+      script: "from-v5-to-v6.js",
+      touches: ["plugins/sentinel/sentinelRules.json5"],
+      reason:
+        "Il pattern di `shell-probe` si fermava al punto e intercettava nomi di  file ordinari: /js/shell.js, /assets/cmd.css, /docs/webshell.pdf. Il  problema non è il rumore nel log: è che il percorso di promozione  documentato nel file delle regole NON PUÒ accorgersene. Dice di guardare  `authenticatedHits` e promuovere se è zero, e un asset chiesto da  visitatori anonimi lo lascia a zero per sempre — quindi la regola  appariva come la più sicura da promuovere proprio mentre promuoverla  avrebbe restituito 404 su una pagina pubblica, con una diagnosi che parte  dal posto sbagliato (il 404 di block è indistinguibile da un file  mancante). Serve una migrazione perché `rules` è un array e il merge del  boot lo tratta come un valore, come per gli step 1→2 e 2→3; a differenza  di quelli, però, questo CAMBIA una regola che l'amministratore potrebbe  aver già promosso, quindi lo script si ferma senza toccare nulla se il  pattern in vigore non è esattamente quello distribuito.",
+    },
   ],
 }

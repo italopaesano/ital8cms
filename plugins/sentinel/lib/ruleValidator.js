@@ -56,9 +56,11 @@ const VALID_ACTIONS = [
   'allow', 'monitor', 'block', 'drop', 'decoy', 'redirect', 'throttle', 'tarpit',
 ];
 
-// Azioni la cui risposta è prodotta dal plugin e non dal 404 comune del core.
-// Su un percorso della superficie riservata chiusa il gate le degrada a 404.
-const DECORATING_ACTIONS = ['decoy', 'redirect', 'tarpit'];
+// NOTA: qui c'era `DECORATING_ACTIONS = ['decoy','redirect','tarpit']`, esportato
+// e mai importato da nessuno. La conoscenza che descriveva vive dove serve — nel
+// gate, che riconosce una risposta "decorata" dalla presenza di `verdict.respond`
+// invece che da un elenco di nomi (`decorationWouldLeak` in runtimeGate.js). Un
+// secondo elenco da tenere allineato a mano era solo un modo di divergere.
 
 const VALID_APPLIES_TO = ['anonymous', 'authenticated', 'any'];
 
@@ -189,7 +191,7 @@ function nodeUsesReputation(node) {
  *
  * @returns {object|null} nodo compilato, o null se invalido
  */
-function compileMatchNode(node, where, errors) {
+function compileMatchNode(node, where, errors, warnings = []) {
   if (!node || typeof node !== 'object' || Array.isArray(node)) {
     errors.push(`${where}: nodo match non valido`);
     return null;
@@ -207,7 +209,7 @@ function compileMatchNode(node, where, errors) {
       }
       const children = [];
       for (let i = 0; i < node[combinator].length; i++) {
-        const child = compileMatchNode(node[combinator][i], `${where}.${combinator}[${i}]`, errors);
+        const child = compileMatchNode(node[combinator][i], `${where}.${combinator}[${i}]`, errors, warnings);
         if (!child) return null;
         children.push(child);
       }
@@ -217,7 +219,7 @@ function compileMatchNode(node, where, errors) {
   }
 
   if (node.not !== undefined) {
-    const child = compileMatchNode(node.not, `${where}.not`, errors);
+    const child = compileMatchNode(node.not, `${where}.not`, errors, warnings);
     if (!child) return null;
     out.not = child;
     conditionCount++;
@@ -348,6 +350,26 @@ function compileMatchNode(node, where, errors) {
     }
     out.status = set;
     conditionCount++;
+
+    // ─── AVVISO: questa foglia non scatta mai, oggi ────────────────────────
+    // `subject.status` è `null` in ogni valutazione: la valutazione
+    // post-risposta, per cui la foglia era stata prevista, non esiste —
+    // `observeOutcome` aggrega e basta, non rivaluta le regole.
+    //
+    // Senza questo avviso il difetto era della forma peggiore possibile: la
+    // regola passava la validazione E il tester la dava per vincente (il
+    // tracciatore, unico posto che scrive `subject.status`, la valutava sul
+    // serio), quindi si arrivava in produzione con due conferme indipendenti
+    // per qualcosa che non succede. Meglio un avviso che due bugie concordi.
+    //
+    // Avviso e non errore: fail-open come tutto il resto del file, e la regola
+    // resta scritta per il giorno in cui la valutazione post-risposta ci sarà.
+    warnings.push(
+      `${where}.status: questa condizione non scatta mai. Lo stato della risposta ` +
+      'non esiste ancora quando le regole vengono valutate (il filtro gira PRIMA ' +
+      'del router), e la valutazione post-risposta oggi aggrega soltanto: vedi i ' +
+      'sospetti scanner nel pannello, che nascono proprio da lì'
+    );
   }
 
   if (node.canary !== undefined) {
@@ -614,7 +636,7 @@ function validateRules(rulesData, options = {}) {
     }
 
     // ── Condizioni ──
-    const match = compileMatchNode(raw.match, `${where} ("${name}").match`, errors);
+    const match = compileMatchNode(raw.match, `${where} ("${name}").match`, errors, warnings);
     if (!match) continue;
 
     // ── Parametri dell'azione ──
@@ -756,6 +778,22 @@ function validateRules(rulesData, options = {}) {
       );
     }
 
+    // Un `throttle` senza `escalate` non fa NIENTE, e non lo si vede da nessuna
+    // parte: non produce una risposta (per progetto — la sua azione è delegare a
+    // rateLimiter, vedi `shouldEnforce`), non ha un ramo in `attachResponder`, e
+    // `escalate()` esce alla prima riga senza il blocco che gli dice a chi
+    // delegare. Il risultato è una regola identica a `monitor` scritta da chi
+    // credeva di star limitando qualcosa — e siccome `monitor` è il default,
+    // nemmeno il log la smentisce.
+    if (action === 'throttle' && raw.escalate === undefined) {
+      warnings.push(
+        `regola "${name}": action "throttle" senza "escalate" non ha alcun effetto — ` +
+        'la sua azione È la delega a rateLimiter. Aggiungi ' +
+        'escalate: { rateLimiterRule: "<nome>" }, oppure usa action "monitor" ' +
+        'se volevi solo osservare'
+      );
+    }
+
     if (raw.escalate !== undefined) {
       const escalate = raw.escalate || {};
       if (typeof escalate.rateLimiterRule !== 'string' || escalate.rateLimiterRule === '') {
@@ -866,6 +904,5 @@ module.exports = {
   hasCatastrophicBacktracking,
   logValidationResults,
   VALID_ACTIONS,
-  DECORATING_ACTIONS,
   VALID_APPLIES_TO,
 };

@@ -33,7 +33,12 @@ function subjectFor(spec) {
       ? { levels: spec.reputation, requests: 0, blockedShare: 0, ageSeconds: 0, protected: false }
       : null,
   });
-  if (Number.isInteger(spec.status)) s.status = spec.status;
+  // `status` NON si scrive sul soggetto, e la conformità qui sotto vale proprio
+  // per questo: a runtime `subject.status` è sempre `null` — il filtro gira
+  // prima del router — quindi un soggetto che lo porta è un soggetto che non
+  // esiste. Costruirlo faceva passare il test mentre i due valutatori
+  // concordavano su una situazione impossibile, ed è così che la foglia `status`
+  // è rimasta a lungo «funzionante» nel tester e morta in produzione.
   return s;
 }
 

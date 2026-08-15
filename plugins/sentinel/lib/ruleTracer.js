@@ -75,7 +75,9 @@ const BROWSER_HEADER_PRESET = {
  * @param {boolean} [spec.authenticated]
  * @param {number[]} [spec.roleIds]
  * @param {string} [spec.username]
- * @param {number} [spec.status] - per provare le regole sull'esito
+ * @param {number} [spec.status] - lo stato che la risposta avrebbe. Si accetta
+ *   ancora, e finisce nel riepilogo del soggetto, ma NON fa scattare la foglia
+ *   `status`: quella non è valutabile a runtime (vedi `traceLeaf`)
  * @param {boolean} [spec.browserProfile] - aggiunge gli header che un browser manda
  * @returns {object} contesto sintetico
  */
@@ -175,8 +177,22 @@ function traceLeaf(leaf, node, subject, matcher) {
     case 'ip':
       return entry(ipMatchesAny(subject.ip, node.ip), node.ip, subject.ip);
     case 'status':
-      return entry(subject.status !== null && node.status.has(subject.status),
-        Array.from(node.status), subject.status === null ? '(non ancora noto)' : subject.status);
+      // ─── QUESTA FOGLIA NON SCATTA MAI, E IL TESTER DEVE DIRLO ─────────────
+      // Il tracciatore era l'unico posto in tutto il plugin che scrivesse
+      // `subject.status`, quindi era anche l'unico in cui la foglia sembrasse
+      // funzionare: si provava una regola `status: [404]`, il tester rispondeva
+      // «matched», e in produzione non succedeva niente. Il filtro gira PRIMA
+      // del router — quando le regole vengono valutate lo stato della risposta
+      // non esiste ancora — e la valutazione post-risposta oggi aggrega e basta.
+      //
+      // Un tester che dice il vero su sé stesso e il falso sul filtro è peggio
+      // di un tester assente, perché ci si fa affidamento proprio prima di
+      // mandare una regola in produzione. Qui rispecchia il runtime: non matcha,
+      // e spiega perché invece di limitarsi a un «no».
+      return entry(false,
+        Array.from(node.status),
+        '(lo stato della risposta non esiste quando le regole vengono valutate: '
+        + 'questa condizione non scatta mai, nemmeno passando --status)');
     case 'canary': {
       const found = subject.canary;
       const wantAny = node.canary === true || node.canary === 'any';
@@ -320,7 +336,13 @@ function testRequest(spec, rules, matcher, options = {}) {
       ? { levels: spec.reputation, requests: 0, blockedShare: 0, ageSeconds: 0, protected: false }
       : null,
   });
-  if (Number.isInteger(spec.status)) subject.status = spec.status;
+  // NOTA: `spec.status` NON viene messo sul soggetto, ed è il punto della
+  // correzione. Scrivendocelo si costruiva un soggetto che a runtime non esiste
+  // — lì `subject.status` è sempre `null` — e su quel soggetto finto la foglia
+  // `status` matchava: il tester rispondeva «questa regola scatta» per una
+  // regola che in produzione non si accende mai. Lo stato richiesto resta
+  // nell'eco del soggetto qui sotto, perché chi l'ha passato deve ritrovarlo,
+  // ma non entra nella valutazione.
 
   const evaluated = [];
   let winner = null;
@@ -366,7 +388,9 @@ function testRequest(spec, rules, matcher, options = {}) {
       ip: subject.ip,
       authenticated: subject.authenticated,
       roleIds: subject.roleIds,
-      status: subject.status,
+      // Eco di ciò che è stato chiesto, non di ciò che il motore ha visto: vedi
+      // la nota sopra. La foglia `status` lo dichiara nella propria riga.
+      status: Number.isInteger(spec.status) ? spec.status : null,
       canary: subject.canary,
       sessionAnomalies: subject.sessionAnomalies,
       reputation: subject.reputation,

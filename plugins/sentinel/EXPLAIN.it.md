@@ -666,13 +666,32 @@ L'ultimo file non viene mai eliminato: è quello su cui si sta scrivendo, e
 cancellarlo perderebbe gli eventi dell'attacco in corso — cioè proprio quelli per
 cui il budget è stato superato.
 
-## 11. Scritture riga per riga, non a blocchi
+## 11. Scritture a blocchi, ma non più grandi di 4 KB
 
-`SentinelLog.flush()` fa una `appendFileSync` **per evento** invece di un unico
-batch. Sembra inefficiente ed è deliberato: su POSIX una `write` in `O_APPEND`
-sotto i 4 KB è atomica, quindi due processi che scrivono sullo stesso file non
-possono interlacciare una riga. Un batch di dimensione arbitraria perderebbe
-quella garanzia proprio nello scenario cluster per cui esiste `instanceId`.
+`SentinelLog.flush()` raggruppa gli eventi in blocchi che restano **sotto i
+4 KB** (`MAX_ATOMIC_WRITE_BYTES`, cioè `PIPE_BUF`) e ne scrive uno per
+`appendFileSync`. Il vincolo da rispettare è che su POSIX una `write` in
+`O_APPEND` sotto quella soglia è atomica: due processi che scrivono sullo stesso
+file non possono interlacciarsi, ed è la garanzia che rende sensato `instanceId`
+nello scenario cluster.
+
+**Qui c'era una riga per write, e la ragione scritta accanto era sbagliata di
+mezza frase.** Diceva «un batch di dimensione arbitraria perderebbe quella
+garanzia» — vero — e ne concludeva che si dovesse scrivere una riga alla volta,
+che non segue: la garanzia riguarda la **dimensione della write**, non il numero
+di righe che contiene. Dieci righe in una write da 800 byte sono atomiche
+esattamente quanto una.
+
+Il prezzo si pagava dove fa più male. Il flush gira ogni secondo, e sotto attacco
+il buffer accumula migliaia di eventi: ognuno costava una syscall **sincrona**
+sull'event loop, cioè sul tempo di risposta dell'intero sito, proprio mentre il
+sito è sotto pressione. Raggruppando, il numero di write scende di un ordine di
+grandezza (misurato: 1000 eventi → meno di 100 write) e il file prodotto è
+identico byte per byte.
+
+Una singola riga più lunga di 4 KB parte da sola e supera il tetto: era già così
+prima — una riga, una write — quindi non si perde nulla che si avesse.
+Spezzarla sarebbe peggio, perché produrrebbe JSONL non valido.
 
 ## 12. Perché `allow-loopback` è disattivata di default
 

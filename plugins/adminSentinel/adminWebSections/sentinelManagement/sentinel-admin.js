@@ -371,7 +371,11 @@
     tbody.innerHTML = rows.map((c) =>
       '<tr>'
       + '<td><code>' + esc(c.clientId) + '</code></td>'
-      + '<td class="text-end fw-bold">' + num(c.distinctPaths) + '</td>'
+      // Il "+" dice che il conteggio ha toccato il tetto e il vero valore è
+      // almeno quello: senza, una stima verrebbe letta come una misura.
+      + '<td class="text-end fw-bold">' + num(c.distinctPaths)
+        + (c.distinctPathsSaturated ? '<span title="conteggio fermato al tetto: almeno questo valore">+</span>' : '')
+        + '</td>'
       + '<td class="text-end">' + num(c.notFound) + '</td>'
       + '<td class="text-end">' + num(c.total) + '</td>'
       + '<td class="small text-muted">' + esc(shortTime(c.lastSeen)) + '</td>'

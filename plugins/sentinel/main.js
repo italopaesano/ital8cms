@@ -40,6 +40,7 @@
 
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
 const logger = require('../../core/logger');
@@ -88,6 +89,7 @@ let dropDegraded = 0;   // quante volte è degradato a blocco per via del proxy
 let sweepTimer = null;
 let censusSaveTimer = null;
 let gateState = 'running';
+let shutdownHooksInstalled = false;
 
 let pluginSysRef = null;
 
@@ -100,6 +102,10 @@ const decoyCache = new Map();
 
 // Latch per non ripetere all'infinito lo stesso avviso di configurazione.
 let rulesUnavailableLogged = false;
+// Timbro di modifica dell'ultimo sentinelRules.json5 letto. In debug è ciò che
+// distingue «il file è cambiato» da «è arrivata un'altra richiesta»: vedi
+// currentRules().
+let rulesFileMtimeMs = 0;
 // Idem per la catena X-Forwarded-For più corta dei proxy dichiarati: la
 // condizione è provocabile da chi bussa, quindi un log per richiesta sarebbe
 // un attacco al disco travestito da diagnostica.
@@ -125,6 +131,17 @@ function log(level, message) {
  */
 function loadRules() {
   const rulesPath = path.join(pluginFolder, 'sentinelRules.json5');
+
+  // Timbro PRIMA della lettura, non dopo. Se il file cambia nell'istante fra le
+  // due operazioni, con questo ordine si legge il contenuto nuovo e si registra
+  // il timbro vecchio: la prossima richiesta ricarica una volta di troppo, che
+  // non costa nulla. Con l'ordine inverso si registrerebbe il timbro di una
+  // versione mai letta, e la modifica resterebbe invisibile fino alla successiva.
+  try {
+    rulesFileMtimeMs = fs.statSync(rulesPath).mtimeMs;
+  } catch (_err) {
+    rulesFileMtimeMs = 0;
+  }
 
   let rulesData;
   try {
@@ -176,6 +193,46 @@ function warnMissingDecoyFiles(rules) {
       `regola "${rule.name}": il decoy "${rule.decoy.file}" non esiste né in ` +
       'decoys/data/ né in decoys/default/ — l\'azione degraderà al 404 comune');
   }
+}
+
+/**
+ * Le regole da applicare a questa richiesta.
+ *
+ * ─── IN DEBUG SI RICARICA AL CAMBIAMENTO, NON A OGNI RICHIESTA ────────────────
+ * L'intento — «una modifica al file ha effetto immediato, senza riavviare» — è
+ * giusto e resta. Qui c'era però `isDebugMode ? loadRules() : compiledRules`, e
+ * `loadRules()` non è una rilettura: è lettura del file, validazione completa,
+ * ricompilazione di TUTTE le regex, `existsSync` per ogni decoy, e l'emissione
+ * di ogni avviso di validazione sul log.
+ *
+ * Il gate sta prima del router, quindi tutto questo girava anche per ogni
+ * immagine e ogni foglio di stile. E con un solo avviso in sospeso — cioè la
+ * condizione normale di chi sta scrivendo regole, l'unica ragione per cui si
+ * accende il debug — il log prendeva una riga per richiesta.
+ *
+ * Il timbro di modifica dà lo stesso comportamento al costo di una `stat`: si
+ * ricarica quando il file cambia davvero. Resta sicuro per la stessa ragione di
+ * prima: le scritture del twin admin sono atomiche (temp + rename), quindi non
+ * si può mai leggere un file a metà.
+ *
+ * @returns {Array<object>}
+ */
+function currentRules() {
+  if (!isDebugMode) return compiledRules;
+
+  try {
+    const mtimeMs = fs.statSync(path.join(pluginFolder, 'sentinelRules.json5')).mtimeMs;
+    if (mtimeMs !== rulesFileMtimeMs) {
+      compiledRules = loadRules();
+      decoyCache.clear();
+    }
+  } catch (_err) {
+    // File sparito o non interrogabile: si tengono le regole già compilate.
+    // Fail-soft come il resto del percorso caldo — un problema sul file non deve
+    // togliere di mezzo le regole che stanno già funzionando.
+  }
+
+  return compiledRules;
 }
 
 /** Rilegge le regole a caldo (usato dal twin admin dopo un salvataggio). */
@@ -454,6 +511,9 @@ function shouldEnforce(rule, subject) {
   if (gateState !== 'running') return false;
 
   if (subject.authenticated) {
+    // `exempt` non arriva mai fin qui: ferma il matching a monte, in `evaluate`,
+    // quindi senza regola non c'è niente da applicare. Il controllo resta
+    // comunque corretto per entrambe le modalità che non agiscono.
     const authConf = custom.authenticatedTraffic || {};
     if (authConf.mode !== 'enforce') return false;
 
@@ -793,10 +853,10 @@ const engine = {
   evaluate(ctx) {
     if (!custom || custom.enabled === false) return null;
 
-    // In debug le regole si rileggono ad ogni richiesta, così una modifica ha
-    // effetto immediato. È sicuro perché le scritture del twin admin sono
-    // atomiche (temp + rename): non si può mai leggere un file a metà.
-    const rules = isDebugMode ? loadRules() : compiledRules;
+    // In debug le regole si ricaricano quando il FILE cambia, non a ogni
+    // richiesta: stesso effetto immediato, senza rivalidare tutto per ogni
+    // immagine servita. Vedi currentRules().
+    const rules = currentRules();
     if (rules.length === 0) return null;
 
     const fingerprint = buildFingerprint(ctx, { salt: custom.fingerprintSalt || '' });
@@ -820,7 +880,37 @@ const engine = {
         : null,
     });
 
-    const rule = findFirstMatch(rules, subject, matcher);
+    // ─── "exempt": le regole non si applicano affatto agli autenticati ───────
+    // È l'unica delle tre modalità che vale PRIMA della valutazione e non dopo.
+    // `monitor` ed `enforce` decidono se AGIRE su ciò che una regola ha trovato,
+    // e vivono in `shouldEnforce`; `exempt` dice di non cercare, quindi deve
+    // fermare il matching stesso.
+    //
+    // Per un periodo qui non c'era nulla: `shouldEnforce` controllava solo
+    // `!== 'enforce'`, quindi `exempt` e `monitor` erano la stessa cosa. Chi lo
+    // impostava aveva chiesto di non guardare i propri utenti autenticati e si
+    // ritrovava le regole che matchavano lo stesso, righe di log **con lo
+    // username**, contatori che salivano e — per le regole `monitor` —
+    // rateLimiter alimentato. Su una funzione che tocca persone identificate, la
+    // distanza fra ciò che il config prometteva e ciò che faceva cadeva proprio
+    // sul dato personale.
+    //
+    // ─── COSA RESTA IN PIEDI, E PERCHE ──────────────────────────────────────
+    // L'esenzione riguarda le REGOLE, non tutti i sensori:
+    //   • la coerenza di sessione continua a osservare — è la difesa contro il
+    //     cookie rubato, e chi esenta gli autenticati dal filtro non sta
+    //     chiedendo di smettere di accorgersi che un account è stato dirottato;
+    //   • il canary continua a segnalare — è l'unico evento del plugin che non
+    //     ammette interpretazioni, e tacerlo perché l'utente è loggato sarebbe
+    //     esattamente il contrario di ciò che serve;
+    //   • il censimento continua a contare — la sua chiave è l'impronta, non la
+    //     persona, e spegnerlo accecherebbe la reputazione di TUTTI.
+    // Sparisce ciò che nomina l'utente: match, riga di log, contatori per
+    // regola, escalation.
+    const authConf = custom.authenticatedTraffic || {};
+    const rulesApply = !(subject.authenticated && authConf.mode === 'exempt');
+
+    const rule = rulesApply ? findFirstMatch(rules, subject, matcher) : null;
 
     const enforced = rule ? shouldEnforce(rule, subject) : false;
 
@@ -932,7 +1022,7 @@ const engine = {
    *
    * Fail-soft assoluto: la risposta è già stata emessa.
    */
-  observeOutcome(ctx, info) {
+  observeOutcome(ctx, _info) {
     if (!custom || custom.observeOutcomes === false) return;
     if (!outcomeCensus) return;
     if (!(ctx.status >= 400)) return;
@@ -1053,8 +1143,15 @@ module.exports = {
       if (censusSaveTimer.unref) censusSaveTimer.unref();
     }
 
-    process.on('SIGTERM', persistAll);
-    process.on('SIGINT', persistAll);
+    // Una volta sola, anche se loadPlugin girasse di nuovo. Node non deduplica
+    // gli handler: una seconda registrazione ne aggiungerebbe un secondo che fa
+    // esattamente lo stesso lavoro, e l'avviso di MaxListeners arriverebbe da
+    // sentinel per conto di tutto il processo.
+    if (!shutdownHooksInstalled) {
+      process.on('SIGTERM', persistAll);
+      process.on('SIGINT', persistAll);
+      shutdownHooksInstalled = true;
+    }
 
     const modeLabel = custom.mode === 'enforce' ? 'ENFORCE' : 'monitor (osservazione)';
     log('info',
@@ -1187,7 +1284,7 @@ module.exports = {
        */
       testRequest: (spec) => testRequest(
         spec,
-        isDebugMode ? loadRules() : compiledRules,
+        currentRules(),
         matcher || new PatternMatcher(),
         {
           salt: custom.fingerprintSalt || '',

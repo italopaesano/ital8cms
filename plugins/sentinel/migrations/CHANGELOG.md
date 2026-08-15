@@ -8,6 +8,23 @@ che è la versione di struttura dell'intero pacchetto.
 
 ---
 
+## v5 → v6 — `shell-probe` richiede un'estensione eseguibile
+
+**Con script** (`from-v5-to-v6.js`), automatico e idempotente. È il primo step
+che **modifica** una regola invece di aggiungerne una.
+
+Il pattern si fermava al punto e intercettava nomi di file ordinari —
+`/js/shell.js`, `/assets/cmd.css`. Il problema non è il rumore: è che il percorso
+di promozione documentato (*«promuovi se `authenticatedHits` è zero»*) non può
+cogliere un falso positivo su traffico anonimo, quindi la regola sembrava la più
+sicura da promuovere proprio mentre non lo era.
+
+⚠ Se il pattern in vigore **non è esattamente quello distribuito**, lo script non
+tocca niente e scrive un avviso: un pattern personalizzato è una scelta
+dell'amministratore.
+
+→ [`from-v5-to-v6.md`](./from-v5-to-v6.md)
+
 ## v4 → v5 — reputazione locale delle impronte
 
 **Nessuno script:** `custom.reputation` e `custom.census.ipRetentionDays` sono
