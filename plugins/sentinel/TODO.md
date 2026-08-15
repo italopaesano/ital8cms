@@ -1051,6 +1051,55 @@ nome, e test che li verificano separatamente**. È il caso dell'allerta sul disc
       migrazione per le installazioni esistenti (come per gli step v1→v2 e
       v2→v3).
 
+#### Nomi introdotti dal piano — ✅ confermati dal maintainer
+
+Tutti e tredici, più i tre file di test. Le alternative valutate restano qui:
+se una convince di più, la sostituzione è meccanica e nessuna di queste è nel
+formato di un file su disco tranne le due marcate **persistita**.
+
+**Dalla parte applicata (v2.86.1)**
+
+| Nome | Cos'è | Alternative valutate |
+|---|---|---|
+| `scanBraces` | profilo delle graffe di un file, riga per riga, con lo stato dei commenti portato avanti | `braceProfile`, `scanBraceDepth` |
+| `batchLines` | raggruppa gli eventi in blocchi sotto il tetto atomico | `chunkLines`, `groupIntoWrites` |
+| `MAX_ATOMIC_WRITE_BYTES` | il tetto: `PIPE_BUF` di Linux | `PIPE_BUF`, `MAX_WRITE_BYTES` |
+| `currentRules` | le regole da applicare a questa richiesta (ricarica su `mtime` in debug) | `rulesInForce`, `activeRules` |
+| `rulesFileMtimeMs` | timbro dell'ultimo file letto | `lastRulesMtimeMs`, `rulesStamp` |
+| `shutdownHooksInstalled` | guardia contro la doppia registrazione dei segnali | `signalsRegistered`, `shutdownWired` |
+
+`MAX_ATOMIC_WRITE_BYTES` è stato preferito a `PIPE_BUF` — il nome che il
+sistema operativo gli dà — perché qui la costante non descrive un buffer di
+pipe ma *il limite oltre il quale una write smette di essere atomica*, che è
+l'unica ragione per cui la usiamo. Chi legge non deve dover sapere da dove
+viene il numero per capire cosa impone.
+
+**Dalle decisioni (v2.87.0)**
+
+| Nome | Cos'è | Alternative valutate |
+|---|---|---|
+| `pathKeys` | impronte a 32 bit dei percorsi, solo per contare | `pathHashes`, `seenPathKeys` |
+| `MAX_PATH_KEYS` | tetto del conteggio (1024) | `MAX_TRACKED_PATHS`, `PATH_KEY_LIMIT` |
+| `hashPath` | FNV-1a a 32 bit | `pathKey`, `fingerprintPath` |
+| `recordPath` | aggiorna campione, conteggio e saturazione | `notePath`, `trackPath` |
+| `distinctPathsSaturated` | **persistita** — il conteggio si è fermato al tetto (OutcomeCensus) | `distinctPathsCapped`, `distinctPathsAtLeast` |
+| `pathCountSaturated` | **persistita** — idem per FingerprintCensus | `pathCountCapped`, `pathCountAtLeast` |
+
+Le due persistite si scrivono **solo quando vere**, quindi rinominarle non
+richiederebbe una migrazione: le voci che non le portano restano leggibili con
+qualunque nome. `…Capped` era il candidato più forte; ha perso perché descrive
+cosa è successo alla *struttura* («è stata tappata») mentre `…Saturated`
+descrive cosa è successo al **numero**, che è ciò che legge chi guarda la
+tabella.
+
+**File di test:** `sentinelLog.test.js`, `rulesHotReload.test.js`,
+`reviewDecisions.test.js`. I primi due prendono il nome dal modulo che
+provano, come tutti gli altri del plugin; il terzo no — prende il nome
+dall'**intervento**, perché copre quattro moduli diversi tenuti insieme dal
+fatto di essere le decisioni della stessa revisione. Alternative valutate:
+`decisions.test.js` (troppo generico fra due anni), `statusLeafAndCounters.test.js`
+(elenca il contenuto e invecchia alla prima aggiunta).
+
 ---
 
 ### Trasversali, da fare quando servono e non come passo a sé
