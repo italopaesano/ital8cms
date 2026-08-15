@@ -511,6 +511,9 @@ function shouldEnforce(rule, subject) {
   if (gateState !== 'running') return false;
 
   if (subject.authenticated) {
+    // `exempt` non arriva mai fin qui: ferma il matching a monte, in `evaluate`,
+    // quindi senza regola non c'è niente da applicare. Il controllo resta
+    // comunque corretto per entrambe le modalità che non agiscono.
     const authConf = custom.authenticatedTraffic || {};
     if (authConf.mode !== 'enforce') return false;
 
@@ -877,7 +880,37 @@ const engine = {
         : null,
     });
 
-    const rule = findFirstMatch(rules, subject, matcher);
+    // ─── "exempt": le regole non si applicano affatto agli autenticati ───────
+    // È l'unica delle tre modalità che vale PRIMA della valutazione e non dopo.
+    // `monitor` ed `enforce` decidono se AGIRE su ciò che una regola ha trovato,
+    // e vivono in `shouldEnforce`; `exempt` dice di non cercare, quindi deve
+    // fermare il matching stesso.
+    //
+    // Per un periodo qui non c'era nulla: `shouldEnforce` controllava solo
+    // `!== 'enforce'`, quindi `exempt` e `monitor` erano la stessa cosa. Chi lo
+    // impostava aveva chiesto di non guardare i propri utenti autenticati e si
+    // ritrovava le regole che matchavano lo stesso, righe di log **con lo
+    // username**, contatori che salivano e — per le regole `monitor` —
+    // rateLimiter alimentato. Su una funzione che tocca persone identificate, la
+    // distanza fra ciò che il config prometteva e ciò che faceva cadeva proprio
+    // sul dato personale.
+    //
+    // ─── COSA RESTA IN PIEDI, E PERCHE ──────────────────────────────────────
+    // L'esenzione riguarda le REGOLE, non tutti i sensori:
+    //   • la coerenza di sessione continua a osservare — è la difesa contro il
+    //     cookie rubato, e chi esenta gli autenticati dal filtro non sta
+    //     chiedendo di smettere di accorgersi che un account è stato dirottato;
+    //   • il canary continua a segnalare — è l'unico evento del plugin che non
+    //     ammette interpretazioni, e tacerlo perché l'utente è loggato sarebbe
+    //     esattamente il contrario di ciò che serve;
+    //   • il censimento continua a contare — la sua chiave è l'impronta, non la
+    //     persona, e spegnerlo accecherebbe la reputazione di TUTTI.
+    // Sparisce ciò che nomina l'utente: match, riga di log, contatori per
+    // regola, escalation.
+    const authConf = custom.authenticatedTraffic || {};
+    const rulesApply = !(subject.authenticated && authConf.mode === 'exempt');
+
+    const rule = rulesApply ? findFirstMatch(rules, subject, matcher) : null;
 
     const enforced = rule ? shouldEnforce(rule, subject) : false;
 

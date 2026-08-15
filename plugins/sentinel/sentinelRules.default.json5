@@ -211,10 +211,10 @@
       name: "shell-probe",
       enabled: true,
       category: "scanner",
-      description: "Nomi di webshell noti: chi li cerca sta verificando se il server  è già stato compromesso da qualcun altro.",
+      description: "Nomi di webshell noti: chi li cerca sta verificando se il server  è già stato compromesso da qualcun altro.  Il nome NON basta: serve anche un'estensione eseguibile. Prima il pattern  si fermava al punto, e intercettava /js/shell.js e /assets/cmd.css —  falsi positivi che il semaforo della promozione non può cogliere, perché  un asset chiesto da visitatori anonimi lascia authenticatedHits a zero:  la regola sembrava la più sicura da promuovere proprio mentre rompeva una  pagina pubblica. Una webshell caricata con un'estensione innocua sfugge a  questa regola, ma quel caso lo copre backup-probe (.bak, .old, .swp).",
       action: "monitor",
       match: {
-        path: "regex:/(c99|r57|wso|b374k|shell|cmd|backdoor|webshell)\\.",
+        path: "regex:/(c99|r57|wso|b374k|shell|cmd|backdoor|webshell)\\.(php|php3|php4|php5|php7|phtml|asp|aspx|jsp|cgi|pl)$",
       },
     },
 

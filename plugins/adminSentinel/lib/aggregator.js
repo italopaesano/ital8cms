@@ -153,6 +153,11 @@ function suspectedScanners(clients, minDistinctPaths = 20) {
     .map((c) => ({
       clientId: c.clientId,
       distinctPaths: c.distinctPaths,
+      // Il conteggio si ferma a un tetto (vedi census.js): oltre quello il
+      // valore è un limite inferiore, e la tabella lo mostra come "1024+".
+      // Nasconderlo darebbe per esatta una stima proprio dove si sta valutando
+      // quanto è grande una scansione.
+      distinctPathsSaturated: c.distinctPathsSaturated === true,
       total: c.total,
       notFound: (c.byStatus && c.byStatus['404']) || 0,
       firstSeen: c.firstSeen,

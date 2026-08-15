@@ -234,6 +234,13 @@ function readOutcomeCensus(dataDir) {
       }
       existing.total += entry.total || 0;
       existing.distinctPaths = Math.max(existing.distinctPaths || 0, entry.distinctPaths || 0);
+      // Basta che UNO shard abbia saturato il conteggio perché il numero fuso
+      // sia un limite inferiore: la saturazione si propaga in OR, come
+      // `safeToPromote` si propaga in AND poco più sotto e per la stessa
+      // ragione — fondere due misure parziali non può produrre più certezza di
+      // quanta ne avesse la meno certa delle due.
+      existing.distinctPathsSaturated = existing.distinctPathsSaturated === true
+        || entry.distinctPathsSaturated === true;
       for (const [code, n] of Object.entries(entry.byStatus || {})) {
         existing.byStatus[code] = (existing.byStatus[code] || 0) + n;
       }

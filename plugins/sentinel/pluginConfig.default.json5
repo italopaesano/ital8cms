@@ -1,6 +1,6 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "schemaVersion": 5,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 6,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   "active": 1,
 
   // Weight 3: prima di analytics (5) e rateLimiter (5). Conta poco in pratica —
@@ -57,7 +57,18 @@
     // sono l'account compromesso, il bot registrato e la sessione rubata.
     "authenticatedTraffic": {
 
-      // "exempt"  → le regole non si applicano affatto agli autenticati
+      // "exempt"  → le regole non si applicano affatto agli autenticati: non si
+      //             cerca nemmeno quale regola matcherebbe, quindi niente righe
+      //             di log (che porterebbero lo username), niente contatori per
+      //             regola, niente escalation verso rateLimiter.
+      //             RESTANO ATTIVI tre sensori che non nominano l'utente e che
+      //             esentare sarebbe controproducente: la coerenza di sessione
+      //             (è la difesa contro il cookie rubato — chi esenta gli
+      //             autenticati dal filtro non sta chiedendo di smettere di
+      //             accorgersi che un account è stato dirottato), il token esca
+      //             (l'unico segnale certo del plugin) e il censimento delle
+      //             impronte (la sua chiave è il client, non la persona, e
+      //             spegnerlo accecherebbe la reputazione di tutti).
       // "monitor" → le regole matchano e vengono registrate, ma non applicate
       // "enforce" → applicate come agli anonimi
       //

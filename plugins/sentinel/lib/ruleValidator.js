@@ -191,7 +191,7 @@ function nodeUsesReputation(node) {
  *
  * @returns {object|null} nodo compilato, o null se invalido
  */
-function compileMatchNode(node, where, errors) {
+function compileMatchNode(node, where, errors, warnings = []) {
   if (!node || typeof node !== 'object' || Array.isArray(node)) {
     errors.push(`${where}: nodo match non valido`);
     return null;
@@ -209,7 +209,7 @@ function compileMatchNode(node, where, errors) {
       }
       const children = [];
       for (let i = 0; i < node[combinator].length; i++) {
-        const child = compileMatchNode(node[combinator][i], `${where}.${combinator}[${i}]`, errors);
+        const child = compileMatchNode(node[combinator][i], `${where}.${combinator}[${i}]`, errors, warnings);
         if (!child) return null;
         children.push(child);
       }
@@ -219,7 +219,7 @@ function compileMatchNode(node, where, errors) {
   }
 
   if (node.not !== undefined) {
-    const child = compileMatchNode(node.not, `${where}.not`, errors);
+    const child = compileMatchNode(node.not, `${where}.not`, errors, warnings);
     if (!child) return null;
     out.not = child;
     conditionCount++;
@@ -350,6 +350,26 @@ function compileMatchNode(node, where, errors) {
     }
     out.status = set;
     conditionCount++;
+
+    // ─── AVVISO: questa foglia non scatta mai, oggi ────────────────────────
+    // `subject.status` è `null` in ogni valutazione: la valutazione
+    // post-risposta, per cui la foglia era stata prevista, non esiste —
+    // `observeOutcome` aggrega e basta, non rivaluta le regole.
+    //
+    // Senza questo avviso il difetto era della forma peggiore possibile: la
+    // regola passava la validazione E il tester la dava per vincente (il
+    // tracciatore, unico posto che scrive `subject.status`, la valutava sul
+    // serio), quindi si arrivava in produzione con due conferme indipendenti
+    // per qualcosa che non succede. Meglio un avviso che due bugie concordi.
+    //
+    // Avviso e non errore: fail-open come tutto il resto del file, e la regola
+    // resta scritta per il giorno in cui la valutazione post-risposta ci sarà.
+    warnings.push(
+      `${where}.status: questa condizione non scatta mai. Lo stato della risposta ` +
+      'non esiste ancora quando le regole vengono valutate (il filtro gira PRIMA ' +
+      'del router), e la valutazione post-risposta oggi aggrega soltanto: vedi i ' +
+      'sospetti scanner nel pannello, che nascono proprio da lì'
+    );
   }
 
   if (node.canary !== undefined) {
@@ -616,7 +636,7 @@ function validateRules(rulesData, options = {}) {
     }
 
     // ── Condizioni ──
-    const match = compileMatchNode(raw.match, `${where} ("${name}").match`, errors);
+    const match = compileMatchNode(raw.match, `${where} ("${name}").match`, errors, warnings);
     if (!match) continue;
 
     // ── Parametri dell'azione ──

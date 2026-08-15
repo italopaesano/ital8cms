@@ -883,8 +883,9 @@ escludono a vicenda.
 
 > ⚠️ **Il nome del piano è da confermare**: alternative proposte *Piano di
 > rifinitura II* / *Piano di allineamento* / *Piano post-revisione II*.
-> Metà del piano è **già applicata** (sotto), l'altra metà **richiede una tua
-> decisione** e non è stata toccata.
+> **Piano chiuso:** applicata la parte che non richiedeva decisioni (v2.86.1) e,
+> sulle raccomandazioni accettate dal maintainer, tutte e quattro le voci da
+> decidere (v2.87.0). 10 rilievi su 10.
 
 Revisione completa del plugin (main + 16 moduli `lib/`, config, regole,
 migrazioni, doc), successiva al piano di consolidamento. Nessun rilievo critico:
@@ -959,9 +960,20 @@ nome, e test che li verificano separatamente**. È il caso dell'allerta sul disc
       `SentinelLog` non aveva test propri), più `rulesFileEditor.test.js` e
       `ruleValidator.test.js`. Suite completa verde.
 
-#### Da decidere — quattro scelte, nessuna toccata
+#### ~~Da decidere~~ ✅ CHIUSE — quattro scelte, tutte applicate
 
-- [ ] **D1. La foglia `status` produce regole che non scattano mai.**
+- [x] **D1. La foglia `status` produce regole che non scattano mai.**
+      → **Risolta con (a).** Avviso del validatore («questa condizione non
+      scatta mai») e tracer allineato al runtime. La correzione vera era nel
+      tester: `testRequest` scriveva `spec.status` sul soggetto, costruendo un
+      soggetto che a runtime non esiste — ed è per questo che la foglia sembrava
+      funzionare proprio nello strumento che si usa per verificarla prima di
+      andare in produzione. Lo stato richiesto resta nell'eco del soggetto, ma
+      non entra nella valutazione. **Il test di conformità fra i due valutatori
+      lo confermava per la ragione sbagliata**: il suo `subjectFor` scriveva a
+      sua volta lo status, quindi i due valutatori concordavano su una
+      situazione impossibile. Ora non lo scrive più, e la conformità vale.
+      La (c) — valutazione post-risposta vera — resta una voce di roadmap.
       *(verificato eseguendo)* `ruleMatcher.js` mette `status: null` nel soggetto
       con il commento «valorizzato solo nella valutazione post-risposta», e
       quella valutazione **non esiste**: `observeOutcome` aggrega e basta.
@@ -973,8 +985,19 @@ nome, e test che li verificano separatamente**. È il caso dell'allerta sul disc
       tracer, un'ora; **(b)** rimuovere la foglia (errore di validazione +
       migrazione per chi l'avesse scritta); **(c)** implementare la valutazione
       post-risposta, che è una funzionalità e non una correzione.
-- [ ] **D2. `distinctPaths` e `pathCount` diventano contatori di richieste dopo
-      il tetto del campione.** *(verificato eseguendo)* Saturato il campione
+- [x] **D2. `distinctPaths` e `pathCount` diventano contatori di richieste dopo
+      il tetto del campione.**
+      → **Risolta con (b), in una forma più economica di quella proposta.** Il
+      consiglio diceva «numeri, non stringhe: costa poco» — affermazione
+      sbagliata così com'era scritta, perché il costo si moltiplica per il
+      numero di client tracciati (5000) e non per uno. La forma applicata tiene
+      il conto: due strutture separate, `paths` (stringhe, solo per il campione
+      da MOSTRARE, ridotto a quanto se ne salva davvero: 16 e 32, non 64 e 256)
+      e `pathKeys` (impronte FNV-1a a 32 bit, solo per CONTARE, tetto
+      `MAX_PATH_KEYS = 1024`). La memoria per client resta nello stesso ordine
+      di prima e il conteggio esatto arriva quattro volte più lontano. Al tetto
+      si ferma e lo **dichiara** (`distinctPathsSaturated` / `pathCountSaturated`,
+      scritti solo quando veri), fino alla tabella del twin che mostra `1024+`. *(verificato eseguendo)* Saturato il campione
       (256 per l'aggregato degli esiti, 64 per il censimento), ogni richiesta a
       un percorso fuori dal campione incrementa il contatore — **anche la
       stessa, ripetuta**. Misurato: 257 percorsi distinti + 5000 ripetizioni di
@@ -988,8 +1011,13 @@ nome, e test che li verificano separatamente**. È il caso dell'allerta sul disc
       saturazione — richiede un nome nuovo e tocca il formato del file;
       **(c)** lasciare il conteggio e rinominare il campo in ciò che davvero
       misura — costa una migrazione e non recupera il segnale.
-- [ ] **D3. `authenticatedTraffic.mode: "exempt"` è documentato e non
-      implementato.** *(verificato eseguendo)* `pluginConfig.default.json5`
+- [x] **D3. `authenticatedTraffic.mode: "exempt"` è documentato e non
+      implementato.**
+      → **Risolta con (a).** Una condizione sola, in `evaluate`: con `exempt` su
+      traffico autenticato non si cerca la regola, e tutto il resto del percorso
+      gestiva già `rule === null`. Restano attivi coerenza di sessione, canary e
+      censimento — i tre sensori che non nominano l'utente e che esentare
+      sarebbe controproducente (motivazione per esteso nel config e nel README). *(verificato eseguendo)* `pluginConfig.default.json5`
       promette «le regole non si applicano affatto agli autenticati»;
       `shouldEnforce` controlla solo `!== 'enforce'`, quindi `exempt` e
       `monitor` sono identici. La differenza è reale: con `exempt` le regole
@@ -1000,8 +1028,15 @@ nome, e test che li verificano separatamente**. È il caso dell'allerta sul disc
       **(a)** implementarlo davvero: uscita anticipata prima della valutazione
       per il traffico autenticato; **(b)** togliere il valore dalla
       documentazione e lasciare due modalità.
-- [ ] **D4. `shell-probe` matcha nomi di file legittimi, e la procedura di
-      promozione non può accorgersene.** *(verificato eseguendo)* La regola
+- [x] **D4. `shell-probe` matcha nomi di file legittimi, e la procedura di
+      promozione non può accorgersene.**
+      → **Risolta con (b)**, più la migrazione **v5→v6**: il pattern richiede ora
+      un'estensione eseguibile (`php|php3|php4|php5|php7|phtml|asp|aspx|jsp|cgi|pl`).
+      È il primo step di migrazione che **modifica** una regola invece di
+      aggiungerla, e da lì il vincolo che lo governa: se il pattern in vigore non
+      è esattamente quello distribuito, non tocca niente e avvisa. Una migrazione
+      che sovrascrive la scelta di un amministratore fa perdere fiducia in tutte
+      quelle successive. *(verificato eseguendo)* La regola
       distribuita cerca `/(c99|r57|wso|b374k|shell|cmd|backdoor|webshell)\.`:
       `/js/shell.js` e `/assets/cmd.css` matchano. Il punto non è il rumore, è
       che il semaforo documentato — «se `authenticatedHits` è zero dopo

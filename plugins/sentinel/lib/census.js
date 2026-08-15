@@ -89,6 +89,89 @@ function loadSafely(filePath) {
 const isoOrNull = (ms) => (typeof ms === 'number' ? new Date(ms).toISOString() : null);
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CONTEGGIO DEI PERCORSI DISTINTI
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// ─── IL DIFETTO CHE QUESTA PARTE ESISTE PER NON RIFARE ────────────────────────
+// Il campione dei percorsi serviva a due scopi insieme: mostrarne qualcuno, e
+// riconoscere quelli già visti per contare i distinti. Riempito il campione, il
+// secondo scopo spariva in silenzio — ogni richiesta a un percorso fuori dal
+// campione incrementava il contatore, **anche la stessa ripetuta**. Misurato:
+// 257 percorsi distinti più 5000 ripetizioni di uno solo davano 5256.
+//
+// Il numero non resta nel file: è la colonna della tabella «sospetti scanner»,
+// cioè della vista che esiste per far scoprire gli attacchi per cui non c'è
+// ancora una regola. Un contatore che mente lì mente a chi deve decidere.
+//
+// ─── DUE STRUTTURE, PERCHE SONO DUE DOMANDE DIVERSE ───────────────────────────
+//   • `paths`    — un pugno di percorsi da MOSTRARE. Ne bastano quanti se ne
+//                  scrivono su disco, e sono stringhe.
+//   • `pathKeys` — impronte a 32 bit dei percorsi, solo per CONTARE. Numeri, non
+//                  stringhe: a parità di memoria se ne tengono molti di più, e
+//                  non c'è niente da leggere.
+//
+// ─── PERCHE UN TETTO ANCHE QUI, E PERCHE SI DICHIARA ──────────────────────────
+// La chiave la sceglie chi bussa: senza tetto, generare percorsi a caso sarebbe
+// il modo di far crescere la memoria per client (vedi BoundedStore). Il tetto
+// resta quindi obbligatorio — e alzarlo non è gratis, perché si moltiplica per
+// il numero di client tracciati.
+//
+// La differenza rispetto a prima è che al tetto il conteggio si FERMA e lo
+// DICHIARA, invece di continuare a salire contando altro. «1024+» è un'
+// informazione; «5256» che significa tutt'altro non lo è.
+const MAX_PATH_KEYS = 1024;
+
+/**
+ * Impronta a 32 bit di un percorso (FNV-1a).
+ *
+ * Le collisioni fanno perdere un conteggio ogni tanto e non hanno conseguenze:
+ * qui non si decide niente su un singolo percorso, si misura un ordine di
+ * grandezza. Non è una funzione crittografica e non deve esserlo — deve essere
+ * veloce, perché gira su ogni richiesta osservata.
+ *
+ * @param {string} value
+ * @returns {number}
+ */
+function hashPath(value) {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+}
+
+/**
+ * Registra un percorso: aggiorna il campione da mostrare, il conteggio dei
+ * distinti e lo stato di saturazione.
+ *
+ * @param {object} entry      - voce dell'archivio (mutata)
+ * @param {string} reqPath
+ * @param {object} options
+ * @param {string} options.counter   - nome del campo contatore sulla voce
+ * @param {string} options.saturated - nome del campo di saturazione sulla voce
+ * @param {number} options.sampleMax - quanti percorsi tenere da mostrare
+ */
+function recordPath(entry, reqPath, options) {
+  if (!reqPath) return;
+
+  const key = hashPath(reqPath);
+
+  if (!entry.pathKeys.has(key)) {
+    if (entry.pathKeys.size < MAX_PATH_KEYS) {
+      entry.pathKeys.add(key);
+      entry[options.counter]++;
+    } else {
+      // Tetto raggiunto: da qui in poi non si sa più distinguere un percorso
+      // nuovo da uno già visto, quindi non si conta. Si dice.
+      entry[options.saturated] = true;
+    }
+  }
+
+  if (entry.paths.size < options.sampleMax) entry.paths.add(reqPath);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // CENSIMENTO DELLE IMPRONTE
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -146,7 +229,16 @@ class FingerprintCensus {
         matchedCount: raw.matchedCount || 0,
         blockedCount: raw.blockedCount || 0,
         paths: new Set(Array.isArray(raw.samplePaths) ? raw.samplePaths : []),
+        // Le impronte dei percorsi NON si ricostruiscono dal file: sul disco
+        // finisce solo il campione, e ricavare le chiavi da quello farebbe
+        // ripartire il conteggio dai 16 percorsi mostrati invece che da
+        // `pathCount`. Il contatore sopravvive al riavvio, l'insieme riparte —
+        // stessa scelta di `distinctIpsBaseline` in ruleHitCounter, e con lo
+        // stesso effetto: dopo un riavvio si può ricontare un percorso già
+        // visto, mai perdere quelli contati prima.
+        pathKeys: new Set(Array.isArray(raw.samplePaths) ? raw.samplePaths.map(hashPath) : []),
         pathCount: raw.pathCount || 0,
+        pathCountSaturated: raw.pathCountSaturated === true,
         // Formato storico: array di stringhe. Si accetta ancora, datando gli
         // indirizzi all'ultima comparsa della voce — l'informazione più vicina
         // al vero che si abbia, e comunque conservativa.
@@ -180,7 +272,9 @@ class FingerprintCensus {
         matchedCount: 0,
         blockedCount: 0,
         paths: new Set(),
+        pathKeys: new Set(),
         pathCount: 0,
+        pathCountSaturated: false,
         ips: new Map(),
         ipCount: 0,
         class: info.fpClass || {},
@@ -202,15 +296,16 @@ class FingerprintCensus {
         if (info.blocked) entry.blockedCount++;
         entry.class = info.fpClass || entry.class;
 
-        // I percorsi si contano tenendo un campione limitato: l'obiettivo è
-        // distinguere "un client che chiede sempre la stessa cosa" da "un client
-        // che ne prova centinaia", non ricostruire la navigazione.
-        if (info.path && entry.paths.size < 64 && !entry.paths.has(info.path)) {
-          entry.paths.add(info.path);
-          entry.pathCount++;
-        } else if (info.path && !entry.paths.has(info.path)) {
-          entry.pathCount++;
-        }
+        // L'obiettivo è distinguere "un client che chiede sempre la stessa cosa"
+        // da "un client che ne prova centinaia", non ricostruire la navigazione:
+        // si mostra un pugno di percorsi e si contano i distinti a parte.
+        // Il campione tenuto in memoria è quanto se ne scrive su disco (16), non
+        // di più: tenerne 64 per salvarne 16 era memoria spesa per niente.
+        recordPath(entry, info.path, {
+          counter: 'pathCount',
+          saturated: 'pathCountSaturated',
+          sampleMax: 16,
+        });
 
         if (this.ipMode !== 'none' && info.ip) {
           if (!entry.ips.has(info.ip)) {
@@ -287,6 +382,10 @@ class FingerprintCensus {
         matchedCount: entry.matchedCount,
         blockedCount: entry.blockedCount,
         pathCount: entry.pathCount,
+        // Presente solo quando è vero: una chiave in più su ogni voce di un
+        // archivio che ne ha diecimila, per uno stato che quasi nessuna
+        // raggiunge, sarebbe peso su disco senza informazione.
+        pathCountSaturated: entry.pathCountSaturated ? true : undefined,
         samplePaths: Array.from(entry.paths).slice(0, 16),
         ipCount: this.ipMode === 'none' ? 0 : entry.ipCount,
         // Solo con "full" gli indirizzi finiscono su disco. Con "count" restano
@@ -351,7 +450,11 @@ class OutcomeCensus {
         total: raw.total || 0,
         byStatus: raw.byStatus || {},
         paths: new Set(Array.isArray(raw.samplePaths) ? raw.samplePaths : []),
+        // Come nel censimento delle impronte: il contatore sopravvive al
+        // riavvio, l'insieme delle impronte dei percorsi riparte dal campione.
+        pathKeys: new Set(Array.isArray(raw.samplePaths) ? raw.samplePaths.map(hashPath) : []),
         distinctPaths: raw.distinctPaths || 0,
+        distinctPathsSaturated: raw.distinctPathsSaturated === true,
       };
     });
   }
@@ -371,16 +474,21 @@ class OutcomeCensus {
         total: 0,
         byStatus: {},
         paths: new Set(),
+        pathKeys: new Set(),
         distinctPaths: 0,
+        distinctPathsSaturated: false,
       }),
       (entry) => {
         entry.total++;
         const key = String(status);
         entry.byStatus[key] = (entry.byStatus[key] || 0) + 1;
-        if (reqPath && !entry.paths.has(reqPath)) {
-          entry.distinctPaths++;
-          if (entry.paths.size < 256) entry.paths.add(reqPath);
-        }
+        // Il campione tenuto in memoria è quanto se ne salva (32): prima erano
+        // 256 stringhe per client, di cui 224 non uscivano mai dal processo.
+        recordPath(entry, reqPath, {
+          counter: 'distinctPaths',
+          saturated: 'distinctPathsSaturated',
+          sampleMax: 32,
+        });
       });
 
     this.dirty = true;
@@ -406,6 +514,7 @@ class OutcomeCensus {
         total: entry.total,
         byStatus: entry.byStatus,
         distinctPaths: entry.distinctPaths,
+        distinctPathsSaturated: entry.distinctPathsSaturated ? true : undefined,
         samplePaths: Array.from(entry.paths).slice(0, 32),
       })),
     };
@@ -418,14 +527,25 @@ class OutcomeCensus {
    * Client che hanno collezionato molti percorsi distinti falliti: è la firma
    * della scansione, e non richiede alcuna regola scritta a mano.
    *
+   * `saturated` significa che il conteggio si è fermato al tetto: il valore è un
+   * limite inferiore, e va letto «1024 o più». Non è un dettaglio implementativo
+   * da nascondere — chi guarda questa tabella sta stimando quanto è grande una
+   * scansione, e la differenza fra «esattamente 1024» e «almeno 1024» è
+   * esattamente ciò che vuole sapere.
+   *
    * @param {number} minDistinctPaths
-   * @returns {Array<{ clientId: string, distinctPaths: number, total: number }>}
+   * @returns {Array<{ clientId: string, distinctPaths: number, saturated: boolean, total: number }>}
    */
   getSuspectedScanners(minDistinctPaths = 20) {
     const out = [];
     for (const [clientId, entry] of this.store.entries) {
       if (entry.distinctPaths >= minDistinctPaths) {
-        out.push({ clientId, distinctPaths: entry.distinctPaths, total: entry.total });
+        out.push({
+          clientId,
+          distinctPaths: entry.distinctPaths,
+          saturated: entry.distinctPathsSaturated === true,
+          total: entry.total,
+        });
       }
     }
     return out.sort((a, b) => b.distinctPaths - a.distinctPaths);
@@ -439,4 +559,7 @@ class OutcomeCensus {
   }
 }
 
-module.exports = { FingerprintCensus, OutcomeCensus, saveAtomic };
+module.exports = {
+  FingerprintCensus, OutcomeCensus, saveAtomic,
+  hashPath, recordPath, MAX_PATH_KEYS,
+};
