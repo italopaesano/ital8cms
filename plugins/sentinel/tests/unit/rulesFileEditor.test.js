@@ -4,7 +4,7 @@ const path = require('path');
 const json5 = require('json5');
 const {
   setRuleAction, replaceRule, serializeRule,
-  findRuleBlock, countBraces, describeDifference,
+  findRuleBlock, countBraces, scanBraces, describeDifference,
 } = require('../../lib/rulesFileEditor');
 
 let filePath;
@@ -73,6 +73,35 @@ describe('countBraces', () => {
     expect(countBraces('    { name: "x" },')).toEqual({ open: 1, close: 1 });
     expect(countBraces('  match: {')).toEqual({ open: 1, close: 0 });
   });
+
+  // JSON5 ammette entrambe le forme di commento, e questa mancava: una graffa
+  // dentro `/* */` sbilanciava il conteggio, e da lì la ricerca del blocco
+  // finiva altrove. Falliva in modo sicuro — la verifica differenziale annulla
+  // la scrittura — ma con un messaggio che dà la colpa al file sbagliato.
+  test('ignora le graffe dentro un commento a blocco sulla stessa riga', () => {
+    expect(countBraces('  /* nota con { graffa } */')).toEqual({ open: 0, close: 0 });
+  });
+
+  test('conta ciò che sta FUORI dal commento a blocco, sulla stessa riga', () => {
+    expect(countBraces('  /* nota { */ match: {')).toEqual({ open: 1, close: 0 });
+  });
+});
+
+describe('scanBraces — lo stato che attraversa le righe', () => {
+  test('un commento a blocco su più righe non sbilancia il conteggio', () => {
+    const lines = [
+      '{',
+      '  /* apertura del commento {',
+      '     ancora dentro } e }',
+      '     chiusura */',
+      '}',
+    ];
+    const profile = scanBraces(lines);
+    const totale = profile.reduce((acc, r) => acc + r.open - r.close, 0);
+    expect(totale).toBe(0);
+    expect(profile[2].commented).toBe(true);
+    expect(profile[4].commented).toBe(false);
+  });
 });
 
 describe('findRuleBlock', () => {
@@ -87,6 +116,34 @@ describe('findRuleBlock', () => {
 
   test('null se la regola non esiste', () => {
     expect(findRuleBlock(SAMPLE.split('\n'), 'inesistente')).toBeNull();
+  });
+
+  test('non si fa ingannare da una regola commentata a blocco con lo stesso nome', () => {
+    // Commentare una regola per metterla da parte è la cosa più naturale del
+    // mondo, e con `/* */` la sua riga `name:` è identica a quella vera. Se la
+    // ricerca si fermasse lì, il salvataggio riscriverebbe del testo commentato:
+    // la GUI direbbe «salvato» e la regola in vigore resterebbe com'era.
+    const withCommented = [
+      '{',
+      '  rules: [',
+      '    /* messa da parte per ora',
+      '    {',
+      '      name: "php-probe",',
+      '      action: "block",',
+      '    },',
+      '    */',
+      '    {',
+      '      name: "php-probe",',
+      '      action: "monitor",',
+      '    },',
+      '  ],',
+      '}',
+    ];
+    const block = findRuleBlock(withCommented, 'php-probe');
+    expect(block).not.toBeNull();
+    const text = withCommented.slice(block.start, block.end + 1).join('\n');
+    expect(text).toContain('"monitor"');
+    expect(text).not.toContain('"block"');
   });
 });
 
@@ -139,6 +196,26 @@ describe('setRuleAction', () => {
     setRuleAction(filePath, 'backup-probe', 'drop');
     setRuleAction(filePath, 'php-probe', 'monitor');
     expect(() => json5.parse(fs.readFileSync(filePath, 'utf8'))).not.toThrow();
+  });
+
+  // Il caso completo del difetto sui commenti a blocco: prima la promozione
+  // falliva con «blocco testuale non individuabile» su un file perfettamente
+  // valido, e l'amministratore non aveva modo di capire che la colpa era di una
+  // graffa dentro un `/* */` scritto mesi prima.
+  test('promuove anche su un file che usa commenti a blocco', () => {
+    const withBlockComments = SAMPLE.replace(
+      '    // Commento fra le due regole.',
+      '    /* Commento fra le due regole,\n       con una { graffa } spaiata dentro. */',
+    );
+    fs.writeFileSync(filePath, withBlockComments, 'utf8');
+
+    expect(() => setRuleAction(filePath, 'backup-probe', 'block')).not.toThrow();
+
+    const updated = fs.readFileSync(filePath, 'utf8');
+    const parsed = json5.parse(updated);
+    expect(parsed.rules[1].action).toBe('block');
+    expect(parsed.rules[0].action).toBe('monitor');   // l'altra non è stata toccata
+    expect(updated).toContain('con una { graffa } spaiata dentro.');
   });
 });
 

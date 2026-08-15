@@ -303,6 +303,33 @@ describe('azioni drop e tarpit', () => {
   });
 });
 
+describe('azione throttle — la delega senza destinatario', () => {
+  // `throttle` non produce una risposta per progetto: la sua azione È
+  // l'escalation verso rateLimiter. Senza `escalate` non resta niente — non
+  // enforcement (escluso in shouldEnforce), non una risposta (nessun ramo in
+  // attachResponder), non un conteggio (escalate() esce alla prima riga). La
+  // regola diventa identica a una `monitor`, scritta da chi credeva di limitare
+  // qualcosa, e siccome `monitor` è il default nemmeno il log la smentisce.
+  test('throttle senza escalate produce un avviso', () => {
+    const r = validateRules({ rules: [rule({ action: 'throttle' })] });
+    expect(r.valid).toBe(true);
+    expect(r.warnings.join(' ')).toMatch(/throttle.*non ha alcun effetto/);
+  });
+
+  test('throttle con escalate non avvisa', () => {
+    const r = validateRules({
+      rules: [rule({ action: 'throttle', escalate: { rateLimiterRule: 'scanner' } })],
+    });
+    expect(r.valid).toBe(true);
+    expect(r.warnings.join(' ')).not.toMatch(/non ha alcun effetto/);
+  });
+
+  test('le altre azioni senza escalate non avvisano', () => {
+    const r = validateRules({ rules: [rule({ action: 'monitor' }), rule({ name: 'b', action: 'block' })] });
+    expect(r.warnings.join(' ')).not.toMatch(/non ha alcun effetto/);
+  });
+});
+
 describe('foglia canary', () => {
   test.each([[true], ['any'], ['known'], ['unknown']])('%s è un valore ammesso', (value) => {
     const r = validateRules({ rules: [rule({ match: { canary: value } })] });

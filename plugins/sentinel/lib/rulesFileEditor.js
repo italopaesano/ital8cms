@@ -41,6 +41,13 @@ const { VALID_ACTIONS } = require('./ruleValidator');
  * conteggio ignora le graffe dentro stringhe e commenti, che nelle descrizioni
  * ci sono davvero.
  *
+ * ─── PERCHE UNA SCANSIONE UNICA IN AVANTI ─────────────────────────────────────
+ * Le due scansioni (in su e in giù) usano un profilo delle graffe calcolato UNA
+ * volta in avanti, invece di contare riga per riga mentre si spostano. Serve per
+ * i commenti a blocco: `/* ... *\/` può attraversare più righe, quindi sapere se
+ * una riga è dentro un commento richiede di conoscere quelle PRIMA di lei — cosa
+ * che una risalita, per costruzione, non può fare.
+ *
  * @param {string[]} lines
  * @param {string} ruleName
  * @returns {{ start: number, end: number }|null}
@@ -49,8 +56,15 @@ function findRuleBlock(lines, ruleName) {
   const escaped = ruleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const namePattern = new RegExp(`^\\s*["']?name["']?\\s*:\\s*["']${escaped}["']\\s*,?\\s*$`);
 
+  const profile = scanBraces(lines);
+
   let nameLine = -1;
   for (let i = 0; i < lines.length; i++) {
+    // Una regola interamente commentata con /* */ ha righe `name:` dall'aspetto
+    // identico a quelle vere: prenderla per buona farebbe riscrivere del testo
+    // commentato, cioè la regola sbagliata. (Con `//` non si pone: il commento
+    // precede il nome sulla riga e il pattern non attacca.)
+    if (profile[i].commented) continue;
     if (namePattern.test(lines[i])) { nameLine = i; break; }
   }
   if (nameLine === -1) return null;
@@ -59,8 +73,7 @@ function findRuleBlock(lines, ruleName) {
   let start = -1;
   let depth = 0;
   for (let i = nameLine; i >= 0; i--) {
-    const { open, close } = countBraces(lines[i]);
-    depth += close - open;
+    depth += profile[i].close - profile[i].open;
     if (depth < 0) { start = i; break; }
   }
   if (start === -1) return null;
@@ -69,8 +82,7 @@ function findRuleBlock(lines, ruleName) {
   let end = -1;
   depth = 0;
   for (let i = start; i < lines.length; i++) {
-    const { open, close } = countBraces(lines[i]);
-    depth += open - close;
+    depth += profile[i].open - profile[i].close;
     if (depth === 0 && i >= start) { end = i; break; }
   }
   if (end === -1) return null;
@@ -79,17 +91,49 @@ function findRuleBlock(lines, ruleName) {
 }
 
 /**
+ * Profilo delle graffe di un file, riga per riga, con lo stato dei commenti a
+ * blocco portato avanti da una riga all'altra.
+ *
+ * @param {string[]} lines
+ * @returns {Array<{ open: number, close: number, commented: boolean }>}
+ *   `commented` = la riga COMINCIA dentro un commento a blocco
+ */
+function scanBraces(lines) {
+  const state = { inBlockComment: false };
+  return lines.map((line) => {
+    const commented = state.inBlockComment;
+    const { open, close } = countBraces(line, state);
+    return { open, close, commented };
+  });
+}
+
+/**
  * Conta le graffe di una riga ignorando stringhe e commenti.
  * Senza questo, una descrizione che contiene `{` sposterebbe il conteggio e la
  * ricerca finirebbe sul blocco sbagliato.
+ *
+ * Gestisce entrambe le forme di commento. Quella a blocco richiede uno stato che
+ * sopravviva alla riga — `/*` su una riga e `*\/` tre righe dopo — e per questo
+ * `state` viene MUTATO: chi scandisce un file intero lo passa una volta sola e
+ * ottiene il conteggio giusto anche a cavallo delle righe. Chiamandola su una
+ * riga isolata lo stato nasce e muore lì, che è il comportamento storico.
+ *
+ * @param {string} line
+ * @param {{ inBlockComment: boolean }} [state] - mutato in place
+ * @returns {{ open: number, close: number }}
  */
-function countBraces(line) {
+function countBraces(line, state = { inBlockComment: false }) {
   let open = 0;
   let close = 0;
   let inString = null;
 
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
+
+    if (state.inBlockComment) {
+      if (ch === '*' && line[i + 1] === '/') { state.inBlockComment = false; i++; }
+      continue;
+    }
 
     if (inString) {
       if (ch === '\\') { i++; continue; }
@@ -99,6 +143,7 @@ function countBraces(line) {
 
     if (ch === '"' || ch === "'") { inString = ch; continue; }
     if (ch === '/' && line[i + 1] === '/') break;          // commento di riga
+    if (ch === '/' && line[i + 1] === '*') { state.inBlockComment = true; i++; continue; }
     if (ch === '{') open++;
     else if (ch === '}') close++;
   }
@@ -340,5 +385,5 @@ function replaceRule(filePath, ruleName, newRule) {
 
 module.exports = {
   setRuleAction, replaceRule, serializeRule,
-  findRuleBlock, countBraces, describeDifference,
+  findRuleBlock, countBraces, scanBraces, describeDifference,
 };

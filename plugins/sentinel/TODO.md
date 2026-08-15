@@ -879,6 +879,144 @@ escludono a vicenda.
 
 ---
 
+### Piano di rifinitura II — quello che la revisione del 2026-08-15 ha trovato
+
+> ⚠️ **Il nome del piano è da confermare**: alternative proposte *Piano di
+> rifinitura II* / *Piano di allineamento* / *Piano post-revisione II*.
+> Metà del piano è **già applicata** (sotto), l'altra metà **richiede una tua
+> decisione** e non è stata toccata.
+
+Revisione completa del plugin (main + 16 moduli `lib/`, config, regole,
+migrazioni, doc), successiva al piano di consolidamento. Nessun rilievo critico:
+i nove step di quel piano sono stati riverificati e reggono. **10 rilievi nuovi**,
+quattro dei quali verificati eseguendo il codice.
+
+Lo schema ricorrente è, di nuovo, il secondo di quel piano — *i commenti più
+sicuri di sé stanno dove sono i difetti* — con una variante che vale la pena
+nominare perché si ripete: **due moduli che hanno un'idea diversa dello stesso
+nome, e test che li verificano separatamente**. È il caso dell'allerta sul disco
+(A1) e, in altra forma, della foglia `status` (D1).
+
+#### Applicati — non richiedevano decisioni
+
+- [x] **🐞 A1. L'allerta sul budget disco partiva come «INFO».** `sentinelLog`
+      emetteva `kind: 'log-size-threshold'`, assente dalla tabella
+      `ALERT_SEVERITY` di `alertDispatcher` → severità di ripiego, e un oggetto
+      email che non distingue la riga da alzarsi a leggere. Invisibile ai test
+      perché quelli del dispatcher notificavano già `diskBudget`, il nome
+      giusto: si verificavano a vicenda senza che nessuno usasse ciò che l'altro
+      emette. Allineato a `diskBudget` (il nome già presente in tabella, nei
+      test e come default di `sendAlert`), con un test che collega i due moduli.
+- [x] **A2. Le scritture del log a blocchi sotto 4 KB.** `flush()` faceva una
+      `appendFileSync` **per evento**, con la motivazione — scritta in
+      `EXPLAIN.it.md §11` — che una write in `O_APPEND` sotto 4 KB è atomica.
+      La premessa è vera, la conclusione no: la garanzia riguarda la
+      **dimensione** della write, non il numero di righe. Il prezzo si pagava
+      sotto attacco, quando il buffer accumula migliaia di eventi al secondo e
+      ognuno costa una syscall sincrona sull'event loop. Misurato: 1000 eventi →
+      da 1000 write a **meno di 100**, file identico.
+- [x] **🐞 A3. `countBraces` non conosceva i commenti a blocco.** `/* nota { */`
+      sbilanciava il conteggio e la ricerca del blocco finiva altrove: la
+      promozione dalla GUI falliva con «blocco testuale non individuabile» su un
+      file JSON5 perfettamente valido. Falliva in modo sicuro (la verifica
+      differenziale annulla la scrittura) ma dando la colpa al posto sbagliato.
+      Ora lo stato del commento attraversa le righe (`scanBraces`), e
+      `findRuleBlock` **salta le righe `name:` dentro un commento a blocco** —
+      altrimenti una regola messa da parte commentandola verrebbe riscritta al
+      posto di quella in vigore, con la GUI che dice «salvato».
+- [x] **A4. In `debugMode` le regole si ricaricano al cambiamento del file**, non
+      a ogni richiesta. `loadRules()` non è una rilettura: è validazione
+      completa, ricompilazione di tutte le regex, un `existsSync` per decoy e
+      l'emissione di **ogni avviso di validazione sul log**. Il gate sta prima
+      del router, quindi girava anche per ogni immagine — e con un solo avviso in
+      sospeso (la condizione normale di chi sta scrivendo regole) il log prendeva
+      una riga per richiesta. Timbro `mtime`, fail-soft: file illeggibile → si
+      tengono le regole già in vigore.
+- [x] **A5. Avviso del validatore su `throttle` senza `escalate`.** Non produce
+      una risposta (per progetto), non è enforcement, e senza destinatario non
+      conta nemmeno: è una `monitor` scritta da chi credeva di limitare qualcosa,
+      e siccome `monitor` è il default nemmeno il log la smentisce.
+- [x] **A6. Minori.** Registrazione una sola volta degli handler `SIGTERM`/
+      `SIGINT` (Node non deduplica, e una seconda `loadPlugin` ne impilerebbe
+      un'altra coppia identica); parametro `info` inutilizzato in
+      `observeOutcome`; rimosso `DECORATING_ACTIONS`, esportato e mai importato
+      (la conoscenza vive nel gate, che riconosce una risposta decorata dalla
+      presenza di `verdict.respond`, non da un elenco di nomi da tenere
+      allineato a mano).
+- [x] **A7. Documentazione del file delle regole distribuito.** L'elenco delle
+      foglie in testa a `sentinelRules.default.json5` ometteva `canary`,
+      `sessionAnomaly` e `reputation` — e due di queste sono usate dalle regole
+      poco sotto. Aggiunto inoltre l'avvertimento che i path si scrivono **con**
+      `apiPrefix` e `pluginPagesPrefix` (a differenza di `globalPrefix`, che il
+      codice antepone): cambiarli in `ital8Config.json5` spegne in silenzio le
+      regole che li nominano, oggi `auth-surface-noise`. E una nota su
+      `backup-probe`, che intercetta anche gli archivi legittimi.
+- [x] **Non era un difetto:** `getRulesSource()` senza `try/catch` è **corretto**.
+      Il chiamante (rotta `/rules/source` di `adminSentinel`) lo cattura e
+      risponde 500 con il messaggio; restituire `[]` nasconderebbe un file di
+      regole rotto dietro un form vuoto, che poi ci si scrive sopra.
+- [x] **+29 test.** `sentinelLog.test.js` e `rulesHotReload.test.js` (nuovi;
+      `SentinelLog` non aveva test propri), più `rulesFileEditor.test.js` e
+      `ruleValidator.test.js`. Suite completa verde.
+
+#### Da decidere — quattro scelte, nessuna toccata
+
+- [ ] **D1. La foglia `status` produce regole che non scattano mai.**
+      *(verificato eseguendo)* `ruleMatcher.js` mette `status: null` nel soggetto
+      con il commento «valorizzato solo nella valutazione post-risposta», e
+      quella valutazione **non esiste**: `observeOutcome` aggrega e basta.
+      L'unico posto che scrive `subject.status` è il tracer. Quindi:
+      `match: { status: [404] }` **si valida**, il tester **conferma che
+      scatterebbe**, e in produzione è morta. `README.it.md` la documenta come
+      «solo nella valutazione dell'esito».
+      Tre uscite, in ordine di costo: **(a)** warning del validatore + nota nel
+      tracer, un'ora; **(b)** rimuovere la foglia (errore di validazione +
+      migrazione per chi l'avesse scritta); **(c)** implementare la valutazione
+      post-risposta, che è una funzionalità e non una correzione.
+- [ ] **D2. `distinctPaths` e `pathCount` diventano contatori di richieste dopo
+      il tetto del campione.** *(verificato eseguendo)* Saturato il campione
+      (256 per l'aggregato degli esiti, 64 per il censimento), ogni richiesta a
+      un percorso fuori dal campione incrementa il contatore — **anche la
+      stessa, ripetuta**. Misurato: 257 percorsi distinti + 5000 ripetizioni di
+      uno solo → `distinctPaths: 5256`. Il numero è mostrato tal quale nella
+      tabella «sospetti scanner» del twin, cioè nella vista su cui si decide se
+      scrivere una regola. Stessa famiglia di C8, che non era arrivato qui.
+      **(a)** contare solo ciò che entra nel campione — onesto, ma un vero
+      scanner con 500 percorsi ne mostra 256, e il campo perde proprio la coda
+      che lo rende utile; **(b)** insieme separato di hash dei percorsi, tetto
+      molto più alto (numeri, non stringhe) e un campo che dichiara la
+      saturazione — richiede un nome nuovo e tocca il formato del file;
+      **(c)** lasciare il conteggio e rinominare il campo in ciò che davvero
+      misura — costa una migrazione e non recupera il segnale.
+- [ ] **D3. `authenticatedTraffic.mode: "exempt"` è documentato e non
+      implementato.** *(verificato eseguendo)* `pluginConfig.default.json5`
+      promette «le regole non si applicano affatto agli autenticati»;
+      `shouldEnforce` controlla solo `!== 'enforce'`, quindi `exempt` e
+      `monitor` sono identici. La differenza è reale: con `exempt` le regole
+      continuano a matchare, a scrivere nel log, a incrementare i contatori e —
+      per le regole `monitor` — ad alimentare `rateLimiter`. Chi lo imposta
+      credendo di aver escluso gli autenticati sta ancora registrando persone
+      identificate (vedi §*Privacy* del README).
+      **(a)** implementarlo davvero: uscita anticipata prima della valutazione
+      per il traffico autenticato; **(b)** togliere il valore dalla
+      documentazione e lasciare due modalità.
+- [ ] **D4. `shell-probe` matcha nomi di file legittimi, e la procedura di
+      promozione non può accorgersene.** *(verificato eseguendo)* La regola
+      distribuita cerca `/(c99|r57|wso|b374k|shell|cmd|backdoor|webshell)\.`:
+      `/js/shell.js` e `/assets/cmd.css` matchano. Il punto non è il rumore, è
+      che il semaforo documentato — «se `authenticatedHits` è zero dopo
+      settimane, promuovi tranquillamente» — **non può coglierlo**, perché un
+      asset chiesto da visitatori anonimi lascia quel contatore a zero. La regola
+      sembra sicura da promuovere proprio mentre non lo è.
+      **(a)** togliere i due termini generici `shell` e `cmd`; **(b)** richiedere
+      un'estensione eseguibile (`\.(php|asp|aspx|jsp|cgi|pl)$`), che restringe
+      molto ma è coerente con «ital8cms non esegue PHP»; **(c)** lasciarla e
+      avvertire nella `description`. Tocca il file delle regole distribuito →
+      migrazione per le installazioni esistenti (come per gli step v1→v2 e
+      v2→v3).
+
+---
+
 ### Trasversali, da fare quando servono e non come passo a sé
 
 | Voce | Quando |

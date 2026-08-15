@@ -40,11 +40,20 @@
 //   match        condizioni; più foglie nello stesso oggetto = AND implicito.
 //                Combinatori: all / any / not.
 //   escalate     { rateLimiterRule } — alimenta il plugin rateLimiter, che con la
-//                sua escalation trasforma l'insistenza in un ban IP
+//                sua escalation trasforma l'insistenza in un ban IP.
+//                Con { ban: true, banSeconds } blocca SUBITO invece di contare:
+//                si giustifica solo dove il primo evento è già la prova, cioè
+//                oggi soltanto sul token esca.
 //
 // Foglie: path, extension, method, userAgent, header, query, ip, authenticated,
-//         roleIds, fingerprint, fingerprintClass.
+//         roleIds, fingerprint, fingerprintClass, canary, sessionAnomaly,
+//         reputation.
 // I path si scrivono SENZA globalPrefix, che viene anteposto dal codice.
+//
+// ⚠ I path si scrivono invece CON apiPrefix e pluginPagesPrefix — "/api/...",
+// "/pluginPages/..." — che a differenza di globalPrefix NON vengono anteposti dal
+// codice. Sono configurabili in ital8Config.json5: se li cambi, le regole che li
+// nominano (qui sotto: auth-surface-noise) smettono di matchare in silenzio.
 //
 // ⚠ CON `hideExtension` ATTIVO: le regole per `extension` non cambiano (una sonda
 // .php arriva sempre con l'estensione), ma una regola per `path` verso una pagina
@@ -150,7 +159,7 @@
       name: "backup-probe",
       enabled: true,
       category: "sensitive-file",
-      description: "Ricerca di dump e backup lasciati sul server.  Nota: analytics ESCLUDE queste estensioni dal tracking, quindi  senza questa regola il tentativo non comparirebbe da nessuna parte.",
+      description: "Ricerca di dump e backup lasciati sul server.  Nota: analytics ESCLUDE queste estensioni dal tracking, quindi  senza questa regola il tentativo non comparirebbe da nessuna parte.  ATTENZIONE PRIMA DI PROMUOVERLA: se il tuo sito distribuisce archivi  (manuali .tar.gz, allegati .rar) questa regola li intercetta tutti —  l'estensione è l'ultima, quindi /download/manuale.tar.gz matcha su \"gz\".  Guarda i percorsi nel log prima di passarla a block.",
       action: "monitor",
       match: {
         extension: ["sql", "bak", "old", "swp", "dump", "tar", "gz", "tgz", "rar", "7z"],

@@ -56,9 +56,11 @@ const VALID_ACTIONS = [
   'allow', 'monitor', 'block', 'drop', 'decoy', 'redirect', 'throttle', 'tarpit',
 ];
 
-// Azioni la cui risposta è prodotta dal plugin e non dal 404 comune del core.
-// Su un percorso della superficie riservata chiusa il gate le degrada a 404.
-const DECORATING_ACTIONS = ['decoy', 'redirect', 'tarpit'];
+// NOTA: qui c'era `DECORATING_ACTIONS = ['decoy','redirect','tarpit']`, esportato
+// e mai importato da nessuno. La conoscenza che descriveva vive dove serve — nel
+// gate, che riconosce una risposta "decorata" dalla presenza di `verdict.respond`
+// invece che da un elenco di nomi (`decorationWouldLeak` in runtimeGate.js). Un
+// secondo elenco da tenere allineato a mano era solo un modo di divergere.
 
 const VALID_APPLIES_TO = ['anonymous', 'authenticated', 'any'];
 
@@ -756,6 +758,22 @@ function validateRules(rulesData, options = {}) {
       );
     }
 
+    // Un `throttle` senza `escalate` non fa NIENTE, e non lo si vede da nessuna
+    // parte: non produce una risposta (per progetto — la sua azione è delegare a
+    // rateLimiter, vedi `shouldEnforce`), non ha un ramo in `attachResponder`, e
+    // `escalate()` esce alla prima riga senza il blocco che gli dice a chi
+    // delegare. Il risultato è una regola identica a `monitor` scritta da chi
+    // credeva di star limitando qualcosa — e siccome `monitor` è il default,
+    // nemmeno il log la smentisce.
+    if (action === 'throttle' && raw.escalate === undefined) {
+      warnings.push(
+        `regola "${name}": action "throttle" senza "escalate" non ha alcun effetto — ` +
+        'la sua azione È la delega a rateLimiter. Aggiungi ' +
+        'escalate: { rateLimiterRule: "<nome>" }, oppure usa action "monitor" ' +
+        'se volevi solo osservare'
+      );
+    }
+
     if (raw.escalate !== undefined) {
       const escalate = raw.escalate || {};
       if (typeof escalate.rateLimiterRule !== 'string' || escalate.rateLimiterRule === '') {
@@ -866,6 +884,5 @@ module.exports = {
   hasCatastrophicBacktracking,
   logValidationResults,
   VALID_ACTIONS,
-  DECORATING_ACTIONS,
   VALID_APPLIES_TO,
 };

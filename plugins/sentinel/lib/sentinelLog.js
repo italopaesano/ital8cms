@@ -31,6 +31,57 @@ const path = require('path');
 
 const FILE_PREFIX = 'sentinel';
 
+/**
+ * Tetto di una singola write, in byte.
+ *
+ * È `PIPE_BUF` di Linux: sotto questa soglia una `write` in O_APPEND è atomica,
+ * e due processi che scrivono sullo stesso file non possono interlacciare ciò
+ * che scrivono. Vedi il commento esteso in `flush()`.
+ */
+const MAX_ATOMIC_WRITE_BYTES = 4096;
+
+/**
+ * Raggruppa gli eventi in blocchi di testo che restano sotto il tetto atomico.
+ *
+ * Una riga che da sola lo supera esce nel proprio blocco: non si può fare di
+ * meglio, e spezzarla produrrebbe JSONL non valido — che è molto peggio di una
+ * write non atomica.
+ *
+ * @param {Array<object>} events
+ * @param {number} maxBytes
+ * @returns {string[]} blocchi pronti da scrivere, newline finale compreso
+ */
+function batchLines(events, maxBytes) {
+  const chunks = [];
+  let current = '';
+  let currentBytes = 0;
+
+  for (const event of events) {
+    const line = JSON.stringify(event) + '\n';
+    const lineBytes = Buffer.byteLength(line, 'utf8');
+
+    if (currentBytes > 0 && currentBytes + lineBytes > maxBytes) {
+      chunks.push(current);
+      current = '';
+      currentBytes = 0;
+    }
+
+    current += line;
+    currentBytes += lineBytes;
+
+    // Riga più lunga del tetto da sola: chiude subito il blocco invece di
+    // trascinarsi dietro le successive, che resterebbero anche loro sopra soglia.
+    if (currentBytes >= maxBytes) {
+      chunks.push(current);
+      current = '';
+      currentBytes = 0;
+    }
+  }
+
+  if (currentBytes > 0) chunks.push(current);
+  return chunks;
+}
+
 function getIsoWeekString(date) {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const dayOfWeek = d.getUTCDay() || 7;
@@ -144,14 +195,28 @@ class SentinelLog {
 
     const filePath = path.join(this.dataDir, getFileName(this.rotationMode, this.instanceId));
 
-    // Una riga per chiamata di append: su POSIX una `write` in O_APPEND sotto i
-    // 4 KB è atomica, quindi due processi che scrivono sullo stesso file non
-    // possono interlacciare una riga. Un batch unico di dimensione arbitraria
-    // perderebbe quella garanzia proprio nello scenario cluster per cui esiste
-    // instanceId.
+    // ── Perché si scrive a blocchi, e perché il blocco è da 4 KB ──
+    // Su POSIX una `write` in O_APPEND **sotto PIPE_BUF (4 KB)** è atomica: due
+    // processi che scrivono sullo stesso file non possono interlacciarsi. È la
+    // garanzia che tiene in piedi lo scenario cluster per cui esiste instanceId,
+    // e un batch unico di dimensione arbitraria la perderebbe.
+    //
+    // Ma la garanzia riguarda la DIMENSIONE della write, non il numero di righe:
+    // finché il blocco resta sotto il tetto, dieci righe in una write sono
+    // atomiche esattamente quanto una. Qui si scriveva una riga per volta, che è
+    // la lettura più severa del vincolo e la si pagava dove fa più male — sotto
+    // attacco il buffer accumula migliaia di eventi al secondo, e ognuno
+    // costava una syscall sincrona sull'event loop, cioè sul tempo di risposta
+    // di tutto il sito. Raggruppando, il numero di write scende di un ordine di
+    // grandezza e l'atomicità resta intatta.
+    //
+    // Una singola riga più lunga di 4 KB parte da sola e supera il tetto: era
+    // già così prima (una riga = una write), quindi non si perde nulla che si
+    // avesse. Un evento simile è comunque patologico — l'UA è troncato a 512 e
+    // il resto dei campi è limitato.
     try {
-      for (const event of toWrite) {
-        fs.appendFileSync(filePath, JSON.stringify(event) + '\n', 'utf8');
+      for (const chunk of batchLines(toWrite, MAX_ATOMIC_WRITE_BYTES)) {
+        fs.appendFileSync(filePath, chunk, 'utf8');
       }
       this.writeFailureLogged = false;
     } catch (err) {
@@ -211,7 +276,15 @@ class SentinelLog {
     if (usedPercent >= this.alertAtPercent && !this.alertSent) {
       this.alertSent = true;
       const payload = {
-        kind: 'log-size-threshold',
+        // Il genere DEVE essere una chiave di ALERT_SEVERITY in alertDispatcher:
+        // è quella tabella a decidere la gravità che finisce nell'oggetto
+        // dell'email. Qui c'era `log-size-threshold`, che in tabella non esiste,
+        // e l'allerta sul disco partiva come "INFO" — cioè la riga che deve far
+        // alzare qualcuno alle tre di notte arrivava con la gravità di una nota.
+        // Il difetto era invisibile ai test perché quelli del dispatcher
+        // notificano già `diskBudget`, il nome giusto: si verificavano a vicenda
+        // senza che nessuno dei due usasse ciò che l'altro emette davvero.
+        kind: 'diskBudget',
         usedPercent: Math.round(usedPercent),
         totalBytes,
         maxTotalBytes: this.maxTotalBytes,
@@ -281,4 +354,7 @@ class SentinelLog {
   }
 }
 
-module.exports = { SentinelLog, getFileName, listLogFiles, FILE_PREFIX };
+module.exports = {
+  SentinelLog, getFileName, listLogFiles, batchLines,
+  FILE_PREFIX, MAX_ATOMIC_WRITE_BYTES,
+};

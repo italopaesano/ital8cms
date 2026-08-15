@@ -261,6 +261,12 @@ esattamente come con `monitor`. Ne discendono due conseguenze da conoscere:
   contraddizione nei termini. Se vuoi il ban, la regola va promossa a un'azione
   che risponde.
 
+Ne discende che **un `throttle` senza `escalate` non fa assolutamente niente**:
+se la sua azione è la delega, senza destinatario non resta nulla, e la regola
+diventa una `monitor` scritta da chi credeva di star limitando qualcosa. Il
+validatore lo dice all'avvio con un avviso, invece di lasciarlo scoprire
+guardando un contatore che sale senza che cambi mai niente.
+
 Il 404 di `block` non è fabbricato da questo plugin: è prodotto da
 `reservedGate.deny()`, l'unico punto del progetto che genera il 404 «di
 copertura», presidiato da un test che lo confronta byte per byte con un 404
@@ -448,6 +454,12 @@ regola è in osservazione.
 Il contenuto dei file è tenuto in memoria dopo la prima lettura — chi scandisce
 il sito non deve poter dettare il ritmo delle nostre letture su disco. In
 `debugMode` la cache è spenta e un ricaricamento delle regole la svuota.
+
+> **In `debugMode` le regole si ricaricano quando il file cambia**, non a ogni
+> richiesta. L'effetto per chi le sta scrivendo è lo stesso — si salva e si
+> prova — ma il gate sta prima del router, quindi rivalidare a ogni richiesta
+> significava ricompilare tutte le regex anche per ogni immagine servita, e
+> riemettere ogni avviso di validazione sul log una volta per richiesta.
 
 ## Coerenza di sessione
 
