@@ -1,4 +1,6 @@
-const { summarize, mergeRuleStatus, suspectedScanners, unclassifiedShare } = require('../../lib/aggregator');
+const {
+  createSummaryAccumulator, summarize, mergeRuleStatus, suspectedScanners, unclassifiedShare,
+} = require('../../lib/aggregator');
 
 const ev = (over = {}) => ({
   timestamp: '2026-08-08T10:00:00.000Z',
@@ -82,6 +84,46 @@ describe('summarize', () => {
       { day: '2026-08-07', count: 2 },
       { day: '2026-08-09', count: 1 },
     ]);
+  });
+});
+
+// L'accumulatore è la forma che la dashboard usa davvero: `summarize` è solo il
+// suo involucro per chi ha già un array. Il patto che i due devono rispettare è
+// uno solo — dare lo stesso risultato — perché è ciò che rende sostituibile
+// l'uno con l'altro senza dover ricontrollare ogni numero.
+describe('createSummaryAccumulator', () => {
+  const eventi = [
+    ev(),
+    ev({ enforced: true, ip: '203.0.113.2', fpClass: { coherent: false } }),
+    ev({ category: 'sensitive-file', ruleName: 'env-probe', fp: 'bbb', isBot: true }),
+    ev({ timestamp: '2026-08-09T11:00:00.000Z', isAuthenticated: true }),
+  ];
+
+  test('dà esattamente il risultato di summarize sugli stessi eventi', () => {
+    const accumulator = createSummaryAccumulator();
+    for (const evento of eventi) accumulator.add(evento);
+    expect(accumulator.result()).toEqual(summarize(eventi));
+  });
+
+  test('senza eventi non lancia e non inventa numeri', () => {
+    expect(createSummaryAccumulator().result()).toEqual(summarize([]));
+  });
+
+  // Il senso di avere un accumulatore invece di un array: il chiamante non deve
+  // trattenere gli eventi per poterli contare.
+  test('non trattiene gli eventi che ha ricevuto', () => {
+    const accumulator = createSummaryAccumulator();
+    const evento = ev();
+    accumulator.add(evento);
+    const risultato = accumulator.result();
+    expect(Object.values(risultato)).not.toContain(evento);
+    expect(risultato.total).toBe(1);
+  });
+
+  test('leggere il risultato due volte dà lo stesso risultato', () => {
+    const accumulator = createSummaryAccumulator();
+    accumulator.add(ev());
+    expect(accumulator.result()).toEqual(accumulator.result());
   });
 });
 

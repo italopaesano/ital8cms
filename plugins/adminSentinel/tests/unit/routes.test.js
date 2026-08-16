@@ -11,6 +11,7 @@ const os = require('os');
 const path = require('path');
 const { createPluginSysMock, createCtxMock, runRoute, validateRoute } = require('../../../../core/testHelpers');
 const plugin = require('../../main.js');
+const reader = require('../../lib/sentinelDataReader');
 
 let dataDir;
 let serviceFolder;
@@ -63,6 +64,9 @@ beforeEach(() => {
   const made = makeServiceFolder();
   serviceFolder = made.folder;
   dataDir = made.dir;
+  // La cache dei riepiloghi vive quanto il processo: senza azzerarla, un test
+  // leggerebbe il risultato di quello prima.
+  plugin._internals.clearSummaryCache();
 });
 
 afterEach(() => {
@@ -230,6 +234,109 @@ describe('lettura dei dati', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // VISTA C — form strutturato
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Il riepilogo si ricava da TUTTO il log della finestra, e la finestra arriva a
+// un anno: ricalcolarlo a ogni auto-aggiornamento significa rileggere centinaia
+// di megabyte ogni quindici secondi per ottenere quasi sempre lo stesso numero.
+// Peggio, la lettura è sincrona: finché gira, il sito intero è fermo.
+describe('cache del riepilogo', () => {
+  let scanSpy;
+
+  beforeEach(async () => {
+    await attach();
+    fs.writeFileSync(path.join(dataDir, 'sentinel-2026-08-08.jsonl'),
+      JSON.stringify({
+        timestamp: new Date().toISOString(), path: '/x.php', ruleName: 'php-probe',
+        category: 'cms-probe', ip: '1.2.3.4', fp: 'aaa', enforced: false,
+      }) + '\n', 'utf8');
+    scanSpy = jest.spyOn(reader, 'forEachEventSince');
+  });
+
+  afterEach(() => {
+    scanSpy.mockRestore();
+  });
+
+  test('dichiara quando i numeri sono stati calcolati', async () => {
+    const ctx = createCtxMock({ query: { days: '7' } });
+    await runRoute(routeByPath('/summary'), ctx);
+    expect(Number.isNaN(Date.parse(ctx.body.computedAt))).toBe(false);
+  });
+
+  // A file immutati la risposta in cache non è vecchia: è esattamente quella che
+  // il ricalcolo produrrebbe. Riusarla non è una scorciatoia.
+  test('a file immutati non rilegge il log', async () => {
+    const primo = createCtxMock({ query: { days: '7' } });
+    await runRoute(routeByPath('/summary'), primo);
+    const secondo = createCtxMock({ query: { days: '7' } });
+    await runRoute(routeByPath('/summary'), secondo);
+
+    expect(scanSpy).toHaveBeenCalledTimes(1);
+    expect(secondo.body.summary).toEqual(primo.body.summary);
+    expect(secondo.body.computedAt).toBe(primo.body.computedAt);
+  });
+
+  test('finestre diverse non si scambiano il riepilogo', async () => {
+    await runRoute(routeByPath('/summary'), createCtxMock({ query: { days: '7' } }));
+    await runRoute(routeByPath('/summary'), createCtxMock({ query: { days: '30' } }));
+    expect(scanSpy).toHaveBeenCalledTimes(2);
+  });
+
+  // `days` è un parametro di query e vale 1-365: chi chiama l'API direttamente
+  // può fabbricare una voce per ogni valore. La cache resta una mappa di lavoro.
+  test('molte finestre diverse non fanno crescere la cache senza limite', async () => {
+    for (let giorni = 1; giorni <= 40; giorni++) {
+      await runRoute(routeByPath('/summary'), createCtxMock({ query: { days: String(giorni) } }));
+    }
+    expect(plugin._internals.summaryCacheSize())
+      .toBeLessThanOrEqual(plugin._internals.MAX_CACHED_WINDOWS);
+
+    // Lo sfratto non deve costare la correttezza: la finestra più recente è
+    // ancora in cache e risponde con i numeri giusti.
+    const ultimo = createCtxMock({ query: { days: '40' } });
+    await runRoute(routeByPath('/summary'), ultimo);
+    expect(ultimo.body.summary.total).toBe(1);
+    expect(scanSpy).toHaveBeenCalledTimes(40);
+  });
+
+  test('quando il log cresce e la cache è disattivata, ricalcola', async () => {
+    const precedente = plugin._internals.setSummaryCacheSeconds(0);
+    try {
+      const primo = createCtxMock({ query: { days: '7' } });
+      await runRoute(routeByPath('/summary'), primo);
+
+      fs.appendFileSync(path.join(dataDir, 'sentinel-2026-08-08.jsonl'),
+        JSON.stringify({
+          timestamp: new Date().toISOString(), path: '/y.php', ruleName: 'php-probe',
+          category: 'cms-probe', ip: '5.6.7.8', fp: 'bbb', enforced: true,
+        }) + '\n', 'utf8');
+
+      const secondo = createCtxMock({ query: { days: '7' } });
+      await runRoute(routeByPath('/summary'), secondo);
+
+      expect(scanSpy).toHaveBeenCalledTimes(2);
+      expect(secondo.body.summary.total).toBe(2);
+    } finally {
+      plugin._internals.setSummaryCacheSeconds(precedente);
+    }
+  });
+
+  // Il difetto originale peggiorava con le schede aperte, quindi la deduplica
+  // va chiusa qui e non nel browser: tre schede fanno un calcolo, non tre.
+  test('richieste simultanee producono un solo calcolo', async () => {
+    const precedente = plugin._internals.setSummaryCacheSeconds(0);
+    try {
+      const contesti = [createCtxMock({ query: { days: '7' } }),
+        createCtxMock({ query: { days: '7' } }),
+        createCtxMock({ query: { days: '7' } })];
+      await Promise.all(contesti.map((ctx) => runRoute(routeByPath('/summary'), ctx)));
+
+      expect(scanSpy).toHaveBeenCalledTimes(1);
+      for (const ctx of contesti) expect(ctx.body.summary.total).toBe(1);
+    } finally {
+      plugin._internals.setSummaryCacheSeconds(precedente);
+    }
+  });
+});
 
 describe('/rules/source', () => {
   beforeEach(async () => { await attach(); });

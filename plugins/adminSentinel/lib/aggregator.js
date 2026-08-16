@@ -16,56 +16,95 @@
 'use strict';
 
 /**
- * Riepilogo di una finestra di eventi.
+ * Accumulatore del riepilogo: si alimenta un evento per volta e si legge alla
+ * fine.
  *
- * @param {Array<object>} events
- * @returns {object}
+ * ─── PERCHE UN ACCUMULATORE E NON UN ARRAY DI EVENTI ──────────────────────────
+ * I numeri qui sotto sono tutti calcolabili **una richiesta per volta**: nessuno
+ * di loro ha bisogno di vedere l'insieme completo. Tenere in memoria un anno di
+ * eventi per contarli è quindi memoria spesa per niente — e non poca: un anno di
+ * log al tetto dei 200 MB diventa qualche centinaio di megabyte di oggetti
+ * parsati, allocati e buttati via a ogni auto-aggiornamento della dashboard.
+ *
+ * Alimentato da `sentinelDataReader.forEachEventSince`, che legge un file per
+ * volta e non trattiene nulla: quello che resta in memoria sono queste mappe,
+ * non gli eventi.
+ *
+ * Le mappe per IP e per impronta sono l'unica parte che cresce con il traffico,
+ * ed è inevitabile: `distinctIps` e `distinctFingerprints` sono cardinalità, e
+ * una cardinalità esatta si paga tenendo l'insieme. Restano comunque un ordine
+ * di grandezza sotto agli eventi che le producono.
+ *
+ * @returns {{ add: (event: object) => void, result: () => object }}
  */
-function summarize(events) {
+function createSummaryAccumulator() {
   const byCategory = new Map();
   const byRule = new Map();
   const byIp = new Map();
   const byFingerprint = new Map();
   const byDay = new Map();
 
+  let total = 0;
   let enforced = 0;
   let observed = 0;
   let authenticated = 0;
   let bots = 0;
   let incoherent = 0;
 
-  for (const event of events) {
-    if (event.enforced) enforced++; else observed++;
-    if (event.isAuthenticated) authenticated++;
-    if (event.isBot) bots++;
-    if (event.fpClass && event.fpClass.coherent === false) incoherent++;
-
-    bump(byCategory, event.category || 'uncategorized');
-    bump(byRule, event.ruleName || '—');
-    if (event.ip) bump(byIp, event.ip);
-    if (event.fp) bump(byFingerprint, event.fp);
-
-    const day = typeof event.timestamp === 'string' ? event.timestamp.slice(0, 10) : null;
-    if (day) bump(byDay, day);
-  }
-
   return {
-    total: events.length,
-    enforced,
-    observed,
-    authenticated,
-    bots,
-    // Il segnale singolo più affidabile del plugin: quante richieste hanno
-    // dichiarato un browser mentre la forma degli header diceva altro.
-    incoherent,
-    distinctIps: byIp.size,
-    distinctFingerprints: byFingerprint.size,
-    byCategory: toSortedArray(byCategory, 'category'),
-    byRule: toSortedArray(byRule, 'ruleName'),
-    topIps: toSortedArray(byIp, 'ip').slice(0, 20),
-    topFingerprints: toSortedArray(byFingerprint, 'fp').slice(0, 20),
-    timeline: toSortedArray(byDay, 'day').sort((a, b) => a.day.localeCompare(b.day)),
+    add(event) {
+      total++;
+      if (event.enforced) enforced++; else observed++;
+      if (event.isAuthenticated) authenticated++;
+      if (event.isBot) bots++;
+      if (event.fpClass && event.fpClass.coherent === false) incoherent++;
+
+      bump(byCategory, event.category || 'uncategorized');
+      bump(byRule, event.ruleName || '—');
+      if (event.ip) bump(byIp, event.ip);
+      if (event.fp) bump(byFingerprint, event.fp);
+
+      const day = typeof event.timestamp === 'string' ? event.timestamp.slice(0, 10) : null;
+      if (day) bump(byDay, day);
+    },
+
+    result() {
+      return {
+        total,
+        enforced,
+        observed,
+        authenticated,
+        bots,
+        // Il segnale singolo più affidabile del plugin: quante richieste hanno
+        // dichiarato un browser mentre la forma degli header diceva altro.
+        incoherent,
+        distinctIps: byIp.size,
+        distinctFingerprints: byFingerprint.size,
+        byCategory: toSortedArray(byCategory, 'category'),
+        byRule: toSortedArray(byRule, 'ruleName'),
+        topIps: toSortedArray(byIp, 'ip').slice(0, 20),
+        topFingerprints: toSortedArray(byFingerprint, 'fp').slice(0, 20),
+        timeline: toSortedArray(byDay, 'day').sort((a, b) => a.day.localeCompare(b.day)),
+      };
+    },
   };
+}
+
+/**
+ * Riepilogo di una finestra di eventi già in memoria.
+ *
+ * Involucro sottile sull'accumulatore, per chi ha davvero un array sotto mano —
+ * i test, e chiunque aggreghi un insieme piccolo e noto. Il percorso della
+ * dashboard NON passa di qui: usa l'accumulatore direttamente, perché l'array
+ * che questa funzione richiede è esattamente ciò che non si vuole costruire.
+ *
+ * @param {Array<object>} events
+ * @returns {object}
+ */
+function summarize(events) {
+  const accumulator = createSummaryAccumulator();
+  for (const event of events) accumulator.add(event);
+  return accumulator.result();
 }
 
 function bump(map, key) {
@@ -192,6 +231,7 @@ function unclassifiedShare(fingerprints) {
 }
 
 module.exports = {
+  createSummaryAccumulator,
   summarize,
   mergeRuleStatus,
   suspectedScanners,

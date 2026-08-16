@@ -216,6 +216,11 @@
     const data = await fetchJson(SN_API + '/summary?days=' + encodeURIComponent(days));
     if (!data.enabled) return;
 
+    // I numeri possono venire da un calcolo di qualche secondo fa (vedi
+    // summaryCacheSeconds): la pagina lo dice invece di lasciarlo supporre.
+    const computedAt = $('summaryComputedAt');
+    if (computedAt) computedAt.textContent = shortTime(data.computedAt);
+
     const s = data.summary || {};
     $('kpiTotal').textContent = num(s.total);
     $('kpiEnforced').textContent = num(s.enforced);

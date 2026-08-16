@@ -44,6 +44,33 @@ const custom = ownConfig.custom || {};
 let myPluginSys = null;
 let ownFolder = null;
 
+/**
+ * Riepiloghi già calcolati, indicizzati per `dataDir|giorni`.
+ *
+ * Ogni voce: `{ stamp, computedAt, payload, pending }`.
+ *
+ * La data dir entra nella chiave anche se a runtime è una sola: un riepilogo
+ * indicizzato per soli giorni sarebbe corretto per coincidenza, e la coincidenza
+ * smette di valere al primo `custom.dataPath` cambiato a caldo.
+ *
+ * ─── PERCHE UN TETTO SU UNA MAPPA DI QUATTRO VOCI ─────────────────────────────
+ * Le finestre del menu a tendina sono quattro, ma `days` è un parametro di query
+ * e vale da 1 a 365: chi chiama l'API direttamente può fabbricare una voce per
+ * ogni valore. Nessuna è grande — contatori, due classifiche da venti e una riga
+ * per giorno — ma «piccola per 365» è un ragionamento che si fa una volta e poi
+ * si smette di rifare quando il contenuto cresce. Il tetto lo rende inutile: la
+ * mappa resta una mappa di lavoro e non diventa un archivio.
+ */
+const summaryCache = new Map();
+
+/** Finestre distinte tenute in cache. Le voci del menu sono quattro. */
+const MAX_CACHED_WINDOWS = 8;
+
+/** Età massima di un riepilogo quando i file SONO cambiati. 0 = mai in cache. */
+let summaryCacheSeconds = Number.isFinite(custom.summaryCacheSeconds)
+  ? custom.summaryCacheSeconds
+  : 30;
+
 // Il filtro delle richieste è configurazione sensibile: root (0) e admin (1).
 const pluginAccess = {
   requiresAuth: true,
@@ -77,6 +104,100 @@ function sentinelDataDir() {
 /** Risposta comune quando il service non è disponibile. */
 function serviceUnavailable(extra = {}) {
   return { enabled: false, ...extra };
+}
+
+/**
+ * Il riepilogo di una finestra, ricalcolato solo quando serve davvero.
+ *
+ * ─── PERCHE UNA CACHE SU UNA DASHBOARD DI SICUREZZA ───────────────────────────
+ * Il riepilogo si ricava da tutto il log della finestra, e la finestra arriva a
+ * un anno perché è una voce del menu. Ricalcolarlo a ogni auto-aggiornamento
+ * significa rileggere e riparsare centinaia di megabyte ogni quindici secondi,
+ * per ogni scheda aperta, e ottenere quasi sempre lo stesso numero.
+ *
+ * La validità sta su due livelli, e il primo non è un compromesso:
+ *
+ *   1. TIMBRO IDENTICO — i file non sono cambiati, quindi la risposta in cache è
+ *      *bit per bit* quella che il ricalcolo produrrebbe. Non è vecchia, è
+ *      esatta: nessun limite di età avrebbe senso. Su un sito tranquillo è il
+ *      caso normale, e l'auto-aggiornamento smette di costare.
+ *   2. TIMBRO CAMBIATO ma calcolo recente — qui sì che si sta servendo qualcosa
+ *      di un po' vecchio, e infatti la risposta porta `computedAt` e la pagina
+ *      lo mostra. Su un sito attivo il log cambia ogni secondo: senza questo
+ *      livello il primo caso non scatterebbe mai e si tornerebbe a ricalcolare
+ *      sempre.
+ *
+ * Le richieste in volo si fondono: tre schede aperte fanno un ricalcolo, non
+ * tre. È la stessa situazione che rendeva il difetto originale peggiore di
+ * quanto sembrasse, e va chiusa qui e non nel browser.
+ *
+ * Resta un limite che questa cache non può togliere: il PRIMO calcolo della
+ * finestra annuale su un log grosso costa comunque secondi di CPU (spezzettati,
+ * vedi `forEachEventSince`). Toglierlo del tutto vuol dire non ricavare più il
+ * riepilogo dagli eventi grezzi, cioè far scrivere al service un aggregato
+ * giornaliero accanto agli altri censimenti — un intervento su `sentinel`, non
+ * su questo plugin.
+ *
+ * @param {string} dataDir
+ * @param {number} days
+ * @returns {Promise<{ computedAt: number, payload: object }>}
+ */
+async function summaryForWindow(dataDir, days) {
+  const stamp = reader.windowStamp(dataDir, days);
+  const cacheKey = `${dataDir}|${days}`;
+
+  let entry = summaryCache.get(cacheKey);
+  if (!entry) {
+    // Si sfratta la voce inserita per prima (le Map iterano in ordine di
+    // inserimento), mai una con un calcolo in corso: buttarla via lascerebbe
+    // orfane le richieste che la stanno aspettando e ne farebbe partire un'altra
+    // identica, cioè il contrario di quello per cui la deduplica esiste.
+    if (summaryCache.size >= MAX_CACHED_WINDOWS) {
+      for (const [key, cached] of summaryCache) {
+        if (!cached.pending) { summaryCache.delete(key); break; }
+      }
+    }
+    entry = { stamp: null, computedAt: 0, payload: null, pending: null };
+    summaryCache.set(cacheKey, entry);
+  }
+
+  if (entry.payload) {
+    if (entry.stamp === stamp) return entry;
+    const maxAgeMs = summaryCacheSeconds * 1000;
+    if (maxAgeMs > 0 && Date.now() - entry.computedAt < maxAgeMs) return entry;
+  }
+
+  if (!entry.pending) {
+    entry.pending = (async () => {
+      const accumulator = aggregator.createSummaryAccumulator();
+      const scan = await reader.forEachEventSince(dataDir, days, (event) => accumulator.add(event));
+      const census = reader.readFingerprintCensus(dataDir);
+
+      return {
+        days,
+        summary: accumulator.result(),
+        // Il traffico che nessuna regola descrive: è lì che si scoprono le
+        // regole mancanti, non fra quelle che già scattano.
+        unclassified: aggregator.unclassifiedShare(census.fingerprints),
+        evictions: census.evictions,
+        scannedFiles: scan.scannedFiles,
+      };
+    })()
+      .then((payload) => {
+        entry.stamp = stamp;
+        entry.computedAt = Date.now();
+        entry.payload = payload;
+        return entry;
+      })
+      .finally(() => { entry.pending = null; });
+  }
+
+  return entry.pending;
+}
+
+/** Svuota i riepiloghi in cache. Esportata per i test. */
+function clearSummaryCache() {
+  summaryCache.clear();
 }
 
 /**
@@ -187,17 +308,16 @@ module.exports = {
             ? Math.min(requested, 365)
             : (custom.windowDays || 7);
 
-          const events = reader.readEventsSince(dataDir, days);
-          const census = reader.readFingerprintCensus(dataDir);
+          const entry = await summaryForWindow(dataDir, days);
 
           ctx.body = {
             enabled: true,
-            days,
-            summary: aggregator.summarize(events),
-            // Il traffico che nessuna regola descrive: è lì che si scoprono le
-            // regole mancanti, non fra quelle che già scattano.
-            unclassified: aggregator.unclassifiedShare(census.fingerprints),
-            evictions: census.evictions,
+            ...entry.payload,
+            // Quando i numeri sono stati calcolati. La pagina lo mostra: servire
+            // un riepilogo di trenta secondi fa va benissimo, farlo credere
+            // dell'istante no — è lo stesso motivo per cui la dashboard forza il
+            // salvataggio degli archivi prima di leggerli.
+            computedAt: new Date(entry.computedAt).toISOString(),
           };
         },
       },
@@ -560,5 +680,24 @@ module.exports = {
       },
 
     ];
+  },
+};
+
+// Esportati per i test: la cache dei riepiloghi vive per tutta la durata del
+// processo, e un test che non potesse azzerarla vedrebbe il risultato di quello
+// prima. Stessa convenzione di `sentinel/main.js`.
+module.exports._internals = {
+  clearSummaryCache,
+  summaryCacheSize: () => summaryCache.size,
+  MAX_CACHED_WINDOWS,
+  /**
+   * Sostituisce l'età massima della cache; ritorna il valore precedente, che
+   * chi chiama è tenuto a ripristinare. Stessa idea dello scambio temporaneo di
+   * `custom` in `sentinel/main.js`.
+   */
+  setSummaryCacheSeconds: (value) => {
+    const previous = summaryCacheSeconds;
+    summaryCacheSeconds = value;
+    return previous;
   },
 };

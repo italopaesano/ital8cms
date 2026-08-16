@@ -1,0 +1,29 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// Migrazioni del plugin adminSentinel.
+//
+// Il clock è la `schemaVersion` del DESCRITTORE (`pluginConfig.default.json5`),
+// che è la versione di struttura dell'intero pacchetto: uno step si applica
+// quando il descrittore vivo è a `from` e il `.default` è a `to`.
+//
+// Il runner non guarda se serva uno script: guarda se la CATENA copre il salto.
+// Uno step `automatic: true` senza script — il caso più frequente, quello in cui
+// basta il merge additivo ricorsivo del boot — va dichiarato lo stesso, o ogni
+// installazione riceve un box [MIGRATE] di errore a ogni avvio che nulla può
+// chiudere. `reason` è obbligatorio sempre: dichiarare che un salto è sicuro non
+// è la stessa cosa che motivarlo.
+//
+// Vedi docs/decisions/config-migrations.it.md e core/migrationRunner.js.
+{
+  steps: [
+    {
+      from: 1,
+      to: 2,
+      title: "Cache del riepilogo della panoramica",
+      automatic: true,
+      touches: ["plugins/adminSentinel/pluginConfig.json5"],
+      reason:
+        "Aggiunge `custom.summaryCacheSeconds` (default 30). È una chiave nuova  DENTRO un oggetto già esistente, che il merge additivo ricorsivo del boot  sa aggiungere da sé lasciando intatti i valori presenti: nessuno script.  Lo step esiste perché la catena sia contigua, e perché la chiave arrivi  nel config VIVO invece di restare una manopola che esiste solo nel  codice — chi ha già l'installazione non leggerebbe mai, altrimenti, che  il tetto si può alzare o togliere. Il valore serve solo quando i file  sono cambiati: a timbro invariato il riepilogo in cache viene servito  comunque, perché è esatto e non vecchio.",
+    },
+  ],
+}

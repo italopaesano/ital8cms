@@ -120,17 +120,49 @@ function readRecentEvents(dataDir, filter = {}) {
 }
 
 /**
- * Legge TUTTI gli eventi di una finestra temporale, per le aggregazioni.
+ * Righe elaborate fra due cessioni del controllo all'event loop.
+ *
+ * Il valore serve a mettere un TETTO alla singola pausa, non a ripartire il
+ * lavoro equamente: cedere fra un file e l'altro non basterebbe, perché sotto
+ * attacco un file giornaliero può prendersi da solo quasi tutto il budget dei
+ * 200 MB della data dir e varrebbe da sé una stalla di secondi.
+ */
+const LINES_PER_SLICE = 20000;
+
+/**
+ * Scorre gli eventi di una finestra temporale passandoli a una callback, **senza
+ * mai materializzarli tutti insieme**.
+ *
+ * ─── PERCHE ASINCRONA, PER UNA LETTURA CHE E TUTTA SINCRONA ───────────────────
+ * `readFileSync` e `JSON.parse` non cedono il controllo: finché girano, il
+ * processo non serve nessun'altra richiesta. Su un anno di log al tetto dei
+ * 200 MB sono ~3 secondi in cui l'INTERO sito è fermo — non la dashboard, il
+ * sito — e con l'auto-aggiornamento della panoramica la cosa si ripete da sé.
+ *
+ * Qui il lavoro è lo stesso ma spezzato: ogni `LINES_PER_SLICE` righe si cede al
+ * loop, così le altre richieste passano in mezzo. Il tempo totale non cala (è
+ * CPU, e va pagata); cambia che non è più una stalla ma qualche millisecondo in
+ * più su ciascuna delle richieste che nel frattempo arrivano.
+ *
+ * Chi ha bisogno del riepilogo NON accumuli in un array: usa
+ * `aggregator.createSummaryAccumulator()`, che è la ragione per cui questa
+ * funzione consegna un evento per volta invece di restituirne un elenco.
  *
  * @param {string} dataDir
  * @param {number} [days=7] - Giorni da coprire a ritroso
- * @returns {Array<object>}
+ * @param {(event: object) => void} onEvent - Riceve ogni evento dentro la finestra
+ * @returns {Promise<{ scannedFiles: number, eventCount: number }>}
  */
-function readEventsSince(dataDir, days = 7) {
+async function forEachEventSince(dataDir, days = 7, onEvent) {
   const cutoffMs = Date.now() - days * 86400000;
   const files = listEventFiles(dataDir).reverse();
 
-  const out = [];
+  let scannedFiles = 0;
+  let eventCount = 0;
+  // Il conteggio attraversa i file invece di ripartire da capo a ogni file:
+  // trecento file da poche righe non devono poter scorrere senza mai cedere.
+  let sinceLastYield = 0;
+
   for (const filePath of files) {
     let mtimeMs = 0;
     try { mtimeMs = fs.statSync(filePath).mtimeMs; } catch (_e) { continue; }
@@ -139,12 +171,85 @@ function readEventsSince(dataDir, days = 7) {
     // ordine cronologico decrescente).
     if (mtimeMs < cutoffMs) break;
 
-    for (const event of readJsonl(filePath)) {
-      const t = Date.parse(event.timestamp);
-      if (Number.isFinite(t) && t >= cutoffMs) out.push(event);
+    let lines;
+    try { lines = fs.readFileSync(filePath, 'utf8').split('\n'); } catch (_e) { continue; }
+    scannedFiles++;
+
+    for (const line of lines) {
+      if (line.trim()) {
+        // Una riga malformata si salta: un log troncato da un crash non deve
+        // rendere illeggibile tutto il resto.
+        let event = null;
+        try { event = JSON.parse(line); } catch (_e) { event = null; }
+        if (event) {
+          const t = Date.parse(event.timestamp);
+          if (Number.isFinite(t) && t >= cutoffMs) {
+            onEvent(event);
+            eventCount++;
+          }
+        }
+      }
+
+      if (++sinceLastYield >= LINES_PER_SLICE) {
+        sinceLastYield = 0;
+        await new Promise((resolve) => setImmediate(resolve));
+      }
     }
   }
-  return out;
+
+  return { scannedFiles, eventCount };
+}
+
+/**
+ * Timbro dei file da cui dipende il riepilogo di una finestra: cambia se e solo
+ * se può essere cambiata la risposta.
+ *
+ * Serve a rispondere alla domanda «ricalcolare cambierebbe qualcosa?» al costo
+ * di una `readdir` e di qualche `stat` — millisecondi — invece che rileggendo
+ * tutto. Se il timbro coincide con quello di un riepilogo già calcolato, quel
+ * riepilogo non è vecchio: è **esatto**, e servirlo non è una scorciatoia.
+ *
+ * Comprende anche gli archivi delle impronte, non solo il log: `/summary`
+ * riporta la quota di traffico non classificato, che nasce da lì. Un timbro che
+ * guardasse i soli eventi terrebbe buona una quota ormai superata.
+ *
+ * Limite dichiarato: due riscritture dello stesso file nello stesso millisecondo
+ * e con la stessa dimensione sarebbero indistinguibili. Per il log non può
+ * succedere (si appende, quindi la dimensione cresce); per un archivio riscritto
+ * intero è teoricamente possibile e praticamente trascurabile — e l'età massima
+ * della cache lo limita comunque.
+ *
+ * @param {string} dataDir
+ * @param {number} [days=7]
+ * @returns {string} timbro opaco, da confrontare e basta
+ */
+function windowStamp(dataDir, days = 7) {
+  if (!dataDir) return 'no-data-dir';
+  const cutoffMs = Date.now() - days * 86400000;
+
+  let names;
+  try { names = fs.readdirSync(dataDir); } catch (_err) { return 'unreadable'; }
+
+  let files = 0;
+  let newestMtimeMs = 0;
+  let totalBytes = 0;
+
+  for (const name of names) {
+    const isEvent = name.startsWith(EVENT_PREFIX) && name.endsWith('.jsonl');
+    const isCensus = name.startsWith(CENSUS_PREFIX) && name.endsWith('.json5');
+    if (!isEvent && !isCensus) continue;
+
+    let stat;
+    try { stat = fs.statSync(path.join(dataDir, name)); } catch (_err) { continue; }
+    // Fuori finestra: non contribuisce alla risposta, quindi non al timbro.
+    if (isEvent && stat.mtimeMs < cutoffMs) continue;
+
+    files++;
+    totalBytes += stat.size;
+    if (stat.mtimeMs > newestMtimeMs) newestMtimeMs = stat.mtimeMs;
+  }
+
+  return `${days}:${files}:${newestMtimeMs}:${totalBytes}`;
 }
 
 /**
@@ -295,7 +400,8 @@ module.exports = {
   listEventFiles,
   readJsonl,
   readRecentEvents,
-  readEventsSince,
+  forEachEventSince,
+  windowStamp,
   readFingerprintCensus,
   readOutcomeCensus,
   readRuleHits,

@@ -103,6 +103,11 @@ Le ultime righe del log, filtrabili per soli eventi applicati.
 | Oggetto condiviso di `sentinel` | Stato vivo: statistiche in memoria, nomi delle regole | Stesso processo, costo nullo |
 | File in `plugins/sentinel/data/` | Dati storici: eventi, censimenti, contatori | Un anno di eventi non può passare per la memoria del service |
 
+I dati storici si leggono **senza materializzarli**: `forEachEventSince` consegna
+un evento per volta a chi aggrega, e non trattiene niente. La stessa ragione per
+cui non passano dall'oggetto condiviso vale dentro questo plugin — un anno di
+eventi non deve stare in memoria nemmeno qui. Vedi *Il costo della panoramica*.
+
 La data dir è risolta dal `custom.dataPath` del service via
 `pluginSys.getPlugin('sentinel')`, non cablata: un percorso personalizzato
 continua a funzionare.
@@ -143,6 +148,51 @@ a un pannello che risponde 404.
 | `eventLimit` | `100` | Righe nella tabella eventi |
 | `scannerThreshold` | `20` | Percorsi distinti falliti per essere un sospetto scanner |
 | `autoRefreshSeconds` | `15` | Auto-aggiornamento; `0` lo disattiva |
+| `summaryCacheSeconds` | `30` | Quanto resta buono un riepilogo già calcolato **quando i file sono cambiati**; `0` ricalcola sempre (vedi *Il costo della panoramica*) |
+| `maxBackupsPerFile` | `10` | Backup di `sentinelRules.json5` conservati prima dei salvataggi dall'editor raw |
+
+### Il costo della panoramica
+
+Il riepilogo si ricava da **tutto** il log della finestra, e la finestra arriva a
+un anno perché *«Ultimo anno»* è una voce del menu. Lettura e parsing sono
+sincroni: finché girano, il processo non serve nessun'altra richiesta — quindi il
+conto non lo paga la dashboard, lo paga il **sito**.
+
+Tre cose lo tengono a bada, e vale la pena sapere quale fa cosa:
+
+| | Cosa fa | Effetto misurato su 273 MB / 600.000 eventi |
+|---|---|---|
+| **Streaming** | Gli eventi alimentano un accumulatore e vengono buttati subito, invece di essere raccolti in un array per poi contarli | heap **da +280 MB a +21 MB** |
+| **Cessione del controllo** | Ogni 20.000 righe il lettore lascia girare l'event loop | stalla massima **da ~4,5 s a 74 ms** |
+| **Cache** | A file invariati il riepilogo non si ricalcola | secondo aggiornamento **da ~4,5 s a ~1 ms** |
+
+Misurato anche sull'istanza viva (81,8 MB di log, richieste HTTP autenticate): la
+stessa panoramica ripetuta tre volte passa da **775 / 722 / 725 ms** a
+**715 / 5,8 / 5,3 ms**, e la latenza peggiore di un endpoint leggero interrogato
+*durante* il calcolo scende da **645 ms** (su un calcolo da 693 ms: chi arriva
+all'inizio aspetta praticamente tutto) a **178 ms**, con tutte le richieste
+servite mentre la panoramica lavorava. Prima il sito si fermava, adesso rallenta.
+
+La cache ha due livelli, e il primo non è un compromesso:
+
+1. **Timbro dei file identico** → la risposta in cache è *esattamente* quella che
+   il ricalcolo produrrebbe. Non è vecchia, è esatta: si serve senza limiti di
+   età. Il timbro costa una `readdir` e qualche `stat` (~1 ms), e comprende anche
+   gli archivi delle impronte, perché la quota non classificata nasce da lì.
+2. **Timbro cambiato ma calcolo recente** → qui sì che i numeri sono un po'
+   vecchi, ed è `summaryCacheSeconds` a dire quanto. Serve sui siti attivi, dove
+   il log cresce di continuo e il primo livello non scatterebbe mai.
+
+Le richieste in volo si fondono: **tre schede aperte fanno un calcolo, non tre**.
+
+La pagina mostra sempre l'istante di calcolo accanto alla sorgente dati. Servire
+un riepilogo di trenta secondi fa va benissimo; farlo credere dell'istante no.
+
+> **Limite dichiarato.** Il *primo* calcolo della finestra annuale su un log
+> grosso costa comunque secondi di CPU, spezzettati. Toglierlo del tutto vuol
+> dire non ricavare più il riepilogo dagli eventi grezzi, cioè far scrivere a
+> `sentinel` un aggregato giornaliero accanto agli altri censimenti: è un
+> intervento sul service, non su questo plugin.
 
 ## API
 
@@ -153,6 +203,7 @@ vanno esposte a chiunque.
 ```
 GET  /status                        stato vivo + effectivelyEnforcing + dataDir
 GET  /summary?days=7                KPI, composizione, timeline, quota non classificata
+                                    (+ computedAt: quando i numeri sono stati calcolati)
 GET  /rules                         contatori + azione in vigore + indicatore di promuovibilità
 GET  /fingerprints?limit=50         censimento delle impronte
 GET  /scanners?minPaths=20          sospetti scanner

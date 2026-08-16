@@ -398,6 +398,14 @@
   <p class="text-muted small mt-3 mb-0">
     <%= __({it: 'Sorgente dati:', en: 'Data source:'}, passData.ctx) %>
     <code id="dataDir">—</code>
+    <%#
+      Il riepilogo può arrivare da un calcolo di qualche secondo fa: dirlo è la
+      stessa cura per cui la pagina forza il salvataggio degli archivi prima di
+      leggerli. Un numero vecchio va benissimo, un numero vecchio spacciato per
+      istantaneo no.
+    %>
+    · <%= __({it: 'riepilogo calcolato:', en: 'summary computed:'}, passData.ctx) %>
+    <span id="summaryComputedAt">—</span>
   </p>
 
 </div>

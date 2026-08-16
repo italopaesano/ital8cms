@@ -101,12 +101,96 @@ describe('readRecentEvents', () => {
   });
 });
 
-describe('readEventsSince', () => {
-  test('esclude gli eventi fuori dalla finestra', () => {
+describe('forEachEventSince', () => {
+  /** Raccoglie in un array ciò che la funzione consegna un evento per volta. */
+  async function collect(dir, days) {
+    const events = [];
+    const scan = await reader.forEachEventSince(dir, days, (e) => events.push(e));
+    return { events, scan };
+  }
+
+  test('esclude gli eventi fuori dalla finestra', async () => {
     const vecchio = new Date(Date.now() - 30 * 86400000).toISOString();
     writeJsonl('sentinel-2026-08-08.jsonl', [ev({ timestamp: vecchio }), ev()]);
-    const events = reader.readEventsSince(dataDir, 7);
+    const { events } = await collect(dataDir, 7);
     expect(events).toHaveLength(1);
+  });
+
+  test('riporta quanti file ha letto e quanti eventi ha consegnato', async () => {
+    writeJsonl('sentinel-2026-08-08.jsonl', [ev(), ev()]);
+    writeJsonl('sentinel-2026-08-09.jsonl', [ev()]);
+    const { scan } = await collect(dataDir, 7);
+    expect(scan).toEqual({ scannedFiles: 2, eventCount: 3 });
+  });
+
+  // Stessa tolleranza di readJsonl: un log troncato da un crash non deve
+  // impedire di leggere le righe buone che lo precedono.
+  test('le righe malformate non interrompono lo scorrimento', async () => {
+    write('sentinel-2026-08-08.jsonl',
+      JSON.stringify(ev()) + '\n{ rotta\n' + JSON.stringify(ev()) + '\n');
+    const { events } = await collect(dataDir, 7);
+    expect(events).toHaveLength(2);
+  });
+
+  test('una data dir inesistente non fa lanciare nulla', async () => {
+    const { events, scan } = await collect(path.join(dataDir, 'non-esiste'), 7);
+    expect(events).toEqual([]);
+    expect(scan.scannedFiles).toBe(0);
+  });
+
+  // La ragione d'essere della funzione: il lavoro viene spezzato, così le altre
+  // richieste passano in mezzo invece di aspettare la fine. Senza cessione del
+  // controllo il timer non potrebbe MAI scattare durante la lettura, perché il
+  // ciclo non lascerebbe girare nient'altro.
+  test('cede il controllo all event loop mentre legge', async () => {
+    const righe = [];
+    for (let i = 0; i < 45000; i++) righe.push(ev({ ip: '203.0.113.' + (i % 250) }));
+    writeJsonl('sentinel-2026-08-08.jsonl', righe);
+
+    let passato = false;
+    const sonda = setInterval(() => { passato = true; }, 1);
+
+    const { events } = await collect(dataDir, 7);
+    clearInterval(sonda);
+
+    expect(events).toHaveLength(45000);
+    expect(passato).toBe(true);
+  });
+});
+
+describe('windowStamp', () => {
+  test('non cambia se non cambia nulla', () => {
+    writeJsonl('sentinel-2026-08-08.jsonl', [ev()]);
+    expect(reader.windowStamp(dataDir, 7)).toBe(reader.windowStamp(dataDir, 7));
+  });
+
+  test('cambia quando il log cresce', () => {
+    writeJsonl('sentinel-2026-08-08.jsonl', [ev()]);
+    const prima = reader.windowStamp(dataDir, 7);
+    fs.appendFileSync(path.join(dataDir, 'sentinel-2026-08-08.jsonl'),
+      JSON.stringify(ev()) + '\n', 'utf8');
+    expect(reader.windowStamp(dataDir, 7)).not.toBe(prima);
+  });
+
+  // /summary riporta anche la quota non classificata, che nasce dal censimento:
+  // un timbro cieco agli archivi terrebbe buona una quota ormai superata.
+  test('cambia quando cambia il censimento delle impronte', () => {
+    writeJsonl('sentinel-2026-08-08.jsonl', [ev()]);
+    writeJson5('fingerprintCensus.json5', { evictions: 0, fingerprints: {} });
+    const prima = reader.windowStamp(dataDir, 7);
+    writeJson5('fingerprintCensus.json5', {
+      evictions: 0, fingerprints: { aaa: { count: 9, matchedCount: 1 } },
+    });
+    expect(reader.windowStamp(dataDir, 7)).not.toBe(prima);
+  });
+
+  test('finestre diverse hanno timbri diversi', () => {
+    writeJsonl('sentinel-2026-08-08.jsonl', [ev()]);
+    expect(reader.windowStamp(dataDir, 7)).not.toBe(reader.windowStamp(dataDir, 30));
+  });
+
+  test('una data dir inesistente non fa lanciare nulla', () => {
+    expect(typeof reader.windowStamp(path.join(dataDir, 'non-esiste'), 7)).toBe('string');
   });
 });
 
