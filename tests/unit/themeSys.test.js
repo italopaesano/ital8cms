@@ -490,6 +490,88 @@ describe('Theme System', () => {
         expect(result.errors).toEqual([]);
       }
     });
+
+    describe('albero di inclusione (issue #355, punto 2)', () => {
+      test('un hook dichiarato in un sub-partial incluso NON è un errore', () => {
+        // Lo scenario della issue: il footer visivo è fattorizzato in un
+        // sub-partial condiviso, l'hook scatta a render e finisce dentro <footer>
+        writeProbeTheme({
+          ...validBase,
+          'footer.ejs': `<%- include('siteFooter.ejs') %>${hookCall('script')}</body>`,
+          'siteFooter.ejs': `<footer class="site-footer">${hookCall('footer')}</footer>`
+        });
+
+        const result = validateThemeContent(probeThemeName);
+
+        expect(result.errors).toEqual([]);
+        expect(result.valid).toBe(true);
+      });
+
+      test('un hook assente anche nell\'albero resta un errore', () => {
+        writeProbeTheme({
+          ...validBase,
+          'footer.ejs': `<%- include('siteFooter.ejs') %>${hookCall('script')}</body>`,
+          'siteFooter.ejs': '<footer class="site-footer"></footer>'
+        });
+
+        const result = validateThemeContent(probeThemeName);
+
+        expect(result.errors).toHaveLength(1);
+        expect(result.errors[0]).toContain('Hook "footer" mancante');
+      });
+
+      test('un include verso un file inesistente è segnalato come errore', () => {
+        writeProbeTheme({
+          ...validBase,
+          'footer.ejs': `<%- include('siteFooter.ejs') %>${hookCall('script')}</body>`
+        });
+
+        const result = validateThemeContent(probeThemeName);
+        const includeError = result.errors.find(e => e.includes('non trovato'));
+
+        expect(includeError).toContain("include 'siteFooter.ejs' non trovato");
+        expect(includeError).toContain('andrà in errore al render');
+      });
+
+      test('un include non risolvibile è dichiarato SOLO se un hook risulta mancante', () => {
+        writeProbeTheme({
+          ...validBase,
+          'footer.ejs': `<%- include(passData.themeSys.getThemePartPath('siteFooter.ejs')) %>${hookCall('script')}`
+        });
+
+        const result = validateThemeContent(probeThemeName);
+        const hookError = result.errors.find(e => e.includes('Hook "footer" mancante'));
+
+        expect(hookError).toContain('1 include non risolvibile');
+        expect(hookError).toContain('la ricerca può essere incompleta');
+      });
+
+      test('nessuna nota sull\'incompletezza quando gli hook ci sono tutti', () => {
+        // Include non risolvibile, ma nessun hook mancante: niente rumore
+        writeProbeTheme({
+          ...validBase,
+          'footer.ejs': `<%- include(passData.themeSys.getThemePartPath('x.ejs')) %>` +
+                        `<footer>${hookCall('footer')}</footer>${hookCall('script')}`
+        });
+
+        const result = validateThemeContent(probeThemeName);
+
+        expect(result.errors).toEqual([]);
+      });
+
+      test('anche l\'esenzione del warning navbar guarda dentro l\'albero', () => {
+        writeProbeTheme({
+          ...validBase,
+          'nav.ejs': '<nav class="navbar"><%- include(\'navItems.ejs\') %></nav>',
+          'navItems.ejs': hookCall('nav')
+        });
+
+        const result = validateThemeContent(probeThemeName);
+
+        expect(result.errors).toEqual([]);
+        expect(result.warnings).toEqual([]);
+      });
+    });
   });
 
   describe('Version Format Checking', () => {

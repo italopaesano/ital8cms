@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const semver = require('semver');
 const loadJson5 = require('./loadJson5');
+const resolveIncludeTree = require('./ejsIncludeResolver');
 //let ital8Conf;
 
 /**
@@ -474,14 +475,41 @@ class themeSys{
       }
 
       try {
-        const content = fs.readFileSync(partialPath, 'utf8');
+        // Gli hook si cercano nell'albero di inclusione, non nel solo file: un
+        // partial che fattorizza una parte di sé in un sub-partial condiviso è
+        // corretto a runtime, e cercare nel solo file radice lo darebbe per
+        // incompleto (issue #355). Il perimetro della risoluzione è il tema.
+        //
+        // Conseguenza da tenere presente: un hook trovato in un file incluso vale
+        // per il partial radice. Oggi innocuo — nessun hook è richiesto in due
+        // partial diversi — ma se un domani lo fosse, due radici che includono lo
+        // stesso sub-partial passerebbero entrambe con una sola chiamata reale.
+        const includeTree = resolveIncludeTree(partialPath, { rootPath: themePath });
+        const content = includeTree.reachedFiles[0].content;   // il partial radice
+        const searchedSource = includeTree.reachedFiles.map(reached => reached.content).join('\n');
+
+        // Un include verso un file inesistente fa fallire il render: dirlo al boot
+        // è più utile del 500 in faccia all'utente.
+        for (const { filePath, target } of includeTree.missingIncludes) {
+          const includingFile = path.relative(viewsPath, filePath);
+          errors.push(`${includingFile}: include '${target}' non trovato — il tema andrà in errore al render`);
+        }
+
+        // Se un include non è risolvibile, un hook dato per mancante potrebbe
+        // essere proprio là dentro: lo si dichiara SOLO quando cambia la
+        // conclusione, per non fare rumore sui temi sani.
+        const unresolvedCount = includeTree.unresolvedIncludes.length;
+        const searchLimitNote = unresolvedCount === 0
+          ? ''
+          : `\n   ⚠ ${unresolvedCount === 1 ? '1 include non risolvibile' : `${unresolvedCount} include non risolvibili`}` +
+            `: ${includeTree.unresolvedIncludes[0].expression} — la ricerca può essere incompleta`;
 
         // Verifica presenza hook richiesti
         for (const { name, purpose } of hookConfig.hooks) {
-          const hookFound = hookCallVariants(name).some(variant => content.includes(variant));
+          const hookFound = hookCallVariants(name).some(variant => searchedSource.includes(variant));
 
           if (!hookFound) {
-            errors.push(`${partialName}: Hook "${name}" mancante (${purpose})`);
+            errors.push(`${partialName}: Hook "${name}" mancante (${purpose})${searchLimitNote}`);
           }
         }
 
@@ -495,10 +523,11 @@ class themeSys{
             // Non emettere warning se c'è un wrapper <nav> ma il contenuto è iniettato via hook
             if (partialName === 'nav.ejs' && pattern.source.includes('nav')) {
               // Verifica se c'è l'hook che inietta il contenuto dinamicamente.
-              // Same variants as the required-hook check above, so both points
-              // recognise the very same call (the `pluginSys.` prefix is not
-              // required here either).
-              const hasNavHook = hookCallVariants('nav').some(variant => content.includes(variant));
+              // Same variants and same search surface as the required-hook check
+              // above: the hook counts wherever it is in the include tree, while
+              // the suspicious pattern itself is matched on the root file only —
+              // a warning must name the file that actually carries the markup.
+              const hasNavHook = hookCallVariants('nav').some(variant => searchedSource.includes(variant));
 
               if (hasNavHook) {
                 // Hook trovato - il contenuto è dinamico, solo il wrapper è hardcoded (OK)
