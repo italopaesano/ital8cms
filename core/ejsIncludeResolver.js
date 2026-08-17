@@ -117,29 +117,84 @@ function readIncludeArgument(source, argumentStart) {
     }
   }
 
-  return { expression: summariseExpression(source, cursor) };
+  // `include()` senza argomenti, o con l'argomento su un'altra riga, non lascia
+  // niente da mostrare: un segnaposto è meglio di un messaggio con un buco.
+  const expression = summariseExpression(source, cursor);
+
+  return { expression: expression === '' ? '(argomento non riconoscibile)' : expression };
 }
 
 /**
- * Trova tutte le chiamate `include(` di un sorgente e ne classifica l'argomento.
- * Il carattere precedente non deve essere una parte di identificatore né un punto,
- * così `content.includes(` e `myInclude(` non vengono scambiati per include EJS.
+ * Estrae le sole regioni di CODICE di un template: ciò che sta dentro un tag EJS
+ * e non è un commento.
+ *
+ * Un `include` conta solo se EJS lo esegue. Cercarlo nell'intero sorgente
+ * scambierebbe per chiamate reali sia gli include dentro `<%# ... %>` — che EJS
+ * non esegue mai, ed è il modo normale di disattivarne uno mentre si sviluppa —
+ * sia le occorrenze dentro il markup, per esempio in una stringa di uno
+ * `<script>` inline.
+ */
+function extractEjsCodeRegions(source) {
+  const codeRegions = [];
+  let cursor = 0;
+
+  while (cursor < source.length) {
+    const tagStart = source.indexOf('<%', cursor);
+    if (tagStart === -1) break;
+
+    // `<%%` è la forma con cui EJS stampa un `<%` letterale: non apre un tag
+    if (source[tagStart + 2] === '%') {
+      cursor = tagStart + 3;
+      continue;
+    }
+
+    const tagEnd = source.indexOf('%>', tagStart + 2);
+    if (tagEnd === -1) break; // tag non chiuso: non c'è codice da eseguire
+
+    // `<%#` è un commento: il suo contenuto non viene mai eseguito
+    if (source[tagStart + 2] !== '#') {
+      codeRegions.push(source.slice(tagStart + 2, tagEnd));
+    }
+
+    cursor = tagEnd + 2;
+  }
+
+  return codeRegions;
+}
+
+/**
+ * Trova tutte le chiamate `include(` eseguibili di un sorgente e ne classifica
+ * l'argomento. Il carattere precedente non deve essere parte di un identificatore
+ * né un punto, così `content.includes(` e `myInclude(` non vengono scambiati per
+ * include EJS.
+ *
+ * LIMITE: un `include(` scritto dentro una stringa che sta a sua volta dentro un
+ * tag EJS verrebbe contato. Caso patologico, e comunque non peggiore del silenzio.
  */
 function findIncludeCalls(source) {
   const calls = [];
   const callPattern = /(^|[^\w.$])include\s*\(/g;
 
-  let match;
-  while ((match = callPattern.exec(source)) !== null) {
-    calls.push(readIncludeArgument(source, callPattern.lastIndex));
+  for (const codeRegion of extractEjsCodeRegions(source)) {
+    callPattern.lastIndex = 0;
+
+    while (callPattern.exec(codeRegion) !== null) {
+      calls.push(readIncludeArgument(codeRegion, callPattern.lastIndex));
+    }
   }
 
   return calls;
 }
 
 /**
- * Verifica che un path risolto non esca dal perimetro consentito.
- * Stessa postura anti path-traversal adottata dal plugin bootstrapNavbar.
+ * Verifica che un path risolto non esca lessicalmente dal perimetro consentito.
+ *
+ * NON è un confine di sicurezza, ed è bene non scambiarlo per tale: il controllo
+ * è puramente lessicale e non risolve i symlink, ma soprattutto non ci sarebbe
+ * niente da difendere — il tema è codice che EJS eseguirà comunque, seguendo
+ * esattamente gli stessi include (symlink compresi). Il perimetro serve a
+ * limitare l'ampiezza della ricerca a ciò che appartiene al tema, così che un
+ * hook trovato fuori non venga accreditato al tema per sbaglio.
  */
 function isInsidePerimeter(candidatePath, rootPath) {
   if (!rootPath) return true;
@@ -160,9 +215,12 @@ function findExistingTarget(includingFilePath, literalPath) {
   const basePath = path.resolve(path.dirname(includingFilePath), literalPath);
 
   for (const candidatePath of [basePath, basePath + EJS_EXTENSION]) {
-    if (fs.existsSync(candidatePath) && fs.statSync(candidatePath).isFile()) {
-      return candidatePath;
-    }
+    // Una sola stat invece di existsSync + statSync: metà delle syscall, e
+    // nessuna finestra fra le due in cui il file possa sparire (un salvataggio
+    // atomico dell'editor mentre nodemon riavvia) facendo lanciare la seconda.
+    const candidateStats = fs.statSync(candidatePath, { throwIfNoEntry: false });
+
+    if (candidateStats && candidateStats.isFile()) return candidatePath;
   }
 
   return null;

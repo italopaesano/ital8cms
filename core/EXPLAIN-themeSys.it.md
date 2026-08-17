@@ -264,6 +264,46 @@ Se un tema non passa la validazione:
 
 **Comportamento soft-fail:** Anche se il tema configurato è invalido, il sistema non si blocca ma usa il tema di default.
 
+### 4.4 Metodo `validateThemeContent(themeName, themesRootPath?)`
+
+Dove `validateTheme()` guarda la **struttura** (le directory e i file ci sono?), `validateThemeContent()` guarda il **contenuto**: ogni partial dichiara gli hook che deve dichiarare, e non cabla asset che dovrebbero arrivare dai plugin.
+
+Gira in coda a `validateTheme()`, per il tema pubblico e per quello admin (se diverso). **Gli esiti non sono bloccanti:** vengono stampati in console e basta — il fallback al tema `default` scatta solo per `validateTheme()`. Il secondo parametro esiste per i test, che validano un tema di prova in una tmpdir senza scrivere in `themes/`.
+
+**Gli hook si cercano nell'albero di inclusione, non nel singolo file.** Un tema che fattorizza il footer visivo in un sub-partial condiviso è corretto a runtime, e cercare nel solo file radice lo darebbe per rotto (issue #355). Il modulo `core/ejsIncludeResolver.js` risolve ricorsivamente gli `include` letterali a partire dal partial, e l'hook viene cercato nella concatenazione dei sorgenti raggiunti. Il controllo non si allenta: l'hook deve comunque esistere nel sottoalbero effettivamente renderizzato **a partire da quel partial**.
+
+| Hook | Partial | Obbligatorio |
+|------|---------|--------------|
+| `head` | `head.ejs` | sì |
+| `header` | `header.ejs` | sì |
+| `footer`, `script` | `footer.ejs` | sì |
+| `nav` | `nav.ejs` | solo se il partial esiste |
+| `main`, `body` | `main.ejs` | solo se il partial esiste |
+| `aside` | `aside.ejs` | solo se il partial esiste |
+
+**Le tre classi di messaggio:**
+
+```
+❌ footer.ejs: Hook "footer" mancante (injection contenuti a fine pagina)
+❌ nav.ejs: include 'brand.ejs' non trovato — il tema andrà in errore al render
+⚠️  siteHead.ejs: Bootstrap CSS hardcoded (dovrebbe essere iniettato via hook)
+```
+
+Il secondo è un controllo a sé: un include verso un file inesistente fa **fallire il render** in EJS, quindi saperlo al boot vale più di un 500 in faccia all'utente. È attribuito al file che contiene l'include, non alla radice dell'albero.
+
+**Quando la ricerca è incompleta lo dice.** Un `include` con path calcolato — `include(passData.themeSys.getThemePartPath('x.ejs'))` — non è risolvibile senza eseguire il template. Se questo coincide con un hook dato per mancante, il messaggio lo dichiara, e solo in quel caso:
+
+```
+❌ head.ejs: Hook "head" mancante (injection CSS/meta tag dentro <head>)
+   ⚠ 1 include non risolvibile in siteHead.ejs: passData.themeSys.getThemePartPath("x.ejs") — la ricerca può essere incompleta
+```
+
+**Limiti dichiarati:**
+
+- Solo i path **letterali** sono risolvibili; i path calcolati, quelli fuori dalla cartella del tema e quelli oltre la profondità massima finiscono fra i non risolvibili (dichiarati, mai silenziosi).
+- La scansione riconosce gli `include` **eseguibili**, cioè quelli dentro un tag EJS che non sia un commento `<%# … %>`: commentare un include è il modo normale di disattivarlo e non deve produrre un errore. Un `include(` scritto dentro una stringa che sta a sua volta dentro un tag EJS verrebbe però contato.
+- Un hook trovato in un file incluso vale per il partial radice. Oggi innocuo (nessun hook è richiesto in due partial diversi), ma due radici che includessero lo stesso sub-partial passerebbero entrambe con una sola chiamata reale.
+
 ---
 
 ## 5. Sistema Dipendenze

@@ -201,6 +201,54 @@ describe('ejsIncludeResolver', () => {
     });
   });
 
+  describe('solo il codice EJS conta', () => {
+    test('un include dentro un commento EJS non viene seguito', () => {
+      writeTree({ 'views/footer.ejs': "<%# include('vecchio.ejs') %>" });
+
+      const tree = resolve('views/footer.ejs');
+
+      expect(tree.missingIncludes).toEqual([]);
+      expect(tree.unresolvedIncludes).toEqual([]);
+      expect(tree.reachedFiles).toHaveLength(1);
+    });
+
+    test('un include fuori dai tag EJS \u00e8 markup, non codice', () => {
+      writeTree({ 'views/footer.ejs': `<script>const s = "include('nope.ejs')";</script>` });
+
+      const tree = resolve('views/footer.ejs');
+
+      expect(tree.missingIncludes).toEqual([]);
+      expect(tree.unresolvedIncludes).toEqual([]);
+    });
+
+    test('<%% non apre un tag: \u00e8 un <% letterale', () => {
+      writeTree({ 'views/footer.ejs': "<%%- include('nope.ejs') %>" });
+
+      expect(resolve('views/footer.ejs').missingIncludes).toEqual([]);
+    });
+
+    test('un include reale accanto a uno commentato viene comunque seguito', () => {
+      writeTree({
+        'views/footer.ejs': "<%# include('vecchio.ejs') %><%- include('siteFooter.ejs') %>",
+        'views/siteFooter.ejs': 'HOOK_FOOTER'
+      });
+
+      const tree = resolve('views/footer.ejs');
+
+      expect(joinedSource(tree)).toContain('HOOK_FOOTER');
+      expect(tree.missingIncludes).toEqual([]);
+    });
+
+    test("include() senza argomento non produce un'espressione vuota", () => {
+      writeTree({ 'views/footer.ejs': '<%- include() %>' });
+
+      const tree = resolve('views/footer.ejs');
+
+      expect(tree.unresolvedIncludes).toHaveLength(1);
+      expect(tree.unresolvedIncludes[0].expression).not.toBe('');
+    });
+  });
+
   describe('robustezza', () => {
     test('un ciclo A → B → A non manda in loop', () => {
       writeTree({

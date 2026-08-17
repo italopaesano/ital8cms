@@ -393,10 +393,13 @@ class themeSys{
   /**
    * Valida il CONTENUTO dei partials di un tema verificando la presenza degli hook richiesti
    * @param {string} themeName - Nome del tema da validare
+   * @param {string} [themesRootPath] - Cartella che contiene i temi. Il default è
+   *        quella del progetto; il parametro esiste perché i test possano validare
+   *        un tema di prova in una tmpdir senza scrivere nel repo.
    * @returns {object} - { valid: boolean, errors: Array<string>, warnings: Array<string> }
    */
-  validateThemeContent(themeName) {
-    const themePath = path.join(__dirname, '../themes', themeName);
+  validateThemeContent(themeName, themesRootPath = path.join(__dirname, '../themes')) {
+    const themePath = path.join(themesRootPath, themeName);
     const viewsPath = path.join(themePath, 'views');
     const errors = [];
     const warnings = [];
@@ -485,23 +488,26 @@ class themeSys{
         // partial diversi — ma se un domani lo fosse, due radici che includono lo
         // stesso sub-partial passerebbero entrambe con una sola chiamata reale.
         const includeTree = resolveIncludeTree(partialPath, { rootPath: themePath });
-        const content = includeTree.reachedFiles[0].content;   // il partial radice
         const searchedSource = includeTree.reachedFiles.map(reached => reached.content).join('\n');
 
         // Un include verso un file inesistente fa fallire il render: dirlo al boot
-        // è più utile del 500 in faccia all'utente.
+        // è più utile del 500 in faccia all'utente. Il difetto è attribuito al file
+        // che contiene l'include, non alla radice dell'albero.
         for (const { filePath, target } of includeTree.missingIncludes) {
-          const includingFile = path.relative(viewsPath, filePath);
-          errors.push(`${includingFile}: include '${target}' non trovato — il tema andrà in errore al render`);
+          errors.push(`${path.relative(viewsPath, filePath)}: include '${target}' non trovato` +
+                      ` — il tema andrà in errore al render`);
         }
 
         // Se un include non è risolvibile, un hook dato per mancante potrebbe
         // essere proprio là dentro: lo si dichiara SOLO quando cambia la
-        // conclusione, per non fare rumore sui temi sani.
+        // conclusione, per non fare rumore sui temi sani. Anche qui conta il file
+        // che contiene l'include: dirigere l'utente sulla radice lo manderebbe a
+        // cercare in un file dove quella riga non c'è.
         const unresolvedCount = includeTree.unresolvedIncludes.length;
         const searchLimitNote = unresolvedCount === 0
           ? ''
           : `\n   ⚠ ${unresolvedCount === 1 ? '1 include non risolvibile' : `${unresolvedCount} include non risolvibili`}` +
+            ` in ${path.relative(viewsPath, includeTree.unresolvedIncludes[0].filePath)}` +
             `: ${includeTree.unresolvedIncludes[0].expression} — la ricerca può essere incompleta`;
 
         // Verifica presenza hook richiesti
@@ -513,41 +519,50 @@ class themeSys{
           }
         }
 
-        // Verifica pattern sospetti (solo per partials non opzionali o esistenti)
+        // Verifica pattern sospetti. Come per gli hook si guarda l'intero albero:
+        // un tema che fattorizza l'<head> in un sub-partial nasconderebbe altrimenti
+        // proprio gli asset cablati che questi warning esistono per intercettare.
+        // Il warning nomina il file in cui il markup si trova davvero.
         for (const { pattern, message, file } of suspiciousPatterns) {
-          // Se il pattern specifica un file, controlla solo quello
-          if (file && file !== partialName) continue;
+          for (const reached of includeTree.reachedFiles) {
+            const reachedName = path.relative(viewsPath, reached.filePath);
 
-          if (pattern.test(content)) {
+            // Se il pattern specifica un file, controlla solo quello
+            if (file && file !== reachedName) continue;
+
+            if (!pattern.test(reached.content)) continue;
+
             // Caso speciale: navbar in nav.ejs
             // Non emettere warning se c'è un wrapper <nav> ma il contenuto è iniettato via hook
-            if (partialName === 'nav.ejs' && pattern.source.includes('nav')) {
+            if (reachedName === 'nav.ejs' && pattern.source.includes('nav')) {
               // Verifica se c'è l'hook che inietta il contenuto dinamicamente.
-              // Same variants and same search surface as the required-hook check
-              // above: the hook counts wherever it is in the include tree, while
-              // the suspicious pattern itself is matched on the root file only —
-              // a warning must name the file that actually carries the markup.
+              // Same variants and same surface as the required-hook check above:
+              // the hook counts wherever it sits in the include tree.
               const hasNavHook = hookCallVariants('nav').some(variant => searchedSource.includes(variant));
 
-              if (hasNavHook) {
-                // Hook trovato - il contenuto è dinamico, solo il wrapper è hardcoded (OK)
-                continue;
-              }
+              // Hook trovato - il contenuto è dinamico, solo il wrapper è hardcoded (OK)
+              if (hasNavHook) continue;
             }
 
-            warnings.push(`${partialName}: ${message}`);
+            warnings.push(`${reachedName}: ${message}`);
           }
         }
 
       } catch (error) {
-        errors.push(`Errore lettura ${partialName}: ${error.message}`);
+        errors.push(`Errore nella validazione di ${partialName}: ${error.message}`);
       }
     }
 
+    // Ogni partial risolve il proprio albero, quindi un sub-partial condiviso viene
+    // esaminato una volta per ciascuna radice che lo raggiunge: senza deduplica lo
+    // stesso identico difetto comparirebbe più volte, e chi legge andrebbe a cercare
+    // un secondo problema che non esiste.
+    const uniqueErrors = [...new Set(errors)];
+
     return {
-      valid: errors.length === 0,
-      errors: errors,
-      warnings: warnings
+      valid: uniqueErrors.length === 0,
+      errors: uniqueErrors,
+      warnings: [...new Set(warnings)]
     };
   }
 
