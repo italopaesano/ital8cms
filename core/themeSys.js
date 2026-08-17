@@ -400,39 +400,53 @@ class themeSys{
     const errors = [];
     const warnings = [];
 
-    // Definisci gli hook richiesti per ogni partial
+    // The three quoting forms a theme can use to call a hook. Derived from the
+    // hook name so that the name stays the single source of truth: the error
+    // message reads it back from the declaration instead of re-parsing it out
+    // of a pre-built string.
+    const hookCallVariants = (hookName) => [
+      `hookPage("${hookName}"`,
+      `hookPage('${hookName}'`,
+      `hookPage(\`${hookName}\``
+    ];
+
+    // Definisci gli hook richiesti per ogni partial.
+    // `purpose` descrive il SINGOLO hook: viene stampato nel messaggio d'errore,
+    // che cita così solo l'hook effettivamente mancante.
     const requiredHooks = {
       'head.ejs': {
-        required: ['hookPage("head"', 'hookPage(\'head\'', 'hookPage(`head`'],
-        description: 'Hook "head" per injection CSS/meta tags'
+        hooks: [
+          { name: 'head', purpose: 'injection CSS/meta tag dentro <head>' }
+        ]
       },
       'header.ejs': {
-        required: ['hookPage("header"', 'hookPage(\'header\'', 'hookPage(`header`'],
-        description: 'Hook "header" all\'inizio del body'
+        hooks: [
+          { name: 'header', purpose: 'injection contenuti in apertura del <body>' }
+        ]
       },
       'footer.ejs': {
-        required: [
-          ['hookPage("footer"', 'hookPage(\'footer\'', 'hookPage(`footer`'],
-          ['hookPage("script"', 'hookPage(\'script\'', 'hookPage(`script`']
-        ],
-        description: 'Hook "footer" e "script" per injection scripts'
+        hooks: [
+          { name: 'footer', purpose: 'injection contenuti a fine pagina' },
+          { name: 'script', purpose: 'injection script di fine body' }
+        ]
       },
       'nav.ejs': {
-        required: ['hookPage("nav"', 'hookPage(\'nav\'', 'hookPage(`nav`'],
-        description: 'Hook "nav" per navigation',
+        hooks: [
+          { name: 'nav', purpose: 'injection voci di navigazione' }
+        ],
         optional: true
       },
       'main.ejs': {
-        required: [
-          ['hookPage("main"', 'hookPage(\'main\'', 'hookPage(`main`'],
-          ['hookPage("body"', 'hookPage(\'body\'', 'hookPage(`body`']
+        hooks: [
+          { name: 'main', purpose: 'contenuto principale, dentro <main>' },
+          { name: 'body', purpose: 'contenuto di pagina dopo </main>' }
         ],
-        description: 'Hook "main" e "body" per contenuto principale',
         optional: true
       },
       'aside.ejs': {
-        required: ['hookPage("aside"', 'hookPage(\'aside\'', 'hookPage(`aside`'],
-        description: 'Hook "aside" per sidebar',
+        hooks: [
+          { name: 'aside', purpose: 'injection contenuti della sidebar' }
+        ],
         optional: true
       }
     };
@@ -463,14 +477,11 @@ class themeSys{
         const content = fs.readFileSync(partialPath, 'utf8');
 
         // Verifica presenza hook richiesti
-        const requiredArray = Array.isArray(hookConfig.required[0]) ? hookConfig.required : [hookConfig.required];
-
-        for (const hookVariants of requiredArray) {
-          const hookFound = hookVariants.some(variant => content.includes(variant));
+        for (const { name, purpose } of hookConfig.hooks) {
+          const hookFound = hookCallVariants(name).some(variant => content.includes(variant));
 
           if (!hookFound) {
-            const hookName = hookVariants[0].match(/hookPage\(["'`](\w+)["'`]/)[1];
-            errors.push(`${partialName}: Hook "${hookName}" mancante (${hookConfig.description})`);
+            errors.push(`${partialName}: Hook "${name}" mancante (${purpose})`);
           }
         }
 
@@ -483,10 +494,11 @@ class themeSys{
             // Caso speciale: navbar in nav.ejs
             // Non emettere warning se c'è un wrapper <nav> ma il contenuto è iniettato via hook
             if (partialName === 'nav.ejs' && pattern.source.includes('nav')) {
-              // Verifica se c'è l'hook che inietta il contenuto dinamicamente
-              const hasNavHook = content.includes('pluginSys.hookPage("nav"') ||
-                                 content.includes("pluginSys.hookPage('nav'") ||
-                                 content.includes('pluginSys.hookPage(`nav`');
+              // Verifica se c'è l'hook che inietta il contenuto dinamicamente.
+              // Same variants as the required-hook check above, so both points
+              // recognise the very same call (the `pluginSys.` prefix is not
+              // required here either).
+              const hasNavHook = hookCallVariants('nav').some(variant => content.includes(variant));
 
               if (hasNavHook) {
                 // Hook trovato - il contenuto è dinamico, solo il wrapper è hardcoded (OK)

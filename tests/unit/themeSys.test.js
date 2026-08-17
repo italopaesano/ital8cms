@@ -387,6 +387,111 @@ describe('Theme System', () => {
     });
   });
 
+  describe('validateThemeContent — messaggi di hook mancante', () => {
+    // A differenza dei blocchi qui sopra, questi test esercitano la funzione
+    // REALE di core/themeSys.js, non una copia. validateThemeContent() non usa
+    // `this`, quindi si invoca sul prototype senza costruire l'istanza (il
+    // costruttore valida i temi attivi e ha effetti collaterali sul config).
+    const themeSysClass = require('../../core/themeSys');
+    const validateThemeContent = (themeName) =>
+      themeSysClass.prototype.validateThemeContent.call({}, themeName);
+
+    // Tema temporaneo creato dentro themes/: il path dei temi è risolto da
+    // validateThemeContent() rispetto a core/, quindi non è iniettabile.
+    const probeThemeName = '__validateThemeContentProbe';
+    const probeViewsPath = path.join(themesBasePath, probeThemeName, 'views');
+
+    /** Scrive i partial passati (nome → contenuto) nel tema temporaneo */
+    function writeProbeTheme(partials) {
+      fs.rmSync(path.join(themesBasePath, probeThemeName), { recursive: true, force: true });
+      fs.mkdirSync(probeViewsPath, { recursive: true });
+      for (const [fileName, content] of Object.entries(partials)) {
+        fs.writeFileSync(path.join(probeViewsPath, fileName), content, 'utf8');
+      }
+    }
+
+    const hookCall = (hookName) =>
+      `<%- passData.pluginSys.hookPage("${hookName}", passData); %>`;
+
+    // Partial minimi che soddisfano i tre obbligatori
+    const validBase = {
+      'head.ejs': `<head>${hookCall('head')}</head>`,
+      'header.ejs': `<body>${hookCall('header')}`,
+      'footer.ejs': `<footer>${hookCall('footer')}</footer>${hookCall('script')}</body>`
+    };
+
+    afterEach(() => {
+      fs.rmSync(path.join(themesBasePath, probeThemeName), { recursive: true, force: true });
+    });
+
+    test('un partial con più hook cita SOLO quello mancante', () => {
+      // footer.ejs dichiara "script" ma non "footer"
+      writeProbeTheme({
+        ...validBase,
+        'footer.ejs': `<footer></footer>${hookCall('script')}</body>`
+      });
+
+      const result = validateThemeContent(probeThemeName);
+
+      expect(result.valid).toBe(false);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toContain('Hook "footer" mancante');
+      // Il difetto della issue #355: la parentesi nominava anche l'hook presente
+      expect(result.errors[0]).not.toContain('script');
+    });
+
+    test('lo stesso vale per il secondo hook del gruppo (main.ejs)', () => {
+      writeProbeTheme({
+        ...validBase,
+        'main.ejs': `<main>${hookCall('main')}</main>`
+      });
+
+      const result = validateThemeContent(probeThemeName);
+
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toContain('Hook "body" mancante');
+      expect(result.errors[0]).not.toContain('"main"');
+    });
+
+    test('il messaggio non ripete il nome dell\'hook nella parentesi', () => {
+      writeProbeTheme({ ...validBase, 'head.ejs': '<head></head>' });
+
+      const result = validateThemeContent(probeThemeName);
+      const headError = result.errors.find(e => e.includes('head.ejs'));
+
+      // Una sola occorrenza di "head" fra virgolette: quella del nome
+      expect(headError.match(/"head"/g)).toHaveLength(1);
+    });
+
+    test('l\'esenzione del warning navbar accetta la chiamata senza prefisso pluginSys.', () => {
+      writeProbeTheme({
+        ...validBase,
+        'nav.ejs': '<nav class="navbar"><%- hookPage(`nav`, passData); %></nav>'
+      });
+
+      const result = validateThemeContent(probeThemeName);
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.warnings).toHaveLength(0);
+    });
+
+    test('un tema con tutti gli hook al posto giusto è valido', () => {
+      writeProbeTheme(validBase);
+
+      const result = validateThemeContent(probeThemeName);
+
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    test('i temi del repo restano validi', () => {
+      for (const themeName of ['default', 'defaultAdminTheme', 'baseExampleTheme']) {
+        const result = validateThemeContent(themeName);
+        expect(result.errors).toEqual([]);
+      }
+    });
+  });
+
   describe('Version Format Checking', () => {
     test('versione tema è in formato valido', () => {
       const descPath = path.join(themesBasePath, 'default', 'themeDescription.json5');
