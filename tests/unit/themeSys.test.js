@@ -6,6 +6,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const loadJson5 = require('../../core/loadJson5');
 const semver = require('semver');
 
@@ -384,6 +385,263 @@ describe('Theme System', () => {
       // baseExampleTheme ha solo head, header, footer, script
       expect(themeSupportsHook('baseExampleTheme', 'head')).toBe(true);
       expect(themeSupportsHook('baseExampleTheme', 'footer')).toBe(true);
+    });
+  });
+
+  describe('validateThemeContent — messaggi di hook mancante', () => {
+    // A differenza dei blocchi qui sopra, questi test esercitano la funzione
+    // REALE di core/themeSys.js, non una copia. validateThemeContent() non usa
+    // `this`, quindi si invoca sul prototype senza costruire l'istanza (il
+    // costruttore valida i temi attivi e ha effetti collaterali sul config).
+    const themeSysClass = require('../../core/themeSys');
+
+    // Il tema di prova vive in una tmpdir, mai dentro themes/ del repo
+    // (docs/testing.it.md → isolamento filesystem): un run interrotto lascerebbe
+    // una directory senza themeConfig.json5 che fa fallire la suite successiva.
+    const probeThemeName = 'probeTheme';
+    let probeThemesRoot;
+
+    const validateThemeContent = (themeName, themesRootPath = probeThemesRoot) =>
+      themeSysClass.prototype.validateThemeContent.call({}, themeName, themesRootPath);
+
+    /** Scrive i partial passati (nome → contenuto) nel tema temporaneo */
+    function writeProbeTheme(partials) {
+      const probeViewsPath = path.join(probeThemesRoot, probeThemeName, 'views');
+      fs.mkdirSync(probeViewsPath, { recursive: true });
+
+      for (const [fileName, content] of Object.entries(partials)) {
+        fs.writeFileSync(path.join(probeViewsPath, fileName), content, 'utf8');
+      }
+    }
+
+    const hookCall = (hookName) =>
+      `<%- passData.pluginSys.hookPage("${hookName}", passData); %>`;
+
+    // Partial minimi che soddisfano i tre obbligatori
+    const validBase = {
+      'head.ejs': `<head>${hookCall('head')}</head>`,
+      'header.ejs': `<body>${hookCall('header')}`,
+      'footer.ejs': `<footer>${hookCall('footer')}</footer>${hookCall('script')}</body>`
+    };
+
+    beforeEach(() => {
+      probeThemesRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ital8-theme-'));
+    });
+
+    afterEach(() => {
+      fs.rmSync(probeThemesRoot, { recursive: true, force: true });
+    });
+
+    test('un partial con più hook cita SOLO quello mancante', () => {
+      // footer.ejs dichiara "script" ma non "footer"
+      writeProbeTheme({
+        ...validBase,
+        'footer.ejs': `<footer></footer>${hookCall('script')}</body>`
+      });
+
+      const result = validateThemeContent(probeThemeName);
+
+      expect(result.valid).toBe(false);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toContain('Hook "footer" mancante');
+      // Il difetto della issue #355: la parentesi nominava anche l'hook presente
+      expect(result.errors[0]).not.toContain('script');
+    });
+
+    test('lo stesso vale per il secondo hook del gruppo (main.ejs)', () => {
+      writeProbeTheme({
+        ...validBase,
+        'main.ejs': `<main>${hookCall('main')}</main>`
+      });
+
+      const result = validateThemeContent(probeThemeName);
+
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toContain('Hook "body" mancante');
+      expect(result.errors[0]).not.toContain('"main"');
+    });
+
+    test('il messaggio non ripete il nome dell\'hook nella parentesi', () => {
+      writeProbeTheme({ ...validBase, 'head.ejs': '<head></head>' });
+
+      const result = validateThemeContent(probeThemeName);
+      const headError = result.errors.find(e => e.includes('head.ejs'));
+
+      // Una sola occorrenza di "head" fra virgolette: quella del nome
+      expect(headError.match(/"head"/g)).toHaveLength(1);
+    });
+
+    test('l\'esenzione del warning navbar accetta la chiamata senza prefisso pluginSys.', () => {
+      writeProbeTheme({
+        ...validBase,
+        'nav.ejs': '<nav class="navbar"><%- hookPage(`nav`, passData); %></nav>'
+      });
+
+      const result = validateThemeContent(probeThemeName);
+
+      expect(result.errors).toHaveLength(0);
+      expect(result.warnings).toHaveLength(0);
+    });
+
+    test('un tema con tutti gli hook al posto giusto è valido', () => {
+      writeProbeTheme(validBase);
+
+      const result = validateThemeContent(probeThemeName);
+
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    test('i temi del repo restano validi', () => {
+      for (const themeName of ['default', 'defaultAdminTheme', 'baseExampleTheme']) {
+        const result = validateThemeContent(themeName, themesBasePath);
+        expect(result.errors).toEqual([]);
+      }
+    });
+
+    describe('albero di inclusione (issue #355, punto 2)', () => {
+      test('un hook dichiarato in un sub-partial incluso NON è un errore', () => {
+        // Lo scenario della issue: il footer visivo è fattorizzato in un
+        // sub-partial condiviso, l'hook scatta a render e finisce dentro <footer>
+        writeProbeTheme({
+          ...validBase,
+          'footer.ejs': `<%- include('siteFooter.ejs') %>${hookCall('script')}</body>`,
+          'siteFooter.ejs': `<footer class="site-footer">${hookCall('footer')}</footer>`
+        });
+
+        const result = validateThemeContent(probeThemeName);
+
+        expect(result.errors).toEqual([]);
+        expect(result.valid).toBe(true);
+      });
+
+      test('un hook assente anche nell\'albero resta un errore', () => {
+        writeProbeTheme({
+          ...validBase,
+          'footer.ejs': `<%- include('siteFooter.ejs') %>${hookCall('script')}</body>`,
+          'siteFooter.ejs': '<footer class="site-footer"></footer>'
+        });
+
+        const result = validateThemeContent(probeThemeName);
+
+        expect(result.errors).toHaveLength(1);
+        expect(result.errors[0]).toContain('Hook "footer" mancante');
+      });
+
+      test('un include verso un file inesistente è segnalato come errore', () => {
+        writeProbeTheme({
+          ...validBase,
+          'footer.ejs': `<%- include('siteFooter.ejs') %>${hookCall('script')}</body>`
+        });
+
+        const result = validateThemeContent(probeThemeName);
+        const includeError = result.errors.find(e => e.includes('non trovato'));
+
+        expect(includeError).toContain("include 'siteFooter.ejs' non trovato");
+        expect(includeError).toContain('andrà in errore al render');
+      });
+
+      test('un include non risolvibile è dichiarato SOLO se un hook risulta mancante', () => {
+        writeProbeTheme({
+          ...validBase,
+          'footer.ejs': `<%- include(passData.themeSys.getThemePartPath('siteFooter.ejs')) %>${hookCall('script')}`
+        });
+
+        const result = validateThemeContent(probeThemeName);
+        const hookError = result.errors.find(e => e.includes('Hook "footer" mancante'));
+
+        expect(hookError).toContain('1 include non risolvibile');
+        expect(hookError).toContain('la ricerca può essere incompleta');
+      });
+
+      test('nessuna nota sull\'incompletezza quando gli hook ci sono tutti', () => {
+        // Include non risolvibile, ma nessun hook mancante: niente rumore
+        writeProbeTheme({
+          ...validBase,
+          'footer.ejs': `<%- include(passData.themeSys.getThemePartPath('x.ejs')) %>` +
+                        `<footer>${hookCall('footer')}</footer>${hookCall('script')}`
+        });
+
+        const result = validateThemeContent(probeThemeName);
+
+        expect(result.errors).toEqual([]);
+      });
+
+      test('un include dentro un commento EJS non è un include', () => {
+        // EJS non esegue mai <%# ... %>: commentare un include è il modo normale
+        // di disattivarlo mentre si sviluppa, e non deve produrre un errore
+        writeProbeTheme({
+          ...validBase,
+          'head.ejs': `<head>${hookCall('head')}<%# include('vecchio.ejs') %></head>`
+        });
+
+        expect(validateThemeContent(probeThemeName).errors).toEqual([]);
+      });
+
+      test('un include dentro il markup, fuori dai tag EJS, non è un include', () => {
+        writeProbeTheme({
+          ...validBase,
+          'head.ejs': `<head>${hookCall('head')}<script>const s = "include('nope.ejs')";</script></head>`
+        });
+
+        expect(validateThemeContent(probeThemeName).errors).toEqual([]);
+      });
+
+      test('lo stesso include rotto non è segnalato una volta per radice', () => {
+        // header.ejs include nav.ejs: l'albero di nav viene percorso due volte,
+        // una da header e una da nav stesso. Il difetto è uno solo
+        writeProbeTheme({
+          ...validBase,
+          'header.ejs': `<body>${hookCall('header')}<%- include('nav.ejs') %>`,
+          'nav.ejs': `<nav>${hookCall('nav')}<%- include('brand.ejs') %></nav>`
+        });
+
+        const brokenIncludeErrors = validateThemeContent(probeThemeName).errors
+          .filter(e => e.includes("include 'brand.ejs' non trovato"));
+
+        expect(brokenIncludeErrors).toHaveLength(1);
+        expect(brokenIncludeErrors[0]).toMatch(/^nav\.ejs:/);
+      });
+
+      test('la nota sull\'incompletezza nomina il file che contiene l\'include', () => {
+        writeProbeTheme({
+          ...validBase,
+          'head.ejs': `<head><%- include('meta.ejs') %></head>`,
+          'meta.ejs': `<%- include(passData.themeSys.getThemePartPath('x.ejs')) %>`
+        });
+
+        const headError = validateThemeContent(probeThemeName).errors
+          .find(e => e.includes('Hook "head" mancante'));
+
+        expect(headError).toContain('in meta.ejs');
+      });
+
+      test('i pattern sospetti guardano dentro l\'albero e nominano il file vero', () => {
+        writeProbeTheme({
+          ...validBase,
+          'head.ejs': `<head>${hookCall('head')}<%- include('siteHead.ejs') %></head>`,
+          'siteHead.ejs': '<link rel="stylesheet" href="/css/bootstrap.min.css">'
+        });
+
+        const result = validateThemeContent(probeThemeName);
+
+        expect(result.errors).toEqual([]);
+        expect(result.warnings).toHaveLength(1);
+        expect(result.warnings[0]).toMatch(/^siteHead\.ejs: Bootstrap CSS hardcoded/);
+      });
+
+      test('anche l\'esenzione del warning navbar guarda dentro l\'albero', () => {
+        writeProbeTheme({
+          ...validBase,
+          'nav.ejs': '<nav class="navbar"><%- include(\'navItems.ejs\') %></nav>',
+          'navItems.ejs': hookCall('nav')
+        });
+
+        const result = validateThemeContent(probeThemeName);
+
+        expect(result.errors).toEqual([]);
+        expect(result.warnings).toEqual([]);
+      });
     });
   });
 

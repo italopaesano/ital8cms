@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const semver = require('semver');
 const loadJson5 = require('./loadJson5');
+const resolveIncludeTree = require('./ejsIncludeResolver');
 //let ital8Conf;
 
 /**
@@ -392,47 +393,64 @@ class themeSys{
   /**
    * Valida il CONTENUTO dei partials di un tema verificando la presenza degli hook richiesti
    * @param {string} themeName - Nome del tema da validare
+   * @param {string} [themesRootPath] - Cartella che contiene i temi. Il default è
+   *        quella del progetto; il parametro esiste perché i test possano validare
+   *        un tema di prova in una tmpdir senza scrivere nel repo.
    * @returns {object} - { valid: boolean, errors: Array<string>, warnings: Array<string> }
    */
-  validateThemeContent(themeName) {
-    const themePath = path.join(__dirname, '../themes', themeName);
+  validateThemeContent(themeName, themesRootPath = path.join(__dirname, '../themes')) {
+    const themePath = path.join(themesRootPath, themeName);
     const viewsPath = path.join(themePath, 'views');
     const errors = [];
     const warnings = [];
 
-    // Definisci gli hook richiesti per ogni partial
+    // The three quoting forms a theme can use to call a hook. Derived from the
+    // hook name so that the name stays the single source of truth: the error
+    // message reads it back from the declaration instead of re-parsing it out
+    // of a pre-built string.
+    const hookCallVariants = (hookName) => [
+      `hookPage("${hookName}"`,
+      `hookPage('${hookName}'`,
+      `hookPage(\`${hookName}\``
+    ];
+
+    // Definisci gli hook richiesti per ogni partial.
+    // `purpose` descrive il SINGOLO hook: viene stampato nel messaggio d'errore,
+    // che cita così solo l'hook effettivamente mancante.
     const requiredHooks = {
       'head.ejs': {
-        required: ['hookPage("head"', 'hookPage(\'head\'', 'hookPage(`head`'],
-        description: 'Hook "head" per injection CSS/meta tags'
+        hooks: [
+          { name: 'head', purpose: 'injection CSS/meta tag dentro <head>' }
+        ]
       },
       'header.ejs': {
-        required: ['hookPage("header"', 'hookPage(\'header\'', 'hookPage(`header`'],
-        description: 'Hook "header" all\'inizio del body'
+        hooks: [
+          { name: 'header', purpose: 'injection contenuti in apertura del <body>' }
+        ]
       },
       'footer.ejs': {
-        required: [
-          ['hookPage("footer"', 'hookPage(\'footer\'', 'hookPage(`footer`'],
-          ['hookPage("script"', 'hookPage(\'script\'', 'hookPage(`script`']
-        ],
-        description: 'Hook "footer" e "script" per injection scripts'
+        hooks: [
+          { name: 'footer', purpose: 'injection contenuti a fine pagina' },
+          { name: 'script', purpose: 'injection script di fine body' }
+        ]
       },
       'nav.ejs': {
-        required: ['hookPage("nav"', 'hookPage(\'nav\'', 'hookPage(`nav`'],
-        description: 'Hook "nav" per navigation',
+        hooks: [
+          { name: 'nav', purpose: 'injection voci di navigazione' }
+        ],
         optional: true
       },
       'main.ejs': {
-        required: [
-          ['hookPage("main"', 'hookPage(\'main\'', 'hookPage(`main`'],
-          ['hookPage("body"', 'hookPage(\'body\'', 'hookPage(`body`']
+        hooks: [
+          { name: 'main', purpose: 'contenuto principale, dentro <main>' },
+          { name: 'body', purpose: 'contenuto di pagina dopo </main>' }
         ],
-        description: 'Hook "main" e "body" per contenuto principale',
         optional: true
       },
       'aside.ejs': {
-        required: ['hookPage("aside"', 'hookPage(\'aside\'', 'hookPage(`aside`'],
-        description: 'Hook "aside" per sidebar',
+        hooks: [
+          { name: 'aside', purpose: 'injection contenuti della sidebar' }
+        ],
         optional: true
       }
     };
@@ -460,53 +478,91 @@ class themeSys{
       }
 
       try {
-        const content = fs.readFileSync(partialPath, 'utf8');
+        // Gli hook si cercano nell'albero di inclusione, non nel solo file: un
+        // partial che fattorizza una parte di sé in un sub-partial condiviso è
+        // corretto a runtime, e cercare nel solo file radice lo darebbe per
+        // incompleto (issue #355). Il perimetro della risoluzione è il tema.
+        //
+        // Conseguenza da tenere presente: un hook trovato in un file incluso vale
+        // per il partial radice. Oggi innocuo — nessun hook è richiesto in due
+        // partial diversi — ma se un domani lo fosse, due radici che includono lo
+        // stesso sub-partial passerebbero entrambe con una sola chiamata reale.
+        const includeTree = resolveIncludeTree(partialPath, { rootPath: themePath });
+        const searchedSource = includeTree.reachedFiles.map(reached => reached.content).join('\n');
+
+        // Un include verso un file inesistente fa fallire il render: dirlo al boot
+        // è più utile del 500 in faccia all'utente. Il difetto è attribuito al file
+        // che contiene l'include, non alla radice dell'albero.
+        for (const { filePath, target } of includeTree.missingIncludes) {
+          errors.push(`${path.relative(viewsPath, filePath)}: include '${target}' non trovato` +
+                      ` — il tema andrà in errore al render`);
+        }
+
+        // Se un include non è risolvibile, un hook dato per mancante potrebbe
+        // essere proprio là dentro: lo si dichiara SOLO quando cambia la
+        // conclusione, per non fare rumore sui temi sani. Anche qui conta il file
+        // che contiene l'include: dirigere l'utente sulla radice lo manderebbe a
+        // cercare in un file dove quella riga non c'è.
+        const unresolvedCount = includeTree.unresolvedIncludes.length;
+        const searchLimitNote = unresolvedCount === 0
+          ? ''
+          : `\n   ⚠ ${unresolvedCount === 1 ? '1 include non risolvibile' : `${unresolvedCount} include non risolvibili`}` +
+            ` in ${path.relative(viewsPath, includeTree.unresolvedIncludes[0].filePath)}` +
+            `: ${includeTree.unresolvedIncludes[0].expression} — la ricerca può essere incompleta`;
 
         // Verifica presenza hook richiesti
-        const requiredArray = Array.isArray(hookConfig.required[0]) ? hookConfig.required : [hookConfig.required];
-
-        for (const hookVariants of requiredArray) {
-          const hookFound = hookVariants.some(variant => content.includes(variant));
+        for (const { name, purpose } of hookConfig.hooks) {
+          const hookFound = hookCallVariants(name).some(variant => searchedSource.includes(variant));
 
           if (!hookFound) {
-            const hookName = hookVariants[0].match(/hookPage\(["'`](\w+)["'`]/)[1];
-            errors.push(`${partialName}: Hook "${hookName}" mancante (${hookConfig.description})`);
+            errors.push(`${partialName}: Hook "${name}" mancante (${purpose})${searchLimitNote}`);
           }
         }
 
-        // Verifica pattern sospetti (solo per partials non opzionali o esistenti)
+        // Verifica pattern sospetti. Come per gli hook si guarda l'intero albero:
+        // un tema che fattorizza l'<head> in un sub-partial nasconderebbe altrimenti
+        // proprio gli asset cablati che questi warning esistono per intercettare.
+        // Il warning nomina il file in cui il markup si trova davvero.
         for (const { pattern, message, file } of suspiciousPatterns) {
-          // Se il pattern specifica un file, controlla solo quello
-          if (file && file !== partialName) continue;
+          for (const reached of includeTree.reachedFiles) {
+            const reachedName = path.relative(viewsPath, reached.filePath);
 
-          if (pattern.test(content)) {
+            // Se il pattern specifica un file, controlla solo quello
+            if (file && file !== reachedName) continue;
+
+            if (!pattern.test(reached.content)) continue;
+
             // Caso speciale: navbar in nav.ejs
             // Non emettere warning se c'è un wrapper <nav> ma il contenuto è iniettato via hook
-            if (partialName === 'nav.ejs' && pattern.source.includes('nav')) {
-              // Verifica se c'è l'hook che inietta il contenuto dinamicamente
-              const hasNavHook = content.includes('pluginSys.hookPage("nav"') ||
-                                 content.includes("pluginSys.hookPage('nav'") ||
-                                 content.includes('pluginSys.hookPage(`nav`');
+            if (reachedName === 'nav.ejs' && pattern.source.includes('nav')) {
+              // Verifica se c'è l'hook che inietta il contenuto dinamicamente.
+              // Same variants and same surface as the required-hook check above:
+              // the hook counts wherever it sits in the include tree.
+              const hasNavHook = hookCallVariants('nav').some(variant => searchedSource.includes(variant));
 
-              if (hasNavHook) {
-                // Hook trovato - il contenuto è dinamico, solo il wrapper è hardcoded (OK)
-                continue;
-              }
+              // Hook trovato - il contenuto è dinamico, solo il wrapper è hardcoded (OK)
+              if (hasNavHook) continue;
             }
 
-            warnings.push(`${partialName}: ${message}`);
+            warnings.push(`${reachedName}: ${message}`);
           }
         }
 
       } catch (error) {
-        errors.push(`Errore lettura ${partialName}: ${error.message}`);
+        errors.push(`Errore nella validazione di ${partialName}: ${error.message}`);
       }
     }
 
+    // Ogni partial risolve il proprio albero, quindi un sub-partial condiviso viene
+    // esaminato una volta per ciascuna radice che lo raggiunge: senza deduplica lo
+    // stesso identico difetto comparirebbe più volte, e chi legge andrebbe a cercare
+    // un secondo problema che non esiste.
+    const uniqueErrors = [...new Set(errors)];
+
     return {
-      valid: errors.length === 0,
-      errors: errors,
-      warnings: warnings
+      valid: uniqueErrors.length === 0,
+      errors: uniqueErrors,
+      warnings: [...new Set(warnings)]
     };
   }
 
