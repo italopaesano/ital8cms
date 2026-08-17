@@ -8,12 +8,24 @@
  * profondità in CLAUDE.md.
  */
 
-/* global SN_API, SN_AUTO_REFRESH_SECONDS, SN_EVENT_LIMIT, SN_DEFAULT_DAYS, escapeHtml */
+/* global SN_API, SN_AUTO_REFRESH_SECONDS, SN_EVENT_LIMIT, SN_DEFAULT_DAYS, snT, escapeHtml */
 (function () {
   'use strict';
 
   const $ = (id) => document.getElementById(id);
   const esc = (v) => escapeHtml(v === null || v === undefined ? '' : String(v));
+
+  /**
+   * Etichetta tradotta. L'implementazione sta in `sentinel-i18n.js`, condivisa
+   * dalle quattro pagine della sezione.
+   *
+   * Si risolve alla CHIAMATA e non al caricamento per due motivi: sotto Node
+   * questo file viene richiesto per le sue funzioni pure, dove nessun global di
+   * browser esiste; e se lo script condiviso non fosse stato caricato, l'ultima
+   * cosa utile che una dashboard può fare è mostrare le chiavi invece di
+   * spegnersi a metà rendering.
+   */
+  const t = (key, vars) => (typeof snT === 'function' ? snT(key, vars) : String(key));
 
   let autoRefreshTimer = null;
   let currentMode = null;
@@ -78,10 +90,10 @@
     btn.disabled = false;
     if (currentMode === 'enforce') {
       btn.className = 'btn btn-outline-secondary btn-sm';
-      btn.textContent = '↩ Torna in osservazione';
+      btn.textContent = t('toObservation');
     } else {
       btn.className = 'btn btn-outline-danger btn-sm';
-      btn.textContent = '⏻ Attiva enforcement';
+      btn.textContent = t('enableEnforce');
     }
 
     // Le due condizioni vanno mostrate insieme: `mode: enforce` con il gate su
@@ -129,22 +141,22 @@
     const rows = canary.recentTriggers || [];
     const body = $('canaryTable');
     if (rows.length === 0) {
-      body.innerHTML = '<tr><td colspan="4" class="text-muted p-3">Nessun token ancora usato.</td></tr>';
+      emptyRow(body, 4, t('emptyCanary'));
       return;
     }
 
     // esc() su ogni campo: qui si stampano indirizzi e percorsi, cioè
     // stringhe scelte da chi ha fatto la richiesta.
-    body.innerHTML = rows.map(function (t) {
-      var same = t.sameClient === null || t.sameClient === undefined
+    body.innerHTML = rows.map(function (riga) {
+      var same = riga.sameClient === null || riga.sameClient === undefined
         ? '<span class="text-muted">?</span>'
-        : (t.sameClient
-          ? '<span class="badge bg-secondary">sì</span>'
-          : '<span class="badge bg-danger">no</span>');
+        : (riga.sameClient
+          ? '<span class="badge bg-secondary">' + esc(t('yes')) + '</span>'
+          : '<span class="badge bg-danger">' + esc(t('no')) + '</span>');
       return '<tr>'
-        + '<td>' + esc(shortTime(t.at)) + '</td>'
-        + '<td><code>' + esc(t.usedByIp || '—') + '</code></td>'
-        + '<td><code>' + esc(t.deliveredToIp || '—') + '</code></td>'
+        + '<td>' + esc(shortTime(riga.at)) + '</td>'
+        + '<td><code>' + esc(riga.usedByIp || '—') + '</code></td>'
+        + '<td><code>' + esc(riga.deliveredToIp || '—') + '</code></td>'
         + '<td>' + same + '</td>'
         + '</tr>';
     }).join('');
@@ -163,8 +175,9 @@
     const refused = tarpit ? tarpit.refused : 0;
     box.classList.toggle('d-none', !refused);
     if (refused) {
-      $('tarpitDetail').textContent = ' (' + num(refused) + ' rifiutate, '
-        + num(tarpit.concurrent) + '/' + num(tarpit.maxConcurrent) + ' in corso) ';
+      $('tarpitDetail').textContent = ' (' + t('tarpitDetail', {
+        refused: num(refused), current: num(tarpit.concurrent), max: num(tarpit.maxConcurrent),
+      }) + ') ';
     }
   }
 
@@ -187,7 +200,7 @@
     const rows = sessions.recent || [];
     const body = $('sessionTable');
     if (rows.length === 0) {
-      body.innerHTML = '<tr><td colspan="4" class="text-muted p-3">Nessuna anomalia rilevata.</td></tr>';
+      emptyRow(body, 4, t('emptySessions'));
       return;
     }
 
@@ -216,6 +229,11 @@
     const data = await fetchJson(SN_API + '/summary?days=' + encodeURIComponent(days));
     if (!data.enabled) return;
 
+    // I numeri possono venire da un calcolo di qualche secondo fa (vedi
+    // summaryCacheSeconds): la pagina lo dice invece di lasciarlo supporre.
+    const computedAt = $('summaryComputedAt');
+    if (computedAt) computedAt.textContent = shortTime(data.computedAt);
+
     const s = data.summary || {};
     $('kpiTotal').textContent = num(s.total);
     $('kpiEnforced').textContent = num(s.enforced);
@@ -227,7 +245,7 @@
     const tbody = $('categoryTable');
     const rows = s.byCategory || [];
     if (rows.length === 0) {
-      emptyRow(tbody, 2, 'Nessun evento nella finestra selezionata.');
+      emptyRow(tbody, 2, t('emptyWindow'));
       return;
     }
     const max = rows[0].count;
@@ -245,22 +263,27 @@
     window.__snRules = rules;
 
     if (rules.length === 0) {
-      emptyRow(tbody, 8, 'Nessuna regola definita.');
+      emptyRow(tbody, 8, t('emptyRules'));
       return;
     }
 
     tbody.innerHTML = rules.map((r) => {
       let flag;
-      if (r.neverFired) {
+      if (r.defined === null) {
+        // Le definizioni non sono arrivate (filtro spento): questi sono i
+        // contatori su disco senza nessuno che dica se la regola esista ancora.
+        // Marcarli «rimossa» sarebbe un verdetto che nessuno ha emesso.
+        flag = '<span class="badge bg-light text-dark" title="' + esc(t('unknownRule')) + '">?</span>';
+      } else if (r.neverFired) {
         // Zero scatti non vuol dire «sicura»: vuol dire che non si sa niente.
         // Promuoverla sarebbe un atto di fede, non una decisione informata.
-        flag = '<span class="badge bg-secondary">mai scattata</span>';
+        flag = '<span class="badge bg-secondary">' + esc(t('neverFired')) + '</span>';
       } else if (!r.defined) {
-        flag = '<span class="badge bg-dark">rimossa</span>';
+        flag = '<span class="badge bg-dark">' + esc(t('removed')) + '</span>';
       } else if (r.safeToPromote) {
-        flag = '<span class="badge bg-success">sì</span>';
+        flag = '<span class="badge bg-success">' + esc(t('yes')) + '</span>';
       } else {
-        flag = '<span class="badge bg-warning text-dark">no</span>';
+        flag = '<span class="badge bg-warning text-dark">' + esc(t('no')) + '</span>';
       }
 
       const authClass = r.authenticatedHits > 0 ? 'text-danger fw-bold' : '';
@@ -290,16 +313,18 @@
    * promossa, non nascosto in un menu.
    */
   function actionButton(rule) {
-    if (!rule.defined) return '';
+    // `defined: null` = definizioni non disponibili. Offrire «promuovi» senza
+    // sapere quale sia l'azione in vigore proporrebbe un gesto alla cieca.
+    if (rule.defined === null || !rule.defined) return '';
     if (rule.action === 'allow') return '';
 
     if (rule.action === 'block') {
       return '<button class="btn btn-outline-secondary btn-sm py-0" '
-        + 'data-rule="' + esc(rule.ruleName) + '" data-action="monitor">↩ retrocedi</button>';
+        + 'data-rule="' + esc(rule.ruleName) + '" data-action="monitor">' + esc(t('demote')) + '</button>';
     }
     const warn = rule.authenticatedHits > 0 ? ' sn-risky' : '';
     return '<button class="btn btn-outline-danger btn-sm py-0' + warn + '" '
-      + 'data-rule="' + esc(rule.ruleName) + '" data-action="block">⏻ promuovi</button>';
+      + 'data-rule="' + esc(rule.ruleName) + '" data-action="block">' + esc(t('promote')) + '</button>';
   }
 
   async function changeRuleAction(ruleName, action) {
@@ -307,9 +332,7 @@
     // chiude fuori qualcuno: si chiede conferma nominando il numero.
     const row = (window.__snRules || []).find((r) => r.ruleName === ruleName);
     if (action === 'block' && row && row.authenticatedHits > 0) {
-      const ok = window.confirm(
-        'Questa regola ha colpito ' + row.authenticatedHits + ' richieste di utenti '
-        + 'autenticati. Promuoverla a blocco potrebbe chiudere fuori qualcuno.\n\nProcedere comunque?');
+      const ok = window.confirm(t('promoteRisky', { n: row.authenticatedHits }));
       if (!ok) return;
     }
 
@@ -321,23 +344,19 @@
         body: JSON.stringify({ ruleName: ruleName, action: action }),
       });
       const data = await res.json();
-      if (!data.ok) { showAlert('Modifica rifiutata: ' + data.error, 'danger'); return; }
+      if (!data.ok) { showAlert(t('changeRejected', { error: data.error }), 'danger'); return; }
 
-      showAlert('Regola "' + ruleName + '": ' + (data.previous || '?') + ' → ' + action
-        + '. In vigore adesso, senza riavvio.', 'success');
+      showAlert(t('ruleChanged', { rule: ruleName, from: data.previous || '?', to: action }), 'success');
       refreshAll();
     } catch (err) {
-      showAlert('Errore di rete: ' + err.message, 'danger');
+      showAlert(t('networkError', { error: err.message }), 'danger');
     }
   }
 
   async function toggleMode() {
     const target = currentMode === 'enforce' ? 'monitor' : 'enforce';
     if (target === 'enforce') {
-      const ok = window.confirm(
-        'Attivando l\'enforcement le regole in "block" cominceranno a bloccare davvero.\n\n'
-        + 'Se qualcosa va storto: npm run cli -- sentinel monitor\n'
-        + '(ferma l\'enforcement a caldo SENZA perdere i dati).\n\nProcedere?');
+      const ok = window.confirm(t('enforceWarning'));
       if (!ok) return;
     }
     try {
@@ -348,11 +367,11 @@
         body: JSON.stringify({ mode: target }),
       });
       const data = await res.json();
-      if (!data.ok) { showAlert('Cambio modalità rifiutato: ' + data.error, 'danger'); return; }
-      showAlert('Modalità globale: ' + target, 'success');
+      if (!data.ok) { showAlert(t('modeRejected', { error: data.error }), 'danger'); return; }
+      showAlert(t('modeChanged', { mode: target }), 'success');
       refreshAll();
     } catch (err) {
-      showAlert('Errore di rete: ' + err.message, 'danger');
+      showAlert(t('networkError', { error: err.message }), 'danger');
     }
   }
 
@@ -363,8 +382,10 @@
     const tbody = $('scannerTable');
     const rows = data.scanners || [];
 
+    updateEvictionWarning('outcomes', data.evictions);
+
     if (rows.length === 0) {
-      emptyRow(tbody, 5, 'Nessun client sopra la soglia. È una buona notizia.');
+      emptyRow(tbody, 5, t('emptyScanners'));
       return;
     }
 
@@ -374,7 +395,7 @@
       // Il "+" dice che il conteggio ha toccato il tetto e il vero valore è
       // almeno quello: senza, una stima verrebbe letta come una misura.
       + '<td class="text-end fw-bold">' + num(c.distinctPaths)
-        + (c.distinctPathsSaturated ? '<span title="conteggio fermato al tetto: almeno questo valore">+</span>' : '')
+        + (c.distinctPathsSaturated ? '<span title="' + esc(t('saturatedHint')) + '">+</span>' : '')
         + '</td>'
       + '<td class="text-end">' + num(c.notFound) + '</td>'
       + '<td class="text-end">' + num(c.total) + '</td>'
@@ -392,15 +413,15 @@
     $('ipModeBadge').textContent = 'IP: ' + (data.ipMode || '—');
 
     if (rows.length === 0) {
-      emptyRow(tbody, 5, 'Censimento vuoto.');
+      emptyRow(tbody, 5, t('emptyCensus'));
       return;
     }
 
     tbody.innerHTML = rows.map((f) => {
       const cls = f.class || {};
       const coherent = cls.coherent === false
-        ? '<span class="badge bg-warning text-dark">no</span>'
-        : '<span class="badge bg-light text-dark">sì</span>';
+        ? '<span class="badge bg-warning text-dark">' + esc(t('no')) + '</span>'
+        : '<span class="badge bg-light text-dark">' + esc(t('yes')) + '</span>';
       return '<tr>'
         + '<td><code class="sn-fp">' + esc(f.fp) + '</code></td>'
         + '<td>' + esc(cls.family || '—') + '</td>'
@@ -410,15 +431,25 @@
         + '</tr>';
     }).join('');
 
-    updateEvictionWarning(data.evictions);
+    updateEvictionWarning('fingerprints', data.evictions);
   }
 
-  let lastEvictions = 0;
-  function updateEvictionWarning(value) {
-    lastEvictions = value || 0;
+  // Gli sfratti arrivano da DUE archivi — impronte e esiti — e la pagina ne
+  // mostrava uno solo, perché l'avviso lo aggiornava la sola tabella delle
+  // impronte. Un archivio sotto pressione e l'altro tranquillo davano quindi un
+  // avviso spento su metà del problema. Ciascuna sorgente scrive la sua casella
+  // e l'avviso mostra il totale, così nessuna delle due può nascondere l'altra.
+  const evictions = { fingerprints: 0, outcomes: 0 };
+
+  function updateEvictionWarning(sorgente, value) {
+    evictions[sorgente] = value || 0;
+    const totale = evictions.fingerprints + evictions.outcomes;
+
     const box = $('evictionWarning');
-    box.classList.toggle('d-none', lastEvictions === 0);
-    $('evictionDetail').textContent = ' (' + lastEvictions + ') ';
+    box.classList.toggle('d-none', totale === 0);
+    $('evictionDetail').textContent = ' (' + t('evictionDetail', {
+      total: totale, fp: evictions.fingerprints, clients: evictions.outcomes,
+    }) + ') ';
   }
 
   // ── Eventi ────────────────────────────────────────────────────────────────
@@ -430,7 +461,7 @@
     const rows = data.events || [];
 
     if (rows.length === 0) {
-      emptyRow(tbody, 5, 'Nessun evento registrato.');
+      emptyRow(tbody, 5, t('emptyEvents'));
       return;
     }
 
@@ -472,7 +503,7 @@
         loadEvents(),
       ]);
     } catch (err) {
-      showAlert('Errore nel caricamento dei dati: ' + err.message, 'danger');
+      showAlert(t('loadError', { error: err.message }), 'danger');
     } finally {
       spinner.classList.add('d-none');
     }

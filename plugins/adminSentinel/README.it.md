@@ -103,6 +103,11 @@ Le ultime righe del log, filtrabili per soli eventi applicati.
 | Oggetto condiviso di `sentinel` | Stato vivo: statistiche in memoria, nomi delle regole | Stesso processo, costo nullo |
 | File in `plugins/sentinel/data/` | Dati storici: eventi, censimenti, contatori | Un anno di eventi non può passare per la memoria del service |
 
+I dati storici si leggono **senza materializzarli**: `forEachEventSince` consegna
+un evento per volta a chi aggrega, e non trattiene niente. La stessa ragione per
+cui non passano dall'oggetto condiviso vale dentro questo plugin — un anno di
+eventi non deve stare in memoria nemmeno qui. Vedi *Il costo della panoramica*.
+
 La data dir è risolta dal `custom.dataPath` del service via
 `pluginSys.getPlugin('sentinel')`, non cablata: un percorso personalizzato
 continua a funzionare.
@@ -143,6 +148,51 @@ a un pannello che risponde 404.
 | `eventLimit` | `100` | Righe nella tabella eventi |
 | `scannerThreshold` | `20` | Percorsi distinti falliti per essere un sospetto scanner |
 | `autoRefreshSeconds` | `15` | Auto-aggiornamento; `0` lo disattiva |
+| `summaryCacheSeconds` | `30` | Quanto resta buono un riepilogo già calcolato **quando i file sono cambiati**; `0` ricalcola sempre (vedi *Il costo della panoramica*) |
+| `maxBackupsPerFile` | `10` | Backup di `sentinelRules.json5` conservati prima dei salvataggi dall'editor raw |
+
+### Il costo della panoramica
+
+Il riepilogo si ricava da **tutto** il log della finestra, e la finestra arriva a
+un anno perché *«Ultimo anno»* è una voce del menu. Lettura e parsing sono
+sincroni: finché girano, il processo non serve nessun'altra richiesta — quindi il
+conto non lo paga la dashboard, lo paga il **sito**.
+
+Tre cose lo tengono a bada, e vale la pena sapere quale fa cosa:
+
+| | Cosa fa | Effetto misurato su 273 MB / 600.000 eventi |
+|---|---|---|
+| **Streaming** | Gli eventi alimentano un accumulatore e vengono buttati subito, invece di essere raccolti in un array per poi contarli | heap **da +280 MB a +21 MB** |
+| **Cessione del controllo** | Ogni 20.000 righe il lettore lascia girare l'event loop | stalla massima **da ~4,5 s a 74 ms** |
+| **Cache** | A file invariati il riepilogo non si ricalcola | secondo aggiornamento **da ~4,5 s a ~1 ms** |
+
+Misurato anche sull'istanza viva (81,8 MB di log, richieste HTTP autenticate): la
+stessa panoramica ripetuta tre volte passa da **775 / 722 / 725 ms** a
+**715 / 5,8 / 5,3 ms**, e la latenza peggiore di un endpoint leggero interrogato
+*durante* il calcolo scende da **645 ms** (su un calcolo da 693 ms: chi arriva
+all'inizio aspetta praticamente tutto) a **178 ms**, con tutte le richieste
+servite mentre la panoramica lavorava. Prima il sito si fermava, adesso rallenta.
+
+La cache ha due livelli, e il primo non è un compromesso:
+
+1. **Timbro dei file identico** → la risposta in cache è *esattamente* quella che
+   il ricalcolo produrrebbe. Non è vecchia, è esatta: si serve senza limiti di
+   età. Il timbro costa una `readdir` e qualche `stat` (~1 ms), e comprende anche
+   gli archivi delle impronte, perché la quota non classificata nasce da lì.
+2. **Timbro cambiato ma calcolo recente** → qui sì che i numeri sono un po'
+   vecchi, ed è `summaryCacheSeconds` a dire quanto. Serve sui siti attivi, dove
+   il log cresce di continuo e il primo livello non scatterebbe mai.
+
+Le richieste in volo si fondono: **tre schede aperte fanno un calcolo, non tre**.
+
+La pagina mostra sempre l'istante di calcolo accanto alla sorgente dati. Servire
+un riepilogo di trenta secondi fa va benissimo; farlo credere dell'istante no.
+
+> **Limite dichiarato.** Il *primo* calcolo della finestra annuale su un log
+> grosso costa comunque secondi di CPU, spezzettati. Toglierlo del tutto vuol
+> dire non ricavare più il riepilogo dagli eventi grezzi, cioè far scrivere a
+> `sentinel` un aggregato giornaliero accanto agli altri censimenti: è un
+> intervento sul service, non su questo plugin.
 
 ## API
 
@@ -153,6 +203,7 @@ vanno esposte a chiunque.
 ```
 GET  /status                        stato vivo + effectivelyEnforcing + dataDir
 GET  /summary?days=7                KPI, composizione, timeline, quota non classificata
+                                    (+ computedAt: quando i numeri sono stati calcolati)
 GET  /rules                         contatori + azione in vigore + indicatore di promuovibilità
 GET  /fingerprints?limit=50         censimento delle impronte
 GET  /scanners?minPaths=20          sospetti scanner
@@ -167,8 +218,29 @@ POST /rules/save                    { content } — valida, fa il backup, salva,
 POST /rules/test                    { spec } — prova una richiesta e spiega l'esito
 
 GET  /rules/source                  le regole come stanno sul FILE (per il form)
-POST /rules/fields                  { ruleName, rule } — salva una regola dal form
+                                    (+ mtime, per la guardia sulla sovrascrittura)
+POST /rules/fields                  { ruleName, rule, knownMtime? } — salva una regola dal form
 ```
+
+**`enabled` significa una cosa sola:** il service è disponibile. I dati storici
+vengono restituiti comunque — il log su disco non smette di esistere quando il
+filtro viene spento — e `/rules` porta `definitionsAvailable`: senza definizioni
+le righe hanno `defined: null`, perché «rimossa» sarebbe un verdetto che nessuno
+ha emesso.
+
+**Salvataggi e conflitti.** `/rules/raw` e `/rules/source` restituiscono l'`mtime`
+del file; rimandandolo come `knownMtime` al salvataggio si ottiene **409** se nel
+frattempo qualcuno l'ha cambiato — una promozione dalla panoramica, un altro
+amministratore, la riga di comando. La precondizione è **opzionale**, come
+`If-Match`: chi non la manda salva come prima, e sa di rinunciarci.
+
+Le tre risposte di errore sono distinte, perché mandano in tre posti diversi:
+
+| Esito | HTTP | Cosa vuol dire |
+|---|---|---|
+| Regole non valide | `400` con `errors[]` | il testo è sbagliato: si corregge nell'editor |
+| File cambiato sotto | `409` con `conflict: true` | il file su disco non è più quello che hai caricato |
+| Scrittura fallita | `500` con `error` | disco pieno, permessi, FS in sola lettura |
 
 Le POST richiedono il token CSRF, iniettato automaticamente nelle pagine admin
 dall'hook `head` di `csrfProtection`: il `fetch` del browser lo aggiunge da sé.
@@ -179,6 +251,17 @@ Ogni contenuto dinamico passa da `escapeHtml()` prima di finire in `innerHTML`:
 qui si stampano IP, percorsi e User-Agent, cioè **stringhe scelte
 dall'attaccante**. Una dashboard di sicurezza che si fa iniettare HTML dai propri
 dati è un bersaglio, non uno strumento.
+
+## Lingua
+
+Le pagine sono bilingue (it/en) **per intero**, contenuto dinamico compreso: il
+JS di pagina non può chiamare `__()`, quindi ogni EJS gli passa le proprie
+etichette in `SN_I18N` e `sentinel-i18n.js` le riempie con `snT()`.
+
+Le etichette usano segnaposto (`{rule}`, `{n}`) invece della concatenazione:
+`'Regola "' + nome + '": ' + prima` funziona in italiano e decide l'ordine delle
+parole per ogni lingua futura. Un test verifica che ogni chiave usata dal JS
+esista e che non ce ne siano di inutilizzate.
 
 ---
 
@@ -305,7 +388,23 @@ Lo stesso strumento è disponibile da riga di comando
 (`npm run cli -- sentinel test <path>`), che è spesso dove serve: la domanda
 «perché questa regola non scatta?» arriva mentre si sta scrivendo il file in SSH.
 
+### Cosa si perde salvando dal form, e cosa no
+
+Si perdono i **commenti scritti dentro quella regola** (vedi sopra). **Non** si
+perde nulla di ciò che il form non conosce: la regola da salvare parte da quella
+sul file, e il form sovrascrive solo i campi che possiede. Un campo aggiunto un
+domani a `sentinel` sopravvive al salvataggio per costruzione, invece di
+sopravvivere se qualcuno si ricorda di aggiungerlo alla GUI.
+
 ## Cosa NON fa ancora
 
 Le Tre Viste ci sono tutte. Restano aperti i punti del *piano di rifinitura* in
 [`plugins/sentinel/TODO.md`](../sentinel/TODO.md).
+
+Un limite noto della panoramica: il **primo** calcolo della finestra annuale su
+un log grosso costa comunque secondi di CPU (spezzettati, quindi il sito
+risponde). Toglierlo del tutto vuol dire non ricavare più il riepilogo dagli
+eventi grezzi, cioè far scrivere a `sentinel` un aggregato giornaliero accanto
+agli altri censimenti: è un intervento sul service.
+
+> 📖 Perché è fatto così, e come si regola: [`EXPLAIN.it.md`](./EXPLAIN.it.md).

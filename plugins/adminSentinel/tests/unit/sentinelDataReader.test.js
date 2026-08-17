@@ -101,12 +101,124 @@ describe('readRecentEvents', () => {
   });
 });
 
-describe('readEventsSince', () => {
-  test('esclude gli eventi fuori dalla finestra', () => {
+// «Troncato» deve voler dire «ne sono rimasti fuori», non «il limite è stato
+// raggiunto»: erano la stessa cosa nel codice e non lo sono nella realtà.
+describe('readRecentEvents — il verdetto sul troncamento', () => {
+  test('esattamente `limit` eventi e nient altro NON è troncato', () => {
+    writeJsonl('sentinel-2026-08-08.jsonl', [ev(), ev()]);
+    expect(reader.readRecentEvents(dataDir, { limit: 2 }).truncated).toBe(false);
+  });
+
+  test('meno eventi del limite non è troncato', () => {
+    writeJsonl('sentinel-2026-08-08.jsonl', [ev()]);
+    expect(reader.readRecentEvents(dataDir, { limit: 10 }).truncated).toBe(false);
+  });
+
+  test('righe avanzate nello stesso file → troncato', () => {
+    writeJsonl('sentinel-2026-08-08.jsonl', [ev(), ev(), ev()]);
+    expect(reader.readRecentEvents(dataDir, { limit: 2 }).truncated).toBe(true);
+  });
+
+  test('file più vecchi non aperti → troncato', () => {
+    writeJsonl('sentinel-2026-08-07.jsonl', [ev()]);
+    writeJsonl('sentinel-2026-08-08.jsonl', [ev(), ev()]);
+    const result = reader.readRecentEvents(dataDir, { limit: 2 });
+    expect(result.truncated).toBe(true);
+    // E senza aprirlo: la promessa di fermarsi appena si ha abbastanza resta.
+    expect(result.scannedFiles).toBe(1);
+  });
+});
+
+describe('forEachEventSince', () => {
+  /** Raccoglie in un array ciò che la funzione consegna un evento per volta. */
+  async function collect(dir, days) {
+    const events = [];
+    const scan = await reader.forEachEventSince(dir, days, (e) => events.push(e));
+    return { events, scan };
+  }
+
+  test('esclude gli eventi fuori dalla finestra', async () => {
     const vecchio = new Date(Date.now() - 30 * 86400000).toISOString();
     writeJsonl('sentinel-2026-08-08.jsonl', [ev({ timestamp: vecchio }), ev()]);
-    const events = reader.readEventsSince(dataDir, 7);
+    const { events } = await collect(dataDir, 7);
     expect(events).toHaveLength(1);
+  });
+
+  test('riporta quanti file ha letto e quanti eventi ha consegnato', async () => {
+    writeJsonl('sentinel-2026-08-08.jsonl', [ev(), ev()]);
+    writeJsonl('sentinel-2026-08-09.jsonl', [ev()]);
+    const { scan } = await collect(dataDir, 7);
+    expect(scan).toEqual({ scannedFiles: 2, eventCount: 3 });
+  });
+
+  // Stessa tolleranza di readJsonl: un log troncato da un crash non deve
+  // impedire di leggere le righe buone che lo precedono.
+  test('le righe malformate non interrompono lo scorrimento', async () => {
+    write('sentinel-2026-08-08.jsonl',
+      JSON.stringify(ev()) + '\n{ rotta\n' + JSON.stringify(ev()) + '\n');
+    const { events } = await collect(dataDir, 7);
+    expect(events).toHaveLength(2);
+  });
+
+  test('una data dir inesistente non fa lanciare nulla', async () => {
+    const { events, scan } = await collect(path.join(dataDir, 'non-esiste'), 7);
+    expect(events).toEqual([]);
+    expect(scan.scannedFiles).toBe(0);
+  });
+
+  // La ragione d'essere della funzione: il lavoro viene spezzato, così le altre
+  // richieste passano in mezzo invece di aspettare la fine. Senza cessione del
+  // controllo il timer non potrebbe MAI scattare durante la lettura, perché il
+  // ciclo non lascerebbe girare nient'altro.
+  test('cede il controllo all event loop mentre legge', async () => {
+    const righe = [];
+    for (let i = 0; i < 45000; i++) righe.push(ev({ ip: '203.0.113.' + (i % 250) }));
+    writeJsonl('sentinel-2026-08-08.jsonl', righe);
+
+    let passato = false;
+    const sonda = setInterval(() => { passato = true; }, 1);
+
+    const { events } = await collect(dataDir, 7);
+    clearInterval(sonda);
+
+    expect(events).toHaveLength(45000);
+    expect(passato).toBe(true);
+  });
+});
+
+describe('windowStamp', () => {
+  test('non cambia se non cambia nulla', () => {
+    writeJsonl('sentinel-2026-08-08.jsonl', [ev()]);
+    expect(reader.windowStamp(dataDir, 7)).toBe(reader.windowStamp(dataDir, 7));
+  });
+
+  test('cambia quando il log cresce', () => {
+    writeJsonl('sentinel-2026-08-08.jsonl', [ev()]);
+    const prima = reader.windowStamp(dataDir, 7);
+    fs.appendFileSync(path.join(dataDir, 'sentinel-2026-08-08.jsonl'),
+      JSON.stringify(ev()) + '\n', 'utf8');
+    expect(reader.windowStamp(dataDir, 7)).not.toBe(prima);
+  });
+
+  // /summary riporta anche la quota non classificata, che nasce dal censimento:
+  // un timbro cieco agli archivi terrebbe buona una quota ormai superata.
+  test('cambia quando cambia il censimento delle impronte', () => {
+    writeJsonl('sentinel-2026-08-08.jsonl', [ev()]);
+    writeJson5('fingerprintCensus.json5', { evictions: 0, fingerprints: {} });
+    const prima = reader.windowStamp(dataDir, 7);
+    writeJson5('fingerprintCensus.json5', {
+      evictions: 0, fingerprints: { aaa: { count: 9, matchedCount: 1 } },
+    });
+    expect(reader.windowStamp(dataDir, 7)).not.toBe(prima);
+  });
+
+  test('finestre diverse hanno timbri diversi', () => {
+    writeJsonl('sentinel-2026-08-08.jsonl', [ev()]);
+    expect(reader.windowStamp(dataDir, 7)).not.toBe(reader.windowStamp(dataDir, 30));
+  });
+
+  test('una data dir inesistente non fa lanciare nulla', () => {
+    expect(typeof reader.windowStamp(path.join(dataDir, 'non-esiste'), 7)).toBe('string');
   });
 });
 
@@ -175,5 +287,78 @@ describe('fusione degli shard', () => {
     expect(hits).toHaveLength(1);
     expect(hits[0].ruleName).toBe('a');
     expect(hits[0].hits).toBe(7);
+  });
+});
+
+/**
+ * L'accumulatore nasceva come copia della PRIMA voce incontrata, e le difese
+ * (`|| 0`, `|| {}`) proteggevano solo la voce in arrivo. Una prima voce
+ * incompleta — shard troncato, schema più vecchio, scrittura interrotta —
+ * avvelenava quindi tutta la fusione.
+ *
+ * Il difetto non si vede in esercizio (il service scrive sempre tutti i campi,
+ * anche a zero) e vive nel ramo che serve al cluster: quello che nessuno
+ * eserciterà finché non servirà davvero. `readShards` a monte è già fail-soft
+ * con gli shard illeggibili; questi test estendono la stessa tolleranza a
+ * quelli parziali.
+ */
+describe('fusione di shard parziali', () => {
+  test('un client senza byStatus non fa più fallire la lettura', () => {
+    writeJson5('outcomeCensus.w1.json5', { byClient: { c1: { total: 3, distinctPaths: 2 } } });
+    writeJson5('outcomeCensus.w2.json5', {
+      byClient: { c1: { total: 5, distinctPaths: 9, byStatus: { 404: 5 }, lastSeen: '2026-01-02' } },
+    });
+
+    const clients = reader.readOutcomeCensus(dataDir).clients;
+    expect(clients).toHaveLength(1);
+    expect(clients[0].total).toBe(8);
+    expect(clients[0].distinctPaths).toBe(9);
+    expect(clients[0].byStatus).toEqual({ 404: 5 });
+  });
+
+  test('impronte: contatori assenti valgono zero, non NaN', () => {
+    writeJson5('fingerprintCensus.w1.json5', { fingerprints: { fp1: { lastSeen: '2026-01-01' } } });
+    writeJson5('fingerprintCensus.w2.json5', {
+      fingerprints: { fp1: { count: 5, matchedCount: 2, lastSeen: '2026-01-02' } },
+    });
+
+    const fp = reader.readFingerprintCensus(dataDir).fingerprints[0];
+    expect(fp.count).toBe(5);
+    expect(fp.matchedCount).toBe(2);
+    expect(fp.blockedCount).toBe(0);
+    expect(Number.isNaN(fp.count)).toBe(false);
+  });
+
+  // Il più insidioso dei tre: un NaN qui non fa rumore, rende `safeToPromote`
+  // falso e la regola sembra semplicemente non promuovibile.
+  test('contatori di regola: un NaN non deve poter spegnere la promuovibilità', () => {
+    writeJson5('ruleHits.w1.json5', { rules: { r1: { lastHit: '2026-01-01' } } });
+    writeJson5('ruleHits.w2.json5', { rules: { r1: { hits: 4, authenticatedHits: 0 } } });
+
+    const row = reader.readRuleHits(dataDir)[0];
+    expect(row.hits).toBe(4);
+    expect(row.authenticatedHits).toBe(0);
+    expect(row.safeToPromote).toBe(true);
+  });
+
+  test('gli estremi temporali si allargano anche se il primo shard non li aveva', () => {
+    writeJson5('fingerprintCensus.w1.json5', { fingerprints: { fp1: { count: 1 } } });
+    writeJson5('fingerprintCensus.w2.json5', {
+      fingerprints: { fp1: { count: 1, firstSeen: '2025-12-01', lastSeen: '2026-01-02' } },
+    });
+
+    const fp = reader.readFingerprintCensus(dataDir).fingerprints[0];
+    expect(fp.firstSeen).toBe('2025-12-01');
+    expect(fp.lastSeen).toBe('2026-01-02');
+  });
+
+  test('la fusione non muta gli oggetti letti dagli shard', () => {
+    writeJson5('outcomeCensus.w1.json5', { byClient: { c1: { total: 1, byStatus: { 404: 1 } } } });
+    writeJson5('outcomeCensus.w2.json5', { byClient: { c1: { total: 1, byStatus: { 404: 1 } } } });
+
+    reader.readOutcomeCensus(dataDir);
+    // Riletto da zero: se la fusione avesse sommato dentro l'oggetto del primo
+    // shard, il file non basterebbe più a spiegare il risultato.
+    expect(reader.readOutcomeCensus(dataDir).clients[0].byStatus).toEqual({ 404: 2 });
   });
 });

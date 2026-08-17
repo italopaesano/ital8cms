@@ -43,6 +43,25 @@ function readRaw(filePath) {
 }
 
 /**
+ * Solo l'mtime, senza leggere il contenuto.
+ *
+ * Serve alla guardia contro la sovrascrittura: si confronta l'istante che il
+ * client ha visto caricando con quello che il file ha adesso. Leggere l'intero
+ * file per ricavarne una data sarebbe sprecato proprio nel percorso di
+ * salvataggio, che è quello che deve essere veloce.
+ *
+ * @param {string} filePath
+ * @returns {string|null} ISO, oppure null se il file non c'è o non si legge
+ */
+function currentMtime(filePath) {
+  try {
+    return fs.statSync(filePath).mtime.toISOString();
+  } catch (_err) {
+    return null;
+  }
+}
+
+/**
  * Copia il file corrente nella cartella dei backup, con timestamp.
  * Fail-soft: se il backup non riesce lo si segnala, ma non si impedisce il
  * salvataggio — bloccare una correzione urgente perché non si può archiviare la
@@ -120,4 +139,6 @@ function listBackups(ownFolder) {
   }
 }
 
-module.exports = { readRaw, writeRaw, createBackup, listBackups, pruneBackups, BACKUP_DIR_NAME };
+module.exports = {
+  readRaw, writeRaw, currentMtime, createBackup, listBackups, pruneBackups, BACKUP_DIR_NAME,
+};

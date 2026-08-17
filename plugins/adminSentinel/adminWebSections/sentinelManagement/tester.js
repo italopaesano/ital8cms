@@ -6,17 +6,29 @@
  * «perché questa regola non scatta?» si legge invece di doverla dedurre.
  */
 
-/* global SN_API, escapeHtml */
+/* global SN_API, snT, escapeHtml */
 (function () {
   'use strict';
 
   const $ = (id) => document.getElementById(id);
   const esc = (v) => escapeHtml(v === null || v === undefined ? '' : String(v));
 
+  /**
+   * Etichetta tradotta. L'implementazione sta in `sentinel-i18n.js`, condivisa
+   * dalle quattro pagine della sezione.
+   *
+   * Si risolve alla CHIAMATA e non al caricamento per due motivi: sotto Node
+   * questo file viene richiesto per le sue funzioni pure, dove nessun global di
+   * browser esiste; e se lo script condiviso non fosse stato caricato, l'ultima
+   * cosa utile che una dashboard può fare è mostrare le chiavi invece di
+   * spegnersi a metà rendering.
+   */
+  const t = (key, vars) => (typeof snT === 'function' ? snT(key, vars) : String(key));
+
   function fmt(value) {
-    if (value === undefined) return '<em>(assente)</em>';
+    if (value === undefined) return '<em>' + esc(t('absent')) + '</em>';
     if (value === null) return 'null';
-    if (typeof value === 'string') return value === '' ? '<em>(vuoto)</em>' : esc(value);
+    if (typeof value === 'string') return value === '' ? '<em>' + esc(t('blank')) + '</em>' : esc(value);
     return '<code>' + esc(JSON.stringify(value)) + '</code>';
   }
 
@@ -33,8 +45,8 @@
       }
 
       return '<div class="' + pad + '">' + mark + ' <strong>' + esc(e.leaf) + '</strong>: '
-        + '<span class="text-muted">atteso</span> ' + fmt(e.expected)
-        + ' <span class="text-muted">— osservato</span> ' + fmt(e.actual)
+        + '<span class="text-muted">' + esc(t('expected')) + '</span> ' + fmt(e.expected)
+        + ' <span class="text-muted">— ' + esc(t('observed')) + '</span> ' + fmt(e.actual)
         + '</div>';
     }).join('');
   }
@@ -45,23 +57,22 @@
 
     out.push('<div class="mb-3 small">'
       + '<div><strong>' + esc(s.method) + ' ' + esc(s.path) + (s.query ? '?' + esc(s.query) : '') + '</strong></div>'
-      + '<div class="text-muted">ip: ' + esc(s.ip)
-      + ' · estensione: ' + (s.extension ? esc(s.extension) : '<em>nessuna</em>')
-      + ' · impronta: <code>' + esc(s.fp) + '</code>'
-      + ' · famiglia: ' + esc(s.fpClass.family)
-      + ' · profilo: ' + esc(s.fpClass.headerProfile)
-      + ' · coerente: ' + (s.fpClass.coherent
-        ? 'sì'
-        : '<span class="text-warning fw-bold">no</span>')
+      + '<div class="text-muted">'
+      + esc(t('subjectLine', { ip: s.ip, ext: s.extension || t('none') }))
+      + '<code>' + esc(s.fp) + '</code>'
+      + esc(t('familyLine', { family: s.fpClass.family, profile: s.fpClass.headerProfile }))
+      + (s.fpClass.coherent
+        ? esc(t('yes'))
+        : '<span class="text-warning fw-bold">' + esc(t('no')) + '</span>')
       + '</div></div>');
 
     if (result.matched) {
       out.push('<div class="alert alert-success py-2">✓ <strong>' + esc(result.matched.ruleName) + '</strong>'
-        + ' → action: <code>' + esc(result.matched.action) + '</code>'
-        + ' <span class="text-muted">(categoria: ' + esc(result.matched.category) + ')</span></div>');
+        + esc(t('matched')) + '<code>' + esc(result.matched.action) + '</code>'
+        + ' <span class="text-muted">'
+        + esc(t('categoryNote', { category: result.matched.category })) + '</span></div>');
     } else {
-      out.push('<div class="alert alert-secondary py-2">✗ Nessuna regola matcha: '
-        + 'la richiesta passerebbe senza essere classificata.</div>');
+      out.push('<div class="alert alert-secondary py-2">' + esc(t('noMatch')) + '</div>');
     }
 
     const rows = verbose ? result.evaluated : result.evaluated.filter((r) => r.matched);
@@ -69,11 +80,11 @@
       const mark = rule.matched ? '✓' : '·';
       let note = '';
       if (rule.skipped) {
-        note = ' <span class="badge bg-secondary">saltata: ' + esc(rule.skipped) + '</span>';
+        note = ' <span class="badge bg-secondary">' + esc(t('skipped', { reason: rule.skipped })) + '</span>';
       } else if (rule.shortCircuited) {
         // A runtime queste non verrebbero nemmeno valutate: dirlo evita di far
         // credere che siano state scartate nel merito.
-        note = ' <span class="badge bg-light text-dark">dopo la vincitrice</span>';
+        note = ' <span class="badge bg-light text-dark">' + esc(t('afterWinner')) + '</span>';
       }
 
       out.push('<div class="sn-trace-rule ' + (rule.matched ? 'sn-trace-hit' : '') + '">'
@@ -84,8 +95,7 @@
     }
 
     if (rows.length === 0) {
-      out.push('<div class="text-muted small">Attiva «mostra anche le regole che non matchano» '
-        + 'per vedere perché ciascuna è stata scartata.</div>');
+      out.push('<div class="text-muted small">' + esc(t('verboseHint')) + '</div>');
     }
 
     $('testResult').innerHTML = out.join('');
@@ -117,7 +127,7 @@
 
     if (!spec.path) {
       box.className = 'alert alert-warning';
-      box.textContent = 'Il percorso è obbligatorio.';
+      box.textContent = t('pathRequired');
       box.classList.remove('d-none');
       return;
     }
@@ -133,14 +143,14 @@
 
       if (!data.ok) {
         box.className = 'alert alert-danger';
-        box.textContent = data.error || 'Il filtro non è disponibile.';
+        box.textContent = data.error || t('unavailable');
         box.classList.remove('d-none');
         return;
       }
       render(data.result, $('tVerbose').checked);
     } catch (err) {
       box.className = 'alert alert-danger';
-      box.textContent = 'Errore di rete: ' + err.message;
+      box.textContent = t('networkError', { error: err.message });
       box.classList.remove('d-none');
     }
   }

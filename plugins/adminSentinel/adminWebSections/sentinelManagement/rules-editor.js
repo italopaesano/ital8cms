@@ -7,14 +7,29 @@
  * sono la descrizione di cosa osserva ogni regola.
  */
 
-/* global SN_API, escapeHtml */
+/* global SN_API, snT, escapeHtml */
 (function () {
   'use strict';
 
   const $ = (id) => document.getElementById(id);
   const esc = (v) => escapeHtml(v === null || v === undefined ? '' : String(v));
 
+  /**
+   * Etichetta tradotta. L'implementazione sta in `sentinel-i18n.js`, condivisa
+   * dalle quattro pagine della sezione.
+   *
+   * Si risolve alla CHIAMATA e non al caricamento per due motivi: sotto Node
+   * questo file viene richiesto per le sue funzioni pure, dove nessun global di
+   * browser esiste; e se lo script condiviso non fosse stato caricato, l'ultima
+   * cosa utile che una dashboard può fare è mostrare le chiavi invece di
+   * spegnersi a metà rendering.
+   */
+  const t = (key, vars) => (typeof snT === 'function' ? snT(key, vars) : String(key));
+
   let savedContent = '';
+  // mtime del file quando l'abbiamo caricato. Si rimanda al salvataggio: è così
+  // che il server si accorge che qualcuno l'ha toccato mentre lo si modificava.
+  let knownMtime = null;
 
   function setAlert(message, kind) {
     const box = $('globalAlert');
@@ -40,20 +55,20 @@
     const parts = [];
 
     if (result.ok) {
-      parts.push('<div class="text-success fw-bold">✓ Valido — '
-        + esc(result.ruleCount) + ' regole</div>');
+      parts.push('<div class="text-success fw-bold">'
+        + esc(t('valid', { n: result.ruleCount })) + '</div>');
     } else {
-      parts.push('<div class="text-danger fw-bold">✗ Non valido</div>');
+      parts.push('<div class="text-danger fw-bold">' + esc(t('invalid')) + '</div>');
     }
 
     if (result.errors && result.errors.length) {
-      parts.push('<div class="mt-2 fw-bold text-danger">Errori</div><ul class="mb-0 ps-3">'
+      parts.push('<div class="mt-2 fw-bold text-danger">' + esc(t('errorsTitle')) + '</div><ul class="mb-0 ps-3">'
         + result.errors.map((e) => '<li>' + esc(e) + '</li>').join('') + '</ul>');
     }
     // Gli avvisi non impediscono il salvataggio ma vanno letti: «questa regola
     // non scatterà mai» è il tipo di cosa che si scopre altrimenti fra un mese.
     if (result.warnings && result.warnings.length) {
-      parts.push('<div class="mt-2 fw-bold text-warning">Avvisi</div><ul class="mb-0 ps-3">'
+      parts.push('<div class="mt-2 fw-bold text-warning">' + esc(t('warningsTitle')) + '</div><ul class="mb-0 ps-3">'
         + result.warnings.map((w) => '<li>' + esc(w) + '</li>').join('') + '</ul>');
     }
 
@@ -64,7 +79,7 @@
   function renderBackups(backups) {
     const list = $('backupList');
     if (!backups || backups.length === 0) {
-      list.innerHTML = '<li class="list-group-item text-muted">Nessuno.</li>';
+      list.innerHTML = '<li class="list-group-item text-muted">' + esc(t('noBackups')) + '</li>';
       return;
     }
     list.innerHTML = backups.slice(0, 10).map((b) =>
@@ -81,21 +96,22 @@
       const data = await res.json();
 
       if (!data.enabled) {
-        setAlert('Il plugin sentinel non è attivo: non c\'è nulla da modificare.', 'warning');
+        setAlert(t('inactive'), 'warning');
         $('rulesEditor').disabled = true;
         return;
       }
       if (!data.ok) {
-        setAlert('Lettura del file fallita: ' + data.error, 'danger');
+        setAlert(t('readFailed', { error: data.error }), 'danger');
         return;
       }
 
       savedContent = data.content;
+      knownMtime = data.mtime || null;
       $('rulesEditor').value = data.content;
       renderBackups(data.backups);
       markDirty();
     } catch (err) {
-      setAlert('Errore di rete: ' + err.message, 'danger');
+      setAlert(t('networkError', { error: err.message }), 'danger');
     }
   }
 
@@ -110,24 +126,53 @@
       });
       renderValidation(await res.json());
     } catch (err) {
-      setAlert('Errore di rete: ' + err.message, 'danger');
+      setAlert(t('networkError', { error: err.message }), 'danger');
     }
   }
 
-  async function save() {
+  /**
+   * @param {boolean} [force] - salva anche se il file è cambiato nel frattempo
+   */
+  async function save(force) {
     clearAlert();
     try {
+      const corpo = { content: $('rulesEditor').value };
+      // Omettere il campo È la rinuncia alla guardia: la precondizione è
+      // opzionale lato server, come `If-Match`.
+      if (!force && knownMtime) corpo.knownMtime = knownMtime;
+
       const res = await fetch(SN_API + '/rules/save', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: $('rulesEditor').value }),
+        body: JSON.stringify(corpo),
       });
       const data = await res.json();
 
+      // Il file è cambiato da quando l'abbiamo caricato. Qui si sta per
+      // riscrivere il file INTERO, quindi sovrascrivere significa cancellare
+      // quella modifica per intero: si nomina la conseguenza invece di
+      // limitarsi a chiedere conferma.
+      if (res.status === 409) {
+        const procedi = window.confirm(
+          t('conflict', { error: data.error || t('conflictFallback') }));
+        if (procedi) await save(true);
+        else setAlert(t('saveCancelled'), 'warning');
+        return;
+      }
+
       if (!data.saved) {
-        renderValidation(data);
-        setAlert('Salvataggio rifiutato: il file su disco non è stato toccato.', 'danger');
+        // Due esiti diversi che prima finivano nello stesso posto. Un file di
+        // regole invalido è colpa di chi scrive e si corregge nell'editor; un
+        // disco pieno o una cartella non scrivibile no — e mostrarlo come
+        // «non valido» senza un errore mandava a cercare nel posto sbagliato.
+        const validazione = Array.isArray(data.errors) && data.errors.length > 0;
+        if (validazione) {
+          renderValidation(data);
+          setAlert(t('saveRejected'), 'danger');
+        } else {
+          setAlert(t('writeFailed', { error: data.error || t('noReason') }), 'danger');
+        }
         return;
       }
 
@@ -135,11 +180,11 @@
       markDirty();
       // reloadRules() è già stato chiamato dal server: le regole sono in vigore
       // adesso, senza riavvio.
-      setAlert('Salvato e ricaricato: ' + data.ruleCount + ' regole attive'
-        + (data.backup ? ' (backup: ' + data.backup + ')' : ''), 'success');
+      setAlert(t('saved', { n: data.ruleCount })
+        + (data.backup ? t('savedBackup', { file: data.backup }) : ''), 'success');
       load();
     } catch (err) {
-      setAlert('Errore di rete: ' + err.message, 'danger');
+      setAlert(t('networkError', { error: err.message }), 'danger');
     }
   }
 
@@ -147,7 +192,9 @@
     $('rulesEditor').addEventListener('input', markDirty);
     $('btnReload').addEventListener('click', load);
     $('btnValidate').addEventListener('click', validate);
-    $('btnSave').addEventListener('click', save);
+    // `click` passa un evento come primo argomento: senza involucro finirebbe
+    // in `force`, e ogni salvataggio scavalcherebbe la guardia sul file.
+    $('btnSave').addEventListener('click', function () { save(false); });
 
     // Uscire con modifiche non salvate è un incidente frequente e silenzioso.
     window.addEventListener('beforeunload', (e) => {
