@@ -61,6 +61,7 @@ Before writing any file, gather these inputs from the user. **Do not guess.** Al
   ```
 - Templates MUST include `head.ejs`, `header.ejs`, `footer.ejs` partials and MUST NOT duplicate `<html>`, `<head>`, `<body>` tags (they are already in the partials).
 - Partials use `passData.pluginSys.hookPage("section", passData)` for plugin integration (sections: `head`, `header`, `nav`, `main`, `body`, `aside`, `footer`, `script`).
+- **Hooks may live in sub-partials, but every `include` must resolve.** The boot validator (`themeSys.validateThemeContent()`) searches each partial's **include tree**, not just the file, so factoring shared markup into an extra partial is fully supported: three layouts that all `include('siteFooter.ejs')`, with `hookPage("footer")` declared inside it, validate clean — and the injected content stays inside the `<footer>` the theme styles instead of rendering outside it. The counterpart is that an `include('x.ejs')` pointing at a file the theme does not ship is a **boot error**, because EJS throws at render on a missing include. Two consequences when generating: never leave a dangling `include`, and a hook counts wherever it sits in the tree of the partial that requires it.
 - **Documentation (ital8doc v1-1, MANDATORY).** Every theme ships `README.it.md` — the Italian **reference** ("how do I USE / customize it?") — plus an English `README.md` **stub**. Add `EXPLAIN.it.md` (+ its `EXPLAIN.md` stub) — "why is it built this way + how do I tune it?" — **only** when the theme has non-trivial internals worth a deep-dive (an empty or README-duplicating EXPLAIN is **forbidden**). Line 1 of each doc is the ital8doc marker, line 2 the English pointer note. See [`docs/ITAL8DOC-latest.md`](../../../docs/ITAL8DOC-latest.md).
 - **npm dependencies — hybrid per-theme model.** Themes follow the same per-package model as plugins: a theme that needs its own npm packages can be **self-contained** (own `package.json` → `themes/<name>/node_modules`, git-ignored) and keep those packages out of `nodeModuleDependency`, or **legacy** (declared in `nodeModuleDependency`, installed at root — the default for `ejs`). Never enable npm `workspaces`. See [`docs/self-update.it.md`](../../../docs/self-update.it.md).
 - Don't add error handling, validation, or comments beyond what the variant strictly needs.
@@ -174,7 +175,7 @@ Drop the `templates` array (admin themes don't expose user-creatable templates).
     <%- include('aside.ejs') %>
 ```
 
-(For `minimal`, drop the three `include` lines.)
+**For `minimal`, drop the three `include` lines** — `nav.ejs`, `main.ejs` and `aside.ejs` are not generated for that variant, so leaving them makes EJS throw at render and the boot validator reports one error per dangling include.
 
 ### `views/header.ejs` — complete
 
@@ -501,5 +502,6 @@ If the current directory does not look like an ital8cms project (no `ital8Config
 - Don't generate `pluginsEndpointsMarkup/` for `minimal` or `standard` variants.
 - Don't omit the JSON5 header comment on the first line of any `.json5` file.
 - Don't add `active` (removed from the theme schema) or `isInstalled` (runtime state, written at boot) to `themeConfig.default.json5`; don't write a live `themeConfig.json5` (it is materialized at boot).
-- Don't rename or restructure partials — the names `head.ejs`, `header.ejs`, `footer.ejs`, `nav.ejs`, `main.ejs`, `aside.ejs` are required by the theme system.
+- Don't rename the standard partials — the names `head.ejs`, `header.ejs`, `footer.ejs`, `nav.ejs`, `main.ejs`, `aside.ejs` are required by the theme system. Adding **extra** sub-partials alongside them is allowed (the validator follows includes), just don't generate them unasked.
+- Don't leave an `include()` pointing at a file the chosen variant doesn't generate — most easily done by forgetting to drop the `nav`/`main`/`aside` includes from `views/header.ejs` in the **minimal** variant. It is a render-time crash, and the boot validator now names it.
 - Don't modify `ital8Config.json5` automatically — always show the user the snippet to add manually.
