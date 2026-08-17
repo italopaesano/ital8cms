@@ -111,7 +111,40 @@
 
 <script>
   const SN_API = '/<%= passData.apiPrefix %>/adminSentinel';
+
+  <%# Etichette per il JS di pagina — vedi la nota in index.ejs. %>
+  const SN_I18N = <%- JSON.stringify({
+    absent:       __({it: '(assente)', en: '(absent)'}, passData.ctx),
+    blank:        __({it: '(vuoto)', en: '(blank)'}, passData.ctx),
+    none:         __({it: 'nessuna', en: 'none'}, passData.ctx),
+    yes:          __({it: 'sì', en: 'yes'}, passData.ctx),
+    no:           __({it: 'no', en: 'no'}, passData.ctx),
+    expected:     __({it: 'atteso', en: 'expected'}, passData.ctx),
+    observed:     __({it: 'osservato', en: 'observed'}, passData.ctx),
+    subjectLine:  __({
+      it: 'ip: {ip} · estensione: {ext} · impronta: ',
+      en: 'ip: {ip} · extension: {ext} · fingerprint: '
+    }, passData.ctx),
+    familyLine:   __({it: ' · famiglia: {family} · profilo: {profile} · coerente: ', en: ' · family: {family} · profile: {profile} · coherent: '}, passData.ctx),
+    matched:      __({it: ' → action: ', en: ' → action: '}, passData.ctx),
+    categoryNote: __({it: '(categoria: {category})', en: '(category: {category})'}, passData.ctx),
+    noMatch:      __({
+      it: '✗ Nessuna regola matcha: la richiesta passerebbe senza essere classificata.',
+      en: '✗ No rule matches: the request would pass without being classified.'
+    }, passData.ctx),
+    skipped:      __({it: 'saltata: {reason}', en: 'skipped: {reason}'}, passData.ctx),
+    afterWinner:  __({it: 'dopo la vincitrice', en: 'after the winner'}, passData.ctx),
+    verboseHint:  __({
+      it: 'Attiva «mostra anche le regole che non matchano» per vedere perché ciascuna è stata scartata.',
+      en: 'Turn on “also show rules that do not match” to see why each was discarded.'
+    }, passData.ctx),
+    pathRequired: __({it: 'Il percorso è obbligatorio.', en: 'The path is required.'}, passData.ctx),
+    unavailable:  __({it: 'Il filtro non è disponibile.', en: 'The filter is not available.'}, passData.ctx),
+    networkError: __({it: 'Errore di rete: {error}', en: 'Network error: {error}'}, passData.ctx),
+  }).replace(/</g, '\\u003c') %>;
 </script>
+<%# La funzione delle etichette, condivisa: va caricata PRIMA dello script di pagina. %>
+<script src="/<%= passData.adminPrefix %>/sentinelManagement/sentinel-i18n.js"></script>
 <script src="/<%= passData.adminPrefix %>/sentinelManagement/tester.js"></script>
 
 <%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>

@@ -21,12 +21,24 @@
  * qualcuno.
  */
 
-/* global SN_API, escapeHtml */
+/* global SN_API, snT, escapeHtml */
 (function () {
   'use strict';
 
   const $ = (id) => document.getElementById(id);
   const esc = (v) => escapeHtml(v === null || v === undefined ? '' : String(v));
+
+  /**
+   * Etichetta tradotta. L'implementazione sta in `sentinel-i18n.js`, condivisa
+   * dalle quattro pagine della sezione.
+   *
+   * Si risolve alla CHIAMATA e non al caricamento per due motivi: sotto Node
+   * questo file viene richiesto per le sue funzioni pure, dove nessun global di
+   * browser esiste; e se lo script condiviso non fosse stato caricato, l'ultima
+   * cosa utile che una dashboard può fare è mostrare le chiavi invece di
+   * spegnersi a metà rendering.
+   */
+  const t = (key, vars) => (typeof snT === 'function' ? snT(key, vars) : String(key));
 
   /** Foglie che il form sa mostrare. Tutto il resto rende il match "complesso". */
   const SIMPLE_LEAVES = [
@@ -40,6 +52,9 @@
   let rules = [];
   let current = null;      // la regola come sta sul file
   let dirty = false;
+  // mtime del file di regole al momento in cui l'abbiamo letto. Si rimanda al
+  // salvataggio, così il server può accorgersi che nel frattempo è cambiato.
+  let knownMtime = null;
 
   // ── Utility ───────────────────────────────────────────────────────────────
 
@@ -111,6 +126,12 @@
    * singolo che ne contiene una. Prima il campo era una riga sola e un valore
    * array vi finiva schiacciato da `String(...)`, per poi tornare sul file come
    * l'unica stringa improbabile `"a,b"`.
+   *
+   * Vale per `query` E per `userAgent`: anche gli User-Agent contengono virgole
+   * — «Mozilla/5.0 (Linux; Android 10, wv)» ne ha una — e il campo a virgole lo
+   * restituiva spezzato in due pattern che non matchano più niente. È lo stesso
+   * difetto di `query`, sul campo accanto, sopravvissuto alla correzione di C6
+   * perché lì si era guardata la querystring e non chi le somigliava.
    */
   const patternsToText = (value) => asArray(value).join('\n');
 
@@ -118,6 +139,51 @@
     const righe = String(text || '').split('\n').map((s) => s.trim()).filter(Boolean);
     if (righe.length === 0) return undefined;
     return collapse(righe);
+  }
+
+  /**
+   * Le chiavi di primo livello che il form possiede: le sole che può scrivere e
+   * le sole che può togliere.
+   *
+   * Tutto ciò che non è in questo elenco viene lasciato **com'è** dalla fusione.
+   */
+  const FORM_OWNED_KEYS = [
+    'name', 'enabled', 'action', 'match',
+    'category', 'description', 'appliesTo',
+    'decoy', 'redirect', 'tarpit', 'escalate',
+  ];
+
+  /**
+   * La regola da salvare: quella SUL FILE, con sopra i campi del form.
+   *
+   * ─── LA STESSA REGOLA DI PRIMA, APPLICATA UN LIVELLO PIU SU ───────────────
+   * Il `match` non rappresentabile era già conservato alla lettera, ma il resto
+   * della regola veniva **ricostruito da zero**: l'oggetto inviato al service
+   * conteneva solo le chiavi che il form conosce. Finché lo schema del file e
+   * l'elenco del form coincidono non si perde niente — ed è vero oggi, l'ho
+   * verificato contro il validatore del motore — ma è una coincidenza da
+   * mantenere a mano: la prima chiave nuova aggiunta a `sentinel` sparirebbe al
+   * primo salvataggio dal form, in silenzio e senza che nessun test se ne
+   * accorga.
+   *
+   * Partire dalla regola su file capovolge il default: ciò che il form non
+   * conosce sopravvive per costruzione, invece di sopravvivere se qualcuno si
+   * ricorda di aggiungerlo qui.
+   *
+   * Le chiavi possedute si tolgono quando il form le lascia vuote — è così che
+   * si cancella un `escalate` — quindi l'elenco serve in entrambe le direzioni.
+   *
+   * @param {object} ruleOnFile - la regola come sta sul file
+   * @param {object} formFields - i soli campi raccolti dal form
+   * @returns {object}
+   */
+  function mergeRuleFields(ruleOnFile, formFields) {
+    const merged = Object.assign({}, ruleOnFile || {});
+    for (const key of FORM_OWNED_KEYS) {
+      if (formFields[key] === undefined) delete merged[key];
+      else merged[key] = formFields[key];
+    }
+    return merged;
   }
 
   /** Il match è rappresentabile dal form? */
@@ -141,10 +207,11 @@
     const res = await fetch(SN_API + '/rules/source', { credentials: 'same-origin' });
     const data = await res.json();
     rules = data.rules || [];
+    knownMtime = data.mtime || null;
 
     const list = $('ruleList');
     if (rules.length === 0) {
-      list.innerHTML = '<div class="list-group-item text-muted small">Nessuna regola nel file.</div>';
+      list.innerHTML = '<div class="list-group-item text-muted small">' + esc(t('noRules')) + '</div>';
       return;
     }
 
@@ -168,7 +235,7 @@
   function select(index) {
     // Uscire da una regola modificata senza salvare è il modo più facile di
     // perdere lavoro in una GUI a due pannelli: si chiede conferma.
-    if (dirty && !window.confirm('Ci sono modifiche non salvate su questa regola. Vuoi abbandonarle?')) return;
+    if (dirty && !window.confirm(t('abandon'))) return;
     current = rules[index];
     fill(current, index);
   }
@@ -181,7 +248,7 @@
     $('formCard').style.display = '';
 
     $('fName').textContent = rule.name;
-    $('fPosition').textContent = 'posizione ' + (index + 1) + ' di ' + rules.length;
+    $('fPosition').textContent = t('position', { i: index + 1, n: rules.length });
     $('fCategory').value = rule.category || '';
     $('fDescription').value = rule.description || '';
     $('fAppliesTo').value = rule.appliesTo || 'any';
@@ -244,7 +311,7 @@
     $('mPath').value = asArray(m.path).join('\n');
     $('mExtension').value = asArray(m.extension).join(', ');
     $('mMethod').value = asArray(m.method).join(', ');
-    $('mUserAgent').value = Array.isArray(m.userAgent) ? m.userAgent.join(', ') : (m.userAgent || '');
+    $('mUserAgent').value = patternsToText(m.userAgent);
     $('mQuery').value = patternsToText(m.query);
     $('mIp').value = asArray(m.ip).join(', ');
     $('mStatus').value = asArray(m.status).join(', ');
@@ -276,8 +343,9 @@
     const method = listOf($('mMethod').value);
     if (method) m.method = method;
 
-    const ua = String($('mUserAgent').value || '').trim();
-    if (ua) m.userAgent = ua.indexOf('regex:') === 0 || ua === 'empty' ? ua : collapse(listOf(ua));
+    // `regex:` ed `empty` restano scalari da sé: una riga sola torna scalare.
+    const userAgent = textToPatterns($('mUserAgent').value);
+    if (userAgent !== undefined) m.userAgent = userAgent;
 
     const query = textToPatterns($('mQuery').value);
     if (query !== undefined) m.query = query;
@@ -345,34 +413,62 @@
       if (Number.isInteger(seconds) && seconds > 0) rule.escalate.banSeconds = seconds;
     }
 
-    return rule;
+    // Ciò che il form non conosce sopravvive: si parte dalla regola su file.
+    return mergeRuleFields(current, rule);
   }
 
   // ── Salvataggio ───────────────────────────────────────────────────────────
 
-  async function save() {
+  /**
+   * @param {boolean} [force] - salva anche se il file è cambiato nel frattempo
+   */
+  async function save(force) {
     clearAlert();
     const rule = collect();
+    const corpo = { ruleName: current.name, rule: rule };
+    // Omettere il campo È la rinuncia alla guardia: il server tratta la
+    // precondizione come opzionale, esattamente come `If-Match`.
+    if (!force && knownMtime) corpo.knownMtime = knownMtime;
 
-    const res = await fetch(SN_API + '/rules/fields', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ruleName: current.name, rule: rule }),
-    });
-    const data = await res.json();
+    let res;
+    let data;
+    try {
+      res = await fetch(SN_API + '/rules/fields', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(corpo),
+      });
+      data = await res.json();
+    } catch (err) {
+      // Senza questo la promise veniva rifiutata in silenzio: nessun avviso, il
+      // badge fermo, e l'impressione che il salvataggio fosse andato.
+      alertBox(t('networkError', { error: err.message }), 'danger');
+      return;
+    }
+
+    // Qualcuno ha toccato il file mentre lo si modificava: promozione dalla
+    // panoramica, altro amministratore, riga di comando.
+    if (res.status === 409) {
+      const procedi = window.confirm(
+        t('conflict', { error: data.error || t('conflictFallback') }));
+      if (procedi) await save(true);
+      return;
+    }
 
     if (!data.ok) {
-      const dettaglio = (data.errors && data.errors.length) ? data.errors.join(' · ') : data.error;
-      alertBox('Non salvata: ' + dettaglio, 'danger');
+      const dettaglio = (data.errors && data.errors.length)
+        ? data.errors.join(' · ')
+        : (data.error || t('noReason'));
+      alertBox(t('notSaved', { error: dettaglio }), 'danger');
       return;
     }
 
     dirty = false;
     const avvisi = (data.warnings && data.warnings.length)
-      ? ' Avvisi: ' + data.warnings.join(' · ')
+      ? t('withWarnings', { warnings: data.warnings.join(' · ') })
       : '';
-    alertBox('Regola salvata e ricaricata nel motore.' + avvisi, avvisi ? 'warning' : 'success');
+    alertBox(t('savedOk') + avvisi, avvisi ? 'warning' : 'success');
 
     // Si rilegge il file invece di fidarsi di ciò che si è appena inviato: è
     // l'unico modo di mostrare cosa c'è davvero su disco dopo la scrittura.
@@ -395,7 +491,10 @@
   // non gira; sotto Node permette di verificare il giro completo file → form →
   // file senza allestire un DOM, che questo progetto non fa da nessuna parte.
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { ANY, anyOrListToSelection, selectionToAnyOrList, patternsToText, textToPatterns };
+    module.exports = {
+      ANY, anyOrListToSelection, selectionToAnyOrList, patternsToText, textToPatterns,
+      FORM_OWNED_KEYS, mergeRuleFields,
+    };
   }
 
   // Sotto Node non c'è un `document` da agganciare: il file viene richiesto solo
@@ -407,7 +506,9 @@
       .forEach(markDirtyOn);
 
     $('fAction').addEventListener('change', function () { renderActionParams(current || {}); });
-    $('btnSave').addEventListener('click', save);
+    // `click` passa un evento come primo argomento: senza involucro finirebbe
+    // in `force`, e ogni salvataggio scavalcherebbe la guardia sul file.
+    $('btnSave').addEventListener('click', function () { save(false); });
     $('btnReload').addEventListener('click', async function () {
       const nome = current && current.name;
       await loadRules();
@@ -422,6 +523,6 @@
       return '';
     });
 
-    loadRules().catch(function (err) { alertBox('Caricamento fallito: ' + err.message, 'danger'); });
+    loadRules().catch(function (err) { alertBox(t('loadFailed', { error: err.message }), 'danger'); });
   });
 }());

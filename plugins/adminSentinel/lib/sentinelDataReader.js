@@ -101,21 +101,36 @@ function readRecentEvents(dataDir, filter = {}) {
 
   const collected = [];
   let scannedFiles = 0;
+  // «Ne sono rimasti fuori»: vero perché ne abbiamo VISTI altri, non perché il
+  // limite è stato raggiunto. Erano la stessa cosa nel codice e non lo sono
+  // nella realtà: un log con esattamente `limit` eventi si dichiarava troncato
+  // avendo consegnato tutto quello che aveva.
+  let leftOut = false;
 
   for (const filePath of files) {
     scannedFiles++;
     const rows = readJsonl(filePath).filter(matches);
     // Dentro un file l'ordine è cronologico crescente: si prende dalla coda.
-    for (let i = rows.length - 1; i >= 0 && collected.length < limit; i--) {
+    let i = rows.length - 1;
+    for (; i >= 0 && collected.length < limit; i--) {
       collected.push(rows[i]);
     }
-    if (collected.length >= limit) break;
+
+    if (collected.length >= limit) {
+      // Righe avanzate in QUESTO file, oppure file più vecchi non aperti: in
+      // entrambi i casi ci sono altri eventi. Il secondo caso è prudente — con
+      // un filtro stretto quei file potrebbero non contenerne nessuno — e la
+      // prudenza va in questa direzione: dire «forse c'è dell'altro» quando non
+      // c'è costa una riga di interfaccia, tacerlo quando c'è nasconde dati.
+      leftOut = i >= 0 || scannedFiles < files.length;
+      break;
+    }
   }
 
   return {
     events: collected,
     scannedFiles,
-    truncated: collected.length >= limit,
+    truncated: leftOut,
   };
 }
 
@@ -276,6 +291,47 @@ function readShards(dataDir, prefix) {
 }
 
 /**
+ * Prima voce di un accumulatore di fusione: contatori garantiti numerici e
+ * identità che vince sul contenuto dello shard.
+ *
+ * ─── PERCHE NON BASTA LO SPREAD ───────────────────────────────────────────────
+ * L'accumulatore nasceva come copia della PRIMA voce incontrata, e da lì in poi
+ * le difese (`|| 0`, `|| {}`) proteggevano solo la voce *in arrivo*. Una prima
+ * voce incompleta — shard troncato, file di uno schema più vecchio, scrittura
+ * interrotta — avvelenava quindi tutta la fusione: `undefined + 5` è `NaN`, e
+ * `existing.byStatus[code]` su un `byStatus` assente è un TypeError che fa
+ * fallire l'intera rotta. Verificato eseguendo il modulo.
+ *
+ * Il difetto non si vede oggi (il service scrive sempre tutti i campi, anche a
+ * zero) e vive nel ramo che serve al cluster: cioè quello che nessuno eserciterà
+ * finché non servirà davvero. `readShards` a monte è già fail-soft con gli shard
+ * illeggibili; questo lo rende coerente con quelli parziali.
+ *
+ * @param {object} entry - la voce così com'è nello shard
+ * @param {string[]} counters - chiavi da forzare a numero
+ * @param {object} identity - `{ fp }` / `{ clientId }` / `{ ruleName }`
+ * @returns {object}
+ */
+function seedMergedEntry(entry, counters, identity) {
+  const seeded = { ...entry, ...identity };
+  for (const key of counters) {
+    seeded[key] = Number.isFinite(entry[key]) ? entry[key] : 0;
+  }
+  return seeded;
+}
+
+/** Estremi temporali: si allargano, e tollerano un capo ancora assente. */
+function widenEarliest(existing, candidate) {
+  if (!candidate) return existing;
+  return (!existing || candidate < existing) ? candidate : existing;
+}
+
+function widenLatest(existing, candidate) {
+  if (!candidate) return existing;
+  return (!existing || candidate > existing) ? candidate : existing;
+}
+
+/**
  * Censimento delle impronte, fuso fra gli shard.
  *
  * @param {string} dataDir
@@ -294,7 +350,9 @@ function readFingerprintCensus(dataDir) {
     for (const [fp, entry] of Object.entries(shard.fingerprints || {})) {
       const existing = merged.get(fp);
       if (!existing) {
-        merged.set(fp, { fp, ...entry });
+        merged.set(fp, seedMergedEntry(
+          entry, ['count', 'matchedCount', 'blockedCount', 'ipCount', 'pathCount'], { fp },
+        ));
         continue;
       }
       // Fusione fra shard: i contatori si sommano, gli estremi temporali si
@@ -304,10 +362,10 @@ function readFingerprintCensus(dataDir) {
       existing.count += entry.count || 0;
       existing.matchedCount += entry.matchedCount || 0;
       existing.blockedCount += entry.blockedCount || 0;
-      existing.ipCount = Math.max(existing.ipCount || 0, entry.ipCount || 0);
-      existing.pathCount = Math.max(existing.pathCount || 0, entry.pathCount || 0);
-      if (entry.firstSeen && entry.firstSeen < existing.firstSeen) existing.firstSeen = entry.firstSeen;
-      if (entry.lastSeen && entry.lastSeen > existing.lastSeen) existing.lastSeen = entry.lastSeen;
+      existing.ipCount = Math.max(existing.ipCount, entry.ipCount || 0);
+      existing.pathCount = Math.max(existing.pathCount, entry.pathCount || 0);
+      existing.firstSeen = widenEarliest(existing.firstSeen, entry.firstSeen);
+      existing.lastSeen = widenLatest(existing.lastSeen, entry.lastSeen);
     }
   }
 
@@ -334,11 +392,16 @@ function readOutcomeCensus(dataDir) {
     for (const [clientId, entry] of Object.entries(shard.byClient || {})) {
       const existing = merged.get(clientId);
       if (!existing) {
-        merged.set(clientId, { clientId, ...entry });
+        const seeded = seedMergedEntry(entry, ['total', 'distinctPaths'], { clientId });
+        // Clonato, e mai condiviso con l'oggetto appena parsato: la fusione ci
+        // somma dentro, e mutare il contenuto di uno shard letto sarebbe un
+        // effetto collaterale invisibile.
+        seeded.byStatus = { ...(entry.byStatus || {}) };
+        merged.set(clientId, seeded);
         continue;
       }
       existing.total += entry.total || 0;
-      existing.distinctPaths = Math.max(existing.distinctPaths || 0, entry.distinctPaths || 0);
+      existing.distinctPaths = Math.max(existing.distinctPaths, entry.distinctPaths || 0);
       // Basta che UNO shard abbia saturato il conteggio perché il numero fuso
       // sia un limite inferiore: la saturazione si propaga in OR, come
       // `safeToPromote` si propaga in AND poco più sotto e per la stessa
@@ -347,9 +410,10 @@ function readOutcomeCensus(dataDir) {
       existing.distinctPathsSaturated = existing.distinctPathsSaturated === true
         || entry.distinctPathsSaturated === true;
       for (const [code, n] of Object.entries(entry.byStatus || {})) {
-        existing.byStatus[code] = (existing.byStatus[code] || 0) + n;
+        existing.byStatus[code] = (existing.byStatus[code] || 0) + (Number.isFinite(n) ? n : 0);
       }
-      if (entry.lastSeen && entry.lastSeen > existing.lastSeen) existing.lastSeen = entry.lastSeen;
+      existing.firstSeen = widenEarliest(existing.firstSeen, entry.firstSeen);
+      existing.lastSeen = widenLatest(existing.lastSeen, entry.lastSeen);
     }
   }
 
@@ -377,16 +441,20 @@ function readRuleHits(dataDir) {
     for (const [ruleName, entry] of Object.entries(shard.rules || {})) {
       const existing = merged.get(ruleName);
       if (!existing) {
-        merged.set(ruleName, { ruleName, ...entry });
+        merged.set(ruleName, seedMergedEntry(
+          entry,
+          ['hits', 'enforcedHits', 'authenticatedHits', 'botHits', 'distinctIps'],
+          { ruleName },
+        ));
         continue;
       }
       existing.hits += entry.hits || 0;
       existing.enforcedHits += entry.enforcedHits || 0;
       existing.authenticatedHits += entry.authenticatedHits || 0;
       existing.botHits += entry.botHits || 0;
-      existing.distinctIps = Math.max(existing.distinctIps || 0, entry.distinctIps || 0);
-      if (entry.lastHit && entry.lastHit > existing.lastHit) existing.lastHit = entry.lastHit;
-      if (entry.firstHit && entry.firstHit < existing.firstHit) existing.firstHit = entry.firstHit;
+      existing.distinctIps = Math.max(existing.distinctIps, entry.distinctIps || 0);
+      existing.lastHit = widenLatest(existing.lastHit, entry.lastHit);
+      existing.firstHit = widenEarliest(existing.firstHit, entry.firstHit);
       // Ricalcolato dopo la fusione: il valore dei singoli shard non vale per
       // l'insieme (uno può avere zero hit autenticati e un altro no).
       existing.safeToPromote = existing.hits > 0 && existing.authenticatedHits === 0;

@@ -153,7 +153,17 @@
 
                 <div class="col-12 col-md-6">
                   <label class="form-label small mb-1">userAgent</label>
-                  <input id="mUserAgent" class="form-control form-control-sm" placeholder="regex:^curl/  ·  empty  ·  curl, wget" spellcheck="false">
+                  <%# Una riga per pattern, come `query` e `path`. Era un campo a
+                      virgole, e uno User-Agent può contenerne — «Mozilla/5.0
+                      (Linux; Android 10, wv)» tornava indietro spezzato in due
+                      pattern che non matchano più niente. %>
+                  <textarea id="mUserAgent" class="form-control form-control-sm" rows="2" spellcheck="false" placeholder="regex:^curl/&#10;empty&#10;wget"></textarea>
+                  <div class="form-text small">
+                    <%= __({
+                      it: 'Una riga per pattern. `regex:` e `empty` vanno da soli, su una riga sola.',
+                      en: 'One pattern per line. `regex:` and `empty` must stand alone, on a single line.'
+                    }, passData.ctx) %>
+                  </div>
                 </div>
                 <div class="col-12 col-md-6">
                   <label class="form-label small mb-1">query</label>
@@ -267,7 +277,33 @@
 
 <script>
   const SN_API = '/<%= passData.apiPrefix %>/adminSentinel';
+
+  <%# Etichette per il JS di pagina — vedi la nota in index.ejs. %>
+  const SN_I18N = <%- JSON.stringify({
+    noRules:      __({it: 'Nessuna regola nel file.', en: 'No rule in the file.'}, passData.ctx),
+    position:     __({it: 'posizione {i} di {n}', en: 'position {i} of {n}'}, passData.ctx),
+    abandon:      __({
+      it: 'Ci sono modifiche non salvate su questa regola. Vuoi abbandonarle?',
+      en: 'This rule has unsaved changes. Do you want to discard them?'
+    }, passData.ctx),
+    conflict:     __({
+      it: '{error}\n\nSalvare comunque significa scrivere sopra quella modifica.\n\nOK = sovrascrivi · Annulla = lascia stare (poi usa «Ricarica» per vedere il file aggiornato)',
+      en: '{error}\n\nSaving anyway means writing over that change.\n\nOK = overwrite · Cancel = leave it (then use “Reload” to see the updated file)'
+    }, passData.ctx),
+    conflictFallback: __({it: 'Il file delle regole è cambiato da quando lo hai caricato.', en: 'The rules file changed since you loaded it.'}, passData.ctx),
+    networkError: __({
+      it: 'Errore di rete: {error} — la regola NON è stata salvata.',
+      en: 'Network error: {error} — the rule was NOT saved.'
+    }, passData.ctx),
+    notSaved:     __({it: 'Non salvata: {error}', en: 'Not saved: {error}'}, passData.ctx),
+    noReason:     __({it: 'motivo non riportato', en: 'no reason reported'}, passData.ctx),
+    savedOk:      __({it: 'Regola salvata e ricaricata nel motore.', en: 'Rule saved and reloaded into the engine.'}, passData.ctx),
+    withWarnings: __({it: ' Avvisi: {warnings}', en: ' Warnings: {warnings}'}, passData.ctx),
+    loadFailed:   __({it: 'Caricamento fallito: {error}', en: 'Loading failed: {error}'}, passData.ctx),
+  }).replace(/</g, '\\u003c') %>;
 </script>
+<%# La funzione delle etichette, condivisa: va caricata PRIMA dello script di pagina. %>
+<script src="/<%= passData.adminPrefix %>/sentinelManagement/sentinel-i18n.js"></script>
 <script src="/<%= passData.adminPrefix %>/sentinelManagement/rule-form.js"></script>
 
 <%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>

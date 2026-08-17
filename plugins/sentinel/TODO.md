@@ -1523,20 +1523,29 @@ e accumulare statistiche locali sulle firme viste.
 
 ## 11. Twin admin (`adminSentinel`) — fase successiva
 
-- [~] **Interfaccia costruita sulle tre fasi** (osserva → capisci → promuovi):
+- [x] **Interfaccia costruita sulle tre fasi** (osserva → capisci → promuovi):
       è la spina dorsale della GUI, non un accessorio. La Vista Dati mostra in
       quale fase si trova ogni regola e cosa serve per passare alla successiva
       (colonna «utenti autenticati» + indicatore di promuovibilità); il *gesto*
-      per promuovere arriva col passo 2.
-- [~] Sezione admin con le **Tre Viste** — Viste A e B fatte, C (form strutturato) aperta
+      per promuovere è arrivato col passo 2.
+- [x] Sezione admin con le **Tre Viste** — A, B e C tutte e tre in vigore
 - [x] Vista Dati: richieste filtrate, top regole, top IP, top fingerprint, timeline
 - [x] Editor JSON5 raw di `sentinelRules.json5` (validazione lato server + scrittura atomica,
       backup prima di ogni salvataggio, testo salvato senza riformattazione)
-- [ ] Form strutturato coordinato con l'editor (validatore condiviso col service plugin)
+- [x] Form strutturato coordinato con l'editor (validatore condiviso col service plugin)
+      — consegnato in R1, rifinito in C6 (le due forme che tornavano indietro
+      diverse) e nella revisione del twin (chiavi di primo livello conservate,
+      `userAgent` una riga per pattern)
 - [x] Tester delle regole nella GUI (incolla una richiesta → dice cosa matcherebbe)
-- [~] Azioni live via oggetto condiviso: promozione/retrocessione e passaggio
-      `monitor` ↔ `enforce` **fatti** (senza riavvio); il ban immediato arriva col
-      passo 5, insieme ai canary token
+- [x] Azioni live via oggetto condiviso: promozione/retrocessione e passaggio
+      `monitor` ↔ `enforce` senza riavvio; ban immediato e canary token dal passo 5
+- [x] Coordinamento fra le viste anche in **scrittura**: le tre strade portano
+      allo stesso file, e `knownMtime` impedisce che un editor aperto da mezz'ora
+      cancelli una promozione fatta nel frattempo (revisione del twin)
+
+> **Stato:** il twin è completo rispetto a questo elenco. I rilievi della sua
+> revisione sono chiusi; quel che resta aperto sul twin è annotato nel suo
+> [`README.it.md`](../adminSentinel/README.it.md) → *Cosa NON fa ancora*.
 
 ---
 

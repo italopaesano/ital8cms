@@ -66,6 +66,27 @@ const summaryCache = new Map();
 /** Finestre distinte tenute in cache. Le voci del menu sono quattro. */
 const MAX_CACHED_WINDOWS = 8;
 
+/**
+ * Distanza minima fra due `/flush` richiesti dalla GUI.
+ *
+ * ─── PERCHE UN FRENO SU UN'OPERAZIONE UTILE ───────────────────────────────────
+ * Forzare il salvataggio degli archivi prima di leggerli è giusto: senza, la
+ * dashboard mostrerebbe dati vecchi di un minuto senza dirlo. Ma la GUI lo
+ * chiede a OGNI aggiornamento — quindi ogni 15 secondi, **per ogni scheda
+ * aperta** — e ogni flush serializza per intero i tre archivi, che possono
+ * contenere diecimila impronte e cinquemila client. Il service, per conto suo,
+ * li salva una volta al minuto: la dashboard aperta in tre schede moltiplicava
+ * per dodici le scritture su disco di un plugin nato per non pesare.
+ *
+ * Dieci secondi tengono il dato abbastanza fresco da non cambiare nulla per chi
+ * guarda (con l'auto-aggiornamento di default a 15 s la singola scheda flusha
+ * come prima) e collassano la moltiplicazione, che era il difetto vero.
+ */
+const FLUSH_MIN_INTERVAL_MS = 10000;
+
+/** Ultimo flush effettivamente eseguito. */
+let lastFlushMs = 0;
+
 /** Età massima di un riepilogo quando i file SONO cambiati. 0 = mai in cache. */
 let summaryCacheSeconds = Number.isFinite(custom.summaryCacheSeconds)
   ? custom.summaryCacheSeconds
@@ -104,6 +125,28 @@ function sentinelDataDir() {
 /** Risposta comune quando il service non è disponibile. */
 function serviceUnavailable(extra = {}) {
   return { enabled: false, ...extra };
+}
+
+/**
+ * `enabled` significa UNA cosa sola: il service è disponibile.
+ *
+ * ─── PERCHE UN HELPER PER UN DOPPIO PUNTO ESCLAMATIVO ─────────────────────────
+ * Le rotte di lettura lo ricavavano dalla sola esistenza della data dir, e
+ * `/status` dall'oggetto condiviso: due significati diversi per la stessa
+ * chiave. Con `sentinel` disattivato (`custom.enabled: false`) il plugin resta
+ * registrato, quindi la data dir si risolve lo stesso e `/rules` rispondeva
+ * `enabled: true` — per giunta marcando OGNI regola come «rimossa», perché senza
+ * oggetto condiviso non arrivava nessuna definizione e i contatori su disco
+ * diventavano tutti orfani. La GUI lo mascherava (si ferma su `/status` e non
+ * carica il resto), ma chi chiama l'API leggeva che il filtro era attivo e che
+ * le sue regole erano sparite: entrambe false.
+ *
+ * I dati storici continuano a essere restituiti: il log su disco non smette di
+ * esistere quando il filtro viene spento, e nasconderlo servirebbe solo a
+ * impedire di guardare cosa era successo prima di spegnerlo.
+ */
+function serviceAvailable() {
+  return !!getSentinel();
 }
 
 /**
@@ -198,6 +241,49 @@ async function summaryForWindow(dataDir, days) {
 /** Svuota i riepiloghi in cache. Esportata per i test. */
 function clearSummaryCache() {
   summaryCache.clear();
+}
+
+/**
+ * Il file di regole è cambiato da quando il client l'ha letto?
+ *
+ * ─── PERCHE SERVE, E PERCHE L'MTIME BASTA ─────────────────────────────────────
+ * Le tre viste modificano lo STESSO file, e la panoramica ci scrive pure — il
+ * pulsante «promuovi» è una scrittura. Un editor raw aperto tiene il testo in
+ * pancia per tutto il tempo della modifica, e salvandolo riscrive il file
+ * INTERO: qualunque cosa sia successa nel frattempo — una promozione dalla
+ * panoramica, un altro amministratore, `npm run cli` — sparisce senza che
+ * nessuno se ne accorga, e `reloadRules()` mette in vigore la versione vecchia.
+ * La GUI direbbe «salvato», che è vero, e non direbbe «e ho cancellato la
+ * modifica di qualcun altro», che è la parte che conta.
+ *
+ * L'mtime basta perché la finestra da coprire è LUNGA — i minuti di una
+ * modifica, non i microsecondi fra due syscall — e perché il dato viaggiava già:
+ * `readRaw` lo restituiva e nessuno lo guardava.
+ *
+ * La precondizione è OPZIONALE, come `If-Match`: chi non manda `knownMtime`
+ * salva come prima. Il client la manda sempre; chi chiama l'API da uno script
+ * non si trova un contratto cambiato sotto i piedi, e sa di rinunciarci.
+ *
+ * @param {string} filePath
+ * @param {*} knownMtime - l'istante che il client ha visto, o niente
+ * @returns {object|null} il corpo del 409, oppure null se si può procedere
+ */
+function staleWriteConflict(filePath, knownMtime) {
+  if (typeof knownMtime !== 'string' || knownMtime === '') return null;
+
+  const actual = rulesFile.currentMtime(filePath);
+  if (actual === null || actual === knownMtime) return null;
+
+  return {
+    ok: false,
+    saved: false,
+    conflict: true,
+    error: 'Il file delle regole è cambiato da quando lo hai caricato '
+      + `(letto: ${knownMtime}, adesso: ${actual}). `
+      + 'Qualcuno ha promosso una regola dalla panoramica, o l\'ha modificato altrove.',
+    knownMtime,
+    currentMtime: actual,
+  };
 }
 
 /**
@@ -311,7 +397,7 @@ module.exports = {
           const entry = await summaryForWindow(dataDir, days);
 
           ctx.body = {
-            enabled: true,
+            enabled: serviceAvailable(),
             ...entry.payload,
             // Quando i numeri sono stati calcolati. La pagina lo mostra: servire
             // un riepilogo di trenta secondi fa va benissimo, farlo credere
@@ -337,10 +423,23 @@ module.exports = {
           const hits = reader.readRuleHits(dataDir);
           // Le definizioni complete, non i soli nomi: la GUI ha bisogno
           // dell'`action` in vigore per proporre il gesto giusto.
-          let definitions = [];
+          let definitions = null;
           if (sentinel && typeof sentinel.getRules === 'function') definitions = sentinel.getRules();
           else if (sentinel && typeof sentinel.getRuleNames === 'function') definitions = sentinel.getRuleNames();
-          ctx.body = { enabled: true, rules: aggregator.mergeRuleStatus(hits, definitions) };
+
+          // Senza definizioni non si sa quali regole esistano, e un elenco vuoto
+          // non è la stessa cosa di «nessuna regola»: passandolo come tale, ogni
+          // contatore su disco diventerebbe un orfano marcato «rimossa». Meglio
+          // mostrare i contatori senza verdetto e dirlo.
+          const definitionsAvailable = definitions !== null;
+
+          ctx.body = {
+            enabled: serviceAvailable(),
+            definitionsAvailable,
+            rules: definitionsAvailable
+              ? aggregator.mergeRuleStatus(hits, definitions)
+              : hits.map((row) => ({ ...row, defined: null })),
+          };
         },
       },
 
@@ -358,7 +457,7 @@ module.exports = {
           const limit = Math.min(parseInt(ctx.query.limit, 10) || 50, 500);
           const census = reader.readFingerprintCensus(dataDir);
           ctx.body = {
-            enabled: true,
+            enabled: serviceAvailable(),
             ipMode: census.ipMode,
             evictions: census.evictions,
             fingerprints: census.fingerprints.slice(0, limit),
@@ -377,10 +476,18 @@ module.exports = {
             ctx.body = serviceUnavailable({ scanners: [] });
             return;
           }
-          const threshold = parseInt(ctx.query.minPaths, 10) || custom.scannerThreshold || 20;
+          // `|| default` scartava lo zero, che è una richiesta legittima e anzi
+          // la più utile fra tutte: «mostrami TUTTI i client censiti», cioè come
+          // si sceglie una soglia guardando la distribuzione invece di
+          // indovinarla. Un numero valido vince, anche se vale zero.
+          const requested = parseInt(ctx.query.minPaths, 10);
+          const threshold = Number.isFinite(requested) && requested >= 0
+            ? requested
+            : (custom.scannerThreshold || 20);
+
           const outcome = reader.readOutcomeCensus(dataDir);
           ctx.body = {
-            enabled: true,
+            enabled: serviceAvailable(),
             threshold,
             evictions: outcome.evictions,
             scanners: aggregator.suspectedScanners(outcome.clients, threshold),
@@ -406,7 +513,7 @@ module.exports = {
             ip: ctx.query.ip ? String(ctx.query.ip) : undefined,
             enforcedOnly: ctx.query.enforcedOnly === '1',
           });
-          ctx.body = { enabled: true, ...result };
+          ctx.body = { enabled: serviceAvailable(), ...result };
         },
       },
 
@@ -432,7 +539,15 @@ module.exports = {
             return;
           }
           try {
-            ctx.body = { enabled: true, rules: sentinel.getRulesSource() };
+            ctx.body = {
+              enabled: true,
+              rules: sentinel.getRulesSource(),
+              // Il client lo rimanda al salvataggio: è così che il server si
+              // accorge che il file è cambiato mentre lo si modificava.
+              mtime: typeof sentinel.getRulesFilePath === 'function'
+                ? rulesFile.currentMtime(sentinel.getRulesFilePath())
+                : null,
+            };
           } catch (err) {
             ctx.status = 500;
             ctx.body = { enabled: true, rules: [], error: err.message };
@@ -461,6 +576,15 @@ module.exports = {
             ctx.status = 400;
             ctx.body = { ok: false, error: 'ruleName e rule sono obbligatori' };
             return;
+          }
+
+          if (typeof sentinel.getRulesFilePath === 'function') {
+            const conflict = staleWriteConflict(sentinel.getRulesFilePath(), body.knownMtime);
+            if (conflict) {
+              ctx.status = 409;
+              ctx.body = { ...conflict, ruleName };
+              return;
+            }
           }
 
           try {
@@ -628,7 +752,20 @@ module.exports = {
             return;
           }
 
-          const content = ctx.request.body && ctx.request.body.content;
+          const body = ctx.request.body || {};
+          const content = body.content;
+          const filePath = sentinel.getRulesFilePath();
+
+          // PRIMA della validazione: se il file è cambiato sotto i piedi, il
+          // testo in pancia al browser è vecchio, e dirgli che è valido non
+          // servirebbe a niente se non a incoraggiarlo a scriverlo sopra.
+          const conflict = staleWriteConflict(filePath, body.knownMtime);
+          if (conflict) {
+            ctx.status = 409;
+            ctx.body = conflict;
+            return;
+          }
+
           const check = validateText(content, sentinel);
 
           // Validazione LATO SERVER prima di ogni scrittura, con il validatore
@@ -639,7 +776,6 @@ module.exports = {
             return;
           }
 
-          const filePath = sentinel.getRulesFilePath();
           const backup = rulesFile.createBackup(filePath, ownFolder || __dirname, custom.maxBackupsPerFile);
           const written = rulesFile.writeRaw(filePath, content);
 
@@ -674,8 +810,19 @@ module.exports = {
             ctx.body = serviceUnavailable();
             return;
           }
+
+          const since = Date.now() - lastFlushMs;
+          if (since < FLUSH_MIN_INTERVAL_MS) {
+            // Non è un errore e non è un rifiuto: gli archivi sono già stati
+            // scritti pochi istanti fa, quindi rileggerli darebbe lo stesso
+            // risultato. Lo si dichiara invece di fingere di aver flushato.
+            ctx.body = { enabled: true, ok: true, flushed: false, ageMs: since };
+            return;
+          }
+
           sentinel.flushNow();
-          ctx.body = { enabled: true, ok: true };
+          lastFlushMs = Date.now();
+          ctx.body = { enabled: true, ok: true, flushed: true, ageMs: 0 };
         },
       },
 
@@ -690,6 +837,10 @@ module.exports._internals = {
   clearSummaryCache,
   summaryCacheSize: () => summaryCache.size,
   MAX_CACHED_WINDOWS,
+  FLUSH_MIN_INTERVAL_MS,
+  /** Il freno del flush è stato di processo: senza azzerarlo, un test vedrebbe quello prima. */
+  resetFlushThrottle: () => { lastFlushMs = 0; },
+  staleWriteConflict,
   /**
    * Sostituisce l'età massima della cache; ritorna il valore precedente, che
    * chi chiama è tenuto a ripristinare. Stessa idea dello scambio temporaneo di

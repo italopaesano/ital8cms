@@ -218,8 +218,29 @@ POST /rules/save                    { content } — valida, fa il backup, salva,
 POST /rules/test                    { spec } — prova una richiesta e spiega l'esito
 
 GET  /rules/source                  le regole come stanno sul FILE (per il form)
-POST /rules/fields                  { ruleName, rule } — salva una regola dal form
+                                    (+ mtime, per la guardia sulla sovrascrittura)
+POST /rules/fields                  { ruleName, rule, knownMtime? } — salva una regola dal form
 ```
+
+**`enabled` significa una cosa sola:** il service è disponibile. I dati storici
+vengono restituiti comunque — il log su disco non smette di esistere quando il
+filtro viene spento — e `/rules` porta `definitionsAvailable`: senza definizioni
+le righe hanno `defined: null`, perché «rimossa» sarebbe un verdetto che nessuno
+ha emesso.
+
+**Salvataggi e conflitti.** `/rules/raw` e `/rules/source` restituiscono l'`mtime`
+del file; rimandandolo come `knownMtime` al salvataggio si ottiene **409** se nel
+frattempo qualcuno l'ha cambiato — una promozione dalla panoramica, un altro
+amministratore, la riga di comando. La precondizione è **opzionale**, come
+`If-Match`: chi non la manda salva come prima, e sa di rinunciarci.
+
+Le tre risposte di errore sono distinte, perché mandano in tre posti diversi:
+
+| Esito | HTTP | Cosa vuol dire |
+|---|---|---|
+| Regole non valide | `400` con `errors[]` | il testo è sbagliato: si corregge nell'editor |
+| File cambiato sotto | `409` con `conflict: true` | il file su disco non è più quello che hai caricato |
+| Scrittura fallita | `500` con `error` | disco pieno, permessi, FS in sola lettura |
 
 Le POST richiedono il token CSRF, iniettato automaticamente nelle pagine admin
 dall'hook `head` di `csrfProtection`: il `fetch` del browser lo aggiunge da sé.
@@ -230,6 +251,17 @@ Ogni contenuto dinamico passa da `escapeHtml()` prima di finire in `innerHTML`:
 qui si stampano IP, percorsi e User-Agent, cioè **stringhe scelte
 dall'attaccante**. Una dashboard di sicurezza che si fa iniettare HTML dai propri
 dati è un bersaglio, non uno strumento.
+
+## Lingua
+
+Le pagine sono bilingue (it/en) **per intero**, contenuto dinamico compreso: il
+JS di pagina non può chiamare `__()`, quindi ogni EJS gli passa le proprie
+etichette in `SN_I18N` e `sentinel-i18n.js` le riempie con `snT()`.
+
+Le etichette usano segnaposto (`{rule}`, `{n}`) invece della concatenazione:
+`'Regola "' + nome + '": ' + prima` funziona in italiano e decide l'ordine delle
+parole per ogni lingua futura. Un test verifica che ogni chiave usata dal JS
+esista e che non ce ne siano di inutilizzate.
 
 ---
 
@@ -356,7 +388,23 @@ Lo stesso strumento è disponibile da riga di comando
 (`npm run cli -- sentinel test <path>`), che è spesso dove serve: la domanda
 «perché questa regola non scatta?» arriva mentre si sta scrivendo il file in SSH.
 
+### Cosa si perde salvando dal form, e cosa no
+
+Si perdono i **commenti scritti dentro quella regola** (vedi sopra). **Non** si
+perde nulla di ciò che il form non conosce: la regola da salvare parte da quella
+sul file, e il form sovrascrive solo i campi che possiede. Un campo aggiunto un
+domani a `sentinel` sopravvive al salvataggio per costruzione, invece di
+sopravvivere se qualcuno si ricorda di aggiungerlo alla GUI.
+
 ## Cosa NON fa ancora
 
 Le Tre Viste ci sono tutte. Restano aperti i punti del *piano di rifinitura* in
 [`plugins/sentinel/TODO.md`](../sentinel/TODO.md).
+
+Un limite noto della panoramica: il **primo** calcolo della finestra annuale su
+un log grosso costa comunque secondi di CPU (spezzettati, quindi il sito
+risponde). Toglierlo del tutto vuol dire non ricavare più il riepilogo dagli
+eventi grezzi, cioè far scrivere a `sentinel` un aggregato giornaliero accanto
+agli altri censimenti: è un intervento sul service.
+
+> 📖 Perché è fatto così, e come si regola: [`EXPLAIN.it.md`](./EXPLAIN.it.md).

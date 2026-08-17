@@ -415,7 +415,64 @@
   const SN_AUTO_REFRESH_SECONDS = <%= passData.plugin.adminSentinel.autoRefreshSeconds %>;
   const SN_EVENT_LIMIT = <%= passData.plugin.adminSentinel.eventLimit %>;
   const SN_DEFAULT_DAYS = <%= passData.plugin.adminSentinel.windowDays %>;
+
+  <%#
+    Etichette tradotte per il JS di pagina, che non può chiamare __().
+
+    Si passa da JSON.stringify e dal tag di output NON escapato, invece di
+    interpolare una stringa per volta con quello escapato: quest'ultimo converte
+    in entità, e in italiano ogni apostrofo arriverebbe a schermo come "&#39;".
+    Il minore viene neutralizzato a parte, così una traduzione che un giorno
+    contenesse un tag di chiusura script non chiuderebbe il blocco.
+
+    Le graffe nelle stringhe sono segnaposto, riempiti da t() lato client:
+    l'ordine delle parole cambia da lingua a lingua, e concatenare pezzi di
+    frase lo darebbe per fisso.
+  %>
+  const SN_I18N = <%- JSON.stringify({
+    toObservation:   __({it: '↩ Torna in osservazione', en: '↩ Back to observation'}, passData.ctx),
+    enableEnforce:   __({it: '⏻ Attiva enforcement', en: '⏻ Enable enforcement'}, passData.ctx),
+    promote:         __({it: '⏻ promuovi', en: '⏻ promote'}, passData.ctx),
+    demote:          __({it: '↩ retrocedi', en: '↩ demote'}, passData.ctx),
+    yes:             __({it: 'sì', en: 'yes'}, passData.ctx),
+    no:              __({it: 'no', en: 'no'}, passData.ctx),
+    neverFired:      __({it: 'mai scattata', en: 'never fired'}, passData.ctx),
+    removed:         __({it: 'rimossa', en: 'removed'}, passData.ctx),
+    unknownRule:     __({it: 'definizioni non disponibili: il filtro è spento', en: 'definitions unavailable: the filter is off'}, passData.ctx),
+    saturatedHint:   __({it: 'conteggio fermato al tetto: almeno questo valore', en: 'count stopped at the cap: at least this value'}, passData.ctx),
+
+    emptyCanary:     __({it: 'Nessun token ancora usato.', en: 'No token used yet.'}, passData.ctx),
+    emptySessions:   __({it: 'Nessuna anomalia rilevata.', en: 'No anomaly detected.'}, passData.ctx),
+    emptyWindow:     __({it: 'Nessun evento nella finestra selezionata.', en: 'No events in the selected window.'}, passData.ctx),
+    emptyRules:      __({it: 'Nessuna regola definita.', en: 'No rule defined.'}, passData.ctx),
+    emptyScanners:   __({it: 'Nessun client sopra la soglia. È una buona notizia.', en: 'No client above the threshold. That is good news.'}, passData.ctx),
+    emptyCensus:     __({it: 'Censimento vuoto.', en: 'Census empty.'}, passData.ctx),
+    emptyEvents:     __({it: 'Nessun evento registrato.', en: 'No event recorded.'}, passData.ctx),
+
+    promoteRisky:    __({
+      it: 'Questa regola ha colpito {n} richieste di utenti autenticati. Promuoverla a blocco potrebbe chiudere fuori qualcuno.\n\nProcedere comunque?',
+      en: 'This rule has hit {n} requests from authenticated users. Promoting it to block could lock somebody out.\n\nProceed anyway?'
+    }, passData.ctx),
+    enforceWarning:  __({
+      it: 'Attivando l\'enforcement le regole in "block" cominceranno a bloccare davvero.\n\nSe qualcosa va storto: npm run cli -- sentinel monitor\n(ferma l\'enforcement a caldo SENZA perdere i dati).\n\nProcedere?',
+      en: 'Enabling enforcement makes rules in "block" start blocking for real.\n\nIf anything goes wrong: npm run cli -- sentinel monitor\n(stops enforcement live WITHOUT losing data).\n\nProceed?'
+    }, passData.ctx),
+    ruleChanged:     __({
+      it: 'Regola "{rule}": {from} → {to}. In vigore adesso, senza riavvio.',
+      en: 'Rule "{rule}": {from} → {to}. In force now, no restart.'
+    }, passData.ctx),
+    modeChanged:     __({it: 'Modalità globale: {mode}', en: 'Global mode: {mode}'}, passData.ctx),
+    changeRejected:  __({it: 'Modifica rifiutata: {error}', en: 'Change rejected: {error}'}, passData.ctx),
+    modeRejected:    __({it: 'Cambio modalità rifiutato: {error}', en: 'Mode change rejected: {error}'}, passData.ctx),
+    networkError:    __({it: 'Errore di rete: {error}', en: 'Network error: {error}'}, passData.ctx),
+    loadError:       __({it: 'Errore nel caricamento dei dati: {error}', en: 'Failed to load data: {error}'}, passData.ctx),
+
+    evictionDetail:  __({it: '{total}: {fp} impronte, {clients} client', en: '{total}: {fp} fingerprints, {clients} clients'}, passData.ctx),
+    tarpitDetail:    __({it: '{refused} rifiutate, {current}/{max} in corso', en: '{refused} refused, {current}/{max} in progress'}, passData.ctx),
+  }).replace(/</g, '\\u003c') %>;
 </script>
+<%# La funzione delle etichette, condivisa: va caricata PRIMA dello script di pagina. %>
+<script src="/<%= passData.adminPrefix %>/sentinelManagement/sentinel-i18n.js"></script>
 <script src="/<%= passData.adminPrefix %>/sentinelManagement/sentinel-admin.js"></script>
 
 <%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>

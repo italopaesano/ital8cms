@@ -75,7 +75,37 @@
 
 <script>
   const SN_API = '/<%= passData.apiPrefix %>/adminSentinel';
+
+  <%# Etichette per il JS di pagina — vedi la nota in index.ejs sul perché
+      JSON.stringify e non un'interpolazione per stringa. %>
+  const SN_I18N = <%- JSON.stringify({
+    inactive:      __({it: 'Il plugin sentinel non è attivo: non c\'è nulla da modificare.', en: 'The sentinel plugin is not active: there is nothing to edit.'}, passData.ctx),
+    readFailed:    __({it: 'Lettura del file fallita: {error}', en: 'Reading the file failed: {error}'}, passData.ctx),
+    networkError:  __({it: 'Errore di rete: {error}', en: 'Network error: {error}'}, passData.ctx),
+    valid:         __({it: '✓ Valido — {n} regole', en: '✓ Valid — {n} rules'}, passData.ctx),
+    invalid:       __({it: '✗ Non valido', en: '✗ Not valid'}, passData.ctx),
+    errorsTitle:   __({it: 'Errori', en: 'Errors'}, passData.ctx),
+    warningsTitle: __({it: 'Avvisi', en: 'Warnings'}, passData.ctx),
+    noBackups:     __({it: 'Nessuno.', en: 'None.'}, passData.ctx),
+
+    conflict:      __({
+      it: '{error}\n\nIl tuo testo è quello di prima: salvarlo adesso cancella quella modifica.\n\nOK = sovrascrivi · Annulla = lascia stare (poi «Ricarica da disco»)',
+      en: '{error}\n\nYour text is the older one: saving it now erases that change.\n\nOK = overwrite · Cancel = leave it (then “Reload from disk”)'
+    }, passData.ctx),
+    conflictFallback: __({it: 'Il file delle regole è cambiato da quando lo hai caricato.', en: 'The rules file changed since you loaded it.'}, passData.ctx),
+    saveCancelled: __({it: 'Salvataggio annullato: il file su disco non è stato toccato.', en: 'Save cancelled: the file on disk was not touched.'}, passData.ctx),
+    saveRejected:  __({it: 'Salvataggio rifiutato: il file su disco non è stato toccato.', en: 'Save rejected: the file on disk was not touched.'}, passData.ctx),
+    writeFailed:   __({
+      it: 'Scrittura fallita: {error} — il file su disco non è stato sostituito.',
+      en: 'Write failed: {error} — the file on disk was not replaced.'
+    }, passData.ctx),
+    noReason:      __({it: 'motivo non riportato', en: 'no reason reported'}, passData.ctx),
+    saved:         __({it: 'Salvato e ricaricato: {n} regole attive', en: 'Saved and reloaded: {n} rules active'}, passData.ctx),
+    savedBackup:   __({it: ' (backup: {file})', en: ' (backup: {file})'}, passData.ctx),
+  }).replace(/</g, '\\u003c') %>;
 </script>
+<%# La funzione delle etichette, condivisa: va caricata PRIMA dello script di pagina. %>
+<script src="/<%= passData.adminPrefix %>/sentinelManagement/sentinel-i18n.js"></script>
 <script src="/<%= passData.adminPrefix %>/sentinelManagement/rules-editor.js"></script>
 
 <%- include( passData.themeSys.getThemePartPath( 'footer.ejs', passData ) ) %>
