@@ -136,12 +136,36 @@ Fonte: intervento v2.64.0 (canonizzazione del `.default`).
 
 Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
 
-- [ ] **Flake osservato una volta** in `tests/integration/pluginNpmInstall.test.js`
-      ("self-contained già installato → npm install SALTATO"), durante una suite
-      completa. Non riprodotto in 5 esecuzioni mirate né in 2 baseline. Più test
-      spawnano `node index.js` sulla **porta 3000**: la causa probabile è contesa
-      di porta. Mitigazione già applicata al test dell'upgrade (porta dedicata);
-      valutare di estenderla a tutti i test che avviano un server.
+- [x] ~~**Flake osservato una volta** in `tests/integration/pluginNpmInstall.test.js`
+      ("self-contained già installato → npm install SALTATO")~~ — **causa trovata e
+      corretta** (v2.95.0). Non era contesa di porta: la suite gira `maxWorkers: 1`,
+      quindi due server non sono mai vivi insieme, e questo test usa già una porta
+      dedicata casuale. Il difetto era nell'**harness**: `runBoot()` si concludeva su
+      `proc.on('exit')` valutando lì `started: READY.test(out)`, ma `'exit'` segnala
+      la morte del processo, **non** che le pipe di stdio siano state drenate — gli
+      ultimi chunk possono essere ancora in volo, quindi un boot **riuscito** poteva
+      essere riportato come `started: false`. Misurato: su 200 spawn che stampano un
+      marker e escono subito, in **14 casi (7%)** il marker mancava su `'exit'` ed era
+      presente su `'close'`; con la correzione, 0 su 200 (Node 22 e 24). L'harness era
+      duplicato **identico** anche in `bootLifecycle.test.js`, dove il ramo d'uscita è
+      quello che conta di più (i gate `[FATAL]` di cui si asserisce l'output): corretto
+      in entrambi.
+- [x] ~~Il fallimento era **indiagnosticabile**~~ — `expect(res.started).toBe(true)`
+      stampava solo «Expected: true / Received: false» e buttava via l'output del
+      processo, cioè l'unica cosa che spiega l'uscita. È il motivo per cui questa voce
+      è rimasta senza causa: nei log CI non c'era niente da leggere. Ora si asserisce
+      sull'oggetto (`{ started, code, output }`), così il messaggio d'errore porta con
+      sé stdout+stderr e il codice d'uscita.
+- [ ] **Range di porte sovrapposti fra i due harness di boot** (scoperto indagando il
+      punto sopra, **non** la causa di quel fallimento): `pluginNpmInstall` sceglie in
+      `35000..36499`, `bootLifecycle` in `34000..35499` — 500 porte in comune. Oggi è
+      innocuo perché `maxWorkers: 1` serializza la suite, ma è una mina che esplode al
+      primo tentativo di riabilitare il parallelismo, ed è proprio l'ipotesi sbagliata
+      che questa voce ha inseguito per mesi. Da risolvere insieme al punto sotto,
+      preferibilmente allocando una porta libera dal SO (`listen(0)`) invece di
+      sorteggiarla.
+- [ ] **Estendere la porta dedicata a tutti i test che avviano un server** (voce
+      originale, ancora valida): più test spawnano `node index.js` sulla **porta 3000**.
 - [ ] **Migrare i test plugin-specifici** da `/tests/unit/{pluginName}/` a
       `plugins/{pluginName}/tests/` (convenzione già in vigore; migrato solo
       `bootstrapNavbar` come riferimento).
@@ -180,10 +204,10 @@ Da affrontare in una review dedicata:
 
 Fonte: `docs/roadmap.it.md` punto 16 — aggiornamenti rinviati dal bulk del 2026-05-19.
 
-**Ultimo giro di routine: 2026-08-12** (v2.84.0) — `npm outdated` pulito e
+**Ultimo giro di routine: 2026-08-23** (v2.94.0) — `npm outdated` pulito e
 `npm audit` a **0 vulnerabilità**, con la sola esclusione di `ccxt` per policy.
 
-- [ ] **`ccxt`** (plugin `ccxt`), `4.5.58` → `4.5.73`: verificare se è ancora usato e
+- [ ] **`ccxt`** (plugin `ccxt`), `4.5.58` → `4.5.75`: verificare se è ancora usato e
       se la superficie API è cambiata fra le minor; testare le rotte prima del bump.
       *Escluso dagli update di routine per policy (CLAUDE.md regola 12): release molto
       frequenti legate alle API degli exchange.*
@@ -279,6 +303,45 @@ kcs(dir, { index: ['index.ejs'], dirListing: { enabled: false }, /* … */ }) //
 **Sistemi affetti:** qualunque sito che voglia servire una homepage **senza**
 esporre il directory listing — cioè la configurazione normale di un sito in
 produzione. Oggi le due cose non sono separabili.
+
+
+### 🐞 `urlRedirect` — un `HEAD` su un path redirezionato non segue il redirect
+
+Fonte: emerso aggiornando `koa-classic-server` alla **5.3.0** (v2.94.0), che porta
+`HEAD` nel default di `options.method`. **Non è un bug del modulo:** il codice è
+nostro, `plugins/urlRedirect/main.js` → `getMiddlewareToAdd()`.
+
+Il middleware si autoesclude su qualsiasi verbo diverso da `GET`
+(`if (ctx.method !== 'GET') { await next(); return }`), scelta corretta finché il
+server statico rifiutava `HEAD` e la richiesta finiva comunque 404. Ora che `HEAD`
+è servito, il redirect viene **scavalcato**: la richiesta prosegue e il file
+originale risponde 200.
+
+Misurato su server reale, con una regola temporanea `/robots.txt → /sitemap.xml`:
+
+```
+GET  /robots.txt  → 301  (Location: /sitemap.xml)   ✅
+HEAD /robots.txt  → 200  (nessun Location)          ❌ serve la risorsa da cui si sta redirezionando
+```
+
+RFC 9110 §9.3.2 vuole che `HEAD` rispecchi `GET`: stesso status, stessi header,
+nessun corpo. Qui i due verbi divergono sia nello status sia in `Location`. Chi
+legge il sito con `HEAD` — cache, reverse proxy, link-checker, crawler — non vede
+il redirect e continua a considerare valido il vecchio URL.
+
+- [ ] Estendere il guard a `HEAD` (`!['GET', 'HEAD'].includes(ctx.method)`), così il
+      redirect vale per entrambi i verbi. **Da decidere dal maintainer**, non applicato
+      qui: è un cambio di comportamento di un plugin, fuori dallo scopo di un giro di
+      aggiornamento dipendenze.
+- [ ] Decidere se un `HEAD` debba incrementare l'`hitCounter`. Contarlo gonfia le
+      statistiche con traffico non umano; non contarlo le lascia coerenti con oggi.
+      Sono due scelte difendibili, ma vanno prese esplicitamente.
+- [ ] Test di regressione sui due verbi: oggi **nessun test del progetto usa `HEAD`**,
+      ed è la ragione per cui la suite è rimasta verde mentre il comportamento cambiava.
+
+**Non urgente su questa installazione:** il `redirectMap.json5` vivo non ha regole
+attive (tutti gli esempi sono commentati), quindi oggi non c'è divergenza da
+osservare. Diventa visibile alla prima regola configurata.
 
 ## 8. Direzioni ampie
 

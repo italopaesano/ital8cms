@@ -115,7 +115,17 @@ function runBoot(dir, { timeoutMs = 60000 } = {}) {
 
     proc.stdout.on('data', onData);
     proc.stderr.on('data', onData);
-    proc.on('exit', (code) => settle({ exited: true, code }));
+    // Si conclude su 'close', NON su 'exit'. 'exit' segnala la morte del processo ma
+    // NON che le pipe di stdio siano state drenate: gli ultimi chunk possono essere
+    // ancora in volo, quindi valutare `out` lì può perdere proprio la riga READY e
+    // riportare `started: false` su un boot RIUSCITO. Misurato: su 200 spawn che
+    // stampano un marker e escono subito, in 14 casi (7%) il marker mancava su
+    // 'exit' ed era presente su 'close'. 'close' è emesso dopo la chiusura di tutti
+    // gli stdio, quindi lì `out` è completo. Se 'close' non arrivasse, resta il
+    // timeout esterno: un fallimento dichiarato è meglio di un esito sbagliato.
+    proc.on('exit', (code) => {
+      proc.once('close', () => settle({ exited: true, code }));
+    });
 
     const timer = setTimeout(() => settle({ exited: false, code: null, timedOut: true }), timeoutMs);
   });
@@ -161,7 +171,9 @@ describe('npm install self-contained alla transizione d\'installazione (integrat
     const res = await runBoot(dir);
 
     expect(res.timedOut).toBeFalsy();
-    expect(res.started).toBe(true);
+    // Vedi la nota nell'altro test: l'oggetto porta l'output nel messaggio d'errore.
+    expect({ started: res.started, code: res.code, output: res.output })
+      .toMatchObject({ started: true });
 
     // self-contained fresco → riga di install + caricato + isInstalled:1 + lockfile creato
     expect(res.output).toMatch(/Plugin self-contained "zzScFresh": installo le dipendenze npm/);
@@ -190,7 +202,13 @@ describe('npm install self-contained alla transizione d\'installazione (integrat
     const res = await runBoot(dir);
 
     expect(res.timedOut).toBeFalsy();
-    expect(res.started).toBe(true);
+    // Si asserisce sull'oggetto e non sul solo booleano: quando il boot NON parte,
+    // il messaggio di jest deve dire PERCHÉ. `expect(res.started).toBe(true)` stampa
+    // "Expected: true / Received: false" e basta — l'output del processo, che è
+    // l'unica cosa che spiega l'uscita, viene buttato via. È la ragione per cui
+    // questo fallimento è rimasto senza causa in TODO.md §5.
+    expect({ started: res.started, code: res.code, output: res.output })
+      .toMatchObject({ started: true });
     expect(res.output).toMatch(/Plugin caricato: zzScInstalled/);
     // isInstalled era già 1 → transizione NON attraversata → nessun npm install
     expect(res.output).not.toMatch(/Plugin self-contained "zzScInstalled": installo le dipendenze npm/);
