@@ -171,6 +171,23 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       `bootstrapNavbar` come riferimento).
 - [ ] **E2E/Playwright per plugin e temi**: estendere la discovery automatica oltre
       unit e integration, con orchestrazione del server.
+- [ ] **`pluginSys.initialize()` non è testabile in-process: la root dei plugin è cablata.**
+      *(Emerso in v2.97.0 riscrivendo `pluginSys.test.js` contro il modulo reale.)*
+      `initialize()` risolve i plugin con `path.join(__dirname, '..', 'plugins')` e non
+      accetta una root alternativa: eseguirlo in un test caricherebbe i plugin VERI
+      in-process e scriverebbe `isInstalled` nei loro config vivi, contro la regola di
+      isolamento filesystem di [`docs/testing.it.md`](./docs/testing.it.md). Oggi quel
+      ramo è verificato solo **spawnando un processo** (`bootLifecycle.test.js`,
+      `pluginNpmInstall.test.js`), quindi la copertura non lo accredita: `core/pluginSys.js`
+      resta al 24,5% di righe, e le ~250 righe mancanti sono quasi tutte lì dentro —
+      stati dei plugin, ordine di caricamento, cascata sui dipendenti, cicli, transizione
+      `isInstalled` non-1 → 1.
+      **La correzione ha già un precedente deciso nel progetto:** `validateThemeContent()`
+      cablava la root dei temi ed è stata resa parametrica in v2.92.0 (parametro opzionale,
+      default invariato, i test usano una tmpdir). Stessa forma qui: un parametro opzionale
+      per la root dei plugin, default identico a oggi, così `initialize()` diventa
+      esercitabile su una fixture senza cambiare il comportamento di produzione.
+      Richiede l'approvazione del nome (regola 3) prima di essere scritto.
 - [ ] **Soglia minima di coverage** con fail della CI, calcolata in modo aggregato
       (core + plugin attivi + temi). **Sbloccata a metà da v2.96.0**: lo scope della
       misura ora copre tutto il codice che la suite ha il permesso di eseguire
