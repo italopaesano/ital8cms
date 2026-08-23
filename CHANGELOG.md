@@ -3,6 +3,38 @@
 
 Storico delle modifiche del progetto e della documentazione (voci dalla più recente).
 
+- v2.94.0 (2026-08-23): **DEPS — `koa-classic-server` 5.2.0 → 5.3.0: `HEAD` entra nel default, e su ital8cms era un 404** - Giro di aggiornamento richiesto sul modulo mantenuto dal team, esteso a tutto ciò che la policy consente. `npm outdated` pulito e `npm audit` a zero.
+
+  | Pacchetto | Da → A | Note |
+  |---|---|---|
+  | `koa-classic-server` | ^5.2.0 → **^5.3.0** | `HEAD` nel default di `options.method`, normalizzazione di `options.method`, `Content-Length` corretto su HEAD, ordinamento del listing normalizzato |
+  | `inquirer` | ^14.0.2 → **^14.1.0** | Allineamento del floor alla versione corrente (nessun cambio d'uso: `scripts/init.js` e `configWizard.js` restano sull'interop CommonJS) |
+  | `glob` (override) | ^11.0.0 → **^13.0.6** | La 11.x è finita **deprecata a sua volta** — era l'unico `npm warn deprecated` rimasto sull'install |
+  | `js-yaml` (override) | ^5.2.3 → **^5.3.0** | Allineamento del floor dentro lo stesso major già verificato in v2.84.0 |
+  | `ccxt` | 4.5.58 → 4.5.75 | **NON aggiornato**, policy (CLAUDE.md regola 12) |
+
+  - **La 5.3.0 corregge un difetto che ital8cms aveva addosso senza saperlo.** Fino alla 5.2.0 il default di `options.method` era `['GET']`, e ital8cms non passa `method` in nessuna delle sue **cinque** istanze: quindi `HEAD` non veniva accettato, cadeva su `next()` e finiva **404**. Non è una sottigliezza teorica — è un 404 su file che `GET` serve con 200, cioè il server che *afferma che la risorsa non esiste*. Misurato sul server reale prima e dopo, perché «i test passano» non avrebbe mostrato niente: nessun test del progetto usa `HEAD`.
+
+    | Richiesta | 5.2.0 | 5.3.0 |
+    |---|---|---|
+    | `HEAD /robots.txt` (file di `www`) | **404** | **200**, `Content-Length: 81`, corpo vuoto ✅ |
+    | `HEAD /sitemap.xml` (file di `www`) | **404** | **200**, `Content-Length: 110`, corpo vuoto ✅ |
+    | `HEAD /public-theme-resources/css/theme.css` | **404** | **200**, `Content-Length: 532`, corpo vuoto ✅ |
+    | `HEAD /zzz-non-esiste.txt` (404 di controllo) | 404 | 404 (invariato) |
+    | `HEAD /api/adminUsers/logged` (rotta del router) | 200 | 200 (invariato) |
+    | `HEAD /admin/` (pannello) | 302 | 302 (invariato) |
+
+    Le tre righe che cambiano sono esattamente le istanze **statiche** (`www`, risorse del tema, plugin pages); router e pannello erano già corretti perché `HEAD` lì lo gestisce `@koa/router`. Chi emetteva `HEAD` — cache, reverse proxy, link-checker, monitor di uptime — leggeva «non esiste» su ogni file statico del sito.
+
+  - **Il perimetro di sicurezza NON si allarga, ed è stato verificato invece che dedotto.** `HEAD` accettato significa una richiesta in più che arriva ai server statici, quindi la domanda giusta era se i tre gate pre-router la intercettino come intercettano `GET`. La risposta sta nel codice: `createMaintenanceGate`, `createReservedGate` e `createSentinelGate` (`core/priorityMiddlewares/runtimeGate.js`) discriminano **solo** su `ctx.path` — `ctx.method` non compare in nessuno dei tre. Un `HEAD` verso la superficie riservata prende lo stesso 404 di un `GET`. Nel probe sopra, `/admin/` risponde 302 a entrambi i verbi.
+  - **`glob`: l'override andava avanzato per la stessa ragione per cui era nato.** Il commit che lo introdusse (`0ec1044`) si intitolava *drop deprecated jest transitive deps* e forzava la 11.x per sostituire la 10.5.0 deprecata; oggi è la **11.x** a essere deprecata, e l'install lo diceva a ogni giro. È l'unica transitiva del progetto in questo stato, vive solo dentro `jest` (dev), e jest dichiara `^10.5.0`: l'override già saltava un major, ora ne salta tre. Verificata la suite completa e — poiché `glob` alimenta `test-exclude` via `babel-plugin-istanbul` — anche il percorso **coverage**, che è il ramo che il solo `jest` non esercita: `jest --coverage` risolve include/exclude e produce le righe per-file su tutto l'albero.
+  - **`js-yaml`:** stesso ramo verificato in v2.84.0 e con lo stesso metodo, non per abitudine ma perché il progetto continua a non avere un `.nycrc.yml` proprio: `.nycrc.yml` temporaneo + `loadNycConfig()`, config letta correttamente sulla 5.3.0.
+  - **🐞 Un difetto NOSTRO che il bump ha scoperto, registrato e non corretto qui:** `urlRedirect` si autoesclude su ogni verbo diverso da `GET` (`ctx.method !== 'GET'`), scelta corretta finché `HEAD` finiva comunque 404. Ora che `HEAD` è servito, il redirect viene **scavalcato**: con una regola temporanea `/robots.txt → /sitemap.xml`, `GET` risponde `301 Location: /sitemap.xml` e `HEAD` risponde **200 servendo la risorsa da cui si sta redirezionando**, senza `Location`. È la stessa divergenza `GET`/`HEAD` che la 5.3.0 elimina nel modulo, un livello più in là e in codice nostro — quindi la regola 4 non c'entra: non è un bug di `koa-classic-server`. **Non applicata la fix in questo commit**: cambiare il comportamento di un plugin (e decidere se un `HEAD` debba incrementare l'`hitCounter`) è una scelta del maintainer, fuori dallo scopo di un giro di dipendenze. Aperto in `TODO.md` §7 con la misura e le tre voci da decidere. Nessuna urgenza sull'installazione corrente: il `redirectMap.json5` vivo non ha regole attive.
+  - **Perché nessun test se n'era accorto:** in tutto il progetto **nessun test usa `HEAD`** — la suite è rimasta verde su entrambe le versioni mentre il comportamento cambiava su tre istanze su cinque. Voce di copertura aperta nel TODO.
+  - **Modello ibrido per-plugin verificato:** `npm run deps-sync` riporta `1 self-contained, 0 legacy, 0 realign`.
+  - **Verifica:** Jest **142 suite / 4197 test verdi** (5 skipped); e2e Playwright **95 passed** e globalPrefix **17 passed**; `npm audit` **0 vulnerabilità**; `npm outdated` pulito a meno di `ccxt`. *(Nota d'ambiente invariata rispetto a v2.84.0: questo container ha chromium build 1194 mentre Playwright ne cerca la 1234, quindi gli e2e girano con `PW_EXECUTABLE_PATH=/opt/pw-browsers/chromium` — l'opt-in già previsto da `tests/playwright.config.js`. Su una macchina normale serve `npx playwright install`.)*
+  - **Files Modified:** `/package.json`, `/package-lock.json`, `/CLAUDE.md`, `/TODO.md`, `/CHANGELOG.md`.
+
 - v2.93.0 (2026-08-17): **DOC — `ital8cms-theme-creator`: allineata al nuovo comportamento del validatore dei temi (issue #355)** - Sola skill, nessun codice.
   - **Una parentesi è diventata portante.** La skill diceva «(For `minimal`, drop the three `include` lines)» a proposito degli `include` di `nav`/`main`/`aside` in `header.ejs`, che nella variante `minimal` non vengono generati. Dimenticarlo produceva un **crash al render**, latente finché qualcuno non apriva la pagina; ora il validatore lo dichiara al boot con un errore per ciascun include pendente. Verificato scaffoldando le varianti: `minimal` e `standard` restano valide, la minimal con gli include lasciati per errore produce i tre errori attesi. L'istruzione è ora una regola esplicita con la sua conseguenza, non un inciso.
   - **Documentata la capacità nuova.** Gli hook possono ora vivere in un sub-partial: tre layout che includono lo stesso `siteFooter.ejs` con `hookPage("footer")` dentro validano puliti, e il contenuto iniettato resta **dentro** il `<footer>` che il tema stila invece di renderizzare fuori. Era il caso della issue, e senza dirlo un autore di temi non saprebbe che la fattorizzazione è consentita: il «Don't rename or restructure partials» si leggeva anche come «niente partial in più». Riformulato: i nomi standard restano obbligatori, i sub-partial aggiuntivi sono liberi.
