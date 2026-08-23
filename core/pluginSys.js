@@ -24,11 +24,24 @@ class pluginSys{
   #reservedRoutePaths = new Set();// path completi delle rotte che appartengono alla superficie riservata (popolato da loadRoutes)
   #ital8Conf = null;// configurazione principale del sistema (per whitelist funzioni globali)
   #pluginStates = new Map();// stato runtime per plugin: 'available'|'disabled'|'incomplete'|'installed' (+ reason/detail)
+  #pluginsRootPath = null;// cartella da cui si risolvono i plugin (default: <progetto>/plugins)
 
-  constructor(ital8Conf){// qui bisognerà andare nella cartelle dai plugin e caricarli uno a uno
+  /**
+   * @param {object} ital8Conf - configurazione principale del sistema
+   * @param {string} [pluginsRootPath] - cartella da cui risolvere i plugin.
+   *   Default INVARIATO: la `plugins/` del progetto. Il parametro esiste perché
+   *   la root era cablata in sei punti, il che rendeva `initialize()` impossibile
+   *   da esercitare in un test senza caricare i plugin VERI in-process e
+   *   scrivere `isInstalled` nei loro config vivi — contro l'isolamento
+   *   filesystem di docs/testing.it.md. Stessa forma già adottata per
+   *   `validateThemeContent(..., themesRootPath)` in v2.92.0, e per lo stesso
+   *   motivo. Nessun chiamante di produzione lo passa.
+   */
+  constructor(ital8Conf, pluginsRootPath = path.join(__dirname, '..', 'plugins')){// qui bisognerà andare nella cartelle dai plugin e caricarli uno a uno
 
     // Salva riferimento alla configurazione principale
-    this.#ital8Conf = ital8Conf; 
+    this.#ital8Conf = ital8Conf;
+    this.#pluginsRootPath = pluginsRootPath;
 
     this.#hooksPage = new Map();// new Map(['namelPlugin', new Map(['head', (passData) => {}],['body', ( passData ) => {} ])]);
     this.#routes = new Map();// mappa che conterrà come chiave il nome del plugin da caricare e come valore un array contenete tutti gli ogetti che rappresentano le rotte
@@ -51,11 +64,11 @@ class pluginSys{
       //caricatePlugin = ( pluginName, pluginConfig, routes, hooksPage, objectToShareToWebPages, activePlugins ) => {// q
 
       // Calcola il percorso della cartella del plugin
-      const pathPluginFolder = path.join(__dirname, '..', 'plugins', pluginName);
+      const pathPluginFolder = path.join(this.#pluginsRootPath, pluginName);
 
       try {
         //console.log(pluginConfig);
-        const pluginConfig = loadJson5(path.join(__dirname, '..', 'plugins', pluginName, 'pluginConfig.json5'));
+        const pluginConfig = loadJson5(path.join(this.#pluginsRootPath, pluginName, 'pluginConfig.json5'));
 
         // TRANSIZIONE D'INSTALLAZIONE: il plugin diventa "installed" la prima volta
         // quando isInstalled non era già 1 (clone fresco: il campo può mancare →
@@ -84,7 +97,7 @@ class pluginSys{
           }
         }
 
-        const plugin = require(path.join(__dirname, '..', 'plugins', pluginName, 'main.js'));
+        const plugin = require(path.join(this.#pluginsRootPath, pluginName, 'main.js'));
 
         // Aggiungi metadata al plugin object per uso futuro
         plugin.pluginName = pluginName;
@@ -152,7 +165,7 @@ class pluginSys{
         //
         // Prima installazione: NON è un upgrade. Là gira installPlugin() (sopra) e
         // qui si registra soltanto la versione di partenza, senza invocare l'hook.
-        const pluginDescription = loadJson5(path.join(__dirname, '..', 'plugins', pluginName, 'pluginDescription.json5'));
+        const pluginDescription = loadJson5(path.join(this.#pluginsRootPath, pluginName, 'pluginDescription.json5'));
         const newVersion = pluginDescription.version;
         const oldVersion = pluginConfig.version || '0.0.0'; // mai eseguito prima → 0.0.0
         const livePluginConfigPath = path.join(pathPluginFolder, 'pluginConfig.json5');
@@ -250,7 +263,7 @@ class pluginSys{
     }// const caricatePlugin = ( pluginName, pluginConfig ) => {
 
     // adesso leggo tutti i file della cartella plugins e ciclo per attivari e caricare quelli per essere caricati
-    const baseDir =  path.join(__dirname, '..', 'plugins' ) ;//ottengo ilpercorso della directory plugins
+    const baseDir =  this.#pluginsRootPath ;//ottengo ilpercorso della directory plugins
     let Afiles = fs.readdirSync( baseDir );// gli dico di leggere il contenuto della directori plugins e metterloin un arra ps linux non distingue fra file e directori sono tutti fil eper lui
     // Tengo solo le directory reali. throwIfNoEntry:false evita un crash ENOENT
     // al boot su symlink rotti dentro plugins/ (es. un SKILL.md che punta a un
@@ -864,7 +877,7 @@ class pluginSys{
     }
 
     try {
-      const descriptionPath = path.join(__dirname, '../plugins', pluginName, 'pluginDescription.json5');
+      const descriptionPath = path.join(this.#pluginsRootPath, pluginName, 'pluginDescription.json5');
       const description = loadJson5(descriptionPath);
       return description.version || null;
     } catch (error) {

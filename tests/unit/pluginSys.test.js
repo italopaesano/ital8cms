@@ -17,25 +17,31 @@
  * È lo stesso antipattern già corretto per themeSys in v2.90.0 («i nuovi test
  * esercitano la funzione REALE, non una copia»), rimasto qui.
  *
- * PERIMETRO ATTUALE, E PERCHÉ NON È ANCORA TUTTO
- * ----------------------------------------------
- * `initialize()` — dove vivono caricamento, stati, dipendenze e cicli — risolve
- * i plugin con `path.join(__dirname, '..', 'plugins')`, cioè la cartella REALE
- * del progetto, e non accetta una root alternativa. Eseguirlo qui caricherebbe
- * i plugin veri in-process e SCRIVEREBBE `isInstalled` nei loro config vivi:
- * contro la regola di isolamento filesystem di docs/testing.it.md.
+ * PERIMETRO
+ * ---------
+ * Due gruppi di test, che richiedono due strade diverse:
  *
- * Questo file copre quindi tutta la superficie raggiungibile SENZA initialize():
- * costruttore, accessori, contratto degli oggetti restituiti (copie difensive) e
- * getGlobalFunctions(), che è pilotato dalla configurazione iniettata nel
- * costruttore ed è quindi interamente esercitabile.
+ *  1. Superficie raggiungibile SENZA initialize() — costruttore, accessori,
+ *     copie difensive, iniezione dei sottosistemi e getGlobalFunctions(), che è
+ *     pilotato dalla configurazione iniettata nel costruttore.
  *
- * Il resto richiede una root dei plugin iniettabile — la stessa correzione già
- * applicata a validateThemeContent() in v2.92.0, che cablava la root dei temi.
- * Vedi TODO.md §5.
+ *  2. `initialize()`, dove vive la maggior parte del modulo: stati dei plugin,
+ *     ordine di caricamento, cascata sui dipendenti, cicli, persistenza di
+ *     `isInstalled`. Risolveva i plugin con `path.join(__dirname, '..',
+ *     'plugins')` — la cartella REALE — quindi eseguirlo in un test avrebbe
+ *     caricato i plugin veri in-process e scritto `isInstalled` nei loro config
+ *     vivi, contro l'isolamento filesystem di docs/testing.it.md. Da v2.98.0 il
+ *     costruttore accetta una root opzionale (`pluginsRootPath`, default
+ *     invariato), sulla falsariga di `validateThemeContent(..., themesRootPath)`
+ *     in v2.92.0: i test usano una tmpdir con plugin sintetici.
  */
 
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
 const pluginSys = require('../../core/pluginSys');
+const loadJson5 = require('../../core/loadJson5');
 
 // Il modulo logga su console in diversi rami (warning sulla whitelist, banner
 // dell'errore fatale). I test li esercitano di proposito, quindi le console
@@ -264,5 +270,263 @@ describe('pluginSys — le funzioni di fallback restano usabili nei template', (
     const fallback = buildFallback('formatPrice');
     expect(fallback()).toBe('');
     expect(fallback(1, 2, 3)).toBe('');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// initialize(): il ramo dove vive la maggior parte del modulo.
+//
+// Reso esercitabile dal parametro `pluginsRootPath` del costruttore (default
+// invariato): i plugin vengono risolti da una tmpdir con plugin sintetici,
+// quindi nessun plugin reale viene caricato e nessun config vivo del progetto
+// viene toccato. `essentialPlugins` è lasciato vuoto di proposito: un
+// essenziale mancante farebbe `process.exit`, che qui ucciderebbe il worker.
+// ─────────────────────────────────────────────────────────────────────────────
+
+let fixtureRoots = [];
+
+afterEach(() => {
+  for (const dir of fixtureRoots) {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
+  }
+  fixtureRoots = [];
+});
+
+/** Crea una root temporanea che farà da cartella `plugins/`. */
+const makePluginsRoot = () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ital8-pluginsys-'));
+  fixtureRoots.push(dir);
+  return dir;
+};
+
+/** Scrive un plugin sintetico dentro `root`. */
+const writePlugin = (root, name, opts = {}) => {
+  const {
+    active = 1, weight = 0, dependency = {}, nodeModuleDependency = {},
+    isInstalled, main, withoutLiveConfig = false,
+  } = opts;
+
+  const dir = path.join(root, name);
+  fs.mkdirSync(dir, { recursive: true });
+
+  if (!withoutLiveConfig) {
+    const cfg = { schemaVersion: 1, active, weight, dependency, nodeModuleDependency };
+    if (isInstalled !== undefined) cfg.isInstalled = isInstalled;
+    fs.writeFileSync(path.join(dir, 'pluginConfig.json5'), '// fixture\n' + JSON.stringify(cfg, null, 2) + '\n', 'utf8');
+  }
+
+  fs.writeFileSync(
+    path.join(dir, 'pluginDescription.json5'),
+    '// fixture\n' + JSON.stringify({
+      name, version: '1.0.0', description: 'fixture', author: 'test', email: 't@t.t', license: 'ISC',
+    }, null, 2) + '\n',
+    'utf8',
+  );
+
+  fs.writeFileSync(
+    path.join(dir, 'main.js'),
+    main || 'module.exports = { async loadPlugin() {}, getRouteArray() { return []; } };\n',
+    'utf8',
+  );
+
+  return dir;
+};
+
+/** main.js che annota in un file ogni hook del ciclo di vita invocato. */
+const recordingMain = (marker, logFile) =>
+  `const fs = require('fs');\n` +
+  `const note = (what) => fs.appendFileSync(${JSON.stringify(logFile)}, what + ':${marker}\\n');\n` +
+  `module.exports = {\n` +
+  `  async loadPlugin() { note('load'); },\n` +
+  `  async installPlugin() { note('install'); },\n` +
+  `  getRouteArray() { return []; },\n` +
+  `};\n`;
+
+describe('pluginSys.initialize() — gli stati dei plugin', () => {
+  test('plugin attivo e completo → installed e caricato', async () => {
+    const root = makePluginsRoot();
+    writePlugin(root, 'zzSemplice');
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+
+    expect(sys.getPluginState('zzSemplice').state).toBe('installed');
+    expect(sys.isPluginActive('zzSemplice')).toBe(true);
+    expect(sys.getActivePluginNames()).toContain('zzSemplice');
+  });
+
+  test('active: 0 → disabled, e NON viene caricato', async () => {
+    const root = makePluginsRoot();
+    writePlugin(root, 'zzSpento', { active: 0 });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+
+    expect(sys.getPluginState('zzSpento').state).toBe('disabled');
+    expect(sys.isPluginActive('zzSpento')).toBe(false);
+  });
+
+  test('senza pluginConfig.json5 vivo → available (mai preso in carico)', async () => {
+    const root = makePluginsRoot();
+    writePlugin(root, 'zzMaiPreso', { withoutLiveConfig: true });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+
+    expect(sys.getPluginState('zzMaiPreso').state).toBe('available');
+    expect(sys.isPluginActive('zzMaiPreso')).toBe(false);
+  });
+
+  test('dipendenza da un plugin inesistente → incomplete', async () => {
+    const root = makePluginsRoot();
+    writePlugin(root, 'zzOrfano', { dependency: { zzNonEsiste: '^1.0.0' } });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+
+    expect(sys.getPluginState('zzOrfano').state).toBe('incomplete');
+    expect(sys.isPluginActive('zzOrfano')).toBe(false);
+  });
+
+  test('dipendenza npm assente → incomplete', async () => {
+    const root = makePluginsRoot();
+    writePlugin(root, 'zzNpmMancante', {
+      nodeModuleDependency: { 'questo-modulo-npm-non-esiste-davvero': '^1.0.0' },
+    });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+
+    expect(sys.getPluginState('zzNpmMancante').state).toBe('incomplete');
+  });
+});
+
+describe('pluginSys.initialize() — boot graceful', () => {
+  test('un loadPlugin() che lancia NON blocca il boot: gli altri caricano', async () => {
+    const root = makePluginsRoot();
+    writePlugin(root, 'zzRotto', {
+      main: 'module.exports = { async loadPlugin() { throw new Error("boom"); }, getRouteArray() { return []; } };\n',
+    });
+    writePlugin(root, 'zzSano');
+
+    const sys = new pluginSys({}, root);
+    await expect(sys.initialize()).resolves.not.toThrow();
+
+    expect(sys.getPluginState('zzRotto').state).toBe('incomplete');
+    expect(sys.getPluginState('zzSano').state).toBe('installed');
+    expect(sys.isPluginActive('zzSano')).toBe(true);
+  });
+
+  test('il dipendente di un plugin fallito cascata a incomplete', async () => {
+    const root = makePluginsRoot();
+    writePlugin(root, 'zzBase', {
+      main: 'module.exports = { async loadPlugin() { throw new Error("boom"); }, getRouteArray() { return []; } };\n',
+    });
+    writePlugin(root, 'zzDipende', { dependency: { zzBase: '^1.0.0' } });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+
+    expect(sys.getPluginState('zzBase').state).toBe('incomplete');
+    expect(sys.getPluginState('zzDipende').state).toBe('incomplete');
+  });
+
+  test('ciclo A → B → A: entrambi incomplete, il boot completa comunque', async () => {
+    const root = makePluginsRoot();
+    writePlugin(root, 'zzCicloA', { dependency: { zzCicloB: '^1.0.0' } });
+    writePlugin(root, 'zzCicloB', { dependency: { zzCicloA: '^1.0.0' } });
+    writePlugin(root, 'zzFuoriDalCiclo');
+
+    const sys = new pluginSys({}, root);
+    await expect(sys.initialize()).resolves.not.toThrow();
+
+    expect(sys.getPluginState('zzCicloA').state).toBe('incomplete');
+    expect(sys.getPluginState('zzCicloB').state).toBe('incomplete');
+    // Il ciclo non deve trascinarsi dietro chi non c'entra.
+    expect(sys.getPluginState('zzFuoriDalCiclo').state).toBe('installed');
+  });
+});
+
+describe('pluginSys.initialize() — ordine di caricamento', () => {
+  // ⚠ CARATTERIZZAZIONE, NON CONTRATTO DESIDERATO.
+  // CLAUDE.md documenta l'ordine come «1. weight crescente → 2. risoluzione
+  // dipendenze → 3. alfabetico (a parità di weight)». Il primo passo NON è
+  // implementato: `weight` non compare in core/pluginSys.js né in
+  // core/pluginStateResolver.js — solo nei template della GUI admin, che lo
+  // mostrano e lo validano. Fra plugin indipendenti l'ordine è quello di
+  // fs.readdirSync(), cioè alfabetico.
+  //
+  // Questo test fissa il comportamento REALE, così una futura implementazione
+  // del weight lo fa fallire e obbliga a un aggiornamento deliberato invece che
+  // silenzioso. Rilievo aperto in TODO.md §5.
+  test('plugin indipendenti: l\'ordine è alfabetico — il weight è ignorato', async () => {
+    const root = makePluginsRoot();
+    const logFile = path.join(root, 'ordine.log');
+    // I due criteri si contraddicono di proposito: alfabeticamente zzAlpha
+    // precede zzBeta, per weight sarebbe l'inverso.
+    writePlugin(root, 'zzAlpha', { weight: 900, main: recordingMain('zzAlpha', logFile) });
+    writePlugin(root, 'zzBeta', { weight: 1, main: recordingMain('zzBeta', logFile) });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+
+    const loaded = fs.readFileSync(logFile, 'utf8').trim().split('\n')
+      .filter((r) => r.startsWith('load:')).map((r) => r.split(':')[1]);
+    expect(loaded).toEqual(['zzAlpha', 'zzBeta']);
+  });
+
+  test('una dipendenza è caricata prima del suo dipendente, anche con weight contrario', async () => {
+    const root = makePluginsRoot();
+    const logFile = path.join(root, 'ordine.log');
+    // Il dipendente ha weight MINORE: senza risoluzione delle dipendenze
+    // andrebbe per primo, ed è esattamente ciò che non deve accadere.
+    writePlugin(root, 'zzConsumer', { weight: 1, dependency: { zzProvider: '^1.0.0' }, main: recordingMain('zzConsumer', logFile) });
+    writePlugin(root, 'zzProvider', { weight: 500, main: recordingMain('zzProvider', logFile) });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+
+    const loaded = fs.readFileSync(logFile, 'utf8').trim().split('\n')
+      .filter((r) => r.startsWith('load:')).map((r) => r.split(':')[1]);
+    expect(loaded).toEqual(['zzProvider', 'zzConsumer']);
+  });
+});
+
+describe('pluginSys.initialize() — persistenza di isInstalled', () => {
+  test('isInstalled assente → persistito a 1 nel config vivo', async () => {
+    const root = makePluginsRoot();
+    const dir = writePlugin(root, 'zzFresco'); // nessun isInstalled
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+
+    expect(loadJson5(path.join(dir, 'pluginConfig.json5')).isInstalled).toBe(1);
+  });
+
+  test('installPlugin() gira SOLO alla transizione non-1 → 1', async () => {
+    const root = makePluginsRoot();
+    const logFile = path.join(root, 'ciclo.log');
+    writePlugin(root, 'zzGiaInstallato', { isInstalled: 1, main: recordingMain('zzGiaInstallato', logFile) });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+
+    const events = fs.readFileSync(logFile, 'utf8').trim().split('\n');
+    expect(events).toContain('load:zzGiaInstallato');
+    // Era già installato: la transizione non è stata attraversata.
+    expect(events).not.toContain('install:zzGiaInstallato');
+  });
+
+  test('un plugin fresco attraversa la transizione e installPlugin() gira', async () => {
+    const root = makePluginsRoot();
+    const logFile = path.join(root, 'ciclo.log');
+    writePlugin(root, 'zzDaInstallare', { isInstalled: 0, main: recordingMain('zzDaInstallare', logFile) });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+
+    const events = fs.readFileSync(logFile, 'utf8').trim().split('\n');
+    expect(events).toContain('install:zzDaInstallare');
+    expect(events).toContain('load:zzDaInstallare');
   });
 });

@@ -171,23 +171,29 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       `bootstrapNavbar` come riferimento).
 - [ ] **E2E/Playwright per plugin e temi**: estendere la discovery automatica oltre
       unit e integration, con orchestrazione del server.
-- [ ] **`pluginSys.initialize()` non è testabile in-process: la root dei plugin è cablata.**
-      *(Emerso in v2.97.0 riscrivendo `pluginSys.test.js` contro il modulo reale.)*
-      `initialize()` risolve i plugin con `path.join(__dirname, '..', 'plugins')` e non
-      accetta una root alternativa: eseguirlo in un test caricherebbe i plugin VERI
-      in-process e scriverebbe `isInstalled` nei loro config vivi, contro la regola di
-      isolamento filesystem di [`docs/testing.it.md`](./docs/testing.it.md). Oggi quel
-      ramo è verificato solo **spawnando un processo** (`bootLifecycle.test.js`,
-      `pluginNpmInstall.test.js`), quindi la copertura non lo accredita: `core/pluginSys.js`
-      resta al 24,5% di righe, e le ~250 righe mancanti sono quasi tutte lì dentro —
-      stati dei plugin, ordine di caricamento, cascata sui dipendenti, cicli, transizione
-      `isInstalled` non-1 → 1.
-      **La correzione ha già un precedente deciso nel progetto:** `validateThemeContent()`
-      cablava la root dei temi ed è stata resa parametrica in v2.92.0 (parametro opzionale,
-      default invariato, i test usano una tmpdir). Stessa forma qui: un parametro opzionale
-      per la root dei plugin, default identico a oggi, così `initialize()` diventa
-      esercitabile su una fixture senza cambiare il comportamento di produzione.
-      Richiede l'approvazione del nome (regola 3) prima di essere scritto.
+- [x] ~~**`pluginSys.initialize()` non è testabile in-process: la root dei plugin è cablata.**~~
+      **Risolto in v2.98.0**: il costruttore accetta una root opzionale
+      (`pluginsRootPath`, default invariato), sulla falsariga di
+      `validateThemeContent(..., themesRootPath)` in v2.92.0. `core/pluginSys.js`
+      passa da 24,5% a **67,2% di righe** e da 56% a **80,5% di funzioni**.
+- [ ] **🐞 Il `weight` dei plugin NON è implementato, ma è documentato come contratto.**
+      *(Scoperto in v2.98.0 scrivendo i test di `initialize()`.)* `CLAUDE.md` dichiara
+      l'ordine di caricamento come «1. **weight** crescente → 2. risoluzione dipendenze
+      → 3. alfabetico (a parità di weight)». **Il primo passo non esiste:** la stringa
+      `weight` non compare né in `core/pluginSys.js` né in `core/pluginStateResolver.js`
+      — solo nei template della GUI admin, che lo mostrano in tabella e lo validano come
+      campo obbligatorio. Fra plugin indipendenti l'ordine è quello di `fs.readdirSync()`,
+      cioè alfabetico.
+      **Misurato** con due plugin i cui criteri si contraddicono: `zzAlpha` (weight 900) e
+      `zzBeta` (weight 1) → carica `zzAlpha` per primo. La risoluzione delle **dipendenze**
+      funziona invece correttamente e riordina contro l'alfabeto (verificato).
+      Le due uscite possibili, entrambe legittime, sono una decisione del maintainer:
+      **(a)** implementare l'ordinamento per weight prima della risoluzione delle
+      dipendenze, oppure **(b)** togliere il weight dalla documentazione e dalla GUI e
+      dichiarare l'ordine « dipendenze, poi alfabetico ». Oggi un autore di plugin che
+      imposta `weight` ottiene silenziosamente niente.
+      Il test `tests/unit/pluginSys.test.js` fissa il comportamento **reale**, così
+      un'eventuale implementazione lo fa fallire e obbliga a un aggiornamento deliberato.
 - [ ] **Soglia minima di coverage** con fail della CI, calcolata in modo aggregato
       (core + plugin attivi + temi). **Sbloccata a metà da v2.96.0**: lo scope della
       misura ora copre tutto il codice che la suite ha il permesso di eseguire
