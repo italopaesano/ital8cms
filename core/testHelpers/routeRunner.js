@@ -7,7 +7,19 @@
  */
 
 const REQUIRED_FIELDS = ['method', 'path', 'access', 'handler'];
-const VALID_METHODS = ['GET', 'POST', 'PUT', 'DEL', 'DELETE', 'PATCH', 'ALL'];
+
+// ESATTAMENTE i metodi che pluginSys.loadRoutes() sa smistare al router.
+// La catena if/else lì dentro non ha un ramo finale: un metodo fuori da questa
+// lista non viene registrato e NON produce alcun errore — la rotta sparisce e la
+// richiesta cade sul server statico (HTML invece di JSON). È la stessa classe di
+// difetto silenzioso del `method` minuscolo descritta in CLAUDE.md.
+//
+// La lista conteneva anche 'DELETE' e 'PATCH', che loadRoutes NON gestisce: il
+// validatore dava quindi il via libera a rotte destinate a sparire in silenzio.
+// Corretto in v2.99.0; nessuna rotta del progetto li usava (censimento: solo GET
+// e POST). Se un giorno loadRoutes imparerà nuovi verbi, il test di coerenza in
+// tests/integration/routeContract.test.js obbliga ad aggiornare anche questa lista.
+const VALID_METHODS = ['GET', 'POST', 'PUT', 'DEL', 'ALL'];
 
 /**
  * Valida la struttura di un oggetto rotta.

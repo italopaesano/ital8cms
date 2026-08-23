@@ -194,6 +194,17 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       imposta `weight` ottiene silenziosamente niente.
       Il test `tests/unit/pluginSys.test.js` fissa il comportamento **reale**, così
       un'eventuale implementazione lo fa fallire e obbliga a un aggiornamento deliberato.
+- [ ] **`loadRoutes()` scarta in silenzio i metodi che non conosce.**
+      *(Emerso in v2.99.0 scrivendo lo sweep del contratto delle rotte.)* La catena
+      `if/else` che smista i verbi in `core/pluginSys.js` gestisce `GET/POST/PUT/DEL/ALL`
+      e **non ha un ramo finale**: una rotta con un metodo fuori da quei cinque non viene
+      registrata, senza errore né warning, e la richiesta cade sul server statico
+      (HTML invece di JSON). Il validatore dei test è stato allineato ai cinque verbi
+      reali, quindi il difetto non è più raggiungibile *attraverso un test*, ma il
+      **codice di produzione resta muto**: basta un `else` con un `logger.warn` per
+      trasformare una sparizione silenziosa in una diagnosi. Da valutare insieme:
+      se `PATCH` e `DELETE` debbano essere supportati (oggi non lo sono, e nessuna rotta
+      del progetto li usa) oppure restare fuori con un avviso esplicito.
 - [ ] **Soglia minima di coverage** con fail della CI, calcolata in modo aggregato
       (core + plugin attivi + temi). **Sbloccata a metà da v2.96.0**: lo scope della
       misura ora copre tutto il codice che la suite ha il permesso di eseguire
