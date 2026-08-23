@@ -172,7 +172,26 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
 - [ ] **E2E/Playwright per plugin e temi**: estendere la discovery automatica oltre
       unit e integration, con orchestrazione del server.
 - [ ] **Soglia minima di coverage** con fail della CI, calcolata in modo aggregato
-      (core + plugin attivi + temi).
+      (core + plugin attivi + temi). **Sbloccata a metà da v2.96.0**: lo scope della
+      misura ora copre tutto il codice che la suite ha il permesso di eseguire
+      (17.378 righe invece di 6.133), quindi una soglia messa oggi certificherebbe
+      un numero vero. Da fissare **appena sotto** il valore raggiunto e alzare quando
+      sale — un cricchetto che impedisce di tornare indietro, non un obiettivo da
+      rincorrere. I temi restano fuori dallo scope: vanno aggiunti insieme ai loro test.
+- [ ] **GUI admin client-side: 2.129 righe all'1,9%** *(reso visibile da v2.96.0)*.
+      I file `.js` sotto `plugins/*/adminWebSections/` sono codice spedito e quasi
+      del tutto non testato: `media.js` (381 righe), `editor.js` (316), `settings.js`
+      (288), `sentinel-admin.js` (219), `analytics.js` (165), `rateLimiter-admin.js` (119).
+      Con `testEnvironment: 'node'` non sono eseguibili da jest — servono un ambiente
+      jsdom oppure una copertura e2e. Fanno eccezione i due file **dual-mode** di
+      `adminSentinel` (`rule-form.js`, `sentinel-i18n.js`, 571 righe), che espongono
+      `module.exports` dietro un guard e sono già sotto test: è il modello da seguire
+      per rendere testabile il resto senza cambiare ambiente.
+- [ ] **`bin/ital8cms-cli.js` a 0%** (399 righe) *(reso visibile da v2.96.0)*: il
+      binario del control plane non ha test propri. `core/cliBridge/` è coperto,
+      l'entry point no — parsing degli argomenti, dispatch dei sottocomandi e il
+      comportamento con `--` mancante (che npm scarta in silenzio, vedi
+      `docs/cli-control-plane.it.md`) non sono verificati da nulla.
 - [ ] **Scanner prescrittivo al boot** (Fase 2 del testing): verifica per ogni
       plugin attivo dei test minimi richiesti (un test per metodo esportato, uno per
       rotta incluso `access`, validazione dei JSON5, lifecycle hooks). Default

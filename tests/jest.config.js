@@ -76,10 +76,29 @@ module.exports = {
   ],
 
   // Coverage
+  //
+  // Lo scope è TUTTO il codice che la suite ha il permesso di eseguire, non il
+  // sottoinsieme comodo. Fino alla v2.95.0 era `core/**` + `plugins/**/main.js`:
+  // 6.133 righe su ~53.000, cioè un ottavo del progetto. Il taglio cadeva nel
+  // punto peggiore, perché i plugin tengono la logica nelle `lib/` e non in
+  // `main.js` — 22.227 righe restavano fuori dalla misura in ENTRAMBE le
+  // direzioni: quelle ben testate non venivano accreditate, quelle mai eseguite
+  // non risultavano scoperte. Una percentuale alta ottenuta stringendo la
+  // domanda non è una buona notizia, è una domanda diversa.
   collectCoverageFrom: [
     'core/**/*.js',
-    'plugins/**/main.js',
-    '!**/node_modules/**'
+    'plugins/**/*.js',
+    'scripts/**/*.js',
+    'bin/**/*.js',
+    'index.js',
+    '!**/node_modules/**',
+    // I file di test non sono il codice sotto misura.
+    '!**/tests/**',
+    // I plugin non attivi sono già fuori dalla discovery dei test
+    // (testPathIgnorePatterns, poche righe più sopra): misurarne il codice
+    // significherebbe gonfiare il denominatore con righe che la suite non ha il
+    // permesso di testare. Stessa lista, così le due esclusioni non divergono.
+    ...inactivePlugins.map((dir) => `!${dir.replace(/^\//, '')}**`)
   ],
 
   // Reporter

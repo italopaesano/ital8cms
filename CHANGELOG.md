@@ -3,6 +3,27 @@
 
 Storico delle modifiche del progetto e della documentazione (voci dalla più recente).
 
+- v2.96.0 (2026-08-23): **TEST — lo scope della coverage copre il codice vero: 6.133 righe → 17.378, e la percentuale scende** - Step 0 del piano di rientro sul testing. Nessun test nuovo: si cambia la *domanda*, non la risposta.
+  - **Il 54% era misurato su un ottavo del progetto.** `collectCoverageFrom` dichiarava `core/**/*.js` + `plugins/**/main.js`. Il taglio cadeva nel punto peggiore, perché i plugin di questo progetto tengono la logica nelle `lib/` e non in `main.js`: `sentinel` ha 5.842 righe fuori da `main.js`, `admin` 5.187, `mailer` 1.270. Una percentuale alta ottenuta stringendo la domanda non è una buona notizia — è una domanda diversa.
+  - **Nuovo scope:** `core/**`, `plugins/**`, `scripts/**`, `bin/**` e `index.js`, meno `node_modules`, meno `**/tests/**`, meno i **plugin non attivi**. L'ultima esclusione riusa la lista già calcolata per `testPathIgnorePatterns`: misurare codice di cui la suite non esegue i test gonfierebbe il denominatore con righe che nessuno ha il permesso di coprire, e tenere una sola lista impedisce alle due esclusioni di divergere.
+
+    | | prima | dopo |
+    |---|---|---|
+    | file misurati | 84 | **211** |
+    | righe nel calcolo | 6.133 | **17.378** |
+    | righe **coperte** | 3.323 | **8.226** |
+    | righe | 54,18% | **47,33%** |
+    | statement | 53,97% | **46,83%** |
+    | funzioni | 40,02% | **40,92%** |
+    | branch | 51,57% | **46,74%** |
+
+  - **Il taglio nascondeva anche il lavoro migliore, non solo i buchi.** Le `lib/` e le `migrations/` dei plugin sono **4.934 righe coperte al 76,3%** — testate bene e mai accreditate. È il motivo per cui le righe coperte salgono di **+4.903** e le *funzioni* addirittura **migliorano** (40,02% → 40,92%) mentre la percentuale di righe scende: entrando nel calcolo, quel codice porta con sé più copertura della media.
+  - **E rende visibile un buco che non era in nessun elenco:** la GUI admin client-side, `plugins/*/adminWebSections/*.js`, è **2.129 righe all'1,9%**. Non era « scoperta », era fuori dalla domanda. Con `testEnvironment: 'node'` jest non può eseguirla; i due file **dual-mode** di `adminSentinel` (`rule-form.js`, `sentinel-i18n.js`) mostrano però che si può rendere testabile con un guard `typeof module`, senza cambiare ambiente. Aperto in `TODO.md` §5 insieme a `bin/ital8cms-cli.js` (399 righe a 0%, mentre `core/cliBridge/` è coperto).
+  - **Una previsione sbagliata, corretta:** nell'analisi avevo stimato che la percentuale sarebbe scesa « probabilmente sotto il 20% ». È 47,33%. L'errore veniva dall'aver ragionato su righe **fisiche** (~53.000) invece che su righe **eseguibili**, e da un codice molto commentato: escludendo test e plugin inattivi, le righe eseguibili in scope sono 17.378, non ~47.000. La direzione era giusta, l'ordine di grandezza no.
+  - **Perché questo step viene per primo:** è l'unico che cambia il **denominatore**. Farlo dopo aver aggiunto test avrebbe significato rileggere ogni progresso precedente su una scala sbagliata. Da qui in avanti ogni numero si misura su una base che non si sposta.
+  - **Verifica:** suite completa **142 suite / 4197 test verdi** (5 skipped) su **Node 22.22.2 e Node 24.19.0**, invariata — la modifica tocca solo la misura, non l'esecuzione. Verificato inoltre che **nessun file fallisce l'instrumentazione**: i 127 file entrati nello scope sono tutti analizzabili da jest.
+  - **Files Modified:** `/tests/jest.config.js`, `/TODO.md`, `/CHANGELOG.md`.
+
 - v2.95.0 (2026-08-23): **FIX — l'harness dei test di boot poteva dichiarare fallito un boot RIUSCITO: `'exit'` non garantisce lo stdout drenato** - Solo test. Emerso da un fallimento CI su Node 24.x della PR #358, in un test che passava su Node 22.x nello stesso commit e che `TODO.md` §5 inseguiva da mesi come «flake, causa probabile contesa di porta».
   - **🐞 `runBoot()` si concludeva sull'evento sbagliato.** L'harness risolveva su `proc.on('exit')` e valutava **lì** `started: READY.test(out)`. Ma `'exit'` segnala che il processo è morto, **non** che le pipe di stdio siano state drenate: gli ultimi chunk possono essere ancora in volo, e la riga `server started on port` finire nel buffer *dopo* che il verdetto è già stato emesso. Esito: un boot **riuscito** riportato come `started: false`, cioè esattamente il fallimento osservato (`timedOut` falsy + `started` false = il ramo `'exit'`).
   - **Misurato, non ipotizzato.** Su 200 spawn di un processo che stampa un marker ed esce subito, il marker mancava su `'exit'` ed era presente su `'close'` in **14 casi (7%)**. Con la correzione: **0 su 200**, sia su Node 22.22.2 sia su Node 24.19.0. `'close'` è emesso dopo la chiusura di *tutti* gli stdio, quindi lì `out` è completo per costruzione.
