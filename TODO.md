@@ -136,12 +136,36 @@ Fonte: intervento v2.64.0 (canonizzazione del `.default`).
 
 Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
 
-- [ ] **Flake osservato una volta** in `tests/integration/pluginNpmInstall.test.js`
-      ("self-contained già installato → npm install SALTATO"), durante una suite
-      completa. Non riprodotto in 5 esecuzioni mirate né in 2 baseline. Più test
-      spawnano `node index.js` sulla **porta 3000**: la causa probabile è contesa
-      di porta. Mitigazione già applicata al test dell'upgrade (porta dedicata);
-      valutare di estenderla a tutti i test che avviano un server.
+- [x] ~~**Flake osservato una volta** in `tests/integration/pluginNpmInstall.test.js`
+      ("self-contained già installato → npm install SALTATO")~~ — **causa trovata e
+      corretta** (v2.95.0). Non era contesa di porta: la suite gira `maxWorkers: 1`,
+      quindi due server non sono mai vivi insieme, e questo test usa già una porta
+      dedicata casuale. Il difetto era nell'**harness**: `runBoot()` si concludeva su
+      `proc.on('exit')` valutando lì `started: READY.test(out)`, ma `'exit'` segnala
+      la morte del processo, **non** che le pipe di stdio siano state drenate — gli
+      ultimi chunk possono essere ancora in volo, quindi un boot **riuscito** poteva
+      essere riportato come `started: false`. Misurato: su 200 spawn che stampano un
+      marker e escono subito, in **14 casi (7%)** il marker mancava su `'exit'` ed era
+      presente su `'close'`; con la correzione, 0 su 200 (Node 22 e 24). L'harness era
+      duplicato **identico** anche in `bootLifecycle.test.js`, dove il ramo d'uscita è
+      quello che conta di più (i gate `[FATAL]` di cui si asserisce l'output): corretto
+      in entrambi.
+- [x] ~~Il fallimento era **indiagnosticabile**~~ — `expect(res.started).toBe(true)`
+      stampava solo «Expected: true / Received: false» e buttava via l'output del
+      processo, cioè l'unica cosa che spiega l'uscita. È il motivo per cui questa voce
+      è rimasta senza causa: nei log CI non c'era niente da leggere. Ora si asserisce
+      sull'oggetto (`{ started, code, output }`), così il messaggio d'errore porta con
+      sé stdout+stderr e il codice d'uscita.
+- [ ] **Range di porte sovrapposti fra i due harness di boot** (scoperto indagando il
+      punto sopra, **non** la causa di quel fallimento): `pluginNpmInstall` sceglie in
+      `35000..36499`, `bootLifecycle` in `34000..35499` — 500 porte in comune. Oggi è
+      innocuo perché `maxWorkers: 1` serializza la suite, ma è una mina che esplode al
+      primo tentativo di riabilitare il parallelismo, ed è proprio l'ipotesi sbagliata
+      che questa voce ha inseguito per mesi. Da risolvere insieme al punto sotto,
+      preferibilmente allocando una porta libera dal SO (`listen(0)`) invece di
+      sorteggiarla.
+- [ ] **Estendere la porta dedicata a tutti i test che avviano un server** (voce
+      originale, ancora valida): più test spawnano `node index.js` sulla **porta 3000**.
 - [ ] **Migrare i test plugin-specifici** da `/tests/unit/{pluginName}/` a
       `plugins/{pluginName}/tests/` (convenzione già in vigore; migrato solo
       `bootstrapNavbar` come riferimento).

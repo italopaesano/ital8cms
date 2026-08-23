@@ -110,7 +110,13 @@ function runBoot(dir, { timeoutMs = 40000 } = {}) {
 
     proc.stdout.on('data', onData);
     proc.stderr.on('data', onData);
-    proc.on('exit', (code) => settle({ exited: true, code }));
+    // Si conclude su 'close', NON su 'exit' — vedi la nota estesa in
+    // tests/integration/pluginNpmInstall.test.js. In sintesi: 'exit' non garantisce
+    // che le pipe siano drenate, quindi `out` può essere incompleto proprio nel ramo
+    // che qui serve di più (i gate che escono, di cui si asserisce l'output).
+    proc.on('exit', (code) => {
+      proc.once('close', () => settle({ exited: true, code }));
+    });
 
     const timer = setTimeout(() => settle({ exited: false, code: null, timedOut: true }), timeoutMs);
   });
