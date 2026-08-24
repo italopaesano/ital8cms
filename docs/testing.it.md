@@ -270,6 +270,49 @@ plugins/myPlugin/
 
 Stessa struttura per i temi in `themes/myTheme/tests/`.
 
+#### La suite di integrità dei temi
+
+Ogni tema ha `tests/themeIntegrity.test.js`: **tre righe** che delegano alla suite
+condivisa in `core/testHelpers/themeIntegrity.js`.
+
+```javascript
+const { describeThemeIntegrity } = require('../../../core/testHelpers/themeIntegrity');
+
+describeThemeIntegrity(__dirname);
+```
+
+Il file **non nomina il tema**: nome e radice si ricavano da `__dirname`, così
+rinominare la cartella non lascia un test che ne valida un altro.
+
+**Perché il file sta nel tema ma le asserzioni no.** Il modello del progetto è
+self-contained — un tema clonato da un repo porta con sé il proprio test, e
+`npm run test:themes` lo trova con il pattern `themes/[^/]+/tests/`. Ma il contratto
+che i temi devono soddisfare è **uno solo**: copiarlo in ogni tema significherebbe
+tanti punti da aggiornare quanti sono i temi, e altrettante occasioni di
+dimenticarne uno. Un tema clonato in un'altra installazione funziona lo stesso,
+perché `core/testHelpers/` fa parte del CMS come `loadJson5`.
+
+**Cosa verifica, oltre a ciò che `themeSys` già copre.** Non ri-testa il validatore
+(quello ha i suoi unit test): lo **applica ai temi veri**, e aggiunge i due punti
+che il validatore non guarda.
+
+| Verifica | Perché non bastava `validateThemeContent()` |
+|---|---|
+| Struttura e hook richiesti | — (è il validatore, applicato al tema vero) |
+| Include risolvibili in **ogni** `.ejs` | Il validatore parte dai **sei partial noti**: `templates/` e `pluginsEndpointsMarkup/` non vengono mai raggiunti — 17 file su 54 nel repo. Un include rotto là dentro è un 500 alla prima richiesta di quella pagina |
+| Target di `getThemePartPath()` | Path **calcolato** a runtime: il risolutore generico lo classifica « non risolvibile » e passa oltre. È però l'idioma canonico del progetto, e sui sette temi vale 42 chiamate |
+| Target di `getThemeResourceUrl()` | Una risorsa assente non rompe il render: dà un **404 su ogni pagina** servita dal tema — il tipo di difetto che sopravvive a lungo perché « la pagina funziona » |
+| Coppia `.default`/vivo del descrittore | `schemaVersion` intero e prima chiave, `isInstalled` assente dal `.default`, `isAdminTheme` non alla deriva fra i due |
+| Coerenza con `ital8Config.json5` | Il tema admin attivo deve dichiarare `isAdminTheme: true`; quello pubblico no |
+
+`wwwCustomPath` è verificato come **implicazione a senso unico**: col flag acceso la
+cartella `www/` del tema deve esistere (è l'unica radice servita, e dichiararlo
+senza averla significa 404 su tutto il sito); col flag spento un `www/` nel tema è
+inerte — `getWwwPath()` lo ignora — e non viene vietato.
+
+Creando un tema nuovo, lo scaffolding della skill `ital8cms-theme-creator` genera
+il file: saltarlo è il modo in cui un tema esce silenziosamente dalla copertura.
+
 ### Nomi dei file
 
 - Test: `*.test.js` o `*.spec.js` (match Jest standard)
@@ -295,6 +338,11 @@ const {
 ```
 
 **Path relativo** da un file `plugins/myPlugin/tests/unit/foo.test.js`: `../../../core/testHelpers`.
+
+> `themeIntegrity.js` è l'unico helper **fuori** dal barrel `index.js`, e si importa
+> per path diretto. Il barrel fa lo spread di tutti i moduli che elenca: includerlo
+> farebbe caricare `themeSys` e `ejsIncludeResolver` a ogni test che usa un
+> qualsiasi mock, senza che nessuno di quei test li usi.
 
 #### Factory di mock
 
@@ -378,7 +426,7 @@ npm run test:core
 # Solo un plugin specifico
 npm run test:plugin --plugin=bootstrapNavbar
 
-# Solo i temi
+# Solo i temi (7 suite, 98 test — la suite di integrità di ogni tema)
 npm run test:themes
 ```
 

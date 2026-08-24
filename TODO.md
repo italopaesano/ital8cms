@@ -105,12 +105,19 @@ senza rimando sono descritte per intero qui perché non hanno una voce propria a
       ma **non** `themes/`. Il JS dei temi è poco (6 file, 395 righe) e tutto lato
       browser. Da decidere insieme ai test dei temi: includerli senza test li porterebbe
       a 0% e abbasserebbe la soglia senza dire niente di nuovo.
-- [ ] **Come testare i 7 temi: un test parametrico unico o `themes/<tema>/tests/`?**
-      Il parametrico è un file solo e copre automaticamente i temi futuri; la seconda
-      forma segue la convenzione già in vigore per i plugin e permette a un tema di
-      portarsi i propri test quando viene distribuito separatamente. Scelta di
-      convenzione, non tecnica: `validateThemeContent()` e `resolveIncludeTree()`
-      funzionano in entrambi i casi.
+      **Aggiornamento (v3.5.0):** i test dei temi ora ci sono, ma verificano *struttura e
+      contratti* — non eseguono il JS lato browser dei temi, che resterebbe comunque a
+      0%. La decisione quindi **non** è sbloccata da v3.5.0: dipende ancora dalla scelta
+      su `jsdom` vs e2e per il client-side (voce qui sotto).
+- [x] ~~**Come testare i 7 temi: un test parametrico unico o `themes/<tema>/tests/`?**~~
+      **Deciso dal maintainer e applicato in v3.5.0:** `themes/<tema>/tests/themeIntegrity.test.js`,
+      uno per tema, per il modello self-contained — un tema distribuito porta con sé il
+      proprio test. Il costo della forma (la stessa logica ripetuta sette volte) è
+      risolto tenendo le **asserzioni** in `core/testHelpers/themeIntegrity.js` e
+      lasciando nel tema **tre righe** che vi delegano: il file resta nel tema, il
+      contratto resta uno solo. Il rischio residuo — creare un tema e dimenticare il
+      file — è chiuso dallo scaffolding della skill `ital8cms-theme-creator`, che ora
+      lo genera (prima aveva una regola esplicita che vietava di farlo).
 - [ ] **La GUI admin client-side: `jsdom` o copertura e2e?** → §5.
       2.129 righe all'1,9%, non eseguibili da jest con `testEnvironment: 'node'`.
       I due file dual-mode di `adminSentinel` mostrano una terza via: un guard
@@ -263,6 +270,16 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       `bootstrapNavbar` come riferimento).
 - [ ] **E2E/Playwright per plugin e temi**: estendere la discovery automatica oltre
       unit e integration, con orchestrazione del server.
+- [ ] **`themeSys.validateTheme()` NON accetta una root parametrica**, a differenza
+      della sua gemella `validateThemeContent(themeName, themesRootPath)` (v2.92.0).
+      *(Emerso in v3.5.0 scrivendo la suite di integrità dei temi.)* Cabla
+      `path.join(__dirname, '../themes', themeName)`, quindi non può validare un tema
+      di prova in una tmpdir: la suite dei temi la invoca sui temi **veri**, dove
+      questo non morde, ma un test che voglia costruire un tema deliberatamente rotto
+      senza toccare il repo oggi non può usarla. Stessa forma della correzione già
+      applicata due volte (`themesRootPath` in v2.92.0, `pluginsRootPath` in v2.98.0):
+      un parametro opzionale con default invariato, nessun chiamante da aggiornare.
+      Lo stesso vale per `checkDependencies()` e `getAvailableThemes()`.
 - [x] ~~**`pluginSys.initialize()` non è testabile in-process: la root dei plugin è cablata.**~~
       **Risolto in v2.98.0**: il costruttore accetta una root opzionale
       (`pluginsRootPath`, default invariato), sulla falsariga di

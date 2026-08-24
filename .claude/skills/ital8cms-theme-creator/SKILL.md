@@ -496,7 +496,7 @@ If the current directory does not look like an ital8cms project (no `ital8Config
 - Don't ship an English `README.md`/`EXPLAIN.md` with real content — it's a **stub** (marker + pointer to the `.it.md`); the reference is always the `.it.md`.
 - Don't scaffold a `migrations/` folder for a brand-new theme (nothing to migrate from at `schemaVersion: 1`) — but don't stay silent about it either: the summary must tell the user what to do at the first structural change.
 - Don't move `ejs` out of `nodeModuleDependency` (it's a root dependency); only a theme's own extra npm packages go into a self-contained `package.json`, and don't enable npm `workspaces`.
-- Don't add tests (themes can have `themes/<name>/tests/` per project convention, but generating empty test scaffolding is out of scope).
+- **Do** generate `themes/<name>/tests/themeIntegrity.test.js` — three lines that delegate to the shared suite (`describeThemeIntegrity(__dirname)` from `core/testHelpers/themeIntegrity.js`). Copy it verbatim from any existing theme. It is **not** empty scaffolding: it wires the new theme into the contract suite that every theme runs (structure, required hooks, resolvable includes, `getThemePartPath()`/`getThemeResourceUrl()` targets, the `.default`/live descriptor pair), and it is what `npm run test:themes` collects. Skipping it is how a theme silently drops out of coverage. Don't write theme-specific tests beyond that unless the user asks.
 - Don't add the `<html>`, `<head>`, or `<body>` tags inside a template — they belong to the partials.
 - Don't generate a `templates/` directory for the `admin` variant.
 - Don't generate `pluginsEndpointsMarkup/` for `minimal` or `standard` variants.
