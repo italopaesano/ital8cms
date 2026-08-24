@@ -448,31 +448,87 @@ describe('pluginSys.initialize() — boot graceful', () => {
 });
 
 describe('pluginSys.initialize() — ordine di caricamento', () => {
-  // ⚠ CARATTERIZZAZIONE, NON CONTRATTO DESIDERATO.
-  // CLAUDE.md documenta l'ordine come «1. weight crescente → 2. risoluzione
-  // dipendenze → 3. alfabetico (a parità di weight)». Il primo passo NON è
-  // implementato: `weight` non compare in core/pluginSys.js né in
-  // core/pluginStateResolver.js — solo nei template della GUI admin, che lo
-  // mostrano e lo validano. Fra plugin indipendenti l'ordine è quello di
-  // fs.readdirSync(), cioè alfabetico.
-  //
-  // Questo test fissa il comportamento REALE, così una futura implementazione
-  // del weight lo fa fallire e obbliga a un aggiornamento deliberato invece che
-  // silenzioso. Rilievo aperto in TODO.md §5.
-  test('plugin indipendenti: l\'ordine è alfabetico — il weight è ignorato', async () => {
+  /** Nomi dei plugin nell'ordine in cui loadPlugin() è stato invocato. */
+  const loadOrder = (logFile) => fs.readFileSync(logFile, 'utf8').trim().split('\n')
+    .filter((r) => r.startsWith('load:')).map((r) => r.split(':')[1]);
+
+  test('weight minore viene caricato prima, anche contro l\'ordine alfabetico', async () => {
     const root = makePluginsRoot();
     const logFile = path.join(root, 'ordine.log');
     // I due criteri si contraddicono di proposito: alfabeticamente zzAlpha
-    // precede zzBeta, per weight sarebbe l'inverso.
+    // precede zzBeta, per weight è l'inverso. Deve vincere il weight.
     writePlugin(root, 'zzAlpha', { weight: 900, main: recordingMain('zzAlpha', logFile) });
     writePlugin(root, 'zzBeta', { weight: 1, main: recordingMain('zzBeta', logFile) });
 
     const sys = new pluginSys({}, root);
     await sys.initialize();
 
-    const loaded = fs.readFileSync(logFile, 'utf8').trim().split('\n')
-      .filter((r) => r.startsWith('load:')).map((r) => r.split(':')[1]);
-    expect(loaded).toEqual(['zzAlpha', 'zzBeta']);
+    expect(loadOrder(logFile)).toEqual(['zzBeta', 'zzAlpha']);
+  });
+
+  test('weight negativo precede lo zero (è il caso reale di simpleI18n a -10)', async () => {
+    const root = makePluginsRoot();
+    const logFile = path.join(root, 'ordine.log');
+    writePlugin(root, 'zzAnticipato', { weight: -10, main: recordingMain('zzAnticipato', logFile) });
+    writePlugin(root, 'zzNormale', { weight: 0, main: recordingMain('zzNormale', logFile) });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+
+    expect(loadOrder(logFile)).toEqual(['zzAnticipato', 'zzNormale']);
+  });
+
+  test('a parità di weight l\'ordine è alfabetico', async () => {
+    const root = makePluginsRoot();
+    const logFile = path.join(root, 'ordine.log');
+    // Scritti in ordine NON alfabetico: il tiebreak non deve dipendere né
+    // dall'ordine di creazione né da quello che restituisce readdirSync.
+    writePlugin(root, 'zzGamma', { weight: 5, main: recordingMain('zzGamma', logFile) });
+    writePlugin(root, 'zzAlfa', { weight: 5, main: recordingMain('zzAlfa', logFile) });
+    writePlugin(root, 'zzBeta', { weight: 5, main: recordingMain('zzBeta', logFile) });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+
+    expect(loadOrder(logFile)).toEqual(['zzAlfa', 'zzBeta', 'zzGamma']);
+  });
+
+  test('weight assente equivale a 0 (retrocompatibilità)', async () => {
+    const root = makePluginsRoot();
+    const logFile = path.join(root, 'ordine.log');
+    const dir = path.join(root, 'zzSenzaPeso');
+    writePlugin(root, 'zzSenzaPeso', { main: recordingMain('zzSenzaPeso', logFile) });
+    // Rimuovo il campo weight dal config vivo.
+    const raw = fs.readFileSync(path.join(dir, 'pluginConfig.json5'), 'utf8');
+    fs.writeFileSync(path.join(dir, 'pluginConfig.json5'), raw.replace(/\s*"weight": \d+,/, ''), 'utf8');
+
+    writePlugin(root, 'zzDopo', { weight: 5, main: recordingMain('zzDopo', logFile) });
+    writePlugin(root, 'zzPrima', { weight: -5, main: recordingMain('zzPrima', logFile) });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+
+    expect(loadOrder(logFile)).toEqual(['zzPrima', 'zzSenzaPeso', 'zzDopo']);
+  });
+
+  test('weight non numerico → trattato come 0 e segnalato', async () => {
+    const root = makePluginsRoot();
+    const logFile = path.join(root, 'ordine.log');
+    const dir = path.join(root, 'zzPesoStorto');
+    writePlugin(root, 'zzPesoStorto', { main: recordingMain('zzPesoStorto', logFile) });
+    const raw = fs.readFileSync(path.join(dir, 'pluginConfig.json5'), 'utf8');
+    fs.writeFileSync(path.join(dir, 'pluginConfig.json5'), raw.replace(/"weight": \d+/, '"weight": "alto"'), 'utf8');
+
+    writePlugin(root, 'zzDopo', { weight: 5, main: recordingMain('zzDopo', logFile) });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+
+    // Un config sbagliato non deve far scivolare il plugin in silenzio.
+    const logged = consoleSpies.flatMap((spy) => spy.mock.calls.flat()).join(' ');
+    expect(logged).toMatch(/zzPesoStorto/);
+    expect(logged).toMatch(/weight non numerico/);
+    expect(loadOrder(logFile)).toEqual(['zzPesoStorto', 'zzDopo']);
   });
 
   test('una dipendenza è caricata prima del suo dipendente, anche con weight contrario', async () => {
@@ -528,5 +584,156 @@ describe('pluginSys.initialize() — persistenza di isInstalled', () => {
     const events = fs.readFileSync(logFile, 'utf8').trim().split('\n');
     expect(events).toContain('install:zzDaInstallare');
     expect(events).toContain('load:zzDaInstallare');
+  });
+});
+
+describe('pluginSys.loadRoutes() — i metodi non gestiti non spariscono più in silenzio', () => {
+  /** Router finto con i cinque metodi che pluginSys sa smistare. */
+  const makeRouterMock = () => ({
+    get: jest.fn(), post: jest.fn(), put: jest.fn(), del: jest.fn(), all: jest.fn(),
+  });
+
+  /** main.js che dichiara una sola rotta con il metodo indicato. */
+  const mainWithRoute = (method) =>
+    `module.exports = {\n` +
+    `  async loadPlugin() {},\n` +
+    `  getRouteArray() {\n` +
+    `    return [{ method: ${JSON.stringify(method)}, path: '/prova',\n` +
+    `      access: { requiresAuth: false, allowedRoles: [] },\n` +
+    `      handler: async (ctx) => { ctx.body = 'ok'; } }];\n` +
+    `  },\n` +
+    `};\n`;
+
+  test('baseline: una rotta GET viene registrata sul router', async () => {
+    const root = makePluginsRoot();
+    writePlugin(root, 'zzRottaBuona', { main: mainWithRoute('GET') });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+    const router = makeRouterMock();
+    sys.loadRoutes(router, '/api');
+
+    expect(router.get).toHaveBeenCalledTimes(1);
+    expect(router.get.mock.calls[0][0]).toBe('/api/zzRottaBuona/prova');
+  });
+
+  test('un metodo non gestito NON viene registrato, ma ora viene segnalato', async () => {
+    const root = makePluginsRoot();
+    writePlugin(root, 'zzRottaPatch', { main: mainWithRoute('PATCH') });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+    const router = makeRouterMock();
+    sys.loadRoutes(router, '/api');
+
+    // Il comportamento non cambia — la rotta resta non registrata, perché il
+    // router non la saprebbe smistare. Cambia che ora lo si viene a sapere.
+    for (const method of Object.keys(router)) {
+      expect(router[method]).not.toHaveBeenCalled();
+    }
+
+    const logged = consoleSpies.flatMap((spy) => spy.mock.calls.flat()).join(' ');
+    expect(logged).toMatch(/Rotta IGNORATA/);
+    expect(logged).toMatch(/zzRottaPatch/);   // quale plugin
+    expect(logged).toMatch(/PATCH/);          // quale metodo
+    expect(logged).toMatch(/\/api\/zzRottaPatch\/prova/); // quale path
+  });
+
+  test('anche il method minuscolo — la forma più insidiosa — viene segnalato', async () => {
+    const root = makePluginsRoot();
+    writePlugin(root, 'zzMinuscolo', { main: mainWithRoute('get') });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+    const router = makeRouterMock();
+    sys.loadRoutes(router, '/api');
+
+    expect(router.get).not.toHaveBeenCalled();
+    const logged = consoleSpies.flatMap((spy) => spy.mock.calls.flat()).join(' ');
+    expect(logged).toMatch(/Rotta IGNORATA/);
+    expect(logged).toMatch(/zzMinuscolo/);
+  });
+});
+
+describe('pluginSys.loadRoutes() — handler mancante o non invocabile', () => {
+  const makeRouterMock = () => ({
+    get: jest.fn(), post: jest.fn(), put: jest.fn(), del: jest.fn(), all: jest.fn(),
+  });
+
+  test('`func` invece di `handler`: non registrata e segnalata (prima era un 500)', async () => {
+    const root = makePluginsRoot();
+    writePlugin(root, 'zzConFunc', {
+      main:
+        `module.exports = {\n` +
+        `  async loadPlugin() {},\n` +
+        `  getRouteArray() {\n` +
+        `    return [{ method: 'GET', path: '/prova',\n` +
+        `      access: { requiresAuth: false, allowedRoles: [] },\n` +
+        `      func: async (ctx) => { ctx.body = 'ok'; } }];\n` +
+        `  },\n};\n`,
+    });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+    const router = makeRouterMock();
+    sys.loadRoutes(router, '/api');
+
+    // Misurato prima della correzione: la rotta VENIVA registrata con un handler
+    // che avvolgeva undefined, e falliva alla prima richiesta con
+    // «TypeError: originalHandler is not a function».
+    expect(router.get).not.toHaveBeenCalled();
+
+    const logged = consoleSpies.flatMap((spy) => spy.mock.calls.flat()).join(' ');
+    expect(logged).toMatch(/Rotta IGNORATA/);
+    expect(logged).toMatch(/zzConFunc/);
+    expect(logged).toMatch(/handler mancante o non invocabile/);
+    // Il messaggio deve nominare la causa vera, non solo il sintomo.
+    expect(logged).toMatch(/"func"/);
+  });
+
+  test('handler che non è una funzione → non registrata e segnalata', async () => {
+    const root = makePluginsRoot();
+    writePlugin(root, 'zzHandlerStringa', {
+      main:
+        `module.exports = {\n` +
+        `  async loadPlugin() {},\n` +
+        `  getRouteArray() {\n` +
+        `    return [{ method: 'GET', path: '/prova',\n` +
+        `      access: { requiresAuth: false, allowedRoles: [] },\n` +
+        `      handler: 'non una funzione' }];\n` +
+        `  },\n};\n`,
+    });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+    const router = makeRouterMock();
+    sys.loadRoutes(router, '/api');
+
+    expect(router.get).not.toHaveBeenCalled();
+    const logged = consoleSpies.flatMap((spy) => spy.mock.calls.flat()).join(' ');
+    expect(logged).toMatch(/handler mancante o non invocabile/);
+  });
+
+  test('una rotta rotta non impedisce alle altre dello stesso plugin di registrarsi', async () => {
+    const root = makePluginsRoot();
+    writePlugin(root, 'zzMisto', {
+      main:
+        `module.exports = {\n` +
+        `  async loadPlugin() {},\n` +
+        `  getRouteArray() {\n` +
+        `    return [\n` +
+        `      { method: 'GET', path: '/rotta', access: { requiresAuth: false, allowedRoles: [] }, func: async () => {} },\n` +
+        `      { method: 'GET', path: '/sana',  access: { requiresAuth: false, allowedRoles: [] }, handler: async (ctx) => { ctx.body = 'ok'; } },\n` +
+        `    ];\n` +
+        `  },\n};\n`,
+    });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+    const router = makeRouterMock();
+    sys.loadRoutes(router, '/api');
+
+    expect(router.get).toHaveBeenCalledTimes(1);
+    expect(router.get.mock.calls[0][0]).toBe('/api/zzMisto/sana');
   });
 });

@@ -303,7 +303,15 @@ Pattern: `/${apiPrefix}/${pluginName}/${path}` (default `/api/{pluginName}/...`)
 | `handler` | sì | `async (ctx) => { ... }` |
 | `access` | sì | controllo accessi (vedi Sistema di controllo accessi) |
 
-> **WARNING:** `method` minuscolo (`'get'`) o `func` invece di `handler` → la rotta viene **silenziosamente ignorata** da `pluginSys.loadRoutes()` e la richiesta cade sul static server (HTML invece di JSON). Il campo `access` è **obbligatorio**: la sua assenza causa **errore fatale al boot** (vedi Sistema di controllo accessi).
+> **WARNING — tre modi di sbagliare una rotta, con tre esiti diversi.** Da **v3.0.0** i primi due non sono più silenziosi: `loadRoutes()` non registra la rotta ed emette un warning che nomina plugin, metodo e path.
+>
+> | Errore | Cosa succedeva prima | Da v3.0.0 |
+> |---|---|---|
+> | `method` minuscolo (`'get'`) o verbo non supportato (`'PATCH'`, `'DELETE'`) | rotta non registrata, **nessun avviso**; la richiesta cade sul static server (HTML invece di JSON) | non registrata + **warning al boot** |
+> | `func` invece di `handler` | rotta **REGISTRATA** con un handler che avvolge `undefined` → **500** alla prima richiesta (`TypeError: originalHandler is not a function`) — non un 404, come questa nota affermava erroneamente | non registrata + **warning al boot** che nomina la causa |
+> | `access` mancante | **errore fatale al boot** (vedi Sistema di controllo accessi) | invariato |
+>
+> Lo sweep `tests/integration/routeContract.test.js` verifica tutte e tre le forme su ogni plugin attivo. Lo sweep `tests/integration/routeContract.test.js` verifica tutte e tre le forme su ogni plugin attivo.
 
 ```javascript
 getRouteArray() {

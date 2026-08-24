@@ -176,35 +176,31 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       (`pluginsRootPath`, default invariato), sulla falsariga di
       `validateThemeContent(..., themesRootPath)` in v2.92.0. `core/pluginSys.js`
       passa da 24,5% a **67,2% di righe** e da 56% a **80,5% di funzioni**.
-- [ ] **🐞 Il `weight` dei plugin NON è implementato, ma è documentato come contratto.**
-      *(Scoperto in v2.98.0 scrivendo i test di `initialize()`.)* `CLAUDE.md` dichiara
-      l'ordine di caricamento come «1. **weight** crescente → 2. risoluzione dipendenze
-      → 3. alfabetico (a parità di weight)». **Il primo passo non esiste:** la stringa
-      `weight` non compare né in `core/pluginSys.js` né in `core/pluginStateResolver.js`
-      — solo nei template della GUI admin, che lo mostrano in tabella e lo validano come
-      campo obbligatorio. Fra plugin indipendenti l'ordine è quello di `fs.readdirSync()`,
-      cioè alfabetico.
-      **Misurato** con due plugin i cui criteri si contraddicono: `zzAlpha` (weight 900) e
-      `zzBeta` (weight 1) → carica `zzAlpha` per primo. La risoluzione delle **dipendenze**
-      funziona invece correttamente e riordina contro l'alfabeto (verificato).
-      Le due uscite possibili, entrambe legittime, sono una decisione del maintainer:
-      **(a)** implementare l'ordinamento per weight prima della risoluzione delle
-      dipendenze, oppure **(b)** togliere il weight dalla documentazione e dalla GUI e
-      dichiarare l'ordine « dipendenze, poi alfabetico ». Oggi un autore di plugin che
-      imposta `weight` ottiene silenziosamente niente.
-      Il test `tests/unit/pluginSys.test.js` fissa il comportamento **reale**, così
-      un'eventuale implementazione lo fa fallire e obbliga a un aggiornamento deliberato.
-- [ ] **`loadRoutes()` scarta in silenzio i metodi che non conosce.**
-      *(Emerso in v2.99.0 scrivendo lo sweep del contratto delle rotte.)* La catena
-      `if/else` che smista i verbi in `core/pluginSys.js` gestisce `GET/POST/PUT/DEL/ALL`
-      e **non ha un ramo finale**: una rotta con un metodo fuori da quei cinque non viene
-      registrata, senza errore né warning, e la richiesta cade sul server statico
-      (HTML invece di JSON). Il validatore dei test è stato allineato ai cinque verbi
-      reali, quindi il difetto non è più raggiungibile *attraverso un test*, ma il
-      **codice di produzione resta muto**: basta un `else` con un `logger.warn` per
-      trasformare una sparizione silenziosa in una diagnosi. Da valutare insieme:
-      se `PATCH` e `DELETE` debbano essere supportati (oggi non lo sono, e nessuna rotta
-      del progetto li usa) oppure restare fuori con un avviso esplicito.
+- [x] ~~**🐞 Il `weight` dei plugin NON è implementato, ma è documentato come contratto.**~~
+      **Risolto in v3.0.0**: `initialize()` ordina i plugin installabili per `weight`
+      crescente e, a parità di peso, alfabeticamente — l'ordine che `CLAUDE.md`
+      dichiarava da sempre. Il tiebreak è esplicito e non affidato all'ordine di
+      `fs.readdirSync()`, che non è garantito alfabetico su tutti i filesystem.
+      Verificato sul boot reale: i 12 plugin **senza dipendenze** occupano ora le
+      posizioni 1-12 esattamente in ordine di peso (`simpleI18n` a -10 per primo),
+      mentre i 10 **con dipendenze** seguono in coda perché le dipendenze prevalgono
+      sul peso, come documentato. Un `weight` non numerico vale 0 e viene segnalato.
+- [x] ~~**`loadRoutes()` scarta in silenzio i metodi che non conosce.**~~
+      **Risolto in v3.0.0**: la catena `if/else` è diventata la mappa
+      `ROUTER_METHOD_DISPATCH`, fonte di verità unica dei verbi supportati, con un
+      ramo finale che emette un warning nominando plugin, metodo e path. Un test in
+      `tests/integration/routeContract.test.js` legge le chiavi della mappa e le
+      confronta con `VALID_METHODS` dell'helper, così le due liste non possono più
+      divergere in silenzio (era già successo).
+- [x] ~~**`func` invece di `handler`: la documentazione descriveva l'esito sbagliato.**~~
+      *(Scoperto in v3.0.0 verificando ciò che stavo per scrivere in `CLAUDE.md`.)*
+      La nota diceva « rotta silenziosamente ignorata → la richiesta cade sul static
+      server ». **Misurato, succedeva altro:** la rotta veniva **registrata** con un
+      handler che avvolgeva `undefined`, e falliva alla prima richiesta con
+      `TypeError: originalHandler is not a function`, cioè un **500** — peggio di una
+      rotta assente, perché esiste, risponde e si rompe solo quando qualcuno la usa.
+      `loadRoutes()` ora verifica che `handler` sia una funzione, salta la rotta e lo
+      segnala nominando la causa; `CLAUDE.md` riporta i tre esiti reali in tabella.
 - [ ] **Soglia minima di coverage** con fail della CI, calcolata in modo aggregato
       (core + plugin attivi + temi). **Sbloccata a metà da v2.96.0**: lo scope della
       misura ora copre tutto il codice che la suite ha il permesso di eseguire

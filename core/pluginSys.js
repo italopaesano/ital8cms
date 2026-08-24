@@ -11,6 +11,22 @@ const installPluginNpmDeps = require('./installPluginNpmDeps');
 const { checkNpmDeps, resolvePluginStates } = require('./pluginStateResolver');
 const demoNotice = require('./demoNotice');
 
+// Metodi delle rotte dei plugin → metodo corrispondente di @koa/router.
+// FONTE DI VERITÀ UNICA dei verbi supportati: prima era una catena if/else, e la
+// lista finiva duplicata in tre punti (la catena, il messaggio d'errore, e
+// VALID_METHODS in core/testHelpers/routeRunner.js) senza niente che li tenesse
+// insieme. Sono già divergiti una volta — l'helper accettava DELETE e PATCH, che
+// la catena non gestiva, e il validatore approvava rotte destinate a sparire.
+// Un test in tests/integration/routeContract.test.js legge queste chiavi e le
+// confronta con quelle dell'helper.
+const ROUTER_METHOD_DISPATCH = {
+  GET:  'get',
+  POST: 'post',
+  PUT:  'put',
+  DEL:  'del',
+  ALL:  'all',
+};
+
 class pluginSys{
 
   #pluginsMiddlewares = Array();//Variabile privata che contiene l'elenco dei midlware dei plugin da aggiungere
@@ -327,7 +343,21 @@ class pluginSys{
 
       const npm = checkNpmDeps(pluginConfig.nodeModuleDependency, resolveInstalledVersion);
       const pluginDeps = new Map(Object.entries(pluginConfig.dependency || {}));
-      candidates.push({ name: nameFile, version, npmOk: npm.ok, npmDetail: npm, pluginDeps });
+
+      // PESO DI CARICAMENTO. Assente → 0 (retrocompatibile: un plugin che non lo
+      // dichiara non deve cambiare posizione). Presente ma non numerico è invece
+      // un errore di configurazione dell'autore, non un default: va detto, perché
+      // altrimenti il plugin scivolerebbe a 0 in silenzio.
+      let weight = 0;
+      if (pluginConfig.weight !== undefined) {
+        if (typeof pluginConfig.weight === 'number' && Number.isFinite(pluginConfig.weight)) {
+          weight = pluginConfig.weight;
+        } else {
+          logger.warn('pluginSys', `"${nameFile}": weight non numerico (${JSON.stringify(pluginConfig.weight)}) — uso 0`);
+        }
+      }
+
+      candidates.push({ name: nameFile, version, npmOk: npm.ok, npmDetail: npm, pluginDeps, weight });
       candidateConfigs.set(nameFile, pluginConfig);
     }
 
@@ -350,7 +380,24 @@ class pluginSys{
 
     // ── CARICAMENTO DEI PLUGIN 'installed', nell'ordine delle dipendenze ──────
     // I plugin non-'installed' (available/disabled/incomplete) NON vengono caricati.
-    const installable = candidates.filter(c => resolvedStates.get(c.name).state === 'installed');
+    // ORDINE DICHIARATO IN CLAUDE.md: 1) weight crescente, 2) risoluzione delle
+    // dipendenze (una dipendenza è caricata prima del suo dipendente qualunque sia
+    // il peso), 3) alfabetico a parità di weight.
+    //
+    // Il primo passo NON esisteva: fino alla v3.0.0 l'ordine era quello di
+    // fs.readdirSync(), e il campo `weight` — pur documentato, mostrato dalla GUI
+    // admin e validato come obbligatorio — non veniva letto da nessuna parte. Chi
+    // lo impostava otteneva silenziosamente niente, e i valori nel repo mostrano
+    // che veniva impostato con intenzione (simpleI18n a -10 perché fornisce la
+    // funzione globale __(), adminAccessControl a -5 perché regola gli accessi).
+    //
+    // Il tiebreak alfabetico è esplicito e non affidato alla stabilità di sort():
+    // l'ordine di readdirSync non è garantito alfabetico su tutti i filesystem,
+    // quindi «a parità di weight, alfabetico» sarebbe stato vero solo per caso.
+    // Confronto diretto e non localeCompare, per non dipendere dal locale.
+    const installable = candidates
+      .filter(c => resolvedStates.get(c.name).state === 'installed')
+      .sort((a, b) => (a.weight - b.weight) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 
     // Tutte le dipendenze (plugin) del candidato sono già tra gli attivi?
     const dependenciesActive = (depMap) => {
@@ -715,6 +762,21 @@ class pluginSys{
       for (const oRoute of Avalue) {
         const path = `${prefix}/${key}${oRoute.path}`;
 
+        // HANDLER MANCANTE O NON INVOCABILE. Il caso tipico è `func` invece di
+        // `handler`: CLAUDE.md lo dava per «silenziosamente ignorato», ma la
+        // misura dice altro — la rotta veniva REGISTRATA con un handler che
+        // avvolgeva `undefined`, e falliva alla prima richiesta con
+        // `TypeError: originalHandler is not a function`, cioè un 500. Peggio di
+        // una rotta assente: esiste, risponde, e si rompe solo quando qualcuno la
+        // usa. Meglio non registrarla e dirlo al boot.
+        if (typeof oRoute.handler !== 'function') {
+          logger.warn('pluginSys',
+            `Rotta IGNORATA — plugin "${key}", ${oRoute.method} ${path}: handler mancante o non invocabile\n` +
+            `   La chiave DEVE chiamarsi "handler" ed essere una funzione${oRoute.func ? ' — qui c\'è "func", che pluginSys non legge' : ''}.\n` +
+            `   Senza questo controllo la rotta verrebbe registrata e risponderebbe 500 alla prima richiesta.`);
+          continue;
+        }
+
         // Se la route dichiara un campo access, wrappa l'handler con un controllo di autenticazione e ruoli
         const handler = oRoute.access ? this.#wrapHandlerWithAccessCheck(oRoute.handler, oRoute.access) : oRoute.handler;
 
@@ -731,16 +793,22 @@ class pluginSys{
           this.#reservedRoutePaths.add(path);
         }
 
-        if( oRoute.method == 'GET'){
-          router.get( path , handler );// key è il nome del plugin che farà parte del percorso per evitare conflitti
-        }else if( oRoute.method == 'POST' ){
-          router.post( path , handler );
-        }else if( oRoute.method == 'PUT' ){
-          router.put( path , handler );
-        }else if( oRoute.method == 'DEL' ){
-          router.del( path , handler );
-        }else if( oRoute.method == 'ALL' ){
-          router.all( path , handler );
+        // key è il nome del plugin, che fa parte del percorso per evitare conflitti.
+        const routerMethod = ROUTER_METHOD_DISPATCH[oRoute.method];
+        if (routerMethod) {
+          router[routerMethod]( path , handler );
+        } else {
+          // RAMO CHE PRIMA NON ESISTEVA. La catena if/else si limitava ai cinque
+          // metodi noti e finiva lì: una rotta con qualunque altro verbo non veniva
+          // registrata, senza errore né warning. Spariva — e la richiesta cadeva sul
+          // server statico restituendo HTML dove il chiamante aspettava JSON, un
+          // difetto che si nota solo dal browser. È la stessa classe di guasto
+          // silenzioso del `method` minuscolo descritta in CLAUDE.md, ed è ora
+          // l'unica delle tre a essere diagnosticata a voce.
+          logger.warn('pluginSys',
+            `Rotta IGNORATA — plugin "${key}", metodo "${oRoute.method}" ${path}\n` +
+            `   Metodi gestiti: ${Object.keys(ROUTER_METHOD_DISPATCH).join(', ')} (MAIUSCOLI).\n` +
+            `   La rotta NON è registrata: la richiesta cadrà sul server statico (HTML invece di JSON).`);
         }
       }
 

@@ -185,9 +185,14 @@ describe('contratto delle rotte — il validatore non deve divergere da loadRout
     // approvava rotte destinate a sparire. Qui i verbi vengono LETTI dal sorgente
     // di pluginSys, così le due liste non possono più separarsi in silenzio.
     const source = fs.readFileSync(PLUGIN_SYS_SOURCE, 'utf8');
-    const dispatched = [...source.matchAll(/oRoute\.method\s*==\s*'([A-Z]+)'/g)].map((m) => m[1]);
+    const block = source.match(/const ROUTER_METHOD_DISPATCH = \{([\s\S]*?)\n\};/);
 
-    expect(dispatched.length).toBeGreaterThan(0); // il pattern deve ancora trovare qualcosa
+    // Se la mappa venisse rinominata o rimossa, questo test deve fallire invece
+    // di confrontare una lista vuota con una lista vuota e dichiararsi contento.
+    expect(block).not.toBeNull();
+
+    const dispatched = [...block[1].matchAll(/^\s*([A-Z]+)\s*:/gm)].map((m) => m[1]);
+    expect(dispatched.length).toBeGreaterThan(0);
     expect([...new Set(dispatched)].sort()).toEqual([...VALID_METHODS].sort());
   });
 });
