@@ -385,8 +385,11 @@ il redirect e continua a considerare valido il vecchio URL.
 - [ ] Decidere se un `HEAD` debba incrementare l'`hitCounter`. Contarlo gonfia le
       statistiche con traffico non umano; non contarlo le lascia coerenti con oggi.
       Sono due scelte difendibili, ma vanno prese esplicitamente.
-- [ ] Test di regressione sui due verbi: oggi **nessun test del progetto usa `HEAD`**,
-      ed è la ragione per cui la suite è rimasta verde mentre il comportamento cambiava.
+- [ ] Test di regressione sui due verbi **per questa rotta**. La lacuna generale è
+      chiusa da v3.1.0 (`tests/integration/httpVerbs.test.js` verifica `HEAD` su tutte
+      e sei le superfici e sulla superficie riservata), ma il caso di `urlRedirect`
+      resta scoperto perché dipende dalla decisione qui sopra: il test va scritto
+      **insieme** alla scelta sul guard, non prima.
 
 **Non urgente su questa installazione:** il `redirectMap.json5` vivo non ha regole
 attive (tutti gli esempi sono commentati), quindi oggi non c'è divergenza da
