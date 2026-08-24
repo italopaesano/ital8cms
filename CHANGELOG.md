@@ -3,6 +3,28 @@
 
 Storico delle modifiche del progetto e della documentazione (voci dalla più recente).
 
+- v3.3.0 (2026-08-23): **TEST — i plugin scoperti: `seo`, `simpleI18n`, `media`, `adminAnalytics`; e due difetti di sicurezza trovati dai test** - Step 5 del piano di rientro sul testing. Nessuna modifica al codice di produzione.
+  - **+134 test su quattro plugin che non ne avevano nessuno.**
+
+    | Plugin | prima | dopo | dove |
+    |---|---|---|---|
+    | `seo` | 0% | **34,2%** | meta tag, canonical, robots.txt, JSON-LD |
+    | `simpleI18n` | ~7% | **77,6%** | `__()`, fallback lingua, middleware, whitelist |
+    | `media` | 0% | **31,2%** | naming delle varianti, estensioni, preset |
+    | `adminAnalytics` | ~5% | 5,7% | export CSV/JSON (solo `exportFormatter`) |
+
+  - **🔴 Formula injection nell'export CSV di `adminAnalytics`.** `formatCsv()` applica correttamente il quoting RFC 4180 — verificato — ma **non neutralizza i valori che iniziano con `=`, `+`, `-`, `@`**: aprendo l'export con Excel o LibreOffice quelle celle sono **formule**. Conta più di una formula injection qualsiasi perché `userAgent`, `referrer` e `path` arrivano dalle **richieste HTTP**: il contenuto è scelto da chiunque visiti il sito, senza alcun accesso privilegiato, e il file lo apre un amministratore. **Misurato:** uno `User-Agent` valorizzato a `=1+1` esce dalla cella come `=1+1`, e nemmeno il quoting protegge — `"=HYPERLINK(…)"` resta una formula. Non corretto qui: la mitigazione cambia il contenuto dell'export, quindi è una decisione. Aperta in `TODO.md` con i test di caratterizzazione che falliranno alla correzione.
+  - **🟡 Il JSON-LD di `seo` può uscire dal tag `<script>`.** `JSON.stringify` non escapa la sequenza `</script>`, che il parser HTML interpreta prima del JSON: un `siteName` valorizzato a `Sito</script><b>x</b>` chiude il tag in anticipo. Severità più bassa — il valore arriva da `seoConfig.json5`, scritto da un amministratore che può già modificare i template, quindi **non è un'escalation** — ma resta una via per introdurre markup da un campo che non sembra HTML. Anche questa aperta con test di caratterizzazione.
+  - **Un invariante di sicurezza reso esplicito invece che assunto.** In `metaTagGenerator`, `escapeAttr()` copre `& " < >` ma **non l'apice singolo**: è corretto *solo finché* gli attributi usano le virgolette doppie. Un test verifica proprio quell'accoppiamento — se qualcuno passasse ad `attr='…'`, fallisce **prima** che il buco si apra, invece di lasciare che il difetto emerga dal markup.
+  - **Il round-trip come contratto, in `media`.** `variantFolderName()` e `originalNameFromVariantFolder()` devono essere l'una l'inversa dell'altra: se divergessero, le varianti resterebbero sul disco senza che nessuno le ritrovi — spazio occupato e mai servito. Sei nomi difficili (spazi, punti multipli, maiuscole, accenti, senza estensione) verificati in andata e ritorno.
+  - **`simpleI18n` copre anche il modello a whitelist:** `getGlobalFunctionsForTemplates()` deve esporre **solo** `__()`, e la funzione deve funzionare **staccata dall'oggetto** — nei template è invocata come funzione libera, quindi senza il `bind` `this.config` esploderebbe. Verificato anche che `getSupportedLangs()` e `getConfig()` restituiscano **copie**: un template che mutasse la lista cambierebbe il comportamento per tutte le richieste successive del processo.
+  - **`ostrukUtility`: niente da testare, e vale la pena dirlo.** Ogni funzione esportata restituisce `{}`, `[]` o una `Map` vuota — è uno scheletro. Scrivergli dei test sarebbe stato lavoro che gonfia il conteggio senza verificare niente. Aperto in `TODO.md` se rimuoverlo, disattivarlo o spostarlo accanto a `exampleComplete`, che è già inattivo e serve proprio a quello.
+  - **Quello che resta, dichiarato:** di `adminAnalytics` è coperto il solo `exportFormatter`; `aggregator`, `analyticsFileManager`, `chartDataBuilder`, `analyticsConfigValidator`, `fileSelector` e `main.js` restano **911 righe al 5,7%**. E `urlRedirect` su `HEAD` resta bloccato dalla decisione già aperta. Entrambi in `TODO.md`.
+  - **Nomi introdotti:** i file di test sotto `plugins/{seo,simpleI18n,media,adminAnalytics}/tests/unit/`, più `makePassData`, `evento`, `righe`, `ctxConLang`, `runMiddleware`, `makeCtx`, locali ai file.
+  - **Verifica:** **151 suite / 4447 test verdi** (5 skipped) su **Node 22.22.2 e Node 24.19.0**. Copertura totale del progetto **50,2%** di righe.
+  - **Files Added:** `/plugins/seo/tests/unit/metaTagGenerator.test.js`, `/plugins/seo/tests/unit/robotsAndStructuredData.test.js`, `/plugins/simpleI18n/tests/unit/translate.test.js`, `/plugins/media/tests/unit/variantResolver.test.js`, `/plugins/adminAnalytics/tests/unit/exportFormatter.test.js`.
+  - **Files Modified:** `/TODO.md`, `/CHANGELOG.md`.
+
 - v3.2.0 (2026-08-23): **TEST — `adminUsers`: le regole su username, email e ruoli, e il divieto sui ruoli di sistema** - Step 4 del piano di rientro sul testing, più la sezione *Decisioni in attesa del maintainer* in testa a `TODO.md`. Nessuna modifica al codice di produzione.
   - **Prima di scrivere, ho guardato cosa era già coperto — e ho ridotto lo scope.** Il piano prevedeva `adminUsers` **e** `adminAccessControl`. Ma `lib/libAccess.js`, che verifica le credenziali con bcrypt, è già al **100%** (9 test), e la logica di `adminAccessControl` vive in `accessManager` (**30 test**: utente non autenticato, ruolo giusto, ruolo sbagliato, multi-ruolo, policy di default, middleware, superficie riservata) e in `core/patternMatcher` (**41 test**, priorità dei pattern inclusa). Riscriverli sarebbe stato lavoro che sembra copertura e non lo è. Il buco vero era altrove: **`userManagement.js` allo 0% di funzioni** e `roleManagement.js` al 28,5%.
 

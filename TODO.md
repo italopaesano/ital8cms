@@ -56,6 +56,33 @@ senza rimando sono descritte per intero qui perché non hanno una voce propria a
       scrive API REST, oppure **lasciarli fuori** dichiarando che `DEL` è la forma
       canonica del progetto. Aggiungendoli va aggiornata anche `VALID_METHODS` in
       `core/testHelpers/routeRunner.js` — il test di coerenza lo impone.
+- [ ] **🔴 Formula injection nell'export CSV di `adminAnalytics`** *(trovata in v3.3.0)*.
+      `exportFormatter.formatCsv()` applica correttamente il quoting RFC 4180 ma **non
+      neutralizza i valori che iniziano con `=`, `+`, `-`, `@`**: aprendo l'export con
+      Excel o LibreOffice quelle celle vengono interpretate come **formule**.
+      **Perché conta più di una formula injection qualsiasi:** i campi `userAgent`,
+      `referrer` e `path` arrivano dalle richieste HTTP, quindi il contenuto è scelto
+      da **chiunque visiti il sito** — non serve alcun accesso privilegiato — mentre il
+      file viene aperto da un amministratore. **Misurato:** uno `User-Agent` valorizzato
+      a `=1+1` finisce nella cella come `=1+1`, e nemmeno il quoting protegge
+      (`"=HYPERLINK(…)"` resta una formula).
+      La mitigazione convenzionale è anteporre un apice ai valori che iniziano con quei
+      caratteri; in alternativa si può esportare i campi sempre come testo. Entrambe
+      **cambiano il contenuto dell'export**, quindi la scelta è del maintainer. Test di
+      caratterizzazione in `plugins/adminAnalytics/tests/unit/exportFormatter.test.js`:
+      falliranno alla correzione, come promemoria.
+- [ ] **Il JSON-LD di `seo` può uscire dal tag `<script>`** *(trovata in v3.3.0)*.
+      `generateStructuredData()` inserisce l'output di `JSON.stringify` dentro
+      `<script type="application/ld+json">`, e `JSON.stringify` **non escapa la
+      sequenza `</script>`**, che il parser HTML interpreta prima del JSON. Un
+      `siteName` valorizzato a `Sito</script><b>x</b>` chiude il tag in anticipo e
+      inietta markup.
+      **Severità più bassa della precedente:** il valore arriva da `seoConfig.json5`,
+      scritto da un amministratore (ruoli 0/1), che può già modificare i template —
+      non è quindi un'escalation, ma resta una via per introdurre markup da un campo
+      che non sembra HTML. La correzione è sostituire `<` con `\u003c` nel JSON
+      serializzato. Caratterizzata in
+      `plugins/seo/tests/unit/robotsAndStructuredData.test.js`.
 - [ ] **Il valore della soglia minima di coverage in CI** → §5.
       Da fissare quando gli step del piano di rientro saranno completati: la proposta è
       **appena sotto** il valore raggiunto, come cricchetto anti-regressione e non come
@@ -300,6 +327,19 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       l'entry point no — parsing degli argomenti, dispatch dei sottocomandi e il
       comportamento con `--` mancante (che npm scarta in silenzio, vedi
       `docs/cli-control-plane.it.md`) non sono verificati da nulla.
+- [ ] **`adminAnalytics` resta in gran parte scoperto** *(v3.3.0 ha coperto solo
+      `exportFormatter`)*. Restano senza test `aggregator.js` (260 righe),
+      `analyticsFileManager.js` (241), `chartDataBuilder.js` (143),
+      `analyticsConfigValidator.js` (109), `fileSelector.js` (102) e `main.js` (480):
+      **911 righe al 5,7%**. `chartDataBuilder` e `analyticsConfigValidator` sono puri
+      e sono i prossimi candidati naturali; `analyticsFileManager` legge il filesystem.
+- [ ] **`ostrukUtility` è un plugin boilerplate vuoto, ma è `active: 1`.**
+      *(Constatato in v3.3.0 cercando cosa testare.)* Ogni funzione esportata
+      restituisce `{}`, `[]` o una `Map` vuota: non c'è logica da verificare, e
+      scrivergli dei test sarebbe cerimonia. Da decidere se **rimuoverlo**
+      dall'installazione di default, **disattivarlo** (`active: 0`) o tenerlo come
+      scheletro di riferimento — nel qual caso il posto giusto sarebbe accanto a
+      `exampleComplete`, che è già inattivo e serve proprio a quello.
 - [ ] **Scanner prescrittivo al boot** (Fase 2 del testing): verifica per ogni
       plugin attivo dei test minimi richiesti (un test per metodo esportato, uno per
       rotta incluso `access`, validazione dei JSON5, lifecycle hooks). Default
