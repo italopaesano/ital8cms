@@ -9,9 +9,18 @@ const loadJson5 = require('../../core/loadJson5')
  * - Stato plugin: /plugins/{pluginName}/scripts/initState.json5
  */
 class StateManager {
-  constructor(logger) {
+  /**
+   * @param {object} logger - InitLogger
+   * @param {string} [globalStatePath] - File dello stato globale di installazione.
+   *        Il default è quello del progetto; il parametro esiste perché i test
+   *        possano lavorare in una tmpdir senza scrivere nel repository.
+   *
+   * Lo stato PER PLUGIN non ha bisogno di un seam: è già derivato dal `pluginPath`
+   * che i metodi ricevono come argomento.
+   */
+  constructor(logger, globalStatePath = path.join(__dirname, '../initState.json5')) {
     this.logger = logger
-    this.globalStatePath = path.join(__dirname, '../initState.json5')
+    this.globalStatePath = globalStatePath
   }
 
   /**

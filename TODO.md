@@ -270,18 +270,43 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       `bootstrapNavbar` come riferimento).
 - [ ] **E2E/Playwright per plugin e temi**: estendere la discovery automatica oltre
       unit e integration, con orchestrazione del server.
-- [ ] **La catena init/backup non è testabile in-process: le root sono cablate.**
-      *(Emerso in v3.6.0 facendo lo step 7.)* `StateManager` cabla
-      `path.join(__dirname, '../initState.json5')` e `BackupManager` cabla
-      `path.join(__dirname, '../../backups')`: entrambe puntano al **repo reale**,
-      quindi esercitarle in un test scriverebbe dentro il progetto — l'unica cosa
-      che lo step 7 vietava esplicitamente. Per questo v3.6.0 ha coperto ciò che
-      era già isolabile (`validators`, `configureSessionKeys`) e ha lasciato fuori
-      `stateManager.js` (69 righe), `backupManager.js` (89), `pluginScanner.js` (72),
-      `pluginInitRunner.js` (79) e `configWizard.js` (66): **375 righe allo 0%**.
-      Correzione: un parametro opzionale al costruttore con default invariato,
-      esattamente come `themesRootPath` (v2.92.0) e `pluginsRootPath` (v2.98.0).
-      Nessun chiamante da aggiornare — è la stessa forma già applicata due volte.
+- [x] ~~**La catena init/backup non è testabile in-process: le root sono cablate.**~~
+      **Risolto in v3.7.0.** Seam aggiunto a quattro classi — `StateManager`
+      (`globalStatePath`), `BackupManager` (`backupRoot` **e** `pluginsRootPath`),
+      `PluginScanner` (`pluginsDir`), `ConfigWizard` (`configPath`) — come parametro
+      opzionale col default invariato, la forma già usata da `themesRootPath`
+      (v2.92.0) e `pluginsRootPath` (v2.98.0). L'unico chiamante
+      (`scripts/init.js:163-164`) non è stato toccato. Le quattro classi passano
+      **da 0% a una media del 94,6%** di righe, con il **100% delle funzioni**.
+      `pluginInitRunner.js` non aveva bisogno di seam (è già parametrizzato) e resta
+      da coprire.
+      **Nota sul perimetro:** `getBackupPath()` e `getPluginBackupPath()` restano
+      ancorati a `__dirname` di proposito — il loro punto di riferimento *è* la
+      radice del progetto, e spostarlo renderebbe il path relativo a se stesso,
+      perdendo l'informazione che quei metodi esistono per dare.
+- [ ] **🐞 `ConfigWizard.saveConfig()` distrugge i commenti di `ital8Config.json5`.**
+      *(Trovato in v3.7.0 coprendo il wizard.)* Fa `JSON.stringify` dell'oggetto
+      intero, cioè **riserializza** invece di modificare le chiavi cambiate — esattamente
+      l'anti-pattern che questo stesso `CLAUDE.md` vieta (*« preferisci
+      `setJson5Key`/`editJson5` a un `saveJson5` dell'oggetto intero: quest'ultimo perde
+      i commenti »*), e che il codice più recente rispetta (`sessionKeyManager` usa
+      `editJson5` proprio per questo).
+      **Misurato sul file reale:** `ital8Config.json5` passa da **230 righe commentate su
+      340 a una sola**, e da 340 a 115 righe totali. È la documentazione inline della
+      configurazione centrale, e chi esegue il wizard confermando una qualsiasi modifica
+      la perde tutta, in silenzio. **I valori sopravvivono** — il sito continua a
+      funzionare identico — quindi non è un guasto, è una perdita di documentazione:
+      per questo può passare inosservata a lungo.
+      Correzione: sostituire la riscrittura con un `editJson5` per ogni chiave cambiata.
+      Cambia il comportamento del wizard, quindi è una decisione. Caratterizzato in
+      `tests/unit/scripts/configWizard.test.js`.
+- [ ] **Il backup globale è piatto: due file omonimi si sovrascrivono.**
+      *(Emerso in v3.7.0.)* `BackupManager.backupGlobalFile()` usa il solo `basename`,
+      quindi `a/config.json5` e `b/config.json5` finiscono sullo stesso path dentro lo
+      snapshot e il secondo cancella il primo **senza dirlo**. Oggi non morde — i config
+      globali salvati hanno nomi distinti (`ital8Config`, `koaSession`, `adminConfig`) —
+      ma è il tipo di limite che si scopre quando serve il ripristino. Caratterizzato in
+      `tests/unit/scripts/backupManager.test.js`.
 - [ ] **`port()` accetta un input troncato da `parseInt`.**
       *(Emerso in v3.6.0 testando i validatori del wizard.)* `parseInt('3000abc')`
       vale 3000, e il wizard ha `filter: (v) => parseInt(v)`: la porta scritta nel

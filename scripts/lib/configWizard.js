@@ -10,9 +10,17 @@ const validators = require('./validators')
  * Ripropone ital8Config.json5 e permette modifiche
  */
 class ConfigWizard {
-  constructor(logger) {
+  /**
+   * @param {object} logger - InitLogger
+   * @param {string} [configPath] - File `ital8Config.json5` da leggere e riscrivere.
+   *        Il default è quello del progetto; il parametro esiste perché i test
+   *        possano lavorare su una copia in tmpdir — questo wizard **riscrive** la
+   *        configurazione globale, quindi esercitarlo sul file vivo la
+   *        sovrascriverebbe.
+   */
+  constructor(logger, configPath = path.join(__dirname, '../../ital8Config.json5')) {
     this.logger = logger
-    this.configPath = path.join(__dirname, '../../ital8Config.json5')
+    this.configPath = configPath
   }
 
   /**
