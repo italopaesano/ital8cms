@@ -17,6 +17,7 @@ Distinzione con gli altri due registri:
 
 ## Indice
 
+0. [Decisioni in attesa del maintainer](#decisioni-in-attesa-del-maintainer)
 1. [Migrazione dei config](#1-migrazione-dei-config)
 2. [Ciclo di vita dei config](#2-ciclo-di-vita-dei-config)
 3. [Installazione di pacchetti da repo Git](#3-installazione-di-pacchetti-da-repo-git)
@@ -25,6 +26,57 @@ Distinzione con gli altri due registri:
 6. [Sicurezza](#6-sicurezza)
 7. [Dipendenze](#7-dipendenze)
 8. [Direzioni ampie](#8-direzioni-ampie)
+
+---
+
+## Decisioni in attesa del maintainer
+
+Punti in cui il lavoro è **fermo per scelta, non per mancanza di tempo**: ognuno ha
+più uscite difendibili e cambia comportamento o convenzioni, quindi la decisione
+spetta al maintainer. Chi riprende in mano il progetto può partire da qui.
+
+Le voci con un rimando hanno la trattazione completa nella sezione indicata; quelle
+senza rimando sono descritte per intero qui perché non hanno una voce propria altrove.
+
+- [ ] **`urlRedirect` e `HEAD`** *(due decisioni collegate)* → §7.
+      **(a)** Estendere il guard a `HEAD` (`!['GET','HEAD'].includes(ctx.method)`) così il
+      redirect vale per entrambi i verbi, oppure lasciare che `HEAD` non rediriga.
+      Oggi `GET` risponde 301 e `HEAD` risponde 200 servendo la risorsa da cui si
+      sta redirezionando.
+      **(b)** Un `HEAD` deve incrementare l'`hitCounter`? Contarlo gonfia le statistiche
+      con traffico non umano; non contarlo le lascia coerenti con oggi. Il test di
+      regressione va scritto **insieme** alla scelta, non prima.
+- [ ] **`PATCH` e `DELETE` fra i verbi supportati dalle rotte dei plugin?**
+      *(Rimasta aperta chiudendo il difetto di `loadRoutes()` in v3.0.0, §5.)*
+      Oggi `ROUTER_METHOD_DISPATCH` gestisce `GET/POST/PUT/DEL/ALL`; un verbo fuori da
+      questi non viene registrato e — da v3.0.0 — viene segnalato con un warning.
+      Nessuna rotta del progetto li usa (censimento: solo `GET` ×66 e `POST` ×69),
+      quindi non c'è urgenza. Le uscite sono due: **aggiungerli** alla mappa (una riga
+      per verbo, `@koa/router` li supporta) rendendo il CMS più convenzionale per chi
+      scrive API REST, oppure **lasciarli fuori** dichiarando che `DEL` è la forma
+      canonica del progetto. Aggiungendoli va aggiornata anche `VALID_METHODS` in
+      `core/testHelpers/routeRunner.js` — il test di coerenza lo impone.
+- [ ] **Il valore della soglia minima di coverage in CI** → §5.
+      Da fissare quando gli step del piano di rientro saranno completati: la proposta è
+      **appena sotto** il valore raggiunto, come cricchetto anti-regressione e non come
+      obiettivo da rincorrere.
+- [ ] **I temi entrano nello scope della coverage?** → §5.
+      Oggi `collectCoverageFrom` copre `core`, `plugins`, `scripts`, `bin` e `index.js`,
+      ma **non** `themes/`. Il JS dei temi è poco (6 file, 395 righe) e tutto lato
+      browser. Da decidere insieme ai test dei temi: includerli senza test li porterebbe
+      a 0% e abbasserebbe la soglia senza dire niente di nuovo.
+- [ ] **Come testare i 7 temi: un test parametrico unico o `themes/<tema>/tests/`?**
+      Il parametrico è un file solo e copre automaticamente i temi futuri; la seconda
+      forma segue la convenzione già in vigore per i plugin e permette a un tema di
+      portarsi i propri test quando viene distribuito separatamente. Scelta di
+      convenzione, non tecnica: `validateThemeContent()` e `resolveIncludeTree()`
+      funzionano in entrambi i casi.
+- [ ] **La GUI admin client-side: `jsdom` o copertura e2e?** → §5.
+      2.129 righe all'1,9%, non eseguibili da jest con `testEnvironment: 'node'`.
+      I due file dual-mode di `adminSentinel` mostrano una terza via: un guard
+      `typeof module` che li rende testabili **senza** cambiare ambiente.
+- [ ] **Pagina segnaposto di primo avvio per `/www`** → §4.
+      Voce preesistente: su un'installazione `production` pulita `GET /` risponde 404.
 
 ---
 
@@ -201,6 +253,32 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       rotta assente, perché esiste, risponde e si rompe solo quando qualcuno la usa.
       `loadRoutes()` ora verifica che `handler` sia una funzione, salta la rotta e lo
       segnala nominando la causa; `CLAUDE.md` riporta i tre esiti reali in tabella.
+- [ ] **🐞 `roleManagement`: il numero `0` è scambiato per un `roleId` assente.**
+      *(Scoperto in v3.2.0 scrivendo i test dei ruoli.)* `updateCustomRole()` e
+      `deleteCustomRole()` iniziano con `if (!roleId)`, e **`0` è falsy** — ma 0 è
+      l'ID di `root`, il ruolo più privilegiato. Il rifiuto avviene comunque, quindi
+      **non è un buco di sicurezza**, ma il messaggio è falso: dice « devi
+      specificare il roleId » a chi l'ha specificato, e `updateCustomRole()`
+      restituisce `errorType: 'all'` invece di `'roleId'`.
+      **Misurato:** con `0` (numero) → « Devi specificare il roleId »; con `"0"`
+      (stringa) → « Non puoi eliminare un ruolo di sistema », cioè il ramo giusto.
+      La divergenza fra i due è la prova che si tratta di un errore di controllo e
+      non di una scelta. Morde solo i chiamanti **da codice**: dal form admin il
+      valore arriva come stringa. La correzione è distinguere « assente » da
+      « zero » (`roleId === undefined || roleId === null || roleId === ''`), ma
+      cambia l'`errorType` restituito in quel caso, quindi va decisa. Due test in
+      `plugins/adminUsers/tests/unit/roleManagement.test.js` fissano il
+      comportamento attuale e falliranno alla correzione, come promemoria.
+- [ ] **`userUsert()` e `roleManagement`: i path dei file dati sono cablati.**
+      *(Emerso in v3.2.0.)* `usersFilePath` e `rolesFilePath` sono costruiti su
+      `__dirname`, quindi i rami che **scrivono** (creazione utente riuscita,
+      creazione/aggiornamento/cancellazione di un ruolo custom) non sono
+      esercitabili senza toccare i file veri del plugin. Oggi i test coprono solo i
+      rami che ritornano prima della scrittura, con una rete di sicurezza che
+      confronta l'hash dei file di dati a inizio e fine suite. La correzione è la
+      stessa già applicata due volte — un path opzionale col default invariato,
+      come `pluginsRootPath` (v2.98.0) e `themesRootPath` (v2.92.0) — e sbloccherebbe
+      i rami di scrittura, che sono quelli dove nascono gli account.
 - [ ] **Soglia minima di coverage** con fail della CI, calcolata in modo aggregato
       (core + plugin attivi + temi). **Sbloccata a metà da v2.96.0**: lo scope della
       misura ora copre tutto il codice che la suite ha il permesso di eseguire
