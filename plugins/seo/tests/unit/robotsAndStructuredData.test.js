@@ -22,6 +22,7 @@ const {
   buildOrganizationSchema,
   buildWebSiteSchema,
   generateStructuredData,
+  serializeJsonLd,
 } = require('../../lib/structuredData');
 
 describe('generateRobotsTxt()', () => {
@@ -163,20 +164,54 @@ describe('generateStructuredData() — il markup JSON-LD', () => {
     expect(generateStructuredData({ enableStructuredData: true })).toBe('');
   });
 
-  test('CARATTERIZZAZIONE: un `</script>` nel config esce dal tag', () => {
-    // `JSON.stringify` escapa le virgolette ma NON la sequenza `</script>`, che il
-    // parser HTML interpreta prima del JSON: il tag si chiude in anticipo.
+  test('un `</script>` nel config NON esce dal tag (corretto in v3.4.0)', () => {
+    // Il parser HTML cerca `</script` prima che un parser JSON veda il payload:
+    // senza escape il tag si chiudeva in anticipo e il resto diventava markup vivo.
     //
     // Il valore arriva da `seoConfig.json5`, scritto da un amministratore
-    // (ruoli 0/1) — quindi non è una escalation: chi può scriverlo può già
-    // modificare i template. Resta però una via per introdurre markup da un
-    // campo che non sembra HTML, e il test lo tiene sotto osservazione: la
-    // correzione sarebbe sostituire `<` con `\\u003c` nel JSON serializzato.
+    // (ruoli 0/1), quindi non era una escalation di privilegi — ma un campo di
+    // testo semplice come `siteName` non deve essere una via per iniettare
+    // markup in ogni pagina del sito.
     const html = generateStructuredData({
       enableStructuredData: true,
       siteName: 'Sito</script><b>x</b>',
     });
 
-    expect(html).toContain('</script><b>x</b>');
+    expect(html).not.toContain('</script><b>x</b>');
+    // Esattamente due tag aperti e due chiusi: la struttura regge.
+    expect(html.match(/<\/script>/g).length).toBe(2);
+  });
+
+  test('il valore originale sopravvive alla riparsatura', () => {
+    // L'escape `\\uXXXX` è standard JSON: chi consuma il JSON-LD (i motori di
+    // ricerca) rilegge il carattere originale. Nessun dato viene perso.
+    const siteName = 'A & B </script> <b>';
+    const html = generateStructuredData({ enableStructuredData: true, siteName });
+    const [, json] = html.match(/<script type="application\/ld\+json">(.*?)<\/script>/);
+
+    expect(JSON.parse(json).name).toBe(siteName);
+  });
+
+  test('anche `&` e `>` sono neutralizzati', () => {
+    // `&` da solo non rompe il tag, ma un `&lt;` reintrodotto da un
+    // trasformatore a valle sì: si escapa la terna completa.
+    const html = generateStructuredData({
+      enableStructuredData: true,
+      siteName: 'Sito',
+      siteUrl: 'https://esempio.it?a=1&b=2>',
+    });
+
+    expect(html).not.toContain('?a=1&b=2');
+    expect(html).toContain('\\u0026');
+    expect(html).toContain('\\u003e');
+  });
+
+  test('serializeJsonLd() — contratto della funzione', () => {
+    expect(serializeJsonLd({ a: '<' })).toBe('{"a":"\\u003c"}');
+    expect(serializeJsonLd({ a: '>' })).toBe('{"a":"\\u003e"}');
+    expect(serializeJsonLd({ a: '&' })).toBe('{"a":"\\u0026"}');
+    // Nulla di innocuo viene toccato, e il risultato resta JSON valido.
+    expect(serializeJsonLd({ a: 'testo', n: 1 })).toBe('{"a":"testo","n":1}');
+    expect(JSON.parse(serializeJsonLd({ a: '</script>' })).a).toBe('</script>');
   });
 });

@@ -134,9 +134,19 @@ All features are toggled in `pluginConfig.json5` under the `custom` section:
 
 ## Behavior Details
 
-### Only GET Requests
+### Only GET and HEAD Requests
 
-The middleware only intercepts `GET` requests. POST, PUT, DELETE, etc. pass through unchanged.
+The middleware intercepts `GET` and `HEAD`. POST, PUT, DELETE, etc. pass through
+unchanged — a 301 on a POST would make the client switch verb and drop the body.
+
+`HEAD` gets exactly the same response as `GET` — same status, same `Location`, no
+body — as RFC 9110 §9.3.2 requires. Before v3.4.0 only `GET` was intercepted, so a
+`HEAD` on a redirected path served the very resource being redirected away from,
+and caches, reverse proxies, link checkers and crawlers kept treating the old URL
+as valid.
+
+A redirected `HEAD` **does** increment the hit counter: that counter tracks how
+many times each rule is *used*, and a `HEAD` answered with a 301 has used it.
 
 ### Debug vs Production Mode
 
@@ -248,13 +258,17 @@ Useful for a future admin plugin that manages redirects visually.
 npx jest tests/unit/urlRedirect/ --verbose
 ```
 
-3 test files, 101 tests:
+4 test files, 113 tests:
 
-| File | Tests | Covers |
-|------|-------|--------|
+| File | Covers |
+|------|--------|
 | `configValidator.test.js` | Validation logic, utilities |
 | `redirectMatcher.test.js` | Exact, wildcard, regex matching, query string |
 | `hitCounter.test.js` | Counters, flush, shutdown, persistence |
+| `middleware.test.js` | Verb handling (GET/HEAD parity), pass-through, query string, hit counting |
+
+`middleware.test.js` drives `loadPlugin()` against a **temporary plugin folder**
+holding real rules, so the live `redirectMap.json5` is neither needed nor touched.
 
 ## File Reference
 

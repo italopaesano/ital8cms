@@ -378,7 +378,7 @@ Struttura tema: `views/` (partial `head`/`header`/`nav`/`main`/`aside`/`footer`)
 Plugin documentati nei rispettivi doc (uso, configurazione, API, esempi):
 
 - **bootstrapNavbar** — genera navbar Bootstrap 5 (`horizontal`/`vertical`/`offcanvas`) da file `navbar.{name}.json5`: visibilità per auth/ruoli, auto-active, dropdown, separatori, `settingsOverrides`, `configDir` (con protezione path-traversal), caching prod/debug. Esposto ai template: `passData.plugin.bootstrapNavbar.render({name, configDir?, settingsOverrides?}, passData)`. → [`plugins/bootstrapNavbar/EXPLAIN.md`](./plugins/bootstrapNavbar/EXPLAIN.md)
-- **urlRedirect** — redirect 301/302 con pattern exact / wildcard (`*`, `**`) / `regex:`, first-match-wins (ordine array in `redirectMap.json5`), hit counter, preservazione query string. Pure middleware, intercetta solo le GET. → [`plugins/urlRedirect/README.md`](./plugins/urlRedirect/README.md)
+- **urlRedirect** — redirect 301/302 con pattern exact / wildcard (`*`, `**`) / `regex:`, first-match-wins (ordine array in `redirectMap.json5`), hit counter, preservazione query string. Pure middleware, intercetta `GET` e `HEAD` (parità RFC 9110 §9.3.2; su `HEAD` il redirect conta come hit). → [`plugins/urlRedirect/README.md`](./plugins/urlRedirect/README.md)
 - **adminBootstrapNavbar** — twin admin GUI (sezione `navbarsManagement`) per creare/editare/validare/preview i file navbar: editor JSON5, 5 template, file picker, soft-delete con backup. → [`plugins/adminBootstrapNavbar/README.md`](./plugins/adminBootstrapNavbar/README.md)
 
 > Scaffolding rapido di una navbar: skill `ital8cms-bootstrapNavbar-creator`.

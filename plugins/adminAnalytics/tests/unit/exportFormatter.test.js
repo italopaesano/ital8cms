@@ -12,11 +12,18 @@
  * chi ha i privilegi più alti. L'intero plugin era senza test.
  *
  * Il quoting RFC 4180 è implementato correttamente e qui viene fissato. La
- * protezione dalla **formula injection** invece non c'è, ed è caratterizzata in
- * fondo al file come difetto noto, non come comportamento voluto.
+ * protezione dalla **formula injection** mancava: era caratterizzata in fondo al
+ * file come difetto noto, ed è stata corretta in v3.4.0 — quei test ora fissano
+ * il contratto della neutralizzazione, non più il difetto.
  */
 
-const { formatCsv, formatJson, EVENT_FIELDS } = require('../../lib/exportFormatter');
+const {
+  formatCsv,
+  formatJson,
+  neutralizeFormula,
+  EVENT_FIELDS,
+  FORMULA_TRIGGERS,
+} = require('../../lib/exportFormatter');
 
 /** Evento minimo: i campi non valorizzati diventano celle vuote. */
 const evento = (over = {}) => ({
@@ -128,40 +135,55 @@ describe('formatJson()', () => {
   });
 });
 
-describe('⚠ DIFETTO NOTO — formula injection nell\'export CSV', () => {
-  // CARATTERIZZAZIONE, non contratto desiderato.
-  //
-  // `formatCsv()` applica il quoting RFC 4180 ma NON neutralizza i valori che
-  // iniziano con `= + - @`: aprendo l'export con Excel o LibreOffice, quelle
-  // celle vengono interpretate come FORMULE.
-  //
-  // Perché conta qui più che altrove: `userAgent`, `referrer` e `path` arrivano
-  // dalle richieste HTTP, quindi il contenuto è scelto da **chiunque visiti il
-  // sito**, mentre il file viene aperto da un amministratore. Non serve alcun
-  // accesso privilegiato per piazzare il valore.
-  //
-  // La mitigazione convenzionale è anteporre un apice ai valori che iniziano con
-  // quei caratteri. Cambia il contenuto dell'export, quindi è una decisione:
-  // aperta in TODO.md, sezione «Decisioni in attesa del maintainer».
-  // Quando verrà corretta, questi test falliscono e vanno riscritti come
-  // contratto.
+describe('formula injection — neutralizzazione (v3.4.0)', () => {
+  // Il difetto che questi test presidiavano come caratterizzazione è stato
+  // corretto: `path`, `referrer` e `userAgent` arrivano dalle richieste HTTP,
+  // quindi il contenuto è scelto da chiunque visiti il sito — senza alcun
+  // accesso privilegiato — mentre il file lo apre un amministratore.
   test.each([
-    ['uguale',    '=1+1'],
-    ['più',       '+1+1'],
-    ['meno',      '-1+1'],
+    ['uguale',     '=1+1'],
+    ['più',        '+1+1'],
+    ['meno',       '-1+1'],
     ['chiocciola', '@SUM(A1:A9)'],
-  ])('un userAgent che inizia con %s finisce nella cella senza protezione', (_caso, payload) => {
+    ['tab',        '\t=1+1'],
+  ])('un userAgent che inizia con %s viene neutralizzato con l\'apice', (_caso, payload) => {
     const cella = righe(formatCsv([evento({ userAgent: payload })]))[1]
       .split(',')[EVENT_FIELDS.indexOf('userAgent')];
 
-    expect(cella).toBe(payload);
-    expect(cella.startsWith(payload[0])).toBe(true);
+    expect(cella).toBe(`'${payload}`);
+    expect(FORMULA_TRIGGERS).not.toContain(cella[0]);
   });
 
-  test('nemmeno il quoting protegge: la formula resta all\'inizio della cella', () => {
-    // Con una virgola il valore viene quotato — ma il foglio di calcolo valuta
-    // comunque il contenuto fra le virgolette.
+  test('l\'apice sta DENTRO le virgolette, così il quoting RFC 4180 regge', () => {
+    // Se il prefisso finisse fuori dalle virgolette romperebbe la struttura del
+    // CSV: il campo verrebbe letto come due colonne.
     const riga = righe(formatCsv([evento({ referrer: '=HYPERLINK("http://x"),y' })]))[1];
-    expect(riga).toContain('"=HYPERLINK(');
+    expect(riga).toContain('"\'=HYPERLINK(');
+    expect(riga).not.toContain(',"=HYPERLINK(');
+  });
+
+  test('i valori innocui NON vengono toccati', () => {
+    // Una neutralizzazione troppo larga sporcherebbe ogni export.
+    const cella = righe(formatCsv([evento({ userAgent: 'Mozilla/5.0' })]))[1]
+      .split(',')[EVENT_FIELDS.indexOf('userAgent')];
+    expect(cella).toBe('Mozilla/5.0');
+  });
+
+  test('i NUMERI negativi restano numeri, non diventano testo', () => {
+    // `-` è un trigger di formula, ma solo per le stringhe: un numero non può
+    // portare una formula, e prefissarlo lo renderebbe inutilizzabile nei calcoli.
+    const cella = righe(formatCsv([evento({ durationMs: -5 })]))[1]
+      .split(',')[EVENT_FIELDS.indexOf('durationMs')];
+    expect(cella).toBe('-5');
+  });
+
+  test('neutralizeFormula() — contratto della funzione', () => {
+    expect(neutralizeFormula('=1+1')).toBe("'=1+1");
+    expect(neutralizeFormula('testo')).toBe('testo');
+    expect(neutralizeFormula('')).toBe('');
+    // Non stringhe: passano attraverso, convertite ma non prefissate.
+    expect(neutralizeFormula(-5)).toBe('-5');
+    expect(neutralizeFormula(200)).toBe('200');
+    expect(neutralizeFormula(true)).toBe('true');
   });
 });

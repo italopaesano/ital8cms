@@ -37,6 +37,7 @@ const {
   getCustomRoles,
   getHardcodedRoles,
   getNextCustomRoleId,
+  isRoleIdAbsent,
 } = require('../../roleManagement');
 
 const PLUGIN_DIR = path.join(__dirname, '..', '..');
@@ -135,29 +136,44 @@ describe('deleteCustomRole() — i ruoli di sistema non si cancellano', () => {
     expect(deleteCustomRole(1).error).toMatch(/sistema|hardcoded/i);
   });
 
-  // ⚠ CARATTERIZZAZIONE DI UN DIFETTO, non del comportamento voluto.
-  //
-  // `if (!roleId)` scambia il NUMERO 0 per un argomento assente, e 0 è l'ID di
-  // `root` — il ruolo più privilegiato. Il rifiuto avviene comunque (nessuna
-  // cancellazione), quindi non è un buco di sicurezza, ma il messaggio è falso:
-  // dice « devi specificare il roleId » a chi l'ha specificato, e restituisce
-  // `errorType: 'all'` su update invece di `'roleId'`.
-  //
-  // Morde solo i chiamanti da CODICE: dal form admin il valore arriva come
-  // stringa `"0"`, che è truthy e prende il ramo corretto. Aperto in TODO.md §5;
-  // quando verrà corretto, questi due test falliscono e vanno riscritti come
-  // contratto vero.
-  test('DIFETTO NOTO: il numero 0 è scambiato per roleId assente (update)', () => {
+  // Il numero 0 è l'ID di `root`, il ruolo più privilegiato — ed era scambiato
+  // per un argomento assente da `if (!roleId)`. Corretto in v3.4.0: il rifiuto
+  // avveniva comunque, ma il messaggio mentiva e su update evidenziava il campo
+  // sbagliato nel form.
+  test('il numero 0 è riconosciuto come roleId, non come argomento assente', () => {
     const res = updateCustomRole(0, 'nomeNuovo', 'descrizione');
-    expect(res.errorType).toBe('all');
-    expect(res.error).toMatch(/Devi specificare/);
+    expect(res.errorType).toBe('roleId');
+    expect(res.error).toMatch(/sistema|hardcoded/i);
+    expect(res.error).not.toMatch(/Devi specificare/);
   });
 
-  test('DIFETTO NOTO: la stringa "0" prende invece il ramo corretto', () => {
-    // La divergenza fra `0` e `"0"` è la prova che si tratta di un errore di
-    // controllo e non di una scelta.
-    expect(deleteCustomRole('0').error).toMatch(/sistema|hardcoded/i);
-    expect(deleteCustomRole(0).error).toMatch(/Devi specificare/);
+  test('`0` e `"0"` prendono ora lo STESSO ramo', () => {
+    // La divergenza fra i due era la prova che si trattava di un errore di
+    // controllo e non di una scelta: ora devono convergere.
+    expect(deleteCustomRole(0).error).toBe(deleteCustomRole('0').error);
+    expect(deleteCustomRole(0).errorType).toBe('roleId');
+    expect(deleteCustomRole(0).error).toMatch(/sistema|hardcoded/i);
+  });
+
+  test.each([
+    ['undefined', undefined],
+    ['null',      null],
+    ['stringa vuota', ''],
+  ])('un roleId davvero assente (%s) resta rifiutato come tale', (_caso, valore) => {
+    // La correzione non deve aver allargato la porta: ciò che è assente per
+    // davvero deve continuare a produrre il messaggio « devi specificare ».
+    expect(deleteCustomRole(valore).error).toMatch(/Devi specificare/);
+    expect(updateCustomRole(valore, 'nomeX', 'descX').errorType).toBe('all');
+  });
+
+  test('isRoleIdAbsent() — contratto della funzione', () => {
+    expect(isRoleIdAbsent(undefined)).toBe(true);
+    expect(isRoleIdAbsent(null)).toBe(true);
+    expect(isRoleIdAbsent('')).toBe(true);
+    // 0 è un ID valido, non un'assenza. È il cuore della correzione.
+    expect(isRoleIdAbsent(0)).toBe(false);
+    expect(isRoleIdAbsent('0')).toBe(false);
+    expect(isRoleIdAbsent(100)).toBe(false);
   });
 
   test('ruolo inesistente → errore, nessun utente toccato', () => {

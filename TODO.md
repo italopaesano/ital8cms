@@ -38,14 +38,17 @@ spetta al maintainer. Chi riprende in mano il progetto può partire da qui.
 Le voci con un rimando hanno la trattazione completa nella sezione indicata; quelle
 senza rimando sono descritte per intero qui perché non hanno una voce propria altrove.
 
-- [ ] **`urlRedirect` e `HEAD`** *(due decisioni collegate)* → §7.
-      **(a)** Estendere il guard a `HEAD` (`!['GET','HEAD'].includes(ctx.method)`) così il
-      redirect vale per entrambi i verbi, oppure lasciare che `HEAD` non rediriga.
-      Oggi `GET` risponde 301 e `HEAD` risponde 200 servendo la risorsa da cui si
-      sta redirezionando.
-      **(b)** Un `HEAD` deve incrementare l'`hitCounter`? Contarlo gonfia le statistiche
-      con traffico non umano; non contarlo le lascia coerenti con oggi. Il test di
-      regressione va scritto **insieme** alla scelta, non prima.
+- [x] ~~**`urlRedirect` e `HEAD`** *(due decisioni collegate)* → §7.~~ **Deciso e
+      applicato in v3.4.0.** **(a)** Il guard è esteso a `HEAD`: RFC 9110 §9.3.2
+      definisce `HEAD` come `GET` senza corpo, quindi la divergenza non era una scelta
+      difendibile ma un difetto. **(b)** Un `HEAD` redirezionato **incrementa** il
+      contatore: quel contatore misura « quante volte una regola è stata usata », e un
+      `HEAD` a cui si è risposto 301 l'ha usata; non contarlo avrebbe richiesto di
+      re-introdurre un caso speciale su `HEAD`, cioè la stessa divergenza appena
+      corretta, stavolta nelle statistiche. Regressione in
+      `tests/unit/urlRedirect/middleware.test.js` (12 test, prima superficie del
+      middleware a essere coperta). **Se il maintainer preferisce non contare i `HEAD`**
+      è una riga sola nel guard del contatore, e il test che la presidia lo dice.
 - [ ] **`PATCH` e `DELETE` fra i verbi supportati dalle rotte dei plugin?**
       *(Rimasta aperta chiudendo il difetto di `loadRoutes()` in v3.0.0, §5.)*
       Oggi `ROUTER_METHOD_DISPATCH` gestisce `GET/POST/PUT/DEL/ALL`; un verbo fuori da
@@ -56,7 +59,13 @@ senza rimando sono descritte per intero qui perché non hanno una voce propria a
       scrive API REST, oppure **lasciarli fuori** dichiarando che `DEL` è la forma
       canonica del progetto. Aggiungendoli va aggiornata anche `VALID_METHODS` in
       `core/testHelpers/routeRunner.js` — il test di coerenza lo impone.
-- [ ] **🔴 Formula injection nell'export CSV di `adminAnalytics`** *(trovata in v3.3.0)*.
+- [x] ~~**🔴 Formula injection nell'export CSV di `adminAnalytics`** *(trovata in v3.3.0)*.~~
+      **Corretta in v3.4.0** con la mitigazione convenzionale (apice anteposto), applicata
+      **prima** del quoting così il prefisso finisce dentro le virgolette e la struttura
+      RFC 4180 regge. `neutralizeFormula()` agisce sulle sole **stringhe**: un numero non
+      può portare una formula, e prefissare un `durationMs: -5` lo renderebbe inutilizzabile
+      nei calcoli. Trigger coperti: `=`, `+`, `-`, `@`, TAB, CR. I test di caratterizzazione
+      sono stati riscritti come contratto. Testo originale della segnalazione:
       `exportFormatter.formatCsv()` applica correttamente il quoting RFC 4180 ma **non
       neutralizza i valori che iniziano con `=`, `+`, `-`, `@`**: aprendo l'export con
       Excel o LibreOffice quelle celle vengono interpretate come **formule**.
@@ -71,7 +80,11 @@ senza rimando sono descritte per intero qui perché non hanno una voce propria a
       **cambiano il contenuto dell'export**, quindi la scelta è del maintainer. Test di
       caratterizzazione in `plugins/adminAnalytics/tests/unit/exportFormatter.test.js`:
       falliranno alla correzione, come promemoria.
-- [ ] **Il JSON-LD di `seo` può uscire dal tag `<script>`** *(trovata in v3.3.0)*.
+- [x] ~~**Il JSON-LD di `seo` può uscire dal tag `<script>`** *(trovata in v3.3.0)*.~~
+      **Corretta in v3.4.0**: `serializeJsonLd()` escapa `<`, `>` e `&` come `\uXXXX` —
+      escape JSON standard, quindi i consumatori (motori di ricerca inclusi) rileggono il
+      carattere originale e nessun dato va perso. Verificato che il valore sopravvive alla
+      riparsatura. Testo originale della segnalazione:
       `generateStructuredData()` inserisce l'output di `JSON.stringify` dentro
       `<script type="application/ld+json">`, e `JSON.stringify` **non escapa la
       sequenza `</script>`**, che il parser HTML interpreta prima del JSON. Un
@@ -280,8 +293,17 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       rotta assente, perché esiste, risponde e si rompe solo quando qualcuno la usa.
       `loadRoutes()` ora verifica che `handler` sia una funzione, salta la rotta e lo
       segnala nominando la causa; `CLAUDE.md` riporta i tre esiti reali in tabella.
-- [ ] **🐞 `roleManagement`: il numero `0` è scambiato per un `roleId` assente.**
-      *(Scoperto in v3.2.0 scrivendo i test dei ruoli.)* `updateCustomRole()` e
+- [x] ~~**🐞 `roleManagement`: il numero `0` è scambiato per un `roleId` assente.**~~
+      **Corretto in v3.4.0:** il guard falsy è sostituito da `isRoleIdAbsent()`, che
+      chiede « è stato fornito? » invece di « è diverso da zero? ». `0` e `"0"` ora
+      convergono sullo stesso ramo, e ciò che è assente per davvero (`undefined`,
+      `null`, stringa vuota — quest'ultima è ciò che invia un campo di form in bianco)
+      continua a essere rifiutato come tale. I due test di caratterizzazione sono
+      riscritti come contratto. **Resta fuori dalla correzione**, di proposito, il
+      messaggio per un roleId non numerico: `"abc"` produce ancora « Ruolo con ID NaN
+      non trovato » — brutto da leggere ma innocuo, e allargare la correzione avrebbe
+      cambiato il comportamento di casi che nessuno aveva segnalato.
+      Testo originale della segnalazione: *(Scoperto in v3.2.0 scrivendo i test dei ruoli.)* `updateCustomRole()` e
       `deleteCustomRole()` iniziano con `if (!roleId)`, e **`0` è falsy** — ma 0 è
       l'ID di `root`, il ruolo più privilegiato. Il rifiuto avviene comunque, quindi
       **non è un buco di sicurezza**, ma il messaggio è falso: dice « devi
@@ -472,7 +494,10 @@ esporre il directory listing — cioè la configurazione normale di un sito in
 produzione. Oggi le due cose non sono separabili.
 
 
-### 🐞 `urlRedirect` — un `HEAD` su un path redirezionato non segue il redirect
+### ✅ `urlRedirect` — un `HEAD` su un path redirezionato non seguiva il redirect
+
+**RISOLTO in v3.4.0.** La descrizione resta come traccia di come il difetto è stato
+trovato e misurato; le scelte prese sono in fondo.
 
 Fonte: emerso aggiornando `koa-classic-server` alla **5.3.0** (v2.94.0), che porta
 `HEAD` nel default di `options.method`. **Non è un bug del modulo:** il codice è
@@ -496,22 +521,25 @@ nessun corpo. Qui i due verbi divergono sia nello status sia in `Location`. Chi
 legge il sito con `HEAD` — cache, reverse proxy, link-checker, crawler — non vede
 il redirect e continua a considerare valido il vecchio URL.
 
-- [ ] Estendere il guard a `HEAD` (`!['GET', 'HEAD'].includes(ctx.method)`), così il
-      redirect vale per entrambi i verbi. **Da decidere dal maintainer**, non applicato
-      qui: è un cambio di comportamento di un plugin, fuori dallo scopo di un giro di
-      aggiornamento dipendenze.
-- [ ] Decidere se un `HEAD` debba incrementare l'`hitCounter`. Contarlo gonfia le
-      statistiche con traffico non umano; non contarlo le lascia coerenti con oggi.
-      Sono due scelte difendibili, ma vanno prese esplicitamente.
-- [ ] Test di regressione sui due verbi **per questa rotta**. La lacuna generale è
-      chiusa da v3.1.0 (`tests/integration/httpVerbs.test.js` verifica `HEAD` su tutte
-      e sei le superfici e sulla superficie riservata), ma il caso di `urlRedirect`
-      resta scoperto perché dipende dalla decisione qui sopra: il test va scritto
-      **insieme** alla scelta sul guard, non prima.
+- [x] Guard esteso a `HEAD` (`ctx.method !== 'GET' && ctx.method !== 'HEAD'`). Non era
+      in realtà una decisione a due uscite: RFC 9110 §9.3.2 definisce `HEAD` come `GET`
+      senza corpo, quindi « lasciare che `HEAD` non rediriga » significava tenere una
+      violazione, non scegliere una convenzione.
+- [x] Un `HEAD` redirezionato **incrementa** l'`hitCounter`. Il contatore si documenta
+      da sé come « quante volte ogni regola è **usata** », e un `HEAD` a cui si è
+      risposto 301 l'ha usata. L'alternativa avrebbe richiesto di scrivere un caso
+      speciale su `HEAD` nel punto del conteggio — cioè re-introdurre, nelle
+      statistiche, la stessa divergenza appena corretta nel redirect.
+- [x] Test di regressione: `tests/unit/urlRedirect/middleware.test.js`, 12 test. È la
+      **prima copertura del middleware** del plugin — i tre file preesistenti coprivano
+      le librerie (`redirectMatcher`, `configValidator`, `hitCounter`) ma non il codice
+      che le orchestra, ed è esattamente lì che stava il difetto. Il test esercita
+      `loadPlugin()` su una **cartella plugin temporanea** con regole vere, così il
+      `redirectMap.json5` vivo non serve e non viene toccato.
 
-**Non urgente su questa installazione:** il `redirectMap.json5` vivo non ha regole
-attive (tutti gli esempi sono commentati), quindi oggi non c'è divergenza da
-osservare. Diventa visibile alla prima regola configurata.
+**Verifica anti-vacuità:** tre mutazioni applicate al codice corretto uccidono i test —
+ritorno al guard solo-`GET` (4 rossi), guard rimosso del tutto (6 rossi), `HEAD` che
+redirige ma non conta (1 rosso).
 
 ## 8. Direzioni ampie
 

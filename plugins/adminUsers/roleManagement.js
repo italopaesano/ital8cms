@@ -70,6 +70,29 @@ function createCustomRole(name, description) {
 }
 
 /**
+ * Distingue un roleId ASSENTE da uno presente.
+ *
+ * PERCHÉ ESISTE. Il controllo era `if (!roleId)`, che legge il NUMERO 0 come
+ * "non fornito" — e 0 è l'ID di `root`, il ruolo più privilegiato. Il rifiuto
+ * avveniva comunque (nessun ruolo di sistema è mai stato toccato), ma il
+ * messaggio mentiva: diceva « devi specificare il roleId » a chi l'aveva
+ * specificato, e su update restituiva `errorType: 'all'` invece di `'roleId'`,
+ * cioè evidenziava il campo sbagliato nel form.
+ *
+ * La divergenza fra `0` e `"0"` — la stringa è truthy e prendeva il ramo giusto —
+ * è la prova che si trattava di un errore di controllo e non di una scelta.
+ *
+ * La stringa vuota conta come assente: è ciò che invia un campo di form lasciato
+ * in bianco.
+ *
+ * @param {*} roleId - Valore ricevuto dal chiamante
+ * @returns {boolean} - true se il roleId non è stato fornito
+ */
+function isRoleIdAbsent(roleId) {
+    return roleId === undefined || roleId === null || roleId === '';
+}
+
+/**
  * Aggiorna un ruolo custom esistente
  * @param {number} roleId - ID del ruolo da modificare
  * @param {string} name - Nuovo nome
@@ -77,7 +100,7 @@ function createCustomRole(name, description) {
  * @returns {object} - {success: ...} oppure {error: ...}
  */
 function updateCustomRole(roleId, name, description) {
-    if (!roleId || !name || !description) {
+    if (isRoleIdAbsent(roleId) || !name || !description) {
         return { error: 'Errore: Devi specificare roleId, nome e descrizione.', errorType: 'all' };
     }
 
@@ -126,7 +149,7 @@ function updateCustomRole(roleId, name, description) {
  * @returns {object} - {success: ..., affectedUsers: ...} oppure {error: ...}
  */
 function deleteCustomRole(roleId) {
-    if (!roleId) {
+    if (isRoleIdAbsent(roleId)) {
         return { error: 'Errore: Devi specificare il roleId.', errorType: 'roleId' };
     }
 
@@ -225,5 +248,6 @@ module.exports = {
     deleteCustomRole,
     getCustomRoles,
     getHardcodedRoles,
-    getNextCustomRoleId
+    getNextCustomRoleId,
+    isRoleIdAbsent
 };
