@@ -270,6 +270,43 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       `bootstrapNavbar` come riferimento).
 - [ ] **E2E/Playwright per plugin e temi**: estendere la discovery automatica oltre
       unit e integration, con orchestrazione del server.
+- [ ] **La catena init/backup non è testabile in-process: le root sono cablate.**
+      *(Emerso in v3.6.0 facendo lo step 7.)* `StateManager` cabla
+      `path.join(__dirname, '../initState.json5')` e `BackupManager` cabla
+      `path.join(__dirname, '../../backups')`: entrambe puntano al **repo reale**,
+      quindi esercitarle in un test scriverebbe dentro il progetto — l'unica cosa
+      che lo step 7 vietava esplicitamente. Per questo v3.6.0 ha coperto ciò che
+      era già isolabile (`validators`, `configureSessionKeys`) e ha lasciato fuori
+      `stateManager.js` (69 righe), `backupManager.js` (89), `pluginScanner.js` (72),
+      `pluginInitRunner.js` (79) e `configWizard.js` (66): **375 righe allo 0%**.
+      Correzione: un parametro opzionale al costruttore con default invariato,
+      esattamente come `themesRootPath` (v2.92.0) e `pluginsRootPath` (v2.98.0).
+      Nessun chiamante da aggiornare — è la stessa forma già applicata due volte.
+- [ ] **`port()` accetta un input troncato da `parseInt`.**
+      *(Emerso in v3.6.0 testando i validatori del wizard.)* `parseInt('3000abc')`
+      vale 3000, e il wizard ha `filter: (v) => parseInt(v)`: la porta scritta nel
+      config **non è quella digitata**, e nessuno lo segnala. Stessa cosa per
+      `'3000.9'` → 3000 e `'1e4'` → 1. Impatto basso (chi installa vede la porta nel
+      riepilogo) ma la correzione — un `/^\d+$/` prima del parse — **rifiuterebbe un
+      input oggi accettato**, quindi è una decisione, non una svista da correggere di
+      nascosto. Caratterizzato in `tests/unit/scripts/validators.test.js`.
+- [ ] **Quattro validatori senza chiamanti: cablarli o rimuoverli.**
+      *(Censito in v3.6.0 su tutto il repo.)* `boolean`, `toBoolean`, `positiveInteger`
+      e `directoryPath` non sono usati da nessuna parte. Vivi sono solo `port`
+      (httpPort), `apiPrefix` (apiPrefix + adminPrefix), `required` (i due temi) e
+      `username`/`email`/`password` (account **root**, via
+      `plugins/adminUsers/scripts/init.js`). Due dettagli che contano se qualcuno li
+      cablasse: `directoryPath` **accetta i `..` di traversal** (la regex ammette punti
+      e slash) — oggi innocuo perché è codice morto, non altrettanto il giorno in cui
+      guardasse un path di config; e `positiveInteger` accetta `0` mentre il suo
+      messaggio dice « deve essere un numero positivo » (accettare 0 è quasi certamente
+      voluto — è « disattivato » in mezzo schema del progetto — quindi è il **messaggio**
+      da correggere, non il comportamento).
+- [ ] **Il controllo `includes('/')` di `apiPrefix()` è irraggiungibile.**
+      *(Emerso in v3.6.0.)* La regex che lo precede non ammette `/`, quindi ogni valore
+      con uno slash esce prima e il messaggio dedicato — il più utile dei due — non viene
+      mai mostrato. Non è un buco (il rifiuto avviene comunque), è un ramo morto.
+      Fissato da un test che diventa rosso se il ramo torna raggiungibile.
 - [ ] **`themeSys.validateTheme()` NON accetta una root parametrica**, a differenza
       della sua gemella `validateThemeContent(themeName, themesRootPath)` (v2.92.0).
       *(Emerso in v3.5.0 scrivendo la suite di integrità dei temi.)* Cabla
