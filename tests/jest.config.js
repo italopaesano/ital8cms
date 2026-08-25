@@ -103,11 +103,12 @@ module.exports = {
 
   // Soglia minima di copertura — un CRICCHETTO, non un obiettivo.
   //
-  // ⚠ VALORI PROVVISORI, E OGGI INERTI. La CI esegue `npm test`, che lancia jest
-  // SENZA `--coverage`: questa soglia scatta solo su `npm run test:coverage`, cioè
-  // quando qualcuno la chiede apposta. Perché presidi davvero una pull request
-  // serve un passo di CI che raccolga la copertura — decisione ancora aperta,
-  // insieme ai valori qui sotto (vedi TODO.md → *Decisioni in attesa del maintainer*).
+  // DOVE VIENE APPLICATA. Il job `coverage` del workflow CI esegue
+  // `npm run test:coverage` a ogni pull request: è lì che questa soglia diventa un
+  // check che può fallire. Vive qui e non nel workflow di proposito — così un
+  // `npm run test:coverage` in locale dà lo stesso verdetto della CI, invece di
+  // scoprirlo dopo il push. Nota che `npm test` lancia jest SENZA `--coverage`:
+  // la suite normale non valuta la soglia, e non deve.
   //
   // Serve a impedire che la copertura SCENDA, non a spingerla a salire: il valore
   // è un punto sotto quello raggiunto (52,12 / 51,10 / 47,39 / 52,87 al momento in

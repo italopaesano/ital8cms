@@ -4,6 +4,10 @@
 #                (22 "Jod", 24 "Krypton").
 #   2. `audit` — dependency vulnerability audit (npm audit), also on a weekly cron so
 #                newly disclosed advisories on already-installed deps are surfaced.
+#   3. `coverage` — anti-regression ratchet on test coverage. Runs once, on a single
+#                Node line: the percentages are identical to the line on 22 and 24
+#                (measured: 10058/19297 statements on both), so running it inside the
+#                matrix would compute the same number twice.
 name: CI
 
 on:
@@ -61,6 +65,47 @@ jobs:
       # Runs scripts/checkNixShell.js (no-op on non-Nix CI) → Jest → Playwright.
       - name: Run test suite
         run: npm test
+
+  coverage:
+    name: Coverage ratchet
+    # Come il test matrix: sul cron settimanale serve solo l'audit.
+    if: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      # Una sola versione di Node, di proposito. La copertura misura QUALI righe
+      # vengono eseguite, non come: 22 e 24 producono numeri identici alla riga,
+      # quindi eseguirlo due volte costerebbe minuti senza aggiungere informazione.
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # `test:coverage` è jest da solo — niente Playwright, che non contribuisce
+      # alla copertura misurata da `collectCoverageFrom` e raddoppierebbe i tempi.
+      #
+      # La soglia vive in `tests/jest.config.js` (`coverageThreshold`), non qui: così
+      # vale anche in locale, e un `npm run test:coverage` sulla macchina di chi
+      # sviluppa dà lo stesso verdetto della CI invece di scoprirlo dopo il push.
+      #
+      # Questo job fallisce SOLO per la soglia o per un test rotto, e il check si
+      # chiama « Coverage ratchet »: chi guarda la lista dei check capisce quale
+      # delle due cose è successa senza aprire il log.
+      #
+      # ⚠ Nessuna rete verso GitHub è garantita qui: i 5 test di
+      # `themesInstall.realRepo` si saltano da soli quando i repo remoti non sono
+      # raggiungibili. È il caso da cui la soglia è stata misurata — il PAVIMENTO —
+      # quindi una run connessa può solo alzare il numero, mai abbassarlo.
+      - name: Run test suite with coverage (fails below threshold)
+        run: npm run test:coverage
 
   audit:
     name: Dependency vulnerability audit
