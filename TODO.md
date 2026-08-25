@@ -138,6 +138,62 @@ senza rimando sono descritte per intero qui perché non hanno una voce propria a
 - [ ] **Pagina segnaposto di primo avvio per `/www`** → §4.
       Voce preesistente: su un'installazione `production` pulita `GET /` risponde 404.
 
+**Le sei voci sotto vengono dalla revisione completa della branch** (v3.10.0 → v3.12.0):
+tutto ciò che quella revisione ha trovato e che si poteva correggere senza scegliere è
+già corretto; queste sei restano perché ognuna **cambia un comportamento oggi accettato**
+o una convenzione dichiarata. Ordinate per costo di non decidere, con la trattazione
+completa in §5 accanto alla misura che le ha fatte emergere.
+
+- [ ] **(D1) `ConfigWizard.saveConfig()` distrugge i commenti di `ital8Config.json5`** → §5.
+      Misurato sul file vero: **230 righe con commento → 1**, 340 righe → 115. È
+      l'anti-pattern che `CLAUDE.md` vieta esplicitamente e che `sessionKeyManager` già
+      evita usando `editJson5`. Le uscite: **riscrivere `saveConfig()` chiave per chiave**
+      con `editJson5`/`setJson5Key` (il file vivo conserva la sua documentazione, ma il
+      wizard deve saper *aggiungere* chiavi assenti, non solo aggiornarle), oppure
+      **accettare la perdita** dichiarando che dopo il wizard il config vivo è un file
+      generato e la documentazione sta solo nel `.default`.
+- [ ] **(D2) Il gate fatale su `access` che la documentazione promette e il codice non ha** → §5.
+      `CLAUDE.md` dice « assenza di `access` = errore fatale al boot »; `loadRoutes` fa
+      `oRoute.access ? wrap(...) : oRoute.handler` — la rotta viene **registrata senza
+      controllo di autenticazione**. Nessuna rotta del progetto ne è priva (sweep di
+      `routeContract.test.js` verde su tutti i plugin attivi), quindi il rischio è per i
+      plugin di terze parti. Le uscite: **implementare il gate** (fedele al testo, ma un
+      plugin esterno con una svista impedisce il boot dell'intero sito — contrario al boot
+      graceful introdotto per i plugin), **saltare la rotta con un warning** (coerente con
+      come v3.0.0 tratta già `method` minuscolo e `func` al posto di `handler`) e allineare
+      la documentazione, oppure **correggere solo la documentazione** lasciando il codice.
+- [ ] **(D3) Un unico ordinamento topologico, invece del sort su un sottoinsieme** → §5.
+      Misurato: 12 plugin senza dipendenze sono ordinati per `weight`; i 10 con
+      `dependency` vengono accodati man mano che si risolvono e **scavalcano il sort** —
+      `adminAccessControl` dichiara `-5` e carica 22° su 22. Di quei 10, solo 2 registrano
+      middleware, quindi oggi l'effetto pratico è circoscritto. Le uscite: **rifare
+      l'ordinamento** (topologico su tutti gli installabili, `weight` come tie-break — è
+      il cuore del boot, va fatto con la sua rete di test) oppure **lasciarlo** e tenere il
+      limite dichiarato nel commento corretto in v3.12.0 e in `CLAUDE.md`.
+- [ ] **(D4) `port()` accetta un input che `parseInt` tronca** → §5.
+      `'3000abc'` → 3000, `'3000.9'` → 3000, `'1e4'` → 1: la porta scritta nel config **non
+      è quella digitata**, e nessuno lo segnala. Le uscite: **rifiutare** con `/^\d+$/`
+      prima del parse (un input oggi accettato smette di esserlo — è una regressione
+      volontaria, non una svista) oppure **accettare** e dichiarare che il riepilogo del
+      wizard è il punto in cui l'installatore vede cosa è stato scritto.
+- [ ] **(D5) Il floor `roleId >= 100` non è applicato a delete/update** → §5.
+      Il confine dei ruoli custom è conosciuto solo da `getNextCustomRoleId`;
+      `deleteCustomRole`/`updateCustomRole` si affidano al solo `isHardcoded`, che vive in
+      un file vivo, git-ignored e modificabile a mano. Verificato che oggi `root` non sia
+      cancellabile: è un solo strato, non zero. Le uscite: **aggiungere il floor** come
+      secondo strato (attenzione al messaggio d'errore: per gli ID 0-3 deve restare quello
+      attuale, altrimenti si degrada un messaggio giusto) oppure **lasciare** `isHardcoded`
+      come unica fonte di verità.
+- [ ] **(D6) `getBackupPath()` resta ancorata a `__dirname` mentre la radice è iniettabile** → §5.
+      Dopo il seam di v3.6.0 il backup può scrivere altrove, ma questi due metodi
+      compongono il path da `__dirname`: se la radice è iniettata, la stringa **scritta in
+      `initState.json5` non corrisponde** a dove il file sta davvero. **Verificato che
+      nessuno la risolva**: `pluginInitRunner.js:133` la usa solo come flag
+      (`if (backupPath)`) e per stamparla, e il ripristino ricostruisce il path da
+      `restorePlugin(plugin.name)`. Le uscite: **passare la radice iniettata** ai due
+      metodi (coerenza, nessun beneficio funzionale oggi) oppure **lasciarli** e togliere
+      la nota dal perimetro del seam.
+
 ---
 
 ## 1. Migrazione dei config
@@ -297,7 +353,7 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       ancorati a `__dirname` di proposito — il loro punto di riferimento *è* la
       radice del progetto, e spostarlo renderebbe il path relativo a se stesso,
       perdendo l'informazione che quei metodi esistono per dare.
-- [ ] **🐞 `ConfigWizard.saveConfig()` distrugge i commenti di `ital8Config.json5`.**
+- [ ] **(D1) 🐞 `ConfigWizard.saveConfig()` distrugge i commenti di `ital8Config.json5`.**
       *(Trovato in v3.7.0 coprendo il wizard.)* Fa `JSON.stringify` dell'oggetto
       intero, cioè **riserializza** invece di modificare le chiavi cambiate — esattamente
       l'anti-pattern che questo stesso `CLAUDE.md` vieta (*« preferisci
@@ -320,7 +376,7 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       globali salvati hanno nomi distinti (`ital8Config`, `koaSession`, `adminConfig`) —
       ma è il tipo di limite che si scopre quando serve il ripristino. Caratterizzato in
       `tests/unit/scripts/backupManager.test.js`.
-- [ ] **`port()` accetta un input troncato da `parseInt`.**
+- [ ] **(D4) `port()` accetta un input troncato da `parseInt`.**
       *(Emerso in v3.6.0 testando i validatori del wizard.)* `parseInt('3000abc')`
       vale 3000, e il wizard ha `filter: (v) => parseInt(v)`: la porta scritta nel
       config **non è quella digitata**, e nessuno lo segnala. Stessa cosa per
@@ -364,7 +420,7 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       — perché dipende da altri — e montare il middleware presto? Oggi non si può, e
       `adminAccessControl` ne è il caso: dichiara `weight: -5` ma carica **ultimo**
       perché ha una dipendenza.
-- [ ] **Il `weight` ordina solo dentro il gruppo SENZA dipendenze.**
+- [ ] **(D3) Il `weight` ordina solo dentro il gruppo SENZA dipendenze.**
       *(Emerso in v3.10.0.)* `initialize()` ordina per weight i plugin senza
       dipendenze, poi accoda gli altri man mano che le dipendenze si risolvono:
       `adminAccessControl` (weight **-5**, il più basso dopo `simpleI18n`) carica
@@ -384,14 +440,14 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       aggiunto, e la trappola non resta in piedi per il prossimo registro che qualcuno
       aggiungesse prima del load. Riprodotto prima di correggere (`incomplete` +
       `middleware: 1`), 3 test di regressione, tutti uccisi rimettendo il push prima.
-- [ ] **`CLAUDE.md` promette un gate fatale su `access` che non ho trovato nel codice.**
+- [ ] **(D2) `CLAUDE.md` promette un gate fatale su `access` che non ho trovato nel codice.**
       *(Emerso in v3.10.0.)* La documentazione dice « campo `access` obbligatorio su
       ogni rotta: assenza = **errore fatale al boot** ». In `loadRoutes` il codice reale
       è `const handler = oRoute.access ? wrap(...) : oRoute.handler` — nessun throw:
       una rotta senza `access` viene **registrata senza controllo di autenticazione**.
       Il validatore ora lo segnala (v3.10.0), ma è un test, non un gate di boot. O si
       implementa il gate, o si corregge la documentazione.
-- [ ] **`roleManagement`: il floor `roleId >= 100` non è applicato a delete/update.**
+- [ ] **(D5) `roleManagement`: il floor `roleId >= 100` non è applicato a delete/update.**
       *(Emerso in v3.10.0.)* Il modulo conosce il confine dei ruoli custom solo in
       `getNextCustomRoleId`. `deleteCustomRole`/`updateCustomRole` si affidano al solo
       flag `isHardcoded`, che vive in un file vivo, git-ignored e modificabile a mano.
@@ -413,7 +469,7 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
 - [x] ~~**`updateCustomRole` non impone la lunghezza minima 3**~~ — **corretto in
       v3.12.0**, stesso controllo e stesso messaggio di `createCustomRole`. Verificato
       con una mutazione controllata del file vivo e ripristino con sha256.
-- [ ] **`BackupManager.getBackupPath()`/`getPluginBackupPath()` restano ancorate a
+- [ ] **(D6) `BackupManager.getBackupPath()`/`getPluginBackupPath()` restano ancorate a
       `__dirname`** mentre `backupRoot` è ora iniettabile. *(Emerso in v3.10.0.)* Con
       il seam in uso i due disaccordano, e il valore finisce **persistito** in
       `initState.json5` come `backupPath` — cioè il puntatore che un restore
