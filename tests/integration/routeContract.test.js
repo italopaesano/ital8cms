@@ -185,7 +185,11 @@ describe('contratto delle rotte — il validatore non deve divergere da loadRout
     // approvava rotte destinate a sparire. Qui i verbi vengono LETTI dal sorgente
     // di pluginSys, così le due liste non possono più separarsi in silenzio.
     const source = fs.readFileSync(PLUGIN_SYS_SOURCE, 'utf8');
-    const block = source.match(/const ROUTER_METHOD_DISPATCH = \{([\s\S]*?)\n\};/);
+    // La regex tollera sia il letterale sia l'`Object.assign(Object.create(null), {…})`
+    // adottato in v3.10.0 — la tabella non deve ereditare da Object.prototype,
+    // altrimenti un `method: 'toString'` la attraversa come valore truthy. Ciò che
+    // questo test deve leggere sono le CHIAVI, non la forma della dichiarazione.
+    const block = source.match(/const ROUTER_METHOD_DISPATCH = (?:Object\.assign\(Object\.create\(null\), )?\{([\s\S]*?)\n\}\)?;/);
 
     // Se la mappa venisse rinominata o rimossa, questo test deve fallire invece
     // di confrontare una lista vuota con una lista vuota e dichiararsi contento.

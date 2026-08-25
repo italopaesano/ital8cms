@@ -345,6 +345,69 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       con uno slash esce prima e il messaggio dedicato — il più utile dei due — non viene
       mai mostrato. Non è un buco (il rifiuto avviene comunque), è un ramo morto.
       Fissato da un test che diventa rosso se il ramo torna raggiungibile.
+- [ ] **Il legame « ordine di caricamento = ordine dei middleware » va documentato in `CLAUDE.md`.**
+      *(Emerso in v3.10.0 dalla review della branch.)* `index.js` monta i middleware
+      dei plugin nell'ordine dell'array restituito da `getMiddlewaresToLoad()`, che è
+      l'ordine di caricamento. Nessun documento lo dice, ed è per questo che cambiare
+      l'ordinamento in v3.0.0 ha spostato i middleware senza che nessuno se ne
+      accorgesse. La sezione *Ordine di caricamento* di `CLAUDE.md` parla solo di
+      « i plugin caricati dopo dispongono di quelli caricati prima »: va aggiunto che
+      il `weight` governa **anche** l'annidamento dei middleware, e che chi osserva
+      il traffico deve avere un peso minore di chi lo interrompe.
+      **Domanda aperta più grande:** vale la pena separare i due concetti con una
+      chiave dedicata (un `middlewareWeight`), così che un plugin possa caricare tardi
+      — perché dipende da altri — e montare il middleware presto? Oggi non si può, e
+      `adminAccessControl` ne è il caso: dichiara `weight: -5` ma carica **ultimo**
+      perché ha una dipendenza.
+- [ ] **Il `weight` ordina solo dentro il gruppo SENZA dipendenze.**
+      *(Emerso in v3.10.0.)* `initialize()` ordina per weight i plugin senza
+      dipendenze, poi accoda gli altri man mano che le dipendenze si risolvono:
+      `adminAccessControl` (weight **-5**, il più basso dopo `simpleI18n`) carica
+      **22° su 22**, dopo ogni plugin dependency-free. Il commento introdotto in
+      v3.0.0 dice « il weight ora ordina davvero »: vale per 12 plugin su 22, e va
+      corretto o l'implementazione va completata. La forma giusta è **un unico
+      ordinamento topologico** su tutti gli installabili con il weight come
+      tie-break, non un sort applicato a un sottoinsieme che la coda poi scavalca.
+- [ ] **🔴 Il middleware di un plugin FALLITO resta montato.** *(Preesistente, non
+      introdotto da questa branch — verificato su `main`.)* In `pluginSys`, il push in
+      `#pluginsMiddlewares` avviene **prima** di `await plugin.loadPlugin()`, che può
+      lanciare. Il `catch` del boot graceful ripulisce `#activePlugins`, `#routes`,
+      `#hooksPage` e `#objectToShareToWebPages` — **ma non `#pluginsMiddlewares`**.
+      Un plugin marcato `incomplete` nel box `[PLUGINS]` monta quindi comunque il suo
+      middleware: se quel middleware rilegge lo stato che ha fatto fallire il load
+      (es. `urlRedirect` con `strictValidation: true` e una regola non valida),
+      rilancia **a ogni richiesta**. Correzione: spostare il push dopo `loadPlugin()`,
+      oppure rimuovere l'elemento nel catch.
+- [ ] **`CLAUDE.md` promette un gate fatale su `access` che non ho trovato nel codice.**
+      *(Emerso in v3.10.0.)* La documentazione dice « campo `access` obbligatorio su
+      ogni rotta: assenza = **errore fatale al boot** ». In `loadRoutes` il codice reale
+      è `const handler = oRoute.access ? wrap(...) : oRoute.handler` — nessun throw:
+      una rotta senza `access` viene **registrata senza controllo di autenticazione**.
+      Il validatore ora lo segnala (v3.10.0), ma è un test, non un gate di boot. O si
+      implementa il gate, o si corregge la documentazione.
+- [ ] **`roleManagement`: il floor `roleId >= 100` non è applicato a delete/update.**
+      *(Emerso in v3.10.0.)* Il modulo conosce il confine dei ruoli custom solo in
+      `getNextCustomRoleId`. `deleteCustomRole`/`updateCustomRole` si affidano al solo
+      flag `isHardcoded`, che vive in un file vivo, git-ignored e modificabile a mano.
+      Oggi regge — verificato che root non sia cancellabile — ma è un solo strato.
+- [ ] **`roleManagement`: scritture non atomiche e senza rollback.**
+      *(Emerso in v3.10.0.)* `createCustomRole`, `updateCustomRole` e `deleteCustomRole`
+      usano `fs.writeFileSync` + `JSON.stringify` — contro la regola 1 di `CLAUDE.md`
+      (scritture atomiche temp+rename) e distruggendo i commenti dei `.json5`. Peggio:
+      `deleteCustomRole` scrive `userRole.json5` e poi `userAccount.json5` **in
+      sequenza**; se il secondo fallisce, il ruolo è già sparito ma ogni utente porta
+      ancora il `roleId` orfano, e nessun percorso di codice ripara quello stato.
+- [ ] **`updateCustomRole` non impone la lunghezza minima 3** che `createCustomRole`
+      impone. *(Emerso in v3.10.0.)* Si può creare `moderator` e poi rinominarlo in
+      `a`: i due ingressi allo stesso campo non concordano su cosa sia un nome valido.
+- [ ] **`BackupManager.getBackupPath()`/`getPluginBackupPath()` restano ancorate a
+      `__dirname`** mentre `backupRoot` è ora iniettabile. *(Emerso in v3.10.0.)* Con
+      il seam in uso i due disaccordano, e il valore finisce **persistito** in
+      `initState.json5` come `backupPath` — cioè il puntatore che un restore
+      risolverebbe. In v3.7.0 l'ho documentato come scelta (il loro riferimento *è* la
+      radice del progetto), ma l'argomento non copre il caso in cui quel path venga
+      salvato e riletto: va deciso se ancorarle a `backupRoot` o se `init.js` debba
+      salvare un assoluto.
 - [ ] **`themeSys.validateTheme()` NON accetta una root parametrica**, a differenza
       della sua gemella `validateThemeContent(themeName, themesRootPath)` (v2.92.0).
       *(Emerso in v3.5.0 scrivendo la suite di integrità dei temi.)* Cabla

@@ -19,13 +19,21 @@ const demoNotice = require('./demoNotice');
 // la catena non gestiva, e il validatore approvava rotte destinate a sparire.
 // Un test in tests/integration/routeContract.test.js legge queste chiavi e le
 // confronta con quelle dell'helper.
-const ROUTER_METHOD_DISPATCH = {
+//
+// `Object.create(null)` e NON un letterale: una tabella di lookup non deve
+// ereditare da Object.prototype. Con un letterale, `TABELLA['toString']` (o
+// 'constructor', 'valueOf', '__proto__') restituisce la funzione ereditata —
+// TRUTHY — quindi un `method: 'toString'`, refuso o plugin di terze parti,
+// scavalcava il ramo di warning qui sotto ed entrava in `router[<funzione>]`,
+// che è `undefined`: un TypeError durante il boot, sincrono, dentro index.js.
+// La vecchia catena if/else quei valori li saltava e basta.
+const ROUTER_METHOD_DISPATCH = Object.assign(Object.create(null), {
   GET:  'get',
   POST: 'post',
   PUT:  'put',
   DEL:  'del',
   ALL:  'all',
-};
+});
 
 class pluginSys{
 

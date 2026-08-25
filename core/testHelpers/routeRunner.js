@@ -37,12 +37,37 @@ function validateRoute(route) {
       issues.push(`Missing required field: ${field}`);
     }
   }
-  if (route.method && !VALID_METHODS.includes(route.method)) {
+
+  // I tre controlli qui sotto guardano il VALORE, non la sola presenza della
+  // chiave. Prima erano dietro un guard di verità (`if (route.handler && …)`,
+  // `if (route.access)`), e `field in route` è vero anche per un valore
+  // `undefined`: il validatore approvava quindi — con zero problemi segnalati —
+  // esattamente le tre forme che loadRoutes rifiuta o degrada.
+  //
+  // Misurato prima della correzione: `{handler: undefined}` → nessun problema,
+  // poi `runRoute` esplode con «route.handler is not a function» mentre
+  // loadRoutes salta la rotta con un warning; `{access: null}` → nessun problema,
+  // e loadRoutes REGISTRA la rotta **senza** il wrap di autenticazione
+  // (`oRoute.access ? wrap(...) : oRoute.handler`), cioè aperta; `{method: ''}` →
+  // nessun problema, e la rotta non viene registrata.
+  //
+  // È la stessa divergenza validatore/dispatcher che il commento su VALID_METHODS
+  // dichiarava chiusa in v2.99.0: lo era per i VERBI, non per la struttura.
+  if ('method' in route && !VALID_METHODS.includes(route.method)) {
     issues.push(`Invalid method '${route.method}' (must be uppercase: ${VALID_METHODS.join(', ')})`);
   }
-  if (route.access) {
-    if (typeof route.access !== 'object') {
-      issues.push('access must be an object');
+  if ('handler' in route && typeof route.handler !== 'function') {
+    issues.push('handler must be a function');
+  }
+  if ('path' in route && (typeof route.path !== 'string' || route.path === '')) {
+    issues.push('path must be a non-empty string');
+  }
+  if ('access' in route) {
+    if (!route.access || typeof route.access !== 'object' || Array.isArray(route.access)) {
+      // Un access falsy non è « assente e basta »: loadRoutes registra comunque
+      // la rotta, saltando il controllo di autenticazione. È il caso peggiore
+      // dei tre, perché la rotta funziona — senza protezione.
+      issues.push('access must be an object (a falsy access registers the route UNPROTECTED)');
     } else {
       if (!('requiresAuth' in route.access)) {
         issues.push('access.requiresAuth must be defined');
@@ -55,9 +80,6 @@ function validateRoute(route) {
         issues.push('access.allowedRoles must be an array');
       }
     }
-  }
-  if (route.handler && typeof route.handler !== 'function') {
-    issues.push('handler must be a function');
   }
   return issues;
 }
