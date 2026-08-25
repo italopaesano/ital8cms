@@ -368,16 +368,16 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       corretto o l'implementazione va completata. La forma giusta è **un unico
       ordinamento topologico** su tutti gli installabili con il weight come
       tie-break, non un sort applicato a un sottoinsieme che la coda poi scavalca.
-- [ ] **🔴 Il middleware di un plugin FALLITO resta montato.** *(Preesistente, non
-      introdotto da questa branch — verificato su `main`.)* In `pluginSys`, il push in
-      `#pluginsMiddlewares` avviene **prima** di `await plugin.loadPlugin()`, che può
-      lanciare. Il `catch` del boot graceful ripulisce `#activePlugins`, `#routes`,
-      `#hooksPage` e `#objectToShareToWebPages` — **ma non `#pluginsMiddlewares`**.
-      Un plugin marcato `incomplete` nel box `[PLUGINS]` monta quindi comunque il suo
-      middleware: se quel middleware rilegge lo stato che ha fatto fallire il load
-      (es. `urlRedirect` con `strictValidation: true` e una regola non valida),
-      rilancia **a ogni richiesta**. Correzione: spostare il push dopo `loadPlugin()`,
-      oppure rimuovere l'elemento nel catch.
+- [x] ~~**🔴 Il middleware di un plugin FALLITO resta montato.**~~
+      **Corretto in v3.11.0.** Il push è stato spostato **dopo** `loadPlugin()`.
+      Perché proprio questo registro era sfuggito al catch: rotte, hook e oggetti
+      condivisi sono Map/oggetti indicizzati **per nome** — tre `delete(pluginName)` —
+      mentre i middleware sono un **array posizionale senza chiave**, che la pulizia
+      non sapeva raggiungere. Spostare il push toglie l'asimmetria alla radice invece
+      di aggiungere una rimozione: non c'è nulla da ripulire se non è mai stato
+      aggiunto, e la trappola non resta in piedi per il prossimo registro che qualcuno
+      aggiungesse prima del load. Riprodotto prima di correggere (`incomplete` +
+      `middleware: 1`), 3 test di regressione, tutti uccisi rimettendo il push prima.
 - [ ] **`CLAUDE.md` promette un gate fatale su `access` che non ho trovato nel codice.**
       *(Emerso in v3.10.0.)* La documentazione dice « campo `access` obbligatorio su
       ogni rotta: assenza = **errore fatale al boot** ». In `loadRoutes` il codice reale

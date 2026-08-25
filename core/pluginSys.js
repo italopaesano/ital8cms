@@ -242,15 +242,35 @@ class pluginSys{
           this.#objectToShareToWebPages[pluginName] = plugin.getObjectToShareToWebPages();
         }
 
-        //aggiungo i midlware di ogli plugin
+        // loadPlugin: può aver bisogno di librerie di altri plugin (già caricati
+        // prima per via dell'ordine di dipendenza). Può lanciare → catch graceful.
+        await plugin.loadPlugin(this, pathPluginFolder);
+
+        // I MIDDLEWARE SI REGISTRANO SOLO A CARICAMENTO RIUSCITO, e questa riga sta
+        // DOPO `loadPlugin()` per una ragione precisa.
+        //
+        // Tutto il resto che `caricatePlugin` registra prima del load — rotte, hook,
+        // oggetti condivisi — vive in una Map o in un oggetto indicizzati per NOME
+        // del plugin, quindi il catch qui sotto li rimuove con un `delete(pluginName)`.
+        // I middleware no: sono un ARRAY posizionale, senza chiave. Rimuoverli
+        // richiederebbe di ricordarsi l'indice, e infatti erano gli unici che il
+        // catch non ripuliva.
+        //
+        // MISURATO prima della correzione: un plugin il cui `loadPlugin()` lancia
+        // veniva marcato `incomplete` e tolto da tutto il resto, ma
+        // `getMiddlewaresToLoad()` restituiva ancora il suo middleware — che
+        // `index.js` montava con `app.use()`. Se quel middleware rilegge lo stato che
+        // ha fatto fallire il load (per esempio `urlRedirect` con
+        // `strictValidation: true` e una regola non valida), rilancia a OGNI
+        // richiesta: 500 sull'intero sito da un plugin che il box `[PLUGINS]` dichiara
+        // saltato.
+        //
+        // Spostare il push invece di aggiungere una rimozione toglie l'asimmetria
+        // alla radice: non c'è nulla da ripulire se non è mai stato aggiunto.
         if(plugin.getMiddlewareToAdd){
           // IMPORTANTE: usa .bind(plugin) per preservare il contesto 'this' quando la funzione viene chiamata in index.js
           this.#pluginsMiddlewares.push( plugin.getMiddlewareToAdd.bind(plugin) );// sarà un array di funzioni che generano un array
         }
-
-        // loadPlugin: può aver bisogno di librerie di altri plugin (già caricati
-        // prima per via dell'ordine di dipendenza). Può lanciare → catch graceful.
-        await plugin.loadPlugin(this, pathPluginFolder);
 
         // Persisti isInstalled:1 nel vivo SOLO se non era già 1 (transizione a
         // installed). setJson5Key AGGIUNGE il campo se manca (clone fresco),

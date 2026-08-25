@@ -342,6 +342,82 @@ const recordingMain = (marker, logFile) =>
   `  getRouteArray() { return []; },\n` +
   `};\n`;
 
+describe('initialize() — un plugin FALLITO non lascia niente dietro di sé', () => {
+  // Il catch del boot graceful rimuove il plugin fallito da rotte, hook e oggetti
+  // condivisi: sono Map e oggetti indicizzati per NOME, quindi bastano tre
+  // `delete(pluginName)`. I middleware invece sono un ARRAY posizionale, senza
+  // chiave — e per questo erano gli unici che il catch non ripuliva.
+  //
+  // MISURATO prima della correzione: stato `incomplete` (giusto) ma
+  // `getMiddlewaresToLoad()` restituiva ancora 1 elemento, che `index.js` montava
+  // con `app.use()`. Se quel middleware rilegge lo stato che ha fatto fallire il
+  // load, rilancia a ogni richiesta: 500 sull'intero sito da un plugin che il box
+  // `[PLUGINS]` dichiara saltato.
+
+  /** Un plugin che registra un middleware e poi fallisce nel loadPlugin. */
+  const MAIN_CHE_FALLISCE = `module.exports = {
+  getRouteArray() { return []; },
+  getMiddlewareToAdd() { return [ async (ctx, next) => { await next(); } ]; },
+  getHooksPage() { return new Map(); },
+  getObjectToShareToWebPages() { return { qualcosa: 1 }; },
+  async loadPlugin() { throw new Error('config non valida — FATAL'); },
+};
+`;
+
+  test('il suo middleware NON resta in coda', async () => {
+    const root = makePluginsRoot();
+    writePlugin(root, 'rotto', { isInstalled: 1, main: MAIN_CHE_FALLISCE });
+
+    const sys = new pluginSys({ essentialPlugins: [] }, root);
+    await sys.initialize();
+
+    expect({
+      stato: sys.getPluginState('rotto').state,
+      middlewareInCoda: sys.getMiddlewaresToLoad().length,
+    }).toEqual({ stato: 'incomplete', middlewareInCoda: 0 });
+  });
+
+  test('non resta niente NEMMENO negli altri quattro registri', async () => {
+    // Il middleware era il buco noto; questo test copre l'invariante intera, così
+    // un registro aggiunto in futuro e dimenticato nel catch si fa notare qui.
+    const root = makePluginsRoot();
+    writePlugin(root, 'rotto', { isInstalled: 1, main: MAIN_CHE_FALLISCE });
+
+    const sys = new pluginSys({ essentialPlugins: [] }, root);
+    await sys.initialize();
+
+    expect(sys.getActivePluginNames()).not.toContain('rotto');
+    expect(sys.getMiddlewaresToLoad()).toEqual([]);
+    expect(sys.getSharedObject('rotto')).toBeNull();
+  });
+
+  test('un plugin SANO accanto a uno rotto conserva il proprio middleware', async () => {
+    // Il rovescio: la pulizia non deve buttare via anche ciò che funziona.
+    // Senza questo, una correzione che svuota l'array passerebbe il test qui sopra.
+    const root = makePluginsRoot();
+    writePlugin(root, 'rotto', { isInstalled: 1, weight: 1, main: MAIN_CHE_FALLISCE });
+    writePlugin(root, 'sano', {
+      isInstalled: 1,
+      weight: 2,
+      main: `module.exports = {
+  async loadPlugin() {},
+  getRouteArray() { return []; },
+  getMiddlewareToAdd() { return [ async (ctx, next) => { await next(); } ]; },
+};
+`,
+    });
+
+    const sys = new pluginSys({ essentialPlugins: [] }, root);
+    await sys.initialize();
+
+    expect({
+      rotto: sys.getPluginState('rotto').state,
+      sano: sys.getPluginState('sano').state,
+      middlewareInCoda: sys.getMiddlewaresToLoad().length,
+    }).toEqual({ rotto: 'incomplete', sano: 'installed', middlewareInCoda: 1 });
+  });
+});
+
 describe('pluginSys.initialize() — gli stati dei plugin', () => {
   test('plugin attivo e completo → installed e caricato', async () => {
     const root = makePluginsRoot();
