@@ -101,6 +101,46 @@ module.exports = {
     ...inactivePlugins.map((dir) => `!${dir.replace(/^\//, '')}**`)
   ],
 
+  // Soglia minima di copertura — un CRICCHETTO, non un obiettivo.
+  //
+  // ⚠ VALORI PROVVISORI, E OGGI INERTI. La CI esegue `npm test`, che lancia jest
+  // SENZA `--coverage`: questa soglia scatta solo su `npm run test:coverage`, cioè
+  // quando qualcuno la chiede apposta. Perché presidi davvero una pull request
+  // serve un passo di CI che raccolga la copertura — decisione ancora aperta,
+  // insieme ai valori qui sotto (vedi TODO.md → *Decisioni in attesa del maintainer*).
+  //
+  // Serve a impedire che la copertura SCENDA, non a spingerla a salire: il valore
+  // è un punto sotto quello raggiunto (52,12 / 51,10 / 47,39 / 52,87 al momento in
+  // cui è stata introdotta), non una meta da rincorrere. Un numero alto ottenuto
+  // per inseguire la soglia non è una buona notizia — è una domanda diversa.
+  //
+  // PERCHÉ UN PUNTO DI MARGINE. Un refactor onesto può ridurre numeratore e
+  // denominatore insieme e far oscillare la percentuale di qualche decimo senza
+  // che si sia perso nulla. Con la soglia esattamente al valore attuale, la CI
+  // diventerebbe rossa per un motivo che non è una regressione di copertura, e
+  // una soglia che si impara a scavalcare smette di essere un presidio.
+  //
+  // PERCHÉ QUATTRO METRICHE E NON SOLO `lines`. `functions` è la più bassa (47,4%)
+  // ed è quella che distingue un modulo **eseguito** da uno soltanto **caricato**:
+  // un `require()` in cima a un test alza le righe senza esercitare niente.
+  //
+  // QUANDO ALZARLA. Dopo un intervento che aggiunge copertura in modo stabile,
+  // riportando ciascun valore a un punto sotto il nuovo raggiunto. Mai in un commit
+  // che non aggiunge test.
+  //
+  // ⚠ Il denominatore dipende da `collectCoverageFrom`, che ESCLUDE i plugin
+  // disattivati: attivare o disattivare un plugin sposta numeratore e denominatore
+  // insieme e può far variare le percentuali senza che sia cambiato un test.
+  // Se succede, il valore va rivisto — non è la soglia ad avere torto.
+  coverageThreshold: {
+    global: {
+      statements: 51,
+      branches: 50,
+      functions: 46,
+      lines: 51
+    }
+  },
+
   // Reporter
   verbose: true,
 

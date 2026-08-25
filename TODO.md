@@ -96,10 +96,29 @@ senza rimando sono descritte per intero qui perché non hanno una voce propria a
       che non sembra HTML. La correzione è sostituire `<` con `\u003c` nel JSON
       serializzato. Caratterizzata in
       `plugins/seo/tests/unit/robotsAndStructuredData.test.js`.
-- [ ] **Il valore della soglia minima di coverage in CI** → §5.
-      Da fissare quando gli step del piano di rientro saranno completati: la proposta è
-      **appena sotto** il valore raggiunto, come cricchetto anti-regressione e non come
-      obiettivo da rincorrere.
+- [ ] **Il valore della soglia minima di coverage, e se applicarla in CI** → §5.
+      *(Step 8, portato al punto di decisione in v3.8.0.)* Una `coverageThreshold` è
+      **già nel config** a `51 / 50 / 46 / 51` (statements/branches/functions/lines),
+      un punto sotto il raggiunto — ma è **inerte**: la CI esegue `npm test`, che lancia
+      jest **senza** `--coverage`, quindi la soglia scatta solo su
+      `npm run test:coverage`. Due cose da decidere, indipendenti fra loro:
+      **(a) I valori.** Misurato: statements **52,12%**, branches **51,10%**, functions
+      **47,39%**, lines **52,87%** — identici **alla riga** su Node 22 e 24 (10058/19297),
+      quindi una soglia non può flakare per versione. Un punto di margine assorbe il
+      movimento del *denominatore*: è già successo due volte — allargando
+      `collectCoverageFrom` (v2.95.0) il numero è passato da ~50% a 47,33% **con gli
+      stessi test**, e attivare/disattivare un plugin sposta numeratore e denominatore
+      insieme. Con margine zero la CI diventa rossa per un motivo che non è una
+      regressione. In alternativa: margine zero (52/51/47/52) come cricchetto massimo,
+      o una sola `lines: 50` — più semplice, ma cieca sulle **funzioni**, che sono la
+      metrica più bassa e l'unica che distingue un modulo *eseguito* da uno solo
+      *caricato* (`userManagement.js` era a « 17,9% righe · **0%** funzioni »).
+      **(b) L'enforcement.** Job `coverage` dedicato su Node 22 (come l'`audit` che già
+      esiste: gira una volta, non rallenta la matrice, e il check fallito si chiama
+      « coverage » invece di « test »); oppure `--coverage` dentro lo step di test della
+      matrice (nessun job in più, ma stesso numero calcolato due volte e un fallimento
+      di soglia confuso con un test rotto); oppure niente CI, e la soglia resta un
+      presidio per chi la lancia a mano. Costo di una run con coverage: **~90-120 s**.
 - [ ] **I temi entrano nello scope della coverage?** → §5.
       Oggi `collectCoverageFrom` copre `core`, `plugins`, `scripts`, `bin` e `index.js`,
       ma **non** `themes/`. Il JS dei temi è poco (6 file, 395 righe) e tutto lato
