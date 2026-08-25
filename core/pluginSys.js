@@ -423,6 +423,21 @@ class pluginSys{
     // l'ordine di readdirSync non è garantito alfabetico su tutti i filesystem,
     // quindi «a parità di weight, alfabetico» sarebbe stato vero solo per caso.
     // Confronto diretto e non localeCompare, per non dipendere dal locale.
+    //
+    // ⚠ FIN DOVE ARRIVA QUESTO ORDINAMENTO, detto con precisione. Ordina i soli
+    // plugin SENZA dipendenze: quelli con `dependency` finiscono in
+    // #pluginsToActive e vengono accodati man mano che le dipendenze si risolvono,
+    // quindi il loro peso non li anticipa. `adminAccessControl` dichiara -5 — il più
+    // basso dopo simpleI18n — e carica ULTIMO, perché dipende da adminUsers.
+    // La forma completa sarebbe un unico ordinamento topologico su tutti gli
+    // installabili con il weight come tie-break; è aperta in TODO.md.
+    //
+    // ⚠ QUESTO ORDINE È ANCHE QUELLO DEI MIDDLEWARE: index.js scorre l'array di
+    // getMiddlewaresToLoad() e fa app.use() di ciascuno. Cambiare l'ordinamento
+    // qui sposta l'annidamento Koa dei middleware dei plugin — è già successo in
+    // v3.0.0, e ha tolto i redirect dalle analytics finché analytics non è stato
+    // portato a -8 (v3.10.0). L'invariante «chi osserva sta prima di chi
+    // interrompe» è presidiata da tests/integration/middlewareOrder.test.js.
     const installable = candidates
       .filter(c => resolvedStates.get(c.name).state === 'installed')
       .sort((a, b) => (a.weight - b.weight) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));

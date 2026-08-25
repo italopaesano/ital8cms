@@ -187,6 +187,59 @@ describe('deleteCustomRole() — i ruoli di sistema non si cancellano', () => {
   });
 });
 
+describe('le due regole sul nome valgono su ENTRAMBI gli ingressi', () => {
+  // `createCustomRole` e `updateCustomRole` scrivono lo stesso campo, quindi
+  // devono concordare su cosa sia valido. La lunghezza minima mancava su update:
+  // creare un ruolo "ab" era rifiutato, ma crearne uno "moderator" e poi
+  // rinominarlo in "a" passava. Allineato in v3.12.0.
+  //
+  // Il ramo di validazione del nome in `updateCustomRole` è raggiungibile SOLO per
+  // un ruolo custom esistente — i controlli su esistenza e `isHardcoded` vengono
+  // prima — e questa installazione non ne ha. Qui si verifica quindi ciò che è
+  // verificabile senza scrivere: che le due funzioni applichino la stessa soglia e
+  // diano lo STESSO messaggio.
+  test.each([['una lettera', 'a'], ['due lettere', 'ab']])(
+    'createCustomRole rifiuta un nome di %s',
+    (_caso, nome) => {
+      expect(createCustomRole(nome, 'descrizione').error).toMatch(/almeno 3 caratteri/);
+    },
+  );
+
+  test('le due funzioni usano la STESSA soglia e lo STESSO messaggio', () => {
+    // Letto dal sorgente: il ramo di update non è eseguibile qui, ma la sua
+    // divergenza dal ramo di create è esattamente il difetto da presidiare.
+    const sorgente = fs.readFileSync(
+      path.join(__dirname, '../../roleManagement.js'), 'utf8');
+
+    const occorrenze = sorgente.match(/name\.length < 3/g) || [];
+    const messaggi = sorgente.match(/deve essere di almeno 3 caratteri/g) || [];
+
+    // Due funzioni, due controlli, due messaggi identici.
+    expect({ controlli: occorrenze.length, messaggi: messaggi.length })
+      .toEqual({ controlli: 2, messaggi: 2 });
+  });
+});
+
+describe('le scritture sono ATOMICHE (temp + rename)', () => {
+  test('nessuna scrittura diretta sui due file di dati', () => {
+    // Regola 1 di CLAUDE.md. Qui si riscrivono ruoli e account dell'intera
+    // installazione: un writeFileSync interrotto a metà lascia un file TRONCATO, e
+    // al boot successivo `loadJson5` non lo legge più — nessun utente, nessun
+    // ruolo, pannello admin irraggiungibile.
+    const sorgente = fs.readFileSync(
+      path.join(__dirname, '../../roleManagement.js'), 'utf8');
+
+    // L'unico writeFileSync ammesso è quello DENTRO l'helper atomico, che scrive
+    // sul file temporaneo.
+    const scrittureDirette = [...sorgente.matchAll(/fs\.writeFileSync\(([^,]+),/g)]
+      .map((m) => m[1].trim())
+      .filter((target) => !target.includes('tempPath'));
+
+    expect(scrittureDirette).toEqual([]);
+    expect(sorgente).toMatch(/fs\.renameSync\(tempPath/);
+  });
+});
+
 describe('lettura dei ruoli', () => {
   test('getHardcodedRoles() restituisce i quattro ruoli di sistema', () => {
     const roles = getHardcodedRoles();

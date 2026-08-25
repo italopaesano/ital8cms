@@ -345,7 +345,12 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       con uno slash esce prima e il messaggio dedicato — il più utile dei due — non viene
       mai mostrato. Non è un buco (il rifiuto avviene comunque), è un ramo morto.
       Fissato da un test che diventa rosso se il ramo torna raggiungibile.
-- [ ] **Il legame « ordine di caricamento = ordine dei middleware » va documentato in `CLAUDE.md`.**
+- [x] ~~**Il legame « ordine di caricamento = ordine dei middleware » va documentato in `CLAUDE.md`.**~~
+      **Fatto in v3.12.0**, in `CLAUDE.md` → *Ordine di caricamento* e nel commento di
+      `pluginSys`, con la regola pratica enunciata: chi osserva il traffico deve avere
+      un peso minore di chi lo interrompe. **Resta aperta** la domanda più grande, qui
+      sotto: se separare i due concetti con una chiave dedicata.
+      Testo originale:
       *(Emerso in v3.10.0 dalla review della branch.)* `index.js` monta i middleware
       dei plugin nell'ordine dell'array restituito da `getMiddlewaresToLoad()`, che è
       l'ordine di caricamento. Nessun documento lo dice, ed è per questo che cambiare
@@ -364,8 +369,9 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       dipendenze, poi accoda gli altri man mano che le dipendenze si risolvono:
       `adminAccessControl` (weight **-5**, il più basso dopo `simpleI18n`) carica
       **22° su 22**, dopo ogni plugin dependency-free. Il commento introdotto in
-      v3.0.0 dice « il weight ora ordina davvero »: vale per 12 plugin su 22, e va
-      corretto o l'implementazione va completata. La forma giusta è **un unico
+      v3.0.0 diceva « il weight ora ordina davvero »: **il commento è stato corretto in
+      v3.12.0** e ora dichiara fin dove arriva. **Resta da decidere** se completare
+      l'implementazione. La forma giusta è **un unico
       ordinamento topologico** su tutti gli installabili con il weight come
       tie-break, non un sort applicato a un sottoinsieme che la coda poi scavalca.
 - [x] ~~**🔴 Il middleware di un plugin FALLITO resta montato.**~~
@@ -390,16 +396,23 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       `getNextCustomRoleId`. `deleteCustomRole`/`updateCustomRole` si affidano al solo
       flag `isHardcoded`, che vive in un file vivo, git-ignored e modificabile a mano.
       Oggi regge — verificato che root non sia cancellabile — ma è un solo strato.
-- [ ] **`roleManagement`: scritture non atomiche e senza rollback.**
+- [x] ~~**`roleManagement`: scritture non atomiche**~~ — **corretto in v3.12.0** con
+      `writeJson5Atomic()` (temp + rename) su tutti e quattro i punti di scrittura.
+      **Restano aperti due pezzi della stessa voce:** (a) la riscrittura passa comunque
+      da `JSON.stringify`, quindi i **commenti si perdono** (`userRole.json5` ne ha 15
+      su 41 righe) — preservarli richiede una modifica chiave-per-chiave che per
+      l'aggiunta e la rimozione di un ruolo gli helper attuali non supportano; (b) il
+      **rollback fra i due file** di `deleteCustomRole` non esiste ancora. Testo
+      originale:
       *(Emerso in v3.10.0.)* `createCustomRole`, `updateCustomRole` e `deleteCustomRole`
       usano `fs.writeFileSync` + `JSON.stringify` — contro la regola 1 di `CLAUDE.md`
       (scritture atomiche temp+rename) e distruggendo i commenti dei `.json5`. Peggio:
       `deleteCustomRole` scrive `userRole.json5` e poi `userAccount.json5` **in
       sequenza**; se il secondo fallisce, il ruolo è già sparito ma ogni utente porta
       ancora il `roleId` orfano, e nessun percorso di codice ripara quello stato.
-- [ ] **`updateCustomRole` non impone la lunghezza minima 3** che `createCustomRole`
-      impone. *(Emerso in v3.10.0.)* Si può creare `moderator` e poi rinominarlo in
-      `a`: i due ingressi allo stesso campo non concordano su cosa sia un nome valido.
+- [x] ~~**`updateCustomRole` non impone la lunghezza minima 3**~~ — **corretto in
+      v3.12.0**, stesso controllo e stesso messaggio di `createCustomRole`. Verificato
+      con una mutazione controllata del file vivo e ripristino con sha256.
 - [ ] **`BackupManager.getBackupPath()`/`getPluginBackupPath()` restano ancorate a
       `__dirname`** mentre `backupRoot` è ora iniettabile. *(Emerso in v3.10.0.)* Con
       il seam in uso i due disaccordano, e il valore finisce **persistito** in

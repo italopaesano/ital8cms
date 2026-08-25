@@ -64,7 +64,7 @@ function createCustomRole(name, description) {
     };
 
     // Salva il file aggiornato
-    fs.writeFileSync(rolesFilePath, JSON.stringify(roleData, null, 2));
+    writeJson5Atomic(rolesFilePath, roleData);
 
     return { success: `Ruolo "${name}" creato con successo con ID ${newRoleId}.`, roleId: newRoleId };
 }
@@ -93,6 +93,32 @@ function isRoleIdAbsent(roleId) {
 }
 
 /**
+ * Scrive un file JSON5 in modo ATOMICO: file temporaneo + rename.
+ *
+ * PERCHÉ. La regola 1 di CLAUDE.md lo impone, e la ragione è concreta: qui si
+ * riscrivono `userRole.json5` e `userAccount.json5`, cioè i ruoli e gli account
+ * dell'intera installazione. Un `writeFileSync` diretto che si interrompe a metà
+ * — disco pieno, processo ucciso — lascia un file TRONCATO, e al boot successivo
+ * `loadJson5` non riesce più a leggerlo: nessun utente, nessun ruolo, pannello
+ * admin irraggiungibile. Il `rename` invece è atomico sullo stesso filesystem: o
+ * il file nuovo è completo, o resta quello vecchio.
+ *
+ * NOTA su ciò che questo NON risolve. La riscrittura passa comunque da
+ * `JSON.stringify`, quindi i commenti del file vivo si perdono (userRole.json5 ne
+ * ha 15 su 41 righe). Preservarli richiederebbe una modifica chiave-per-chiave,
+ * che per l'AGGIUNTA e la RIMOZIONE di un ruolo non è supportata dagli helper
+ * attuali — è un intervento a sé, aperto in TODO.md.
+ *
+ * @param {string} filePath - Path assoluto del file
+ * @param {object} data - Oggetto da serializzare
+ */
+function writeJson5Atomic(filePath, data) {
+    const tempPath = filePath + '.tmp';
+    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf8');
+    fs.renameSync(tempPath, filePath);
+}
+
+/**
  * Aggiorna un ruolo custom esistente
  * @param {number} roleId - ID del ruolo da modificare
  * @param {string} name - Nuovo nome
@@ -118,10 +144,20 @@ function updateCustomRole(roleId, name, description) {
         return { error: 'Errore: Non puoi modificare un ruolo di sistema (hardcoded).', errorType: 'roleId' };
     }
 
-    // Validazione nome
+    // Validazione nome — le STESSE due regole di createCustomRole.
+    //
+    // La lunghezza minima mancava, quindi i due ingressi allo stesso campo non
+    // concordavano su cosa fosse un nome valido: creare un ruolo "ab" era
+    // rifiutato, ma crearne uno "moderator" e poi rinominarlo in "a" passava.
+    // Il messaggio è identico a quello di createCustomRole di proposito: due
+    // testi diversi per la stessa regola fanno cercare una differenza che non c'è.
     const validNameRegex = /^[A-Za-z0-9_\-]+$/;
     if (!validNameRegex.test(name)) {
         return { error: 'Errore: Il nome del ruolo può contenere solo lettere, numeri, underscore e trattini.', errorType: 'name' };
+    }
+
+    if (name.length < 3) {
+        return { error: 'Errore: Il nome del ruolo deve essere di almeno 3 caratteri.', errorType: 'name' };
     }
 
     // Controlla se il nome esiste già in altri ruoli
@@ -137,7 +173,7 @@ function updateCustomRole(roleId, name, description) {
     roleData.roles[roleId].description = description;
 
     // Salva il file aggiornato
-    fs.writeFileSync(rolesFilePath, JSON.stringify(roleData, null, 2));
+    writeJson5Atomic(rolesFilePath, roleData);
 
     return { success: `Ruolo "${name}" aggiornato con successo.` };
 }
@@ -171,7 +207,7 @@ function deleteCustomRole(roleId) {
 
     // Rimuovi il ruolo dal file
     delete roleData.roles[roleId];
-    fs.writeFileSync(rolesFilePath, JSON.stringify(roleData, null, 2));
+    writeJson5Atomic(rolesFilePath, roleData);
 
     // Rimuovi il roleId da tutti gli utenti che lo hanno
     const userData = loadJson5(usersFilePath);
@@ -188,7 +224,7 @@ function deleteCustomRole(roleId) {
 
     // Salva il file utenti aggiornato
     if (affectedUsers.length > 0) {
-        fs.writeFileSync(usersFilePath, JSON.stringify(userData, null, 2));
+        writeJson5Atomic(usersFilePath, userData);
     }
 
     return {

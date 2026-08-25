@@ -270,6 +270,24 @@ Il merge additivo sa solo **aggiungere** chiavi. Quando un `.default` evolve con
 
 1. **weight** crescente → 2. **risoluzione dipendenze** (prima le dipendenze) → 3. **alfabetico** (a parità di weight). I plugin caricati dopo dispongono di quelli caricati prima.
 
+> ⚠️ **L'ordine di caricamento è ANCHE l'ordine dei middleware.** `index.js` scorre
+> l'array di `getMiddlewaresToLoad()` — costruito durante il caricamento — e fa
+> `app.use()` di ciascuno: il `weight` governa quindi **anche l'annidamento Koa**.
+> Conseguenza pratica: **chi OSSERVA il traffico deve avere un peso MINORE di chi lo
+> INTERROMPE.** Un middleware che risponde e non chiama `next()` (un redirect, un
+> blocco) nasconde la richiesta a tutto ciò che sta più a valle.
+>
+> È già costato un difetto: `analytics` osservava i redirect solo perché l'ordine
+> alfabetico lo metteva prima di `urlRedirect`; passando all'ordine per `weight`
+> (v3.0.0) il 100% dei 301/302 è sparito dalle statistiche, finché `analytics` non è
+> stato portato a `-8` (v3.10.0). L'invariante è presidiata da
+> `tests/integration/middlewareOrder.test.js`.
+>
+> **Limite noto:** il `weight` ordina solo dentro il gruppo dei plugin **senza
+> dipendenze**; quelli con `dependency` vengono accodati man mano che le dipendenze
+> si risolvono, quindi il loro peso non li anticipa (`adminAccessControl` dichiara
+> `-5` e carica ultimo). Aperto in `TODO.md`.
+
 ### Stati dei plugin (boot graceful)
 
 `pluginSys.initialize()` calcola a ogni boot lo **stato** di ciascun plugin (`pluginStateResolver` — modulo puro: `checkNpmDeps` + `resolvePluginStates` con cascata a punto fisso e rilevamento cicli). Vengono caricati **solo** i plugin `installed`. Getter: `getPluginState(name)` / `getPluginStates()`.
