@@ -113,6 +113,14 @@ senza rimando sono descritte per intero qui perché non hanno una voce propria a
       o una sola `lines: 50` — più semplice, ma cieca sulle **funzioni**, che sono la
       metrica più bassa e l'unica che distingue un modulo *eseguito* da uno solo
       *caricato* (`userManagement.js` era a « 17,9% righe · **0%** funzioni »).
+      **⚠ Misurare sempre OFFLINE.** I 5 test di `themesInstall.realRepo` si saltano da
+      soli quando GitHub non è raggiungibile, quindi con la rete la copertura è più
+      ALTA. I valori sopra vengono da una run offline (il caso peggiore); fissarli da
+      una run *connessa* armerebbe una trappola — una CI senza rete andrebbe rossa
+      senza che nessuno abbia peggiorato niente. Verificati anche gli altri tre vettori
+      di flakiness: Node 22 vs 24 identici alla riga, `maxWorkers: 1` (nessun
+      parallelismo), e 0 divergenze fra config vivo e `.default` su 34 pacchetti
+      (quindi il denominatore è lo stesso in un clone fresco e in locale).
       **(b) L'enforcement.** Job `coverage` dedicato su Node 22 (come l'`audit` che già
       esiste: gira una volta, non rallenta la matrice, e il check fallito si chiama
       « coverage » invece di « test »); oppure `--coverage` dentro lo step di test della

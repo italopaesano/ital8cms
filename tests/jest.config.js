@@ -128,6 +128,13 @@ module.exports = {
   // riportando ciascun valore a un punto sotto il nuovo raggiunto. Mai in un commit
   // che non aggiunge test.
   //
+  // ⚠ MISURARE SEMPRE **OFFLINE**. I 5 test di `themesInstall.realRepo` si saltano
+  // da soli quando GitHub non è raggiungibile (`NETWORK_OK ? test : test.skip`),
+  // quindi la copertura è più ALTA su una macchina connessa. I valori qui sotto
+  // vengono da una run offline, cioè dal caso peggiore: alzarli partendo da una run
+  // *con* rete armerebbe una trappola: una CI che perde la connessione andrebbe
+  // rossa senza che nessuno abbia peggiorato niente.
+  //
   // ⚠ Il denominatore dipende da `collectCoverageFrom`, che ESCLUDE i plugin
   // disattivati: attivare o disattivare un plugin sposta numeratore e denominatore
   // insieme e può far variare le percentuali senza che sia cambiato un test.
