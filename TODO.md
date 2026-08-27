@@ -144,14 +144,16 @@ già corretto; queste sei restano perché ognuna **cambia un comportamento oggi 
 o una convenzione dichiarata. Ordinate per costo di non decidere, con la trattazione
 completa in §5 accanto alla misura che le ha fatte emergere.
 
-- [ ] **(D1) `ConfigWizard.saveConfig()` distrugge i commenti di `ital8Config.json5`** → §5.
-      Misurato sul file vero: **230 righe con commento → 1**, 340 righe → 115. È
-      l'anti-pattern che `CLAUDE.md` vieta esplicitamente e che `sessionKeyManager` già
-      evita usando `editJson5`. Le uscite: **riscrivere `saveConfig()` chiave per chiave**
-      con `editJson5`/`setJson5Key` (il file vivo conserva la sua documentazione, ma il
-      wizard deve saper *aggiungere* chiavi assenti, non solo aggiornarle), oppure
-      **accettare la perdita** dichiarando che dopo il wizard il config vivo è un file
-      generato e la documentazione sta solo nel `.default`.
+- [x] ~~**(D1) `ConfigWizard.saveConfig()` distrugge i commenti di `ital8Config.json5`** → §5.~~
+      **Deciso dal maintainer e applicato in v3.13.0:** `saveConfig()` riscritta chiave per
+      chiave con `setJson5Key`. Misurato sullo stesso file reale: **340 righe → 340, 230
+      commenti → 230**, con i valori richiesti effettivamente cambiati. Il confronto
+      (`collectChangedPaths`, gemello di `collectMissingPaths`) è ricorsivo, quindi cambiare
+      una foglia annidata non appiattisce il blocco che la contiene. Tre conseguenze volute
+      sul contratto: nulla di cambiato → nulla di scritto; le chiavi assenti dall'oggetto
+      non vengono rimosse ma segnalate; il file deve esistere (la sua assenza è il gate
+      `[INIT]`, non un caso da gestire qui). Rete di regressione: 4 test sui commenti — uno
+      verifica il **testo**, non il conteggio — e la riserializzazione rimessa ne fa cadere 6.
 - [ ] **(D2) Il gate fatale su `access` che la documentazione promette e il codice non ha** → §5.
       `CLAUDE.md` dice « assenza di `access` = errore fatale al boot »; `loadRoutes` fa
       `oRoute.access ? wrap(...) : oRoute.handler` — la rotta viene **registrata senza
@@ -353,7 +355,9 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       ancorati a `__dirname` di proposito — il loro punto di riferimento *è* la
       radice del progetto, e spostarlo renderebbe il path relativo a se stesso,
       perdendo l'informazione che quei metodi esistono per dare.
-- [ ] **(D1) 🐞 `ConfigWizard.saveConfig()` distrugge i commenti di `ital8Config.json5`.**
+- [x] ~~**(D1) 🐞 `ConfigWizard.saveConfig()` distrugge i commenti di `ital8Config.json5`.**~~
+      **CORRETTO in v3.13.0** — scrittura chiave per chiave con `setJson5Key`; 340 righe e
+      230 commenti conservati sul file reale. Cronaca del difetto, per memoria:
       *(Trovato in v3.7.0 coprendo il wizard.)* Fa `JSON.stringify` dell'oggetto
       intero, cioè **riserializza** invece di modificare le chiavi cambiate — esattamente
       l'anti-pattern che questo stesso `CLAUDE.md` vieta (*« preferisci
@@ -366,9 +370,9 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       la perde tutta, in silenzio. **I valori sopravvivono** — il sito continua a
       funzionare identico — quindi non è un guasto, è una perdita di documentazione:
       per questo può passare inosservata a lungo.
-      Correzione: sostituire la riscrittura con un `editJson5` per ogni chiave cambiata.
-      Cambia il comportamento del wizard, quindi è una decisione. Caratterizzato in
-      `tests/unit/scripts/configWizard.test.js`.
+      Corretto sostituendo la riscrittura con un `setJson5Key` per ogni chiave cambiata.
+      Il blocco « ⚠ DIFETTO NOTO » di `tests/unit/scripts/configWizard.test.js` è diventato
+      la rete di regressione che impedisce il ritorno.
 - [ ] **Il backup globale è piatto: due file omonimi si sovrascrivono.**
       *(Emerso in v3.7.0.)* `BackupManager.backupGlobalFile()` usa il solo `basename`,
       quindi `a/config.json5` e `b/config.json5` finiscono sullo stesso path dentro lo

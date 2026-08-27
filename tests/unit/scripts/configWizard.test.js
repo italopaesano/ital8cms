@@ -65,6 +65,13 @@ const CONFIG_CON_COMMENTI = `// This file follows the JSON5 standard
   "adminActiveTheme": "defaultAdminTheme",
   // Una chiave che il wizard NON chiede mai
   "wwwPath": "/www",
+  // Un sotto-oggetto commentato: serve a verificare che cambiare UNA foglia non
+  // appiattisca il blocco che la contiene.
+  "https": {
+    // false = il sito parte solo in HTTP
+    "enabled": false,
+    "port": 443,   // porta TLS
+  },
 }
 `;
 
@@ -127,24 +134,71 @@ describe('readCurrentConfig()', () => {
   });
 });
 
-describe('saveConfig()', () => {
-  test('scrive un JSON5 rileggibile con i valori indicati', () => {
-    wizard.saveConfig({ apiPrefix: 'v2', httpPort: 8080 });
+describe('saveConfig() — scrittura chirurgica, chiave per chiave', () => {
+  // Da v3.13.0 `saveConfig()` non riserializza più il file: confronta l'oggetto
+  // con quello su disco e scrive con `setJson5Key` le sole chiavi cambiate.
+  // Il contratto che ne discende è verificato qui sotto; la conservazione dei
+  // commenti — il motivo della riscrittura — ha un blocco dedicato in fondo.
 
-    expect(loadJson5(configPath)).toEqual({ apiPrefix: 'v2', httpPort: 8080 });
+  test('i valori indicati finiscono sul disco', async () => {
+    await wizard.saveConfig({ ...wizard.readCurrentConfig(), apiPrefix: 'v2', httpPort: 8080 });
+
+    expect(loadJson5(configPath)).toMatchObject({ apiPrefix: 'v2', httpPort: 8080 });
     expect(logger.success).toHaveBeenCalled();
   });
 
-  test('la prima riga resta l\'intestazione JSON5 del progetto', () => {
-    wizard.saveConfig({ apiPrefix: 'api' });
-    expect(fs.readFileSync(configPath, 'utf8').split('\n')[0]).toMatch(/^\/\/ This file follows/);
+  test('scrive SOLO le chiavi cambiate, e le nomina', async () => {
+    // Il valore di ritorno non è cosmetico: è l'unico modo, per chi chiama, di
+    // sapere cosa è stato davvero toccato (prima si riscriveva tutto comunque).
+    const esito = await wizard.saveConfig({ ...wizard.readCurrentConfig(), httpPort: 8080 });
+
+    expect(esito.written).toEqual(['httpPort']);
   });
 
-  test('scrittura impossibile → rilancia dopo averlo detto', () => {
-    const orfano = new ConfigWizard(logger, path.join(tmpDir, 'assente', 'x.json5'));
+  test('niente di cambiato → il file non viene toccato affatto', async () => {
+    const primaDigest = digest(configPath);
 
-    expect(() => orfano.saveConfig({})).toThrow();
+    const esito = await wizard.saveConfig(wizard.readCurrentConfig());
+
+    expect(esito.written).toEqual([]);
+    expect(digest(configPath)).toBe(primaDigest);
+    expect(logger.info).toHaveBeenCalled();
+  });
+
+  test('le chiavi assenti dall\'oggetto NON vengono rimosse, e vengono segnalate', async () => {
+    // Scrivere chiave per chiave significa « questi sono i valori che imposto »,
+    // non « questo è l'intero file »: un oggetto parziale non deve potare il
+    // resto della configurazione. Ma nemmeno passare in silenzio.
+    await wizard.saveConfig({ apiPrefix: 'v2' });
+
+    const salvato = loadJson5(configPath);
+    expect(salvato.apiPrefix).toBe('v2');
+    expect(salvato.wwwPath).toBe('/www');
+    expect(salvato.httpPort).toBe(3000);
+    expect(logger.warning).toHaveBeenCalledWith(expect.stringContaining('wwwPath'));
+  });
+
+  test('una foglia annidata si scrive senza appiattire il blocco che la contiene', async () => {
+    const corrente = wizard.readCurrentConfig();
+
+    const esito = await wizard.saveConfig({ ...corrente, https: { ...corrente.https, port: 8443 } });
+
+    expect(esito.written).toEqual(['https.port']);
+    expect(loadJson5(configPath).https).toEqual({ enabled: false, port: 8443 });
+    // Il commento INTERNO al blocco è ancora lì: è la prova che non è stato
+    // riscritto in blocco con un JSON.stringify del sotto-oggetto.
+    expect(fs.readFileSync(configPath, 'utf8')).toContain('// false = il sito parte solo in HTTP');
+  });
+
+  test('file inesistente → rifiuta dopo averlo detto, senza crearlo', async () => {
+    // Prima il file veniva creato da zero. Ora no: un `ital8Config.json5` assente
+    // è il gate [INIT] del boot, non qualcosa che il wizard inventa.
+    const assente = path.join(tmpDir, 'assente.json5');
+    const orfano = new ConfigWizard(logger, assente);
+
+    await expect(orfano.saveConfig({ apiPrefix: 'api' })).rejects.toThrow();
     expect(logger.error).toHaveBeenCalled();
+    expect(fs.existsSync(assente)).toBe(false);
   });
 });
 
@@ -259,41 +313,74 @@ describe('run() — il percorso completo', () => {
   });
 });
 
-describe('⚠ DIFETTO NOTO — saveConfig() distrugge i commenti del config', () => {
-  // CARATTERIZZAZIONE, non contratto voluto.
+describe('i commenti del config sopravvivono al salvataggio', () => {
+  // ERA IL DIFETTO D1, corretto in v3.13.0.
   //
-  // `saveConfig()` fa `JSON.stringify(config, null, 2)` sull'oggetto intero: il
-  // file viene RISERIALIZZATO, quindi ogni commento sparisce. È esattamente
-  // l'anti-pattern che CLAUDE.md vieta (*« Negli script preferisci
-  // setJson5Key/editJson5 a un saveJson5 dell'oggetto intero: quest'ultimo perde
-  // i commenti del config vivo »*), e che il codice più recente rispetta —
-  // `sessionKeyManager` usa `editJson5` proprio per questo.
+  // `saveConfig()` faceva `JSON.stringify(config, null, 2)` sull'oggetto intero:
+  // il file veniva RISERIALIZZATO, quindi ogni commento spariva. Misurato sul
+  // `ital8Config.json5` reale del progetto: **230 righe con commento su 340
+  // diventavano 1**, e il file passava a 115 righe. Chi eseguiva il wizard e
+  // confermava una qualsiasi modifica perdeva tutta la documentazione inline
+  // della configurazione centrale, in silenzio.
   //
-  // MISURATO sul `ital8Config.json5` reale del progetto: **230 righe commentate
-  // su 340 diventano 1**, e il file passa da 340 a 115 righe. Quel file è la
-  // documentazione inline della configurazione centrale: chi esegue il wizard e
-  // conferma una qualsiasi modifica la perde tutta, in silenzio.
+  // Era l'anti-pattern che CLAUDE.md vieta esplicitamente e che il resto del
+  // codice recente già rispettava (`sessionKeyManager` usa `editJson5`).
   //
-  // Non corretto qui: la correzione è sostituire la riscrittura con un
-  // `editJson5` per ogni chiave cambiata, il che cambia il comportamento del
-  // wizard. È una decisione, aperta in TODO.md §5. Quando verrà fatta, questi
-  // test falliranno e vanno riscritti come contratto.
+  // Questi test sono la rete che impedisce il ritorno: fanno passare la
+  // riscrittura chirurgica e falliscono su qualunque riserializzazione.
 
-  test('un salvataggio azzera i commenti del file', () => {
-    const commenti = (t) => t.split('\n').filter((r) => r.includes('//')).length;
-    expect(commenti(fs.readFileSync(configPath, 'utf8'))).toBeGreaterThan(1);
+  const contaCommenti = (t) => t.split('\n').filter((r) => r.includes('//')).length;
 
-    wizard.saveConfig(wizard.readCurrentConfig());
+  test('salvare NON riduce i commenti del file', async () => {
+    const prima = contaCommenti(fs.readFileSync(configPath, 'utf8'));
+    expect(prima).toBeGreaterThan(1);
 
-    // Resta solo l'intestazione riscritta a mano dal codice.
-    expect(commenti(fs.readFileSync(configPath, 'utf8'))).toBe(1);
+    await wizard.saveConfig({ ...wizard.readCurrentConfig(), httpPort: 8080 });
+
+    expect(contaCommenti(fs.readFileSync(configPath, 'utf8'))).toBe(prima);
   });
 
-  test('i VALORI sopravvivono: si perde la documentazione, non la configurazione', () => {
-    // La distinzione conta per giudicare la gravità: il sito continua a
-    // funzionare identico, ma il file diventa illeggibile per chi lo apre dopo.
+  test('i commenti restano quelli, non solo altrettanti', async () => {
+    // Contarli non basta: una riserializzazione che aggiungesse un'intestazione
+    // per chiave passerebbe il test precedente. Qui si verifica il testo.
+    await wizard.saveConfig({ ...wizard.readCurrentConfig(), apiPrefix: 'v2' });
+
+    const testo = fs.readFileSync(configPath, 'utf8');
+    expect(testo).toContain('// Prefisso delle rotte API');
+    expect(testo).toContain('// pannello admin');
+    expect(testo).toContain('// Una chiave che il wizard NON chiede mai');
+    expect(testo).toContain('// porta TLS');
+  });
+
+  test('la riga della chiave cambiata conserva il proprio commento a fine riga', async () => {
+    // Il caso più insidioso: `editJson5` sostituisce il VALORE, e il commento che
+    // segue sulla stessa riga deve restare al suo posto.
+    await wizard.saveConfig({ ...wizard.readCurrentConfig(), adminPrefix: 'pannello' });
+
+    expect(fs.readFileSync(configPath, 'utf8'))
+      .toMatch(/"adminPrefix":\s*"pannello",\s*\/\/ pannello admin/);
+  });
+
+  test('anche il percorso completo di run() li conserva', async () => {
+    // La regressione da impedire è quella dell'utente vero, che non chiama
+    // `saveConfig()` ma esegue il wizard.
+    const prima = contaCommenti(fs.readFileSync(configPath, 'utf8'));
+    inquirer.prompt
+      .mockResolvedValueOnce({ shouldModify: true })
+      .mockResolvedValueOnce({ fieldsToModify: ['httpPort'] })
+      .mockResolvedValueOnce({ httpPort: 8080 })
+      .mockResolvedValueOnce({ confirm: true });
+
+    await wizard.run();
+
+    expect(loadJson5(configPath).httpPort).toBe(8080);
+    expect(contaCommenti(fs.readFileSync(configPath, 'utf8'))).toBe(prima);
+  });
+
+  test('i VALORI restano corretti: si conserva la documentazione senza perdere la configurazione', async () => {
     const prima = wizard.readCurrentConfig();
-    wizard.saveConfig(prima);
+
+    await wizard.saveConfig(prima);
 
     expect(loadJson5(configPath)).toEqual(prima);
   });
