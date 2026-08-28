@@ -70,7 +70,7 @@ const config = loadJson5('./ital8Config.json5');
 Lavorando su questo codebase come AI assistant — regole operative (le più critiche per prime):
 
 1. **`loadJson5()` SEMPRE** per leggere i file `.json5` (mai `require()`/`JSON.parse()`); scritture **atomiche** (temp + `rename`).
-2. **Campo `access` obbligatorio** su ogni rotta di plugin (`getRouteArray`): assenza = **errore fatale al boot**. Metodo rotta in **MAIUSCOLO**, chiave `handler` (non `func`).
+2. **Campo `access` obbligatorio** su ogni rotta di plugin (`getRouteArray`): assenza (o valore non-oggetto) = **rotta NON registrata + warning al boot** — non esiste, quindi non è aperta; il boot prosegue. Metodo rotta in **MAIUSCOLO**, chiave `handler` (non `func`).
 3. **Naming — OBBLIGATORIO:** prima di introdurre QUALSIASI nuovo nome (variabili, funzioni, file, directory, plugin, classi, costanti) proponi **almeno 2-3 alternative** significative (4-5+ se complesso) con breve spiegazione, e **attendi l'approvazione** del maintainer. Requisito **critico**, mai saltare.
 4. **`koa-classic-server` (dipendenza del team):** se trovi un bug **non aggirarlo** localmente — segnalalo al maintainer e aggiorna alla versione fixata (vedi *Dipendenze Mantenute dal Team*).
 5. **Sicurezza:** password con bcrypt; valida l'input; output **escapato** (XSS); redirect **validati** (open-redirect); il CSRF è gestito dal plugin `csrfProtection`.
@@ -321,15 +321,15 @@ Pattern: `/${apiPrefix}/${pluginName}/${path}` (default `/api/{pluginName}/...`)
 | `handler` | sì | `async (ctx) => { ... }` |
 | `access` | sì | controllo accessi (vedi Sistema di controllo accessi) |
 
-> **WARNING — tre modi di sbagliare una rotta, con tre esiti diversi.** Da **v3.0.0** i primi due non sono più silenziosi: `loadRoutes()` non registra la rotta ed emette un warning che nomina plugin, metodo e path.
+> **WARNING — tre modi di sbagliare una rotta.** Avevano tre esiti diversi, tutti silenziosi; ora hanno la **stessa risposta**: `loadRoutes()` non registra la rotta ed emette un warning che nomina plugin, metodo e path. I primi due da **v3.0.0**, il terzo da **v3.14.0**. Il boot **prosegue** in tutti e tre i casi — una rotta malformata in un plugin non deve togliere il sito a chi l'ha installato (stessa logica del boot graceful dei plugin).
 >
-> | Errore | Cosa succedeva prima | Da v3.0.0 |
+> | Errore | Cosa succedeva prima | Oggi |
 > |---|---|---|
 > | `method` minuscolo (`'get'`) o verbo non supportato (`'PATCH'`, `'DELETE'`) | rotta non registrata, **nessun avviso**; la richiesta cade sul static server (HTML invece di JSON) | non registrata + **warning al boot** |
 > | `func` invece di `handler` | rotta **REGISTRATA** con un handler che avvolge `undefined` → **500** alla prima richiesta (`TypeError: originalHandler is not a function`) — non un 404, come questa nota affermava erroneamente | non registrata + **warning al boot** che nomina la causa |
-> | `access` mancante | **errore fatale al boot** (vedi Sistema di controllo accessi) | invariato |
+> | `access` mancante, `null`, o non-oggetto | rotta **REGISTRATA senza il wrap di autenticazione** — funzionante e **aperta**. `CLAUDE.md` prometteva un « errore fatale al boot » che nel codice non è mai esistito | non registrata + **warning al boot** che nomina la conseguenza (da v3.14.0) |
 >
-> Lo sweep `tests/integration/routeContract.test.js` verifica tutte e tre le forme su ogni plugin attivo. Lo sweep `tests/integration/routeContract.test.js` verifica tutte e tre le forme su ogni plugin attivo.
+> Lo sweep `tests/integration/routeContract.test.js` verifica tutte e tre le forme su ogni plugin attivo, con lo **stesso predicato** che usa `loadRoutes` (`pluginSys.declaresAccess`): validatore e dispatcher erano già tornati a divergere una volta proprio su `access`.
 
 ```javascript
 getRouteArray() {
@@ -695,7 +695,7 @@ Situata in `/plugins/adminUsers/userAccount.json5`
 
 ### Sistema di controllo accessi (adminAccessControl)
 
-Controllo accessi basato su pattern (esatto / wildcard `*`,`**` / `regex:`) con **priorità automatica** (il più specifico vince), regole **hardcoded immutabili** + **custom** in `accessControl.json5`, e campo **`access` obbligatorio** su ogni rotta di plugin (la sua assenza causa errore fatale al boot). Admin UI con editor JSON5 e validazione (sintassi, ruoli, conflitti, immutabilità hardcoded). → [`plugins/adminAccessControl/README.it.md`](./plugins/adminAccessControl/README.it.md) · [`EXPLAIN.it.md`](./plugins/adminAccessControl/EXPLAIN.it.md)
+Controllo accessi basato su pattern (esatto / wildcard `*`,`**` / `regex:`) con **priorità automatica** (il più specifico vince), regole **hardcoded immutabili** + **custom** in `accessControl.json5`, e campo **`access` obbligatorio** su ogni rotta di plugin (una rotta che non lo dichiara non viene registrata: vedi la tabella in *Rotte API dei plugin*). Admin UI con editor JSON5 e validazione (sintassi, ruoli, conflitti, immutabilità hardcoded). → [`plugins/adminAccessControl/README.it.md`](./plugins/adminAccessControl/README.it.md) · [`EXPLAIN.it.md`](./plugins/adminAccessControl/EXPLAIN.it.md)
 
 ### SEO · Rate Limiter · Admin Rate Limiter
 

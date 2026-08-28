@@ -35,6 +35,53 @@ const ROUTER_METHOD_DISPATCH = Object.assign(Object.create(null), {
   ALL:  'all',
 });
 
+/**
+ * Vero se la rotta dichiara il proprio `access` in una forma che il route-wrap
+ * sa usare: un oggetto non nullo e non un array.
+ *
+ * PERCHÉ ESISTE. `CLAUDE.md` ha sempre detto che `access` è obbligatorio su ogni
+ * rotta di plugin, e che la sua assenza è un « errore fatale al boot ». Nel codice
+ * quel gate non c'è mai stato: `loadRoutes` faceva
+ * `oRoute.access ? wrap(...) : oRoute.handler`, quindi una rotta senza `access`
+ * veniva REGISTRATA **senza il controllo di autenticazione** — funzionante e
+ * aperta. Il documento prometteva una protezione che il codice non dava.
+ *
+ * PERCHÉ SALTARE E NON MORIRE. Il fatale punirebbe l'intera installazione per la
+ * svista di un plugin, il contrario del boot graceful che il progetto ha scelto
+ * per i plugin (un `loadPlugin` che lancia → `incomplete` + box, non `exit`). Qui
+ * la stessa logica: la rotta non viene registrata — quindi **non esiste, quindi
+ * non è aperta** — il sito parte, e il box al boot dice quale plugin e quale path.
+ * È anche la forma che le altre due rotte malformate già avevano da v3.0.0
+ * (`method` minuscolo, `func` invece di `handler`): tre difetti della stessa
+ * famiglia, ora con la stessa risposta.
+ *
+ * DOVE STA LA SOGLIA, E PERCHÉ NON PIÙ IN ALTO. Si rifiuta esattamente ciò che
+ * renderebbe la rotta registrata-e-non-protetta, e nient'altro:
+ *
+ *   • `access` assente, `null`, `undefined`, `false`, una stringa, un array
+ *     → SALTATA. Sono i valori per cui il ternario cadeva sul ramo senza wrap.
+ *   • `access: {}` → PASSA, e vale « pubblica » (il wrap legge
+ *     `if (access.requiresAuth)`, che è falsy). Dichiarare `{}` è povero, ma è
+ *     comunque una dichiarazione, e il route-wrap la applica.
+ *   • `{ requiresAuth: true }` senza `allowedRoles` → PASSA. Rifiutarla farebbe
+ *     **sparire una rotta protetta** invece di lasciarla funzionare, e il wrap la
+ *     gestisce già correttamente (`if (access.allowedRoles && length > 0)`).
+ *
+ * Le forme più severe — `requiresAuth` booleano obbligatorio, `allowedRoles`
+ * array — restano competenza di `validateRoute()` in `core/testHelpers/`, che è
+ * un contratto di qualità sulle rotte del progetto, non un cancello di runtime.
+ * Il predicato è condiviso fra i due proprio perché la parte in comune non torni
+ * a divergere: era il difetto 🟡 di v3.10.0, in cui il validatore approvava
+ * `{access: null}` mentre `loadRoutes` registrava la rotta senza protezione.
+ *
+ * @param {object} route - Oggetto rotta come restituito da `getRouteArray()`.
+ * @returns {boolean}
+ */
+function declaresAccess(route) {
+  const access = route && route.access;
+  return access !== null && typeof access === 'object' && !Array.isArray(access);
+}
+
 class pluginSys{
 
   #pluginsMiddlewares = Array();//Variabile privata che contiene l'elenco dei midlware dei plugin da aggiungere
@@ -820,8 +867,24 @@ class pluginSys{
           continue;
         }
 
-        // Se la route dichiara un campo access, wrappa l'handler con un controllo di autenticazione e ruoli
-        const handler = oRoute.access ? this.#wrapHandlerWithAccessCheck(oRoute.handler, oRoute.access) : oRoute.handler;
+        // ACCESS MANCANTE O INUTILIZZABILE. Terza forma di rotta malformata, e la
+        // più grave: qui la rotta non spariva né dava 500 — veniva REGISTRATA e
+        // funzionava, ma senza il wrap di autenticazione. `CLAUDE.md` dichiarava
+        // questo caso « errore fatale al boot »; il gate non è mai esistito.
+        // Saltarla, invece di morire, allinea la risposta al boot graceful dei
+        // plugin: una svista di terze parti non deve fermare l'installazione.
+        if (!declaresAccess(oRoute)) {
+          logger.warn('pluginSys',
+            `Rotta IGNORATA — plugin "${key}", ${oRoute.method} ${path}: campo "access" mancante o non utilizzabile\n` +
+            `   Ricevuto: ${JSON.stringify(oRoute.access) ?? String(oRoute.access)}. Serve un oggetto, es. { requiresAuth: false, allowedRoles: [] }.\n` +
+            `   Senza questo controllo la rotta verrebbe registrata SENZA verifica di autenticazione.`);
+          continue;
+        }
+
+        // `access` è dichiarato: l'handler passa sempre dal wrap di controllo
+        // accessi e ruoli. Non c'è più un ramo « senza wrap » — era quello che
+        // rendeva aperta una rotta a cui il campo mancava.
+        const handler = this.#wrapHandlerWithAccessCheck(oRoute.handler, oRoute.access);
 
         // Indice dei path riservati, per il reserved gate.
         //
@@ -832,7 +895,7 @@ class pluginSys{
         // (verificato: GET su una rotta POST-only dava 405 mentre tutto il resto
         // dava 404). Il gate, che sta prima del router, chiude questi path per
         // path e non per metodo.
-        if (oRoute.access && (oRoute.access.requiresAuth || oRoute.access.isAuthEntryPoint)) {
+        if (oRoute.access.requiresAuth || oRoute.access.isAuthEntryPoint) {
           this.#reservedRoutePaths.add(path);
         }
 
@@ -1087,3 +1150,9 @@ class pluginSys{
 }
 
 module.exports = pluginSys ;
+
+// Esposto perché `core/testHelpers/routeRunner.js` usi LO STESSO predicato del
+// runtime invece di riscriverlo: la parte in comune fra validatore e dispatcher
+// è già tornata a divergere una volta (difetto 🟡 di v3.10.0). Stessa forma di
+// `editJson5._internals`.
+module.exports.declaresAccess = declaresAccess;

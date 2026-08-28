@@ -66,7 +66,7 @@ Il core passa a `validateRequest(ctx, access)` il blocco `access` della rotta �
 | `isAuthEntryPoint: true` | `authEntryPoint` | varco pubblico per necessità (login, logout) |
 | nessuno dei due | `public` | rotta dichiaratamente pubblica |
 
-`access` è **obbligatorio** su ogni rotta (la sua assenza è un errore fatale al boot), quindi il perimetro non è un elenco da mantenere: è la stessa fonte da cui `reservedGate` deriva il proprio, e una rotta nuova eredita il comportamento senza dichiarare nulla.
+`access` è **obbligatorio** su ogni rotta, e una rotta che non lo dichiara non viene nemmeno registrata (salta + warning al boot, v3.14.0), quindi il perimetro non è un elenco da mantenere: è la stessa fonte da cui `reservedGate` deriva il proprio, e una rotta nuova eredita il comportamento senza dichiarare nulla.
 
 **Policy attuale: tutti e tre gli ambiti sono protetti allo stesso modo.** Nel codice reale non costa nulla — sulle 56 rotte mutanti del progetto 51 sono `authenticated`, 2 sono i varchi login/logout e le uniche 3 `public` stanno in `exampleComplete` — e copre il caso futuro: un plugin nuovo con un form pubblico è protetto senza che il suo autore debba saperlo, invece di nascere scoperto in silenzio.
 

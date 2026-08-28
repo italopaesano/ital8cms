@@ -6,6 +6,12 @@
  * (method uppercase, path, access, handler).
  */
 
+// Il predicato del RUNTIME, non una seconda copia: `loadRoutes` salta e segnala
+// esattamente le rotte per cui questo è falso (da v3.14.0). Importarlo invece di
+// riscriverlo è la lezione del difetto 🟡 di v3.10.0, in cui validatore e
+// dispatcher erano tornati a divergere proprio su `access`.
+const { declaresAccess } = require('../pluginSys');
+
 const REQUIRED_FIELDS = ['method', 'path', 'access', 'handler'];
 
 // ESATTAMENTE i metodi che pluginSys.loadRoutes() sa smistare al router.
@@ -63,11 +69,12 @@ function validateRoute(route) {
     issues.push('path must be a non-empty string');
   }
   if ('access' in route) {
-    if (!route.access || typeof route.access !== 'object' || Array.isArray(route.access)) {
-      // Un access falsy non è « assente e basta »: loadRoutes registra comunque
-      // la rotta, saltando il controllo di autenticazione. È il caso peggiore
-      // dei tre, perché la rotta funziona — senza protezione.
-      issues.push('access must be an object (a falsy access registers the route UNPROTECTED)');
+    if (!declaresAccess(route)) {
+      // Un access falsy non era « assente e basta »: fino alla v3.13.0 loadRoutes
+      // registrava comunque la rotta saltando il controllo di autenticazione —
+      // il caso peggiore dei tre, perché la rotta funzionava, senza protezione.
+      // Da v3.14.0 la salta e lo segnala, con QUESTO stesso predicato.
+      issues.push('access must be an object (loadRoutes skips the route: it is never registered)');
     } else {
       if (!('requiresAuth' in route.access)) {
         issues.push('access.requiresAuth must be defined');

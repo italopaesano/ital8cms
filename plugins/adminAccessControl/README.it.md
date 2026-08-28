@@ -70,7 +70,11 @@ Quando più pattern matchano lo stesso URL, **vince il più specifico**: `Esatto
 
 ## Campo `access` obbligatorio nelle rotte dei plugin
 
-**CRITICO:** ogni rotta di un plugin **DEVE** includere il campo `access`. La sua assenza causa un **errore fatale al boot**.
+**CRITICO:** ogni rotta di un plugin **DEVE** includere il campo `access`, e il valore dev'essere un **oggetto**.
+
+Una rotta che non lo dichiara — campo assente, `null`, una stringa, un array — **non viene registrata**: `pluginSys.loadRoutes()` la salta ed emette un warning al boot che nomina plugin, metodo e path. Il boot **prosegue**, coerentemente con il boot graceful dei plugin: la svista di un plugin non toglie il sito a chi l'ha installato. La rotta però non esiste, quindi non è nemmeno raggiungibile senza controllo di accesso.
+
+> Fino alla v3.13.0 questa documentazione parlava di « errore fatale al boot ». Quel gate non è mai esistito nel codice: la rotta veniva **registrata senza il controllo di autenticazione**, cioè funzionante e aperta. Il gate è stato implementato in v3.14.0, nella forma *salta + avvisa*.
 
 ```javascript
 getRouteArray(router, pluginSys, pathPluginFolder) {

@@ -154,16 +154,18 @@ completa in §5 accanto alla misura che le ha fatte emergere.
       non vengono rimosse ma segnalate; il file deve esistere (la sua assenza è il gate
       `[INIT]`, non un caso da gestire qui). Rete di regressione: 4 test sui commenti — uno
       verifica il **testo**, non il conteggio — e la riserializzazione rimessa ne fa cadere 6.
-- [ ] **(D2) Il gate fatale su `access` che la documentazione promette e il codice non ha** → §5.
-      `CLAUDE.md` dice « assenza di `access` = errore fatale al boot »; `loadRoutes` fa
-      `oRoute.access ? wrap(...) : oRoute.handler` — la rotta viene **registrata senza
-      controllo di autenticazione**. Nessuna rotta del progetto ne è priva (sweep di
-      `routeContract.test.js` verde su tutti i plugin attivi), quindi il rischio è per i
-      plugin di terze parti. Le uscite: **implementare il gate** (fedele al testo, ma un
-      plugin esterno con una svista impedisce il boot dell'intero sito — contrario al boot
-      graceful introdotto per i plugin), **saltare la rotta con un warning** (coerente con
-      come v3.0.0 tratta già `method` minuscolo e `func` al posto di `handler`) e allineare
-      la documentazione, oppure **correggere solo la documentazione** lasciando il codice.
+- [x] ~~**(D2) Il gate fatale su `access` che la documentazione promette e il codice non ha** → §5.~~
+      **Deciso dal maintainer e applicato in v3.14.0: salta + avvisa, non fatale.** Il fatale
+      punirebbe l'intera installazione per la svista di un plugin, il contrario del boot
+      graceful già scelto per i plugin. Ora la rotta non viene registrata — quindi non
+      esiste, quindi non è aperta — il sito parte, e il warning nomina plugin, metodo, path,
+      valore ricevuto e conseguenza evitata. **Soglia minima**, scelta fra tre: si rifiuta
+      solo ciò che renderebbe la rotta registrata-e-non-protetta (assente, `null`, stringa,
+      array); `access: {}` e `{requiresAuth: true}` senza ruoli **passano**, perché
+      rifiutarli farebbe sparire rotte che oggi funzionano. Predicato `declaresAccess`
+      **condiviso** con `validateRoute()`, così la parte in comune non torni a divergere.
+      Verificato: 135 rotte reali registrate prima e dopo, identiche; **sei punti di
+      documentazione allineati**.
 - [ ] **(D3) Un unico ordinamento topologico, invece del sort su un sottoinsieme** → §5.
       Misurato: 12 plugin senza dipendenze sono ordinati per `weight`; i 10 con
       `dependency` vengono accodati man mano che si risolvono e **scavalcano il sort** —
@@ -444,13 +446,15 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       aggiunto, e la trappola non resta in piedi per il prossimo registro che qualcuno
       aggiungesse prima del load. Riprodotto prima di correggere (`incomplete` +
       `middleware: 1`), 3 test di regressione, tutti uccisi rimettendo il push prima.
-- [ ] **(D2) `CLAUDE.md` promette un gate fatale su `access` che non ho trovato nel codice.**
-      *(Emerso in v3.10.0.)* La documentazione dice « campo `access` obbligatorio su
+- [x] ~~**(D2) `CLAUDE.md` promette un gate fatale su `access` che non ho trovato nel codice.**~~
+      **RISOLTO in v3.14.0** — gate implementato come *salta + avvisa*, e sei punti di
+      documentazione allineati. Cronaca, per memoria:
+      *(Emerso in v3.10.0.)* La documentazione diceva « campo `access` obbligatorio su
       ogni rotta: assenza = **errore fatale al boot** ». In `loadRoutes` il codice reale
-      è `const handler = oRoute.access ? wrap(...) : oRoute.handler` — nessun throw:
-      una rotta senza `access` viene **registrata senza controllo di autenticazione**.
-      Il validatore ora lo segnala (v3.10.0), ma è un test, non un gate di boot. O si
-      implementa il gate, o si corregge la documentazione.
+      era `const handler = oRoute.access ? wrap(...) : oRoute.handler` — nessun throw:
+      una rotta senza `access` veniva **registrata senza controllo di autenticazione**,
+      cioè funzionante e aperta. Il ramo « senza wrap » non esiste più: superato il gate,
+      `access` è garantito oggetto e l'handler passa **sempre** dal wrap.
 - [ ] **(D5) `roleManagement`: il floor `roleId >= 100` non è applicato a delete/update.**
       *(Emerso in v3.10.0.)* Il modulo conosce il confine dei ruoli custom solo in
       `getNextCustomRoleId`. `deleteCustomRole`/`updateCustomRole` si affidano al solo

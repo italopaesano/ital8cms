@@ -731,6 +731,149 @@ describe('pluginSys.loadRoutes() — i metodi non gestiti non spariscono più in
   });
 });
 
+describe('pluginSys.loadRoutes() — access mancante o inutilizzabile', () => {
+  // DECISIONE D2, applicata in v3.14.0.
+  //
+  // `CLAUDE.md` dichiarava da sempre che il campo `access` è obbligatorio su ogni
+  // rotta di plugin e che la sua assenza è un « errore fatale al boot ». Quel gate
+  // non è mai esistito: `loadRoutes` faceva
+  // `oRoute.access ? wrap(...) : oRoute.handler`, quindi una rotta senza `access`
+  // veniva REGISTRATA senza il wrap di autenticazione — funzionante e aperta. Il
+  // documento prometteva una protezione che il codice non dava.
+  //
+  // Il maintainer ha scelto **salta + avvisa**, non il fatale: la rotta non viene
+  // registrata (quindi non esiste, quindi non è aperta), il sito parte, e il boot
+  // dice quale plugin e quale path. Stessa forma delle altre due rotte malformate.
+  //
+  // La soglia è deliberatamente MINIMA — si rifiuta solo ciò che renderebbe la
+  // rotta registrata-e-non-protetta. Le due code qui sotto (`{}` e
+  // `{requiresAuth:true}` senza ruoli) fissano il confine dall'altro lato: sono la
+  // prova che il gate non è più severo di quanto serva.
+
+  const makeRouterMock = () => ({
+    get: jest.fn(), post: jest.fn(), put: jest.fn(), del: jest.fn(), all: jest.fn(),
+  });
+
+  /** main.js con una sola rotta, il cui `access` è il letterale passato. */
+  const mainWithAccess = (accessLiteral) =>
+    `module.exports = {\n` +
+    `  async loadPlugin() {},\n` +
+    `  getRouteArray() {\n` +
+    `    return [{ method: 'GET', path: '/prova',\n` +
+    `      ${accessLiteral}\n` +
+    `      handler: async (ctx) => { ctx.body = 'ok'; } }];\n` +
+    `  },\n};\n`;
+
+  const caricaRotte = async (nome, accessLiteral) => {
+    const root = makePluginsRoot();
+    writePlugin(root, nome, { main: mainWithAccess(accessLiteral) });
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+    const router = makeRouterMock();
+    sys.loadRoutes(router, '/api');
+    return router;
+  };
+
+  const logCatturato = () => consoleSpies.flatMap((spy) => spy.mock.calls.flat()).join(' ');
+
+  test('campo assente → NON registrata, e segnalata con plugin e path', async () => {
+    // Misurato prima della correzione: `router.get` veniva chiamato, e la rotta
+    // rispondeva senza alcuna verifica di autenticazione.
+    const router = await caricaRotte('zzSenzaAccess', '');
+
+    expect(router.get).not.toHaveBeenCalled();
+
+    const logged = logCatturato();
+    expect(logged).toMatch(/Rotta IGNORATA/);
+    expect(logged).toMatch(/zzSenzaAccess/);
+    expect(logged).toMatch(/\/api\/zzSenzaAccess\/prova/);
+    expect(logged).toMatch(/"access" mancante o non utilizzabile/);
+    // Il messaggio deve dire la conseguenza, non solo il sintomo: è ciò che
+    // distingue un warning che si legge da uno che si scorre.
+    expect(logged).toMatch(/SENZA verifica di autenticazione/);
+  });
+
+  test('`access: null` → NON registrata (era il caso peggiore: funzionava, aperta)', async () => {
+    const router = await caricaRotte('zzAccessNull', 'access: null,');
+
+    expect(router.get).not.toHaveBeenCalled();
+    expect(logCatturato()).toMatch(/"access" mancante o non utilizzabile/);
+  });
+
+  test('un array NON è una dichiarazione di access', async () => {
+    // `typeof [] === 'object'`: senza il controllo su Array.isArray un array
+    // passerebbe, e il wrap leggerebbe `requiresAuth` da un array — sempre
+    // undefined, quindi rotta pubblica per un motivo che nessuno ha scritto.
+    const router = await caricaRotte('zzAccessArray', 'access: [],');
+
+    expect(router.get).not.toHaveBeenCalled();
+    expect(logCatturato()).toMatch(/"access" mancante o non utilizzabile/);
+  });
+
+  test('una stringa NON è una dichiarazione di access', async () => {
+    const router = await caricaRotte('zzAccessStringa', "access: 'pubblica',");
+
+    expect(router.get).not.toHaveBeenCalled();
+    expect(logCatturato()).toMatch(/"access" mancante o non utilizzabile/);
+  });
+
+  test('`access: {}` PASSA e vale pubblica — il gate non è più severo del necessario', async () => {
+    // Il confine dall'altro lato. Dichiarare `{}` è povero, ma è comunque una
+    // dichiarazione, e il wrap la applica (`if (access.requiresAuth)` → falsy).
+    // Un gate che la rifiutasse farebbe sparire rotte che oggi funzionano.
+    const router = await caricaRotte('zzAccessVuoto', 'access: {},');
+
+    expect(router.get).toHaveBeenCalledTimes(1);
+    expect(router.get.mock.calls[0][0]).toBe('/api/zzAccessVuoto/prova');
+  });
+
+  test('`{ requiresAuth: true }` senza allowedRoles PASSA: una rotta protetta non deve sparire', async () => {
+    // Rifiutarla sarebbe il rimedio peggiore del male: il wrap gestisce già
+    // l'assenza di ruoli (`if (access.allowedRoles && length > 0)`), quindi la
+    // rotta resta protetta dall'autenticazione. Saltarla la renderebbe assente.
+    const router = await caricaRotte('zzSoloAuth', 'access: { requiresAuth: true },');
+
+    expect(router.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('una rotta senza access non impedisce alle altre dello stesso plugin di registrarsi', async () => {
+    const root = makePluginsRoot();
+    writePlugin(root, 'zzMistoAccess', {
+      main:
+        `module.exports = {\n` +
+        `  async loadPlugin() {},\n` +
+        `  getRouteArray() {\n` +
+        `    return [\n` +
+        `      { method: 'GET', path: '/aperta', handler: async () => {} },\n` +
+        `      { method: 'GET', path: '/sana', access: { requiresAuth: false, allowedRoles: [] }, handler: async (ctx) => { ctx.body = 'ok'; } },\n` +
+        `    ];\n` +
+        `  },\n};\n`,
+    });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+    const router = makeRouterMock();
+    sys.loadRoutes(router, '/api');
+
+    expect(router.get).toHaveBeenCalledTimes(1);
+    expect(router.get.mock.calls[0][0]).toBe('/api/zzMistoAccess/sana');
+  });
+
+  test('il boot NON si ferma: il plugin resta installed e il sito parte', async () => {
+    // È la differenza fra la scelta presa e il « fatale » che CLAUDE.md
+    // prometteva: una svista in un plugin di terze parti non deve togliere il
+    // sito a chi l'ha installato.
+    const root = makePluginsRoot();
+    writePlugin(root, 'zzSenzaAccessVivo', { main: mainWithAccess('') });
+
+    const sys = new pluginSys({}, root);
+    await sys.initialize();
+
+    expect(sys.getPluginState('zzSenzaAccessVivo')).toMatchObject({ state: 'installed' });
+    expect(() => sys.loadRoutes(makeRouterMock(), '/api')).not.toThrow();
+  });
+});
+
 describe('pluginSys.loadRoutes() — handler mancante o non invocabile', () => {
   const makeRouterMock = () => ({
     get: jest.fn(), post: jest.fn(), put: jest.fn(), del: jest.fn(), all: jest.fn(),
