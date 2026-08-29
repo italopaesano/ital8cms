@@ -9,6 +9,7 @@ const editJson5 = require('./editJson5');
 const setJson5Key = require('./setJson5Key');
 const installPluginNpmDeps = require('./installPluginNpmDeps');
 const { checkNpmDeps, resolvePluginStates } = require('./pluginStateResolver');
+const resolveLoadOrder = require('./pluginLoadOrder');
 const demoNotice = require('./demoNotice');
 
 // Metodi delle rotte dei plugin → metodo corrispondente di @koa/router.
@@ -453,31 +454,21 @@ class pluginSys{
       }
     }
 
-    // ── CARICAMENTO DEI PLUGIN 'installed', nell'ordine delle dipendenze ──────
+    // ── CARICAMENTO DEI PLUGIN 'installed', in UN SOLO ordinamento ───────────
     // I plugin non-'installed' (available/disabled/incomplete) NON vengono caricati.
-    // ORDINE DICHIARATO IN CLAUDE.md: 1) weight crescente, 2) risoluzione delle
-    // dipendenze (una dipendenza è caricata prima del suo dipendente qualunque sia
-    // il peso), 3) alfabetico a parità di weight.
     //
-    // Il primo passo NON esisteva: fino alla v3.0.0 l'ordine era quello di
-    // fs.readdirSync(), e il campo `weight` — pur documentato, mostrato dalla GUI
-    // admin e validato come obbligatorio — non veniva letto da nessuna parte. Chi
-    // lo impostava otteneva silenziosamente niente, e i valori nel repo mostrano
-    // che veniva impostato con intenzione (simpleI18n a -10 perché fornisce la
-    // funzione globale __(), adminAccessControl a -5 perché regola gli accessi).
+    // ORDINE DICHIARATO IN CLAUDE.md: weight crescente, con le dipendenze sempre
+    // prima dei dipendenti e l'alfabetico a parità di peso. Fino alla v3.14.0 quel
+    // contratto era realizzato da DUE meccanismi cuciti insieme — un sort per
+    // weight sui soli plugin senza dipendenze, più una coda che accodava gli altri
+    // man mano che si risolvevano — e il secondo scavalcava il primo: qualunque
+    // plugin con un `dependency` finiva dopo TUTTI quelli senza, qualunque peso
+    // avesse. `adminAccessControl` dichiarava -5 e caricava 22° su 22.
     //
-    // Il tiebreak alfabetico è esplicito e non affidato alla stabilità di sort():
-    // l'ordine di readdirSync non è garantito alfabetico su tutti i filesystem,
-    // quindi «a parità di weight, alfabetico» sarebbe stato vero solo per caso.
-    // Confronto diretto e non localeCompare, per non dipendere dal locale.
-    //
-    // ⚠ FIN DOVE ARRIVA QUESTO ORDINAMENTO, detto con precisione. Ordina i soli
-    // plugin SENZA dipendenze: quelli con `dependency` finiscono in
-    // #pluginsToActive e vengono accodati man mano che le dipendenze si risolvono,
-    // quindi il loro peso non li anticipa. `adminAccessControl` dichiara -5 — il più
-    // basso dopo simpleI18n — e carica ULTIMO, perché dipende da adminUsers.
-    // La forma completa sarebbe un unico ordinamento topologico su tutti gli
-    // installabili con il weight come tie-break; è aperta in TODO.md.
+    // Ora è un ordinamento solo: topologico, con il peso come criterio di scelta
+    // fra i plugin pronti (`core/pluginLoadOrder.js`, modulo puro e testabile da
+    // solo, gemello di `pluginStateResolver`). Il vincolo delle dipendenze resta
+    // duro; il peso decide tutto il resto.
     //
     // ⚠ QUESTO ORDINE È ANCHE QUELLO DEI MIDDLEWARE: index.js scorre l'array di
     // getMiddlewaresToLoad() e fa app.use() di ciascuno. Cambiare l'ordinamento
@@ -485,17 +476,8 @@ class pluginSys{
     // v3.0.0, e ha tolto i redirect dalle analytics finché analytics non è stato
     // portato a -8 (v3.10.0). L'invariante «chi osserva sta prima di chi
     // interrompe» è presidiata da tests/integration/middlewareOrder.test.js.
-    const installable = candidates
-      .filter(c => resolvedStates.get(c.name).state === 'installed')
-      .sort((a, b) => (a.weight - b.weight) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-
-    // Tutte le dipendenze (plugin) del candidato sono già tra gli attivi?
-    const dependenciesActive = (depMap) => {
-      for (const depName of depMap.keys()) {
-        if (!this.#activePlugins.has(depName)) return false;
-      }
-      return true;
-    };
+    const installable = candidates.filter(c => resolvedStates.get(c.name).state === 'installed');
+    const { order, unordered, weightInversions } = resolveLoadOrder(installable);
 
     // Marca un plugin 'incomplete' e persiste isInstalled:0 (solo se cambia).
     const markIncomplete = async (name, reason, detail) => {
@@ -508,35 +490,35 @@ class pluginSys{
       }
     };
 
-    // Senza dipendenze: caricabili subito. Con dipendenze: in coda.
-    for (const c of installable) {
-      if (c.pluginDeps.size === 0) {
-        const ok = await caricatePlugin(c.name);
-        if (!ok) await markIncomplete(c.name, 'load-error', null);
-      } else {
-        this.#pluginsToActive.set(c.name, c.pluginDeps);
+    // Caricamento nell'ordine calcolato. `for...of` (non `forEach`) per AWAITARE
+    // caricatePlugin in sequenza: l'ordine è il punto, eseguirli in parallelo lo
+    // annullerebbe.
+    //
+    // Prima di ciascuno si ricontrolla che le dipendenze siano DAVVERO attive:
+    // l'ordine è topologico, quindi a questo punto la sorte di ogni dipendenza è
+    // già decisa, e una che ha lanciato in `loadPlugin()` non è fra gli attivi.
+    // È la cascata che prima faceva la coda svuotandosi senza progresso.
+    const byName = new Map(installable.map(c => [c.name, c]));
+    for (const name of order) {
+      const depMap = byName.get(name).pluginDeps;
+      const depMancante = [...depMap.keys()].find(dep => !this.#activePlugins.has(dep));
+      if (depMancante !== undefined) {
+        await markIncomplete(name, 'dep-incomplete', { dep: depMancante });
+        continue;
       }
+      const ok = await caricatePlugin(name);
+      if (!ok) await markIncomplete(name, 'load-error', null);
     }
 
-    // Coda: carica chi ha le dipendenze già attive; itera finché c'è progresso.
-    // for...of (non forEach) per AWAITARE caricatePlugin in sequenza.
-    let progress = true;
-    while (this.#pluginsToActive.size > 0 && progress) {
-      progress = false;
-      for (const [name, depMap] of this.#pluginsToActive) {
-        if (dependenciesActive(depMap)) {
-          this.#pluginsToActive.delete(name);
-          const ok = await caricatePlugin(name);
-          if (!ok) await markIncomplete(name, 'load-error', null);
-          progress = true;
-        }
-      }
-    }
-    // Rimasti in coda: una dipendenza è caduta al caricamento → incomplete (cascata).
-    for (const [name] of this.#pluginsToActive) {
-      await markIncomplete(name, 'dep-incomplete', { dep: '(fallita al caricamento)' });
+    // Senza posizione valida: dipendono da qualcosa fuori dagli installabili,
+    // oppure sono in un ciclo (che pluginStateResolver intercetta già a monte).
+    for (const name of unordered) {
+      await markIncomplete(name, 'dep-incomplete', { dep: '(irrisolvibile)' });
     }
     this.#pluginsToActive.clear();
+
+    // ── BOX [WEIGHT]: i pesi che le dipendenze hanno reso impossibili ─────────
+    this.#printWeightInversions(weightInversions);
 
     // ── BOX DI RIEPILOGO degli stati non-installed ───────────────────────────
     this.#printPluginSummary();
@@ -549,6 +531,57 @@ class pluginSys{
     
 
   }// END initialize()
+
+  /**
+   * Stampa un box [WEIGHT] per i plugin il cui `weight` non ha potuto essere
+   * onorato, perché una dipendenza li ha vincolati a caricare più tardi.
+   *
+   * PERCHÉ ESISTE. Le due regole dell'ordinamento possono contraddirsi: il peso
+   * dice « presto », la dipendenza dice « non prima di questo ». Vince la
+   * dipendenza — deve — ma finora la contraddizione era **muta**, e chi leggeva
+   * `weight: -5` nel proprio `pluginConfig.json5` credeva di avere un middleware
+   * a monte di tutto. Non era un peso poco efficace: era inerte, e il peso
+   * governa anche l'annidamento dei middleware Koa.
+   *
+   * Il box dice le tre cose che servono per decidere cosa fare: dove il plugin
+   * carica davvero, chi l'ha frenato, e che il `weight` da solo non basta.
+   * Nessun output quando non c'è nulla da segnalare.
+   *
+   * @private
+   * @param {Array<object>} inversions - Da resolveLoadOrder().weightInversions
+   */
+  #printWeightInversions(inversions) {
+    if (!inversions || inversions.length === 0) return;
+
+    const line = '[WEIGHT]  ' + '═'.repeat(58);
+    const out = [
+      '',
+      line,
+      `[WEIGHT]   ⚠  ${inversions.length} plugin caricano DOPO plugin di peso maggiore:`,
+      '[WEIGHT]      il loro weight non può essere onorato per via delle dipendenze.',
+      '[WEIGHT]',
+    ];
+    for (const inv of inversions) {
+      const dep = inv.blockingDep;
+      out.push(`[WEIGHT]     • ${inv.name} (weight ${inv.weight}) carica in posizione ${inv.position}`);
+      if (dep) {
+        out.push(`[WEIGHT]       vincolato da "${dep.name}" (weight ${dep.weight}, posizione ${dep.position}):`);
+        out.push('[WEIGHT]       una dipendenza carica sempre prima del suo dipendente.');
+      }
+      const nomi = inv.overtaken.map((o) => `${o.name}(${o.weight})`).join(', ');
+      out.push(`[WEIGHT]       scavalcato da: ${nomi}`);
+    }
+    out.push(
+      '[WEIGHT]',
+      '[WEIGHT]   Conta perché l\'ordine di caricamento è ANCHE quello con cui',
+      '[WEIGHT]   index.js monta i middleware: un peso non onorato è un middleware',
+      '[WEIGHT]   montato più a valle di dove lo si voleva. Se serve montare prima,',
+      '[WEIGHT]   il weight da solo non basta — vedi TODO.md, "middlewareWeight".',
+      line,
+      '',
+    );
+    console.warn(out.join('\n'));
+  }
 
   /**
    * Stampa un box [PLUGINS] di riepilogo dei plugin rimasti 'incomplete' (boot

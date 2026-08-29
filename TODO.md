@@ -166,14 +166,19 @@ completa in §5 accanto alla misura che le ha fatte emergere.
       **condiviso** con `validateRoute()`, così la parte in comune non torni a divergere.
       Verificato: 135 rotte reali registrate prima e dopo, identiche; **sei punti di
       documentazione allineati**.
-- [ ] **(D3) Un unico ordinamento topologico, invece del sort su un sottoinsieme** → §5.
-      Misurato: 12 plugin senza dipendenze sono ordinati per `weight`; i 10 con
-      `dependency` vengono accodati man mano che si risolvono e **scavalcano il sort** —
-      `adminAccessControl` dichiara `-5` e carica 22° su 22. Di quei 10, solo 2 registrano
-      middleware, quindi oggi l'effetto pratico è circoscritto. Le uscite: **rifare
-      l'ordinamento** (topologico su tutti gli installabili, `weight` come tie-break — è
-      il cuore del boot, va fatto con la sua rete di test) oppure **lasciarlo** e tenere il
-      limite dichiarato nel commento corretto in v3.12.0 e in `CLAUDE.md`.
+- [x] ~~**(D3) Un unico ordinamento topologico, invece del sort su un sottoinsieme** → §5.~~
+      **Deciso dal maintainer e applicato in v3.15.0.** `core/pluginLoadOrder.js` (modulo
+      puro, gemello di `pluginStateResolver`): Kahn con selezione del minimo — fra i plugin
+      **pronti** si emette sempre quello di `(weight, nome)` minore. Vincolo topologico
+      duro, il peso decide il resto. `adminAccessControl` passa da **22° a 6°**.
+      **Il peso che le dipendenze rendono impossibile ora è segnalato** con un box
+      `[WEIGHT]` al boot (richiesta esplicita del maintainer): nomina il plugin, la
+      dipendenza vincolante e i plugin più pesanti che l'hanno scavalcato. Disuguaglianza
+      **stretta**, così a parità di peso non produce rumore.
+      ⚠ **Ha spostato i middleware:** `adminUsers` e `adminAccessControl` da ultimi a 4° e
+      5° dei nove. Su un URL insieme redirezionato e access-controllato vince ora il
+      controllo d'accesso (prima il redirect); sulla config distribuita non c'è
+      sovrapposizione, ma è documentato in `CLAUDE.md`.
 - [ ] **(D4) `port()` accetta un input che `parseInt` tronca** → §5.
       `'3000abc'` → 3000, `'3000.9'` → 3000, `'1e4'` → 1: la porta scritta nel config **non
       è quella digitata**, e nessuno lo segnala. Le uscite: **rifiutare** con `/^\d+$/`
@@ -421,12 +426,21 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       « i plugin caricati dopo dispongono di quelli caricati prima »: va aggiunto che
       il `weight` governa **anche** l'annidamento dei middleware, e che chi osserva
       il traffico deve avere un peso minore di chi lo interrompe.
-      **Domanda aperta più grande:** vale la pena separare i due concetti con una
-      chiave dedicata (un `middlewareWeight`), così che un plugin possa caricare tardi
-      — perché dipende da altri — e montare il middleware presto? Oggi non si può, e
-      `adminAccessControl` ne è il caso: dichiara `weight: -5` ma carica **ultimo**
-      perché ha una dipendenza.
-- [ ] **(D3) Il `weight` ordina solo dentro il gruppo SENZA dipendenze.**
+      **Domanda aperta più grande — `middlewareWeight`.** Vale la pena separare i due
+      concetti con una chiave dedicata, così che un plugin possa caricare tardi — perché
+      dipende da altri — e montare il middleware presto? *(Aggiornata dopo v3.15.0:
+      l'ordinamento topologico ha ridotto il problema ma non l'ha chiuso.
+      `adminAccessControl` non carica più ultimo, carica **6°**, subito dopo la sua
+      dipendenza `adminUsers` — è tutto ciò che il suo `weight: -5` può ottenere finché
+      caricamento e montaggio restano lo stesso ordine. Il box `[WEIGHT]` al boot rende
+      la cosa **visibile**: chi legge il box sa che quel peso non è onorato, e sa
+      perché.)* Le due strade: una chiave `middlewareWeight` separata, oppure ordinare
+      i middleware in un secondo passaggio dopo il caricamento — quest'ultima non
+      richiede una chiave nuova ma rompe l'identità « ordine di caricamento = ordine
+      dei middleware », su cui oggi si ragiona (ed è documentata).
+- [x] ~~**(D3) Il `weight` ordina solo dentro il gruppo SENZA dipendenze.**~~
+      **RISOLTO in v3.15.0** con l'ordinamento topologico unico + box `[WEIGHT]`.
+      Cronaca, per memoria:
       *(Emerso in v3.10.0.)* `initialize()` ordina per weight i plugin senza
       dipendenze, poi accoda gli altri man mano che le dipendenze si risolvono:
       `adminAccessControl` (weight **-5**, il più basso dopo `simpleI18n`) carica

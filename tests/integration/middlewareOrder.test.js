@@ -23,18 +23,26 @@
  * nuovo senza dire niente di utile. Si fissa l'**invariante semantica**: chi
  * OSSERVA il traffico deve montare prima di chi lo INTERROMPE. Chi aggiunge un
  * plugin che interrompe le richieste, o cambia un `weight`, lo scopre qui.
+ *
+ * SI CONFRONTA L'ORDINE, NON IL PESO (da v3.15.0)
+ * -----------------------------------------------
+ * La prima versione di questo file confrontava i `weight` dichiarati, dando per
+ * scontato che un peso minore significasse « monta prima ». È esattamente
+ * l'assunzione che il difetto D3 ha smontato: `adminAccessControl` dichiarava
+ * -5 e caricava ULTIMO, perché i plugin con dipendenze venivano accodati dopo
+ * tutti quelli senza. Un test costruito su quell'assunzione sarebbe passato
+ * mentre l'invariante era violata.
+ *
+ * Ora si chiede l'ordine a `resolveLoadOrder`, cioè allo stesso modulo che il
+ * boot usa per deciderlo: il confronto è sul risultato, non su una scorciatoia.
  */
 
+const fs = require('fs');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
+const resolveLoadOrder = require('../../core/pluginLoadOrder');
 
 const PLUGINS_DIR = path.join(__dirname, '../../plugins');
-
-/** Il `weight` dichiarato nel config VIVO — quello che il boot legge davvero. */
-const weightOf = (plugin) => {
-  const config = loadJson5(path.join(PLUGINS_DIR, plugin, 'pluginConfig.json5'));
-  return typeof config.weight === 'number' ? config.weight : 0;
-};
 
 const isActive = (plugin) => {
   try {
@@ -45,10 +53,35 @@ const isActive = (plugin) => {
 };
 
 /**
+ * L'ordine di caricamento REALE dei plugin attivi, calcolato dallo stesso modulo
+ * che usa il boot. È anche l'ordine in cui i middleware vengono montati.
+ */
+const ordineReale = () => {
+  const installabili = [];
+  for (const name of fs.readdirSync(PLUGINS_DIR)) {
+    let config;
+    try { config = loadJson5(path.join(PLUGINS_DIR, name, 'pluginConfig.json5')); } catch { continue; }
+    if (config.active !== 1) continue;
+    installabili.push({
+      name,
+      weight: typeof config.weight === 'number' ? config.weight : 0,
+      pluginDeps: new Map(Object.entries(config.dependency || {})),
+    });
+  }
+  return resolveLoadOrder(installabili).order;
+};
+
+/**
  * Plugin che INTERROMPONO la catena: su certe richieste rispondono e non
  * chiamano `next()`. Tutto ciò che deve osservare il traffico va montato prima.
+ *
+ * `adminAccessControl` è entrato in questa lista con v3.15.0. Interrompeva anche
+ * prima — il suo middleware fa `ctx.redirect()` o imposta uno status e ritorna —
+ * ma caricando ULTIMO la domanda « chi osserva sta prima? » non si poneva mai.
+ * Con l'ordinamento topologico carica in mezzo al gruppo, e il vincolo diventa
+ * reale: va presidiato.
  */
-const INTERROMPONO = ['urlRedirect'];
+const INTERROMPONO = ['urlRedirect', 'adminAccessControl'];
 
 /** Plugin che OSSERVANO: il loro middleware avvolge `await next()`. */
 const OSSERVANO = ['analytics'];
@@ -66,21 +99,40 @@ describe('ordine dei middleware — chi osserva sta prima di chi interrompe', ()
   test.each(OSSERVANO)('%s monta PRIMA di ogni plugin che interrompe', (osservatore) => {
     if (!isActive(osservatore)) return; // disattivato: niente da ordinare
 
-    const pesoOsservatore = weightOf(osservatore);
+    const ordine = ordineReale();
+    const posizione = (nome) => ordine.indexOf(nome);
+    expect(posizione(osservatore)).toBeGreaterThanOrEqual(0);
 
     for (const interruttore of INTERROMPONO) {
       if (!isActive(interruttore)) continue;
 
-      // Il weight decide l'ordine di caricamento, e quindi quello dei middleware.
-      // Un osservatore con peso MAGGIORE monta dopo, e non vede le richieste che
-      // l'altro ha già chiuso.
+      // Si confronta la POSIZIONE nell'ordine calcolato, non il weight: un peso
+      // minore non basta a garantire « monta prima », perché una dipendenza può
+      // frenare il plugin (è il caso di adminAccessControl, weight -5).
       expect({
-        [osservatore]: pesoOsservatore,
-        [interruttore]: weightOf(interruttore),
-      }).toMatchObject({ [osservatore]: pesoOsservatore });
+        osservatore: `${osservatore} @${posizione(osservatore) + 1}`,
+        interruttore: `${interruttore} @${posizione(interruttore) + 1}`,
+      }).toMatchObject({ osservatore: `${osservatore} @${posizione(osservatore) + 1}` });
 
-      expect(pesoOsservatore).toBeLessThan(weightOf(interruttore));
+      expect(posizione(osservatore)).toBeLessThan(posizione(interruttore));
     }
+  });
+
+  test('adminAccessControl interrompe davvero: redirect/status senza next()', () => {
+    // La premessa della sua presenza in INTERROMPONO. Il middleware fa
+    // `ctx.redirect(...)` e `return`, oppure imposta uno status e `return`:
+    // in entrambi i casi ciò che sta a valle non vede la richiesta.
+    const source = fs.readFileSync(
+      path.join(PLUGINS_DIR, 'adminAccessControl', 'lib', 'accessManager.js'), 'utf8');
+
+    const middleware = source.slice(source.indexOf('createMiddleware()'));
+    expect(middleware).toMatch(/ctx\.redirect\(/);
+    // Dopo il redirect esce: se un domani chiamasse next(), smetterebbe di
+    // interrompere e questo vincolo diventerebbe inutile senza dirlo.
+    const dopoRedirect = middleware.slice(middleware.indexOf('ctx.redirect('));
+    const primoReturn = dopoRedirect.indexOf('return;');
+    expect(primoReturn).toBeGreaterThan(-1);
+    expect(dopoRedirect.slice(0, primoReturn)).not.toMatch(/await next\(\)/);
   });
 
   test('urlRedirect interrompe davvero: non chiama next() dopo un redirect', () => {

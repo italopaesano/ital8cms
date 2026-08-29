@@ -268,7 +268,7 @@ Il merge additivo sa solo **aggiungere** chiavi. Quando un `.default` evolve con
 
 ### Ordine di caricamento
 
-1. **weight** crescente → 2. **risoluzione dipendenze** (prima le dipendenze) → 3. **alfabetico** (a parità di weight). I plugin caricati dopo dispongono di quelli caricati prima.
+**Un solo ordinamento topologico** (`core/pluginLoadOrder.js`, modulo puro) su tutti gli installabili: fra i plugin **pronti** in quel momento — cioè con tutte le dipendenze già caricate — si sceglie sempre quello di **weight** minore, e a parità il primo in **alfabetico**. Il vincolo delle dipendenze resta **duro** (una dipendenza carica sempre prima del suo dipendente); il peso decide tutto il resto. I plugin caricati dopo dispongono di quelli caricati prima.
 
 > ⚠️ **L'ordine di caricamento è ANCHE l'ordine dei middleware.** `index.js` scorre
 > l'array di `getMiddlewaresToLoad()` — costruito durante il caricamento — e fa
@@ -283,10 +283,29 @@ Il merge additivo sa solo **aggiungere** chiavi. Quando un `.default` evolve con
 > stato portato a `-8` (v3.10.0). L'invariante è presidiata da
 > `tests/integration/middlewareOrder.test.js`.
 >
-> **Limite noto:** il `weight` ordina solo dentro il gruppo dei plugin **senza
-> dipendenze**; quelli con `dependency` vengono accodati man mano che le dipendenze
-> si risolvono, quindi il loro peso non li anticipa (`adminAccessControl` dichiara
-> `-5` e carica ultimo). Aperto in `TODO.md`.
+> **Quando il peso NON può essere onorato → box `[WEIGHT]` al boot.** Le due regole
+> possono contraddirsi: il peso dice « presto », una dipendenza dice « non prima di
+> questo ». Vince la dipendenza — deve — ma la contraddizione non resta muta: il box
+> elenca i plugin caricati dopo altri di peso **strettamente maggiore**, nomina la
+> dipendenza che li ha frenati, e ricorda che per montare un middleware più a monte
+> il `weight` da solo non basta. Sulla configurazione distribuita ne compare **uno**:
+> `adminAccessControl` (`-5`), vincolato da `adminUsers` (`0`).
+>
+> *Storia del limite, ormai chiuso:* fino alla **v3.14.0** l'ordine nasceva da due
+> meccanismi cuciti insieme — un `sort` per `weight` sui soli plugin **senza**
+> dipendenze, più una coda che accodava gli altri — e il secondo scavalcava il primo:
+> `adminAccessControl` dichiarava `-5` e caricava **22° su 22**. Il suo peso non era
+> poco efficace, era **inerte**. Con l'ordinamento unico carica **6°**, subito dopo la
+> sua dipendenza — tutto ciò che `-5` può ottenere.
+>
+> ⚠️ **Il cambiamento ha spostato i middleware**, ed è la parte da tenere a mente:
+> `adminAccessControl` e `adminUsers` sono passati da **ultimi** a 4° e 5° dei nove
+> middleware montati. In particolare `adminAccessControl` — che **interrompe**
+> (redirect al login, o status di rifiuto) — ora monta **prima** di `csrfProtection`,
+> `urlRedirect`, `rateLimiter` e `mailer`. Su un URL che sia insieme redirezionato e
+> soggetto a una regola di accesso, vince ora il controllo d'accesso; prima vinceva il
+> redirect. Sulla configurazione distribuita non c'è sovrapposizione (`redirectMap`
+> parte vuoto), ma chi scrive regole su entrambi i fronti deve saperlo.
 
 ### Stati dei plugin (boot graceful)
 
@@ -1482,6 +1501,7 @@ Spostato in [`docs/deployment.it.md`](./docs/deployment.it.md).
 - `/core/resetConfigsToDefault.js` - Reset: rimuove i vivi di una cartella (rigenerati dai default al boot); usata dal comando CLI `ital8cms-cli reset`
 - `/core/setJson5Key.js` - Ciclo di vita config: upsert (add-or-update) di una chiave in un `.json5` preservando i commenti (usata dal boot per scrivere `isInstalled`/`version`); accetta anche **path annidati** (`['custom','dataPath']`); complementare a `editJson5` (che solo aggiorna)
 - `/core/pluginStateResolver.js` - Ciclo di vita config: modulo **puro** per gli stati dei plugin — `checkNpmDeps` + `resolvePluginStates` (cascata a punto fisso + rilevamento cicli); usato da `pluginSys.initialize()`
+- `/core/pluginLoadOrder.js` - Ordine di caricamento: modulo **puro** `resolveLoadOrder(installables)` — ordinamento **topologico** con il `weight` come criterio di scelta fra i pronti, più il rilevamento dei pesi che le dipendenze rendono impossibili (box `[WEIGHT]`); gemello di `pluginStateResolver` (quello decide CHI si carica, questo QUANDO)
 - `/core/reconcileSchemaVersion.js` - Ciclo di vita config: drift di `schemaVersion` per UNA coppia default↔vivo + **merge additivo ricorsivo** (aggiunge le chiavi nuove a ogni profondità, preserva i valori)
 - `/core/reconcileSchemaVersions.js` - Ciclo di vita config: scansione di contenitori/coppie + box `[SCHEMA]` anti-rumore; invocata al boot (salta i config con una migrazione pendente, via `skipLivePaths`)
 - `/core/migrationRunner.js` - Migrazione dei config: scoperta/validazione degli step in `migrations/`, esecuzione della catena (backup, script, merge, postcondizione strutturale, ricevuta `schemaVersion`), box `[MIGRATE]` al boot
