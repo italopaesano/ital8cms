@@ -55,6 +55,7 @@ describe('port() — la porta HTTP del server', () => {
     ['fuori dal range a 16 bit', '65536'],
     ['negativa', '-1'],
     ['non numerica', 'abc'],
+    ['con lettere in coda', '3000abc'],
     ['stringa vuota', ''],
   ])('rifiuta %s', (_caso, valore) => {
     rifiuta(validators.port(valore));
@@ -66,19 +67,80 @@ describe('port() — la porta HTTP del server', () => {
     expect(validators.port('abc')).not.toBe(validators.port('99999'));
   });
 
-  test('⚠ CARATTERIZZAZIONE: parseInt tronca, così "3000abc" passa come 3000', () => {
-    // `port` fa `parseInt(value)`, che si ferma al primo carattere non numerico
-    // invece di rifiutare. Il wizard ha poi `filter: (v) => parseInt(v)`, quindi
-    // il config riceve 3000: la porta finale NON è quella digitata, e nessuno lo
-    // segnala. Stessa cosa per un decimale.
+  describe('un input che parseInt troncherebbe viene RIFIUTATO (D4, v3.15.0)', () => {
+    // ERA UNA CARATTERIZZAZIONE, ora è il contratto.
     //
-    // Impatto reale basso (chi installa vede la porta nel riepilogo) e la
-    // correzione — un test `/^\d+$/` prima del parse — cambierebbe il
-    // comportamento di un input oggi accettato: è una decisione, non una svista
-    // da correggere di nascosto. Aperta in TODO.md §5.
-    accetta(validators.port('3000abc'));
-    accetta(validators.port('3000.9'));
-    accetta(validators.port('1e4')); // parseInt('1e4') === 1, non 10000
+    // `port` faceva `parseInt(value)` e controllava solo il risultato: parseInt
+    // si ferma al primo carattere non numerico invece di rifiutare, quindi
+    // "3000abc" valeva 3000. Il wizard ha poi `filter: (v) => parseInt(v)`, che
+    // scriveva il valore troncato in `ital8Config.json5`: la porta nel config
+    // NON era quella digitata, e nessuno lo segnalava.
+    //
+    // Il maintainer ha scelto di rifiutare ciò che non è tutto cifre, così il
+    // wizard richiede l'input invece di inventarsi un numero.
+
+    test.each([
+      ['lettere in coda',      '3000abc', 3000],
+      ['un decimale',          '3000.9',  3000],
+      ['notazione scientifica', '1e4',    1],
+      ['un segno più',         '+3000',   3000],
+    ])('rifiuta %s', (_caso, valore) => {
+      rifiuta(validators.port(valore));
+    });
+
+    test('il messaggio mostra il valore in cui SAREBBE stato troncato', () => {
+      // È la parte che rende il rifiuto istruttivo invece che pedante: `1e4` uno
+      // lo legge come diecimila, e parseInt lo avrebbe reso 1.
+      expect(validators.port('1e4')).toContain('1e4');
+      expect(validators.port('1e4')).toMatch(/sarebbe diventato 1\b/);
+      expect(validators.port('3000abc')).toMatch(/sarebbe diventato 3000\b/);
+    });
+
+    test('la frase sul troncamento NON compare se non c\'era nulla di silenzioso', () => {
+      // Su `-1` parseInt restituisce -1: niente è stato scartato di nascosto, e
+      // il vecchio codice l'avrebbe comunque respinto per il range. Annunciare
+      // « sarebbe diventato -1 » spaventerebbe per un pericolo che non c'era.
+      expect(validators.port('-1')).not.toMatch(/sarebbe diventato/);
+      expect(validators.port('abc')).not.toMatch(/sarebbe diventato/);
+    });
+
+    test('gli spazi ai bordi restano tollerati', () => {
+      // Chi digita uno spazio di troppo non ha sbagliato il numero. Il guard
+      // deve mordere sul contenuto, non sulla battitura.
+      accetta(validators.port('  3000  '));
+      accetta(validators.port(' 80'));
+    });
+
+    test('un numero, non solo una stringa, resta accettato', () => {
+      // Il wizard passa `currentConfig.httpPort` come `default`: se l'utente
+      // preme invio, il validatore può ricevere un number. Rifiutarlo bloccherebbe
+      // il percorso più frequente di tutti.
+      accetta(validators.port(3000));
+    });
+
+    test('il range continua a essere controllato DOPO il formato', () => {
+      // I due rifiuti restano distinti: « formato » e « fuori range » sono
+      // problemi diversi e chi digita deve sapere quale dei due ha davanti.
+      expect(validators.port('65536')).toMatch(/tra 1 e 65535/);
+      expect(validators.port('0')).toMatch(/tra 1 e 65535/);
+      expect(validators.port('3000abc')).not.toMatch(/tra 1 e 65535/);
+    });
+  });
+
+  test('l\'ordine filter/validate di inquirer regge il guard', () => {
+    // La premessa del contratto qui sopra. Il guard funziona solo se `validate`
+    // riceve la stringa GREZZA: se `filter: parseInt` girasse prima, il
+    // validatore vedrebbe già 3000 e /^\d+$/ passerebbe, riaprendo il difetto
+    // senza che nessun altro test se ne accorga.
+    //
+    // Verificato sul sorgente di inquirer 14 invece che assunto: il filtro è
+    // applicato nel `.then()` DOPO che il prompt ha risolto.
+    const fs = require('fs');
+    const path = require('path');
+    const sorgente = fs.readFileSync(
+      path.join(__dirname, '../../../node_modules/inquirer/dist/ui/prompt.js'), 'utf8');
+
+    expect(sorgente).toMatch(/promptFn\(question[\s\S]{0,200}?answer:\s*filter\(answer/);
   });
 });
 
@@ -300,8 +362,22 @@ describe('i quattro validatori SENZA chiamanti', () => {
       expect(validators.positiveInteger('-1')).toMatch(/positivo/i);
     });
 
-    test('⚠ un decimale viene troncato invece che rifiutato', () => {
-      accetta(validators.positiveInteger('3.7')); // parseInt → 3
+    test('un decimale viene RIFIUTATO, non troncato (D4, v3.15.0)', () => {
+      // Stesso difetto di `port()`, chiuso insieme al suo. Questo validatore non
+      // ha chiamanti nel repo — vedi il censimento più sopra — quindi la
+      // correzione non cambia nulla oggi: serve a non lasciare in piedi la
+      // stessa trappola per il primo che lo userà.
+      rifiuta(validators.positiveInteger('3.7'));
+      rifiuta(validators.positiveInteger('5xyz'));
+      expect(validators.positiveInteger('3.7')).toMatch(/sarebbe diventato 3\b/);
+    });
+
+    test('il « non positivo » resta un messaggio SUO, distinto dal formato', () => {
+      // Chi scrive « -1 » ha capito il formato e sbagliato il valore: è un'altra
+      // cosa, e riceverne il messaggio sbagliato manda a correggere il posto
+      // sbagliato.
+      expect(validators.positiveInteger('-1')).toMatch(/positivo/i);
+      expect(validators.positiveInteger('-1')).not.toMatch(/solo cifre/);
     });
   });
 

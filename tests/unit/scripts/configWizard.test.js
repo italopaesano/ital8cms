@@ -277,6 +277,29 @@ describe('run() — il percorso completo', () => {
     expect(typeof loadJson5(configPath).httpPort).toBe('number');
   });
 
+  test('una porta con lettere in coda viene RESPINTA dalla domanda del wizard', async () => {
+    // D4, v3.15.0. Il punto non è il validatore in sé — quello ha i suoi test —
+    // ma che sia DAVVERO agganciato a questa domanda: `filter: (v) => parseInt(v)`
+    // è ancora lì, e senza il guard scriverebbe 3000 nel config al posto di
+    // "3000abc". Restituendo una stringa, inquirer ripropone la domanda con quel
+    // messaggio invece di accettare.
+    inquirer.prompt
+      .mockResolvedValueOnce({ shouldModify: true })
+      .mockResolvedValueOnce({ fieldsToModify: ['httpPort'] })
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ confirm: false });
+
+    await wizard.run();
+
+    const domandaPorta = inquirer.prompt.mock.calls[2][0].find((q) => q.name === 'httpPort');
+    const esito = domandaPorta.validate('3000abc');
+
+    expect(typeof esito).toBe('string');
+    expect(esito).toMatch(/sarebbe diventato 3000/);
+    // ...e il filtro, se mai ci arrivasse, farebbe esattamente il danno descritto.
+    expect(domandaPorta.filter('3000abc')).toBe(3000);
+  });
+
   test('ogni campo chiedibile propone come default il valore CORRENTE', async () => {
     // Premere invio su ogni domanda deve lasciare la configurazione com'era: un
     // default sbagliato la cambierebbe senza che nessuno l'abbia chiesto.

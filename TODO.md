@@ -179,12 +179,15 @@ completa in §5 accanto alla misura che le ha fatte emergere.
       5° dei nove. Su un URL insieme redirezionato e access-controllato vince ora il
       controllo d'accesso (prima il redirect); sulla config distribuita non c'è
       sovrapposizione, ma è documentato in `CLAUDE.md`.
-- [ ] **(D4) `port()` accetta un input che `parseInt` tronca** → §5.
-      `'3000abc'` → 3000, `'3000.9'` → 3000, `'1e4'` → 1: la porta scritta nel config **non
-      è quella digitata**, e nessuno lo segnala. Le uscite: **rifiutare** con `/^\d+$/`
-      prima del parse (un input oggi accettato smette di esserlo — è una regressione
-      volontaria, non una svista) oppure **accettare** e dichiarare che il riepilogo del
-      wizard è il punto in cui l'installatore vede cosa è stato scritto.
+- [x] ~~**(D4) `port()` accetta un input che `parseInt` tronca** → §5.~~
+      **Deciso dal maintainer e applicato in v3.16.0: rifiutare ciò che non è tutto cifre.**
+      `/^\d+$/` prima del parse; il wizard ripropone la domanda con un messaggio che mostra
+      anche **il valore in cui l'input sarebbe stato troncato** (« "1e4" … sarebbe diventato
+      1 »), ma solo quando il troncamento era davvero silenzioso — su `-1` no, perché lì
+      `parseInt` non scarta niente. Spazi ai bordi tollerati; range e formato restano due
+      messaggi distinti. Corretto **anche `positiveInteger()`**, difetto identico e nessun
+      chiamante. L'ordine `filter`/`validate` di inquirer è stato **verificato sul sorgente**
+      (è la premessa: col filtro prima, il guard sarebbe inutile) e un test lo presidia.
 - [ ] **(D5) Il floor `roleId >= 100` non è applicato a delete/update** → §5.
       Il confine dei ruoli custom è conosciuto solo da `getNextCustomRoleId`;
       `deleteCustomRole`/`updateCustomRole` si affidano al solo `isHardcoded`, che vive in
@@ -387,7 +390,9 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       globali salvati hanno nomi distinti (`ital8Config`, `koaSession`, `adminConfig`) —
       ma è il tipo di limite che si scopre quando serve il ripristino. Caratterizzato in
       `tests/unit/scripts/backupManager.test.js`.
-- [ ] **(D4) `port()` accetta un input troncato da `parseInt`.**
+- [x] ~~**(D4) `port()` accetta un input troncato da `parseInt`.**~~
+      **CORRETTO in v3.16.0** con `/^\d+$/` prima del parse, insieme al gemello
+      `positiveInteger()`. Cronaca, per memoria:
       *(Emerso in v3.6.0 testando i validatori del wizard.)* `parseInt('3000abc')`
       vale 3000, e il wizard ha `filter: (v) => parseInt(v)`: la porta scritta nel
       config **non è quella digitata**, e nessuno lo segnala. Stessa cosa per
