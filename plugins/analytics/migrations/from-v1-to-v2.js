@@ -65,6 +65,16 @@ const OLD_WEIGHT = 5;
 const NEW_WEIGHT = -8;
 
 /**
+ * Il weight dichiarato da `urlRedirect`, citato nel messaggio di warning perché è
+ * il confine che conta: analytics deve montare prima di lui.
+ *
+ * Era scritto come `OLD_WEIGHT >= 0 ? '1' : '1'` — un ternario con due rami
+ * identici, cioè una costante travestita da scelta, che invitava chi legge a
+ * cercare una distinzione che non c'era.
+ */
+const URL_REDIRECT_WEIGHT = 1;
+
+/**
  * @param {object} ctx - Contesto fornito da core/migrationRunner.js
  * @param {string} ctx.packageDir - Cartella del plugin
  * @param {object} ctx.logger
@@ -83,11 +93,16 @@ async function migrate(ctx) {
 
   if (current.weight !== OLD_WEIGHT) {
     // Valore personalizzato: si lascia com'è e si scrive cosa guardare.
-    logger.warning('migrate',
+    // `warn`, non `warning`: il logger core espone debug/info/warn/error. Con
+    // `warning` questo ramo — quello che DOVEVA proteggere la scelta
+    // dell'amministratore — lanciava un TypeError, il runner interrompeva la
+    // catena e la schemaVersion non avanzava mai: il box [MIGRATE] avrebbe
+    // insistito a ogni boot senza che nulla potesse chiuderlo.
+    logger.warn('migrate',
       `analytics: weight personalizzato (${JSON.stringify(current.weight)}) — NON modificato.\n` +
       `   Perché conta: il middleware di analytics deve montare PRIMA di urlRedirect\n` +
-      `   (weight ${OLD_WEIGHT >= 0 ? '1' : '1'}), altrimenti i redirect 301/302 non compaiono\n` +
-      `   nelle statistiche. Se il valore in uso è maggiore di 1, va abbassato a mano.`);
+      `   (weight ${URL_REDIRECT_WEIGHT}), altrimenti i redirect 301/302 non compaiono\n` +
+      `   nelle statistiche. Se il valore in uso è maggiore di ${URL_REDIRECT_WEIGHT}, va abbassato a mano.`);
     return;
   }
 

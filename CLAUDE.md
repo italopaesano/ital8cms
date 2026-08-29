@@ -298,14 +298,22 @@ Il merge additivo sa solo **aggiungere** chiavi. Quando un `.default` evolve con
 > poco efficace, era **inerte**. Con l'ordinamento unico carica **6°**, subito dopo la
 > sua dipendenza — tutto ciò che `-5` può ottenere.
 >
-> ⚠️ **Il cambiamento ha spostato i middleware**, ed è la parte da tenere a mente:
-> `adminAccessControl` e `adminUsers` sono passati da **ultimi** a 4° e 5° dei nove
-> middleware montati. In particolare `adminAccessControl` — che **interrompe**
-> (redirect al login, o status di rifiuto) — ora monta **prima** di `csrfProtection`,
-> `urlRedirect`, `rateLimiter` e `mailer`. Su un URL che sia insieme redirezionato e
-> soggetto a una regola di accesso, vince ora il controllo d'accesso; prima vinceva il
-> redirect. Sulla configurazione distribuita non c'è sovrapposizione (`redirectMap`
-> parte vuoto), ma chi scrive regole su entrambi i fronti deve saperlo.
+> ⚠️ **Il cambiamento ha spostato i middleware**, ed è la parte da tenere a mente.
+> Sulla configurazione distribuita i plugin che contribuiscono **davvero** un
+> middleware sono **sei** — `simpleI18n`, `analytics`, `adminUsers`,
+> `adminAccessControl`, `urlRedirect`, `rateLimiter` — e in quest'ordine. Altri tre
+> (`admin`, `csrfProtection`, `mailer`) **dichiarano** `getMiddlewareToAdd()` ma
+> restituiscono un array vuoto: non sono nella catena, e ragionare sull'annidamento
+> Koa includendoli porta fuori strada. In particolare **il CSRF non è un middleware**:
+> l'enforcement vive nel route-wrap del core, prima del controllo auth.
+>
+> `adminUsers` e `adminAccessControl` sono passati da **ultimi** a **3°** e **4°** dei
+> sei. `adminAccessControl` — che **interrompe** (redirect al login, o status di
+> rifiuto) — ora monta **prima** di `urlRedirect` e `rateLimiter`. Su un URL che sia
+> insieme redirezionato e soggetto a una regola di accesso, vince ora il controllo
+> d'accesso; prima vinceva il redirect. Sulla configurazione distribuita non c'è
+> sovrapposizione (`redirectMap` parte vuoto), ma chi scrive regole su entrambi i
+> fronti deve saperlo.
 
 ### Stati dei plugin (boot graceful)
 

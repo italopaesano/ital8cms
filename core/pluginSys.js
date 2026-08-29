@@ -90,7 +90,6 @@ class pluginSys{
   #routes;// variabile privata che conterrà le rotte aggiunte dai vari plugin
   #objectToShareToWebPages = {};// variabile che conterà gli ogetti restituiti dai vari plugin che saranno messi a dispozione del motore ejs e degli altri moduli
   #activePlugins = new Map();// Mappa che conterrà i plugin attivi
-  #pluginsToActive = new Map();// plugin da attivare non ancora attivati perchè bisogna controllare le dipendenze
   #themeSys = null;// riferimento al sistema dei temi (impostato dopo l'inizializzazione)
   #reservedGate = null;// gate della superficie riservata (impostato da index.js dopo i priority middlewares)
   #reservedRoutePaths = new Set();// path completi delle rotte che appartengono alla superficie riservata (popolato da loadRoutes)
@@ -515,7 +514,6 @@ class pluginSys{
     for (const name of unordered) {
       await markIncomplete(name, 'dep-incomplete', { dep: '(irrisolvibile)' });
     }
-    this.#pluginsToActive.clear();
 
     // ── BOX [WEIGHT]: i pesi che le dipendenze hanno reso impossibili ─────────
     this.#printWeightInversions(weightInversions);

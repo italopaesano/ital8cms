@@ -109,13 +109,73 @@ describe('ordine dei middleware — chi osserva sta prima di chi interrompe', ()
       // Si confronta la POSIZIONE nell'ordine calcolato, non il weight: un peso
       // minore non basta a garantire « monta prima », perché una dipendenza può
       // frenare il plugin (è il caso di adminAccessControl, weight -5).
-      expect({
-        osservatore: `${osservatore} @${posizione(osservatore) + 1}`,
-        interruttore: `${interruttore} @${posizione(interruttore) + 1}`,
-      }).toMatchObject({ osservatore: `${osservatore} @${posizione(osservatore) + 1}` });
-
+      //
+      // Una sola asserzione, quella che può fallire. La versione precedente ne
+      // aveva anche una decorativa — `expect({a, b}).toMatchObject({a})` con `a`
+      // calcolato dalla stessa espressione da entrambe le parti — che era vera
+      // per QUALUNQUE ordine, violazioni comprese: rumore in un test il cui unico
+      // scopo è presidiare questo vincolo. Il contesto non serviva comunque:
+      // `toBeLessThan` stampa già entrambe le posizioni quando fallisce.
       expect(posizione(osservatore)).toBeLessThan(posizione(interruttore));
     }
+  });
+
+  test('CHI contribuisce davvero un middleware — sei, non nove', () => {
+    // ERA UN ERRORE DI MISURA MIO, trovato dalla review (rettificato in v3.20.0).
+    // Avevo contato le FUNZIONI `getMiddlewareToAdd()` invocate — nove — e scritto
+    // « nove middleware » in `CLAUDE.md` e nel changelog. Tre di quelle funzioni
+    // restituiscono un array vuoto: `admin`, `csrfProtection` e `mailer`
+    // dichiarano il metodo ma non sono nella catena Koa. In particolare il CSRF
+    // NON è un middleware — l'enforcement vive nel route-wrap del core — e
+    // ragionare sull'ordine includendolo porta a conclusioni sbagliate su quando
+    // viene applicato.
+    //
+    // COME È STATA MISURATA questa classificazione, e come rifarla: caricare i
+    // plugin veri con `pluginSys.initialize()` e invocare
+    // `getMiddlewareToAdd({})` su ciascuno, contando chi restituisce un array non
+    // vuoto. Qui NON si fa: caricare i plugin veri dentro la suite avvierebbe i
+    // loro timer (buffer analytics, worker mailer, flush urlRedirect), e un
+    // `require()` di tutti i main.js è già bastato a bloccare un processo in
+    // questa branch. Le due liste sono quindi il RISULTATO di quella misura, e il
+    // test presidia due cose: che restino queste, e che un plugin nuovo che
+    // dichiari il metodo debba essere classificato a mano invece di scivolare
+    // dentro senza che nessuno decida se osserva o interrompe.
+    const CONTRIBUISCONO = [
+      'adminAccessControl', 'adminUsers', 'analytics', 'rateLimiter', 'simpleI18n', 'urlRedirect',
+    ];
+    const DICHIARANO_MA_VUOTO = ['admin', 'csrfProtection', 'mailer'];
+
+    const dichiarano = [];
+    for (const nome of fs.readdirSync(PLUGINS_DIR)) {
+      if (!isActive(nome)) continue;
+      const mainPath = path.join(PLUGINS_DIR, nome, 'main.js');
+      if (!fs.existsSync(mainPath)) continue;
+      if (/\bgetMiddlewareToAdd\b/.test(fs.readFileSync(mainPath, 'utf8'))) dichiarano.push(nome);
+    }
+
+    // Nessun plugin attivo dichiara il metodo senza essere in una delle due liste:
+    // se ne compare uno nuovo, questo test lo nomina e chiede di classificarlo.
+    expect(dichiarano.sort()).toEqual([...CONTRIBUISCONO, ...DICHIARANO_MA_VUOTO].sort());
+
+    // E i tre che NON contribuiscono restano fuori dalla catena: se uno di loro
+    // cominciasse a registrare un middleware, l'ordine documentato cambierebbe e
+    // andrebbe rimisurato.
+    for (const nome of DICHIARANO_MA_VUOTO) {
+      const sorgente = fs.readFileSync(path.join(PLUGINS_DIR, nome, 'main.js'), 'utf8');
+      const senzaCommenti = sorgente.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+      expect(senzaCommenti).not.toMatch(/middlewareArray\.push\s*\(/);
+    }
+  });
+
+  test('la documentazione non torna a dire « nove »', () => {
+    // Presidia la rettifica dove è stata scritta: `CLAUDE.md` è il documento che
+    // chi progetta un plugin legge per capire l'annidamento dei middleware.
+    const claude = fs.readFileSync(path.join(__dirname, '../../CLAUDE.md'), 'utf8');
+    const sezione = claude.slice(claude.indexOf('### Ordine di caricamento'),
+                                claude.indexOf('### Stati dei plugin'));
+
+    expect(sezione).toMatch(/contribuiscono \*\*davvero\*\* un\s+> middleware sono \*\*sei\*\*/);
+    expect(sezione).not.toMatch(/dei nove/);
   });
 
   test('adminAccessControl interrompe davvero: redirect/status senza next()', () => {

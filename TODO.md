@@ -820,6 +820,40 @@ redirige ma non conta (1 rosso).
 Non sono debito, ma direzioni: il dettaglio vive in
 [`docs/roadmap.it.md`](./docs/roadmap.it.md) e non è duplicato qui.
 
+- [ ] **🐞 `touches` è scritto project-relative in 7 step su 8, e il runner lo risolve package-relative.**
+      *(Emerso in v3.20.0 dalla review; l'ottava — analytics — è corretta lì.)*
+      `backupTouchedFiles` (`core/migrationRunner.js:286`) fa
+      `path.join(targetObj.packageDir, relative)`. Un `touches: ["plugins/sentinel/…"]`
+      risolve quindi in `plugins/sentinel/plugins/sentinel/…`, che non esiste, e il ramo
+      `if (!fs.existsSync(full)) continue` lo **salta in silenzio**. La forma corretta è
+      documentata (`docs/decisions/config-migrations.it.md:148`): `["pluginConfig.json5"]`.
+      **Istanze da correggere:** `plugins/sentinel/migrations/migrations.json5` (5 step),
+      `plugins/adminSentinel/…` (1), `core/migrations/adminConfig/…` (1 — anche lì
+      `packageDir` è la cartella che ospita il config, non la radice).
+      **Non è solo il backup:** `touches` guida anche `alignTouchedSchemaVersions`
+      (riga 442) e le `protectedLivePaths` che escludono i file dal merge additivo
+      (riga 533). Per gli step che toccano un file **secondario** — `sentinel` con
+      `sentinelRules.json5` — le conseguenze sono più larghe della sola rete di backup,
+      quindi vanno guardati uno per uno invece che corretti con un `sed`.
+      **Presidiabile:** un test che, per ogni `migrations.json5` del repo, verifichi che
+      ogni `touches` esista risolto dalla cartella del pacchetto. Ne esiste già uno per
+      analytics (`plugins/analytics/tests/unit/migrationV1toV2.test.js`), da generalizzare.
+- [ ] **`roleManagement.writeJson5Atomic()` riserializza: i ruoli perdono i commenti.**
+      *(Emerso in v3.20.0 dalla review.)* È **la stessa forma della decisione D1**, in un
+      altro file. `writeJson5Atomic` fa `JSON.stringify(data, null, 2)`, quindi ogni
+      creazione/modifica/cancellazione di ruolo dal pannello **azzera i commenti** di
+      `userRole.json5` — misurato su copia: **15 righe con commento → 0**, e sparisce
+      anche l'intestazione JSON5 che `CLAUDE.md` dichiara obbligatoria su ogni `.json5`.
+      **Preesistente alla branch** (su `main` erano già quattro `fs.writeFileSync` con
+      `JSON.stringify`); la v3.12.0 ha aggiunto l'atomicità senza cambiare la
+      serializzazione. **È una decisione, non una svista:** per D1 il maintainer ha
+      scelto la scrittura chirurgica, ma `userRole.json5` e `userAccount.json5` sono
+      **dati**, non configurazione — e per i dati riserializzare è difendibile. Le due
+      uscite: **applicare anche qui `setJson5Key`** chiave per chiave (coerenza con D1,
+      ma su una struttura annidata `roles.<id>.<campo>` e con cancellazioni, che
+      `setJson5Key` non sa fare), oppure **dichiarare che i file di dati non portano
+      commenti** e togliere l'intestazione dai loro `.default` — chiudendo la
+      contraddizione dalla parte opposta.
 - [ ] **🔍 Rivedere la strategia di backup, e i nomi che la rendono illeggibile.**
       *(Emerso in v3.18.0, chiudendo D6.)* Sotto `backups/` convivono **due sistemi
       diversi che non si conoscono fra loro**, e la confusione comincia dai nomi.
