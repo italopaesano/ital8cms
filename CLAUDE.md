@@ -1121,6 +1121,12 @@ Server su `http://localhost:3000`.
 > `backup-manager`, `npm run deps-sync`. Modello **ibrido per-plugin** delle
 > dipendenze npm (plugin con `package.json` proprio → `node_modules` locale;
 > pilota `adminMedia`). → [`docs/self-update.it.md`](./docs/self-update.it.md).
+>
+> ⚠️ **Sotto `backups/` convivono DUE sistemi che non si conoscono:** lo snapshot a
+> comando (`backup-*`, quello qui sopra) e il backup automatico del wizard di
+> installazione (`init-*`), che i comandi `backup-list`/`restore`/`backup-manager`
+> **non vedono** — e che quindi non viene mai potato. Confronto, limiti noti e
+> recupero a mano: → [`docs/backup-strategie.it.md`](./docs/backup-strategie.it.md).
 
 > **Control plane CLI (`ital8cms-cli`):** pilota un'istanza **in esecuzione** via
 > socket UNIX locale (tipicamente in SSH). `npm run cli -- status` /

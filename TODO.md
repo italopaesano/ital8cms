@@ -855,8 +855,12 @@ Non sono debito, ma direzioni: il dettaglio vive in
       - **Un solo plugin dichiara `getFilesToBackup()`**: `adminUsers`
         (`userAccount.json5` + `userRole.json5`). Il meccanismo per-plugin esiste per
         un caso solo.
-      - **La procedura non è documentata da nessuna parte.** `docs/self-update.it.md`
-        copre solo `npm run backup`; il backup del wizard non compare in `docs/`.
+      - ~~**La procedura non è documentata da nessuna parte.**~~ **Scritta in v3.19.0:**
+        [`docs/backup-strategie.it.md`](./docs/backup-strategie.it.md) mette i due sistemi
+        a confronto, descrive per intero quello del wizard (cosa copia e quando, layout
+        della cartella, ripristino e suoi limiti, come dichiarare `getFilesToBackup()` in
+        un plugin) e spiega **come recuperare a mano**, visto che il backup globale non ha
+        un ripristino automatico. Restano da decidere le altre voci qui sopra.
 
       **Cosa deciderà la revisione:** se i due sistemi restano due (e allora vanno
       distinti nei nomi e nella documentazione) oppure convergono in uno solo; che

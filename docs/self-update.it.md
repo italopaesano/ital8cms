@@ -68,6 +68,12 @@ calcolo della latest; `--tag` esplicito bypassa la discovery.
 
 ## Backup / restore
 
+> ⚠️ **Non è l'unico backup del progetto.** Il wizard di installazione
+> (`npm run start-configure`) ne fa uno suo, automatico, in `backups/init-<timestamp>/`
+> — che i comandi qui sotto **non vedono**: `backup-list`, `restore` e
+> `backup-manager` filtrano per il prefisso `backup-`. I due sistemi a confronto:
+> [`backup-strategie.it.md`](./backup-strategie.it.md).
+
 Uno snapshot è una **cartella** in `backups/<timestamp>/` con `tree/` (la copia)
 e `manifest.json` (versione, sha git, node, cosa include). Esclusi di default:
 `node_modules` (`--with-node-modules` per includerli), `backups/`, `.git`
