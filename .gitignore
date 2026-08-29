@@ -77,6 +77,11 @@ themes/*/node_modules/
 # Covers site pages and runtime-generated files (e.g. SEO plugin's sitemap.xml / robots.txt).
 /www/*
 !/www/.gitkeep
+# Pagina segnaposto di primo avvio: unico file di /www versionato, così una
+# installazione pulita non risponde 404 su `GET /`. È un file normale — chi
+# costruisce il proprio sito lo sostituisce, e da quel momento comparirà in
+# `git status` come modificato. Vedi il commento in testa al file.
+!/www/index.ejs
 
 # Init system
 /scripts/initState.json5

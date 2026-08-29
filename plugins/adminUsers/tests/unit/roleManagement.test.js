@@ -94,6 +94,49 @@ describe('createCustomRole() — validazione', () => {
   });
 });
 
+describe('i file di DATI non portano commenti — è una scelta, non una svista', () => {
+  // DECISIONE del maintainer (v3.21.0), speculare a D1.
+  //
+  // `writeJson5Atomic` riserializza con `JSON.stringify`, quindi ogni scrittura
+  // azzera i commenti del file vivo. Per i CONFIG il progetto ha scelto l'opposto
+  // — scrittura chirurgica, D1 — ma `userRole.json5` e `userAccount.json5` sono
+  // **dati**: li scrive il codice, non una persona, e comportano cancellazioni di
+  // chiavi annidate che una scrittura chirurgica non saprebbe fare.
+  //
+  // Questi test impediscono che qualcuno "corregga" l'incoerenza in una direzione
+  // sola, lasciando il progetto a metà strada.
+
+  test('i .default dei file di dati NON portano l\'intestazione JSON5', () => {
+    // Se la riportasse, la copia viva la perderebbe alla prima modifica di un
+    // ruolo — cioè si tornerebbe alla contraddizione che questa decisione chiude.
+    for (const nome of ['userRole.default.json5', 'userAccount.default.json5']) {
+      const testo = fs.readFileSync(path.join(__dirname, '../..', nome), 'utf8');
+      expect(testo).not.toMatch(/^\/\/ This file follows the JSON5 standard/);
+      // Ma dichiarano perché: un file senza intestazione e senza spiegazione
+      // sembrerebbe una dimenticanza.
+      expect(testo).toMatch(/FILE DI DATI, NON DI CONFIGURAZIONE/);
+    }
+  });
+
+  test('i .default restano JSON5 validi e leggibili da loadJson5', () => {
+    const loadJson5 = require('../../../../core/loadJson5');
+
+    expect(Object.keys(loadJson5(path.join(__dirname, '../../userRole.default.json5')).roles))
+      .toEqual(['0', '1', '2', '3']);
+    expect(loadJson5(path.join(__dirname, '../../userAccount.default.json5')).users).toEqual({});
+  });
+
+  test('la decisione è scritta accanto al codice che la applica', () => {
+    // Un comportamento voluto che sembra un difetto va dichiarato dove qualcuno
+    // lo incontrerà: nella funzione che riserializza.
+    const sorgente = fs.readFileSync(path.join(__dirname, '../../roleManagement.js'), 'utf8');
+    const jsdoc = sorgente.slice(0, sorgente.indexOf('function writeJson5Atomic'));
+
+    expect(jsdoc).toMatch(/PERCHÉ RISERIALIZZA, ED È VOLUTO/);
+    expect(jsdoc).toMatch(/dati.*non.*configurazione|dati\*\*, non configurazione/is);
+  });
+});
+
 describe('updateCustomRole() — i ruoli di sistema sono immutabili', () => {
   // Il controllo che conta. Se cadesse, dal pannello si potrebbe rinominare
   // `admin` e le regole di accesso che lo nominano smetterebbero di combaciare.

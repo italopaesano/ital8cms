@@ -135,8 +135,17 @@ senza rimando sono descritte per intero qui perché non hanno una voce propria a
       2.129 righe all'1,9%, non eseguibili da jest con `testEnvironment: 'node'`.
       I due file dual-mode di `adminSentinel` mostrano una terza via: un guard
       `typeof module` che li rende testabili **senza** cambiare ambiente.
-- [ ] **Pagina segnaposto di primo avvio per `/www`** → §4.
-      Voce preesistente: su un'installazione `production` pulita `GET /` risponde 404.
+- [x] ~~**Pagina segnaposto di primo avvio per `/www`** → §4.~~
+      **Deciso dal maintainer e applicato in v3.21.0.** `www/index.ejs` è un file normale,
+      committato grazie a un'eccezione `!/www/index.ejs` in `.gitignore` (che esclude tutto
+      `/www/*`) — niente meccanismo di materializzazione: chi costruisce il proprio sito la
+      sostituisce e non torna. Verificato sul server reale: `GET /` passa da **404 a 200**,
+      in italiano e in inglese. Passa dai partial del tema attivo invece di cablare l'HTML,
+      e **non nomina il pannello admin**: `index.js` non passa `adminPrefix` alle pagine
+      pubbliche di proposito, e una pagina di benvenuto è esattamente il posto dove
+      verrebbe naturale metterlo. 7 test, fra cui quello che verifica che l'eccezione in
+      `.gitignore` non si perda — senza, il file resterebbe sulla macchina di chi sviluppa
+      e sparirebbe solo dal pacchetto.
 
 **Le sei voci sotto vengono dalla revisione completa della branch** (v3.10.0 → v3.12.0):
 tutto ciò che quella revisione ha trovato e che si poteva correggere senza scegliere è
@@ -820,7 +829,19 @@ redirige ma non conta (1 rosso).
 Non sono debito, ma direzioni: il dettaglio vive in
 [`docs/roadmap.it.md`](./docs/roadmap.it.md) e non è duplicato qui.
 
-- [ ] **🐞 `touches` è scritto project-relative in 7 step su 8, e il runner lo risolve package-relative.**
+- [x] ~~**🐞 `touches` è scritto project-relative in 7 step su 8, e il runner lo risolve package-relative.**~~
+      **CORRETTO in v3.21.0**, tutte e 7, guardate una per una come deciso. Il caso
+      delicato — `sentinel`, che tocca il file **secondario** `sentinelRules.json5` — è
+      risultato inerte oggi: il suo `.default` e il vivo sono entrambi a `schemaVersion: 1`
+      e il descrittore è a 6 con la catena già applicata, quindi l'allineamento e le
+      `protectedLivePaths` non cambiano nulla; la correzione conta per un'installazione che
+      parta indietro e percorra la catena. **Presidio repo-wide** in
+      `tests/integration/migrationsTouches.test.js`: per ogni `migrations.json5` del
+      progetto ogni `touches` deve risolvere dalla cartella del pacchetto, e non deve
+      cominciare con `plugins/`, `themes/` o `core/`.
+      ⚠ **Un test esistente codificava l'errore**: `adminSentinel/tests/unit/migrationsChain.test.js`
+      risolveva da `repoRoot`, quindi indice e test sbagliavano allo stesso modo e il test
+      passava. Corretto anche quello. Cronaca, per memoria:
       *(Emerso in v3.20.0 dalla review; l'ottava — analytics — è corretta lì.)*
       `backupTouchedFiles` (`core/migrationRunner.js:286`) fa
       `path.join(targetObj.packageDir, relative)`. Un `touches: ["plugins/sentinel/…"]`
@@ -838,7 +859,17 @@ Non sono debito, ma direzioni: il dettaglio vive in
       **Presidiabile:** un test che, per ogni `migrations.json5` del repo, verifichi che
       ogni `touches` esista risolto dalla cartella del pacchetto. Ne esiste già uno per
       analytics (`plugins/analytics/tests/unit/migrationV1toV2.test.js`), da generalizzare.
-- [ ] **`roleManagement.writeJson5Atomic()` riserializza: i ruoli perdono i commenti.**
+- [x] ~~**`roleManagement.writeJson5Atomic()` riserializza: i ruoli perdono i commenti.**~~
+      **Deciso dal maintainer e applicato in v3.21.0: i file di DATI non portano commenti.**
+      Chiusa dalla parte opposta rispetto a D1, e la differenza è nella natura dei file —
+      `userRole.json5` e `userAccount.json5` non sono scritti da una persona per essere
+      riletti da una persona, sono scritti dal codice a ogni operazione del pannello, con
+      **cancellazioni** di chiavi annidate che una scrittura chirurgica non saprebbe fare.
+      Applicato: intestazione JSON5 tolta dai due `.default` (che restano JSON5 validi e
+      **conservano la documentazione dei ruoli**, perché nessun codice li riscrive), con in
+      testa la dichiarazione del perché; eccezione scritta in `CLAUDE.md` accanto alla
+      regola generale; motivazione nella JSDoc di `writeJson5Atomic`; 3 test che
+      impediscono di "correggere" l'incoerenza in una direzione sola. Cronaca, per memoria:
       *(Emerso in v3.20.0 dalla review.)* È **la stessa forma della decisione D1**, in un
       altro file. `writeJson5Atomic` fa `JSON.stringify(data, null, 2)`, quindi ogni
       creazione/modifica/cancellazione di ruolo dal pannello **azzera i commenti** di

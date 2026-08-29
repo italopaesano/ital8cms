@@ -54,6 +54,16 @@ Il progetto ital8cms è anche manutentore del modulo npm **`koa-classic-server`*
 // This file follows the JSON5 standard - comments and trailing commas are supported
 ```
 
+> **Eccezione dichiarata: i file di DATI.** `userAccount.json5` e `userRole.json5`
+> sono scritti **dal codice** a ogni operazione del pannello — con creazioni e
+> cancellazioni di chiavi annidate — quindi vengono riserializzati per intero e
+> **non conservano commenti**, intestazione compresa. Non è una svista: la loro
+> documentazione vive nei rispettivi `.default`, che nessun codice riscrive mai, e
+> che per coerenza non portano l'intestazione. La regola qui sopra vale per i file
+> di **configurazione**, che una persona scrive per essere riletti da una persona
+> (per quelli il progetto usa la scrittura chirurgica: `setJson5Key`/`editJson5`,
+> decisione D1).
+
 **Caricamento dei file JSON:** Tutti i file JSON devono essere caricati usando il modulo centralizzato `core/loadJson5.js` (tutti i file di configurazione ora usano l'estensione .json5):
 
 ```javascript

@@ -1,4 +1,9 @@
-// This file follows the JSON5 standard - comments and trailing commas are supported
+// FILE DI DATI, NON DI CONFIGURAZIONE.
+//
+// Il codice riscrive `userAccount.json5` per intero quando cancella un ruolo dagli
+// utenti che lo avevano: la copia VIVA non conserva commenti, e non porta
+// l'intestazione JSON5 dei file di configurazione. È una scelta, non una svista —
+// vedi CLAUDE.md, *Strategia di archiviazione dati*.
 //
 // Istanza di produzione: nessun utente preconfigurato.
 // Il primo utente root va creato col wizard: `npm run start-configure`.

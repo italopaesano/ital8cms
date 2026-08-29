@@ -24,7 +24,7 @@
       title: "Regola del token esca (canary)",
       automatic: true,
       script: "from-v1-to-v2.js",
-      touches: ["plugins/sentinel/sentinelRules.json5"],
+      touches: ["sentinelRules.json5"],
       reason:
         "Il merge additivo del boot riconcilia anche le coppie secondarie del  plugin, quindi vede sentinelRules.default.json5, ma tratta gli ARRAY come  valori — scelta giusta, perché fonderli significherebbe indovinare la  posizione e sovrascrivere l'ordine deciso dall'amministratore. `rules` è  un array: una regola nuova distribuita col plugin non raggiunge mai  un'installazione esistente. Senza questo step il codice dei token esca ci  sarebbe e la regola che li intercetta no. Stesso difetto di `menuOrder` in  v2.72.0. L'inserimento è testuale (i commenti dentro `rules` sono metà del  valore del file), idempotente, e va SUBITO DOPO LA WHITELIST e non in  fondo: con first-match-wins una regola accodata arriverebbe dopo  `backup-probe`, che matcha .tar.gz, e uno dei decoy distribuiti consegna  il token proprio dentro un finto backup-....tar.gz.",
     },
@@ -34,7 +34,7 @@
       title: "Regola sulla coerenza di sessione",
       automatic: true,
       script: "from-v2-to-v3.js",
-      touches: ["plugins/sentinel/sentinelRules.json5"],
+      touches: ["sentinelRules.json5"],
       reason:
         "Stessa ragione dello step precedente: `rules` è un array e il merge non  lo tocca. Senza questo step, su un'installazione esistente le anomalie di  sessione verrebbero calcolate a ogni richiesta autenticata e buttate via,  perché nessuna regola le guarderebbe. La regola viene inserita DOPO  `canary-token-used` (ancora esplicita) e non semplicemente dopo la  whitelist: senza l'ancora finirebbe sopra quella dello step precedente, e  l'ordine di un'installazione migrata differirebbe da quello di una nuova.",
     },
@@ -57,7 +57,7 @@
       to: 4,
       title: "Tetti di drop e tarpit",
       automatic: true,
-      touches: ["plugins/sentinel/pluginConfig.json5"],
+      touches: ["pluginConfig.json5"],
       reason:
         "Il passo 7 ha aggiunto il blocco `custom.tarpit` (maxConcurrent,  maxSeconds, intervalMs) al descrittore. Sono chiavi nuove DENTRO un  oggetto, che il merge additivo ricorsivo del boot sa aggiungere da sé:  nessuno script. `sentinelRules.default.json5` è cresciuto di 43 righe nello  stesso intervento, ma sono tutte COMMENTI — gli esempi di regola per drop e  tarpit restano commentati per scelta, quindi l'array `rules` non è cambiato  e non c'è nulla da inserire. Questo step esiste perché la catena sia  contigua, non perché ci sia lavoro da fare.",
     },
@@ -66,7 +66,7 @@
       to: 5,
       title: "Reputazione locale delle impronte",
       automatic: true,
-      touches: ["plugins/sentinel/pluginConfig.json5"],
+      touches: ["pluginConfig.json5"],
       reason:
         "Il passo 8 ha aggiunto `custom.reputation` (minRequests, suspectShare,  badShare, burstWindowSeconds, burstMinRequests,  protectBrowserFingerprints) e `custom.census.ipRetentionDays`. Anche qui  solo chiavi dentro oggetti, coperte dal merge additivo; e anche qui le  regole di esempio aggiunte al file distribuito sono commentate, quindi  `rules` non cambia. Attenzione a un valore in particolare:  `protectBrowserFingerprints` arriva a `true`, ed è il default giusto —  un'impronta da browser è condivisa da tutti i suoi utenti, e condannarla  significa chiudere fuori loro. Il merge non sovrascrive un valore già  presente, quindi chi l'avesse messo a false resta a false: se non è  intenzionale, va rivisto a mano.",
     },
@@ -77,7 +77,7 @@
       title: "shell-probe richiede un'estensione eseguibile",
       automatic: true,
       script: "from-v5-to-v6.js",
-      touches: ["plugins/sentinel/sentinelRules.json5"],
+      touches: ["sentinelRules.json5"],
       reason:
         "Il pattern di `shell-probe` si fermava al punto e intercettava nomi di  file ordinari: /js/shell.js, /assets/cmd.css, /docs/webshell.pdf. Il  problema non è il rumore nel log: è che il percorso di promozione  documentato nel file delle regole NON PUÒ accorgersene. Dice di guardare  `authenticatedHits` e promuovere se è zero, e un asset chiesto da  visitatori anonimi lo lascia a zero per sempre — quindi la regola  appariva come la più sicura da promuovere proprio mentre promuoverla  avrebbe restituito 404 su una pagina pubblica, con una diagnosi che parte  dal posto sbagliato (il 404 di block è indistinguibile da un file  mancante). Serve una migrazione perché `rules` è un array e il merge del  boot lo tratta come un valore, come per gli step 1→2 e 2→3; a differenza  di quelli, però, questo CAMBIA una regola che l'amministratore potrebbe  aver già promosso, quindi lo script si ferma senza toccare nulla se il  pattern in vigore non è esattamente quello distribuito.",
     },

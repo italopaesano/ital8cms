@@ -138,23 +138,34 @@ function isRoleIdAbsent(roleId) {
 }
 
 /**
- * Scrive un file JSON5 in modo ATOMICO: file temporaneo + rename.
+ * Scrittura ATOMICA di un file di dati: temp + rename.
  *
- * PERCHÉ. La regola 1 di CLAUDE.md lo impone, e la ragione è concreta: qui si
- * riscrivono `userRole.json5` e `userAccount.json5`, cioè i ruoli e gli account
- * dell'intera installazione. Un `writeFileSync` diretto che si interrompe a metà
- * — disco pieno, processo ucciso — lascia un file TRONCATO, e al boot successivo
- * `loadJson5` non riesce più a leggerlo: nessun utente, nessun ruolo, pannello
- * admin irraggiungibile. Il `rename` invece è atomico sullo stesso filesystem: o
- * il file nuovo è completo, o resta quello vecchio.
+ * L'atomicità è la regola 1 di `CLAUDE.md`, e qui non è formalismo: si riscrivono
+ * i ruoli e gli account dell'INTERA installazione, e una scrittura interrotta a
+ * metà (disco pieno, processo ucciso) lascerebbe un file troncato che al boot
+ * successivo `loadJson5` non legge più — nessun utente, nessun ruolo, pannello
+ * admin irraggiungibile. Il `rename` è atomico sullo stesso filesystem: o il file
+ * nuovo è completo, o resta quello vecchio.
  *
- * NOTA su ciò che questo NON risolve. La riscrittura passa comunque da
- * `JSON.stringify`, quindi i commenti del file vivo si perdono (userRole.json5 ne
- * ha 15 su 41 righe). Preservarli richiederebbe una modifica chiave-per-chiave,
- * che per l'AGGIUNTA e la RIMOZIONE di un ruolo non è supportata dagli helper
- * attuali — è un intervento a sé, aperto in TODO.md.
+ * ─── PERCHÉ RISERIALIZZA, ED È VOLUTO ────────────────────────────────────────
+ * `JSON.stringify` dell'oggetto intero **azzera i commenti** del file vivo:
+ * misurato, `userRole.json5` passa da 15 righe con commento a 0 alla prima
+ * modifica di un ruolo dal pannello.
  *
- * @param {string} filePath - Path assoluto del file
+ * È la stessa forma della decisione D1 (`ConfigWizard.saveConfig()`), dove la
+ * scelta è stata l'opposta — scrittura chirurgica chiave per chiave. Qui il
+ * maintainer ha deciso diversamente, e la differenza è nella natura dei file:
+ * `userRole.json5` e `userAccount.json5` sono **dati**, non configurazione. Non
+ * sono scritti da una persona per essere riletti da una persona; sono scritti dal
+ * codice a ogni operazione sul pannello, con creazioni e CANCELLAZIONI di chiavi
+ * annidate (`roles.<id>`) che una scrittura chirurgica non saprebbe fare — e la
+ * loro documentazione vive nei `.default`, che nessun codice riscrive mai.
+ *
+ * Conseguenza dichiarata: **i file di dati non portano commenti**, e i loro
+ * `.default` non portano l'intestazione JSON5 dei file di configurazione. Vedi
+ * `CLAUDE.md`, *Strategia di archiviazione dati*.
+ *
+ * @param {string} filePath - Path del file da riscrivere
  * @param {object} data - Oggetto da serializzare
  */
 function writeJson5Atomic(filePath, data) {

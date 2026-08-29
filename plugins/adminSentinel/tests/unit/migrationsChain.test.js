@@ -89,11 +89,21 @@ describe('catena delle migrazioni di adminSentinel', () => {
   // I percorsi in `touches` guidano il backup automatico prima di ogni step: uno
   // sbagliato non fallisce, salva il file sbagliato.
   test('i percorsi toccati esistono come coppia .default', () => {
-    const repoRoot = path.join(PLUGIN_DIR, '..', '..');
+    // ⚠ Questo test risolveva da `repoRoot`, e con ciò CODIFICAVA L'ERRORE che la
+    // review di v3.20.0 ha trovato: `core/migrationRunner.js` risolve ogni
+    // `touches` con `path.join(packageDir, relative)`, non dalla radice del
+    // progetto. Finché entrambi — l'indice e il test — sbagliavano allo stesso
+    // modo, il test passava e il backup pre-step continuava a essere saltato in
+    // silenzio. Un test che concorda con il difetto invece che col runner è
+    // peggio di nessun test: dà la sicurezza senza darne il motivo.
+    //
+    // Ora risolve come il runner. Lo sweep repo-wide sta in
+    // `tests/integration/migrationsTouches.test.js`.
     for (const step of index.steps) {
       for (const touched of step.touches) {
-        const predefinito = path.join(repoRoot, touched.replace(/\.json5$/, '.default.json5'));
-        expect(fs.existsSync(predefinito)).toBe(true);
+        const predefinito = path.join(PLUGIN_DIR, touched.replace(/\.json5$/, '.default.json5'));
+        expect({ touches: touched, defaultEsiste: fs.existsSync(predefinito) })
+          .toEqual({ touches: touched, defaultEsiste: true });
       }
     }
   });

@@ -1,4 +1,12 @@
-// This file follows the JSON5 standard - comments and trailing commas are supported
+// FILE DI DATI, NON DI CONFIGURAZIONE.
+//
+// Il codice riscrive `userRole.json5` per intero a ogni creazione, modifica o
+// cancellazione di un ruolo dal pannello admin: la copia VIVA non conserva
+// commenti, e non porta l'intestazione JSON5 che i file di configurazione hanno.
+// È una scelta, non una svista — vedi CLAUDE.md, *Strategia di archiviazione dati*.
+//
+// La documentazione dei ruoli sta quindi QUI, nel default, che nessun codice
+// riscrive mai.
 {
   "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   "roles": {
