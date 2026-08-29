@@ -331,8 +331,10 @@ mantenere a mano:
 > plugin il test fallisce finché non dichiari a quale faccia del sito appartiene.
 
 Un plugin di terze parti che ignora del tutto l'esistenza di `reserved` eredita
-il comportamento corretto **gratis**: `access` è già obbligatorio su ogni rotta e
-la sua assenza è errore fatale al boot.
+il comportamento corretto **gratis**: `access` è già obbligatorio su ogni rotta, e
+una rotta che non lo dichiara **non viene registrata affatto** (salta + warning al
+boot, da v3.14.0). Non può quindi esistere una rotta fuori dall'indice riservato
+perché « le mancava il campo »: o lo dichiara ed è classificata, o non c'è.
 
 ### `isAuthEntryPoint` — l'unica dichiarazione da aggiungere
 

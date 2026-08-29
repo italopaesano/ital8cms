@@ -3,13 +3,65 @@
 /**
  * Validatori comuni per input utente durante wizard
  */
+
+/**
+ * Solo cifre, niente altro. Gli spazi ai bordi sono tollerati (un `trim()`
+ * precede il test): chi digita uno spazio di troppo non ha sbagliato il numero.
+ */
+const SOLE_CIFRE = /^\d+$/
+
+/**
+ * Spiega perché un input numerico è stato rifiutato, mostrando — quando è
+ * significativo — il valore in cui `parseInt` lo avrebbe silenziosamente
+ * trasformato.
+ *
+ * Il « sarebbe diventato » è la parte che conta: senza, il messaggio dice che
+ * l'input è sbagliato; con, dice **quale danno** stava per fare. `3000abc` non
+ * sembra pericoloso finché non si legge che il sito sarebbe partito su 3000
+ * senza dirlo, e `1e4` — che uno legge come diecimila — sarebbe diventato 1.
+ *
+ * @param {string} etichetta - Come chiamare il valore nel messaggio (es. "porta")
+ * @param {*} value - L'input rifiutato, così come digitato
+ * @returns {string}
+ */
+function spiegaNonNumerico(etichetta, value) {
+  const raw = String(value ?? '').trim()
+  const troncato = parseInt(raw)
+  // La frase si aggiunge SOLO se il parse aveva davvero scartato qualcosa senza
+  // dirlo. Su `-1` parseInt restituisce -1 — niente di silenzioso è accaduto, e
+  // il vecchio codice l'avrebbe comunque respinto per il range: annunciare
+  // « sarebbe diventato -1 » spaventerebbe per un pericolo che non c'era.
+  const troncamentoSilenzioso = Number.isFinite(troncato) && String(troncato) !== raw
+  const conseguenza = troncamentoSilenzioso ? ` Scritto così sarebbe diventato ${troncato}.` : ''
+  return `"${value}" non è ${etichetta}: usa solo cifre (0-9), senza lettere, punti o segni.${conseguenza}`
+}
+
 const validators = {
   /**
-   * Valida porta TCP
+   * Valida porta TCP.
+   *
+   * ⚠ IL TEST SULLE SOLE CIFRE VIENE PRIMA DEL PARSE, ed è il punto.
+   * Fino alla v3.15.0 il validatore faceva `parseInt(value)` e si limitava a
+   * controllare il risultato: `parseInt` però **tronca al primo carattere non
+   * numerico** invece di fallire, quindi `"3000abc"` valeva 3000, `"3000.9"`
+   * valeva 3000 e `"1e4"` — che chiunque legge come diecimila — valeva **1**.
+   * Il wizard accettava, `filter: (v) => parseInt(v)` scriveva il valore
+   * troncato in `ital8Config.json5`, e la porta finita nel config **non era
+   * quella digitata**. Nessuno lo segnalava.
+   *
+   * L'ordine filter/validate è stato verificato sul sorgente di inquirer 14
+   * (`dist/ui/prompt.js`: `promptFn(...).then((answer) => ({ answer: filter(answer) }))`):
+   * il filtro è applicato DOPO che il prompt ha risolto, quindi `validate`
+   * riceve la stringa grezza e questo guard morde davvero. Se un domani
+   * l'ordine si invertisse, `validate` riceverebbe già un numero e il guard
+   * diventerebbe inutile — è presidiato in
+   * `tests/unit/scripts/validators.test.js`.
    */
   port: (value) => {
-    const port = parseInt(value)
-    if (isNaN(port)) return 'La porta deve essere un numero'
+    const raw = String(value ?? '').trim()
+    if (raw === '') return 'La porta è obbligatoria'
+    if (!SOLE_CIFRE.test(raw)) return spiegaNonNumerico('una porta valida', value)
+    const port = Number(raw)
     if (port < 1 || port > 65535) return 'Porta deve essere tra 1 e 65535'
     return true
   },
@@ -75,12 +127,22 @@ const validators = {
   },
 
   /**
-   * Valida numero intero positivo
+   * Valida numero intero positivo (zero incluso).
+   *
+   * Stesso guard di `port()` e per la stessa ragione: `parseInt` tronca invece
+   * di fallire. Il difetto era identico — `"3.7"` valeva 3, `"5xyz"` valeva 5 —
+   * ed è stato chiuso insieme all'altro nella v3.15.0. Questo validatore **non
+   * ha chiamanti** nel repo (censimento in `validators.test.js`), quindi la
+   * correzione non cambia nulla oggi: serve a non lasciare in piedi la stessa
+   * trappola per il primo che lo userà.
    */
   positiveInteger: (value) => {
-    const num = parseInt(value)
-    if (isNaN(num)) return 'Deve essere un numero'
-    if (num < 0) return 'Deve essere un numero positivo'
+    const raw = String(value ?? '').trim()
+    if (raw === '') return 'Campo obbligatorio'
+    // Il segno meno è respinto da SOLE_CIFRE, ma merita il suo messaggio: chi
+    // scrive "-1" ha capito il formato e sbagliato il valore, ed è un'altra cosa.
+    if (/^-\d+$/.test(raw)) return 'Deve essere un numero positivo'
+    if (!SOLE_CIFRE.test(raw)) return spiegaNonNumerico('un numero intero', value)
     return true
   },
 

@@ -270,6 +270,49 @@ plugins/myPlugin/
 
 Stessa struttura per i temi in `themes/myTheme/tests/`.
 
+#### La suite di integrità dei temi
+
+Ogni tema ha `tests/themeIntegrity.test.js`: **tre righe** che delegano alla suite
+condivisa in `core/testHelpers/themeIntegrity.js`.
+
+```javascript
+const { describeThemeIntegrity } = require('../../../core/testHelpers/themeIntegrity');
+
+describeThemeIntegrity(__dirname);
+```
+
+Il file **non nomina il tema**: nome e radice si ricavano da `__dirname`, così
+rinominare la cartella non lascia un test che ne valida un altro.
+
+**Perché il file sta nel tema ma le asserzioni no.** Il modello del progetto è
+self-contained — un tema clonato da un repo porta con sé il proprio test, e
+`npm run test:themes` lo trova con il pattern `themes/[^/]+/tests/`. Ma il contratto
+che i temi devono soddisfare è **uno solo**: copiarlo in ogni tema significherebbe
+tanti punti da aggiornare quanti sono i temi, e altrettante occasioni di
+dimenticarne uno. Un tema clonato in un'altra installazione funziona lo stesso,
+perché `core/testHelpers/` fa parte del CMS come `loadJson5`.
+
+**Cosa verifica, oltre a ciò che `themeSys` già copre.** Non ri-testa il validatore
+(quello ha i suoi unit test): lo **applica ai temi veri**, e aggiunge i due punti
+che il validatore non guarda.
+
+| Verifica | Perché non bastava `validateThemeContent()` |
+|---|---|
+| Struttura e hook richiesti | — (è il validatore, applicato al tema vero) |
+| Include risolvibili in **ogni** `.ejs` | Il validatore parte dai **sei partial noti**: `templates/` e `pluginsEndpointsMarkup/` non vengono mai raggiunti — 17 file su 54 nel repo. Un include rotto là dentro è un 500 alla prima richiesta di quella pagina |
+| Target di `getThemePartPath()` | Path **calcolato** a runtime: il risolutore generico lo classifica « non risolvibile » e passa oltre. È però l'idioma canonico del progetto, e sui sette temi vale 42 chiamate |
+| Target di `getThemeResourceUrl()` | Una risorsa assente non rompe il render: dà un **404 su ogni pagina** servita dal tema — il tipo di difetto che sopravvive a lungo perché « la pagina funziona » |
+| Coppia `.default`/vivo del descrittore | `schemaVersion` intero e prima chiave, `isInstalled` assente dal `.default`, `isAdminTheme` non alla deriva fra i due |
+| Coerenza con `ital8Config.json5` | Il tema admin attivo deve dichiarare `isAdminTheme: true`; quello pubblico no |
+
+`wwwCustomPath` è verificato come **implicazione a senso unico**: col flag acceso la
+cartella `www/` del tema deve esistere (è l'unica radice servita, e dichiararlo
+senza averla significa 404 su tutto il sito); col flag spento un `www/` nel tema è
+inerte — `getWwwPath()` lo ignora — e non viene vietato.
+
+Creando un tema nuovo, lo scaffolding della skill `ital8cms-theme-creator` genera
+il file: saltarlo è il modo in cui un tema esce silenziosamente dalla copertura.
+
 ### Nomi dei file
 
 - Test: `*.test.js` o `*.spec.js` (match Jest standard)
@@ -295,6 +338,11 @@ const {
 ```
 
 **Path relativo** da un file `plugins/myPlugin/tests/unit/foo.test.js`: `../../../core/testHelpers`.
+
+> `themeIntegrity.js` è l'unico helper **fuori** dal barrel `index.js`, e si importa
+> per path diretto. Il barrel fa lo spread di tutti i moduli che elenca: includerlo
+> farebbe caricare `themeSys` e `ejsIncludeResolver` a ogni test che usa un
+> qualsiasi mock, senza che nessuno di quei test li usi.
 
 #### Factory di mock
 
@@ -322,6 +370,138 @@ Tutti i metodi restituiti sono `jest.fn()` — permettono asserzioni come `expec
 |---------|-------|
 | `loadFixture(name)` | Carica una fixture JSON5 da `/core/testHelpers/fixtures/` (condivisa tra più plugin) |
 | `createPluginSandbox(pluginName, options)` | Crea dir temporanea in `os.tmpdir()` con scaffolding plugin |
+
+### Cosa entra nella misura di coverage (e perché i temi ci sono)
+
+`collectCoverageFrom` copre `core/`, `plugins/`, `scripts/`, `bin/`, `index.js` e —
+**da v3.23.0** — `themes/**/*.js`. I plugin **disattivati** restano esclusi: sono già
+fuori dalla discovery dei test, e misurarne il codice gonfierebbe il denominatore
+con righe che la suite non ha il permesso di eseguire.
+
+**Perché i temi sono entrati.** Sono 6 file, 395 righe. Finché erano fuori dallo
+scope non risultavano « scoperti »: erano **invisibili** — non comparivano come 0%,
+non comparivano affatto. Cinque sono cablaggio del DOM (menu mobile, smooth scroll,
+back-to-top) che un test unitario non verifica meglio di una lettura, ed entrano a
+0% dichiarandolo. Il sesto è
+`themes/defaultAdminTheme/themeResources/js/escapeHtml.js`, cioè il **livello 2
+della difesa XSS** del pannello admin: una protezione di sicurezza che non era né
+testata né contata.
+
+**Il costo, misurato** con una run completa prima e dopo:
+
+| | senza temi | con i temi | delta |
+|---|---|---|---|
+| statements | 52,57 | 52,25 | −0,32 |
+| branches | 51,59 | 51,38 | −0,21 |
+| functions | 48,02 | 47,50 | −0,52 |
+| lines | 53,30 | 52,95 | −0,35 |
+
+Tutte e quattro restano **sopra la soglia** (51 / 50 / 46 / 51) con margini fra
++1,25 e +1,95: la soglia **non** è stata abbassata. Parte del costo è già rientrata
+col test di `escapeHtml.js`, che da solo ha riportato `functions` da 47,42 a 47,50.
+
+> **La regola generale.** Escludere codice dalla misura per non far scendere la
+> percentuale è come calcolare una media scolastica saltando le materie andate
+> male: il numero sale, la situazione no. Si esclude solo ciò che la suite **non ha
+> il permesso** di eseguire (i plugin disattivati), non ciò che semplicemente non è
+> ancora testato.
+
+### JS client-side della GUI admin: il guard `typeof module`
+
+Il JavaScript delle sezioni admin gira nel browser, e jest lo esegue con
+`testEnvironment: 'node'`: senza un DOM, quei file non si possono nemmeno
+`require()`. Sono **~4.750 righe su 15 file**, storicamente all'1,9% di copertura.
+
+**La scelta del progetto è la terza via**: né `jsdom` (una seconda toolchain e un
+ambiente diverso da quello reale) né e2e per tutto (lento, e verifica il giro
+completo quando spesso serve una funzione sola). Si esporta la **logica pura** con
+un guard che in browser non esiste:
+
+```javascript
+(function () {
+  'use strict';
+
+  function formatDuration(sec) { /* … pura … */ }
+
+  // ── Esportazione per i test ─────────────────────────────────────────────
+  // In browser `module` non esiste e questo ramo non gira.
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { formatDuration };
+  }
+
+  // Sotto Node non c'è un `document` da agganciare: il file viene richiesto
+  // solo per le funzioni pure qui sopra.
+  if (typeof document === 'undefined') return;
+
+  document.addEventListener('DOMContentLoaded', function () { /* … DOM … */ });
+}());
+```
+
+**Servono entrambi i guard.** Il primo esporta; il secondo impedisce che il
+`require()` esploda sull'aggancio dei listener — ed è quello che si dimentica.
+
+#### Quando applicarlo, e quando no
+
+Il pattern **non va applicato a tutti i file**: su uno fatto di soli gestori di
+eventi non guadagna niente e aggiunge rumore. Vale la pena dove c'è logica che
+può sbagliare **in silenzio**:
+
+| Applicalo se la funzione… | Esempio reale |
+|---|---|
+| trasforma dati avanti e indietro | `rule-form.js` → `anyOrListToSelection`/`selectionToAnyOrList` (avevano **perso dati due volte**) |
+| formatta un valore su cui si decide | `rateLimiter-admin.js` → `formatDuration` (se un blocco è ancora attivo) |
+| costruisce HTML da dati del server | `tierBadge`/`eventBadge` — il loro escaping è **superficie XSS** |
+| è pura e ha casi limite | `esc()`, i parser, i validatori client |
+
+Non applicarlo a: gestori di eventi, funzioni che leggono il DOM, funzioni che
+dipendono da stato mutabile di modulo (renderle pure è un refactor del codice di
+produzione, e va deciso a parte).
+
+#### Stato dell'adozione
+
+| Plugin / file | Righe | Esporta |
+|---|---|---|
+| `adminSentinel/rule-form.js` | 528 | ✅ 7 funzioni (mappature del form) |
+| `adminSentinel/sentinel-i18n.js` | 43 | ✅ `snT` |
+| `adminRateLimiter/rateLimiter-admin.js` | 244 | ✅ `esc`, `formatDuration`, `formatTime`, `tierBadge`, `eventBadge` |
+| `themes/defaultAdminTheme/escapeHtml.js` | 20 | ✅ `escapeHtml` — livello 2 della difesa XSS |
+| `adminMedia/media.js` | 754 | ⬜ vedi nota |
+| `adminBootstrapNavbar/editor.js` | 709 | ⬜ `generateLabelFromFileName` è puro |
+| `adminAnalytics/settings.js` | 557 | ⬜ `formToData`/`dataToForm`: è il giro che in `sentinel` aveva perso dati |
+| `adminSentinel/sentinel-admin.js` | 528 | ⬜ |
+| `adminAnalytics/analytics.js` | 434 | ⬜ |
+| `adminSentinel/rules-editor.js` | 209 | ⬜ |
+| `adminCsrfProtection/csrf-admin.js` | 181 | ⬜ |
+| `adminSentinel/tester.js` | 165 | ⬜ |
+| `adminCsrfProtection/settings-editor.js` | 125 | ⬜ |
+| `adminRateLimiter/settings-editor.js` | 123 | ⬜ |
+| `adminRateLimiter/rules-editor.js` | 94 | ⬜ |
+| `adminSeo/editor.js` | 58 | ⬜ |
+
+#### Prima di applicarlo: il file si carica sotto Node?
+
+È la verifica che decide se il lavoro è di due righe o di un refactor:
+
+```bash
+node -e "require('/percorso/assoluto/del/file.js')"
+```
+
+**Misurato** su tre dei file ancora da fare: `adminBootstrapNavbar/editor.js`,
+`adminAnalytics/settings.js` e `adminSeo/editor.js` **caricano puliti** — per loro
+il pattern è davvero solo i due guard più il test.
+
+> **Il tetto sulle branch di un file dual-mode è 75%, non 100%.** I due guard
+> (`typeof module`, `typeof window`) hanno due rami ciascuno, e per definizione
+> **solo uno gira per ambiente**: sotto Node il ramo Node, in browser quello
+> browser. `escapeHtml.js` del tema è a 100% su statements, functions e lines, e a
+> 75% sulle branch proprio per questo — non è una lacuna da inseguire.
+
+`adminMedia/media.js` **no**, ed è l'eccezione da conoscere: il suo
+`const state = { itemsPerPage: ITEMS_PER_PAGE }` a livello di modulo legge una
+**variabile iniettata dall'EJS**, che sotto Node non esiste, quindi il `require()`
+lancia `ReferenceError: ITEMS_PER_PAGE is not defined` prima ancora di arrivare
+all'export. Va prima reso indipendente dalle globali iniettate — che è un refactor
+del codice di produzione, quindi una scelta a sé.
 
 ### Isolamento del filesystem (`createPluginSandbox`)
 
@@ -378,7 +558,7 @@ npm run test:core
 # Solo un plugin specifico
 npm run test:plugin --plugin=bootstrapNavbar
 
-# Solo i temi
+# Solo i temi (7 suite, 98 test — la suite di integrità di ogni tema)
 npm run test:themes
 ```
 

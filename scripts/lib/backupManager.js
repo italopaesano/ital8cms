@@ -8,9 +8,25 @@ const path = require('path')
  * - Backup plugin: file specifici per ogni plugin
  */
 class BackupManager {
-  constructor(logger) {
+  /**
+   * @param {object} logger - InitLogger
+   * @param {string} [backupRoot] - Cartella che ospita gli snapshot. Il default è
+   *        quella del progetto; il parametro esiste perché i test possano scrivere
+   *        in una tmpdir invece che dentro il repository.
+   * @param {string} [pluginsRootPath] - Cartella che contiene i plugin. Serve solo a
+   *        calcolare il path relativo di un file dentro il suo plugin, ma va
+   *        spostata insieme a `backupRoot`: lasciarla cablata farebbe calcolare quel
+   *        relativo rispetto al repo reale, e il backup finirebbe in un ramo di
+   *        cartelle `../../` fuori dallo snapshot.
+   */
+  constructor(
+    logger,
+    backupRoot = path.join(__dirname, '../../backups'),
+    pluginsRootPath = path.join(__dirname, '../../plugins')
+  ) {
     this.logger = logger
-    this.backupRoot = path.join(__dirname, '../../backups')
+    this.backupRoot = backupRoot
+    this.pluginsRootPath = pluginsRootPath
     this.timestamp = this.getItalianTimestamp()
     this.currentBackupDir = path.join(this.backupRoot, `init-${this.timestamp}`)
     this.globalBackupDir = path.join(this.currentBackupDir, 'global')
@@ -96,7 +112,7 @@ class BackupManager {
     }
 
     // Mantieni struttura relativa dentro plugin
-    const pluginRoot = path.join(__dirname, '../../plugins', pluginName)
+    const pluginRoot = path.join(this.pluginsRootPath, pluginName)
     const relativePath = path.relative(pluginRoot, filePath)
     const backupPath = path.join(pluginBackupDir, relativePath)
 
@@ -169,7 +185,7 @@ class BackupManager {
 
     this.logger.info(`Ripristino plugin da backup: ${pluginName}`)
 
-    const pluginRoot = path.join(__dirname, '../../plugins', pluginName)
+    const pluginRoot = path.join(this.pluginsRootPath, pluginName)
 
     // Funzione ricorsiva per ripristinare tutti i file
     const restoreDirectory = (backupDir, targetDir) => {

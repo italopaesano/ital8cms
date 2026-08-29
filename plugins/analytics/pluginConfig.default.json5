@@ -1,12 +1,13 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 2,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   "active": 1,
 
-  // Weight 5: caricamento precoce per misurare tempi di risposta completi.
-  // Il middleware analytics deve precedere routing e altri plugin per catturare
-  // l'intera durata della richiesta (incluso tempo di elaborazione dei plugin successivi).
-  "weight": 5,
+  // Weight -8: analytics deve OSSERVARE tutto il traffico, quindi montare prima di
+  // chiunque possa interromperlo (urlRedirect fa ctx.redirect() e non chiama next()).
+  // Dopo simpleI18n (-10), che popola ctx.state.lang. Il valore precedente era 5, e
+  // faceva sparire il 100% dei 301/302 dalle statistiche: vedi migrations/from-v1-to-v2.md.
+  "weight": -8,  // vedi migrations/from-v1-to-v2.md: analytics deve osservare TUTTO il traffico
 
   "dependency": {},
   "nodeModuleDependency": {},

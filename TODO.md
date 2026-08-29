@@ -17,6 +17,7 @@ Distinzione con gli altri due registri:
 
 ## Indice
 
+0. [Decisioni in attesa del maintainer](#decisioni-in-attesa-del-maintainer)
 1. [Migrazione dei config](#1-migrazione-dei-config)
 2. [Ciclo di vita dei config](#2-ciclo-di-vita-dei-config)
 3. [Installazione di pacchetti da repo Git](#3-installazione-di-pacchetti-da-repo-git)
@@ -28,11 +29,123 @@ Distinzione con gli altri due registri:
 
 ---
 
-## 1. Migrazione dei config
+## Decisioni in attesa del maintainer
 
-Fonte: [`docs/decisions/config-migrations.it.md`](./docs/decisions/config-migrations.it.md) → *Punti rimandati*.
-Lo standard `migrations/` è implementato (v2.67.0); quel che segue è rimasto fuori.
+Punti in cui il lavoro è **fermo per scelta, non per mancanza di tempo**: ognuno ha
+più uscite difendibili e cambia comportamento o convenzioni, quindi la decisione
+spetta al maintainer. Chi riprende in mano il progetto può partire da qui.
 
+Le voci con un rimando hanno la trattazione completa nella sezione indicata; quelle
+senza rimando sono descritte per intero qui perché non hanno una voce propria altrove.
+
+- [x] ~~**`urlRedirect` e `HEAD`** *(due decisioni collegate)* → §7.~~ **Deciso e
+      applicato in v3.4.0.** **(a)** Il guard è esteso a `HEAD`: RFC 9110 §9.3.2
+      definisce `HEAD` come `GET` senza corpo, quindi la divergenza non era una scelta
+      difendibile ma un difetto. **(b)** Un `HEAD` redirezionato **incrementa** il
+      contatore: quel contatore misura « quante volte una regola è stata usata », e un
+      `HEAD` a cui si è risposto 301 l'ha usata; non contarlo avrebbe richiesto di
+      re-introdurre un caso speciale su `HEAD`, cioè la stessa divergenza appena
+      corretta, stavolta nelle statistiche. Regressione in
+      `tests/unit/urlRedirect/middleware.test.js` (12 test, prima superficie del
+      middleware a essere coperta). **Se il maintainer preferisce non contare i `HEAD`**
+      è una riga sola nel guard del contatore, e il test che la presidia lo dice.
+- [x] ~~**`PATCH` e `DELETE` fra i verbi supportati dalle rotte dei plugin?**~~
+      **Deciso dal maintainer in v3.23.0: restano FUORI**, `DEL` è la forma canonica del
+      progetto. Nessuna modifica al codice — `ROUTER_METHOD_DISPATCH` continua a gestire
+      `GET/POST/PUT/DEL/ALL`, e un verbo fuori da questi non viene registrato con un
+      warning al boot (v3.0.0). Nessuna rotta del progetto li usa (censimento: solo `GET`
+      ×66 e `POST` ×69), quindi la decisione non lascia nulla in sospeso.
+      Se un domani si volesse riaprirla: una riga per verbo nella mappa, e va aggiornata
+      anche `VALID_METHODS` in `core/testHelpers/routeRunner.js` — il test di coerenza lo
+      impone da solo.
+- [x] ~~**🔴 Formula injection nell'export CSV di `adminAnalytics`** *(trovata in v3.3.0)*.~~
+      **Corretta in v3.4.0** con la mitigazione convenzionale (apice anteposto), applicata
+      **prima** del quoting così il prefisso finisce dentro le virgolette e la struttura
+      RFC 4180 regge. `neutralizeFormula()` agisce sulle sole **stringhe**: un numero non
+      può portare una formula, e prefissare un `durationMs: -5` lo renderebbe inutilizzabile
+      nei calcoli. Trigger coperti: `=`, `+`, `-`, `@`, TAB, CR. I test di caratterizzazione
+      sono stati riscritti come contratto. Testo originale della segnalazione:
+      `exportFormatter.formatCsv()` applica correttamente il quoting RFC 4180 ma **non
+      neutralizza i valori che iniziano con `=`, `+`, `-`, `@`**: aprendo l'export con
+      Excel o LibreOffice quelle celle vengono interpretate come **formule**.
+      **Perché conta più di una formula injection qualsiasi:** i campi `userAgent`,
+      `referrer` e `path` arrivano dalle richieste HTTP, quindi il contenuto è scelto
+      da **chiunque visiti il sito** — non serve alcun accesso privilegiato — mentre il
+      file viene aperto da un amministratore. **Misurato:** uno `User-Agent` valorizzato
+      a `=1+1` finisce nella cella come `=1+1`, e nemmeno il quoting protegge
+      (`"=HYPERLINK(…)"` resta una formula).
+      La mitigazione convenzionale è anteporre un apice ai valori che iniziano con quei
+      caratteri; in alternativa si può esportare i campi sempre come testo. Entrambe
+      **cambiano il contenuto dell'export**, quindi la scelta è del maintainer. Test di
+      caratterizzazione in `plugins/adminAnalytics/tests/unit/exportFormatter.test.js`:
+      falliranno alla correzione, come promemoria.
+- [x] ~~**Il JSON-LD di `seo` può uscire dal tag `<script>`** *(trovata in v3.3.0)*.~~
+      **Corretta in v3.4.0**: `serializeJsonLd()` escapa `<`, `>` e `&` come `\uXXXX` —
+      escape JSON standard, quindi i consumatori (motori di ricerca inclusi) rileggono il
+      carattere originale e nessun dato va perso. Verificato che il valore sopravvive alla
+      riparsatura. Testo originale della segnalazione:
+      `generateStructuredData()` inserisce l'output di `JSON.stringify` dentro
+      `<script type="application/ld+json">`, e `JSON.stringify` **non escapa la
+      sequenza `</script>`**, che il parser HTML interpreta prima del JSON. Un
+      `siteName` valorizzato a `Sito</script><b>x</b>` chiude il tag in anticipo e
+      inietta markup.
+      **Severità più bassa della precedente:** il valore arriva da `seoConfig.json5`,
+      scritto da un amministratore (ruoli 0/1), che può già modificare i template —
+      non è quindi un'escalation, ma resta una via per introdurre markup da un campo
+      che non sembra HTML. La correzione è sostituire `<` con `\u003c` nel JSON
+      serializzato. Caratterizzata in
+      `plugins/seo/tests/unit/robotsAndStructuredData.test.js`.
+- [x] ~~**Il valore della soglia minima di coverage, e se applicarla in CI**~~
+      **Deciso dal maintainer e applicato in v3.9.0.** `coverageThreshold` a
+      **51 / 50 / 46 / 51** (statements/branches/functions/lines), un punto sotto il
+      raggiunto, e un job CI **`coverage`** dedicato su Node 22 che esegue
+      `npm run test:coverage` a ogni pull request.
+      **Perché un job separato e non dentro la matrice:** le percentuali sono identiche
+      **alla riga** su Node 22 e 24 (10058/19297 statements su entrambe), quindi
+      calcolarle due volte costerebbe minuti senza aggiungere informazione; e il check
+      fallito si chiama « Coverage ratchet » invece di confondersi con un test rotto.
+      **Perché la soglia vive in `jest.config.js` e non nel workflow:** così vale anche
+      in locale, e `npm run test:coverage` sulla macchina di chi sviluppa dà lo stesso
+      verdetto della CI invece di scoprirlo dopo il push.
+      **⚠ Chi la alzerà deve misurare OFFLINE** — i 5 test di `themesInstall.realRepo`
+      si saltano da soli senza rete, quindi una macchina connessa mostra un numero più
+      alto; i valori attuali vengono dal caso peggiore. Annotato nel config.
+      Verificato che il cancello morda in entrambe le direzioni: exit 0 con i valori
+      scelti, exit 1 con una soglia irraggiungibile.
+- [ ] **Estendere il guard `typeof module` agli altri 12 file client-side admin.**
+      *(Aperta in v3.22.0, dopo la decisione sulla terza via.)* Convenzione e tabella di
+      adozione in [`docs/testing.it.md`](./docs/testing.it.md). Il criterio non è
+      « tutti i file », è **dove c'è logica che può sbagliare in silenzio**:
+      - **Priorità alta:** `adminAnalytics/settings.js` → `formToData`/`dataToForm`, cioè
+        esattamente il giro form↔config che in `adminSentinel` aveva **perso dati due
+        volte**. È il candidato con il precedente peggiore.
+      - **Pronti, verificato:** `adminBootstrapNavbar/editor.js`,
+        `adminAnalytics/settings.js` e `adminSeo/editor.js` **caricano puliti** sotto Node
+        (`node -e "require(<file>)"`): per loro è due guard più il test.
+      - **⚠ `adminMedia/media.js` no:** `const state = { itemsPerPage: ITEMS_PER_PAGE }` a
+        livello di modulo legge una globale iniettata dall'EJS → `ReferenceError` al
+        require. Va prima reso indipendente dalle globali, che è un refactor del codice di
+        produzione e quindi una scelta a sé.
+
+- [x] ~~**I temi entrano nello scope della coverage?** → §5.~~
+      **Deciso dal maintainer e applicato in v3.23.0: sì, insieme al test di
+      `escapeHtml.js`.** Le due cose vanno insieme — contare 395 righe senza verificare
+      la più importante avrebbe aggiunto un numero senza aggiungere una verifica.
+      **Il punto non era la percentuale**: finché i temi erano fuori dallo scope, il
+      **livello 2 della difesa XSS** del pannello admin non era né testato né contato,
+      quindi nessun numero diceva che mancava. Ora `escapeHtml.js` è a **100%** su
+      statements/functions/lines (75% branch: è il tetto strutturale di un file
+      dual-mode, i due guard hanno un ramo per ambiente) e ha **41 test**, fra cui il
+      confronto con il gemello `core/escapeHtml.js` — se le due implementazioni
+      divergessero, la difesa in profondità diventerebbe asimmetrica e nessun test lo
+      avrebbe detto, perché ogni file resta valido per conto suo.
+      **Costo misurato:** fra 0,21 e 0,52 punti; tutte e quattro le metriche restano
+      sopra soglia con margini fra +1,25 e +1,95, quindi la soglia **non** è stata
+      abbassata. Gli altri 5 file dei temi entrano a 0% e restano lì a dichiarare che
+      sono cablaggio del DOM.
+      La regola generale è ora scritta in `docs/testing.it.md`: si esclude dalla misura
+      solo ciò che la suite **non ha il permesso** di eseguire (i plugin disattivati),
+      non ciò che semplicemente non è ancora testato.
 - [ ] **Rimuovere i tre workaround** resi superflui dal merge ricorsivo. Erano nati
       per compensare i limiti del vecchio merge top-level, e sono tuttora nel codice:
   - [ ] `DEFAULT_EXEMPT_PATHS` hardcoded in `core/priorityMiddlewares/runtimeGate.js`
@@ -120,15 +233,21 @@ Fonte: intervento v2.64.0 (canonizzazione del `.default`).
       `setJson5Key` senza duplicarlo. Rinominabile senza impatto esterno.
 - [ ] **Riempire gli stub `.md` inglesi** (plugin, temi, core EXPLAIN, guide) alla
       prima pubblicazione importante. *(Fonte: `docs/roadmap.it.md`.)*
-- [ ] **Pagina segnaposto di primo avvio per `/www`.** Su un'installazione
-      `production` pulita `www/` è vuota per progetto (git-ignored, il wizard non ci
-      mette nulla: «www vuota» è una scelta dichiarata in `scripts/init.js`). Da
-      quando `dirListing.wwwPath` è `false` di default, `GET /` risponde **404**: più
-      onesto di prima — l'elenco mostrava `.gitkeep` — ma il primo avvio perde il suo
-      «funziona!» accidentale, e un 404 alla radice si legge come «è rotto».
-      Da valutare: un `index.ejs` di benvenuto seminato dal wizard nel solo profilo
-      `production` (il profilo `demo` già popola `www` da `.demoData/`), oppure una
-      pagina di cortesia servita solo quando `www` è priva di indice.
+- [x] ~~**Pagina segnaposto di primo avvio per `/www`.**~~ **RISOLTA in v3.21.0.**
+      `www/index.ejs` è committato con un'eccezione `!/www/index.ejs` in `.gitignore`:
+      un file normale, non un meccanismo — chi costruisce il proprio sito lo sostituisce
+      e non torna. Verificato sul server reale: `GET /` passa da **404 a 200**, in
+      italiano e in inglese, passando dai partial del tema attivo.
+      Delle due strade valutate qui sotto **nessuna delle due è stata scelta**: né il
+      seeding dal wizard (avrebbe funzionato solo per chi esegue `start-configure`, non
+      per chi clona e lancia `npm start`) né la pagina di cortesia servita dal core
+      (avrebbe intercettato i 404, che è compito del file server e maschererebbe quelli
+      veri). Cronaca, per memoria:
+      Su un'installazione `production` pulita `www/` è vuota per progetto (git-ignored,
+      il wizard non ci mette nulla). Da quando `dirListing.wwwPath` è `false` di default,
+      `GET /` rispondeva **404**: più onesto di prima — l'elenco mostrava `.gitkeep` — ma
+      il primo avvio perdeva il suo «funziona!» accidentale, e un 404 alla radice si
+      legge come «è rotto».
       *Fonte: emerso riattivando `dirListing` dopo la release 5.2.0 di
       `koa-classic-server`.*
 
@@ -171,8 +290,286 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       `bootstrapNavbar` come riferimento).
 - [ ] **E2E/Playwright per plugin e temi**: estendere la discovery automatica oltre
       unit e integration, con orchestrazione del server.
+- [x] ~~**La catena init/backup non è testabile in-process: le root sono cablate.**~~
+      **Risolto in v3.7.0.** Seam aggiunto a quattro classi — `StateManager`
+      (`globalStatePath`), `BackupManager` (`backupRoot` **e** `pluginsRootPath`),
+      `PluginScanner` (`pluginsDir`), `ConfigWizard` (`configPath`) — come parametro
+      opzionale col default invariato, la forma già usata da `themesRootPath`
+      (v2.92.0) e `pluginsRootPath` (v2.98.0). L'unico chiamante
+      (`scripts/init.js:163-164`) non è stato toccato. Le quattro classi passano
+      **da 0% a una media del 94,6%** di righe, con il **100% delle funzioni**.
+      `pluginInitRunner.js` non aveva bisogno di seam (è già parametrizzato) e resta
+      da coprire.
+      **Nota sul perimetro:** `getBackupPath()` e `getPluginBackupPath()` restano
+      ancorati a `__dirname` di proposito — il loro punto di riferimento *è* la
+      radice del progetto, e spostarlo renderebbe il path relativo a se stesso,
+      perdendo l'informazione che quei metodi esistono per dare.
+- [x] ~~**(D1) 🐞 `ConfigWizard.saveConfig()` distrugge i commenti di `ital8Config.json5`.**~~
+      **CORRETTO in v3.13.0** — scrittura chiave per chiave con `setJson5Key`; 340 righe e
+      230 commenti conservati sul file reale. Cronaca del difetto, per memoria:
+      *(Trovato in v3.7.0 coprendo il wizard.)* Fa `JSON.stringify` dell'oggetto
+      intero, cioè **riserializza** invece di modificare le chiavi cambiate — esattamente
+      l'anti-pattern che questo stesso `CLAUDE.md` vieta (*« preferisci
+      `setJson5Key`/`editJson5` a un `saveJson5` dell'oggetto intero: quest'ultimo perde
+      i commenti »*), e che il codice più recente rispetta (`sessionKeyManager` usa
+      `editJson5` proprio per questo).
+      **Misurato sul file reale:** `ital8Config.json5` passa da **230 righe commentate su
+      340 a una sola**, e da 340 a 115 righe totali. È la documentazione inline della
+      configurazione centrale, e chi esegue il wizard confermando una qualsiasi modifica
+      la perde tutta, in silenzio. **I valori sopravvivono** — il sito continua a
+      funzionare identico — quindi non è un guasto, è una perdita di documentazione:
+      per questo può passare inosservata a lungo.
+      Corretto sostituendo la riscrittura con un `setJson5Key` per ogni chiave cambiata.
+      Il blocco « ⚠ DIFETTO NOTO » di `tests/unit/scripts/configWizard.test.js` è diventato
+      la rete di regressione che impedisce il ritorno.
+- [ ] **Il backup globale è piatto: due file omonimi si sovrascrivono.**
+      *(Emerso in v3.7.0.)* `BackupManager.backupGlobalFile()` usa il solo `basename`,
+      quindi `a/config.json5` e `b/config.json5` finiscono sullo stesso path dentro lo
+      snapshot e il secondo cancella il primo **senza dirlo**. Oggi non morde — i config
+      globali salvati hanno nomi distinti (`ital8Config`, `koaSession`, `adminConfig`) —
+      ma è il tipo di limite che si scopre quando serve il ripristino. Caratterizzato in
+      `tests/unit/scripts/backupManager.test.js`.
+- [x] ~~**(D4) `port()` accetta un input troncato da `parseInt`.**~~
+      **CORRETTO in v3.16.0** con `/^\d+$/` prima del parse, insieme al gemello
+      `positiveInteger()`. Cronaca, per memoria:
+      *(Emerso in v3.6.0 testando i validatori del wizard.)* `parseInt('3000abc')`
+      vale 3000, e il wizard ha `filter: (v) => parseInt(v)`: la porta scritta nel
+      config **non è quella digitata**, e nessuno lo segnala. Stessa cosa per
+      `'3000.9'` → 3000 e `'1e4'` → 1. Impatto basso (chi installa vede la porta nel
+      riepilogo) ma la correzione — un `/^\d+$/` prima del parse — **rifiuterebbe un
+      input oggi accettato**, quindi è una decisione, non una svista da correggere di
+      nascosto. Caratterizzato in `tests/unit/scripts/validators.test.js`.
+- [ ] **Quattro validatori senza chiamanti: cablarli o rimuoverli.**
+      *(Censito in v3.6.0 su tutto il repo.)* `boolean`, `toBoolean`, `positiveInteger`
+      e `directoryPath` non sono usati da nessuna parte. Vivi sono solo `port`
+      (httpPort), `apiPrefix` (apiPrefix + adminPrefix), `required` (i due temi) e
+      `username`/`email`/`password` (account **root**, via
+      `plugins/adminUsers/scripts/init.js`). Due dettagli che contano se qualcuno li
+      cablasse: `directoryPath` **accetta i `..` di traversal** (la regex ammette punti
+      e slash) — oggi innocuo perché è codice morto, non altrettanto il giorno in cui
+      guardasse un path di config; e `positiveInteger` accetta `0` mentre il suo
+      messaggio dice « deve essere un numero positivo » (accettare 0 è quasi certamente
+      voluto — è « disattivato » in mezzo schema del progetto — quindi è il **messaggio**
+      da correggere, non il comportamento).
+- [ ] **Il controllo `includes('/')` di `apiPrefix()` è irraggiungibile.**
+      *(Emerso in v3.6.0.)* La regex che lo precede non ammette `/`, quindi ogni valore
+      con uno slash esce prima e il messaggio dedicato — il più utile dei due — non viene
+      mai mostrato. Non è un buco (il rifiuto avviene comunque), è un ramo morto.
+      Fissato da un test che diventa rosso se il ramo torna raggiungibile.
+- [x] ~~**Il legame « ordine di caricamento = ordine dei middleware » va documentato in `CLAUDE.md`.**~~
+      **Fatto in v3.12.0**, in `CLAUDE.md` → *Ordine di caricamento* e nel commento di
+      `pluginSys`, con la regola pratica enunciata: chi osserva il traffico deve avere
+      un peso minore di chi lo interrompe. **Resta aperta** la domanda più grande, qui
+      sotto: se separare i due concetti con una chiave dedicata.
+      Testo originale:
+      *(Emerso in v3.10.0 dalla review della branch.)* `index.js` monta i middleware
+      dei plugin nell'ordine dell'array restituito da `getMiddlewaresToLoad()`, che è
+      l'ordine di caricamento. Nessun documento lo dice, ed è per questo che cambiare
+      l'ordinamento in v3.0.0 ha spostato i middleware senza che nessuno se ne
+      accorgesse. La sezione *Ordine di caricamento* di `CLAUDE.md` parla solo di
+      « i plugin caricati dopo dispongono di quelli caricati prima »: va aggiunto che
+      il `weight` governa **anche** l'annidamento dei middleware, e che chi osserva
+      il traffico deve avere un peso minore di chi lo interrompe.
+      **Domanda aperta più grande — `middlewareWeight`.** Vale la pena separare i due
+      concetti con una chiave dedicata, così che un plugin possa caricare tardi — perché
+      dipende da altri — e montare il middleware presto? *(Aggiornata dopo v3.15.0:
+      l'ordinamento topologico ha ridotto il problema ma non l'ha chiuso.
+      `adminAccessControl` non carica più ultimo, carica **6°**, subito dopo la sua
+      dipendenza `adminUsers` — è tutto ciò che il suo `weight: -5` può ottenere finché
+      caricamento e montaggio restano lo stesso ordine. Il box `[WEIGHT]` al boot rende
+      la cosa **visibile**: chi legge il box sa che quel peso non è onorato, e sa
+      perché.)* Le due strade: una chiave `middlewareWeight` separata, oppure ordinare
+      i middleware in un secondo passaggio dopo il caricamento — quest'ultima non
+      richiede una chiave nuova ma rompe l'identità « ordine di caricamento = ordine
+      dei middleware », su cui oggi si ragiona (ed è documentata).
+- [x] ~~**(D3) Il `weight` ordina solo dentro il gruppo SENZA dipendenze.**~~
+      **RISOLTO in v3.15.0** con l'ordinamento topologico unico + box `[WEIGHT]`.
+      Cronaca, per memoria:
+      *(Emerso in v3.10.0.)* `initialize()` ordina per weight i plugin senza
+      dipendenze, poi accoda gli altri man mano che le dipendenze si risolvono:
+      `adminAccessControl` (weight **-5**, il più basso dopo `simpleI18n`) carica
+      **22° su 22**, dopo ogni plugin dependency-free. Il commento introdotto in
+      v3.0.0 diceva « il weight ora ordina davvero »: **il commento è stato corretto in
+      v3.12.0** e ora dichiara fin dove arriva. **Resta da decidere** se completare
+      l'implementazione. La forma giusta è **un unico
+      ordinamento topologico** su tutti gli installabili con il weight come
+      tie-break, non un sort applicato a un sottoinsieme che la coda poi scavalca.
+- [x] ~~**🔴 Il middleware di un plugin FALLITO resta montato.**~~
+      **Corretto in v3.11.0.** Il push è stato spostato **dopo** `loadPlugin()`.
+      Perché proprio questo registro era sfuggito al catch: rotte, hook e oggetti
+      condivisi sono Map/oggetti indicizzati **per nome** — tre `delete(pluginName)` —
+      mentre i middleware sono un **array posizionale senza chiave**, che la pulizia
+      non sapeva raggiungere. Spostare il push toglie l'asimmetria alla radice invece
+      di aggiungere una rimozione: non c'è nulla da ripulire se non è mai stato
+      aggiunto, e la trappola non resta in piedi per il prossimo registro che qualcuno
+      aggiungesse prima del load. Riprodotto prima di correggere (`incomplete` +
+      `middleware: 1`), 3 test di regressione, tutti uccisi rimettendo il push prima.
+- [x] ~~**(D2) `CLAUDE.md` promette un gate fatale su `access` che non ho trovato nel codice.**~~
+      **RISOLTO in v3.14.0** — gate implementato come *salta + avvisa*, e sei punti di
+      documentazione allineati. Cronaca, per memoria:
+      *(Emerso in v3.10.0.)* La documentazione diceva « campo `access` obbligatorio su
+      ogni rotta: assenza = **errore fatale al boot** ». In `loadRoutes` il codice reale
+      era `const handler = oRoute.access ? wrap(...) : oRoute.handler` — nessun throw:
+      una rotta senza `access` veniva **registrata senza controllo di autenticazione**,
+      cioè funzionante e aperta. Il ramo « senza wrap » non esiste più: superato il gate,
+      `access` è garantito oggetto e l'handler passa **sempre** dal wrap.
+- [x] ~~**(D5) `roleManagement`: il floor `roleId >= 100` non è applicato a delete/update.**~~
+      **CHIUSO in v3.17.0 senza aggiungere il floor** (decisione del maintainer:
+      `isHardcoded` resta il guardiano unico); il lavoro è andato sul messaggio d'errore.
+      Cronaca, per memoria:
+      *(Emerso in v3.10.0.)* Il modulo conosce il confine dei ruoli custom solo in
+      `getNextCustomRoleId`. `deleteCustomRole`/`updateCustomRole` si affidano al solo
+      flag `isHardcoded`, che vive in un file vivo, git-ignored e modificabile a mano.
+      Oggi regge — verificato che root non sia cancellabile — ma è un solo strato.
+- [x] ~~**`roleManagement`: scritture non atomiche**~~ — **corretto in v3.12.0** con
+      `writeJson5Atomic()` (temp + rename) su tutti e quattro i punti di scrittura.
+      **Restano aperti due pezzi della stessa voce:** (a) la riscrittura passa comunque
+      da `JSON.stringify`, quindi i **commenti si perdono** (`userRole.json5` ne ha 15
+      su 41 righe) — preservarli richiede una modifica chiave-per-chiave che per
+      l'aggiunta e la rimozione di un ruolo gli helper attuali non supportano; (b) il
+      **rollback fra i due file** di `deleteCustomRole` non esiste ancora. Testo
+      originale:
+      *(Emerso in v3.10.0.)* `createCustomRole`, `updateCustomRole` e `deleteCustomRole`
+      usano `fs.writeFileSync` + `JSON.stringify` — contro la regola 1 di `CLAUDE.md`
+      (scritture atomiche temp+rename) e distruggendo i commenti dei `.json5`. Peggio:
+      `deleteCustomRole` scrive `userRole.json5` e poi `userAccount.json5` **in
+      sequenza**; se il secondo fallisce, il ruolo è già sparito ma ogni utente porta
+      ancora il `roleId` orfano, e nessun percorso di codice ripara quello stato.
+- [x] ~~**`updateCustomRole` non impone la lunghezza minima 3**~~ — **corretto in
+      v3.12.0**, stesso controllo e stesso messaggio di `createCustomRole`. Verificato
+      con una mutazione controllata del file vivo e ripristino con sha256.
+- [x] ~~**(D6) `BackupManager.getBackupPath()`/`getPluginBackupPath()` restano ancorate a
+      `__dirname`** mentre `backupRoot` è ora iniettabile.~~
+      **CHIUSA in v3.18.0: si lascia com'è** (decisione del maintainer), e il rilievo è
+      confluito nella revisione della strategia di backup in §8, dove ha senso.
+      Cronaca, per memoria: *(emersa in v3.10.0)* con il seam in uso i due riferimenti
+      disaccordano, e il valore finisce persistito in `initState.json5` come `backupPath`.
+      **Avevo scritto che era « il puntatore che un restore risolverebbe »: è falso, e l'ho
+      verificato.** `pluginInitRunner.js:133` usa `backupPath` solo come flag
+      (`if (backupPath)`) e per stamparlo; il ripristino chiama
+      `restorePlugin(plugin.name)`, che ricostruisce il path da `pluginsBackupDir` + nome,
+      seguendo correttamente la radice iniettata. **Nessuno risolve quella stringa**, e
+      `getPluginBackupPath()` non ha proprio chiamanti in produzione.
+- [ ] **`themeSys.validateTheme()` NON accetta una root parametrica**, a differenza
+      della sua gemella `validateThemeContent(themeName, themesRootPath)` (v2.92.0).
+      *(Emerso in v3.5.0 scrivendo la suite di integrità dei temi.)* Cabla
+      `path.join(__dirname, '../themes', themeName)`, quindi non può validare un tema
+      di prova in una tmpdir: la suite dei temi la invoca sui temi **veri**, dove
+      questo non morde, ma un test che voglia costruire un tema deliberatamente rotto
+      senza toccare il repo oggi non può usarla. Stessa forma della correzione già
+      applicata due volte (`themesRootPath` in v2.92.0, `pluginsRootPath` in v2.98.0):
+      un parametro opzionale con default invariato, nessun chiamante da aggiornare.
+      Lo stesso vale per `checkDependencies()` e `getAvailableThemes()`.
+- [x] ~~**`pluginSys.initialize()` non è testabile in-process: la root dei plugin è cablata.**~~
+      **Risolto in v2.98.0**: il costruttore accetta una root opzionale
+      (`pluginsRootPath`, default invariato), sulla falsariga di
+      `validateThemeContent(..., themesRootPath)` in v2.92.0. `core/pluginSys.js`
+      passa da 24,5% a **67,2% di righe** e da 56% a **80,5% di funzioni**.
+- [x] ~~**🐞 Il `weight` dei plugin NON è implementato, ma è documentato come contratto.**~~
+      **Risolto in v3.0.0**: `initialize()` ordina i plugin installabili per `weight`
+      crescente e, a parità di peso, alfabeticamente — l'ordine che `CLAUDE.md`
+      dichiarava da sempre. Il tiebreak è esplicito e non affidato all'ordine di
+      `fs.readdirSync()`, che non è garantito alfabetico su tutti i filesystem.
+      Verificato sul boot reale: i 12 plugin **senza dipendenze** occupano ora le
+      posizioni 1-12 esattamente in ordine di peso (`simpleI18n` a -10 per primo),
+      mentre i 10 **con dipendenze** seguono in coda perché le dipendenze prevalgono
+      sul peso, come documentato. Un `weight` non numerico vale 0 e viene segnalato.
+- [x] ~~**`loadRoutes()` scarta in silenzio i metodi che non conosce.**~~
+      **Risolto in v3.0.0**: la catena `if/else` è diventata la mappa
+      `ROUTER_METHOD_DISPATCH`, fonte di verità unica dei verbi supportati, con un
+      ramo finale che emette un warning nominando plugin, metodo e path. Un test in
+      `tests/integration/routeContract.test.js` legge le chiavi della mappa e le
+      confronta con `VALID_METHODS` dell'helper, così le due liste non possono più
+      divergere in silenzio (era già successo).
+- [x] ~~**`func` invece di `handler`: la documentazione descriveva l'esito sbagliato.**~~
+      *(Scoperto in v3.0.0 verificando ciò che stavo per scrivere in `CLAUDE.md`.)*
+      La nota diceva « rotta silenziosamente ignorata → la richiesta cade sul static
+      server ». **Misurato, succedeva altro:** la rotta veniva **registrata** con un
+      handler che avvolgeva `undefined`, e falliva alla prima richiesta con
+      `TypeError: originalHandler is not a function`, cioè un **500** — peggio di una
+      rotta assente, perché esiste, risponde e si rompe solo quando qualcuno la usa.
+      `loadRoutes()` ora verifica che `handler` sia una funzione, salta la rotta e lo
+      segnala nominando la causa; `CLAUDE.md` riporta i tre esiti reali in tabella.
+- [x] ~~**🐞 `roleManagement`: il numero `0` è scambiato per un `roleId` assente.**~~
+      **Corretto in v3.4.0:** il guard falsy è sostituito da `isRoleIdAbsent()`, che
+      chiede « è stato fornito? » invece di « è diverso da zero? ». `0` e `"0"` ora
+      convergono sullo stesso ramo, e ciò che è assente per davvero (`undefined`,
+      `null`, stringa vuota — quest'ultima è ciò che invia un campo di form in bianco)
+      continua a essere rifiutato come tale. I due test di caratterizzazione sono
+      riscritti come contratto. **Resta fuori dalla correzione**, di proposito, il
+      messaggio per un roleId non numerico: `"abc"` produce ancora « Ruolo con ID NaN
+      non trovato » — brutto da leggere ma innocuo, e allargare la correzione avrebbe
+      cambiato il comportamento di casi che nessuno aveva segnalato.
+      Testo originale della segnalazione: *(Scoperto in v3.2.0 scrivendo i test dei ruoli.)* `updateCustomRole()` e
+      `deleteCustomRole()` iniziano con `if (!roleId)`, e **`0` è falsy** — ma 0 è
+      l'ID di `root`, il ruolo più privilegiato. Il rifiuto avviene comunque, quindi
+      **non è un buco di sicurezza**, ma il messaggio è falso: dice « devi
+      specificare il roleId » a chi l'ha specificato, e `updateCustomRole()`
+      restituisce `errorType: 'all'` invece di `'roleId'`.
+      **Misurato:** con `0` (numero) → « Devi specificare il roleId »; con `"0"`
+      (stringa) → « Non puoi eliminare un ruolo di sistema », cioè il ramo giusto.
+      La divergenza fra i due è la prova che si tratta di un errore di controllo e
+      non di una scelta. Morde solo i chiamanti **da codice**: dal form admin il
+      valore arriva come stringa. La correzione è distinguere « assente » da
+      « zero » (`roleId === undefined || roleId === null || roleId === ''`), ma
+      cambia l'`errorType` restituito in quel caso, quindi va decisa. Due test in
+      `plugins/adminUsers/tests/unit/roleManagement.test.js` fissano il
+      comportamento attuale e falliranno alla correzione, come promemoria.
+- [ ] **`userUsert()` e `roleManagement`: i path dei file dati sono cablati.**
+      *(Emerso in v3.2.0.)* `usersFilePath` e `rolesFilePath` sono costruiti su
+      `__dirname`, quindi i rami che **scrivono** (creazione utente riuscita,
+      creazione/aggiornamento/cancellazione di un ruolo custom) non sono
+      esercitabili senza toccare i file veri del plugin. Oggi i test coprono solo i
+      rami che ritornano prima della scrittura, con una rete di sicurezza che
+      confronta l'hash dei file di dati a inizio e fine suite. La correzione è la
+      stessa già applicata due volte — un path opzionale col default invariato,
+      come `pluginsRootPath` (v2.98.0) e `themesRootPath` (v2.92.0) — e sbloccherebbe
+      i rami di scrittura, che sono quelli dove nascono gli account.
+      **⚠ La rete di sicurezza è un RILEVATORE, non un impedimento — verificato sul
+      campo in v3.17.0.** Durante il mutation testing di D5 una mutazione che
+      disattivava il guardiano `isHardcoded` in `deleteCustomRole()` ha fatto
+      **eseguire davvero** la cancellazione dei quattro ruoli di sistema dal
+      `userRole.json5` vivo. L'`afterAll` con i digest l'ha rilevata — è ciò che i
+      fallimenti stavano dicendo — ma il danno era già scritto; il file è stato
+      ripristinato dal `.default` e verificato con `md5sum -c`. Due conseguenze da
+      tenere presenti finché il seam non c'è: **(a)** una mutazione che disattiva un
+      guardiano di scrittura non va eseguita contro i dati veri; **(b)** `git diff` su
+      questi file **non può rilevare nulla** — sono git-ignored — quindi la verifica
+      va fatta col digest, mai col diff.
 - [ ] **Soglia minima di coverage** con fail della CI, calcolata in modo aggregato
-      (core + plugin attivi + temi).
+      (core + plugin attivi + temi). **Sbloccata a metà da v2.96.0**: lo scope della
+      misura ora copre tutto il codice che la suite ha il permesso di eseguire
+      (17.378 righe invece di 6.133), quindi una soglia messa oggi certificherebbe
+      un numero vero. Da fissare **appena sotto** il valore raggiunto e alzare quando
+      sale — un cricchetto che impedisce di tornare indietro, non un obiettivo da
+      rincorrere. I temi restano fuori dallo scope: vanno aggiunti insieme ai loro test.
+- [ ] **GUI admin client-side: 2.129 righe all'1,9%** *(reso visibile da v2.96.0)*.
+      I file `.js` sotto `plugins/*/adminWebSections/` sono codice spedito e quasi
+      del tutto non testato: `media.js` (381 righe), `editor.js` (316), `settings.js`
+      (288), `sentinel-admin.js` (219), `analytics.js` (165), `rateLimiter-admin.js` (119).
+      Con `testEnvironment: 'node'` non sono eseguibili da jest — servono un ambiente
+      jsdom oppure una copertura e2e. Fanno eccezione i due file **dual-mode** di
+      `adminSentinel` (`rule-form.js`, `sentinel-i18n.js`, 571 righe), che espongono
+      `module.exports` dietro un guard e sono già sotto test: è il modello da seguire
+      per rendere testabile il resto senza cambiare ambiente.
+- [ ] **`bin/ital8cms-cli.js` a 0%** (399 righe) *(reso visibile da v2.96.0)*: il
+      binario del control plane non ha test propri. `core/cliBridge/` è coperto,
+      l'entry point no — parsing degli argomenti, dispatch dei sottocomandi e il
+      comportamento con `--` mancante (che npm scarta in silenzio, vedi
+      `docs/cli-control-plane.it.md`) non sono verificati da nulla.
+- [ ] **`adminAnalytics` resta in gran parte scoperto** *(v3.3.0 ha coperto solo
+      `exportFormatter`)*. Restano senza test `aggregator.js` (260 righe),
+      `analyticsFileManager.js` (241), `chartDataBuilder.js` (143),
+      `analyticsConfigValidator.js` (109), `fileSelector.js` (102) e `main.js` (480):
+      **911 righe al 5,7%**. `chartDataBuilder` e `analyticsConfigValidator` sono puri
+      e sono i prossimi candidati naturali; `analyticsFileManager` legge il filesystem.
+- [ ] **`ostrukUtility` è un plugin boilerplate vuoto, ma è `active: 1`.**
+      *(Constatato in v3.3.0 cercando cosa testare.)* Ogni funzione esportata
+      restituisce `{}`, `[]` o una `Map` vuota: non c'è logica da verificare, e
+      scrivergli dei test sarebbe cerimonia. Da decidere se **rimuoverlo**
+      dall'installazione di default, **disattivarlo** (`active: 0`) o tenerlo come
+      scheletro di riferimento — nel qual caso il posto giusto sarebbe accanto a
+      `exampleComplete`, che è già inattivo e serve proprio a quello.
 - [ ] **Scanner prescrittivo al boot** (Fase 2 del testing): verifica per ogni
       plugin attivo dei test minimi richiesti (un test per metodo esportato, uno per
       rotta incluso `access`, validazione dei JSON5, lifecycle hooks). Default
@@ -305,7 +702,10 @@ esporre il directory listing — cioè la configurazione normale di un sito in
 produzione. Oggi le due cose non sono separabili.
 
 
-### 🐞 `urlRedirect` — un `HEAD` su un path redirezionato non segue il redirect
+### ✅ `urlRedirect` — un `HEAD` su un path redirezionato non seguiva il redirect
+
+**RISOLTO in v3.4.0.** La descrizione resta come traccia di come il difetto è stato
+trovato e misurato; le scelte prese sono in fondo.
 
 Fonte: emerso aggiornando `koa-classic-server` alla **5.3.0** (v2.94.0), che porta
 `HEAD` nel default di `options.method`. **Non è un bug del modulo:** il codice è
@@ -329,25 +729,136 @@ nessun corpo. Qui i due verbi divergono sia nello status sia in `Location`. Chi
 legge il sito con `HEAD` — cache, reverse proxy, link-checker, crawler — non vede
 il redirect e continua a considerare valido il vecchio URL.
 
-- [ ] Estendere il guard a `HEAD` (`!['GET', 'HEAD'].includes(ctx.method)`), così il
-      redirect vale per entrambi i verbi. **Da decidere dal maintainer**, non applicato
-      qui: è un cambio di comportamento di un plugin, fuori dallo scopo di un giro di
-      aggiornamento dipendenze.
-- [ ] Decidere se un `HEAD` debba incrementare l'`hitCounter`. Contarlo gonfia le
-      statistiche con traffico non umano; non contarlo le lascia coerenti con oggi.
-      Sono due scelte difendibili, ma vanno prese esplicitamente.
-- [ ] Test di regressione sui due verbi: oggi **nessun test del progetto usa `HEAD`**,
-      ed è la ragione per cui la suite è rimasta verde mentre il comportamento cambiava.
+- [x] Guard esteso a `HEAD` (`ctx.method !== 'GET' && ctx.method !== 'HEAD'`). Non era
+      in realtà una decisione a due uscite: RFC 9110 §9.3.2 definisce `HEAD` come `GET`
+      senza corpo, quindi « lasciare che `HEAD` non rediriga » significava tenere una
+      violazione, non scegliere una convenzione.
+- [x] Un `HEAD` redirezionato **incrementa** l'`hitCounter`. Il contatore si documenta
+      da sé come « quante volte ogni regola è **usata** », e un `HEAD` a cui si è
+      risposto 301 l'ha usata. L'alternativa avrebbe richiesto di scrivere un caso
+      speciale su `HEAD` nel punto del conteggio — cioè re-introdurre, nelle
+      statistiche, la stessa divergenza appena corretta nel redirect.
+- [x] Test di regressione: `tests/unit/urlRedirect/middleware.test.js`, 12 test. È la
+      **prima copertura del middleware** del plugin — i tre file preesistenti coprivano
+      le librerie (`redirectMatcher`, `configValidator`, `hitCounter`) ma non il codice
+      che le orchestra, ed è esattamente lì che stava il difetto. Il test esercita
+      `loadPlugin()` su una **cartella plugin temporanea** con regole vere, così il
+      `redirectMap.json5` vivo non serve e non viene toccato.
 
-**Non urgente su questa installazione:** il `redirectMap.json5` vivo non ha regole
-attive (tutti gli esempi sono commentati), quindi oggi non c'è divergenza da
-osservare. Diventa visibile alla prima regola configurata.
+**Verifica anti-vacuità:** tre mutazioni applicate al codice corretto uccidono i test —
+ritorno al guard solo-`GET` (4 rossi), guard rimosso del tutto (6 rossi), `HEAD` che
+redirige ma non conta (1 rosso).
 
 ## 8. Direzioni ampie
 
 Non sono debito, ma direzioni: il dettaglio vive in
 [`docs/roadmap.it.md`](./docs/roadmap.it.md) e non è duplicato qui.
 
+- [x] ~~**🐞 `touches` è scritto project-relative in 7 step su 8, e il runner lo risolve package-relative.**~~
+      **CORRETTO in v3.21.0**, tutte e 7, guardate una per una come deciso. Il caso
+      delicato — `sentinel`, che tocca il file **secondario** `sentinelRules.json5` — è
+      risultato inerte oggi: il suo `.default` e il vivo sono entrambi a `schemaVersion: 1`
+      e il descrittore è a 6 con la catena già applicata, quindi l'allineamento e le
+      `protectedLivePaths` non cambiano nulla; la correzione conta per un'installazione che
+      parta indietro e percorra la catena. **Presidio repo-wide** in
+      `tests/integration/migrationsTouches.test.js`: per ogni `migrations.json5` del
+      progetto ogni `touches` deve risolvere dalla cartella del pacchetto, e non deve
+      cominciare con `plugins/`, `themes/` o `core/`.
+      ⚠ **Un test esistente codificava l'errore**: `adminSentinel/tests/unit/migrationsChain.test.js`
+      risolveva da `repoRoot`, quindi indice e test sbagliavano allo stesso modo e il test
+      passava. Corretto anche quello. Cronaca, per memoria:
+      *(Emerso in v3.20.0 dalla review; l'ottava — analytics — è corretta lì.)*
+      `backupTouchedFiles` (`core/migrationRunner.js:286`) fa
+      `path.join(targetObj.packageDir, relative)`. Un `touches: ["plugins/sentinel/…"]`
+      risolve quindi in `plugins/sentinel/plugins/sentinel/…`, che non esiste, e il ramo
+      `if (!fs.existsSync(full)) continue` lo **salta in silenzio**. La forma corretta è
+      documentata (`docs/decisions/config-migrations.it.md:148`): `["pluginConfig.json5"]`.
+      **Istanze da correggere:** `plugins/sentinel/migrations/migrations.json5` (5 step),
+      `plugins/adminSentinel/…` (1), `core/migrations/adminConfig/…` (1 — anche lì
+      `packageDir` è la cartella che ospita il config, non la radice).
+      **Non è solo il backup:** `touches` guida anche `alignTouchedSchemaVersions`
+      (riga 442) e le `protectedLivePaths` che escludono i file dal merge additivo
+      (riga 533). Per gli step che toccano un file **secondario** — `sentinel` con
+      `sentinelRules.json5` — le conseguenze sono più larghe della sola rete di backup,
+      quindi vanno guardati uno per uno invece che corretti con un `sed`.
+      **Presidiabile:** un test che, per ogni `migrations.json5` del repo, verifichi che
+      ogni `touches` esista risolto dalla cartella del pacchetto. Ne esiste già uno per
+      analytics (`plugins/analytics/tests/unit/migrationV1toV2.test.js`), da generalizzare.
+- [x] ~~**`roleManagement.writeJson5Atomic()` riserializza: i ruoli perdono i commenti.**~~
+      **Deciso dal maintainer e applicato in v3.21.0: i file di DATI non portano commenti.**
+      Chiusa dalla parte opposta rispetto a D1, e la differenza è nella natura dei file —
+      `userRole.json5` e `userAccount.json5` non sono scritti da una persona per essere
+      riletti da una persona, sono scritti dal codice a ogni operazione del pannello, con
+      **cancellazioni** di chiavi annidate che una scrittura chirurgica non saprebbe fare.
+      Applicato: intestazione JSON5 tolta dai due `.default` (che restano JSON5 validi e
+      **conservano la documentazione dei ruoli**, perché nessun codice li riscrive), con in
+      testa la dichiarazione del perché; eccezione scritta in `CLAUDE.md` accanto alla
+      regola generale; motivazione nella JSDoc di `writeJson5Atomic`; 3 test che
+      impediscono di "correggere" l'incoerenza in una direzione sola. Cronaca, per memoria:
+      *(Emerso in v3.20.0 dalla review.)* È **la stessa forma della decisione D1**, in un
+      altro file. `writeJson5Atomic` fa `JSON.stringify(data, null, 2)`, quindi ogni
+      creazione/modifica/cancellazione di ruolo dal pannello **azzera i commenti** di
+      `userRole.json5` — misurato su copia: **15 righe con commento → 0**, e sparisce
+      anche l'intestazione JSON5 che `CLAUDE.md` dichiara obbligatoria su ogni `.json5`.
+      **Preesistente alla branch** (su `main` erano già quattro `fs.writeFileSync` con
+      `JSON.stringify`); la v3.12.0 ha aggiunto l'atomicità senza cambiare la
+      serializzazione. **È una decisione, non una svista:** per D1 il maintainer ha
+      scelto la scrittura chirurgica, ma `userRole.json5` e `userAccount.json5` sono
+      **dati**, non configurazione — e per i dati riserializzare è difendibile. Le due
+      uscite: **applicare anche qui `setJson5Key`** chiave per chiave (coerenza con D1,
+      ma su una struttura annidata `roles.<id>.<campo>` e con cancellazioni, che
+      `setJson5Key` non sa fare), oppure **dichiarare che i file di dati non portano
+      commenti** e togliere l'intestazione dai loro `.default` — chiudendo la
+      contraddizione dalla parte opposta.
+- [ ] **🔍 Rivedere la strategia di backup, e i nomi che la rendono illeggibile.**
+      *(Emerso in v3.18.0, chiudendo D6.)* Sotto `backups/` convivono **due sistemi
+      diversi che non si conoscono fra loro**, e la confusione comincia dai nomi.
+
+      | | `npm run backup` | il backup del wizard |
+      |---|---|---|
+      | Modulo | `scripts/lib/backupEngine.js` | `scripts/lib/backupManager.js` |
+      | Quando | a comando | solo dentro `npm run start-configure` |
+      | Cosa copia | tutta l'installazione | `ital8Config`, `koaSession`, e i file che un plugin dichiara con `getFilesToBackup()` |
+      | Cartella | `backups/backup-<timestamp>/` | `backups/init-<timestamp>/` |
+      | Ripristino | `npm run restore -- --latest` | automatico, solo su fallimento, solo per plugin |
+      | Visto da `backup-list` | sì | **no** |
+
+      **⚠ Due file si chiamano `backupManager.js`** e non c'entrano niente l'uno con
+      l'altro: `scripts/backupManager.js` è il comando `npm run backup-manager` (pota
+      gli snapshot), `scripts/lib/backupManager.js` è la classe del wizard. Il nome
+      condiviso è il primo motivo per cui la faccenda è difficile da tenere a mente.
+
+      **I limiti concreti, misurati:**
+      - **Il backup globale non ha alcun ripristino.** `ital8Config.json5` e
+        `koaSession.json5` vengono copiati (`init.js:209`, `sessionKeyManager.js:148`)
+        ma **nessun codice li rimette a posto**: quella copia va ripescata a mano.
+      - **Gli `init-*` sono invisibili alla toolchain degli snapshot.**
+        `backupEngine.listBackups()` filtra per prefisso `backup-`
+        (`backupEngine.js:35`), quindi `backup-list`, `backup-manager` e `restore`
+        non li vedono: non vengono elencati, non si ripristinano col comando, e
+        **non vengono potati mai**.
+      - **`initState.json5` registra due formati di path diversi**: quello globale è
+        **relativo** (`getBackupPath()`), quello per-plugin è **assoluto** (il valore
+        di ritorno di `backupPluginFiles`, `pluginInitRunner.js:86`).
+      - **`getPluginBackupPath()` è codice morto**: nessun chiamante in produzione,
+        solo due test.
+      - **Un solo plugin dichiara `getFilesToBackup()`**: `adminUsers`
+        (`userAccount.json5` + `userRole.json5`). Il meccanismo per-plugin esiste per
+        un caso solo.
+      - ~~**La procedura non è documentata da nessuna parte.**~~ **Scritta in v3.19.0:**
+        [`docs/backup-strategie.it.md`](./docs/backup-strategie.it.md) mette i due sistemi
+        a confronto, descrive per intero quello del wizard (cosa copia e quando, layout
+        della cartella, ripristino e suoi limiti, come dichiarare `getFilesToBackup()` in
+        un plugin) e spiega **come recuperare a mano**, visto che il backup globale non ha
+        un ripristino automatico. Restano da decidere le altre voci qui sopra.
+
+      **Cosa deciderà la revisione:** se i due sistemi restano due (e allora vanno
+      distinti nei nomi e nella documentazione) oppure convergono in uno solo; che
+      forma ha un path scritto in `initState.json5`; se il backup globale merita un
+      ripristino o va dichiarato « copia di cortesia ». Vedi anche la voce chiusa
+      **(D6)** in §5, il cui rilievo originario — `getBackupPath()` ancorata a
+      `__dirname` — è stato assorbito qui: da solo non valeva un intervento, come
+      parte di questa revisione sì.
 - [ ] Migrazione a **TypeScript**
 - [ ] Configurazione via **`.env`**
 - [ ] **Documentazione API** (Swagger/OpenAPI)

@@ -8,9 +8,16 @@ const loadJson5 = require('../../core/loadJson5')
  * Cerca plugins/{pluginName}/scripts/init.js
  */
 class PluginScanner {
-  constructor(logger) {
+  /**
+   * @param {object} logger - InitLogger
+   * @param {string} [pluginsDir] - Cartella che contiene i plugin. Il default è
+   *        quella del progetto; il parametro esiste perché i test possano
+   *        scandire un albero di prova in una tmpdir invece del repository —
+   *        stessa forma di `pluginsRootPath` in `core/pluginSys.js` (v2.98.0).
+   */
+  constructor(logger, pluginsDir = path.join(__dirname, '../../plugins')) {
     this.logger = logger
-    this.pluginsDir = path.join(__dirname, '../../plugins')
+    this.pluginsDir = pluginsDir
   }
 
   /**

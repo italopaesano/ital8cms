@@ -1,0 +1,27 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// Migrazioni del plugin analytics.
+//
+// Il clock è la `schemaVersion` del DESCRITTORE (`pluginConfig.default.json5`),
+// che è la versione di struttura dell'intero pacchetto: uno step si applica
+// quando il descrittore vivo è a `from` e il `.default` è a `to`.
+//
+// Vedi docs/decisions/config-migrations.it.md e core/migrationRunner.js.
+{
+  steps: [
+    {
+      from: 1,
+      to: 2,
+      title: "weight da 5 a -8: analytics torna a monte di chi interrompe",
+      automatic: true,
+      script: "from-v1-to-v2.js",
+      // Path RELATIVO alla cartella del pacchetto: il runner fa
+      // path.join(packageDir, relative). Scritto come "plugins/analytics/..."
+      // risolveva in plugins/analytics/plugins/analytics/..., che non esiste, e il
+      // backup pre-step veniva saltato in silenzio.
+      touches: ["pluginConfig.json5"],
+      reason:
+        "L'ordine di caricamento dei plugin è ANCHE l'ordine in cui index.js fa  app.use() dei loro middleware, e quel legame non era documentato. Finché  pluginSys caricava in ordine alfabetico (fino alla v2.99.0), analytics  capitava secondo e urlRedirect dodicesimo: analytics avvolgeva urlRedirect  per caso. Col passaggio all'ordine per weight (v3.0.0) — corretto in sé,  è il contratto dichiarato da CLAUDE.md — urlRedirect (1) ha cominciato a  montare prima di analytics (5). Il middleware di urlRedirect, su una regola  che matcha, fa ctx.redirect() e ritorna SENZA chiamare next(); un  middleware che osserva deve stare più esterno di uno che interrompe.  MISURATO: il 100% dei 301/302 spariva dal log analytics e dalla dashboard  admin — non un errore visibile, traffico che semplicemente non risultava  mai esistito. Si cambia il valore e non il codice perché il meccanismo ora  è giusto: è il weight 5 a non essere mai stato scelto pensando ai  middleware, dato che prima non li governava. -8 mette analytics dopo  simpleI18n (-10), che popola ctx.state.lang, e prima di chiunque possa  interrompere. Serve una migrazione perché `weight` esiste già nel config  vivo e il merge additivo del boot sa solo AGGIUNGERE chiavi: senza questo  step ogni installazione esistente resterebbe a 5. Lo script non tocca  nulla se il valore in vigore non è esattamente 5, cioè se l'amministratore  l'ha già scelto lui.",
+    },
+  ],
+}

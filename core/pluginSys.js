@@ -9,7 +9,79 @@ const editJson5 = require('./editJson5');
 const setJson5Key = require('./setJson5Key');
 const installPluginNpmDeps = require('./installPluginNpmDeps');
 const { checkNpmDeps, resolvePluginStates } = require('./pluginStateResolver');
+const resolveLoadOrder = require('./pluginLoadOrder');
 const demoNotice = require('./demoNotice');
+
+// Metodi delle rotte dei plugin → metodo corrispondente di @koa/router.
+// FONTE DI VERITÀ UNICA dei verbi supportati: prima era una catena if/else, e la
+// lista finiva duplicata in tre punti (la catena, il messaggio d'errore, e
+// VALID_METHODS in core/testHelpers/routeRunner.js) senza niente che li tenesse
+// insieme. Sono già divergiti una volta — l'helper accettava DELETE e PATCH, che
+// la catena non gestiva, e il validatore approvava rotte destinate a sparire.
+// Un test in tests/integration/routeContract.test.js legge queste chiavi e le
+// confronta con quelle dell'helper.
+//
+// `Object.create(null)` e NON un letterale: una tabella di lookup non deve
+// ereditare da Object.prototype. Con un letterale, `TABELLA['toString']` (o
+// 'constructor', 'valueOf', '__proto__') restituisce la funzione ereditata —
+// TRUTHY — quindi un `method: 'toString'`, refuso o plugin di terze parti,
+// scavalcava il ramo di warning qui sotto ed entrava in `router[<funzione>]`,
+// che è `undefined`: un TypeError durante il boot, sincrono, dentro index.js.
+// La vecchia catena if/else quei valori li saltava e basta.
+const ROUTER_METHOD_DISPATCH = Object.assign(Object.create(null), {
+  GET:  'get',
+  POST: 'post',
+  PUT:  'put',
+  DEL:  'del',
+  ALL:  'all',
+});
+
+/**
+ * Vero se la rotta dichiara il proprio `access` in una forma che il route-wrap
+ * sa usare: un oggetto non nullo e non un array.
+ *
+ * PERCHÉ ESISTE. `CLAUDE.md` ha sempre detto che `access` è obbligatorio su ogni
+ * rotta di plugin, e che la sua assenza è un « errore fatale al boot ». Nel codice
+ * quel gate non c'è mai stato: `loadRoutes` faceva
+ * `oRoute.access ? wrap(...) : oRoute.handler`, quindi una rotta senza `access`
+ * veniva REGISTRATA **senza il controllo di autenticazione** — funzionante e
+ * aperta. Il documento prometteva una protezione che il codice non dava.
+ *
+ * PERCHÉ SALTARE E NON MORIRE. Il fatale punirebbe l'intera installazione per la
+ * svista di un plugin, il contrario del boot graceful che il progetto ha scelto
+ * per i plugin (un `loadPlugin` che lancia → `incomplete` + box, non `exit`). Qui
+ * la stessa logica: la rotta non viene registrata — quindi **non esiste, quindi
+ * non è aperta** — il sito parte, e il box al boot dice quale plugin e quale path.
+ * È anche la forma che le altre due rotte malformate già avevano da v3.0.0
+ * (`method` minuscolo, `func` invece di `handler`): tre difetti della stessa
+ * famiglia, ora con la stessa risposta.
+ *
+ * DOVE STA LA SOGLIA, E PERCHÉ NON PIÙ IN ALTO. Si rifiuta esattamente ciò che
+ * renderebbe la rotta registrata-e-non-protetta, e nient'altro:
+ *
+ *   • `access` assente, `null`, `undefined`, `false`, una stringa, un array
+ *     → SALTATA. Sono i valori per cui il ternario cadeva sul ramo senza wrap.
+ *   • `access: {}` → PASSA, e vale « pubblica » (il wrap legge
+ *     `if (access.requiresAuth)`, che è falsy). Dichiarare `{}` è povero, ma è
+ *     comunque una dichiarazione, e il route-wrap la applica.
+ *   • `{ requiresAuth: true }` senza `allowedRoles` → PASSA. Rifiutarla farebbe
+ *     **sparire una rotta protetta** invece di lasciarla funzionare, e il wrap la
+ *     gestisce già correttamente (`if (access.allowedRoles && length > 0)`).
+ *
+ * Le forme più severe — `requiresAuth` booleano obbligatorio, `allowedRoles`
+ * array — restano competenza di `validateRoute()` in `core/testHelpers/`, che è
+ * un contratto di qualità sulle rotte del progetto, non un cancello di runtime.
+ * Il predicato è condiviso fra i due proprio perché la parte in comune non torni
+ * a divergere: era il difetto 🟡 di v3.10.0, in cui il validatore approvava
+ * `{access: null}` mentre `loadRoutes` registrava la rotta senza protezione.
+ *
+ * @param {object} route - Oggetto rotta come restituito da `getRouteArray()`.
+ * @returns {boolean}
+ */
+function declaresAccess(route) {
+  const access = route && route.access;
+  return access !== null && typeof access === 'object' && !Array.isArray(access);
+}
 
 class pluginSys{
 
@@ -18,17 +90,29 @@ class pluginSys{
   #routes;// variabile privata che conterrà le rotte aggiunte dai vari plugin
   #objectToShareToWebPages = {};// variabile che conterà gli ogetti restituiti dai vari plugin che saranno messi a dispozione del motore ejs e degli altri moduli
   #activePlugins = new Map();// Mappa che conterrà i plugin attivi
-  #pluginsToActive = new Map();// plugin da attivare non ancora attivati perchè bisogna controllare le dipendenze
   #themeSys = null;// riferimento al sistema dei temi (impostato dopo l'inizializzazione)
   #reservedGate = null;// gate della superficie riservata (impostato da index.js dopo i priority middlewares)
   #reservedRoutePaths = new Set();// path completi delle rotte che appartengono alla superficie riservata (popolato da loadRoutes)
   #ital8Conf = null;// configurazione principale del sistema (per whitelist funzioni globali)
   #pluginStates = new Map();// stato runtime per plugin: 'available'|'disabled'|'incomplete'|'installed' (+ reason/detail)
+  #pluginsRootPath = null;// cartella da cui si risolvono i plugin (default: <progetto>/plugins)
 
-  constructor(ital8Conf){// qui bisognerà andare nella cartelle dai plugin e caricarli uno a uno
+  /**
+   * @param {object} ital8Conf - configurazione principale del sistema
+   * @param {string} [pluginsRootPath] - cartella da cui risolvere i plugin.
+   *   Default INVARIATO: la `plugins/` del progetto. Il parametro esiste perché
+   *   la root era cablata in sei punti, il che rendeva `initialize()` impossibile
+   *   da esercitare in un test senza caricare i plugin VERI in-process e
+   *   scrivere `isInstalled` nei loro config vivi — contro l'isolamento
+   *   filesystem di docs/testing.it.md. Stessa forma già adottata per
+   *   `validateThemeContent(..., themesRootPath)` in v2.92.0, e per lo stesso
+   *   motivo. Nessun chiamante di produzione lo passa.
+   */
+  constructor(ital8Conf, pluginsRootPath = path.join(__dirname, '..', 'plugins')){// qui bisognerà andare nella cartelle dai plugin e caricarli uno a uno
 
     // Salva riferimento alla configurazione principale
-    this.#ital8Conf = ital8Conf; 
+    this.#ital8Conf = ital8Conf;
+    this.#pluginsRootPath = pluginsRootPath;
 
     this.#hooksPage = new Map();// new Map(['namelPlugin', new Map(['head', (passData) => {}],['body', ( passData ) => {} ])]);
     this.#routes = new Map();// mappa che conterrà come chiave il nome del plugin da caricare e come valore un array contenete tutti gli ogetti che rappresentano le rotte
@@ -51,11 +135,11 @@ class pluginSys{
       //caricatePlugin = ( pluginName, pluginConfig, routes, hooksPage, objectToShareToWebPages, activePlugins ) => {// q
 
       // Calcola il percorso della cartella del plugin
-      const pathPluginFolder = path.join(__dirname, '..', 'plugins', pluginName);
+      const pathPluginFolder = path.join(this.#pluginsRootPath, pluginName);
 
       try {
         //console.log(pluginConfig);
-        const pluginConfig = loadJson5(path.join(__dirname, '..', 'plugins', pluginName, 'pluginConfig.json5'));
+        const pluginConfig = loadJson5(path.join(this.#pluginsRootPath, pluginName, 'pluginConfig.json5'));
 
         // TRANSIZIONE D'INSTALLAZIONE: il plugin diventa "installed" la prima volta
         // quando isInstalled non era già 1 (clone fresco: il campo può mancare →
@@ -84,7 +168,7 @@ class pluginSys{
           }
         }
 
-        const plugin = require(path.join(__dirname, '..', 'plugins', pluginName, 'main.js'));
+        const plugin = require(path.join(this.#pluginsRootPath, pluginName, 'main.js'));
 
         // Aggiungi metadata al plugin object per uso futuro
         plugin.pluginName = pluginName;
@@ -152,7 +236,7 @@ class pluginSys{
         //
         // Prima installazione: NON è un upgrade. Là gira installPlugin() (sopra) e
         // qui si registra soltanto la versione di partenza, senza invocare l'hook.
-        const pluginDescription = loadJson5(path.join(__dirname, '..', 'plugins', pluginName, 'pluginDescription.json5'));
+        const pluginDescription = loadJson5(path.join(this.#pluginsRootPath, pluginName, 'pluginDescription.json5'));
         const newVersion = pluginDescription.version;
         const oldVersion = pluginConfig.version || '0.0.0'; // mai eseguito prima → 0.0.0
         const livePluginConfigPath = path.join(pathPluginFolder, 'pluginConfig.json5');
@@ -205,15 +289,35 @@ class pluginSys{
           this.#objectToShareToWebPages[pluginName] = plugin.getObjectToShareToWebPages();
         }
 
-        //aggiungo i midlware di ogli plugin
+        // loadPlugin: può aver bisogno di librerie di altri plugin (già caricati
+        // prima per via dell'ordine di dipendenza). Può lanciare → catch graceful.
+        await plugin.loadPlugin(this, pathPluginFolder);
+
+        // I MIDDLEWARE SI REGISTRANO SOLO A CARICAMENTO RIUSCITO, e questa riga sta
+        // DOPO `loadPlugin()` per una ragione precisa.
+        //
+        // Tutto il resto che `caricatePlugin` registra prima del load — rotte, hook,
+        // oggetti condivisi — vive in una Map o in un oggetto indicizzati per NOME
+        // del plugin, quindi il catch qui sotto li rimuove con un `delete(pluginName)`.
+        // I middleware no: sono un ARRAY posizionale, senza chiave. Rimuoverli
+        // richiederebbe di ricordarsi l'indice, e infatti erano gli unici che il
+        // catch non ripuliva.
+        //
+        // MISURATO prima della correzione: un plugin il cui `loadPlugin()` lancia
+        // veniva marcato `incomplete` e tolto da tutto il resto, ma
+        // `getMiddlewaresToLoad()` restituiva ancora il suo middleware — che
+        // `index.js` montava con `app.use()`. Se quel middleware rilegge lo stato che
+        // ha fatto fallire il load (per esempio `urlRedirect` con
+        // `strictValidation: true` e una regola non valida), rilancia a OGNI
+        // richiesta: 500 sull'intero sito da un plugin che il box `[PLUGINS]` dichiara
+        // saltato.
+        //
+        // Spostare il push invece di aggiungere una rimozione toglie l'asimmetria
+        // alla radice: non c'è nulla da ripulire se non è mai stato aggiunto.
         if(plugin.getMiddlewareToAdd){
           // IMPORTANTE: usa .bind(plugin) per preservare il contesto 'this' quando la funzione viene chiamata in index.js
           this.#pluginsMiddlewares.push( plugin.getMiddlewareToAdd.bind(plugin) );// sarà un array di funzioni che generano un array
         }
-
-        // loadPlugin: può aver bisogno di librerie di altri plugin (già caricati
-        // prima per via dell'ordine di dipendenza). Può lanciare → catch graceful.
-        await plugin.loadPlugin(this, pathPluginFolder);
 
         // Persisti isInstalled:1 nel vivo SOLO se non era già 1 (transizione a
         // installed). setJson5Key AGGIUNGE il campo se manca (clone fresco),
@@ -250,7 +354,7 @@ class pluginSys{
     }// const caricatePlugin = ( pluginName, pluginConfig ) => {
 
     // adesso leggo tutti i file della cartella plugins e ciclo per attivari e caricare quelli per essere caricati
-    const baseDir =  path.join(__dirname, '..', 'plugins' ) ;//ottengo ilpercorso della directory plugins
+    const baseDir =  this.#pluginsRootPath ;//ottengo ilpercorso della directory plugins
     let Afiles = fs.readdirSync( baseDir );// gli dico di leggere il contenuto della directori plugins e metterloin un arra ps linux non distingue fra file e directori sono tutti fil eper lui
     // Tengo solo le directory reali. throwIfNoEntry:false evita un crash ENOENT
     // al boot su symlink rotti dentro plugins/ (es. un SKILL.md che punta a un
@@ -314,7 +418,21 @@ class pluginSys{
 
       const npm = checkNpmDeps(pluginConfig.nodeModuleDependency, resolveInstalledVersion);
       const pluginDeps = new Map(Object.entries(pluginConfig.dependency || {}));
-      candidates.push({ name: nameFile, version, npmOk: npm.ok, npmDetail: npm, pluginDeps });
+
+      // PESO DI CARICAMENTO. Assente → 0 (retrocompatibile: un plugin che non lo
+      // dichiara non deve cambiare posizione). Presente ma non numerico è invece
+      // un errore di configurazione dell'autore, non un default: va detto, perché
+      // altrimenti il plugin scivolerebbe a 0 in silenzio.
+      let weight = 0;
+      if (pluginConfig.weight !== undefined) {
+        if (typeof pluginConfig.weight === 'number' && Number.isFinite(pluginConfig.weight)) {
+          weight = pluginConfig.weight;
+        } else {
+          logger.warn('pluginSys', `"${nameFile}": weight non numerico (${JSON.stringify(pluginConfig.weight)}) — uso 0`);
+        }
+      }
+
+      candidates.push({ name: nameFile, version, npmOk: npm.ok, npmDetail: npm, pluginDeps, weight });
       candidateConfigs.set(nameFile, pluginConfig);
     }
 
@@ -335,17 +453,30 @@ class pluginSys{
       }
     }
 
-    // ── CARICAMENTO DEI PLUGIN 'installed', nell'ordine delle dipendenze ──────
+    // ── CARICAMENTO DEI PLUGIN 'installed', in UN SOLO ordinamento ───────────
     // I plugin non-'installed' (available/disabled/incomplete) NON vengono caricati.
+    //
+    // ORDINE DICHIARATO IN CLAUDE.md: weight crescente, con le dipendenze sempre
+    // prima dei dipendenti e l'alfabetico a parità di peso. Fino alla v3.14.0 quel
+    // contratto era realizzato da DUE meccanismi cuciti insieme — un sort per
+    // weight sui soli plugin senza dipendenze, più una coda che accodava gli altri
+    // man mano che si risolvevano — e il secondo scavalcava il primo: qualunque
+    // plugin con un `dependency` finiva dopo TUTTI quelli senza, qualunque peso
+    // avesse. `adminAccessControl` dichiarava -5 e caricava 22° su 22.
+    //
+    // Ora è un ordinamento solo: topologico, con il peso come criterio di scelta
+    // fra i plugin pronti (`core/pluginLoadOrder.js`, modulo puro e testabile da
+    // solo, gemello di `pluginStateResolver`). Il vincolo delle dipendenze resta
+    // duro; il peso decide tutto il resto.
+    //
+    // ⚠ QUESTO ORDINE È ANCHE QUELLO DEI MIDDLEWARE: index.js scorre l'array di
+    // getMiddlewaresToLoad() e fa app.use() di ciascuno. Cambiare l'ordinamento
+    // qui sposta l'annidamento Koa dei middleware dei plugin — è già successo in
+    // v3.0.0, e ha tolto i redirect dalle analytics finché analytics non è stato
+    // portato a -8 (v3.10.0). L'invariante «chi osserva sta prima di chi
+    // interrompe» è presidiata da tests/integration/middlewareOrder.test.js.
     const installable = candidates.filter(c => resolvedStates.get(c.name).state === 'installed');
-
-    // Tutte le dipendenze (plugin) del candidato sono già tra gli attivi?
-    const dependenciesActive = (depMap) => {
-      for (const depName of depMap.keys()) {
-        if (!this.#activePlugins.has(depName)) return false;
-      }
-      return true;
-    };
+    const { order, unordered, weightInversions } = resolveLoadOrder(installable);
 
     // Marca un plugin 'incomplete' e persiste isInstalled:0 (solo se cambia).
     const markIncomplete = async (name, reason, detail) => {
@@ -358,35 +489,34 @@ class pluginSys{
       }
     };
 
-    // Senza dipendenze: caricabili subito. Con dipendenze: in coda.
-    for (const c of installable) {
-      if (c.pluginDeps.size === 0) {
-        const ok = await caricatePlugin(c.name);
-        if (!ok) await markIncomplete(c.name, 'load-error', null);
-      } else {
-        this.#pluginsToActive.set(c.name, c.pluginDeps);
+    // Caricamento nell'ordine calcolato. `for...of` (non `forEach`) per AWAITARE
+    // caricatePlugin in sequenza: l'ordine è il punto, eseguirli in parallelo lo
+    // annullerebbe.
+    //
+    // Prima di ciascuno si ricontrolla che le dipendenze siano DAVVERO attive:
+    // l'ordine è topologico, quindi a questo punto la sorte di ogni dipendenza è
+    // già decisa, e una che ha lanciato in `loadPlugin()` non è fra gli attivi.
+    // È la cascata che prima faceva la coda svuotandosi senza progresso.
+    const byName = new Map(installable.map(c => [c.name, c]));
+    for (const name of order) {
+      const depMap = byName.get(name).pluginDeps;
+      const depMancante = [...depMap.keys()].find(dep => !this.#activePlugins.has(dep));
+      if (depMancante !== undefined) {
+        await markIncomplete(name, 'dep-incomplete', { dep: depMancante });
+        continue;
       }
+      const ok = await caricatePlugin(name);
+      if (!ok) await markIncomplete(name, 'load-error', null);
     }
 
-    // Coda: carica chi ha le dipendenze già attive; itera finché c'è progresso.
-    // for...of (non forEach) per AWAITARE caricatePlugin in sequenza.
-    let progress = true;
-    while (this.#pluginsToActive.size > 0 && progress) {
-      progress = false;
-      for (const [name, depMap] of this.#pluginsToActive) {
-        if (dependenciesActive(depMap)) {
-          this.#pluginsToActive.delete(name);
-          const ok = await caricatePlugin(name);
-          if (!ok) await markIncomplete(name, 'load-error', null);
-          progress = true;
-        }
-      }
+    // Senza posizione valida: dipendono da qualcosa fuori dagli installabili,
+    // oppure sono in un ciclo (che pluginStateResolver intercetta già a monte).
+    for (const name of unordered) {
+      await markIncomplete(name, 'dep-incomplete', { dep: '(irrisolvibile)' });
     }
-    // Rimasti in coda: una dipendenza è caduta al caricamento → incomplete (cascata).
-    for (const [name] of this.#pluginsToActive) {
-      await markIncomplete(name, 'dep-incomplete', { dep: '(fallita al caricamento)' });
-    }
-    this.#pluginsToActive.clear();
+
+    // ── BOX [WEIGHT]: i pesi che le dipendenze hanno reso impossibili ─────────
+    this.#printWeightInversions(weightInversions);
 
     // ── BOX DI RIEPILOGO degli stati non-installed ───────────────────────────
     this.#printPluginSummary();
@@ -399,6 +529,57 @@ class pluginSys{
     
 
   }// END initialize()
+
+  /**
+   * Stampa un box [WEIGHT] per i plugin il cui `weight` non ha potuto essere
+   * onorato, perché una dipendenza li ha vincolati a caricare più tardi.
+   *
+   * PERCHÉ ESISTE. Le due regole dell'ordinamento possono contraddirsi: il peso
+   * dice « presto », la dipendenza dice « non prima di questo ». Vince la
+   * dipendenza — deve — ma finora la contraddizione era **muta**, e chi leggeva
+   * `weight: -5` nel proprio `pluginConfig.json5` credeva di avere un middleware
+   * a monte di tutto. Non era un peso poco efficace: era inerte, e il peso
+   * governa anche l'annidamento dei middleware Koa.
+   *
+   * Il box dice le tre cose che servono per decidere cosa fare: dove il plugin
+   * carica davvero, chi l'ha frenato, e che il `weight` da solo non basta.
+   * Nessun output quando non c'è nulla da segnalare.
+   *
+   * @private
+   * @param {Array<object>} inversions - Da resolveLoadOrder().weightInversions
+   */
+  #printWeightInversions(inversions) {
+    if (!inversions || inversions.length === 0) return;
+
+    const line = '[WEIGHT]  ' + '═'.repeat(58);
+    const out = [
+      '',
+      line,
+      `[WEIGHT]   ⚠  ${inversions.length} plugin caricano DOPO plugin di peso maggiore:`,
+      '[WEIGHT]      il loro weight non può essere onorato per via delle dipendenze.',
+      '[WEIGHT]',
+    ];
+    for (const inv of inversions) {
+      const dep = inv.blockingDep;
+      out.push(`[WEIGHT]     • ${inv.name} (weight ${inv.weight}) carica in posizione ${inv.position}`);
+      if (dep) {
+        out.push(`[WEIGHT]       vincolato da "${dep.name}" (weight ${dep.weight}, posizione ${dep.position}):`);
+        out.push('[WEIGHT]       una dipendenza carica sempre prima del suo dipendente.');
+      }
+      const nomi = inv.overtaken.map((o) => `${o.name}(${o.weight})`).join(', ');
+      out.push(`[WEIGHT]       scavalcato da: ${nomi}`);
+    }
+    out.push(
+      '[WEIGHT]',
+      '[WEIGHT]   Conta perché l\'ordine di caricamento è ANCHE quello con cui',
+      '[WEIGHT]   index.js monta i middleware: un peso non onorato è un middleware',
+      '[WEIGHT]   montato più a valle di dove lo si voleva. Se serve montare prima,',
+      '[WEIGHT]   il weight da solo non basta — vedi TODO.md, "middlewareWeight".',
+      line,
+      '',
+    );
+    console.warn(out.join('\n'));
+  }
 
   /**
    * Stampa un box [PLUGINS] di riepilogo dei plugin rimasti 'incomplete' (boot
@@ -702,8 +883,39 @@ class pluginSys{
       for (const oRoute of Avalue) {
         const path = `${prefix}/${key}${oRoute.path}`;
 
-        // Se la route dichiara un campo access, wrappa l'handler con un controllo di autenticazione e ruoli
-        const handler = oRoute.access ? this.#wrapHandlerWithAccessCheck(oRoute.handler, oRoute.access) : oRoute.handler;
+        // HANDLER MANCANTE O NON INVOCABILE. Il caso tipico è `func` invece di
+        // `handler`: CLAUDE.md lo dava per «silenziosamente ignorato», ma la
+        // misura dice altro — la rotta veniva REGISTRATA con un handler che
+        // avvolgeva `undefined`, e falliva alla prima richiesta con
+        // `TypeError: originalHandler is not a function`, cioè un 500. Peggio di
+        // una rotta assente: esiste, risponde, e si rompe solo quando qualcuno la
+        // usa. Meglio non registrarla e dirlo al boot.
+        if (typeof oRoute.handler !== 'function') {
+          logger.warn('pluginSys',
+            `Rotta IGNORATA — plugin "${key}", ${oRoute.method} ${path}: handler mancante o non invocabile\n` +
+            `   La chiave DEVE chiamarsi "handler" ed essere una funzione${oRoute.func ? ' — qui c\'è "func", che pluginSys non legge' : ''}.\n` +
+            `   Senza questo controllo la rotta verrebbe registrata e risponderebbe 500 alla prima richiesta.`);
+          continue;
+        }
+
+        // ACCESS MANCANTE O INUTILIZZABILE. Terza forma di rotta malformata, e la
+        // più grave: qui la rotta non spariva né dava 500 — veniva REGISTRATA e
+        // funzionava, ma senza il wrap di autenticazione. `CLAUDE.md` dichiarava
+        // questo caso « errore fatale al boot »; il gate non è mai esistito.
+        // Saltarla, invece di morire, allinea la risposta al boot graceful dei
+        // plugin: una svista di terze parti non deve fermare l'installazione.
+        if (!declaresAccess(oRoute)) {
+          logger.warn('pluginSys',
+            `Rotta IGNORATA — plugin "${key}", ${oRoute.method} ${path}: campo "access" mancante o non utilizzabile\n` +
+            `   Ricevuto: ${JSON.stringify(oRoute.access) ?? String(oRoute.access)}. Serve un oggetto, es. { requiresAuth: false, allowedRoles: [] }.\n` +
+            `   Senza questo controllo la rotta verrebbe registrata SENZA verifica di autenticazione.`);
+          continue;
+        }
+
+        // `access` è dichiarato: l'handler passa sempre dal wrap di controllo
+        // accessi e ruoli. Non c'è più un ramo « senza wrap » — era quello che
+        // rendeva aperta una rotta a cui il campo mancava.
+        const handler = this.#wrapHandlerWithAccessCheck(oRoute.handler, oRoute.access);
 
         // Indice dei path riservati, per il reserved gate.
         //
@@ -714,20 +926,26 @@ class pluginSys{
         // (verificato: GET su una rotta POST-only dava 405 mentre tutto il resto
         // dava 404). Il gate, che sta prima del router, chiude questi path per
         // path e non per metodo.
-        if (oRoute.access && (oRoute.access.requiresAuth || oRoute.access.isAuthEntryPoint)) {
+        if (oRoute.access.requiresAuth || oRoute.access.isAuthEntryPoint) {
           this.#reservedRoutePaths.add(path);
         }
 
-        if( oRoute.method == 'GET'){
-          router.get( path , handler );// key è il nome del plugin che farà parte del percorso per evitare conflitti
-        }else if( oRoute.method == 'POST' ){
-          router.post( path , handler );
-        }else if( oRoute.method == 'PUT' ){
-          router.put( path , handler );
-        }else if( oRoute.method == 'DEL' ){
-          router.del( path , handler );
-        }else if( oRoute.method == 'ALL' ){
-          router.all( path , handler );
+        // key è il nome del plugin, che fa parte del percorso per evitare conflitti.
+        const routerMethod = ROUTER_METHOD_DISPATCH[oRoute.method];
+        if (routerMethod) {
+          router[routerMethod]( path , handler );
+        } else {
+          // RAMO CHE PRIMA NON ESISTEVA. La catena if/else si limitava ai cinque
+          // metodi noti e finiva lì: una rotta con qualunque altro verbo non veniva
+          // registrata, senza errore né warning. Spariva — e la richiesta cadeva sul
+          // server statico restituendo HTML dove il chiamante aspettava JSON, un
+          // difetto che si nota solo dal browser. È la stessa classe di guasto
+          // silenzioso del `method` minuscolo descritta in CLAUDE.md, ed è ora
+          // l'unica delle tre a essere diagnosticata a voce.
+          logger.warn('pluginSys',
+            `Rotta IGNORATA — plugin "${key}", metodo "${oRoute.method}" ${path}\n` +
+            `   Metodi gestiti: ${Object.keys(ROUTER_METHOD_DISPATCH).join(', ')} (MAIUSCOLI).\n` +
+            `   La rotta NON è registrata: la richiesta cadrà sul server statico (HTML invece di JSON).`);
         }
       }
 
@@ -864,7 +1082,7 @@ class pluginSys{
     }
 
     try {
-      const descriptionPath = path.join(__dirname, '../plugins', pluginName, 'pluginDescription.json5');
+      const descriptionPath = path.join(this.#pluginsRootPath, pluginName, 'pluginDescription.json5');
       const description = loadJson5(descriptionPath);
       return description.version || null;
     } catch (error) {
@@ -963,3 +1181,9 @@ class pluginSys{
 }
 
 module.exports = pluginSys ;
+
+// Esposto perché `core/testHelpers/routeRunner.js` usi LO STESSO predicato del
+// runtime invece di riscriverlo: la parte in comune fra validatore e dispatcher
+// è già tornata a divergere una volta (difetto 🟡 di v3.10.0). Stessa forma di
+// `editJson5._internals`.
+module.exports.declaresAccess = declaresAccess;

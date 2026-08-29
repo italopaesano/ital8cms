@@ -54,6 +54,16 @@ Il progetto ital8cms è anche manutentore del modulo npm **`koa-classic-server`*
 // This file follows the JSON5 standard - comments and trailing commas are supported
 ```
 
+> **Eccezione dichiarata: i file di DATI.** `userAccount.json5` e `userRole.json5`
+> sono scritti **dal codice** a ogni operazione del pannello — con creazioni e
+> cancellazioni di chiavi annidate — quindi vengono riserializzati per intero e
+> **non conservano commenti**, intestazione compresa. Non è una svista: la loro
+> documentazione vive nei rispettivi `.default`, che nessun codice riscrive mai, e
+> che per coerenza non portano l'intestazione. La regola qui sopra vale per i file
+> di **configurazione**, che una persona scrive per essere riletti da una persona
+> (per quelli il progetto usa la scrittura chirurgica: `setJson5Key`/`editJson5`,
+> decisione D1).
+
 **Caricamento dei file JSON:** Tutti i file JSON devono essere caricati usando il modulo centralizzato `core/loadJson5.js` (tutti i file di configurazione ora usano l'estensione .json5):
 
 ```javascript
@@ -70,7 +80,7 @@ const config = loadJson5('./ital8Config.json5');
 Lavorando su questo codebase come AI assistant — regole operative (le più critiche per prime):
 
 1. **`loadJson5()` SEMPRE** per leggere i file `.json5` (mai `require()`/`JSON.parse()`); scritture **atomiche** (temp + `rename`).
-2. **Campo `access` obbligatorio** su ogni rotta di plugin (`getRouteArray`): assenza = **errore fatale al boot**. Metodo rotta in **MAIUSCOLO**, chiave `handler` (non `func`).
+2. **Campo `access` obbligatorio** su ogni rotta di plugin (`getRouteArray`): assenza (o valore non-oggetto) = **rotta NON registrata + warning al boot** — non esiste, quindi non è aperta; il boot prosegue. Metodo rotta in **MAIUSCOLO**, chiave `handler` (non `func`).
 3. **Naming — OBBLIGATORIO:** prima di introdurre QUALSIASI nuovo nome (variabili, funzioni, file, directory, plugin, classi, costanti) proponi **almeno 2-3 alternative** significative (4-5+ se complesso) con breve spiegazione, e **attendi l'approvazione** del maintainer. Requisito **critico**, mai saltare.
 4. **`koa-classic-server` (dipendenza del team):** se trovi un bug **non aggirarlo** localmente — segnalalo al maintainer e aggiorna alla versione fixata (vedi *Dipendenze Mantenute dal Team*).
 5. **Sicurezza:** password con bcrypt; valida l'input; output **escapato** (XSS); redirect **validati** (open-redirect); il CSRF è gestito dal plugin `csrfProtection`.
@@ -268,7 +278,52 @@ Il merge additivo sa solo **aggiungere** chiavi. Quando un `.default` evolve con
 
 ### Ordine di caricamento
 
-1. **weight** crescente → 2. **risoluzione dipendenze** (prima le dipendenze) → 3. **alfabetico** (a parità di weight). I plugin caricati dopo dispongono di quelli caricati prima.
+**Un solo ordinamento topologico** (`core/pluginLoadOrder.js`, modulo puro) su tutti gli installabili: fra i plugin **pronti** in quel momento — cioè con tutte le dipendenze già caricate — si sceglie sempre quello di **weight** minore, e a parità il primo in **alfabetico**. Il vincolo delle dipendenze resta **duro** (una dipendenza carica sempre prima del suo dipendente); il peso decide tutto il resto. I plugin caricati dopo dispongono di quelli caricati prima.
+
+> ⚠️ **L'ordine di caricamento è ANCHE l'ordine dei middleware.** `index.js` scorre
+> l'array di `getMiddlewaresToLoad()` — costruito durante il caricamento — e fa
+> `app.use()` di ciascuno: il `weight` governa quindi **anche l'annidamento Koa**.
+> Conseguenza pratica: **chi OSSERVA il traffico deve avere un peso MINORE di chi lo
+> INTERROMPE.** Un middleware che risponde e non chiama `next()` (un redirect, un
+> blocco) nasconde la richiesta a tutto ciò che sta più a valle.
+>
+> È già costato un difetto: `analytics` osservava i redirect solo perché l'ordine
+> alfabetico lo metteva prima di `urlRedirect`; passando all'ordine per `weight`
+> (v3.0.0) il 100% dei 301/302 è sparito dalle statistiche, finché `analytics` non è
+> stato portato a `-8` (v3.10.0). L'invariante è presidiata da
+> `tests/integration/middlewareOrder.test.js`.
+>
+> **Quando il peso NON può essere onorato → box `[WEIGHT]` al boot.** Le due regole
+> possono contraddirsi: il peso dice « presto », una dipendenza dice « non prima di
+> questo ». Vince la dipendenza — deve — ma la contraddizione non resta muta: il box
+> elenca i plugin caricati dopo altri di peso **strettamente maggiore**, nomina la
+> dipendenza che li ha frenati, e ricorda che per montare un middleware più a monte
+> il `weight` da solo non basta. Sulla configurazione distribuita ne compare **uno**:
+> `adminAccessControl` (`-5`), vincolato da `adminUsers` (`0`).
+>
+> *Storia del limite, ormai chiuso:* fino alla **v3.14.0** l'ordine nasceva da due
+> meccanismi cuciti insieme — un `sort` per `weight` sui soli plugin **senza**
+> dipendenze, più una coda che accodava gli altri — e il secondo scavalcava il primo:
+> `adminAccessControl` dichiarava `-5` e caricava **22° su 22**. Il suo peso non era
+> poco efficace, era **inerte**. Con l'ordinamento unico carica **6°**, subito dopo la
+> sua dipendenza — tutto ciò che `-5` può ottenere.
+>
+> ⚠️ **Il cambiamento ha spostato i middleware**, ed è la parte da tenere a mente.
+> Sulla configurazione distribuita i plugin che contribuiscono **davvero** un
+> middleware sono **sei** — `simpleI18n`, `analytics`, `adminUsers`,
+> `adminAccessControl`, `urlRedirect`, `rateLimiter` — e in quest'ordine. Altri tre
+> (`admin`, `csrfProtection`, `mailer`) **dichiarano** `getMiddlewareToAdd()` ma
+> restituiscono un array vuoto: non sono nella catena, e ragionare sull'annidamento
+> Koa includendoli porta fuori strada. In particolare **il CSRF non è un middleware**:
+> l'enforcement vive nel route-wrap del core, prima del controllo auth.
+>
+> `adminUsers` e `adminAccessControl` sono passati da **ultimi** a **3°** e **4°** dei
+> sei. `adminAccessControl` — che **interrompe** (redirect al login, o status di
+> rifiuto) — ora monta **prima** di `urlRedirect` e `rateLimiter`. Su un URL che sia
+> insieme redirezionato e soggetto a una regola di accesso, vince ora il controllo
+> d'accesso; prima vinceva il redirect. Sulla configurazione distribuita non c'è
+> sovrapposizione (`redirectMap` parte vuoto), ma chi scrive regole su entrambi i
+> fronti deve saperlo.
 
 ### Stati dei plugin (boot graceful)
 
@@ -303,7 +358,15 @@ Pattern: `/${apiPrefix}/${pluginName}/${path}` (default `/api/{pluginName}/...`)
 | `handler` | sì | `async (ctx) => { ... }` |
 | `access` | sì | controllo accessi (vedi Sistema di controllo accessi) |
 
-> **WARNING:** `method` minuscolo (`'get'`) o `func` invece di `handler` → la rotta viene **silenziosamente ignorata** da `pluginSys.loadRoutes()` e la richiesta cade sul static server (HTML invece di JSON). Il campo `access` è **obbligatorio**: la sua assenza causa **errore fatale al boot** (vedi Sistema di controllo accessi).
+> **WARNING — tre modi di sbagliare una rotta.** Avevano tre esiti diversi, tutti silenziosi; ora hanno la **stessa risposta**: `loadRoutes()` non registra la rotta ed emette un warning che nomina plugin, metodo e path. I primi due da **v3.0.0**, il terzo da **v3.14.0**. Il boot **prosegue** in tutti e tre i casi — una rotta malformata in un plugin non deve togliere il sito a chi l'ha installato (stessa logica del boot graceful dei plugin).
+>
+> | Errore | Cosa succedeva prima | Oggi |
+> |---|---|---|
+> | `method` minuscolo (`'get'`) o verbo non supportato (`'PATCH'`, `'DELETE'`) | rotta non registrata, **nessun avviso**; la richiesta cade sul static server (HTML invece di JSON) | non registrata + **warning al boot** |
+> | `func` invece di `handler` | rotta **REGISTRATA** con un handler che avvolge `undefined` → **500** alla prima richiesta (`TypeError: originalHandler is not a function`) — non un 404, come questa nota affermava erroneamente | non registrata + **warning al boot** che nomina la causa |
+> | `access` mancante, `null`, o non-oggetto | rotta **REGISTRATA senza il wrap di autenticazione** — funzionante e **aperta**. `CLAUDE.md` prometteva un « errore fatale al boot » che nel codice non è mai esistito | non registrata + **warning al boot** che nomina la conseguenza (da v3.14.0) |
+>
+> Lo sweep `tests/integration/routeContract.test.js` verifica tutte e tre le forme su ogni plugin attivo, con lo **stesso predicato** che usa `loadRoutes` (`pluginSys.declaresAccess`): validatore e dispatcher erano già tornati a divergere una volta proprio su `access`.
 
 ```javascript
 getRouteArray() {
@@ -370,7 +433,7 @@ Struttura tema: `views/` (partial `head`/`header`/`nav`/`main`/`aside`/`footer`)
 Plugin documentati nei rispettivi doc (uso, configurazione, API, esempi):
 
 - **bootstrapNavbar** — genera navbar Bootstrap 5 (`horizontal`/`vertical`/`offcanvas`) da file `navbar.{name}.json5`: visibilità per auth/ruoli, auto-active, dropdown, separatori, `settingsOverrides`, `configDir` (con protezione path-traversal), caching prod/debug. Esposto ai template: `passData.plugin.bootstrapNavbar.render({name, configDir?, settingsOverrides?}, passData)`. → [`plugins/bootstrapNavbar/EXPLAIN.md`](./plugins/bootstrapNavbar/EXPLAIN.md)
-- **urlRedirect** — redirect 301/302 con pattern exact / wildcard (`*`, `**`) / `regex:`, first-match-wins (ordine array in `redirectMap.json5`), hit counter, preservazione query string. Pure middleware, intercetta solo le GET. → [`plugins/urlRedirect/README.md`](./plugins/urlRedirect/README.md)
+- **urlRedirect** — redirect 301/302 con pattern exact / wildcard (`*`, `**`) / `regex:`, first-match-wins (ordine array in `redirectMap.json5`), hit counter, preservazione query string. Pure middleware, intercetta `GET` e `HEAD` (parità RFC 9110 §9.3.2; su `HEAD` il redirect conta come hit). → [`plugins/urlRedirect/README.md`](./plugins/urlRedirect/README.md)
 - **adminBootstrapNavbar** — twin admin GUI (sezione `navbarsManagement`) per creare/editare/validare/preview i file navbar: editor JSON5, 5 template, file picker, soft-delete con backup. → [`plugins/adminBootstrapNavbar/README.md`](./plugins/adminBootstrapNavbar/README.md)
 
 > Scaffolding rapido di una navbar: skill `ital8cms-bootstrapNavbar-creator`.
@@ -669,7 +732,7 @@ Situata in `/plugins/adminUsers/userAccount.json5`
 
 ### Sistema di controllo accessi (adminAccessControl)
 
-Controllo accessi basato su pattern (esatto / wildcard `*`,`**` / `regex:`) con **priorità automatica** (il più specifico vince), regole **hardcoded immutabili** + **custom** in `accessControl.json5`, e campo **`access` obbligatorio** su ogni rotta di plugin (la sua assenza causa errore fatale al boot). Admin UI con editor JSON5 e validazione (sintassi, ruoli, conflitti, immutabilità hardcoded). → [`plugins/adminAccessControl/README.it.md`](./plugins/adminAccessControl/README.it.md) · [`EXPLAIN.it.md`](./plugins/adminAccessControl/EXPLAIN.it.md)
+Controllo accessi basato su pattern (esatto / wildcard `*`,`**` / `regex:`) con **priorità automatica** (il più specifico vince), regole **hardcoded immutabili** + **custom** in `accessControl.json5`, e campo **`access` obbligatorio** su ogni rotta di plugin (una rotta che non lo dichiara non viene registrata: vedi la tabella in *Rotte API dei plugin*). Admin UI con editor JSON5 e validazione (sintassi, ruoli, conflitti, immutabilità hardcoded). → [`plugins/adminAccessControl/README.it.md`](./plugins/adminAccessControl/README.it.md) · [`EXPLAIN.it.md`](./plugins/adminAccessControl/EXPLAIN.it.md)
 
 ### SEO · Rate Limiter · Admin Rate Limiter
 
@@ -1076,6 +1139,12 @@ Server su `http://localhost:3000`.
 > `backup-manager`, `npm run deps-sync`. Modello **ibrido per-plugin** delle
 > dipendenze npm (plugin con `package.json` proprio → `node_modules` locale;
 > pilota `adminMedia`). → [`docs/self-update.it.md`](./docs/self-update.it.md).
+>
+> ⚠️ **Sotto `backups/` convivono DUE sistemi che non si conoscono:** lo snapshot a
+> comando (`backup-*`, quello qui sopra) e il backup automatico del wizard di
+> installazione (`init-*`), che i comandi `backup-list`/`restore`/`backup-manager`
+> **non vedono** — e che quindi non viene mai potato. Confronto, limiti noti e
+> recupero a mano: → [`docs/backup-strategie.it.md`](./docs/backup-strategie.it.md).
 
 > **Control plane CLI (`ital8cms-cli`):** pilota un'istanza **in esecuzione** via
 > socket UNIX locale (tipicamente in SSH). `npm run cli -- status` /
@@ -1456,6 +1525,7 @@ Spostato in [`docs/deployment.it.md`](./docs/deployment.it.md).
 - `/core/resetConfigsToDefault.js` - Reset: rimuove i vivi di una cartella (rigenerati dai default al boot); usata dal comando CLI `ital8cms-cli reset`
 - `/core/setJson5Key.js` - Ciclo di vita config: upsert (add-or-update) di una chiave in un `.json5` preservando i commenti (usata dal boot per scrivere `isInstalled`/`version`); accetta anche **path annidati** (`['custom','dataPath']`); complementare a `editJson5` (che solo aggiorna)
 - `/core/pluginStateResolver.js` - Ciclo di vita config: modulo **puro** per gli stati dei plugin — `checkNpmDeps` + `resolvePluginStates` (cascata a punto fisso + rilevamento cicli); usato da `pluginSys.initialize()`
+- `/core/pluginLoadOrder.js` - Ordine di caricamento: modulo **puro** `resolveLoadOrder(installables)` — ordinamento **topologico** con il `weight` come criterio di scelta fra i pronti, più il rilevamento dei pesi che le dipendenze rendono impossibili (box `[WEIGHT]`); gemello di `pluginStateResolver` (quello decide CHI si carica, questo QUANDO)
 - `/core/reconcileSchemaVersion.js` - Ciclo di vita config: drift di `schemaVersion` per UNA coppia default↔vivo + **merge additivo ricorsivo** (aggiunge le chiavi nuove a ogni profondità, preserva i valori)
 - `/core/reconcileSchemaVersions.js` - Ciclo di vita config: scansione di contenitori/coppie + box `[SCHEMA]` anti-rumore; invocata al boot (salta i config con una migrazione pendente, via `skipLivePaths`)
 - `/core/migrationRunner.js` - Migrazione dei config: scoperta/validazione degli step in `migrations/`, esecuzione della catena (backup, script, merge, postcondizione strutturale, ricevuta `schemaVersion`), box `[MIGRATE]` al boot

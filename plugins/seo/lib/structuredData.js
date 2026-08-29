@@ -84,6 +84,41 @@ function buildWebSiteSchema(config) {
 }
 
 /**
+ * Characters that would let the serialized JSON escape its <script> container.
+ * The HTML parser scans for `</script` BEFORE any JSON parser sees the payload,
+ * so a `</script>` inside a string value closes the tag early and everything
+ * after it becomes live markup.
+ *
+ * `\uXXXX` is a standard JSON string escape: every consumer (search engines
+ * included) parses it back to the original character, so nothing is lost.
+ */
+const HTML_SENSITIVE_ESCAPES = {
+  '<': '\\u003c',
+  '>': '\\u003e',
+  '&': '\\u0026',
+};
+
+/**
+ * Serializes a schema object into a payload safe to embed in a
+ * <script type="application/ld+json"> tag.
+ *
+ * WHY THIS EXISTS. `JSON.stringify` escapes quotes and backslashes, but NOT the
+ * three characters that matter to an HTML parser. Values come from
+ * `seoConfig.json5` — written by an administrator (roles 0/1), so this is not a
+ * privilege escalation — but a plain text field such as `siteName` must not be a
+ * way to introduce markup into every page of the site.
+ *
+ * A global replace is safe: in JSON output these three characters can only occur
+ * inside string literals, never as structural syntax.
+ *
+ * @param {object} schema - JSON-LD schema object
+ * @returns {string} - JSON payload with HTML-sensitive characters escaped
+ */
+function serializeJsonLd(schema) {
+  return JSON.stringify(schema).replace(/[<>&]/g, (ch) => HTML_SENSITIVE_ESCAPES[ch]);
+}
+
+/**
  * Genera il markup HTML completo per gli structured data.
  * Restituisce uno o più tag <script type="application/ld+json">.
  *
@@ -97,12 +132,12 @@ function generateStructuredData(config) {
 
   const orgSchema = buildOrganizationSchema(config);
   if (orgSchema) {
-    scripts.push(`<script type="application/ld+json">${JSON.stringify(orgSchema)}</script>`);
+    scripts.push(`<script type="application/ld+json">${serializeJsonLd(orgSchema)}</script>`);
   }
 
   const siteSchema = buildWebSiteSchema(config);
   if (siteSchema) {
-    scripts.push(`<script type="application/ld+json">${JSON.stringify(siteSchema)}</script>`);
+    scripts.push(`<script type="application/ld+json">${serializeJsonLd(siteSchema)}</script>`);
   }
 
   return scripts.join('\n    ');
@@ -112,4 +147,5 @@ module.exports = {
   buildOrganizationSchema,
   buildWebSiteSchema,
   generateStructuredData,
+  serializeJsonLd,
 };

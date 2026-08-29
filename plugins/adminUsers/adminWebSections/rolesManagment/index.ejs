@@ -253,7 +253,7 @@
                     document.getElementById('roleNameError').textContent = result.error;
                     document.getElementById('roleNameError').style.display = 'block';
                 } else {
-                    alert(result.error);
+                    alert(testoErroreRuolo(result));
                 }
             } else {
                 alert(result.success);
@@ -313,7 +313,7 @@
                     document.getElementById('editRoleNameError').textContent = result.error;
                     document.getElementById('editRoleNameError').style.display = 'block';
                 } else {
-                    alert(result.error);
+                    alert(testoErroreRuolo(result));
                 }
             } else {
                 alert(result.success);
@@ -323,6 +323,24 @@
         } catch (error) {
             alert('Errore nella modifica del ruolo: ' + error);
         }
+    }
+
+    /**
+     * Compone il testo di un errore sui ruoli, mostrando a parte l'azione
+     * richiesta e rifiutata quando la risposta la porta (`refusedAction`).
+     *
+     * Il messaggio del server spiega la REGOLA — perché un ruolo di sistema non
+     * si tocca — ed è volutamente identico per modifica ed eliminazione: è la
+     * stessa regola, e due varianti dello stesso testo divergono prima o poi.
+     * Quale delle due azioni sia stata tentata è informazione separata, e sta
+     * qui sotto in un blocco suo.
+     *
+     * `alert()` non interpreta HTML, quindi il testo passa così com'è: nessun
+     * escaping (che qui produrrebbe `&amp;` letterali) e nessun rischio XSS.
+     */
+    function testoErroreRuolo(result) {
+        if (!result.refusedAction) return result.error;
+        return `${result.error}\n\n─── Azione richiesta e rifiutata ───\n${result.refusedAction}`;
     }
 
     // Elimina ruolo
@@ -341,7 +359,7 @@
             const result = await response.json();
 
             if (result.error) {
-                alert(result.error);
+                alert(testoErroreRuolo(result));
             } else {
                 let message = result.success;
                 if (result.affectedCount > 0) {

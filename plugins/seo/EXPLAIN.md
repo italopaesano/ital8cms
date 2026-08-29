@@ -282,8 +282,23 @@ Sitemap: https://www.example.com/sitemap.xml  ← aggiunto automaticamente se si
 | `buildOrganizationSchema(config)` | Costruisce l'oggetto JSON-LD per schema.org/Organization |
 | `buildWebSiteSchema(config)` | Costruisce l'oggetto JSON-LD per schema.org/WebSite |
 | `generateStructuredData(config)` | Genera i tag `<script type="application/ld+json">` pronti per l'HTML |
+| `serializeJsonLd(schema)` | Serializza uno schema in un payload sicuro da inserire nel tag |
 
 Richiede almeno `siteName` per generare qualcosa. Se tutti i campi sono vuoti, restituisce stringa vuota.
+
+**Perché la serializzazione non è un `JSON.stringify` diretto** (dalla v3.4.0). Il
+parser HTML cerca `</script` **prima** che un parser JSON veda il payload: un
+`siteName` valorizzato a `Sito</script><b>x</b>` chiudeva il tag in anticipo e il
+resto diventava markup vivo. `serializeJsonLd()` escapa `<`, `>` e `&` come
+`\uXXXX` — escape **JSON standard**, quindi i consumatori (motori di ricerca
+inclusi) rileggono il carattere originale e nessun dato si perde. La sostituzione
+globale è sicura perché in output JSON quei tre caratteri compaiono solo dentro i
+letterali stringa, mai come sintassi.
+
+Il valore arriva da `seoConfig.json5`, scritto da un amministratore (ruoli 0/1) che
+può già modificare i template: **non era un'escalation di privilegi**, ma un campo
+di testo semplice come `siteName` non deve essere una via per iniettare markup in
+ogni pagina del sito.
 
 ### lib/sitemapGenerator.js
 

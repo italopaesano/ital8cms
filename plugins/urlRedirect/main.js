@@ -118,8 +118,23 @@ module.exports = {
 
     return [
       async (ctx, next) => {
-        // Only intercept GET requests
-        if (ctx.method !== 'GET') {
+        // Only intercept safe read verbs.
+        //
+        // HEAD is included because RFC 9110 §9.3.2 defines it as GET without the
+        // body: same status, same headers. Excluding it made the two diverge —
+        // GET answered 301 while HEAD served the very resource being redirected
+        // away from, so caches, reverse proxies, link checkers and crawlers never
+        // saw the redirect and kept treating the old URL as valid.
+        //
+        // The divergence only became observable with koa-classic-server 5.3.0,
+        // which added HEAD to the static server's default methods; before that a
+        // HEAD fell through to a 404 either way.
+        //
+        // A redirected HEAD DOES increment the hit counter: that counter tracks
+        // "how many times each rule is used", and a HEAD answered with a 301 has
+        // used the rule. Not counting it would mean special-casing HEAD again —
+        // reintroducing, in the statistics, the very divergence fixed here.
+        if (ctx.method !== 'GET' && ctx.method !== 'HEAD') {
           await next();
           return;
         }

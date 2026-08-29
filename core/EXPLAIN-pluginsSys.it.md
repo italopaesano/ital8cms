@@ -677,22 +677,53 @@ ERROR: Dipendenza circolare rilevata: pluginA → pluginB → pluginC → plugin
 
 ## 8. Ordine di Caricamento
 
-I plugin vengono caricati in base a:
+L'ordine nasce da **un solo ordinamento topologico** (`core/pluginLoadOrder.js`,
+modulo puro): fra i plugin **pronti** in quel momento — cioè con tutte le
+dipendenze già caricate — si sceglie sempre quello di **weight** minore, e a
+parità il primo in **alfabetico**.
 
-1. **Weight** (crescente: 0, 1, 2...)
-2. **Dipendenze** (prima i plugin senza dipendenze)
-3. **Nome alfabetico** (se weight uguale)
+1. **Dipendenze**: vincolo DURO — una dipendenza carica sempre prima del suo
+   dipendente, qualunque peso abbia.
+2. **Weight** crescente: decide fra tutti quelli che potrebbero caricare ora.
+3. **Nome alfabetico**: a parità di peso.
 
-```json
+```json5
 // pluginConfig.json5
 {
-  "weight": 0    // Caricato prima (es. dbApi)
+  "weight": -10   // Caricato prima (es. simpleI18n, che fornisce __() ai template)
 }
 
 {
-  "weight": 10   // Caricato dopo (es. admin)
+  "weight": 10    // Caricato dopo
 }
 ```
+
+### Quando il peso non può essere onorato → box `[WEIGHT]`
+
+Le due regole possono contraddirsi: il peso dice « presto », una dipendenza dice
+« non prima di questo ». Vince la dipendenza — deve — ma la contraddizione viene
+**riportata** al boot invece di restare muta:
+
+```
+[WEIGHT]   ⚠  1 plugin caricano DOPO plugin di peso maggiore:
+[WEIGHT]      il loro weight non può essere onorato per via delle dipendenze.
+[WEIGHT]
+[WEIGHT]     • adminAccessControl (weight -5) carica in posizione 6
+[WEIGHT]       vincolato da "adminUsers" (weight 0, posizione 5):
+[WEIGHT]       una dipendenza carica sempre prima del suo dipendente.
+[WEIGHT]       scavalcato da: admin(0), bootstrap(0), adminUsers(0)
+```
+
+Conta perché **l'ordine di caricamento è anche l'ordine dei middleware**: un peso
+non onorato è un middleware montato più a valle di dove lo si voleva.
+
+> **Storia.** Fino alla v3.14.0 l'ordine nasceva da due meccanismi cuciti insieme
+> — un `sort` per `weight` sui soli plugin **senza** dipendenze, più una coda che
+> accodava gli altri man mano che si risolvevano — e il secondo scavalcava il
+> primo: qualunque plugin con un `dependency` finiva dopo **tutti** quelli senza.
+> `adminAccessControl` dichiarava `-5` e caricava **22° su 22**: il suo peso non
+> era poco efficace, era **inerte**. Con l'ordinamento unico carica **6°**, subito
+> dopo la sua dipendenza.
 
 ---
 

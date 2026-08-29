@@ -35,3 +35,34 @@ This mirrors the pattern used in `adminSeo` / `seoManagement/globalSettings.ejs`
   - `core/admin/adminConfig.json5` → `sections` object + `menuOrder` array
 - Update `.gitignore` to include the new symlink path:
   `/core/admin/webPages/analyticsSettings`
+
+---
+
+## Note di comportamento
+
+### Export CSV — neutralizzazione delle formule (dalla v3.4.0)
+
+`lib/exportFormatter.js → formatCsv()` antepone un **apice** ai valori stringa che
+iniziano con `=`, `+`, `-`, `@`, TAB o CR, perché quei caratteri fanno interpretare
+la cella come **formula** da Excel e LibreOffice. È rilevante qui più che altrove:
+`path`, `referrer` e `userAgent` sono copiati dalle richieste HTTP, quindi il
+contenuto è scelto da **chiunque visiti il sito**, senza alcun accesso privilegiato,
+mentre il file lo apre un amministratore.
+
+Due dettagli decidono se la protezione funziona:
+
+- l'apice è applicato **prima** del quoting RFC 4180, così finisce *dentro* le
+  virgolette; fuori, spezzerebbe il campo in due colonne;
+- agisce sulle **sole stringhe**: un numero non può portare una formula, e
+  prefissare un `durationMs: -5` lo renderebbe inutilizzabile nei calcoli.
+
+Conseguenza visibile per chi legge l'export: una cella che *legittimamente* inizia
+con uno di quei caratteri mostra l'apice iniziale nel file grezzo. È il
+comportamento voluto, ed è il costo minimo della protezione.
+
+## Debito documentale
+
+- [ ] Il plugin non ha `README.it.md` né `EXPLAIN.it.md` — obbligatorio il primo
+      secondo ital8doc (`CLAUDE.md` §6). Questo file è un piano di feature, non la
+      documentazione del plugin. Finché manca, note come quella qui sopra finiscono
+      nel posto sbagliato.

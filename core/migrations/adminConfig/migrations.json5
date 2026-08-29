@@ -15,7 +15,7 @@
       title: "Sezione admin del filtro sentinel nel menu",
       automatic: true,
       script: "from-v1-to-v2.js",
-      touches: ["core/admin/adminConfig.json5"],
+      touches: ["adminConfig.json5"],
       reason:
         "Il merge additivo aggiunge `sections.sentinelManagement` (è una chiave  nuova, e la traversata ricorsiva la vede), ma NON tocca gli array:  `menuOrder` è un array, e senza questo script la sezione esisterebbe nel  config vivo senza comparire nel menu, perché adminSystem costruisce il  menu iterando proprio menuOrder. È lo stesso difetto emerso in v2.70.1  con le regole di accessControl, qui colto prima che arrivasse in  produzione. Lo script si limita ad accodare la voce se manca: è  idempotente e non riordina le voci già presenti, così una  personalizzazione dell'ordine fatta dall'amministratore sopravvive.",
     },

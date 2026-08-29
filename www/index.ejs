@@ -1,0 +1,66 @@
+<%#
+================================================================================
+PAGINA SEGNAPOSTO DI PRIMO AVVIO — sostituiscila con la tua homepage.
+================================================================================
+Perché esiste: senza un file indice, `GET /` su un'installazione pulita rispondeva
+404, e la prima cosa che vedeva chi aveva appena installato ital8cms era un errore.
+
+È un file NORMALE di `/www`, non un meccanismo: cancellalo o riscrivilo e non
+torna. È l'unico file di `/www` versionato — `.gitignore` esclude tutto il resto —
+quindi se lo modifichi lo vedrai comparire in `git status`: è voluto, così sai che
+stai partendo da un file del progetto e non da roba tua.
+
+NOTA sui link: `adminPrefix` NON è disponibile qui, di proposito — `index.js` non
+lo passa alle pagine pubbliche per non rivelare dove sta il pannello. Non
+aggiungerlo.
+================================================================================
+%>
+<%- include( passData.themeSys.getThemePartPath( 'head.ejs' ) ) %>
+<%- include( passData.themeSys.getThemePartPath( 'header.ejs' ) ) %>
+
+<main class="ital8-placeholder">
+  <style>
+    /* Stile locale e prefissato: questa pagina deve reggere sotto QUALSIASI tema,
+       anche uno che non porti Bootstrap, senza sporcare i selettori del tema. */
+    .ital8-placeholder { max-width: 46rem; margin: 3rem auto; padding: 0 1.25rem;
+      line-height: 1.6; }
+    .ital8-placeholder h1 { margin-bottom: .5rem; }
+    .ital8-placeholder .ital8-lead { font-size: 1.1rem; opacity: .85; margin-top: 0; }
+    .ital8-placeholder code { padding: .1em .35em; border-radius: 3px;
+      background: rgba(127,127,127,.16); font-size: .95em; }
+    .ital8-placeholder .ital8-next { margin-top: 2rem; padding: 1rem 1.25rem;
+      border-left: 3px solid currentColor; opacity: .9; }
+    .ital8-placeholder .ital8-next p:last-child { margin-bottom: 0; }
+  </style>
+
+  <h1><%= __({
+    it: "ital8cms è in funzione",
+    en: "ital8cms is running"
+  }, passData.ctx) %></h1>
+
+  <p class="ital8-lead"><%= __({
+    it: "Stai vedendo la pagina segnaposto: il server è partito e sta servendo /www.",
+    en: "You are seeing the placeholder page: the server started and is serving /www."
+  }, passData.ctx) %></p>
+
+  <div class="ital8-next">
+    <p><strong><%= __({ it: "Il passo successivo", en: "Next step" }, passData.ctx) %></strong></p>
+    <p><%- __({
+      it: "Sostituisci <code>www/index.ejs</code> con la tua homepage. È una pagina EJS come le altre: include i partial del tema attivo e ha accesso a <code>passData</code>.",
+      en: "Replace <code>www/index.ejs</code> with your own homepage. It is a normal EJS page: it includes the active theme's partials and has access to <code>passData</code>."
+    }, passData.ctx) %></p>
+    <p><%- __({
+      it: "Il tema attivo si cambia da <code>ital8Config.json5</code> → <code>activeTheme</code>; i suoi partial stanno in <code>themes/&lt;tema&gt;/views/</code>.",
+      en: "The active theme is set in <code>ital8Config.json5</code> → <code>activeTheme</code>; its partials live in <code>themes/&lt;theme&gt;/views/</code>."
+    }, passData.ctx) %></p>
+  </div>
+
+  <% if (passData.demo) { %>
+    <p><em><%= __({
+      it: "Installazione con profilo demo.",
+      en: "Demo profile installation."
+    }, passData.ctx) %></em></p>
+  <% } %>
+</main>
+
+<%- include( passData.themeSys.getThemePartPath( 'footer.ejs' ) ) %>
