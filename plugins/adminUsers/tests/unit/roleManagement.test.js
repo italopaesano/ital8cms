@@ -108,6 +108,43 @@ describe('updateCustomRole() — i ruoli di sistema sono immutabili', () => {
     expect(res.error).toMatch(/sistema|hardcoded/i);
   });
 
+  test('il messaggio NOMINA il ruolo toccato (D5, v3.17.0)', () => {
+    // Prima diceva soltanto « non puoi modificare un ruolo di sistema »: vero,
+    // ma chi lo leggeva sapeva solo di aver sbattuto contro un muro, senza
+    // sapere contro quale.
+    const res = updateCustomRole(1, 'nomeNuovo', 'descrizione nuova');
+    expect(res.error).toContain('"admin"');
+    expect(res.error).toContain('ID 1');
+  });
+
+  test('il messaggio dice cosa fare INVECE', () => {
+    // È la differenza fra un rifiuto e un vicolo cieco: chi voleva un ruolo su
+    // misura deve uscire dall'errore sapendo dove andare.
+    const res = updateCustomRole(1, 'nomeNuovo', 'descrizione nuova');
+    expect(res.error).toMatch(/custom/i);
+    expect(res.error).toMatch(/100/);
+  });
+
+  test('il gergo « hardcoded » non arriva più all\'amministratore', () => {
+    // Resta il nome del campo nello schema, dove è codice; nel messaggio non
+    // aggiungeva nulla a « di sistema ».
+    expect(updateCustomRole(1, 'nomeNuovo', 'desc').error).not.toMatch(/hardcoded/i);
+  });
+
+  test('l\'azione tentata viaggia a parte, non dentro il testo', () => {
+    // Il testo spiega la REGOLA ed è identico per modifica ed eliminazione;
+    // quale delle due sia stata tentata è informazione separata, così
+    // l'interfaccia può mostrarla dove vuole senza due varianti del messaggio.
+    expect(updateCustomRole(1, 'nomeNuovo', 'desc').refusedAction).toBe('modifica');
+    expect(deleteCustomRole(1).refusedAction).toBe('eliminazione');
+  });
+
+  test('UN SOLO messaggio per modifica ed eliminazione', () => {
+    // Se un domani i due testi divergessero, questo test lo direbbe: due
+    // formulazioni della stessa regola fanno cercare una differenza che non c'è.
+    expect(updateCustomRole(2, 'nomeNuovo', 'desc').error).toBe(deleteCustomRole(2).error);
+  });
+
   test('ruolo inesistente → errore con errorType "roleId"', () => {
     const res = updateCustomRole(99999, 'nomeNuovo', 'descrizione nuova');
     expect(res.errorType).toBe('roleId');
@@ -134,6 +171,26 @@ describe('deleteCustomRole() — i ruoli di sistema non si cancellano', () => {
 
   test('il messaggio dice PERCHÉ', () => {
     expect(deleteCustomRole(1).error).toMatch(/sistema|hardcoded/i);
+  });
+
+  test.each([[0, 'root'], [1, 'admin'], [2, 'editor'], [3, 'selfEditor']])(
+    'il ruolo %i è nominato per NOME nel messaggio', (roleId, nome) => {
+      // Su `root` conta più che altrove: è il rifiuto che un amministratore
+      // deve capire al primo colpo, senza andare a cercare che cos'è l'ID 0.
+      expect(deleteCustomRole(roleId).error).toContain(`"${nome}"`);
+    });
+
+  test('`isHardcoded` resta il guardiano UNICO (D5)', () => {
+    // Decisione del maintainer: nessun floor `roleId >= 100` come secondo
+    // strato. Due fonti di verità sullo stesso confine divergono prima o poi,
+    // e questo flag è ciò che lo schema dei ruoli dichiara.
+    const sorgente = require('fs').readFileSync(
+      require('path').join(__dirname, '../../roleManagement.js'), 'utf8');
+
+    const guardiaUpdate = sorgente.slice(sorgente.indexOf('function updateCustomRole'));
+    const guardiaDelete = sorgente.slice(sorgente.indexOf('function deleteCustomRole'));
+    expect(guardiaUpdate).toMatch(/isHardcoded/);
+    expect(guardiaDelete).toMatch(/isHardcoded/);
   });
 
   // Il numero 0 è l'ID di `root`, il ruolo più privilegiato — ed era scambiato

@@ -8,6 +8,51 @@ const rolesFilePath = path.join(__dirname, 'userRole.json5');
 const usersFilePath = path.join(__dirname, 'userAccount.json5');
 
 /**
+ * Costruisce il messaggio che spiega perché un ruolo di sistema non si tocca.
+ *
+ * ─── DECISIONE D5 ────────────────────────────────────────────────────────────
+ * `isHardcoded` resta il **guardiano unico**: è la fonte di verità dichiarata
+ * dallo schema dei ruoli, ed è verificata funzionante (`deleteCustomRole(0)` e
+ * `deleteCustomRole("0")` sono entrambi respinti — la stringa è la forma che
+ * manda il form admin). Il floor `roleId >= 100` non è stato aggiunto: sarebbe
+ * un secondo strato che duplica la stessa regola in un posto diverso, e due
+ * fonti di verità sullo stesso confine divergono prima o poi.
+ *
+ * Quello che è cambiato è il **messaggio**. Diceva
+ * « Non puoi modificare un ruolo di sistema (hardcoded) »: vero, ma non dice
+ * quale ruolo, non dice perché, e « hardcoded » è gergo che non aggiunge nulla a
+ * « di sistema ». Chi lo leggeva sapeva solo di aver sbattuto contro un muro.
+ *
+ * ─── UN MESSAGGIO SOLO PER MODIFICA ED ELIMINAZIONE ──────────────────────────
+ * Il testo NON nomina l'azione: dice che quel ruolo non si può *né* modificare
+ * *né* eliminare, perché è la stessa regola e sono la stessa risposta. L'azione
+ * concretamente tentata viaggia a parte, nel campo `refusedAction` della
+ * risposta, così l'interfaccia può mostrarla dove vuole senza che il testo
+ * debba esistere in due varianti che possono divergere.
+ *
+ * SICUREZZA DELL'OUTPUT: il nome del ruolo finisce in questo testo, e i nomi
+ * vivono in `userRole.json5` — file vivo, git-ignored, modificabile a mano.
+ * I due punti di rendering della GUI sono `element.textContent = result.error`
+ * e `alert(result.error)`: **nessuno dei due interpreta HTML**, quindi il nome
+ * non va escapato (lo escaping produrrebbe `&amp;` letterali dentro un alert).
+ * Se un domani quel rendering passasse a `innerHTML`, questo testo va escapato
+ * con `escapeHtml` — è la ragione per cui la nota sta qui e non in un commit.
+ *
+ * @param {number} roleId - ID del ruolo di sistema toccato
+ * @param {object} role - Il ruolo, come sta in userRole.json5
+ * @returns {string}
+ */
+function spiegaRuoloDiSistema(roleId, role) {
+    const nome = (role && role.name) ? role.name : `ID ${roleId}`;
+    return (
+        `Errore: "${nome}" (ID ${roleId}) è un ruolo di sistema: non si può né modificare né eliminare.\n` +
+        `I ruoli di sistema (ID 0-3: root, admin, editor, selfEditor) sono parte del modello di accessi ` +
+        `del CMS, e il codice li verifica per numero.\n` +
+        `Per un ruolo su misura creane uno custom: riceve un ID da 100 in su, ed è modificabile ed eliminabile.`
+    );
+}
+
+/**
  * Ottiene il prossimo ID disponibile per ruoli custom (>= 100)
  */
 function getNextCustomRoleId() {
@@ -139,9 +184,14 @@ function updateCustomRole(roleId, name, description) {
         return { error: `Errore: Ruolo con ID ${roleId} non trovato.`, errorType: 'roleId' };
     }
 
-    // Verifica che sia un ruolo custom (non hardcoded)
+    // Verifica che sia un ruolo custom (non hardcoded).
+    // `isHardcoded` è il guardiano unico — vedi spiegaRuoloDiSistema().
     if (roleData.roles[roleId].isHardcoded) {
-        return { error: 'Errore: Non puoi modificare un ruolo di sistema (hardcoded).', errorType: 'roleId' };
+        return {
+            error: spiegaRuoloDiSistema(roleId, roleData.roles[roleId]),
+            errorType: 'roleId',
+            refusedAction: 'modifica',
+        };
     }
 
     // Validazione nome — le STESSE due regole di createCustomRole.
@@ -198,9 +248,14 @@ function deleteCustomRole(roleId) {
         return { error: `Errore: Ruolo con ID ${roleId} non trovato.`, errorType: 'roleId' };
     }
 
-    // Verifica che sia un ruolo custom (non hardcoded)
+    // Verifica che sia un ruolo custom (non hardcoded).
+    // Stesso messaggio della modifica, di proposito: è la stessa regola.
     if (roleData.roles[roleId].isHardcoded) {
-        return { error: 'Errore: Non puoi eliminare un ruolo di sistema (hardcoded).', errorType: 'roleId' };
+        return {
+            error: spiegaRuoloDiSistema(roleId, roleData.roles[roleId]),
+            errorType: 'roleId',
+            refusedAction: 'eliminazione',
+        };
     }
 
     const roleName = roleData.roles[roleId].name;

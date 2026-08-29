@@ -188,14 +188,16 @@ completa in §5 accanto alla misura che le ha fatte emergere.
       messaggi distinti. Corretto **anche `positiveInteger()`**, difetto identico e nessun
       chiamante. L'ordine `filter`/`validate` di inquirer è stato **verificato sul sorgente**
       (è la premessa: col filtro prima, il guard sarebbe inutile) e un test lo presidia.
-- [ ] **(D5) Il floor `roleId >= 100` non è applicato a delete/update** → §5.
-      Il confine dei ruoli custom è conosciuto solo da `getNextCustomRoleId`;
-      `deleteCustomRole`/`updateCustomRole` si affidano al solo `isHardcoded`, che vive in
-      un file vivo, git-ignored e modificabile a mano. Verificato che oggi `root` non sia
-      cancellabile: è un solo strato, non zero. Le uscite: **aggiungere il floor** come
-      secondo strato (attenzione al messaggio d'errore: per gli ID 0-3 deve restare quello
-      attuale, altrimenti si degrada un messaggio giusto) oppure **lasciare** `isHardcoded`
-      come unica fonte di verità.
+- [x] ~~**(D5) Il floor `roleId >= 100` non è applicato a delete/update** → §5.~~
+      **Deciso dal maintainer e applicato in v3.17.0: `isHardcoded` resta il guardiano
+      unico.** Niente floor: sarebbe una seconda fonte di verità sullo stesso confine, e
+      due fonti sullo stesso confine divergono prima o poi. Il flag è la fonte dichiarata
+      dallo schema dei ruoli ed è verificato funzionante.
+      **Il lavoro è andato sul messaggio**, che diceva troppo poco: ora nomina il ruolo
+      (« "root" (ID 0) »), dice perché è intoccabile e cosa fare invece (creare un custom,
+      ID da 100 in su), e non usa più il gergo « hardcoded ». **Un solo testo** per
+      modifica ed eliminazione — è la stessa regola — con l'azione tentata portata a parte
+      nel campo `refusedAction`, che la GUI mostra in un blocco suo.
 - [ ] **(D6) `getBackupPath()` resta ancorata a `__dirname` mentre la radice è iniettabile** → §5.
       Dopo il seam di v3.6.0 il backup può scrivere altrove, ma questi due metodi
       compongono il path da `__dirname`: se la radice è iniettata, la stringa **scritta in
@@ -474,7 +476,10 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       una rotta senza `access` veniva **registrata senza controllo di autenticazione**,
       cioè funzionante e aperta. Il ramo « senza wrap » non esiste più: superato il gate,
       `access` è garantito oggetto e l'handler passa **sempre** dal wrap.
-- [ ] **(D5) `roleManagement`: il floor `roleId >= 100` non è applicato a delete/update.**
+- [x] ~~**(D5) `roleManagement`: il floor `roleId >= 100` non è applicato a delete/update.**~~
+      **CHIUSO in v3.17.0 senza aggiungere il floor** (decisione del maintainer:
+      `isHardcoded` resta il guardiano unico); il lavoro è andato sul messaggio d'errore.
+      Cronaca, per memoria:
       *(Emerso in v3.10.0.)* Il modulo conosce il confine dei ruoli custom solo in
       `getNextCustomRoleId`. `deleteCustomRole`/`updateCustomRole` si affidano al solo
       flag `isHardcoded`, che vive in un file vivo, git-ignored e modificabile a mano.
@@ -579,6 +584,17 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       stessa già applicata due volte — un path opzionale col default invariato,
       come `pluginsRootPath` (v2.98.0) e `themesRootPath` (v2.92.0) — e sbloccherebbe
       i rami di scrittura, che sono quelli dove nascono gli account.
+      **⚠ La rete di sicurezza è un RILEVATORE, non un impedimento — verificato sul
+      campo in v3.17.0.** Durante il mutation testing di D5 una mutazione che
+      disattivava il guardiano `isHardcoded` in `deleteCustomRole()` ha fatto
+      **eseguire davvero** la cancellazione dei quattro ruoli di sistema dal
+      `userRole.json5` vivo. L'`afterAll` con i digest l'ha rilevata — è ciò che i
+      fallimenti stavano dicendo — ma il danno era già scritto; il file è stato
+      ripristinato dal `.default` e verificato con `md5sum -c`. Due conseguenze da
+      tenere presenti finché il seam non c'è: **(a)** una mutazione che disattiva un
+      guardiano di scrittura non va eseguita contro i dati veri; **(b)** `git diff` su
+      questi file **non può rilevare nulla** — sono git-ignored — quindi la verifica
+      va fatta col digest, mai col diff.
 - [ ] **Soglia minima di coverage** con fail della CI, calcolata in modo aggregato
       (core + plugin attivi + temi). **Sbloccata a metà da v2.96.0**: lo scope della
       misura ora copre tutto il codice che la suite ha il permesso di eseguire
