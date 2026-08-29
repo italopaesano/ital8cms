@@ -371,6 +371,96 @@ Tutti i metodi restituiti sono `jest.fn()` — permettono asserzioni come `expec
 | `loadFixture(name)` | Carica una fixture JSON5 da `/core/testHelpers/fixtures/` (condivisa tra più plugin) |
 | `createPluginSandbox(pluginName, options)` | Crea dir temporanea in `os.tmpdir()` con scaffolding plugin |
 
+### JS client-side della GUI admin: il guard `typeof module`
+
+Il JavaScript delle sezioni admin gira nel browser, e jest lo esegue con
+`testEnvironment: 'node'`: senza un DOM, quei file non si possono nemmeno
+`require()`. Sono **~4.750 righe su 15 file**, storicamente all'1,9% di copertura.
+
+**La scelta del progetto è la terza via**: né `jsdom` (una seconda toolchain e un
+ambiente diverso da quello reale) né e2e per tutto (lento, e verifica il giro
+completo quando spesso serve una funzione sola). Si esporta la **logica pura** con
+un guard che in browser non esiste:
+
+```javascript
+(function () {
+  'use strict';
+
+  function formatDuration(sec) { /* … pura … */ }
+
+  // ── Esportazione per i test ─────────────────────────────────────────────
+  // In browser `module` non esiste e questo ramo non gira.
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { formatDuration };
+  }
+
+  // Sotto Node non c'è un `document` da agganciare: il file viene richiesto
+  // solo per le funzioni pure qui sopra.
+  if (typeof document === 'undefined') return;
+
+  document.addEventListener('DOMContentLoaded', function () { /* … DOM … */ });
+}());
+```
+
+**Servono entrambi i guard.** Il primo esporta; il secondo impedisce che il
+`require()` esploda sull'aggancio dei listener — ed è quello che si dimentica.
+
+#### Quando applicarlo, e quando no
+
+Il pattern **non va applicato a tutti i file**: su uno fatto di soli gestori di
+eventi non guadagna niente e aggiunge rumore. Vale la pena dove c'è logica che
+può sbagliare **in silenzio**:
+
+| Applicalo se la funzione… | Esempio reale |
+|---|---|
+| trasforma dati avanti e indietro | `rule-form.js` → `anyOrListToSelection`/`selectionToAnyOrList` (avevano **perso dati due volte**) |
+| formatta un valore su cui si decide | `rateLimiter-admin.js` → `formatDuration` (se un blocco è ancora attivo) |
+| costruisce HTML da dati del server | `tierBadge`/`eventBadge` — il loro escaping è **superficie XSS** |
+| è pura e ha casi limite | `esc()`, i parser, i validatori client |
+
+Non applicarlo a: gestori di eventi, funzioni che leggono il DOM, funzioni che
+dipendono da stato mutabile di modulo (renderle pure è un refactor del codice di
+produzione, e va deciso a parte).
+
+#### Stato dell'adozione
+
+| Plugin / file | Righe | Esporta |
+|---|---|---|
+| `adminSentinel/rule-form.js` | 528 | ✅ 7 funzioni (mappature del form) |
+| `adminSentinel/sentinel-i18n.js` | 43 | ✅ `snT` |
+| `adminRateLimiter/rateLimiter-admin.js` | 244 | ✅ `esc`, `formatDuration`, `formatTime`, `tierBadge`, `eventBadge` |
+| `adminMedia/media.js` | 754 | ⬜ vedi nota |
+| `adminBootstrapNavbar/editor.js` | 709 | ⬜ `generateLabelFromFileName` è puro |
+| `adminAnalytics/settings.js` | 557 | ⬜ `formToData`/`dataToForm`: è il giro che in `sentinel` aveva perso dati |
+| `adminSentinel/sentinel-admin.js` | 528 | ⬜ |
+| `adminAnalytics/analytics.js` | 434 | ⬜ |
+| `adminSentinel/rules-editor.js` | 209 | ⬜ |
+| `adminCsrfProtection/csrf-admin.js` | 181 | ⬜ |
+| `adminSentinel/tester.js` | 165 | ⬜ |
+| `adminCsrfProtection/settings-editor.js` | 125 | ⬜ |
+| `adminRateLimiter/settings-editor.js` | 123 | ⬜ |
+| `adminRateLimiter/rules-editor.js` | 94 | ⬜ |
+| `adminSeo/editor.js` | 58 | ⬜ |
+
+#### Prima di applicarlo: il file si carica sotto Node?
+
+È la verifica che decide se il lavoro è di due righe o di un refactor:
+
+```bash
+node -e "require('/percorso/assoluto/del/file.js')"
+```
+
+**Misurato** su tre dei file ancora da fare: `adminBootstrapNavbar/editor.js`,
+`adminAnalytics/settings.js` e `adminSeo/editor.js` **caricano puliti** — per loro
+il pattern è davvero solo i due guard più il test.
+
+`adminMedia/media.js` **no**, ed è l'eccezione da conoscere: il suo
+`const state = { itemsPerPage: ITEMS_PER_PAGE }` a livello di modulo legge una
+**variabile iniettata dall'EJS**, che sotto Node non esiste, quindi il `require()`
+lancia `ReferenceError: ITEMS_PER_PAGE is not defined` prima ancora di arrivare
+all'export. Va prima reso indipendente dalle globali iniettate — che è un refactor
+del codice di produzione, quindi una scelta a sé.
+
 ### Isolamento del filesystem (`createPluginSandbox`)
 
 **REGOLA CRITICA:** i test **NON devono mai scrivere** dentro la cartella reale del plugin (es. `plugins/myPlugin/data.json5`). Questo contaminerebbe l'ambiente di sviluppo e rompererebbe il determinismo dei test.

@@ -230,6 +230,26 @@
     }
   }
 
+  // ── Esportazione per i test ─────────────────────────────────────────────────
+  // Stessa forma di `adminSentinel/rule-form.js`: in browser `module` non esiste
+  // e questo ramo non gira; sotto Node espone le funzioni PURE, che sono l'unica
+  // parte verificabile senza allestire un DOM — cosa che questo progetto non fa
+  // da nessuna parte (decisione: terza via, v3.22.0).
+  //
+  // Le quattro qui sotto meritano il test per due motivi diversi:
+  //   • `formatDuration` è un formattatore « ovvio » pieno di casi limite, e il
+  //     numero che stampa è il tempo che un amministratore legge per decidere se
+  //     un blocco è ancora attivo;
+  //   • `tierBadge` ed `eventBadge` producono HTML a partire da stringhe che
+  //     arrivano dal server, quindi il loro escaping è una superficie XSS.
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { esc, formatDuration, formatTime, tierBadge, eventBadge };
+  }
+
+  // Sotto Node non c'è un `document` da agganciare: il file viene richiesto solo
+  // per le funzioni pure qui sopra.
+  if (typeof document === 'undefined') return;
+
   document.addEventListener('DOMContentLoaded', function () {
     el('btnRefresh').addEventListener('click', refreshAll);
     const toggle = el('autoRefreshToggle');

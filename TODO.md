@@ -113,6 +113,21 @@ senza rimando sono descritte per intero qui perché non hanno una voce propria a
       alto; i valori attuali vengono dal caso peggiore. Annotato nel config.
       Verificato che il cancello morda in entrambe le direzioni: exit 0 con i valori
       scelti, exit 1 con una soglia irraggiungibile.
+- [ ] **Estendere il guard `typeof module` agli altri 12 file client-side admin.**
+      *(Aperta in v3.22.0, dopo la decisione sulla terza via.)* Convenzione e tabella di
+      adozione in [`docs/testing.it.md`](./docs/testing.it.md). Il criterio non è
+      « tutti i file », è **dove c'è logica che può sbagliare in silenzio**:
+      - **Priorità alta:** `adminAnalytics/settings.js` → `formToData`/`dataToForm`, cioè
+        esattamente il giro form↔config che in `adminSentinel` aveva **perso dati due
+        volte**. È il candidato con il precedente peggiore.
+      - **Pronti, verificato:** `adminBootstrapNavbar/editor.js`,
+        `adminAnalytics/settings.js` e `adminSeo/editor.js` **caricano puliti** sotto Node
+        (`node -e "require(<file>)"`): per loro è due guard più il test.
+      - **⚠ `adminMedia/media.js` no:** `const state = { itemsPerPage: ITEMS_PER_PAGE }` a
+        livello di modulo legge una globale iniettata dall'EJS → `ReferenceError` al
+        require. Va prima reso indipendente dalle globali, che è un refactor del codice di
+        produzione e quindi una scelta a sé.
+
 - [ ] **I temi entrano nello scope della coverage?** → §5.
       Oggi `collectCoverageFrom` copre `core`, `plugins`, `scripts`, `bin` e `index.js`,
       ma **non** `themes/`. Il JS dei temi è poco (6 file, 395 righe) e tutto lato
@@ -131,10 +146,15 @@ senza rimando sono descritte per intero qui perché non hanno una voce propria a
       contratto resta uno solo. Il rischio residuo — creare un tema e dimenticare il
       file — è chiuso dallo scaffolding della skill `ital8cms-theme-creator`, che ora
       lo genera (prima aveva una regola esplicita che vietava di farlo).
-- [ ] **La GUI admin client-side: `jsdom` o copertura e2e?** → §5.
-      2.129 righe all'1,9%, non eseguibili da jest con `testEnvironment: 'node'`.
-      I due file dual-mode di `adminSentinel` mostrano una terza via: un guard
-      `typeof module` che li rende testabili **senza** cambiare ambiente.
+- [x] ~~**La GUI admin client-side: `jsdom` o copertura e2e?** → §5.~~
+      **Deciso dal maintainer: la terza via** — il guard `typeof module`, senza cambiare
+      ambiente. Convenzione scritta in [`docs/testing.it.md`](./docs/testing.it.md) →
+      *JS client-side della GUI admin*, con **quando applicarlo e quando no** (non su un
+      file di soli gestori di eventi: vale dove c'è logica che sbaglia in silenzio) e la
+      tabella di adozione dei 15 file.
+      **Prima applicazione in v3.22.0:** `adminRateLimiter/rateLimiter-admin.js` esporta
+      `esc`, `formatDuration`, `formatTime`, `tierBadge`, `eventBadge` — 29 test.
+      **Resta da fare per gli altri 12 file** (~3.900 righe), voce qui sotto.
 - [x] ~~**Pagina segnaposto di primo avvio per `/www`** → §4.~~
       **Deciso dal maintainer e applicato in v3.21.0.** `www/index.ejs` è un file normale,
       committato grazie a un'eccezione `!/www/index.ejs` in `.gitignore` (che esclude tutto
