@@ -49,16 +49,15 @@ senza rimando sono descritte per intero qui perché non hanno una voce propria a
       `tests/unit/urlRedirect/middleware.test.js` (12 test, prima superficie del
       middleware a essere coperta). **Se il maintainer preferisce non contare i `HEAD`**
       è una riga sola nel guard del contatore, e il test che la presidia lo dice.
-- [ ] **`PATCH` e `DELETE` fra i verbi supportati dalle rotte dei plugin?**
-      *(Rimasta aperta chiudendo il difetto di `loadRoutes()` in v3.0.0, §5.)*
-      Oggi `ROUTER_METHOD_DISPATCH` gestisce `GET/POST/PUT/DEL/ALL`; un verbo fuori da
-      questi non viene registrato e — da v3.0.0 — viene segnalato con un warning.
-      Nessuna rotta del progetto li usa (censimento: solo `GET` ×66 e `POST` ×69),
-      quindi non c'è urgenza. Le uscite sono due: **aggiungerli** alla mappa (una riga
-      per verbo, `@koa/router` li supporta) rendendo il CMS più convenzionale per chi
-      scrive API REST, oppure **lasciarli fuori** dichiarando che `DEL` è la forma
-      canonica del progetto. Aggiungendoli va aggiornata anche `VALID_METHODS` in
-      `core/testHelpers/routeRunner.js` — il test di coerenza lo impone.
+- [x] ~~**`PATCH` e `DELETE` fra i verbi supportati dalle rotte dei plugin?**~~
+      **Deciso dal maintainer in v3.23.0: restano FUORI**, `DEL` è la forma canonica del
+      progetto. Nessuna modifica al codice — `ROUTER_METHOD_DISPATCH` continua a gestire
+      `GET/POST/PUT/DEL/ALL`, e un verbo fuori da questi non viene registrato con un
+      warning al boot (v3.0.0). Nessuna rotta del progetto li usa (censimento: solo `GET`
+      ×66 e `POST` ×69), quindi la decisione non lascia nulla in sospeso.
+      Se un domani si volesse riaprirla: una riga per verbo nella mappa, e va aggiornata
+      anche `VALID_METHODS` in `core/testHelpers/routeRunner.js` — il test di coerenza lo
+      impone da solo.
 - [x] ~~**🔴 Formula injection nell'export CSV di `adminAnalytics`** *(trovata in v3.3.0)*.~~
       **Corretta in v3.4.0** con la mitigazione convenzionale (apice anteposto), applicata
       **prima** del quoting così il prefisso finisce dentro le virgolette e la struttura
@@ -128,125 +127,25 @@ senza rimando sono descritte per intero qui perché non hanno una voce propria a
         require. Va prima reso indipendente dalle globali, che è un refactor del codice di
         produzione e quindi una scelta a sé.
 
-- [ ] **I temi entrano nello scope della coverage?** → §5.
-      Oggi `collectCoverageFrom` copre `core`, `plugins`, `scripts`, `bin` e `index.js`,
-      ma **non** `themes/`. Il JS dei temi è poco (6 file, 395 righe) e tutto lato
-      browser. Da decidere insieme ai test dei temi: includerli senza test li porterebbe
-      a 0% e abbasserebbe la soglia senza dire niente di nuovo.
-      **Aggiornamento (v3.5.0):** i test dei temi ora ci sono, ma verificano *struttura e
-      contratti* — non eseguono il JS lato browser dei temi, che resterebbe comunque a
-      0%. La decisione quindi **non** è sbloccata da v3.5.0: dipende ancora dalla scelta
-      su `jsdom` vs e2e per il client-side (voce qui sotto).
-- [x] ~~**Come testare i 7 temi: un test parametrico unico o `themes/<tema>/tests/`?**~~
-      **Deciso dal maintainer e applicato in v3.5.0:** `themes/<tema>/tests/themeIntegrity.test.js`,
-      uno per tema, per il modello self-contained — un tema distribuito porta con sé il
-      proprio test. Il costo della forma (la stessa logica ripetuta sette volte) è
-      risolto tenendo le **asserzioni** in `core/testHelpers/themeIntegrity.js` e
-      lasciando nel tema **tre righe** che vi delegano: il file resta nel tema, il
-      contratto resta uno solo. Il rischio residuo — creare un tema e dimenticare il
-      file — è chiuso dallo scaffolding della skill `ital8cms-theme-creator`, che ora
-      lo genera (prima aveva una regola esplicita che vietava di farlo).
-- [x] ~~**La GUI admin client-side: `jsdom` o copertura e2e?** → §5.~~
-      **Deciso dal maintainer: la terza via** — il guard `typeof module`, senza cambiare
-      ambiente. Convenzione scritta in [`docs/testing.it.md`](./docs/testing.it.md) →
-      *JS client-side della GUI admin*, con **quando applicarlo e quando no** (non su un
-      file di soli gestori di eventi: vale dove c'è logica che sbaglia in silenzio) e la
-      tabella di adozione dei 15 file.
-      **Prima applicazione in v3.22.0:** `adminRateLimiter/rateLimiter-admin.js` esporta
-      `esc`, `formatDuration`, `formatTime`, `tierBadge`, `eventBadge` — 29 test.
-      **Resta da fare per gli altri 12 file** (~3.900 righe), voce qui sotto.
-- [x] ~~**Pagina segnaposto di primo avvio per `/www`** → §4.~~
-      **Deciso dal maintainer e applicato in v3.21.0.** `www/index.ejs` è un file normale,
-      committato grazie a un'eccezione `!/www/index.ejs` in `.gitignore` (che esclude tutto
-      `/www/*`) — niente meccanismo di materializzazione: chi costruisce il proprio sito la
-      sostituisce e non torna. Verificato sul server reale: `GET /` passa da **404 a 200**,
-      in italiano e in inglese. Passa dai partial del tema attivo invece di cablare l'HTML,
-      e **non nomina il pannello admin**: `index.js` non passa `adminPrefix` alle pagine
-      pubbliche di proposito, e una pagina di benvenuto è esattamente il posto dove
-      verrebbe naturale metterlo. 7 test, fra cui quello che verifica che l'eccezione in
-      `.gitignore` non si perda — senza, il file resterebbe sulla macchina di chi sviluppa
-      e sparirebbe solo dal pacchetto.
-
-**Le sei voci sotto vengono dalla revisione completa della branch** (v3.10.0 → v3.12.0):
-tutto ciò che quella revisione ha trovato e che si poteva correggere senza scegliere è
-già corretto; queste sei restano perché ognuna **cambia un comportamento oggi accettato**
-o una convenzione dichiarata. Ordinate per costo di non decidere, con la trattazione
-completa in §5 accanto alla misura che le ha fatte emergere.
-
-- [x] ~~**(D1) `ConfigWizard.saveConfig()` distrugge i commenti di `ital8Config.json5`** → §5.~~
-      **Deciso dal maintainer e applicato in v3.13.0:** `saveConfig()` riscritta chiave per
-      chiave con `setJson5Key`. Misurato sullo stesso file reale: **340 righe → 340, 230
-      commenti → 230**, con i valori richiesti effettivamente cambiati. Il confronto
-      (`collectChangedPaths`, gemello di `collectMissingPaths`) è ricorsivo, quindi cambiare
-      una foglia annidata non appiattisce il blocco che la contiene. Tre conseguenze volute
-      sul contratto: nulla di cambiato → nulla di scritto; le chiavi assenti dall'oggetto
-      non vengono rimosse ma segnalate; il file deve esistere (la sua assenza è il gate
-      `[INIT]`, non un caso da gestire qui). Rete di regressione: 4 test sui commenti — uno
-      verifica il **testo**, non il conteggio — e la riserializzazione rimessa ne fa cadere 6.
-- [x] ~~**(D2) Il gate fatale su `access` che la documentazione promette e il codice non ha** → §5.~~
-      **Deciso dal maintainer e applicato in v3.14.0: salta + avvisa, non fatale.** Il fatale
-      punirebbe l'intera installazione per la svista di un plugin, il contrario del boot
-      graceful già scelto per i plugin. Ora la rotta non viene registrata — quindi non
-      esiste, quindi non è aperta — il sito parte, e il warning nomina plugin, metodo, path,
-      valore ricevuto e conseguenza evitata. **Soglia minima**, scelta fra tre: si rifiuta
-      solo ciò che renderebbe la rotta registrata-e-non-protetta (assente, `null`, stringa,
-      array); `access: {}` e `{requiresAuth: true}` senza ruoli **passano**, perché
-      rifiutarli farebbe sparire rotte che oggi funzionano. Predicato `declaresAccess`
-      **condiviso** con `validateRoute()`, così la parte in comune non torni a divergere.
-      Verificato: 135 rotte reali registrate prima e dopo, identiche; **sei punti di
-      documentazione allineati**.
-- [x] ~~**(D3) Un unico ordinamento topologico, invece del sort su un sottoinsieme** → §5.~~
-      **Deciso dal maintainer e applicato in v3.15.0.** `core/pluginLoadOrder.js` (modulo
-      puro, gemello di `pluginStateResolver`): Kahn con selezione del minimo — fra i plugin
-      **pronti** si emette sempre quello di `(weight, nome)` minore. Vincolo topologico
-      duro, il peso decide il resto. `adminAccessControl` passa da **22° a 6°**.
-      **Il peso che le dipendenze rendono impossibile ora è segnalato** con un box
-      `[WEIGHT]` al boot (richiesta esplicita del maintainer): nomina il plugin, la
-      dipendenza vincolante e i plugin più pesanti che l'hanno scavalcato. Disuguaglianza
-      **stretta**, così a parità di peso non produce rumore.
-      ⚠ **Ha spostato i middleware:** `adminUsers` e `adminAccessControl` da ultimi a 4° e
-      5° dei nove. Su un URL insieme redirezionato e access-controllato vince ora il
-      controllo d'accesso (prima il redirect); sulla config distribuita non c'è
-      sovrapposizione, ma è documentato in `CLAUDE.md`.
-- [x] ~~**(D4) `port()` accetta un input che `parseInt` tronca** → §5.~~
-      **Deciso dal maintainer e applicato in v3.16.0: rifiutare ciò che non è tutto cifre.**
-      `/^\d+$/` prima del parse; il wizard ripropone la domanda con un messaggio che mostra
-      anche **il valore in cui l'input sarebbe stato troncato** (« "1e4" … sarebbe diventato
-      1 »), ma solo quando il troncamento era davvero silenzioso — su `-1` no, perché lì
-      `parseInt` non scarta niente. Spazi ai bordi tollerati; range e formato restano due
-      messaggi distinti. Corretto **anche `positiveInteger()`**, difetto identico e nessun
-      chiamante. L'ordine `filter`/`validate` di inquirer è stato **verificato sul sorgente**
-      (è la premessa: col filtro prima, il guard sarebbe inutile) e un test lo presidia.
-- [x] ~~**(D5) Il floor `roleId >= 100` non è applicato a delete/update** → §5.~~
-      **Deciso dal maintainer e applicato in v3.17.0: `isHardcoded` resta il guardiano
-      unico.** Niente floor: sarebbe una seconda fonte di verità sullo stesso confine, e
-      due fonti sullo stesso confine divergono prima o poi. Il flag è la fonte dichiarata
-      dallo schema dei ruoli ed è verificato funzionante.
-      **Il lavoro è andato sul messaggio**, che diceva troppo poco: ora nomina il ruolo
-      (« "root" (ID 0) »), dice perché è intoccabile e cosa fare invece (creare un custom,
-      ID da 100 in su), e non usa più il gergo « hardcoded ». **Un solo testo** per
-      modifica ed eliminazione — è la stessa regola — con l'azione tentata portata a parte
-      nel campo `refusedAction`, che la GUI mostra in un blocco suo.
-- [x] ~~**(D6) `getBackupPath()` resta ancorata a `__dirname` mentre la radice è iniettabile** → §5.~~
-      **Deciso dal maintainer: si lascia com'è.** Verificato che **nessuno risolva quella
-      stringa**: `pluginInitRunner.js:133` la usa solo come flag (`if (backupPath)`) e per
-      stamparla, e il ripristino ricostruisce il path da `restorePlugin(plugin.name)`, che
-      segue correttamente la radice iniettata. Da sola non valeva un intervento.
-      **Il rilievo è però stato assorbito in una voce più larga** (§8, *Rivedere la
-      strategia di backup*): guardando il percorso completo è emerso che l'incoerenza non
-      è « `__dirname` contro radice iniettata » ma « `initState.json5` registra due formati
-      di path diversi », che `getPluginBackupPath()` è **codice morto**, e che i due
-      sistemi di backup sotto `backups/` non si conoscono fra loro — con due file omonimi
-      `backupManager.js` a rendere il tutto illeggibile. Lì la correzione ha senso; da
-      sola, no.
-
----
-
-## 1. Migrazione dei config
-
-Fonte: [`docs/decisions/config-migrations.it.md`](./docs/decisions/config-migrations.it.md) → *Punti rimandati*.
-Lo standard `migrations/` è implementato (v2.67.0); quel che segue è rimasto fuori.
-
+- [x] ~~**I temi entrano nello scope della coverage?** → §5.~~
+      **Deciso dal maintainer e applicato in v3.23.0: sì, insieme al test di
+      `escapeHtml.js`.** Le due cose vanno insieme — contare 395 righe senza verificare
+      la più importante avrebbe aggiunto un numero senza aggiungere una verifica.
+      **Il punto non era la percentuale**: finché i temi erano fuori dallo scope, il
+      **livello 2 della difesa XSS** del pannello admin non era né testato né contato,
+      quindi nessun numero diceva che mancava. Ora `escapeHtml.js` è a **100%** su
+      statements/functions/lines (75% branch: è il tetto strutturale di un file
+      dual-mode, i due guard hanno un ramo per ambiente) e ha **41 test**, fra cui il
+      confronto con il gemello `core/escapeHtml.js` — se le due implementazioni
+      divergessero, la difesa in profondità diventerebbe asimmetrica e nessun test lo
+      avrebbe detto, perché ogni file resta valido per conto suo.
+      **Costo misurato:** fra 0,21 e 0,52 punti; tutte e quattro le metriche restano
+      sopra soglia con margini fra +1,25 e +1,95, quindi la soglia **non** è stata
+      abbassata. Gli altri 5 file dei temi entrano a 0% e restano lì a dichiarare che
+      sono cablaggio del DOM.
+      La regola generale è ora scritta in `docs/testing.it.md`: si esclude dalla misura
+      solo ciò che la suite **non ha il permesso** di eseguire (i plugin disattivati),
+      non ciò che semplicemente non è ancora testato.
 - [ ] **Rimuovere i tre workaround** resi superflui dal merge ricorsivo. Erano nati
       per compensare i limiti del vecchio merge top-level, e sono tuttora nel codice:
   - [ ] `DEFAULT_EXEMPT_PATHS` hardcoded in `core/priorityMiddlewares/runtimeGate.js`
@@ -334,15 +233,21 @@ Fonte: intervento v2.64.0 (canonizzazione del `.default`).
       `setJson5Key` senza duplicarlo. Rinominabile senza impatto esterno.
 - [ ] **Riempire gli stub `.md` inglesi** (plugin, temi, core EXPLAIN, guide) alla
       prima pubblicazione importante. *(Fonte: `docs/roadmap.it.md`.)*
-- [ ] **Pagina segnaposto di primo avvio per `/www`.** Su un'installazione
-      `production` pulita `www/` è vuota per progetto (git-ignored, il wizard non ci
-      mette nulla: «www vuota» è una scelta dichiarata in `scripts/init.js`). Da
-      quando `dirListing.wwwPath` è `false` di default, `GET /` risponde **404**: più
-      onesto di prima — l'elenco mostrava `.gitkeep` — ma il primo avvio perde il suo
-      «funziona!» accidentale, e un 404 alla radice si legge come «è rotto».
-      Da valutare: un `index.ejs` di benvenuto seminato dal wizard nel solo profilo
-      `production` (il profilo `demo` già popola `www` da `.demoData/`), oppure una
-      pagina di cortesia servita solo quando `www` è priva di indice.
+- [x] ~~**Pagina segnaposto di primo avvio per `/www`.**~~ **RISOLTA in v3.21.0.**
+      `www/index.ejs` è committato con un'eccezione `!/www/index.ejs` in `.gitignore`:
+      un file normale, non un meccanismo — chi costruisce il proprio sito lo sostituisce
+      e non torna. Verificato sul server reale: `GET /` passa da **404 a 200**, in
+      italiano e in inglese, passando dai partial del tema attivo.
+      Delle due strade valutate qui sotto **nessuna delle due è stata scelta**: né il
+      seeding dal wizard (avrebbe funzionato solo per chi esegue `start-configure`, non
+      per chi clona e lancia `npm start`) né la pagina di cortesia servita dal core
+      (avrebbe intercettato i 404, che è compito del file server e maschererebbe quelli
+      veri). Cronaca, per memoria:
+      Su un'installazione `production` pulita `www/` è vuota per progetto (git-ignored,
+      il wizard non ci mette nulla). Da quando `dirListing.wwwPath` è `false` di default,
+      `GET /` rispondeva **404**: più onesto di prima — l'elenco mostrava `.gitkeep` — ma
+      il primo avvio perdeva il suo «funziona!» accidentale, e un 404 alla radice si
+      legge come «è rotto».
       *Fonte: emerso riattivando `dirListing` dopo la release 5.2.0 di
       `koa-classic-server`.*
 

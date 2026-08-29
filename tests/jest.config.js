@@ -91,6 +91,17 @@ module.exports = {
     'scripts/**/*.js',
     'bin/**/*.js',
     'index.js',
+    // I temi entrano nella misura da v3.23.0. Sono 395 righe su 6 file, e cinque
+    // di essi sono cablaggio del DOM (menu, smooth scroll, back-to-top) che un
+    // test unitario non può verificare meglio di una lettura: entrano a 0% e
+    // restano lì a dichiararlo. Il sesto, `defaultAdminTheme/escapeHtml.js`, è il
+    // LIVELLO 2 della difesa XSS del pannello admin — quello sì testato, ed è la
+    // ragione per cui questa riga è stata aggiunta.
+    //
+    // Prima di v3.23.0 quelle righe non erano « scoperte »: erano INVISIBILI, e
+    // una protezione di sicurezza senza test non risultava da nessuna parte. Il
+    // costo misurato dell'inclusione è fra 0,24 e 0,60 punti percentuali.
+    'themes/**/*.js',
     '!**/node_modules/**',
     // I file di test non sono il codice sotto misura.
     '!**/tests/**',
@@ -140,6 +151,12 @@ module.exports = {
   // disattivati: attivare o disattivare un plugin sposta numeratore e denominatore
   // insieme e può far variare le percentuali senza che sia cambiato un test.
   // Se succede, il valore va rivisto — non è la soglia ad avere torto.
+  //
+  // MISURATO in v3.23.0, includendo `themes/**/*.js`: il denominatore si è mosso
+  // di 395 righe e le quattro metriche sono scese fra 0,24 e 0,60 punti, restando
+  // tutte sopra la soglia. Margini attuali: statements +1,25 · branches +1,38 ·
+  // functions +1,50 · lines +1,95. La soglia NON è stata abbassata: il margine
+  // regge, e abbassarla avrebbe reso il cricchetto più lasco senza motivo.
   coverageThreshold: {
     global: {
       statements: 51,

@@ -371,6 +371,41 @@ Tutti i metodi restituiti sono `jest.fn()` — permettono asserzioni come `expec
 | `loadFixture(name)` | Carica una fixture JSON5 da `/core/testHelpers/fixtures/` (condivisa tra più plugin) |
 | `createPluginSandbox(pluginName, options)` | Crea dir temporanea in `os.tmpdir()` con scaffolding plugin |
 
+### Cosa entra nella misura di coverage (e perché i temi ci sono)
+
+`collectCoverageFrom` copre `core/`, `plugins/`, `scripts/`, `bin/`, `index.js` e —
+**da v3.23.0** — `themes/**/*.js`. I plugin **disattivati** restano esclusi: sono già
+fuori dalla discovery dei test, e misurarne il codice gonfierebbe il denominatore
+con righe che la suite non ha il permesso di eseguire.
+
+**Perché i temi sono entrati.** Sono 6 file, 395 righe. Finché erano fuori dallo
+scope non risultavano « scoperti »: erano **invisibili** — non comparivano come 0%,
+non comparivano affatto. Cinque sono cablaggio del DOM (menu mobile, smooth scroll,
+back-to-top) che un test unitario non verifica meglio di una lettura, ed entrano a
+0% dichiarandolo. Il sesto è
+`themes/defaultAdminTheme/themeResources/js/escapeHtml.js`, cioè il **livello 2
+della difesa XSS** del pannello admin: una protezione di sicurezza che non era né
+testata né contata.
+
+**Il costo, misurato** con una run completa prima e dopo:
+
+| | senza temi | con i temi | delta |
+|---|---|---|---|
+| statements | 52,57 | 52,25 | −0,32 |
+| branches | 51,59 | 51,38 | −0,21 |
+| functions | 48,02 | 47,50 | −0,52 |
+| lines | 53,30 | 52,95 | −0,35 |
+
+Tutte e quattro restano **sopra la soglia** (51 / 50 / 46 / 51) con margini fra
++1,25 e +1,95: la soglia **non** è stata abbassata. Parte del costo è già rientrata
+col test di `escapeHtml.js`, che da solo ha riportato `functions` da 47,42 a 47,50.
+
+> **La regola generale.** Escludere codice dalla misura per non far scendere la
+> percentuale è come calcolare una media scolastica saltando le materie andate
+> male: il numero sale, la situazione no. Si esclude solo ciò che la suite **non ha
+> il permesso** di eseguire (i plugin disattivati), non ciò che semplicemente non è
+> ancora testato.
+
 ### JS client-side della GUI admin: il guard `typeof module`
 
 Il JavaScript delle sezioni admin gira nel browser, e jest lo esegue con
@@ -429,6 +464,7 @@ produzione, e va deciso a parte).
 | `adminSentinel/rule-form.js` | 528 | ✅ 7 funzioni (mappature del form) |
 | `adminSentinel/sentinel-i18n.js` | 43 | ✅ `snT` |
 | `adminRateLimiter/rateLimiter-admin.js` | 244 | ✅ `esc`, `formatDuration`, `formatTime`, `tierBadge`, `eventBadge` |
+| `themes/defaultAdminTheme/escapeHtml.js` | 20 | ✅ `escapeHtml` — livello 2 della difesa XSS |
 | `adminMedia/media.js` | 754 | ⬜ vedi nota |
 | `adminBootstrapNavbar/editor.js` | 709 | ⬜ `generateLabelFromFileName` è puro |
 | `adminAnalytics/settings.js` | 557 | ⬜ `formToData`/`dataToForm`: è il giro che in `sentinel` aveva perso dati |
@@ -453,6 +489,12 @@ node -e "require('/percorso/assoluto/del/file.js')"
 **Misurato** su tre dei file ancora da fare: `adminBootstrapNavbar/editor.js`,
 `adminAnalytics/settings.js` e `adminSeo/editor.js` **caricano puliti** — per loro
 il pattern è davvero solo i due guard più il test.
+
+> **Il tetto sulle branch di un file dual-mode è 75%, non 100%.** I due guard
+> (`typeof module`, `typeof window`) hanno due rami ciascuno, e per definizione
+> **solo uno gira per ambiente**: sotto Node il ramo Node, in browser quello
+> browser. `escapeHtml.js` del tema è a 100% su statements, functions e lines, e a
+> 75% sulle branch proprio per questo — non è una lacuna da inseguire.
 
 `adminMedia/media.js` **no**, ed è l'eccezione da conoscere: il suo
 `const state = { itemsPerPage: ITEMS_PER_PAGE }` a livello di modulo legge una
