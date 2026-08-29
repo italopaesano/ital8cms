@@ -198,15 +198,18 @@ completa in §5 accanto alla misura che le ha fatte emergere.
       ID da 100 in su), e non usa più il gergo « hardcoded ». **Un solo testo** per
       modifica ed eliminazione — è la stessa regola — con l'azione tentata portata a parte
       nel campo `refusedAction`, che la GUI mostra in un blocco suo.
-- [ ] **(D6) `getBackupPath()` resta ancorata a `__dirname` mentre la radice è iniettabile** → §5.
-      Dopo il seam di v3.6.0 il backup può scrivere altrove, ma questi due metodi
-      compongono il path da `__dirname`: se la radice è iniettata, la stringa **scritta in
-      `initState.json5` non corrisponde** a dove il file sta davvero. **Verificato che
-      nessuno la risolva**: `pluginInitRunner.js:133` la usa solo come flag
-      (`if (backupPath)`) e per stamparla, e il ripristino ricostruisce il path da
-      `restorePlugin(plugin.name)`. Le uscite: **passare la radice iniettata** ai due
-      metodi (coerenza, nessun beneficio funzionale oggi) oppure **lasciarli** e togliere
-      la nota dal perimetro del seam.
+- [x] ~~**(D6) `getBackupPath()` resta ancorata a `__dirname` mentre la radice è iniettabile** → §5.~~
+      **Deciso dal maintainer: si lascia com'è.** Verificato che **nessuno risolva quella
+      stringa**: `pluginInitRunner.js:133` la usa solo come flag (`if (backupPath)`) e per
+      stamparla, e il ripristino ricostruisce il path da `restorePlugin(plugin.name)`, che
+      segue correttamente la radice iniettata. Da sola non valeva un intervento.
+      **Il rilievo è però stato assorbito in una voce più larga** (§8, *Rivedere la
+      strategia di backup*): guardando il percorso completo è emerso che l'incoerenza non
+      è « `__dirname` contro radice iniettata » ma « `initState.json5` registra due formati
+      di path diversi », che `getPluginBackupPath()` è **codice morto**, e che i due
+      sistemi di backup sotto `backups/` non si conoscono fra loro — con due file omonimi
+      `backupManager.js` a rendere il tutto illeggibile. Lì la correzione ha senso; da
+      sola, no.
 
 ---
 
@@ -501,14 +504,18 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
 - [x] ~~**`updateCustomRole` non impone la lunghezza minima 3**~~ — **corretto in
       v3.12.0**, stesso controllo e stesso messaggio di `createCustomRole`. Verificato
       con una mutazione controllata del file vivo e ripristino con sha256.
-- [ ] **(D6) `BackupManager.getBackupPath()`/`getPluginBackupPath()` restano ancorate a
-      `__dirname`** mentre `backupRoot` è ora iniettabile. *(Emerso in v3.10.0.)* Con
-      il seam in uso i due disaccordano, e il valore finisce **persistito** in
-      `initState.json5` come `backupPath` — cioè il puntatore che un restore
-      risolverebbe. In v3.7.0 l'ho documentato come scelta (il loro riferimento *è* la
-      radice del progetto), ma l'argomento non copre il caso in cui quel path venga
-      salvato e riletto: va deciso se ancorarle a `backupRoot` o se `init.js` debba
-      salvare un assoluto.
+- [x] ~~**(D6) `BackupManager.getBackupPath()`/`getPluginBackupPath()` restano ancorate a
+      `__dirname`** mentre `backupRoot` è ora iniettabile.~~
+      **CHIUSA in v3.18.0: si lascia com'è** (decisione del maintainer), e il rilievo è
+      confluito nella revisione della strategia di backup in §8, dove ha senso.
+      Cronaca, per memoria: *(emersa in v3.10.0)* con il seam in uso i due riferimenti
+      disaccordano, e il valore finisce persistito in `initState.json5` come `backupPath`.
+      **Avevo scritto che era « il puntatore che un restore risolverebbe »: è falso, e l'ho
+      verificato.** `pluginInitRunner.js:133` usa `backupPath` solo come flag
+      (`if (backupPath)`) e per stamparlo; il ripristino chiama
+      `restorePlugin(plugin.name)`, che ricostruisce il path da `pluginsBackupDir` + nome,
+      seguendo correttamente la radice iniettata. **Nessuno risolve quella stringa**, e
+      `getPluginBackupPath()` non ha proprio chiamanti in produzione.
 - [ ] **`themeSys.validateTheme()` NON accetta una root parametrica**, a differenza
       della sua gemella `validateThemeContent(themeName, themesRootPath)` (v2.92.0).
       *(Emerso in v3.5.0 scrivendo la suite di integrità dei temi.)* Cabla
@@ -813,6 +820,51 @@ redirige ma non conta (1 rosso).
 Non sono debito, ma direzioni: il dettaglio vive in
 [`docs/roadmap.it.md`](./docs/roadmap.it.md) e non è duplicato qui.
 
+- [ ] **🔍 Rivedere la strategia di backup, e i nomi che la rendono illeggibile.**
+      *(Emerso in v3.18.0, chiudendo D6.)* Sotto `backups/` convivono **due sistemi
+      diversi che non si conoscono fra loro**, e la confusione comincia dai nomi.
+
+      | | `npm run backup` | il backup del wizard |
+      |---|---|---|
+      | Modulo | `scripts/lib/backupEngine.js` | `scripts/lib/backupManager.js` |
+      | Quando | a comando | solo dentro `npm run start-configure` |
+      | Cosa copia | tutta l'installazione | `ital8Config`, `koaSession`, e i file che un plugin dichiara con `getFilesToBackup()` |
+      | Cartella | `backups/backup-<timestamp>/` | `backups/init-<timestamp>/` |
+      | Ripristino | `npm run restore -- --latest` | automatico, solo su fallimento, solo per plugin |
+      | Visto da `backup-list` | sì | **no** |
+
+      **⚠ Due file si chiamano `backupManager.js`** e non c'entrano niente l'uno con
+      l'altro: `scripts/backupManager.js` è il comando `npm run backup-manager` (pota
+      gli snapshot), `scripts/lib/backupManager.js` è la classe del wizard. Il nome
+      condiviso è il primo motivo per cui la faccenda è difficile da tenere a mente.
+
+      **I limiti concreti, misurati:**
+      - **Il backup globale non ha alcun ripristino.** `ital8Config.json5` e
+        `koaSession.json5` vengono copiati (`init.js:209`, `sessionKeyManager.js:148`)
+        ma **nessun codice li rimette a posto**: quella copia va ripescata a mano.
+      - **Gli `init-*` sono invisibili alla toolchain degli snapshot.**
+        `backupEngine.listBackups()` filtra per prefisso `backup-`
+        (`backupEngine.js:35`), quindi `backup-list`, `backup-manager` e `restore`
+        non li vedono: non vengono elencati, non si ripristinano col comando, e
+        **non vengono potati mai**.
+      - **`initState.json5` registra due formati di path diversi**: quello globale è
+        **relativo** (`getBackupPath()`), quello per-plugin è **assoluto** (il valore
+        di ritorno di `backupPluginFiles`, `pluginInitRunner.js:86`).
+      - **`getPluginBackupPath()` è codice morto**: nessun chiamante in produzione,
+        solo due test.
+      - **Un solo plugin dichiara `getFilesToBackup()`**: `adminUsers`
+        (`userAccount.json5` + `userRole.json5`). Il meccanismo per-plugin esiste per
+        un caso solo.
+      - **La procedura non è documentata da nessuna parte.** `docs/self-update.it.md`
+        copre solo `npm run backup`; il backup del wizard non compare in `docs/`.
+
+      **Cosa deciderà la revisione:** se i due sistemi restano due (e allora vanno
+      distinti nei nomi e nella documentazione) oppure convergono in uno solo; che
+      forma ha un path scritto in `initState.json5`; se il backup globale merita un
+      ripristino o va dichiarato « copia di cortesia ». Vedi anche la voce chiusa
+      **(D6)** in §5, il cui rilievo originario — `getBackupPath()` ancorata a
+      `__dirname` — è stato assorbito qui: da solo non valeva un intervento, come
+      parte di questa revisione sì.
 - [ ] Migrazione a **TypeScript**
 - [ ] Configurazione via **`.env`**
 - [ ] **Documentazione API** (Swagger/OpenAPI)
