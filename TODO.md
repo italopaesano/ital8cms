@@ -601,10 +601,18 @@ Da affrontare in una review dedicata:
 
 Fonte: `docs/roadmap.it.md` punto 16 — aggiornamenti rinviati dal bulk del 2026-05-19.
 
-**Ultimo giro di routine: 2026-08-23** (v2.94.0) — `npm outdated` pulito e
-`npm audit` a **0 vulnerabilità**, con la sola esclusione di `ccxt` per policy.
+**Ultimo giro di routine: 2026-08-31** (v3.24.0) — `npm outdated` pulito e
+`npm audit` a **0 vulnerabilità** su root e `plugins/adminMedia`, con la sola
+esclusione di `ccxt` per policy.
 
-- [ ] **`ccxt`** (plugin `ccxt`), `4.5.58` → `4.5.75`: verificare se è ancora usato e
+⚠ **Quello zero vale meno di quanto sembri, ed è stato misurato.** La 2.3.0 di
+`multer` chiude **quattro CVE** — fra cui un crash di processo da una sola
+richiesta (`CVE-2026-77078`, CVSS 7.5) — e `npm audit` su una cartella con la
+sola `multer@2.2.0` rispondeva `found 0 vulnerabilities`: non sono (ancora) nel
+database advisory di npm. `npm outdated` le ha fatte emergere, l'audit no. Un
+giro che si fermi all'audit non vede niente.
+
+- [ ] **`ccxt`** (plugin `ccxt`), `4.5.58` → `4.5.76`: verificare se è ancora usato e
       se la superficie API è cambiata fra le minor; testare le rotte prima del bump.
       *Escluso dagli update di routine per policy (CLAUDE.md regola 12): release molto
       frequenti legate alle API degli exchange.*
@@ -620,6 +628,29 @@ Fonte: `docs/roadmap.it.md` punto 16 — aggiornamenti rinviati dal bulk del 202
       cambi di ABI) con install e test mirati.
       *Escluso dagli update di routine per policy (CLAUDE.md regola 12): build nativa
       e plugin disabilitato.*
+- [ ] **`adminMedia` — impostare `fieldArrayIndexLimit` nei `limits` di multer.**
+      La 2.3.0 introduce il limite ma il suo default è **`Infinity`** (README della
+      2.3.0 riga 300; il controllo in `make-middleware.js:224` gira solo se la chiave
+      è dichiarata), e `adminMedia` passa `limits: { fileSize: maxSize }` e nient'altro
+      (`main.js:131`). Quindi l'aggiornamento **non chiude da solo** la CVE dell'indice
+      d'array (`GHSA-535w-7cp7-47q4` / `CVE-2026-82333`, CVSS 7.5): il rimedio
+      ufficiale è in **due** parti, aggiornare *e* impostare il limite.
+      Misurato su `append-field`: `a[4294967294]` materializza un `Array(len=4294967295)`
+      (da 2³²−1 in su il nome ricade su una normale chiave d'oggetto, quindi l'indice
+      utile all'attacco è proprio quello sotto il tetto), e un secondo campo con chiave
+      **non** numerica sullo stesso oggetto base forza la conversione array→oggetto,
+      che itera l'intera lunghezza in modo **sincrono**. Costo misurato su indici
+      piccoli: 1e5 → 2,5 ms, 1e6 → 24,7 ms, 1e7 → 245 ms (lineare, ~24,5 ns per
+      indice) ⇒ estrapolato al tetto, **≈ 105 s di event loop bloccato** da una sola
+      richiesta. Avviene **dentro il parsing**, prima dell'handler: non serve che il
+      codice di `adminMedia` legga `ctx.request.body`. Mitigazione presente oggi: la
+      rotta sta dietro reserved gate + CSRF + `requiresAuth` con ruoli `[0, 1]`. Da decidere: quale
+      indice massimo serve davvero ai nomi di campo del pannello (nessuna sezione usa
+      la sintassi `a[n]`, quindi un valore basso sembra sufficiente) e se la chiave
+      vada esposta in `pluginConfig.json5` invece che cablata.
+      *Fonte: giro dipendenze v3.24.0. Non applicata lì perché è una modifica al codice
+      di un plugin, cioè una scelta del maintainer — stesso trattamento di
+      `urlRedirect`/`HEAD` in v2.94.0.*
 
 ### 🐞 `koa-classic-server` — `dirListing.enabled: false` disabilitava anche la risoluzione del file indice → **CORRETTO in v5.2.0**
 
