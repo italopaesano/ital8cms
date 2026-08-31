@@ -7,9 +7,9 @@
   "author": "Italo Paesano <italopaesano@protonmail.com>",
   "dependencies": {
     "@koa/multer": "^4.0.0",
-    "multer": "^2.2.0"
+    "multer": "^2.3.0"
   },
   "optionalDependencies": {
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.4"
   }
 }

@@ -46,13 +46,13 @@
     "commander": "^15.0.0",
     "ejs": "^6.0.1",
     "handlebars": "^4.7.9",
-    "inquirer": "^14.1.0",
+    "inquirer": "^14.2.0",
     "json5": "^2.2.3",
     "koa": "^3.2.1",
     "koa-bodyparser": "^4.4.1",
     "koa-classic-server": "^5.3.0",
     "koa-session": "^7.0.2",
-    "nodemailer": "^9.0.5",
+    "nodemailer": "^9.1.0",
     "nodemon": "^3.1.14",
     "semver": "^7.8.5"
   },
@@ -62,11 +62,11 @@
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "@types/jest": "^30.0.0",
-    "jest": "^30.4.2"
+    "jest": "^30.5.0"
   },
   "overrides": {
     "@istanbuljs/load-nyc-config": {
-      "js-yaml": "^5.3.0"
+      "js-yaml": "^5.4.1"
     },
     "babel-plugin-istanbul": "^8.0.0",
     "brace-expansion": "^5.0.9",
