@@ -601,9 +601,16 @@ Da affrontare in una review dedicata:
 
 Fonte: `docs/roadmap.it.md` punto 16 — aggiornamenti rinviati dal bulk del 2026-05-19.
 
-**Ultimo giro di routine: 2026-08-31** (v3.24.0) — `npm outdated` pulito e
-`npm audit` a **0 vulnerabilità** su root e `plugins/adminMedia`, con la sola
-esclusione di `ccxt` per policy.
+**Ultimo giro di routine: 2026-09-07** (v3.25.0) — `npm outdated` pulito e
+`npm audit` a **0 vulnerabilità** su root e `plugins/adminMedia`, con le sole
+esclusioni di `ccxt` (policy) e di `nodemailer` 10.x (major rinviato, voce sotto).
+
+⚠ **E il contrario è altrettanto vero: l'audit vede cose che `npm outdated` non
+mostra.** Il giro v3.25.0 ha trovato la sua unica vulnerabilità reale in `qs`
+(**due advisory**), che è una **transitiva** — `koa-bodyparser` → `co-body` →
+`qs` — quindi non compare in `npm outdated`, che elenca le sole dirette. Nessuno
+dei 4 PR Dependabot aperti la nominava. I due strumenti guardano insiemi diversi:
+servono **entrambi**, a ogni giro.
 
 ⚠ **Quello zero vale meno di quanto sembri, ed è stato misurato.** La 2.3.0 di
 `multer` chiude **quattro CVE** — fra cui un crash di processo da una sola
@@ -623,6 +630,32 @@ giro che si fermi all'audit non vede niente.
       `require('inquirer').default` e continuano a chiamare `inquirer.prompt([...])`,
       cioè l'interop CommonJS del pacchetto ESM. Voce rimasta indietro rispetto al
       codice.
+- [ ] **`nodemailer` 9.1.1 → 10.0.0 — major rinviato a un intervento dedicato.**
+      Pubblicata il **2026-09-04**, cioè **3 giorni** prima del giro v3.25.0. L'unico
+      breaking dichiarato è il floor a **Node ≥ 20**, che questo progetto supera già
+      (`engines: >=22.13.0`): il motivo del rinvio **non** è la compatibilità
+      dichiarata, è che la 10.0.0 **riscrive il pacchetto in TypeScript** con doppia
+      build ESM + CommonJS. È un cambio di *packaging*, ed è esattamente ciò che una
+      suite di unit test con `nodemailer` mockato
+      (`tests/unit/mailer/transportFactory.test.js:12`) non esercita.
+      **Compatibilità dell'API verificata, non supposta:** su una cartella pulita con
+      la sola `nodemailer@10.0.0`, `require('nodemailer')` risolve la build CJS ed
+      espone `createTransport`; il transporter costruito con la stessa forma di config
+      di `smtpTransport.js:41` espone `sendMail`, `verify` e `close` come funzioni, e
+      `close()` ritorna senza errore. Le quattro chiamate che il plugin `mailer` fa
+      davvero sono quindi tutte presenti.
+      **Quello che resta non verificato è il motivo del rinvio:** ciò che `nodemailer`
+      fa *dentro* un invio reale — encoding MIME, DKIM, parsing degli indirizzi,
+      handshake TLS — che nessun test di questo repo esercita contro un server SMTP
+      vero, e che è proprio la superficie che una riscrittura tocca. Il range del
+      plugin (`nodemailer: ">=8.0.5"`) è già soddisfatto da entrambe le linee:
+      nessun riallineamento necessario in nessuno dei due casi.
+      Da decidere: se accettare il major dopo qualche patch di assestamento della
+      linea 10.x, e se l'occasione valga per dare al plugin `mailer` un test
+      d'integrazione contro un SMTP finto — che oggi manca, ed è il motivo per cui
+      questo rinvio è **prudenza invece che misura**.
+      *Fonte: giro dipendenze v3.25.0. Preso invece il patch 9.1.1, che porta i fix
+      di sicurezza sull'access sandbox senza il major.*
 - [ ] **`better-sqlite3`** (plugin `dbApi`, oggi `active: 0`): alla riattivazione,
       valutare la versione corrente (range del plugin `^9.2.2`, latest 12.x con
       cambi di ABI) con install e test mirati.
