@@ -233,23 +233,23 @@ Fonte: intervento v2.64.0 (canonizzazione del `.default`).
       `setJson5Key` senza duplicarlo. Rinominabile senza impatto esterno.
 - [ ] **Riempire gli stub `.md` inglesi** (plugin, temi, core EXPLAIN, guide) alla
       prima pubblicazione importante. *(Fonte: `docs/roadmap.it.md`.)*
-- [x] ~~**Pagina segnaposto di primo avvio per `/www`.**~~ **RISOLTA in v3.21.0.**
-      `www/index.ejs` è committato con un'eccezione `!/www/index.ejs` in `.gitignore`:
-      un file normale, non un meccanismo — chi costruisce il proprio sito lo sostituisce
-      e non torna. Verificato sul server reale: `GET /` passa da **404 a 200**, in
-      italiano e in inglese, passando dai partial del tema attivo.
-      Delle due strade valutate qui sotto **nessuna delle due è stata scelta**: né il
-      seeding dal wizard (avrebbe funzionato solo per chi esegue `start-configure`, non
-      per chi clona e lancia `npm start`) né la pagina di cortesia servita dal core
-      (avrebbe intercettato i 404, che è compito del file server e maschererebbe quelli
-      veri). Cronaca, per memoria:
-      Su un'installazione `production` pulita `www/` è vuota per progetto (git-ignored,
-      il wizard non ci mette nulla). Da quando `dirListing.wwwPath` è `false` di default,
-      `GET /` rispondeva **404**: più onesto di prima — l'elenco mostrava `.gitkeep` — ma
-      il primo avvio perdeva il suo «funziona!» accidentale, e un 404 alla radice si
-      legge come «è rotto».
-      *Fonte: emerso riattivando `dirListing` dopo la release 5.2.0 di
-      `koa-classic-server`.*
+- [x] ~~**Pagina segnaposto di primo avvio per `/www`.**~~ **CHIUSA in v3.25.0 —
+      la pagina NON si fa.** Il maintainer ha deciso di rimuovere la segnaposto
+      introdotta in v3.21.0: `/www` è la cartella dell'**utente**, e un'installazione
+      pulita deve trovarla **vuota**. Delle tre strade valutate nel tempo nessuna
+      sopravvive: il seeding dal wizard (avrebbe funzionato solo per chi esegue
+      `start-configure`, non per chi clona e lancia `npm start`), la pagina di cortesia
+      servita dal core (avrebbe intercettato i 404, che è compito del file server, e
+      maschererebbe quelli veri) e il file committato con eccezione in `.gitignore`
+      (era un file del **progetto** in casa di chi costruisce il sito: chi lo
+      sostituiva se lo ritrovava in `git status` come modificato).
+      **Il 404 alla radice è quindi il comportamento voluto**, non un difetto aperto:
+      su un'installazione pulita `GET /` risponde 404 finché non si crea la propria
+      `index.ejs` — con `dirListing.wwwPath` a `false` di default non c'è nemmeno
+      l'elenco della directory. Presidiato da `tests/integration/wwwRootClean.test.js`
+      (`/www` versionata a **un solo file**, `.gitkeep`, e tutto il resto git-ignored).
+      *Fonte: emersa riattivando `dirListing` dopo la release 5.2.0 di
+      `koa-classic-server`; chiusa su decisione del maintainer.*
 
 ## 5. Testing
 
@@ -694,10 +694,12 @@ Fonte: intervento *superficie riservata / assetto vetrina*.
       interrogando sia directory **con** indice sia **senza** — «l'indice è tornato» e
       «l'elenco è stato riacceso» sono esiti diversi e solo il primo è voluto.
 
-**Conseguenza da valutare a parte:** su un'installazione `production` pulita `www/` è
+**Conseguenza valutata e accettata:** su un'installazione `production` pulita `www/` è
 vuota per progetto (git-ignored, il wizard non ci mette nulla), quindi ora `GET /`
 risponde **404** invece dell'elenco di `.gitkeep`. Più onesto, ma il primo avvio perde
-il suo "funziona!" accidentale. Vedi §4 → *pagina segnaposto di primo avvio*.
+il suo "funziona!" accidentale. La segnaposto che lo restituiva (v3.21.0) è stata
+**rimossa in v3.25.0**: il 404 è il comportamento voluto. Vedi §4 → *pagina segnaposto
+di primo avvio*.
 
 **Root cause** — in `node_modules/koa-classic-server/index.cjs`, ramo directory:
 

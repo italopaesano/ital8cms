@@ -158,9 +158,18 @@ Lavorando su questo codebase come AI assistant — regole operative (le più cri
 │   │   └── templates/          # Template di pagina completi
 │   └── baseExampleTheme/       # Tema di esempio
 │
-└── www/                         # Web root pubblica
-    └── index.ejs               # Homepage pubblica
+└── www/                         # Web root pubblica — VUOTA per progetto
+    └── .gitkeep                # (unico file versionato: tiene la cartella nel repo)
 ```
+
+> **`/www` è la cartella dell'utente, e un'installazione pulita la trova vuota.**
+> `.gitignore` esclude `/www/*` con la sola eccezione di `.gitkeep`: il CMS non ci
+> mette nulla — né il wizard né il boot — perché ogni file lì dentro sarebbe un file
+> del progetto in casa di chi costruisce il sito. Conseguenza da conoscere: finché non
+> si crea la propria `index.ejs` (il nome cercato da `indexFiles.wwwPath`), `GET /`
+> risponde **404** — con `dirListing.wwwPath` a `false` di default non c'è nemmeno
+> l'elenco della directory. *(Fra la v3.21.0 e la v3.25.0 qui viveva una pagina
+> segnaposto committata; rimossa su decisione del maintainer.)*
 
 ## Stack tecnologico
 
