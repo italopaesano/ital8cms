@@ -75,13 +75,16 @@ themes/*/node_modules/
 
 # Public web root (user site content): keep the folder, ignore everything inside.
 # Covers site pages and runtime-generated files (e.g. SEO plugin's sitemap.xml / robots.txt).
+#
+# NESSUNA eccezione oltre a .gitkeep, ed è una scelta: /www è la cartella
+# dell'UTENTE, e un'installazione pulita la trova VUOTA. Nemmeno una pagina
+# segnaposto — c'è stata, dalla v3.21.0 alla v3.25.0 (`!/www/index.ejs`), e
+# aveva il difetto di essere un file del progetto in casa di qualcun altro: chi
+# costruiva il proprio sito se lo ritrovava in `git status` come modificato.
+# Conseguenza accettata: su un'installazione pulita `GET /` risponde 404 finché
+# non si crea la propria `index.ejs` (il nome che `indexFiles.wwwPath` cerca).
 /www/*
 !/www/.gitkeep
-# Pagina segnaposto di primo avvio: unico file di /www versionato, così una
-# installazione pulita non risponde 404 su `GET /`. È un file normale — chi
-# costruisce il proprio sito lo sostituisce, e da quel momento comparirà in
-# `git status` come modificato. Vedi il commento in testa al file.
-!/www/index.ejs
 
 # Init system
 /scripts/initState.json5

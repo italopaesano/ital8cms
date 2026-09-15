@@ -171,8 +171,8 @@ configData.https.enabled = false;                 // HTTPS disabilitato (test ve
 
 **Perché la porta dedicata (19400) è fondamentale:**
 
-La directory `/www/` di produzione **NON contiene `index.ejs`** (il file si chiama `__index.ejs`), mentre `/tests/www/` contiene `index.ejs`. Se il server E2E riutilizzasse un server di sviluppo già attivo sulla porta 3000 (che usa `/www/`), i test homepage fallirebbero con:
-- `GET /` → "Index of /" (directory listing, nessun `index.ejs` trovato)
+La directory `/www/` del repo è **vuota per progetto** — `.gitignore` esclude `/www/*` tranne `.gitkeep`, e nessun file indice viene committato — mentre `/tests/www/` contiene il suo `index.ejs`. Se il server E2E riutilizzasse un server di sviluppo già attivo sulla porta 3000 (che usa `/www/`), i test homepage fallirebbero con:
+- `GET /` → **404** (nessun `index.ejs` da servire; con `dirListing.wwwPath` a `false` non c'è nemmeno l'elenco della directory)
 - `GET /index.ejs` → 404
 
 La porta dedicata 19400 + `reuseExistingServer: false` in `playwright.config.js` garantiscono che il server E2E parta sempre con la config di test modificata.

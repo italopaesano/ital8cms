@@ -12,6 +12,11 @@
  * Esecuzione:
  *   node scripts/diagWwwFilesystem.js
  *
+ * PREREQUISITO: serve un `www/index.ejs` — cioè la HOMEPAGE DEL SITO, scritta da
+ * chi lo costruisce. `/www` è vuota su un'installazione pulita (git-ignored, il
+ * CMS non ci mette nulla), quindi qui l'assenza del file NON è un guasto: è
+ * semplicemente il segno che non c'è ancora un sito da diagnosticare.
+ *
  * Cosa controlla:
  *   1. Tipo dirent di ogni file in www/ (isFile, isSymbolicLink, DT_UNKNOWN)
  *   2. Stat vs lstat per www/index.ejs (segue symlink vs non segue)
@@ -171,11 +176,22 @@ function typeLabel(num) {
     info(`  isSymbolicLink(): ${indexEjsDirent.isSymbolicLink()}`);
     info(`  isDirectory(): ${indexEjsDirent.isDirectory()}`);
   } else {
-    fail(`readdir NON contiene "index.ejs" — FILE MANCANTE?`);
+    // Un index.ejs ASSENTE non è il difetto che questo script cerca: le fasi 3-5
+    // diagnosticano come il filesystem RIPORTA un file che c'è. Senza, non c'è
+    // nulla da diagnosticare — quindi warning ed exit 0, non un errore. Il caso
+    // è pure quello normale: /www è vuota su un'installazione pulita. Trattarlo
+    // da guasto manderebbe a caccia di un bug di NixOS chi deve solo ancora
+    // scrivere la propria homepage.
+    warn(`readdir NON contiene "index.ejs"`);
     console.log();
-    console.log(`${c.red}  DIAGNOSI: index.ejs non esiste nella directory www/.`);
-    console.log(`  Questo spiega sia "Index of /" che il 404 su /index.ejs.${c.reset}`);
-    process.exit(1);
+    console.log(`${c.yellow}  DIAGNOSI: non c'è un file indice da analizzare, e le due letture sono:`);
+    console.log(`  • installazione pulita → normale. /www è la cartella dell'utente e parte`);
+    console.log(`    VUOTA (git-ignored a meno di .gitkeep): il CMS non ci mette nulla, e`);
+    console.log(`    finché non crei la tua www/index.ejs, GET / risponde 404 per progetto.`);
+    console.log(`  • il sito c'era → allora è il file a mancare, non il filesystem a mentire:`);
+    console.log(`    spiega sia "Index of /" sia il 404 su /index.ejs.`);
+    console.log(`  In entrambi i casi: crea/ripristina www/index.ejs e rilancia.${c.reset}`);
+    process.exit(0);
   }
   console.log();
 
