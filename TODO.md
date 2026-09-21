@@ -601,18 +601,32 @@ Da affrontare in una review dedicata:
 
 Fonte: `docs/roadmap.it.md` punto 16 — aggiornamenti rinviati dal bulk del 2026-05-19.
 
-**Ultimo giro di routine: 2026-08-31** (v3.24.0) — `npm outdated` pulito e
-`npm audit` a **0 vulnerabilità** su root e `plugins/adminMedia`, con la sola
-esclusione di `ccxt` per policy.
+**Ultimo giro di routine: 2026-09-21** (v3.26.0) — `npm outdated` pulito e
+`npm audit` a **0 vulnerabilità** su root e `plugins/adminMedia`, con le sole
+esclusioni di `ccxt` per policy e del major `nodemailer` 10.x (voce sotto).
 
-⚠ **Quello zero vale meno di quanto sembri, ed è stato misurato.** La 2.3.0 di
-`multer` chiude **quattro CVE** — fra cui un crash di processo da una sola
-richiesta (`CVE-2026-77078`, CVSS 7.5) — e `npm audit` su una cartella con la
-sola `multer@2.2.0` rispondeva `found 0 vulnerabilities`: non sono (ancora) nel
-database advisory di npm. `npm outdated` le ha fatte emergere, l'audit no. Un
-giro che si fermi all'audit non vede niente.
+⚠ **Quello zero vale meno di quanto sembri, ed è stato misurato — due volte.**
+La 2.3.0 di `multer` chiudeva **quattro CVE** — fra cui un crash di processo da
+una sola richiesta (`CVE-2026-77078`, CVSS 7.5) — e `npm audit` su una cartella
+con la sola `multer@2.2.0` rispondeva `found 0 vulnerabilities`. La **2.4.0**
+(pubblicata il 2026-09-14) ripete la scena con `CVE-2026-88932`: l'endpoint bulk
+del registry npm interrogato su `multer@2.3.0` ha risposto `{}`, cioè **nessuna
+advisory nota**. `npm outdated` le ha fatte emergere entrambe, l'audit nessuna
+delle due. Un giro che si fermi all'audit non vede niente.
 
-- [ ] **`ccxt`** (plugin `ccxt`), `4.5.58` → `4.5.76`: verificare se è ancora usato e
+🔴 **E per un anno l'albero di `adminMedia` non è stato sorvegliato affatto.**
+Il modello ibrido per-plugin dà a `plugins/adminMedia` un `package.json` e un
+lock **propri**, che nessuno dei due automatismi leggeva: `dependabot.yml`
+dichiarava il solo `directory: "/"` (Dependabot scansiona le directory che gli
+si nominano, una voce per manifest, e non accetta glob), e il job `audit` della
+CI eseguiva `npm audit` nella sola root. Risultato misurato il 2026-09-21: la
+2.4.0 di `multer` era fuori da una settimana, **zero PR aperti**. Chiuso in
+v3.26.0 — voce Dependabot per `/plugins/adminMedia`, e in CI un **ciclo** su
+`plugins/*/package.json` e `themes/*/package.json` invece di un path cablato,
+così il prossimo pacchetto self-contained è sorvegliato dal giorno in cui atterra.
+**Il ciclo copre la CI, non Dependabot:** lì una voce nuova va aggiunta a mano.
+
+- [ ] **`ccxt`** (plugin `ccxt`), `4.5.58` → `4.5.82`: verificare se è ancora usato e
       se la superficie API è cambiata fra le minor; testare le rotte prima del bump.
       *Escluso dagli update di routine per policy (CLAUDE.md regola 12): release molto
       frequenti legate alle API degli exchange.*
@@ -651,6 +665,57 @@ giro che si fermi all'audit non vede niente.
       *Fonte: giro dipendenze v3.24.0. Non applicata lì perché è una modifica al codice
       di un plugin, cioè una scelta del maintainer — stesso trattamento di
       `urlRedirect`/`HEAD` in v2.94.0.*
+      ⚠ **Riverificata sulla 2.4.0 (giro v3.26.0): la voce resta APERTA, e non si
+      chiuderà da sola.** Letto il sorgente della 2.4.0 invece di fidarsi del numero
+      di versione: il default è ancora `Infinity` (README 2.4.0 riga 314, e la nuova
+      annotazione JSDoc `index.js:36` lo scrive esplicitamente) e il controllo gira
+      ancora solo `if (limits && hasOwnProperty('fieldArrayIndexLimit'))`
+      (`make-middleware.js:274`, era `:224`). La 2.4.0 **valida** i `limits` in
+      costruzione (nuovo `lib/validate-limits.js`) ma valida i valori dichiarati: una
+      chiave assente non ha nulla da validare. Nessun aggiornamento futuro di `multer`
+      chiuderà questa voce — solo la riga di codice in `adminMedia`.
+- [ ] **Plugin `ccxt` — `nodeModuleDependency` dichiara un modulo che non gli serve,
+      e tace quello che gli serve davvero.** `plugins/ccxt/pluginConfig.default.json5`
+      dichiara `{ "path": "^0.12.7" }`. `path` è un **builtin di Node**: il pacchetto
+      npm omonimo è uno shim deprecato del 2015, non è in `package.json` e non è
+      installato. `resolveInstalledVersion` (`core/pluginSys.js:385`) lo cerca in
+      `node_modules/path/package.json`, non lo trova, e `checkNpmDeps` lo classifica
+      `missing`. Nel frattempo `ccxt` — che `main.js:5` e `workerCcxt.js:3` caricano
+      davvero con `require("ccxt")` — **non è dichiarato affatto**: il gate non lo
+      controlla. Le due cose insieme rovesciano il senso della dichiarazione: il
+      plugin fallirebbe la precondizione per un modulo che non usa, e passerebbe la
+      precondizione con quello che usa assente.
+      **Latente oggi, non attiva:** il plugin è `active: 0`, e `pluginSys` assegna lo
+      stato `disabled` *prima* di valutare le dipendenze npm (`pluginSys.js:412`),
+      quindi il controllo non gira proprio. Si manifesta al primo `active: 1`, come
+      `incomplete` con `reason: 'npm'` e un box `[PLUGINS]` che nomina `path`.
+      **Perché non corretta nel giro v3.26.0:** non è un bump, è una modifica a un
+      `.default`, e cambiare il *contenuto* di `nodeModuleDependency` è una
+      sostituzione, non un'aggiunta — quindi il merge additivo non la propaga ai
+      `pluginConfig.json5` vivi già esistenti e servirebbe una migrazione
+      (`migrations/`, con bump di `schemaVersion`). Più il fatto che `ccxt` è escluso
+      dagli interventi di routine per policy (regola 12). Da fare nell'intervento
+      dedicato al plugin, insieme alla voce `ccxt 4.5.58 → 4.5.82` qui sopra.
+- [ ] **`nodemailer` — major 10.x, RINVIATO una seconda volta (oggi `10.0.10`).**
+      Non è una scadenza di sicurezza: l'advisory `GHSA-8m3c-c648-2xjj` (moderate,
+      CVSS 5.9, `resolveContent()` che aggira `disableFileAccess`/`disableUrlAccess`
+      con la firma legacy) è chiusa dalla **9.1.1**, presa in v3.26.0 — il ramo 9
+      resta patchato. Il rinvio della v3.24.0 era motivato dall'età della release
+      (3 giorni) e dal riscrittura in TypeScript con doppia build ESM+CJS, cioè un
+      cambio di **packaging**: esattamente ciò che gli unit test qui non esercitano
+      (`nodemailer` è mockato, `transportFactory.test.js:12`) insieme a tutto ciò che
+      accade in un invio vero — MIME, DKIM, TLS. Quel motivo non è scaduto, ma il
+      ritmo va letto in due tempi, perché dice cose diverse: **dieci patch in dieci
+      giorni** (10.0.0 il 2026-09-04, 10.0.10 il 2026-09-14 — sei delle quali nel solo
+      11 settembre) è il profilo di un ramo che si assesta; i **sette giorni di quiete**
+      che seguono, fino a oggi, sono il primo segnale nell'altra direzione. Non basta
+      ancora: il rischio non è la frequenza in sé, è che il cambiamento sta nel
+      **packaging**, che qui nessun test tocca. Da fare in un intervento dedicato, con
+      **un invio reale** verso un SMTP di prova (l'unica verifica che i mock non possono
+      dare) e non dentro un giro di routine.
+      Il range del plugin `mailer` è `">=8.0.5"`: già soddisfatto in entrambi i casi,
+      nessun riallineamento necessario in nessuna delle due direzioni.
+      *PR Dependabot aperto: #373.*
 
 ### 🐞 `koa-classic-server` — `dirListing.enabled: false` disabilitava anche la risoluzione del file indice → **CORRETTO in v5.2.0**
 

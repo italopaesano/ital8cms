@@ -132,3 +132,28 @@ jobs:
       - name: Audit dependencies (report only)
         continue-on-error: true
         run: npm audit
+
+      # The root audit stops at the root tree. Under the hybrid per-plugin model a
+      # plugin or theme that carries its own package.json has a SEPARATE tree, with
+      # its own lockfile, that `npm audit` above never reads — `adminMedia` ships
+      # multer and sharp that way. The loop is deliberate rather than one hardcoded
+      # path: a new self-contained package is audited the day it lands, without
+      # anyone remembering to add a step here.
+      #
+      # `npm ci` above already installed these trees (the root postinstall runs
+      # deps-sync), so there is nothing to install first.
+      - name: Audit self-contained plugin/theme dependencies (report only)
+        continue-on-error: true
+        run: |
+          shopt -s nullglob
+          found=0
+          for manifest in plugins/*/package.json themes/*/package.json; do
+            found=1
+            dir="$(dirname "$manifest")"
+            echo "::group::npm audit — $dir"
+            (cd "$dir" && npm audit) || true
+            echo "::endgroup::"
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "No self-contained plugin/theme manifests found — nothing to audit."
+          fi
