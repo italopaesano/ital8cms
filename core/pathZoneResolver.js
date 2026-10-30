@@ -197,6 +197,48 @@ function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+/**
+ * Normalizza un suffisso di estensione nella forma canonica col punto.
+ *
+ * Replica la semantica di `normalizeExtSuffix` in `koa-classic-server/index.cjs:30`,
+ * che è il modulo che SERVE davvero le URL pulite: lì il punto iniziale è
+ * « decorazione opzionale » (`'ejs'` ≡ `'.ejs'`) e i suffissi composti
+ * (`'.tar.gz'`, `'.html.ejs'`) sono di prima classe, perché il match è per SUFFISSO.
+ *
+ * Senza questa normalizzazione un `ext: 'ejs'` (accettato dal server) ci farebbe
+ * derivare `/admin/secret.` invece di `/admin/secret`: la URL pulita che il server
+ * serve davvero non matcherebbe nessuna regola, e in silenzio.
+ *
+ * @returns {string|null} forma canonica col punto, o `null` se non nomina un suffisso.
+ */
+function normalizeExtSuffix(value) {
+  if (typeof value !== 'string') return null;
+  const stripped = value.startsWith('.') ? value.slice(1) : value;
+  if (stripped === '') return null;
+  return `.${stripped}`;
+}
+
+/**
+ * Un prefisso concreto finisce DENTRO un pattern, quindi i metacaratteri del
+ * matcher lo tradiscono: `adminPrefix: "a*b"` produce `/a*b/**`, che
+ * `patternMatcher` compila in `^/a[^/]+b/.*$` — e `/a*b/index.ejs` (il path
+ * letterale che il server serve) NON matcha. La zona resterebbe scoperta in
+ * silenzio, cioè il difetto A1 per un'altra strada.
+ *
+ * Lo spazio bianco non espone (viene matchato letteralmente) ma rende il pattern
+ * invalido secondo `patternMatcher.validatePattern()`: incoerenza che va detta.
+ *
+ * MISURATO: `*` scopre la zona; `?` e lo spazio no. La GUI valida `adminPrefix` e
+ * `apiPrefix` (`/^[a-zA-Z0-9_-]+$/` in `plugins/admin/systemSettings.js:104`) ma
+ * NON `viewsPrefix`, e un `ital8Config.json5` scritto a mano non passa da nessun
+ * validatore: il presidio va quindi nel punto d'uso, qui.
+ */
+function describePrefixDefect(prefix) {
+  if (/[*]/.test(prefix)) return 'contiene il metacarattere * — la zona NON verrebbe intercettata';
+  if (/\s/.test(prefix)) return 'contiene spazi — patternMatcher.validatePattern() rifiuta il pattern risultante';
+  return null;
+}
+
 // ─── API pubblica ────────────────────────────────────────────────────────────
 
 /**
@@ -235,8 +277,8 @@ function resolvePathZones(ital8Conf) {
     let ext = null;
     if (def.hideExtensionKey) {
       const ctx = hideExtension[def.hideExtensionKey];
-      if (isPlainObject(ctx) && ctx.enabled === true && typeof ctx.ext === 'string' && ctx.ext !== '') {
-        ext = ctx.ext;
+      if (isPlainObject(ctx) && ctx.enabled === true) {
+        ext = normalizeExtSuffix(ctx.ext);
       }
     }
 
@@ -253,23 +295,44 @@ function resolvePathZones(ital8Conf) {
     });
   });
 
-  // Collisione di prefisso fra due zone nominate: segnalata, non corretta.
   const problems = [];
-  const seenPrefix = new Map();
-  for (const zone of zones) {
-    if (zone.prefix === '') continue; // `site` non ha prefisso proprio
-    if (seenPrefix.has(zone.prefix)) {
+  const named = zones.filter((z) => z.prefix !== ''); // `site` non ha prefisso proprio
+
+  // Prefisso che il matcher non può rappresentare fedelmente.
+  for (const zone of named) {
+    const defect = describePrefixDefect(zone.prefix);
+    if (defect) {
+      problems.push(Object.freeze({
+        kind: 'zone-prefix-invalid',
+        zone: zone.name,
+        key: zone.prefixKey,
+        prefix: zone.prefix,
+        detail: defect,
+      }));
+    }
+  }
+
+  // Collisione fra zone: non solo prefissi IDENTICI ma anche ANNIDATI.
+  // `adminPrefix: "admin"` + `apiPrefix: "admin/api"` passavano in silenzio, e il
+  // longest-match consegnava quel sottoalbero del pannello alla zona `api`, il cui
+  // baseline è `null`: un pezzo di area riservata senza minimo d'accesso.
+  for (let i = 0; i < named.length; i += 1) {
+    for (let j = i + 1; j < named.length; j += 1) {
+      const a = named[i];
+      const b = named[j];
+      const identical = a.prefix === b.prefix;
+      const nested = pathIsUnderSegment(a.prefix, b.prefix) || pathIsUnderSegment(b.prefix, a.prefix);
+      if (!identical && !nested) continue;
       problems.push(Object.freeze({
         kind: 'zone-prefix-collision',
-        prefix: zone.prefix,
-        zones: Object.freeze([seenPrefix.get(zone.prefix), zone.name]),
-        keys: Object.freeze([
-          zones.find((z) => z.name === seenPrefix.get(zone.prefix)).prefixKey,
-          zone.prefixKey,
-        ]),
+        prefix: identical ? a.prefix : undefined,
+        prefixes: Object.freeze([a.prefix, b.prefix]),
+        zones: Object.freeze([a.name, b.name]),
+        keys: Object.freeze([a.prefixKey, b.prefixKey]),
+        detail: identical
+          ? 'due zone condividono lo stesso prefisso concreto'
+          : 'una zona è ANNIDATA nell\'altra: il longest-match consegna il sottoalbero alla più profonda',
       }));
-    } else {
-      seenPrefix.set(zone.prefix, zone.name);
     }
   }
 
@@ -352,7 +415,9 @@ function resolvePattern(pattern, zonesByName) {
   const body = isRegex ? pattern.slice(REGEX_PREFIX.length) : pattern;
 
   const problems = [];
+  let hadPlaceholder = false;
   const resolvedBody = body.replace(PLACEHOLDER_RE, (_match, rawName) => {
+    hadPlaceholder = true;
     const zone = lookup(rawName);
     if (!zone) {
       problems.push(Object.freeze({
@@ -366,20 +431,43 @@ function resolvePattern(pattern, zonesByName) {
     return zone.prefix;
   });
 
-  // Delimitatore spaiato (`{{admin`, `{admin}`, `}}`): la regex non lo intercetta,
-  // quindi resterebbe un letterale che non matcha nessun URL. È esattamente il
-  // fail-open che D2 vieta, perciò è un problema e non un pattern.
-  if (/[{}]/.test(resolvedBody)) {
+  // Delimitatore spaiato (`{{admin`, `{admin}`, `}}`): la regex dei segnaposti non
+  // lo intercetta, quindi resterebbe un letterale che non matcha nessun URL — il
+  // fail-open che D2 vieta. Perciò è un problema, non un pattern.
+  //
+  // MA le graffe SINGOLE sono sintassi legittima dentro un `regex:`: `\d{1,3}` è un
+  // quantificatore. Un controllo indiscriminato scartava quelle regex, cioè buttava
+  // via una regola `requiresAuth` facendola ricadere nella defaultPolicy — lo
+  // stesso danno che si vuole impedire, dal lato opposto. Quindi:
+  //   • `{{` o `}}` DOPPIE → sempre un segnaposto non risolto, in regex come altrove;
+  //   • graffa singola → problema solo FUORI da un `regex:`, dove non ha significato.
+  const hasDoubledBrace = resolvedBody.includes('{{') || resolvedBody.includes('}}');
+  const hasStraySingleBrace = !isRegex && /[{}]/.test(resolvedBody);
+  if (hasDoubledBrace || hasStraySingleBrace) {
     problems.push(Object.freeze({
       kind: 'malformed-placeholder',
       pattern,
-      detail: 'delimitatore { o } spaiato: un segnaposto non risolto non può restare un letterale',
+      detail: hasDoubledBrace
+        ? 'delimitatore {{ o }} spaiato: un segnaposto non risolto non può restare un letterale'
+        : 'graffa singola fuori da un pattern regex:, dove non ha significato',
+    }));
+  }
+
+  // Un pattern vuoto (o di soli spazi) non è un pattern. Senza questo controllo
+  // `{'': regola}` diventava silenziosamente `{'/': regola}`, cioè portava la
+  // homepage pubblica dietro l'autenticazione senza una diagnostica.
+  if (resolvedBody.trim() === '' && !hadPlaceholder) {
+    problems.push(Object.freeze({
+      kind: 'empty-pattern',
+      pattern,
+      detail: 'pattern vuoto o di soli spazi',
     }));
   }
 
   if (problems.length > 0) return { pattern: null, problems: Object.freeze(problems) };
 
-  // `{{site}}` da solo risolve a stringa vuota: la radice del sito è `/`.
+  // `{{site}}` da solo risolve a stringa vuota: la radice del sito è `/`. Vale solo
+  // se un segnaposto c'era davvero — un letterale vuoto è il problema qui sopra.
   const finalBody = resolvedBody === '' ? '/' : resolvedBody;
   return {
     pattern: isRegex ? `${REGEX_PREFIX}${finalBody}` : finalBody,
@@ -423,6 +511,10 @@ function resolveRuleset(rules, zoneMap) {
   const problems = [];
   const derived = [];
   const sourceOf = new Map(); // pattern risolto → pattern sorgente (per i messaggi)
+  // Coppie estesa↔pulita già segnalate. La derivazione guarda nelle due direzioni,
+  // quindi lo stesso conflitto verrebbe trovato due volte (da `/x` verso `/x.ejs` e
+  // viceversa): è un conflitto solo, e va stampato una volta.
+  const reportedTwinPairs = new Set();
 
   // ── 1+2. Risoluzione e collisioni fra pattern espliciti ──
   for (const [rawPattern, rule] of Object.entries(rules)) {
@@ -441,29 +533,78 @@ function resolveRuleset(rules, zoneMap) {
           detail: 'due pattern risolvono allo stesso URL con regole diverse',
         }));
       }
-      continue; // identici → assorbito; diversi → vince il primo, ma il problema è riportato
+      // Vince l'ULTIMO, non il primo. Il chiamante costruisce il ruleset con
+      // `{...config.customRules, ...config.hardcodedRules}`
+      // (`accessManager.loadRules()`:55), cioè con la semantica dell'object spread,
+      // dove le hardcoded — `editable: false` — sovrascrivono le custom. Con
+      // « vince il primo » un `{{admin}}/**` scritto fra le custom avrebbe
+      // spodestato la `/admin/**` hardcoded, invertendo quella precedenza. Il
+      // problema resta riportato: non è una via silenziosa per sovrascrivere.
     }
 
     out[resolved] = rule;
     sourceOf.set(resolved, rawPattern);
   }
 
-  // ── 3. Derivazione delle forme senza estensione ──
+  // ── 3. Derivazione fra forma ESTESA e forma PULITA, nelle due direzioni ──
+  //
+  // Entrambe servono, perché con `hideExtension` acceso i due URL servono la stessa
+  // pagina e lasciarne uno scoperto è una fuga: la forma estesa non protetta risponde
+  // 301 (conferma che la pagina esiste), la forma pulita non protetta serve la pagina.
+  //
+  // La direzione pulita→estesa non è teorica: `accessControl.default.json5` spedisce
+  // TRE regole in forma pulita (`userProfile`, `login`, `logout`), quindi senza questa
+  // direzione le rispettive forme `.ejs` resterebbero fuori da ogni regola.
   for (const resolved of Object.keys(out)) {
     if (resolved.startsWith(REGEX_PREFIX)) continue; // una regex gestisce da sé il proprio matching
 
     const zone = zoneForPath(resolved, zoneMap.zones);
     if (!zone || !zone.ext) continue;
-    if (!resolved.endsWith(zone.ext)) continue;
 
-    const twin = resolved.slice(0, -zone.ext.length);
-    if (twin === '') continue; // un pattern che è SOLO l'estensione non ha gemello sensato
+    let twin = null;
+    if (resolved.endsWith(zone.ext)) {
+      // ESTESA → PULITA. Non si deriva da un `**` immediatamente prima
+      // dell'estensione: `/admin/docs/**.ejs` compila in `^/admin/docs/.*\.ejs$`,
+      // mentre il gemello `/admin/docs/**` compila in `^/admin/docs/.*$` — STRETTAMENTE
+      // più larga, quindi una regola permissiva si estenderebbe a file che non sono
+      // pagine (`db-dump.sql`, `secret.json`). Non esiste un pattern che dica « ogni
+      // path che NON finisce con un'estensione », quindi il gemello va scritto a mano.
+      const candidate = resolved.slice(0, -zone.ext.length);
+      if (candidate.endsWith('**')) {
+        problems.push(Object.freeze({
+          kind: 'underivable-pattern',
+          pattern: resolved,
+          zone: zone.name,
+          detail: 'un `**` prima dell\'estensione non ha un gemello pulito esprimibile: '
+            + 'il gemello sarebbe piu\' largo dell\'originale. Scrivere la forma pulita a mano.',
+        }));
+        continue;
+      }
+      twin = candidate;
+    } else if (
+      !resolved.includes('*')                       // un gemello di un wildcard sarebbe ridondante o fuorviante
+      && resolved !== '/' && !resolved.endsWith('/') // le radici non sono file
+      && resolved !== zone.prefix                    // nemmeno la radice della zona
+      && !resolved.slice(resolved.lastIndexOf('/') + 1).includes('.') // ← è davvero una URL PULITA?
+    ) {
+      // PULITA → ESTESA, solo per ciò che È una URL pulita: ultimo segmento senza
+      // punto. `koa-classic-server` matcha per SUFFISSO e accetta suffissi composti,
+      // quindi tecnicamente `/admin/a.css` sarebbe la forma pulita di
+      // `/admin/a.css.ejs` — ma derivare un gemello `.ejs` per ogni regola su
+      // immagini e fogli di stile è rumore su file che non esistono. Chi ha un
+      // `a.css.ejs` scrive il gemello a mano.
+      twin = `${resolved}${zone.ext}`;
+    }
+
+    if (twin === null || twin === '') continue;
 
     if (Object.prototype.hasOwnProperty.call(out, twin)) {
       // Già presente: se è la stessa regola è il config non ancora migrato che porta
       // entrambe le forme → assorbito. Se è diversa, con `hideExtension` acceso i due
       // URL servono la stessa pagina con regole diverse: è un difetto, va detto.
-      if (!sameRule(out[twin], out[resolved])) {
+      const pairKey = [resolved, twin].sort().join('\u0000');
+      if (!sameRule(out[twin], out[resolved]) && !reportedTwinPairs.has(pairKey)) {
+        reportedTwinPairs.add(pairKey);
         problems.push(Object.freeze({
           kind: 'collision',
           pattern: twin,

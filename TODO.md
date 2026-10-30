@@ -919,7 +919,7 @@ Fonte: [`docs/decisions/path-zones.it.md`](./docs/decisions/path-zones.it.md)
 (design **approvato** il 2026-10-30, strada B — « costruire il muro »).
 Chiude alla radice [`REVIEW.md`](./REVIEW.md) → **A1** e **A3**.
 
-**Fasi 0 e 1 fatte** (2026-10-30): esiste `core/pathZoneResolver.js` con 103 test, ma
+**Fasi 0 e 1 fatte** (2026-10-30): esiste `core/pathZoneResolver.js` con 132 test, ma
 **nessun consumatore è collegato**, quindi il comportamento del CMS è ancora invariato.
 Il primo cambiamento visibile arriva con la Fase 2.
 
@@ -928,12 +928,17 @@ Il primo cambiamento visibile arriva con la Fase 2.
       `accessInvariants`/`core/accessInvariantCheck.js`, `[ACCESS]`, `baseline`).
 - [x] ~~**Fase 1 — la mappa: `core/pathZoneResolver.js`** (modulo puro).~~
       **Fatta il 2026-10-30.** `resolvePathZones` · `resolveRuleset` · `resolvePattern` ·
-      `zoneForPath` · `ZONE_NAMES`; 103 test in `tests/unit/core/pathZoneResolver.test.js`,
+      `zoneForPath` · `ZONE_NAMES`; 132 test in `tests/unit/core/pathZoneResolver.test.js`,
       parametrizzati su cinque prefissi diversi (`admin`, `backoffice`, `pannello`,
       `a-b_c`, `MixedCase`). In corso d'opera sono emersi due fail-open silenziosi non
       previsti dalla decisione (delimitatore di segnaposto spaiato, due zone sullo stesso
-      prefisso concreto): aggiunti come terzo e quarto tipo di problema. Nessun
-      consumatore collegato.
+      prefisso concreto): aggiunti come terzo e quarto tipo di problema. Il modulo è
+      poi stato **revisionato**: nove difetti di implementazione corretti, sei dei
+      quali erano fail-open silenziosi (quantificatori regex scartati, estensione non
+      normalizzata, `**` derivato in largo, prefisso non validato, precedenza delle
+      collisioni rovesciata, derivazione solo in una direzione, chiave vuota,
+      annidamento fra zone, lookup sul prototipo). Dettaglio nel registro di
+      decisione → *Revisione del codice*. Nessun consumatore collegato.
 - [ ] **Fase 2 — `baseline` di zona in `accessManager`.** Il `baseline` entra nel motore;
       la `defaultPolicy` globale viene superata; **monotonia** applicata e testata
       (« una regola può solo stringere, mai allentare, il `baseline` della sua zona »).

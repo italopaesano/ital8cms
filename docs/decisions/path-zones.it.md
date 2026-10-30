@@ -2,7 +2,8 @@
 # Decisione: zone dello spazio URL, segnaposti di percorso e `baseline` per zona
 
 > **Stato: IN IMPLEMENTAZIONE** — design e naming approvati il 2026-10-30.
-> **Fasi 0 e 1 completate** (`core/pathZoneResolver.js`, 103 test); nessun
+> **Fasi 0 e 1 completate** (`core/pathZoneResolver.js`, 132 test, revisione del
+> codice chiusa con 9 difetti corretti); nessun
 > consumatore ancora collegato, quindi il comportamento del CMS è **invariato**.
 > Dettaglio in *Stato di implementazione*. Chiude alla radice [`REVIEW.md` → A1](../../REVIEW.md#a1--cambiare-adminprefix-apre-il-pannello-admin-a-chiunque)
 > e, come effetto collaterale, [A3](../../REVIEW.md#a3--le-regole-hardcoded-del-controllo-accessi-non-sono-immutabili).
@@ -457,7 +458,7 @@ perimetro ad aver prodotto A1.
 | Fase | Stato |
 |---|---|
 | 0 — Conferma del naming | ✅ **chiusa** (2026-10-30) |
-| 1 — La mappa (`core/pathZoneResolver.js`) | ✅ **implementata** (2026-10-30) — 103 test |
+| 1 — La mappa (`core/pathZoneResolver.js`) | ✅ **implementata e revisionata** (2026-10-30) — 132 test |
 | 2 — `baseline` in `accessManager` | ⬜ da fare |
 | 3 — Invarianti + box `[ACCESS]` | ⬜ da fare |
 | 4 — Segnaposti nei `.default` + migrazione | ⬜ da fare |
@@ -470,7 +471,7 @@ perimetro ad aver prodotto A1.
   API: `resolvePathZones(ital8Conf)` · `resolveRuleset(rules, zoneMap)` ·
   `resolvePattern(pattern, zonesByName)` · `zoneForPath(pathOrPattern, zones)` ·
   `ZONE_NAMES`.
-- **`tests/unit/core/pathZoneResolver.test.js`** — 103 test, **parametrizzati sul
+- **`tests/unit/core/pathZoneResolver.test.js`** — 132 test, **parametrizzati sul
   prefisso** (`admin`, `backoffice`, `pannello`, `a-b_c`, `MixedCase`), non scritti
   sul solo default: A1 esisteva proprio perché nessun test della suite usava un
   `adminPrefix` diverso da `"admin"`.
@@ -493,7 +494,38 @@ implicava senza nominarlo, e sono annotate qui perché non passino inosservate.
 | Le regole derivate portano **`derivedFrom`** | Serve alla GUI (D5: le derivate si mostrano in sola lettura) e al confronto fra regole, che lo ignora essendo metadato e non contenuto. |
 | `zoneForPath` restituisce **`null`** sui pattern `regex:` | La zona di una regex non è determinabile dal suo testo; è anche il motivo per cui le regex non ricevono la derivazione dell'estensione. |
 
-**Un difetto trovato in rilettura, e corretto.** Il ramo di lookup che accetta un
+### Revisione del codice (2026-10-30) — otto difetti trovati e corretti
+
+La Fase 1 è stata sottoposta a revisione **dopo** la stesura. Nessun rilievo era
+un difetto di design: tutti e otto erano nell'implementazione, e sei di essi
+producevano un **fail-open silenzioso**, cioè la stessa famiglia del difetto che
+questa decisione esiste per chiudere. Sono qui con il danno che facevano.
+
+| # | Difetto | Danno | Correzione |
+|---|---|---|---|
+| ① | Il guard sulle graffe scartava i **quantificatori regex** (`\d{1,3}`) | Una regola `requiresAuth` in forma `regex:` veniva **buttata via** e ricadeva nella `defaultPolicy` (`allow`): lo stesso danno del guard, dal lato opposto | Graffe **doppie** (`{{`/`}}`) sempre un problema; graffa **singola** solo fuori da un `regex:`, dove non ha significato |
+| ② | L'estensione era usata verbatim | `koa-classic-server` normalizza `'ejs'` ≡ `'.ejs'` e accetta suffissi composti: con un `ext` senza punto derivavamo `/x.` invece di `/x`, e la URL pulita realmente servita non matchava nulla | Replicata la semantica di `normalizeExtSuffix` (`koa-classic-server/index.cjs:30`) |
+| ③ | `**` prima dell'estensione veniva derivato | `/admin/docs/**.ejs` → gemello `/admin/docs/**`, **strettamente più largo**: una regola permissiva si estendeva a `db-dump.sql`, `secret.json` | Non si deriva; nuovo problema `underivable-pattern` (il gemello va scritto a mano) |
+| ④ | Il prefisso concreto non era validato | `adminPrefix: "a*b"` → `/a*b/**`, che il matcher compila in `^/a[^/]+b/.*$` e **non matcha** il path letterale servito: zona scoperta, in silenzio | Nuovo problema `zone-prefix-invalid`. Presidio nel punto d'uso perché la GUI valida `adminPrefix`/`apiPrefix` (`systemSettings.js:104`) ma non `viewsPrefix`, e un config scritto a mano non passa da nessun validatore |
+| ⑤ | Nelle collisioni vinceva il **primo** | Il chiamante costruisce `{...customRules, ...hardcodedRules}` (`accessManager.loadRules()`:55), dove le hardcoded `editable: false` sovrascrivono: « vince il primo » **rovesciava** quella precedenza | Vince l'**ultimo**, come l'object spread. Il problema resta riportato |
+| ⑥ | La derivazione era solo estesa→pulita | `accessControl.default.json5` spedisce **tre** regole in forma pulita (`login`, `logout`, `userProfile`): le loro forme `.ejs` restavano fuori da ogni regola, e un anonimo otteneva un 301 — la conferma che la pagina esiste | Derivazione **bidirezionale**, con il conflitto fra le due forme segnalato **una volta** e non una per direzione |
+| ⑦ | Una chiave **vuota** risolveva a `/` | `{'': regola}` portava silenziosamente la homepage pubblica dietro l'autenticazione | Nuovo problema `empty-pattern`; `{{site}}` resta la via legittima per nominare la radice |
+| ⑧ | La collisione fra zone guardava solo l'**uguaglianza** | `adminPrefix: "admin"` + `apiPrefix: "admin/api"` passava in silenzio, e il longest-match consegnava quel sottoalbero del pannello alla zona `api`, il cui `baseline` è `null` | Rilevato anche l'**annidamento** |
+
+Due rilievi del rapporto di revisione sono stati **ridimensionati** dopo verifica
+diretta: `adminPrefix` *è* validato dalla GUI (la riga citata, `systemSettings.js:110`,
+è `viewsPrefix`, che invece non ha controllo di charset), e un prefisso con spazi o
+`?` resta **protetto** — solo `*` scopre davvero la zona. Lo spazio è comunque
+segnalato, perché rende il pattern invalido secondo `patternMatcher.validatePattern()`.
+
+**Collaudo sul config reale.** Il resolver è stato fatto girare sul
+`accessControl.default.json5` spedito, con lo stesso merge di `loadRules()`: 10
+regole in ingresso, 10 in uscita, **zero problemi**, con `hideExtension` sia spento
+sia acceso. Nel secondo caso nulla viene derivato perché il default porta già
+entrambe le forme a mano — il che significa che la Fase 4 può **cancellare** le tre
+forme pulite duplicate sapendo che la derivazione le rigenera.
+
+**Un nono difetto, trovato prima della revisione.** Il ramo di lookup che accetta un
 oggetto semplice al posto della `Map` indicizzava **senza `hasOwnProperty`**: un
 segnaposto `{{constructor}}` o `{{toString}}` pescava dal **prototipo** un valore
 truthy, `zone.prefix` risultava `undefined` e il pattern diventava `"undefined/**"`
@@ -600,7 +632,8 @@ sull'admin.
   **Scelta B**, e stesa la prima versione di questo documento con quattro nomi
   ancora in sospeso.
 - **2026-10-30 (terzo giro)** — **Fase 1 implementata**: `core/pathZoneResolver.js`
-  (modulo puro) e 103 test parametrizzati sul prefisso. In implementazione sono
+  (modulo puro) e 132 test parametrizzati sul prefisso, poi **revisionata**: nove
+  difetti di implementazione corretti, sei dei quali erano fail-open silenziosi. In implementazione sono
   emersi due casi che la decisione implicava senza nominarli — delimitatore di
   segnaposto spaiato e due zone sullo stesso prefisso concreto — aggiunti come
   terzo e quarto tipo di problema, perché entrambi sarebbero stati fail-open

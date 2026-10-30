@@ -593,3 +593,269 @@ describe('regressione A1: il pannello è intercettato con QUALUNQUE adminPrefix'
     expect(matcher.findMatchingRule('/administrator.ejs', rules)).toBeNull();
   });
 });
+
+/**
+ * REGRESSIONI DALLA REVISIONE DEL CODICE (2026-10-30).
+ *
+ * Otto difetti trovati rileggendo la Fase 1 appena scritta. Ognuno è qui con il
+ * danno che faceva, perché nessuno rientri in silenzio.
+ */
+describe('regressioni dalla revisione', () => {
+  const matcher = new PatternMatcher();
+
+  describe('① un quantificatore regex non è un segnaposto malformato', () => {
+    test.each([
+      'regex:^/api/user/\\d{1,3}$',
+      'regex:^/p/\\d{2}$',
+      'regex:/x/[a-z]{3,}',
+    ])('%s sopravvive alla risoluzione', (pattern) => {
+      // Il guard sulle graffe scartava queste regex, cioè BUTTAVA VIA una regola
+      // `requiresAuth` facendola ricadere nella defaultPolicy (`allow`): lo stesso
+      // danno che il guard esiste per impedire, dal lato opposto.
+      const { byName } = resolvePathZones(conf());
+      expect(resolvePattern(pattern, byName).pattern).toBe(pattern);
+    });
+
+    test('una regola regex con quantificatore arriva nel ruleset', () => {
+      const zm = resolvePathZones(conf());
+      const { rules, problems } = resolveRuleset({ 'regex:^/p/\\d{2}$': ADMIN_RULE }, zm);
+      expect(problems).toEqual([]);
+      expect(Object.keys(rules)).toEqual(['regex:^/p/\\d{2}$']);
+    });
+
+    test('ma `{{` o `}}` doppie restano un problema anche dentro una regex', () => {
+      const { byName } = resolvePathZones(conf());
+      expect(resolvePattern('regex:{{api/u', byName).pattern).toBeNull();
+      expect(resolvePattern('regex:/u}}', byName).pattern).toBeNull();
+    });
+
+    test('e una graffa singola FUORI da una regex resta un problema', () => {
+      const { byName } = resolvePathZones(conf());
+      expect(resolvePattern('{admin}/**', byName).pattern).toBeNull();
+    });
+
+    test('un segnaposto risolve anche dentro una regex con quantificatore', () => {
+      const { byName } = resolvePathZones(conf({ adminPrefix: 'backoffice' }));
+      expect(resolvePattern('regex:{{admin}}/u/\\d{1,3}', byName).pattern)
+        .toBe('regex:/backoffice/u/\\d{1,3}');
+    });
+  });
+
+  describe('② l\'estensione si normalizza come fa koa-classic-server', () => {
+    test('una ext SENZA punto è equivalente a quella col punto', () => {
+      // koa-classic-server/index.cjs:30 (`normalizeExtSuffix`) accetta 'ejs' come
+      // '.ejs'. Senza la stessa normalizzazione derivavamo `/pluginPages/x.`
+      // invece di `/pluginPages/x`: la URL pulita che il server serve davvero non
+      // matchava nessuna regola, in silenzio.
+      const zm = resolvePathZones({ ...conf(), hideExtension: { pluginPagesPrefix: { enabled: true, ext: 'ejs' } } });
+      expect(zm.byName.get('pluginPages').ext).toBe('.ejs');
+      const { rules } = resolveRuleset({ '{{pluginPages}}/x.ejs': ADMIN_RULE }, zm);
+      expect(Object.keys(rules)).toEqual(['/pluginPages/x.ejs', '/pluginPages/x']);
+    });
+
+    test('un suffisso composto è di prima classe', () => {
+      const zm = resolvePathZones({ ...conf(), ...hideExt('pluginPagesPrefix', '.html.ejs') });
+      const { derived } = resolveRuleset({ '{{pluginPages}}/x.html.ejs': ADMIN_RULE }, zm);
+      expect(derived).toEqual(['/pluginPages/x']);
+    });
+
+    test('una ext inutilizzabile (vuota, solo punto, non stringa) disattiva la derivazione', () => {
+      for (const ext of ['', '.', 42, null]) {
+        const zm = resolvePathZones({ ...conf(), hideExtension: { adminPrefix: { enabled: true, ext } } });
+        expect(zm.byName.get('admin').ext).toBeNull();
+      }
+    });
+  });
+
+  describe('③ `**` prima dell\'estensione non ha un gemello esprimibile', () => {
+    test('non si deriva un gemello PIÙ LARGO dell\'originale', () => {
+      // `/admin/docs/**.ejs` → `^/admin/docs/.*\.ejs$`
+      // gemello `/admin/docs/**` → `^/admin/docs/.*$`  ← matcha anche db-dump.sql
+      // Con una regola permissiva il gemello apriva file che non sono pagine.
+      const zm = resolvePathZones({ ...conf(), ...hideExt('adminPrefix') });
+      const permissive = { requiresAuth: false, allowedRoles: [], priority: 300 };
+      const { rules, derived, problems } = resolveRuleset({ '{{admin}}/docs/**.ejs': permissive }, zm);
+
+      expect(derived).toEqual([]);
+      expect(rules['/admin/docs/**']).toBeUndefined();
+      expect(problems.map((p) => p.kind)).toEqual(['underivable-pattern']);
+
+      // E il file che sarebbe stato esposto resta fuori da quella regola.
+      expect(matcher.findMatchingRule('/admin/docs/db-dump.sql', rules)).toBeNull();
+    });
+
+    test('un `*` singolo invece ha un gemello preciso e si deriva', () => {
+      // `*` è `[^/]+`: il gemello `/content/*` matcha esattamente le forme pulite.
+      const zm = resolvePathZones({ ...conf(), ...hideExt('wwwPath') });
+      const { derived, problems } = resolveRuleset({ '/content/*.ejs': ADMIN_RULE }, zm);
+      expect(derived).toEqual(['/content/*']);
+      expect(problems).toEqual([]);
+    });
+  });
+
+  describe('④ un prefisso che il matcher non può rappresentare è un problema', () => {
+    test('un prefisso con `*` lascerebbe la zona SCOPERTA: va detto', () => {
+      // `/a*b/**` compila in `^/a[^/]+b/.*$`, che NON matcha `/a*b/index.ejs` —
+      // il path letterale che il server serve. Il pannello resterebbe aperto.
+      const { problems } = resolvePathZones(conf({ adminPrefix: 'a*b' }));
+      expect(problems).toHaveLength(1);
+      expect(problems[0].kind).toBe('zone-prefix-invalid');
+      expect(problems[0].zone).toBe('admin');
+      expect(problems[0].key).toBe('adminPrefix');
+    });
+
+    test('vale per ogni zona, non solo per `admin`', () => {
+      // La GUI valida il charset di adminPrefix e apiPrefix
+      // (plugins/admin/systemSettings.js:104) ma NON di viewsPrefix, e un
+      // ital8Config.json5 scritto a mano non passa da nessun validatore: il
+      // presidio sta nel punto d'uso.
+      const { problems } = resolvePathZones(conf({ viewsPrefix: 'a*b' }));
+      expect(problems.map((p) => p.zone)).toEqual(['views']);
+    });
+
+    test('uno spazio è un problema perché validatePattern lo rifiuta', () => {
+      const { problems } = resolvePathZones(conf({ adminPrefix: 'a b' }));
+      expect(problems.map((p) => p.kind)).toEqual(['zone-prefix-invalid']);
+      expect(matcher.validatePattern('/a b/**').valid).toBe(false);
+    });
+
+    test('i prefissi legittimi non producono problemi', () => {
+      for (const prefix of ['admin', 'backoffice', 'a-b_c', 'MixedCase', 'x2']) {
+        expect(resolvePathZones(conf({ adminPrefix: prefix })).problems).toEqual([]);
+      }
+    });
+  });
+
+  describe('⑤ nelle collisioni vince l\'ULTIMO, come l\'object spread del chiamante', () => {
+    test('una hardcoded non viene spodestata da una custom che risolve uguale', () => {
+      // accessManager.loadRules() costruisce `{...customRules, ...hardcodedRules}`:
+      // le hardcoded (editable: false) sovrascrivono le custom. Con « vince il
+      // primo » un `{{admin}}/**` fra le custom avrebbe rovesciato la precedenza.
+      const zm = resolvePathZones(conf());
+      const custom = { '{{admin}}/**': { requiresAuth: false, allowedRoles: [] } };
+      const hardcoded = { '/admin/**': { requiresAuth: true, allowedRoles: [0, 1] } };
+      const { rules, problems } = resolveRuleset({ ...custom, ...hardcoded }, zm);
+
+      expect(rules['/admin/**'].requiresAuth).toBe(true);
+      expect(rules['/admin/**'].allowedRoles).toEqual([0, 1]);
+      expect(problems.map((p) => p.kind)).toEqual(['collision']);
+    });
+
+    test('la sovrascrittura non è comunque silenziosa', () => {
+      const zm = resolvePathZones(conf());
+      const { problems } = resolveRuleset({
+        '{{admin}}/**': { requiresAuth: false },
+        '/admin/**': { requiresAuth: true },
+      }, zm);
+      expect(problems).toHaveLength(1);
+      expect(problems[0].sources).toEqual(['{{admin}}/**', '/admin/**']);
+    });
+  });
+
+  describe('⑥ la derivazione guarda anche da PULITA a ESTESA', () => {
+    test('le tre regole in forma pulita del default spedito ottengono il gemello .ejs', () => {
+      // accessControl.default.json5 spedisce login, logout e userProfile in forma
+      // PULITA: senza questa direzione le loro forme .ejs restavano fuori da ogni
+      // regola, e un anonimo otteneva un 301 — la conferma che la pagina esiste.
+      const zm = resolvePathZones({ ...conf(), ...hideExt('pluginPagesPrefix') });
+      const { rules, derived, problems } = resolveRuleset({
+        '{{pluginPages}}/adminUsers/login': ADMIN_RULE,
+        '{{pluginPages}}/adminUsers/logout': ADMIN_RULE,
+        '{{pluginPages}}/adminUsers/userProfile': ADMIN_RULE,
+      }, zm);
+
+      expect(problems).toEqual([]);
+      expect(derived).toEqual([
+        '/pluginPages/adminUsers/login.ejs',
+        '/pluginPages/adminUsers/logout.ejs',
+        '/pluginPages/adminUsers/userProfile.ejs',
+      ]);
+      expect(rules['/pluginPages/adminUsers/login.ejs'].derivedFrom)
+        .toBe('/pluginPages/adminUsers/login');
+    });
+
+    test('nessun gemello per i wildcard e per le radici, che non sono file', () => {
+      const zm = resolvePathZones({ ...conf(), ...hideExt('adminPrefix') });
+      const { derived } = resolveRuleset({
+        '{{admin}}/**': ADMIN_RULE,
+        '{{admin}}/*': ADMIN_RULE,
+        '{{admin}}': ADMIN_RULE,
+        '{{admin}}/sezione/': ADMIN_RULE,
+      }, zm);
+      expect(derived).toEqual([]);
+    });
+
+    test('nessun gemello quando l\'ultimo segmento ha già un punto', () => {
+      // `koa-classic-server` matcha per suffisso, quindi `/admin/a.css` sarebbe
+      // tecnicamente la forma pulita di `/admin/a.css.ejs` — ma derivare un `.ejs`
+      // per ogni regola su immagini e CSS è rumore su file che non esistono.
+      const zm = resolvePathZones({ ...conf(), ...hideExt('adminPrefix') });
+      const { derived } = resolveRuleset({ '{{admin}}/a.css': ADMIN_RULE, '{{admin}}/b.js': ADMIN_RULE }, zm);
+      expect(derived).toEqual([]);
+    });
+
+    test('la direzione pulita→estesa funziona anche nella zona `site`', () => {
+      const zm = resolvePathZones({ ...conf(), ...hideExt('wwwPath') });
+      const { derived } = resolveRuleset({ '/riservata': ADMIN_RULE }, zm);
+      expect(derived).toEqual(['/riservata.ejs']);
+    });
+
+    test('il conflitto fra le due forme è segnalato UNA volta, non una per direzione', () => {
+      const zm = resolvePathZones({ ...conf(), ...hideExt('pluginPagesPrefix') });
+      const { problems } = resolveRuleset({
+        '{{pluginPages}}/x.ejs': ADMIN_RULE,
+        '{{pluginPages}}/x': { requiresAuth: false, allowedRoles: [] },
+      }, zm);
+      expect(problems).toHaveLength(1);
+    });
+  });
+
+  describe('⑦ un pattern vuoto non diventa la homepage', () => {
+    test('una chiave vuota è un problema, non `/`', () => {
+      // `{'': regola}` diventava silenziosamente `{'/': regola}`, cioè portava la
+      // homepage pubblica dietro l'autenticazione senza una diagnostica.
+      const zm = resolvePathZones(conf());
+      const { rules, problems } = resolveRuleset({ '': { requiresAuth: true } }, zm);
+      expect(rules).toEqual({});
+      expect(problems.map((p) => p.kind)).toEqual(['empty-pattern']);
+    });
+
+    test('una chiave di soli spazi è lo stesso problema', () => {
+      const { byName } = resolvePathZones(conf());
+      expect(resolvePattern('   ', byName).problems.map((p) => p.kind)).toEqual(['empty-pattern']);
+    });
+
+    test('`{{site}}` resta la via legittima per nominare la radice', () => {
+      const { byName } = resolvePathZones(conf());
+      expect(resolvePattern('{{site}}', byName).pattern).toBe('/');
+    });
+  });
+
+  describe('⑧ anche i prefissi ANNIDATI sono una collisione fra zone', () => {
+    test('una zona annidata in un\'altra viene segnalata', () => {
+      // `adminPrefix: "admin"` + `apiPrefix: "admin/api"`: il longest-match
+      // consegnava `/admin/api/**` alla zona `api`, il cui baseline è `null` —
+      // un pezzo di area riservata senza minimo d'accesso, in silenzio.
+      const { problems, zones } = resolvePathZones(conf({ adminPrefix: 'admin', apiPrefix: 'admin/api' }));
+      expect(problems).toHaveLength(1);
+      expect(problems[0].kind).toBe('zone-prefix-collision');
+      expect(problems[0].prefixes).toEqual(expect.arrayContaining(['/admin', '/admin/api']));
+      expect(problems[0].detail).toContain('ANNIDATA');
+
+      // Il comportamento che il problema descrive è quello reale.
+      expect(zoneForPath('/admin/api/x', zones).name).toBe('api');
+    });
+
+    test('prefissi identici restano segnalati, con il dettaglio giusto', () => {
+      const { problems } = resolvePathZones(conf({ adminPrefix: 'api' }));
+      expect(problems).toHaveLength(1);
+      expect(problems[0].prefix).toBe('/api');
+      expect(problems[0].detail).toContain('stesso prefisso');
+    });
+
+    test('un prefisso che è solo un PREFISSO DI STRINGA di un altro non è annidato', () => {
+      // `/api` e `/apifoo`: niente confine di segmento, nessuna sovrapposizione.
+      expect(resolvePathZones(conf({ adminPrefix: 'apifoo' })).problems).toEqual([]);
+    });
+  });
+});
