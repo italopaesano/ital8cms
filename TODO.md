@@ -26,6 +26,7 @@ Distinzione con gli altri due registri:
 6. [Sicurezza](#6-sicurezza)
 7. [Dipendenze](#7-dipendenze)
 8. [Direzioni ampie](#8-direzioni-ampie)
+9. [Zone dello spazio URL e segnaposti di percorso](#9-zone-dello-spazio-url-e-segnaposti-di-percorso)
 
 ---
 
@@ -38,6 +39,10 @@ spetta al maintainer. Chi riprende in mano il progetto può partire da qui.
 Le voci con un rimando hanno la trattazione completa nella sezione indicata; quelle
 senza rimando sono descritte per intero qui perché non hanno una voce propria altrove.
 
+- [ ] **Quattro nomi da confermare per le zone dello spazio URL** → §9.
+      Il design è **approvato** (strada B, 2026-10-30) ma il codice non parte: `pathZones`,
+      `accessInvariants`, `[ACCESS]` e `posture` sono **proposte registrate**, non ancora
+      introdotte. Fonte: [`docs/decisions/path-zones.it.md`](./docs/decisions/path-zones.it.md) → *Naming*.
 - [x] ~~**`urlRedirect` e `HEAD`** *(due decisioni collegate)* → §7.~~ **Deciso e
       applicato in v3.4.0.** **(a)** Il guard è esteso a `HEAD`: RFC 9110 §9.3.2
       definisce `HEAD` come `GET` senza corpo, quindi la divergenza non era una scelta
@@ -901,3 +906,55 @@ Non sono debito, ma direzioni: il dettaglio vive in
 - [ ] **Build frontend** (bundling degli asset)
 - [ ] **Cleanup dei plugin allo shutdown** coordinato da `pluginSys`, oggi lasciato
       a ogni plugin (es. `urlRedirect/hitCounter.js` gestisce i propri segnali)
+
+## 9. Zone dello spazio URL e segnaposti di percorso
+
+Fonte: [`docs/decisions/path-zones.it.md`](./docs/decisions/path-zones.it.md)
+(design **approvato** il 2026-10-30, strada B — « costruire il muro »).
+Chiude alla radice [`REVIEW.md`](./REVIEW.md) → **A1** e **A3**.
+
+**Niente è ancora implementato.** Le fasi seguono il piano del registro di decisione;
+la Fase 0 è bloccante per tutte le altre.
+
+- [ ] **Fase 0 — conferma del naming.** Quattro nomi proposti e non ancora
+      introdotti (vedi *Decisioni in attesa del maintainer*). Nessun codice.
+- [ ] **Fase 1 — la mappa (modulo core puro).** Zone, risoluzione `{{…}}`, errore su
+      segnaposto sconosciuto, rilevamento delle collisioni dopo la risoluzione,
+      derivazione delle forme senza estensione. Test unitari esaustivi **inclusi i
+      valori non standard** (`adminPrefix: "backoffice"`). Nessun consumatore collegato.
+- [ ] **Fase 2 — postura di zona in `accessManager`.** La postura entra nel motore;
+      la `defaultPolicy` globale viene superata; **monotonia** applicata e testata
+      (« una regola può solo stringere, mai allentare, la postura della zona »).
+      Le `hardcodedRules` diventano ridondanti → decidere se restano come
+      documentazione o spariscono.
+- [ ] **Fase 3 — invarianti + box `[ACCESS]`.** Tabella delle sonde dentro
+      `loadRules()` (copre boot, salvataggio GUI e reload a server acceso con un solo
+      punto); fatale al boot, rifiuto del ruleset a runtime. Test che presidia la
+      presenza di `adminAccessControl` in `essentialPlugins` — oggi l'unica cosa che
+      impedisce a un'installazione senza guardia di partire.
+      **Solo a fine fase** si spuntano A1 e A3 in `REVIEW.md`.
+- [ ] **Fase 4 — segnaposti nei `.default` + migrazione.** I letterali passano a
+      `{{…}}`; la derivazione `hideExtension` sostituisce le regole scritte due volte;
+      `migrations/` + bump di `schemaVersion` del descrittore per ogni pacchetto
+      toccato (è un **cambio di valore**: il merge additivo non lo copre).
+- [ ] **Fase 5 — adozione negli altri consumatori.** I **20 letterali** censiti in
+      `sentinel` (6), `seo` (2), `rateLimiter` (1) e `adminAccessControl` (11) passano
+      ai segnaposti, un plugin per volta. Coinvolti anche `csrfProtection`,
+      `urlRedirect`, `adminSeo` e `core/botDetector.js` (8 consumatori di
+      `core/patternMatcher.js` in tutto).
+- [ ] **Fase 6 — consolidamento `runtimeGate`.** Il `reservedGate` deriva il perimetro
+      dalla mappa invece di ricalcolarlo: oggi `runtimeGate.js:60` e `:275` leggono
+      `adminPrefix` **correttamente**, `accessControl.json5` no, ed è proprio questa
+      divergenza fra due derivazioni dello stesso perimetro ad aver prodotto A1.
+
+**Punti rimandati** (dal registro di decisione, §*Punti rimandati*):
+
+- [ ] Postura della zona `site` configurabile: con quale chiave e in quale file
+      (caso d'uso « sito privato », reale ma non urgente).
+- [ ] Vocabolario **estendibile dai plugin**: chiuso per v1; aprirlo introduce uno
+      spazio di nomi condiviso, quindi richiede un prefisso di namespace.
+- [ ] Lettura di chiavi arbitrarie da file arbitrari (la forma generale della proposta
+      iniziale): molta più macchina per casi d'uso che oggi non esistono.
+- [ ] **`dirListing` acceso sul file server admin** (`index.js:563`, l'unico dei cinque).
+      Non fa parte della decisione, ma è uno dei tre fattori che trasformano A1 da
+      disallineamento di configurazione a esposizione dell'intero albero del pannello.
