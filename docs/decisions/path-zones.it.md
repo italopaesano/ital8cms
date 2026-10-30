@@ -1,8 +1,9 @@
 <!-- ital8doc v1-1 · tipo: decision · lang: it · ref -->
-# Decisione: zone dello spazio URL, segnaposti di percorso e postura per zona
+# Decisione: zone dello spazio URL, segnaposti di percorso e `baseline` per zona
 
-> **Stato: DESIGN — strada B approvata (2026-10-30).** Implementazione **non
-> iniziata**. Chiude alla radice [`REVIEW.md` → A1](../../REVIEW.md#a1--cambiare-adminprefix-apre-il-pannello-admin-a-chiunque)
+> **Stato: DESIGN APPROVATO** — strada B e **naming completo** approvati il
+> 2026-10-30. **Fase 0 chiusa, Fase 1 sbloccata.** Implementazione **non
+> ancora iniziata**. Chiude alla radice [`REVIEW.md` → A1](../../REVIEW.md#a1--cambiare-adminprefix-apre-il-pannello-admin-a-chiunque)
 > e, come effetto collaterale, [A3](../../REVIEW.md#a3--le-regole-hardcoded-del-controllo-accessi-non-sono-immutabili).
 
 ## Contesto
@@ -132,21 +133,22 @@ router e non arriva mai ad `accessControl`.** Da questo middleware passa solo ci
 che il router non intercetta — pagine `/www`, pluginPages, risorse tema, pagine
 admin, e i path `/api/*` inesistenti.
 
-È il fatto che rende praticabile la postura chiusa: chiudere per default **non**
+È il fatto che rende praticabile il `baseline` chiuso: chiudere per default **non**
 spegne il login POST né il CSS servito via `/api/bootstrap/...`.
 
 ## Decisione
 
 Si adotta la **strada B** (« costruire il muro ») invece della strada A
 (« riparare il foglietto »): lo spazio URL diventa un **oggetto interrogabile**,
-diviso in zone, e ogni zona porta la propria postura d'accesso **in codice**.
+diviso in zone, e ogni zona porta il proprio **minimo d'accesso** (`baseline`)
+**in codice**.
 
 ### D1 — La mappa delle zone
 
 Una sola struttura nel core descrive la partizione dello spazio URL. Ogni zona
 porta **quattro attributi** che oggi vivono in quattro posti diversi:
 
-| Zona | Prefisso concreto da | Estensione da | Postura |
+| Zona | Prefisso concreto da | Estensione da | `baseline` (minimo di zona) |
 |---|---|---|---|
 | `admin` | `adminPrefix` | `hideExtension.adminPrefix` | **chiusa** — ruoli `[0, 1]` |
 | `adminThemeResources` | `adminThemeResourcesPrefix` | — | **chiusa** — ruoli `[0, 1]` |
@@ -159,7 +161,7 @@ porta **quattro attributi** che oggi vivono in quattro posti diversi:
 `globalPrefix` non è una zona: è il prefisso di deploy che precede tutte le zone,
 e continua a essere rimosso prima del match come già avviene oggi.
 
-**La postura sta in codice, non in un file.** È questo il punto dell'intera
+**Il `baseline` di ogni zona sta in codice, non in un file.** È questo il punto dell'intera
 decisione: la protezione del pannello non è più cancellabile, perché non c'è più
 niente da cancellare. Prova del nove — con `accessControl.json5` cancellato,
 svuotato o corrotto:
@@ -168,7 +170,7 @@ svuotato o corrotto:
 |---|---|
 | oggi | aperto a tutti |
 | strada A (regole iniettate in codice) | aperto — il motore non ha nulla da cui partire |
-| **strada B (postura di zona)** | **resta chiuso** |
+| **strada B (`baseline` di zona)** | **resta chiuso** |
 
 ### D2 — Segnaposti di percorso: vocabolario chiuso, sintassi `{{…}}`
 
@@ -182,9 +184,11 @@ prefisso concreto:
 
 - **Vocabolario chiuso:** solo i nomi di zona della tabella D1. Nessuna
   espressione, nessun accesso arbitrario a chiavi di configurazione.
-- **Nome della zona, non della chiave:** `{{admin}}`, non `{{adminPrefix}}`. Il
-  segnaposto è un **contratto pubblico**; `adminPrefix` è un dettaglio interno
-  che il resolver può rimappare senza rompere i config degli utenti.
+- **Nome della zona, non della chiave:** `{{admin}}`, non `{{adminPrefix}}`.
+  L'argomento che decide è che lo schema « nome della chiave di config » **non
+  copre tutte le zone**: la zona `site` non ha nessun `sitePrefix`. Un solo
+  vocabolario di sette nomi omogenei, gli stessi della tabella D1 e della chiave
+  `baseline` — vedi *Naming*.
 - **Risoluzione al caricamento, non per richiesta.** Vincolo tecnico, non scelta
   di stile: `patternMatcher.getPatternInfo()` classifica il tipo e la priorità
   **dalla stringa grezza** (`regex:` → 500, `**` → 100, …). Risolvere al momento
@@ -200,30 +204,31 @@ prefisso concreto:
   le due regole sono identiche → assorbi; se **differiscono** → errore, perché è
   un'ambiguità di sicurezza reale.
 
-### D3 — Postura per zona al posto della `defaultPolicy` globale
+### D3 — `baseline` per zona al posto della `defaultPolicy` globale
 
 La `defaultPolicy` odierna risponde a **una** domanda (*«nessuna regola matcha,
 che faccio?»*) con **una** risposta valida per tutto lo spazio URL — che contiene
 il sito pubblico, il CSS del tema e il pannello di amministrazione. Il difetto
 non è che dica `allow`: è che sia **una sola**.
 
-La postura diventa un attributo **della zona** (tabella D1). Le regole nei file
-servono per le **eccezioni** (« questa pagina del mio sito è per iscritti »), non
-per tenere in piedi la protezione del pannello.
+Il minimo d'accesso diventa un attributo **della zona**, espresso dalla chiave
+`baseline` (tabella D1). Le regole nei file servono per le **eccezioni**
+(« questa pagina del mio sito è per iscritti »), non per tenere in piedi la
+protezione del pannello.
 
-Conseguenza voluta: **le `hardcodedRules` diventano ridondanti.** La postura
+Conseguenza voluta: **le `hardcodedRules` diventano ridondanti.** Il `baseline`
 della zona `admin` *è* l'invariante. Il blocco può restare nel `.default` come
 documentazione leggibile con un commento che dichiari che non è più la fonte di
 verità, oppure sparire (vedi *Punti rimandati*).
 
-Il caso d'uso « sito privato » si ottiene senza inventare istruzioni nuove: la
-postura della zona `site` è configurabile, e la zona esiste già per costruzione
-(è tutto ciò che non ricade in una delle sei zone nominate).
+Il caso d'uso « sito privato » si ottiene senza inventare istruzioni nuove: il
+`baseline` della zona `site` è configurabile, e la zona esiste già per
+costruzione (è tutto ciò che non ricade in una delle sei zone nominate).
 
 ### D4 — Monotonia: le regole possono solo stringere
 
-> **Una regola scritta in un file può solo stringere, mai allentare, la postura
-> della sua zona.**
+> **Una regola scritta in un file può solo stringere, mai allentare, il
+> `baseline` della sua zona.**
 
 Rendere privata una pagina pubblica: sì. Rendere pubblica una pagina della zona
 `admin`: no. Senza questo vincolo il muro avrebbe una porticina, e una regola
@@ -289,7 +294,7 @@ questa richiesta?»*).
 
 Perché le sonde e non i controlli sulla forma: esercitano la **vera funzione di
 decisione**, quindi catturano anche una `defaultPolicy` sbagliata, una priorità
-invertita e una regola custom che scavalca la postura (cioè A3); sopravvivono a
+invertita e una regola custom che scavalca il `baseline` (cioè A3); sopravvivono a
 qualunque rifattorizzazione interna; costano zero (funzioni pure, nessun I/O);
 **e la stessa tabella diventa la suite di test di regressione**, invece di
 scrivere le cose due volte.
@@ -357,25 +362,51 @@ sta nella guida, ed è stampabile dalla CLI.
 | **A — Regole hardcoded iniettate in codice** (opzione (a) della review) | Corregge A1 ma lascia l'invariante in un file: cancellare la sezione riapre il pannello. Risolve P1 solo finché nessuno tocca il file, e non risolve P2 né i 20 letterali degli altri plugin. |
 | **Normalizzare il path prima del match** (opzione (b) della review) | Funziona, ma rende il file **bugiardo**: si legge `"/admin/**"` e protegge `/backoffice`. Accettabile come meccanismo interno (è ciò che già si fa per `globalPrefix`), non come modello mentale esposto all'utente. |
 | **Variabili arbitrarie — `"ital8Conf.adminPrefix/**"`** | Proposta iniziale del maintainer, scartata per **fail-open**: la stringa non inizia con `/`, quindi se il resolver non gira (typo, versione più vecchia, un consumer che legge il config grezzo — `getRulesForUI()` lo fa già) diventa un letterale che non matcha nulla → nessuna regola → `allow`. Reintrodurrebbe A1 in una forma che *sembra* corretta a chi legge il file. In più accoppia i config utente al nome di una variabile interna di `index.js`. |
-| **`defaultPolicy` globale da `allow` a `deny`** | Il timore iniziale (spegnere login e CSS via API) **non** si applica: le rotte API non passano da qui. Resta però a carico dell'utente dichiarare una regola per ogni pagina del proprio sito, più le risorse tema pubbliche, `sitemap.xml`, `robots.txt`, la favicon. E l'istruzione che servirebbe per dire « questo sottoalbero è il sito » riporterebbe `allow` su quel sottoalbero: giro completo per tornare al punto di partenza, con una lista in più da mantenere. La postura per zona (D3) è la stessa idea **con il granulo giusto**. |
+| **`defaultPolicy` globale da `allow` a `deny`** | Il timore iniziale (spegnere login e CSS via API) **non** si applica: le rotte API non passano da qui. Resta però a carico dell'utente dichiarare una regola per ogni pagina del proprio sito, più le risorse tema pubbliche, `sitemap.xml`, `robots.txt`, la favicon. E l'istruzione che servirebbe per dire « questo sottoalbero è il sito » riporterebbe `allow` su quel sottoalbero: giro completo per tornare al punto di partenza, con una lista in più da mantenere. Il `baseline` per zona (D3) è la stessa idea **con il granulo giusto**. |
 | **Sfogo per pagine pubbliche in zona chiusa** | Nessun caso d'uso attuale. Uno sfogo che non serve a nessuno è il buco di domani; aggiungerlo in futuro è additivo. |
 
 ## Naming
+
+**Tutti i nomi sono approvati — la Fase 0 è chiusa e la Fase 1 può partire.**
 
 | Concetto | Nome | Stato |
 |---|---|---|
 | Sintassi del segnaposto | `{{…}}` | **approvato** (2026-09-15) — segue il precedente `{{canary}}` in `plugins/sentinel/pluginConfig.default.json5` |
 | La singola voce del vocabolario | `pathPlaceholder` / « segnaposto di percorso » | **approvato** (2026-09-15) |
 | Registro del vocabolario | nessuno: le 7 chiavi `*Prefix` esistenti **sono** il vocabolario | **approvato** (2026-09-15), ampliabile |
-| La mappa dello spazio URL | `pathZones` | **da confermare** — alternative valutate: `urlSpace`, `pathMap`, `urlAtlas`, `siteTopology` |
-| Controllo delle invarianti | `accessInvariants` | **da confermare** — alternative: `protectionProbes`, `accessSelfCheck`, `guardVerifier` |
-| Tag del box al boot | `[ACCESS]` | **da confermare** — alternative: `[INVARIANT]`, `[GUARD]`, `[SECURITY]` |
-| Chiave della postura di zona (la vede l'utente) | `posture` | **da confermare** — alternative: `defaultAccess`, `baseline`, `policy` |
-| Nome di questo documento | `docs/decisions/path-zones.it.md` | **da confermare** — alternative: `url-space-zones.it.md`, `access-path-zones.it.md` (un `git mv`) |
+| Contenuto del segnaposto | il **nome della zona** — `{{admin}}`, non `{{adminPrefix}}` | **approvato** (2026-10-30) — vedi D2 |
+| La mappa dello spazio URL *(concetto)* | `pathZones` | **approvato** (2026-10-30) — alternative valutate: `urlSpace`, `pathMap`, `urlAtlas`, `siteTopology` |
+| La mappa *(modulo)* | `core/pathZoneResolver.js` | **approvato** (2026-10-30) — ricalca `pluginStateResolver`, `servingRootResolver`, `ejsIncludeResolver` |
+| Le invarianti *(concetto: la tabella delle sonde)* | `accessInvariants` | **approvato** (2026-10-30) — alternative: `protectionProbes`, `accessSelfCheck`, `guardVerifier` |
+| Le invarianti *(modulo)* | `core/accessInvariantCheck.js` | **approvato** (2026-10-30) — ricalca `core/storageWritabilityCheck.js`, gate di boot già esistente |
+| Tag del box al boot | `[ACCESS]` | **approvato** (2026-10-30) |
+| Chiave del **minimo di zona** (la vede l'utente) | `baseline` | **approvato** (2026-10-30) — vedi nota |
+| Nome di questo documento | `docs/decisions/path-zones.it.md` | **approvato** (2026-10-30) |
 
-I nomi marcati *da confermare* sono **proposte registrate**, non ancora
-introdotte nel codice: nessuna riga di implementazione è stata scritta. Vanno
-confermati o sostituiti prima della Fase 1.
+**Concetto e modulo portano nomi distinti**, per coerenza col resto del core: a
+parole si dice `pathZones` e `accessInvariants`, i file si chiamano
+`pathZoneResolver.js` e `accessInvariantCheck.js`. Entrambi ricalcano un modulo
+che esiste già, quindi non introducono una convenzione nuova.
+
+**Perché `baseline` e non `posture`, `defaultAccess` o `policy`.** Sotto D4 quella
+chiave **non è un default che le regole scavalcano**: è un **pavimento** che le
+regole possono solo alzare. `defaultAccess` inviterebbe al modello mentale
+sbagliato (« posso scavalcarlo »); `policy` è vago e collide con la
+`defaultPolicy` che sostituisce; `posture` è neutro ma non dice che si tratta di
+un minimo. `baseline: "closed"` sulla zona `admin` si legge come « da qui non si
+scende », che è esattamente il contratto di D4. *(Riserva nota e accettata: in
+inglese `baseline` può anche voler dire « misura di riferimento ».)*
+
+**Perché il nome della zona e non quello della chiave** (`{{admin}}` e non
+`{{adminPrefix}}`) — l'argomento che ha deciso: lo schema « nome della chiave di
+config » **non copre tutte le zone**. La zona `site` non ha nessun `sitePrefix`:
+è `wwwPath` più « tutto ciò che non ricade nelle altre sei ». Nominare i
+segnaposti dalle chiavi darebbe sei nomi di un tipo e uno che non può esserlo,
+mentre i nomi di zona sono sette nomi omogenei — gli stessi che compaiono nella
+tabella D1 e nella chiave `baseline`. Un vocabolario, non due. *(Il
+disaccoppiamento dal nome interno della chiave resta un beneficio, ma minore:
+rinominare `adminPrefix` sarebbe comunque un breaking change con migrazione.)*
+
 
 ## Moduli
 
@@ -384,8 +415,8 @@ da un plugin:
 
 | Modulo | Contenuto | Dipende da | Perché separato |
 |---|---|---|---|
-| **la mappa** | zone, risoluzione `{{…}}`, derivazione delle forme senza estensione, posture | `ital8Config` | puro e sincrono → usabile dagli **8 consumatori** di `patternMatcher` e da `runtimeGate` |
-| **le invarianti** | tabella delle sonde + confronto dei verdetti | riceve la **funzione di decisione** come parametro | il core definisce *cosa* deve valere, il plugin fornisce *chi* decide → il plugin resta sostituibile |
+| **`core/pathZoneResolver.js`** — la mappa (`pathZones`) | zone, risoluzione `{{…}}`, derivazione delle forme senza estensione, `baseline` di ogni zona | `ital8Config` | puro e sincrono → usabile dagli **8 consumatori** di `patternMatcher` e da `runtimeGate` |
+| **`core/accessInvariantCheck.js`** — le invarianti (`accessInvariants`) | tabella delle sonde + confronto dei verdetti | riceve la **funzione di decisione** come parametro | il core definisce *cosa* deve valere, il plugin fornisce *chi* decide → il plugin resta sostituibile |
 
 L'iniezione della funzione di decisione segue il modello già usato fra
 `pluginSys` e `adminSystem` (injection bidirezionale, due fasi).
@@ -401,10 +432,10 @@ perimetro ad aver prodotto A1.
 
 | Fase | Contenuto |
 |---|---|
-| **0 — Conferma del naming** | Confermare i quattro nomi *da confermare*. Nessun codice. |
-| **1 — La mappa (modulo puro)** | Modulo core: zone, risoluzione `{{…}}`, errore su segnaposto sconosciuto, rilevamento collisioni, derivazione delle forme senza estensione. Test unitari esaustivi, incluso `adminPrefix: "backoffice"`. **Nessun consumatore ancora collegato.** |
-| **2 — Postura di zona in `accessManager`** | La postura entra nel motore; `defaultPolicy` globale affiancata e poi superata; monotonia (D4) applicata e testata. `hardcodedRules` diventano ridondanti. |
-| **3 — Invarianti + box `[ACCESS]`** | Tabella delle sonde; controllo dentro `loadRules()`; fatale al boot, rifiuto a runtime (D7); test che presidia la presenza di `adminAccessControl` in `essentialPlugins`. |
+| **0 — Conferma del naming** | ✅ **CHIUSA (2026-10-30).** Tutti i nomi approvati, vedi *Naming*. Nessun codice. |
+| **1 — La mappa (modulo puro)** | `core/pathZoneResolver.js`: zone, risoluzione `{{…}}`, errore su segnaposto sconosciuto, rilevamento collisioni, derivazione delle forme senza estensione. Test unitari esaustivi, incluso `adminPrefix: "backoffice"`. **Nessun consumatore ancora collegato.** |
+| **2 — `baseline` di zona in `accessManager`** | Il `baseline` entra nel motore; `defaultPolicy` globale affiancata e poi superata; monotonia (D4) applicata e testata. `hardcodedRules` diventano ridondanti. |
+| **3 — Invarianti + box `[ACCESS]`** | `core/accessInvariantCheck.js`: tabella delle sonde, invocata dentro `loadRules()`; fatale al boot, rifiuto a runtime (D7); test che presidia la presenza di `adminAccessControl` in `essentialPlugins`. |
 | **4 — Segnaposti nei `.default` + migrazione** | I `.default` passano dai letterali ai segnaposti; derivazione `hideExtension` sostituisce le regole duplicate; `migrations/` + bump di `schemaVersion` (vedi *Migrazione*). |
 | **5 — Adozione negli altri consumatori** | `sentinel`, `seo`, `rateLimiter`, `csrfProtection`, `urlRedirect`, `botDetector`: i 20 letterali censiti passano ai segnaposti, uno plugin per volta. |
 | **6 — Consolidamento `runtimeGate`** | Il `reservedGate` deriva il perimetro dalla mappa invece di ricalcolarlo. |
@@ -417,7 +448,7 @@ perimetro ad aver prodotto A1.
 | Documentazione | `plugins/adminAccessControl/README.it.md` + `EXPLAIN.it.md`; guida del vocabolario in `docs/`; stanza canonica (D8) nei file di config interessati |
 | Test | nuovi: mappa, risoluzione, collisioni, derivazione, monotonia, sonde; **parametrizzati su `adminPrefix` non di default**; aggiornati: `tests/integration/globalPrefix.test.js` (oggi usa **sempre** `adminPrefix: 'admin'`) |
 | `REVIEW.md` | spuntare **A1** e **A3** solo a Fase 3 completata **con** i test di regressione |
-| `CHANGELOG.md` | breaking change (progetto alpha): `defaultPolicy` globale superata dalla postura di zona |
+| `CHANGELOG.md` | breaking change (progetto alpha): `defaultPolicy` globale superata dal `baseline` di zona |
 | `TODO.md` | voce di tracciamento con rimando a questo documento |
 
 ## Migrazione
@@ -439,7 +470,7 @@ che il trigger venga bruciato.
 
 **Nota sui vivi esistenti:** `accessControl.json5` è git-ignored e può essere
 stato personalizzato. La retrocompatibilità dei letterali (D2) garantisce che un
-vivo non migrato continui a funzionare; la postura di zona (D3) garantisce che
+vivo non migrato continui a funzionare; il `baseline` di zona (D3) garantisce che
 continui a funzionare **in sicurezza** anche se non contiene più nessuna regola
 sull'admin.
 
@@ -449,9 +480,9 @@ sull'admin.
   Dopo D3 sono ridondanti. Tenerle costa una possibile confusione (« a cosa
   servono se non proteggono? »); toglierle costa un passaggio di migrazione in
   più. Da decidere in Fase 2.
-- **Postura della zona `site` configurabile: con quale chiave e dove?**
-  (`ital8Config.json5` o il config del plugin). Il caso d'uso « sito privato » è
-  reale ma non urgente.
+- **`baseline` della zona `site`: in quale file si configura?**
+  (`ital8Config.json5` o il config del plugin). Il nome della chiave è deciso,
+  la sua collocazione no. Il caso d'uso « sito privato » è reale ma non urgente.
 - **Vocabolario estendibile dai plugin.** Deciso chiuso per v1 (D2). Un plugin
   che registra zone proprie introduce uno spazio di nomi condiviso e quindi
   collisioni fra plugin: se servirà, va progettato con un prefisso di namespace.
@@ -480,8 +511,8 @@ sull'admin.
 **Negative / costi**
 
 - Intervento ampio: core + 8 plugin + una migrazione per pacchetto toccato.
-- Un **breaking change** dichiarato: la `defaultPolicy` globale è superata dalla
-  postura di zona (accettabile in alpha, da scrivere in `CHANGELOG.md`).
+- Un **breaking change** dichiarato: la `defaultPolicy` globale è superata dal
+  `baseline` di zona (accettabile in alpha, da scrivere in `CHANGELOG.md`).
 - La monotonia (D4) vieta un caso d'uso oggi inesistente: pagine pubbliche dentro
   una zona chiusa.
 - Un nuovo concetto da imparare per chi scrive config — mitigato dalla
@@ -501,5 +532,14 @@ sull'admin.
   (boot + blocco del salvataggio da GUI) e chiede di valutare la fine della
   duplicazione `hideExtension` e una `defaultPolicy` privata.
 - **2026-10-30** — Ripresa. Presentato il bivio: strada A (« riparare il
-  foglietto ») contro strada B (« costruire il muro », postura per zona).
-  **Scelta B.** Questo documento.
+  foglietto ») contro strada B (« costruire il muro », `baseline` per zona).
+  **Scelta B**, e stesa la prima versione di questo documento con quattro nomi
+  ancora in sospeso.
+- **2026-10-30 (secondo giro)** — Riaperti e **chiusi** i quattro nomi.
+  Confermati `{{admin}}` (nome di zona, con l'argomento decisivo della zona
+  `site` priva di chiave di config) e `[ACCESS]`. Affinati gli altri due:
+  concetto e modulo portano nomi distinti (`pathZones` →
+  `core/pathZoneResolver.js`, `accessInvariants` →
+  `core/accessInvariantCheck.js`, entrambi ricalcati su moduli esistenti), e
+  **`posture` è diventato `baseline`** perché D4 rende quella chiave un
+  pavimento, non un default. **Fase 0 chiusa.**

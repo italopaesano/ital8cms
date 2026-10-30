@@ -39,10 +39,16 @@ spetta al maintainer. Chi riprende in mano il progetto può partire da qui.
 Le voci con un rimando hanno la trattazione completa nella sezione indicata; quelle
 senza rimando sono descritte per intero qui perché non hanno una voce propria altrove.
 
-- [ ] **Quattro nomi da confermare per le zone dello spazio URL** → §9.
-      Il design è **approvato** (strada B, 2026-10-30) ma il codice non parte: `pathZones`,
-      `accessInvariants`, `[ACCESS]` e `posture` sono **proposte registrate**, non ancora
-      introdotte. Fonte: [`docs/decisions/path-zones.it.md`](./docs/decisions/path-zones.it.md) → *Naming*.
+- [x] ~~**Quattro nomi da confermare per le zone dello spazio URL** → §9.~~
+      **Chiusi il 2026-10-30.** Confermati `{{admin}}` (nome di **zona**, non di chiave:
+      la zona `site` non ha un `sitePrefix`, quindi lo schema « nome della chiave » non
+      coprirebbe tutte le zone) e `[ACCESS]`. Affinati gli altri due: concetto e modulo
+      portano nomi distinti — `pathZones` → `core/pathZoneResolver.js`,
+      `accessInvariants` → `core/accessInvariantCheck.js`, entrambi ricalcati su moduli
+      che esistono già. E **`posture` è diventato `baseline`**, perché D4 rende quella
+      chiave un *pavimento* e non un *default*: `defaultAccess` avrebbe suggerito il
+      modello mentale sbagliato. Fase 0 chiusa → Fase 1 sbloccata. Fonte:
+      [`docs/decisions/path-zones.it.md`](./docs/decisions/path-zones.it.md) → *Naming*.
 - [x] ~~**`urlRedirect` e `HEAD`** *(due decisioni collegate)* → §7.~~ **Deciso e
       applicato in v3.4.0.** **(a)** Il guard è esteso a `HEAD`: RFC 9110 §9.3.2
       definisce `HEAD` come `GET` senza corpo, quindi la divergenza non era una scelta
@@ -914,22 +920,23 @@ Fonte: [`docs/decisions/path-zones.it.md`](./docs/decisions/path-zones.it.md)
 Chiude alla radice [`REVIEW.md`](./REVIEW.md) → **A1** e **A3**.
 
 **Niente è ancora implementato.** Le fasi seguono il piano del registro di decisione;
-la Fase 0 è bloccante per tutte le altre.
+la Fase 0 è **chiusa** (naming approvato il 2026-10-30), quindi la Fase 1 è sbloccata.
 
-- [ ] **Fase 0 — conferma del naming.** Quattro nomi proposti e non ancora
-      introdotti (vedi *Decisioni in attesa del maintainer*). Nessun codice.
-- [ ] **Fase 1 — la mappa (modulo core puro).** Zone, risoluzione `{{…}}`, errore su
-      segnaposto sconosciuto, rilevamento delle collisioni dopo la risoluzione,
-      derivazione delle forme senza estensione. Test unitari esaustivi **inclusi i
+- [x] ~~**Fase 0 — conferma del naming.**~~ **Chiusa il 2026-10-30:** tutti i nomi
+      approvati (`{{admin}}`, `pathZones`/`core/pathZoneResolver.js`,
+      `accessInvariants`/`core/accessInvariantCheck.js`, `[ACCESS]`, `baseline`).
+- [ ] **Fase 1 — la mappa: `core/pathZoneResolver.js`** (modulo puro). Zone,
+      risoluzione `{{…}}`, errore su segnaposto sconosciuto, rilevamento delle
+      collisioni dopo la risoluzione, derivazione delle forme senza estensione. Test unitari esaustivi **inclusi i
       valori non standard** (`adminPrefix: "backoffice"`). Nessun consumatore collegato.
-- [ ] **Fase 2 — postura di zona in `accessManager`.** La postura entra nel motore;
+- [ ] **Fase 2 — `baseline` di zona in `accessManager`.** Il `baseline` entra nel motore;
       la `defaultPolicy` globale viene superata; **monotonia** applicata e testata
-      (« una regola può solo stringere, mai allentare, la postura della zona »).
+      (« una regola può solo stringere, mai allentare, il `baseline` della sua zona »).
       Le `hardcodedRules` diventano ridondanti → decidere se restano come
       documentazione o spariscono.
-- [ ] **Fase 3 — invarianti + box `[ACCESS]`.** Tabella delle sonde dentro
-      `loadRules()` (copre boot, salvataggio GUI e reload a server acceso con un solo
-      punto); fatale al boot, rifiuto del ruleset a runtime. Test che presidia la
+- [ ] **Fase 3 — invarianti + box `[ACCESS]`: `core/accessInvariantCheck.js`.**
+      Tabella delle sonde invocata dentro `loadRules()` (copre boot, salvataggio
+      GUI e reload a server acceso con un solo punto); fatale al boot, rifiuto del ruleset a runtime. Test che presidia la
       presenza di `adminAccessControl` in `essentialPlugins` — oggi l'unica cosa che
       impedisce a un'installazione senza guardia di partire.
       **Solo a fine fase** si spuntano A1 e A3 in `REVIEW.md`.
@@ -949,7 +956,7 @@ la Fase 0 è bloccante per tutte le altre.
 
 **Punti rimandati** (dal registro di decisione, §*Punti rimandati*):
 
-- [ ] Postura della zona `site` configurabile: con quale chiave e in quale file
+- [ ] `baseline` della zona `site`: il nome della chiave è deciso, **la sua collocazione no**
       (caso d'uso « sito privato », reale ma non urgente).
 - [ ] Vocabolario **estendibile dai plugin**: chiuso per v1; aprirlo introduce uno
       spazio di nomi condiviso, quindi richiede un prefisso di namespace.
