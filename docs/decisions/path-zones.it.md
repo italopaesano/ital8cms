@@ -1,9 +1,10 @@
 <!-- ital8doc v1-1 · tipo: decision · lang: it · ref -->
 # Decisione: zone dello spazio URL, segnaposti di percorso e `baseline` per zona
 
-> **Stato: DESIGN APPROVATO** — strada B e **naming completo** approvati il
-> 2026-10-30. **Fase 0 chiusa, Fase 1 sbloccata.** Implementazione **non
-> ancora iniziata**. Chiude alla radice [`REVIEW.md` → A1](../../REVIEW.md#a1--cambiare-adminprefix-apre-il-pannello-admin-a-chiunque)
+> **Stato: IN IMPLEMENTAZIONE** — design e naming approvati il 2026-10-30.
+> **Fasi 0 e 1 completate** (`core/pathZoneResolver.js`, 103 test); nessun
+> consumatore ancora collegato, quindi il comportamento del CMS è **invariato**.
+> Dettaglio in *Stato di implementazione*. Chiude alla radice [`REVIEW.md` → A1](../../REVIEW.md#a1--cambiare-adminprefix-apre-il-pannello-admin-a-chiunque)
 > e, come effetto collaterale, [A3](../../REVIEW.md#a3--le-regole-hardcoded-del-controllo-accessi-non-sono-immutabili).
 
 ## Contesto
@@ -433,7 +434,7 @@ perimetro ad aver prodotto A1.
 | Fase | Contenuto |
 |---|---|
 | **0 — Conferma del naming** | ✅ **CHIUSA (2026-10-30).** Tutti i nomi approvati, vedi *Naming*. Nessun codice. |
-| **1 — La mappa (modulo puro)** | `core/pathZoneResolver.js`: zone, risoluzione `{{…}}`, errore su segnaposto sconosciuto, rilevamento collisioni, derivazione delle forme senza estensione. Test unitari esaustivi, incluso `adminPrefix: "backoffice"`. **Nessun consumatore ancora collegato.** |
+| **1 — La mappa (modulo puro)** | ✅ **FATTA (2026-10-30).** `core/pathZoneResolver.js`: zone, risoluzione `{{…}}`, errore su segnaposto sconosciuto, rilevamento collisioni, derivazione delle forme senza estensione. Test unitari esaustivi, incluso `adminPrefix: "backoffice"`. **Nessun consumatore ancora collegato.** |
 | **2 — `baseline` di zona in `accessManager`** | Il `baseline` entra nel motore; `defaultPolicy` globale affiancata e poi superata; monotonia (D4) applicata e testata. `hardcodedRules` diventano ridondanti. |
 | **3 — Invarianti + box `[ACCESS]`** | `core/accessInvariantCheck.js`: tabella delle sonde, invocata dentro `loadRules()`; fatale al boot, rifiuto a runtime (D7); test che presidia la presenza di `adminAccessControl` in `essentialPlugins`. |
 | **4 — Segnaposti nei `.default` + migrazione** | I `.default` passano dai letterali ai segnaposti; derivazione `hideExtension` sostituisce le regole duplicate; `migrations/` + bump di `schemaVersion` (vedi *Migrazione*). |
@@ -450,6 +451,69 @@ perimetro ad aver prodotto A1.
 | `REVIEW.md` | spuntare **A1** e **A3** solo a Fase 3 completata **con** i test di regressione |
 | `CHANGELOG.md` | breaking change (progetto alpha): `defaultPolicy` globale superata dal `baseline` di zona |
 | `TODO.md` | voce di tracciamento con rimando a questo documento |
+
+## Stato di implementazione
+
+| Fase | Stato |
+|---|---|
+| 0 — Conferma del naming | ✅ **chiusa** (2026-10-30) |
+| 1 — La mappa (`core/pathZoneResolver.js`) | ✅ **implementata** (2026-10-30) — 103 test |
+| 2 — `baseline` in `accessManager` | ⬜ da fare |
+| 3 — Invarianti + box `[ACCESS]` | ⬜ da fare |
+| 4 — Segnaposti nei `.default` + migrazione | ⬜ da fare |
+| 5 — Adozione negli altri consumatori | ⬜ da fare |
+| 6 — Consolidamento `runtimeGate` | ⬜ da fare |
+
+### Fase 1 — cosa è stato scritto
+
+- **`core/pathZoneResolver.js`** (476 righe, modulo puro, zero dipendenze).
+  API: `resolvePathZones(ital8Conf)` · `resolveRuleset(rules, zoneMap)` ·
+  `resolvePattern(pattern, zonesByName)` · `zoneForPath(pathOrPattern, zones)` ·
+  `ZONE_NAMES`.
+- **`tests/unit/core/pathZoneResolver.test.js`** — 103 test, **parametrizzati sul
+  prefisso** (`admin`, `backoffice`, `pannello`, `a-b_c`, `MixedCase`), non scritti
+  sul solo default: A1 esisteva proprio perché nessun test della suite usava un
+  `adminPrefix` diverso da `"admin"`.
+- **Nessun consumatore collegato**, come previsto dal piano: il comportamento del
+  CMS a questa fase è **invariato**.
+
+### Scelte di dettaglio prese in implementazione
+
+Nessuna devia dalla decisione; tre **aggiungono** un caso che la decisione
+implicava senza nominarlo, e sono annotate qui perché non passino inosservate.
+
+| Scelta | Perché |
+|---|---|
+| Terzo tipo di problema: **`malformed-placeholder`** | Un delimitatore spaiato (`{{admin`, `{admin}`, `}}`) non viene intercettato dalla regex dei segnaposti, quindi **resterebbe un letterale che non matcha nessun URL** — esattamente il fail-open che D2 vieta. Era un buco: è un problema riportato, non un pattern. |
+| Quarto tipo: **`zone-prefix-collision`** | Due zone configurate sullo stesso prefisso concreto (es. `adminPrefix: "api"`) farebbero sparire una zona dentro l'altra senza un fiato. Stessa classe di difetto silenzioso che la decisione esiste per chiudere. |
+| `resolvePattern` **esportata** oltre alle tre funzioni approvate | I consumatori della Fase 5 non hanno tutti un « ruleset »: `urlRedirect` ha un array, `sentinel` regole di forma propria. Senza la risoluzione di un singolo pattern dovrebbero reimplementarla. |
+| `{{site}}` da solo risolve a **`/`** | La zona `site` ha prefisso vuoto, quindi `{{site}}` sostituito darebbe stringa vuota — che non è un pattern. `{{site}}/about.ejs` → `/about.ejs` resta senza doppi slash. |
+| Spazi **tollerati** dentro le graffe (`{{ admin }}`) | Un refuso innocuo non merita un boot fatale; un nome **sconosciuto** sì, e resta tale. |
+| Un prefisso vuoto o di soli spazi ricade sul **valore documentato** | `adminPrefix: ""` farebbe coincidere la zona con la radice del sito, creando un secondo catch-all. Stessa logica di `runtimeGate.js:60` (`ital8Conf.adminPrefix \|\| 'admin'`). |
+| Le regole derivate portano **`derivedFrom`** | Serve alla GUI (D5: le derivate si mostrano in sola lettura) e al confronto fra regole, che lo ignora essendo metadato e non contenuto. |
+| `zoneForPath` restituisce **`null`** sui pattern `regex:` | La zona di una regex non è determinabile dal suo testo; è anche il motivo per cui le regex non ricevono la derivazione dell'estensione. |
+
+**Un difetto trovato in rilettura, e corretto.** Il ramo di lookup che accetta un
+oggetto semplice al posto della `Map` indicizzava **senza `hasOwnProperty`**: un
+segnaposto `{{constructor}}` o `{{toString}}` pescava dal **prototipo** un valore
+truthy, `zone.prefix` risultava `undefined` e il pattern diventava `"undefined/**"`
+— un letterale che non matcha nessun URL, prodotto **in silenzio**. Esattamente il
+fail-open che D2 vieta, ed esattamente la classe di difetto di `REVIEW.md` → **B4**
+(« oggetti indicizzati con input utente senza `hasOwnProperty` »). Corretto con
+`hasOwnProperty` più un controllo di **forma** del record (`prefix` deve essere una
+stringa), che vale per entrambi i rami e protegge anche da una mappa malformata.
+Presidiato da 6 test.
+
+**Limite noto, consapevole:** un segnaposto dentro un pattern `regex:` viene
+sostituito **verbatim**, quindi un prefisso che contenesse metacaratteri regex
+(`adminPrefix: "a.b"`) allargherebbe la regex. Non è un fail-open — una regex più
+larga su una regola `requiresAuth` protegge *più* URL, non meno — ma va saputo.
+
+**Il confronto per segmenti è replicato, non condiviso:** `pathIsUnderSegment` è
+copiata da `core/priorityMiddlewares/runtimeGate.js:228` invece di essere importata,
+perché la direzione di dipendenza corretta è l'opposta (sarà `runtimeGate` a usare la
+mappa, in Fase 6). La replica è esatta, così il consolidamento non cambierà
+comportamento.
 
 ## Migrazione
 
@@ -535,6 +599,14 @@ sull'admin.
   foglietto ») contro strada B (« costruire il muro », `baseline` per zona).
   **Scelta B**, e stesa la prima versione di questo documento con quattro nomi
   ancora in sospeso.
+- **2026-10-30 (terzo giro)** — **Fase 1 implementata**: `core/pathZoneResolver.js`
+  (modulo puro) e 103 test parametrizzati sul prefisso. In implementazione sono
+  emersi due casi che la decisione implicava senza nominarli — delimitatore di
+  segnaposto spaiato e due zone sullo stesso prefisso concreto — aggiunti come
+  terzo e quarto tipo di problema, perché entrambi sarebbero stati fail-open
+  silenziosi. Una rilettura adversariale del modulo ha poi scoperto un terzo
+  fail-open, della classe di B4: il lookup su oggetto semplice senza
+  `hasOwnProperty`. Corretto e presidiato. Vedi *Stato di implementazione*.
 - **2026-10-30 (secondo giro)** — Riaperti e **chiusi** i quattro nomi.
   Confermati `{{admin}}` (nome di zona, con l'argomento decisivo della zona
   `site` priva di chiave di config) e `[ACCESS]`. Affinati gli altri due:

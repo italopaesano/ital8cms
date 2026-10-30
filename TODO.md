@@ -919,16 +919,21 @@ Fonte: [`docs/decisions/path-zones.it.md`](./docs/decisions/path-zones.it.md)
 (design **approvato** il 2026-10-30, strada B — « costruire il muro »).
 Chiude alla radice [`REVIEW.md`](./REVIEW.md) → **A1** e **A3**.
 
-**Niente è ancora implementato.** Le fasi seguono il piano del registro di decisione;
-la Fase 0 è **chiusa** (naming approvato il 2026-10-30), quindi la Fase 1 è sbloccata.
+**Fasi 0 e 1 fatte** (2026-10-30): esiste `core/pathZoneResolver.js` con 103 test, ma
+**nessun consumatore è collegato**, quindi il comportamento del CMS è ancora invariato.
+Il primo cambiamento visibile arriva con la Fase 2.
 
 - [x] ~~**Fase 0 — conferma del naming.**~~ **Chiusa il 2026-10-30:** tutti i nomi
       approvati (`{{admin}}`, `pathZones`/`core/pathZoneResolver.js`,
       `accessInvariants`/`core/accessInvariantCheck.js`, `[ACCESS]`, `baseline`).
-- [ ] **Fase 1 — la mappa: `core/pathZoneResolver.js`** (modulo puro). Zone,
-      risoluzione `{{…}}`, errore su segnaposto sconosciuto, rilevamento delle
-      collisioni dopo la risoluzione, derivazione delle forme senza estensione. Test unitari esaustivi **inclusi i
-      valori non standard** (`adminPrefix: "backoffice"`). Nessun consumatore collegato.
+- [x] ~~**Fase 1 — la mappa: `core/pathZoneResolver.js`** (modulo puro).~~
+      **Fatta il 2026-10-30.** `resolvePathZones` · `resolveRuleset` · `resolvePattern` ·
+      `zoneForPath` · `ZONE_NAMES`; 103 test in `tests/unit/core/pathZoneResolver.test.js`,
+      parametrizzati su cinque prefissi diversi (`admin`, `backoffice`, `pannello`,
+      `a-b_c`, `MixedCase`). In corso d'opera sono emersi due fail-open silenziosi non
+      previsti dalla decisione (delimitatore di segnaposto spaiato, due zone sullo stesso
+      prefisso concreto): aggiunti come terzo e quarto tipo di problema. Nessun
+      consumatore collegato.
 - [ ] **Fase 2 — `baseline` di zona in `accessManager`.** Il `baseline` entra nel motore;
       la `defaultPolicy` globale viene superata; **monotonia** applicata e testata
       (« una regola può solo stringere, mai allentare, il `baseline` della sua zona »).
