@@ -150,8 +150,10 @@ function describeAccessInvariants(zoneMap, options = {}) {
  * NON lancia e non termina il processo: riporta. Il chiamante decide — fatale al
  * boot, rifiuto del ruleset a runtime (D7).
  *
- * @param {function(string, object|null): {allowed: boolean}} decide - La funzione di
- *   decisione: riceve `(url, user)` e ritorna almeno `{ allowed }`.
+ * @param {function(string, object|null): {allowed: boolean, redirect?: string, status?: number}} decide -
+ *   La funzione di decisione: riceve `(url, user)` e ritorna `{ allowed }` più, su un
+ *   rifiuto, l'esito su cui il chiamante agirà (`redirect` o `status`). Un rifiuto
+ *   privo di entrambi è segnalato: non sarebbe applicabile.
  * @param {{zones: object[]}} zoneMap - Il risultato di `resolvePathZones`.
  * @param {object} [options]
  * @param {string|null} [options.loginUrl] - Vedi `describeAccessInvariants`.
@@ -188,16 +190,57 @@ function checkAccessInvariants(decide, zoneMap, options = {}) {
     }
 
     const allowed = !!(verdict && verdict.allowed);
-    const matches = probe.expect === 'allow' ? allowed : !allowed;
-    if (matches) continue;
+
+    if (probe.expect === 'allow') {
+      if (allowed) continue;
+      problems.push(Object.freeze({
+        kind: 'invariant-violation',
+        probe: probe.id,
+        url: probe.url,
+        roleIds: probe.roleIds,
+        expected: 'allow',
+        actual: 'deny',
+        detail: probe.why,
+      }));
+      continue;
+    }
+
+    // ── Un rifiuto deve essere APPLICABILE, non solo esistere ────────────────
+    //
+    // `allowed: false` da solo non basta: chi applica la decisione deve poterci
+    // fare qualcosa. Il middleware agisce su `redirect` oppure su `status`; un
+    // rifiuto che non porta né l'uno né l'altro è un rifiuto che NON PUÒ ESSERE
+    // APPLICATO — e fino alla revisione della Fase 3 finiva servito.
+    //
+    // Guardare solo `allowed` è esattamente ciò che ha fatto passare quel
+    // fail-open sotto il presidio di tutta la Fase 3: la sonda vedeva « negato »
+    // e si dichiarava soddisfatta, mentre la richiesta HTTP veniva servita. Le
+    // sonde misurano la funzione di decisione, non l'enforcement: il minimo che
+    // possono fare è verificare che il verdetto sia AZIONABILE.
+    if (!allowed) {
+      const enforceable = !!(verdict && (verdict.redirect || verdict.status));
+      if (enforceable) continue;
+
+      problems.push(Object.freeze({
+        kind: 'invariant-violation',
+        probe: probe.id,
+        url: probe.url,
+        roleIds: probe.roleIds,
+        expected: 'deny',
+        actual: 'deny-not-enforceable',
+        detail: `${probe.why} — il rifiuto non porta né redirect né status, `
+          + 'quindi chi lo applica non ha un esito su cui agire',
+      }));
+      continue;
+    }
 
     problems.push(Object.freeze({
       kind: 'invariant-violation',
       probe: probe.id,
       url: probe.url,
       roleIds: probe.roleIds,
-      expected: probe.expect,
-      actual: allowed ? 'allow' : 'deny',
+      expected: 'deny',
+      actual: 'allow',
       detail: probe.why,
     }));
   }

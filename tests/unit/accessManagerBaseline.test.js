@@ -266,8 +266,11 @@ describe('risoluzione dei segnaposti dentro il motore', () => {
         customRules: { '{{bogus}}/**': { requiresAuth: true } },
         defaultPolicy: { action: 'allow', redirectOnDenied: '/login' },
       }));
-    am.reloadRules();
-    expect(am.rulesetProblems.map((p) => p.kind)).toEqual(['unknown-placeholder']);
+    const outcome = am.reloadRules();
+    // I problemi del candidato RIFIUTATO arrivano nel valore di ritorno, non in
+    // `rulesetProblems` — che descrive la configurazione in vigore, ed è sana.
+    expect(outcome.problems.map((p) => p.kind)).toEqual(['unknown-placeholder']);
+    expect(am.rulesetProblems).toEqual([]);
   });
 });
 
@@ -455,5 +458,131 @@ describe('presidio: la fatalità del boot dipende da `essentialPlugins`', () => 
     const conf = realLoadJson5(require('path').join(__dirname, '../../ital8Config.default.json5'));
     expect(Array.isArray(conf.essentialPlugins)).toBe(true);
     expect(conf.essentialPlugins).toContain('adminAccessControl');
+  });
+});
+
+/**
+ * REGRESSIONI DALLA REVISIONE DELLA FASE 3 (2026-10-31) — cinque difetti, di cui
+ * uno era un fail-open nel percorso di enforcement.
+ */
+describe('regressioni dalla revisione della Fase 3', () => {
+  describe('① un rifiuto non applicabile NON serve più la pagina', () => {
+    function bareManager(defaultPolicy) {
+      const am = Object.create(AccessManager.prototype);
+      am.patternMatcher = new (require('../../core/patternMatcher'))();
+      am.pathZones = require('../../core/pathZoneResolver').resolvePathZones({});
+      am.rules = {};
+      am.globalPrefix = '';
+      am.defaultPolicy = defaultPolicy;
+      return am;
+    }
+
+    async function serve(am, path, session = {}) {
+      const ctx = { path, session, redirect() { this.redirected = true; } };
+      let served = false;
+      await am.createMiddleware()(ctx, async () => { served = true; });
+      return { served, ctx };
+    }
+
+    test('con una defaultPolicy priva di `redirectOnDenied` la pagina admin è NEGATA', async () => {
+      // Prima della revisione: `checkAccess` rispondeva {allowed:false,
+      // redirect:undefined, status:null}, il middleware non entrava in nessuno dei
+      // due rami e cadeva su `await next()` — pagina servita a un anonimo.
+      const am = bareManager({ action: 'allow' });
+      const { served, ctx } = await serve(am, '/admin/usersManagment/index.ejs');
+      expect(served).toBe(false);
+      expect(ctx.status).toBe(403);
+    });
+
+    test('`allowed: false` non può MAI significare « servi la pagina »', async () => {
+      const am = bareManager({ action: 'allow', redirectOnDenied: '/login' });
+      jest.spyOn(am, 'checkAccess').mockReturnValue({ allowed: false, redirect: null, status: null, reason: 'x' });
+      const { served, ctx } = await serve(am, '/qualsiasi.ejs');
+      expect(served).toBe(false);
+      expect(ctx.status).toBe(403);
+    });
+
+    test('il caso normale continua a funzionare: redirect al login', async () => {
+      const am = bareManager({ action: 'allow', redirectOnDenied: '/pluginPages/adminUsers/login.ejs' });
+      const { served, ctx } = await serve(am, '/admin/x.ejs');
+      expect(served).toBe(false);
+      expect(ctx.redirected).toBe(true);
+    });
+
+    test('e una pagina pubblica resta servita', async () => {
+      const am = bareManager({ action: 'allow', redirectOnDenied: '/login' });
+      const { served } = await serve(am, '/about.ejs');
+      expect(served).toBe(true);
+    });
+  });
+
+  describe('②③④ la forma della `defaultPolicy` è controllata nei DUE percorsi', () => {
+    const CASES = [
+      ['senza defaultPolicy', { hardcodedRules: {}, customRules: {} }],
+      ['senza redirectOnDenied', { hardcodedRules: {}, customRules: {}, defaultPolicy: { action: 'allow' } }],
+      ['redirectOnDenied vuota', { hardcodedRules: {}, customRules: {}, defaultPolicy: { action: 'allow', redirectOnDenied: '  ' } }],
+      ['action con un refuso', { hardcodedRules: {}, customRules: {}, defaultPolicy: { action: 'alow', redirectOnDenied: '/l' } }],
+      ['defaultPolicy non oggetto', { hardcodedRules: {}, customRules: {}, defaultPolicy: 'allow' }],
+    ];
+
+    test.each(CASES)('al boot %s non fa partire il CMS', (_label, access) => {
+      expect(() => managerWith({ access })).toThrow(/controllo accessi non applicabile/);
+    });
+
+    test.each(CASES)('un salvataggio GUI con %s è rifiutato prima di scrivere', (_label, access) => {
+      const am = managerWith({});
+      const fs = require('fs');
+      jest.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
+      jest.spyOn(fs, 'renameSync').mockImplementation(() => {});
+
+      const result = am.saveRules(JSON.stringify(access));
+      expect(result.success).toBe(false);
+      expect(result.problems.map((p) => p.kind)).toEqual(['default-policy-invalid']);
+      expect(fs.writeFileSync).not.toHaveBeenCalled();
+    });
+
+    test('`validateCandidate` non sostituisce più la policy VIVA a quella mancante', () => {
+      // Era il difetto: ricadendo su `this.defaultPolicy` si validava una
+      // configurazione diversa da quella che si stava per scrivere, e un file privo
+      // di `defaultPolicy` passava il controllo per poi non far partire il CMS.
+      const am = managerWith({});
+      expect(am.defaultPolicy).toBeTruthy(); // la policy viva esiste ed è sana
+      const verdict = am.validateCandidate(JSON.stringify({
+        hardcodedRules: { '/admin/**': { requiresAuth: true, allowedRoles: [0, 1] } },
+        customRules: {},
+      }));
+      expect(verdict.valid).toBe(false);
+    });
+
+    test('la diagnosi è UNA e spiega la causa, senza rumore delle sonde', () => {
+      // Con una policy inutilizzabile le sonde non possono dare un verdetto
+      // sensato: diciannove righe sopra l'unico messaggio che spiega il problema
+      // sarebbero rumore. Prima la causa era un TypeError su `undefined`.
+      const am = managerWith({});
+      const verdict = am.validateCandidate(JSON.stringify({ hardcodedRules: {}, customRules: {} }));
+      expect(verdict.problems).toHaveLength(1);
+      expect(verdict.problems[0].kind).toBe('default-policy-invalid');
+      expect(verdict.problems[0].detail).toContain('defaultPolicy');
+      expect(verdict.problems[0].detail).not.toMatch(/TypeError|undefined/);
+    });
+  });
+
+  describe('⑤ `rulesetProblems` descrive solo ciò che è IN VIGORE', () => {
+    test('dopo un rifiuto a runtime resta vuoto: la configurazione attiva è sana', () => {
+      const am = managerWith({});
+      expect(am.rulesetProblems).toEqual([]);
+
+      loadJson5.mockImplementation((p) => (String(p).endsWith('ital8Config.json5') ? {} : {
+        hardcodedRules: {},
+        customRules: { '{{bogus}}/**': { requiresAuth: true } },
+        defaultPolicy: { action: 'allow', redirectOnDenied: LOGIN_ENTRY },
+      }));
+      const outcome = am.reloadRules();
+
+      expect(outcome.accepted).toBe(false);
+      expect(outcome.problems.map((p) => p.kind)).toContain('unknown-placeholder');
+      // Il ruleset in vigore è quello di prima, ed è sano: lo stato deve dirlo.
+      expect(am.rulesetProblems).toEqual([]);
+    });
   });
 });

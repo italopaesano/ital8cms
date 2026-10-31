@@ -26,6 +26,42 @@ const {
 } = require('../../../core/accessInvariantCheck');
 const path = require('path');
 
+/** Le tre azioni che `applyDefaultPolicy` sa applicare. */
+const DEFAULT_POLICY_ACTIONS = Object.freeze(['allow', 'deny', 'requireAuth']);
+
+/**
+ * La `defaultPolicy` dichiarata è usabile? Ritorna il difetto, o `null`.
+ *
+ * Serve a DUE percorsi (il caricamento e la validazione di un candidato), quindi sta
+ * qui una volta sola. Ricalca `describePrefixDefect` di `core/pathZoneResolver.js`.
+ *
+ * Perché è un controllo e non una tolleranza:
+ *   • `redirectOnDenied` assente → un rifiuto per autenticazione non porta né
+ *     redirect né status, e fino alla revisione della Fase 3 il middleware lo
+ *     serviva. Ora lo nega con 403, ma la causa va detta: senza questo controllo la
+ *     diagnosi era un `TypeError` su `undefined` dentro il messaggio della sonda.
+ *   • `action` ignota → il `default:` di `applyDefaultPolicy` ricade su « allow ».
+ *     Un refuso (`"alow"`, `"Deny"`) renderebbe quindi PUBBLICO un sito che
+ *     l'amministratore ha scritto per essere chiuso, in silenzio.
+ */
+function describeDefaultPolicyDefect(policy) {
+  if (policy === undefined || policy === null) {
+    return 'la chiave `defaultPolicy` manca: senza di essa un rifiuto non ha un esito su cui agire';
+  }
+  if (typeof policy !== 'object' || Array.isArray(policy)) {
+    return '`defaultPolicy` non è un oggetto';
+  }
+  if (!DEFAULT_POLICY_ACTIONS.includes(policy.action)) {
+    return `\`defaultPolicy.action\` vale ${JSON.stringify(policy.action)}, che non è fra `
+      + `${DEFAULT_POLICY_ACTIONS.join(' | ')}: verrebbe trattata come "allow"`;
+  }
+  if (typeof policy.redirectOnDenied !== 'string' || policy.redirectOnDenied.trim() === '') {
+    return '`defaultPolicy.redirectOnDenied` manca o è vuota: un rifiuto per autenticazione '
+      + 'non porterebbe alcun esito applicabile';
+  }
+  return null;
+}
+
 class AccessManager {
   constructor(pluginSys, pathPluginFolder) {
     this.pluginSys = pluginSys;
@@ -107,18 +143,33 @@ class AccessManager {
         defaultPolicy: config.defaultPolicy,
       };
 
+      // La forma della `defaultPolicy` va controllata PRIMA delle sonde: altrimenti
+      // una chiave mancante arriva a `checkAccess`, che dereferenzia `undefined`, e
+      // la diagnosi finale è un `TypeError` interno invece della causa.
+      const policyDefect = describeDefaultPolicyDefect(config.defaultPolicy);
+      const policyProblems = policyDefect
+        ? [{ kind: 'default-policy-invalid', detail: policyDefect }]
+        : [];
+
       // Le INVARIANTI: non si guarda com'è scritto il file, si guarda cosa
       // risponderebbe il sistema. Le sonde girano sul CANDIDATO, non sul ruleset
       // vivo — che a runtime è ancora il precedente, cioè proprio quello che non
       // vogliamo misurare.
-      const invariants = checkAccessInvariants(
-        (url, user) => this.checkAccess(url, user, candidate),
-        this.pathZones,
-        { loginUrl: candidate.defaultPolicy && candidate.defaultPolicy.redirectOnDenied }
-      );
+      // Le sonde girano SOLO se la policy è usabile: contro una policy difettosa non
+      // potrebbero dare un verdetto sensato, e aggiungerebbero diciannove righe di
+      // rumore sopra l'unico messaggio che spiega la causa. Un problema chiaro vale
+      // più di venti accurati — è il criterio deciso per il box `[ACCESS]`.
+      const invariants = policyDefect
+        ? { problems: [], probed: 0 }
+        : checkAccessInvariants(
+          (url, user) => this.checkAccess(url, user, candidate),
+          this.pathZones,
+          { loginUrl: candidate.defaultPolicy.redirectOnDenied }
+        );
 
       const problems = [
         ...this.pathZones.problems,
+        ...policyProblems,
         ...resolved.problems,
         ...invariants.problems,
       ];
@@ -191,7 +242,18 @@ class AccessManager {
     }
 
     const declared = { ...parsed.customRules, ...parsed.hardcodedRules };
-    const defaultPolicy = parsed.defaultPolicy || this.defaultPolicy;
+
+    // ⚠ NESSUN fallback sullo stato vivo. Prima si ricadeva su `this.defaultPolicy`
+    // quando il candidato non la dichiarava: così si validava una configurazione
+    // DIVERSA da quella che si stava per scrivere, e un file privo di
+    // `defaultPolicy` passava il controllo per poi non far partire il CMS al riavvio
+    // successivo — cioè esattamente « un file che non farebbe ripartire il CMS » che
+    // veniva salvato. Si valida ciò che finirebbe su disco, e nient'altro.
+    const defaultPolicy = parsed.defaultPolicy;
+    const policyDefect = describeDefaultPolicyDefect(defaultPolicy);
+    if (policyDefect) {
+      return { valid: false, problems: [{ kind: 'default-policy-invalid', detail: policyDefect }] };
+    }
 
     let resolved;
     try {
@@ -228,7 +290,13 @@ class AccessManager {
   #reportProblems(problems) {
     const rulesFile = path.join(this.pathPluginFolder, 'accessControl.json5');
     const fatal = !this.bootCompleted;
-    this.rulesetProblems = problems;
+
+    // `rulesetProblems` descrive la configurazione IN VIGORE. A runtime un candidato
+    // rifiutato non entra in vigore, quindi i suoi problemi non vanno scritti qui:
+    // lo stato direbbe « la configurazione attiva ha problemi » mentre quella attiva
+    // è sana. Chi ha chiesto la ricarica li riceve nel valore di ritorno.
+    if (fatal) this.rulesetProblems = problems;
+
     const box = formatAccessProblemsBox(problems, { fatal, rulesFile });
     const emit = fatal ? console.error : console.warn;
     for (const line of box) emit(line);
@@ -458,6 +526,27 @@ class AccessManager {
           ctx.body = { error: 'Access Denied', reason: accessResult.reason };
           return;
         }
+
+        // ⚠ FAIL-OPEN CHIUSO QUI. Fino alla revisione della Fase 3 un rifiuto che
+        // non portava né redirect né status cadeva fuori da questo `if` e finiva su
+        // `await next()`: la pagina veniva SERVITA a chi era stato negato.
+        //
+        // Era raggiungibile con una configurazione plausibile — `defaultPolicy:
+        // { action: "allow" }` senza `redirectOnDenied` — e su OGNI URL di zona
+        // chiusa priva di regola. Misurato: `checkAccess` rispondeva
+        // `{allowed: false, redirect: undefined, status: null}` e la pagina usciva.
+        //
+        // Un rifiuto senza esito applicabile è un difetto di configurazione, non
+        // un permesso: qui si nega e si dice che è successo. La causa vera è
+        // segnalata al caricamento (problema `default-policy-invalid`), questo è il
+        // presidio di ultima istanza perché `allowed: false` non possa MAI
+        // significare « servi la pagina ».
+        console.error('[AccessControl] rifiuto senza esito applicabile su '
+          + `${ctx.path} (${accessResult.reason}) — negato con 403. `
+          + 'Causa tipica: defaultPolicy priva di redirectOnDenied.');
+        ctx.status = 403;
+        ctx.body = { error: 'Access Denied', reason: accessResult.reason };
+        return;
       }
 
       // Accesso consentito, prosegui

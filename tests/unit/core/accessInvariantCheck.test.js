@@ -18,13 +18,19 @@ const { resolvePathZones } = require('../../../core/pathZoneResolver');
 
 const LOGIN = '/pluginPages/adminUsers/login.ejs';
 
+// ⚠ Gli helper restituiscono rifiuti APPLICABILI (`redirect` o `status`), come fa
+// il motore vero: un `{ allowed: false }` nudo è ora a sua volta una violazione —
+// vedi « un rifiuto deve essere APPLICABILE » in fondo al file.
+const DENY = { allowed: false, redirect: '/login' };
+const ALLOW = { allowed: true };
+
 /** Decisione finta: nega tutto tranne gli URL elencati, e nega all'anonimo. */
 function decider({ allowAnon = [], allowRoles = {} } = {}) {
   return (url, user) => {
-    if (!user) return { allowed: allowAnon.includes(url) };
+    if (!user) return allowAnon.includes(url) ? ALLOW : DENY;
     const roles = user.roleIds || [];
     const allowedForUrl = allowRoles[url] || [];
-    return { allowed: roles.some((r) => allowedForUrl.includes(r)) };
+    return roles.some((r) => allowedForUrl.includes(r)) ? ALLOW : DENY;
   };
 }
 
@@ -34,13 +40,13 @@ function correctDecider(zoneMap, { loginReachable = true } = {}) {
     // Il login vive in `pluginPages`, zona APERTA: per simulare « login
     // irraggiungibile » bisogna negarlo esplicitamente, come farebbe una regola
     // custom con `requiresAuth` messa per errore su quel path.
-    if (url === LOGIN) return { allowed: loginReachable };
+    if (url === LOGIN) return loginReachable ? ALLOW : DENY;
     const zone = zoneMap.zones.find((z) => z.prefix !== '' && (url === z.prefix || url.startsWith(`${z.prefix}/`)));
     const baseline = zone ? zone.baseline : null;
-    if (!baseline || baseline.requiresAuth !== true) return { allowed: true };
-    if (!user) return { allowed: false };
+    if (!baseline || baseline.requiresAuth !== true) return ALLOW;
+    if (!user) return DENY;
     const roles = user.roleIds || [];
-    return { allowed: roles.some((r) => baseline.allowedRoles.includes(r)) };
+    return roles.some((r) => baseline.allowedRoles.includes(r)) ? ALLOW : DENY;
   };
 }
 
@@ -123,7 +129,7 @@ describe('checkAccessInvariants', () => {
 
   test('una decisione che APRE una zona chiusa è colta', () => {
     const zm = resolvePathZones({});
-    const r = checkAccessInvariants(() => ({ allowed: true }), zm, { loginUrl: LOGIN });
+    const r = checkAccessInvariants(() => ALLOW, zm, { loginUrl: LOGIN });
     expect(r.problems.length).toBeGreaterThan(0);
     expect(r.problems.every((p) => p.kind === 'invariant-violation')).toBe(true);
     expect(r.problems.every((p) => p.expected === 'deny' && p.actual === 'allow')).toBe(true);
@@ -133,7 +139,7 @@ describe('checkAccessInvariants', () => {
     // Negare a tutti supera il controllo « l'anonimo non entra » ma fallisce quello
     // « l'admin entra »: un pannello irraggiungibile non è una configurazione valida.
     const zm = resolvePathZones({});
-    const r = checkAccessInvariants(() => ({ allowed: false }), zm, { loginUrl: LOGIN });
+    const r = checkAccessInvariants(() => DENY, zm, { loginUrl: LOGIN });
     const denied = r.problems.filter((p) => p.expected === 'allow');
     expect(denied.length).toBeGreaterThan(0);
   });
@@ -157,11 +163,15 @@ describe('checkAccessInvariants', () => {
     expect(r.problems[0].detail).toContain('rotta');
   });
 
-  test('un verdetto malformato è trattato come « negato »', () => {
+  test('un verdetto malformato fallisce in ENTRAMBE le direzioni', () => {
+    // `undefined` non è né un consenso né un rifiuto applicabile: dopo la revisione
+    // della Fase 3 fallisce anche le sonde `deny`, perché chi deve applicare la
+    // decisione non ha nulla su cui agire.
     const zm = resolvePathZones({});
     const r = checkAccessInvariants(() => undefined, zm, { loginUrl: LOGIN });
-    // Tutte le sonde `allow` falliscono, nessuna `deny`.
-    expect(r.problems.every((p) => p.expected === 'allow')).toBe(true);
+    expect(r.problems).toHaveLength(r.probed);
+    expect(r.problems.filter((p) => p.expected === 'allow').length).toBeGreaterThan(0);
+    expect(r.problems.filter((p) => p.actual === 'deny-not-enforceable').length).toBeGreaterThan(0);
   });
 
   test('le violazioni nominano la sonda, l\'URL e l\'attore', () => {
@@ -240,5 +250,57 @@ describe('formatAccessProblemsBox — diagnostico, non prescrittivo', () => {
   test('il plurale è corretto anche con un problema solo', () => {
     expect(box([{ kind: 'collision' }], { fatal: true })).toContain('1 problema nel');
     expect(box([{ kind: 'collision' }, { kind: 'collision' }], { fatal: true })).toContain('2 problemi nel');
+  });
+});
+
+/**
+ * REGRESSIONE DALLA REVISIONE DELLA FASE 3 (2026-10-31).
+ *
+ * Guardare solo `verdict.allowed` ha fatto passare un fail-open sotto il presidio
+ * di tutta la Fase 3: il middleware serviva la pagina su un rifiuto che non portava
+ * né redirect né status, e la sonda vedeva « negato » e si dichiarava soddisfatta.
+ */
+describe('un rifiuto deve essere APPLICABILE, non solo esistere', () => {
+  const zm = resolvePathZones({});
+
+  test('un rifiuto senza redirect né status è una violazione', () => {
+    const r = checkAccessInvariants(
+      (url, user) => (user ? { allowed: true } : { allowed: false, status: null }),
+      zm, {}
+    );
+    const notEnforceable = r.problems.filter((p) => p.actual === 'deny-not-enforceable');
+    expect(notEnforceable.length).toBeGreaterThan(0);
+    expect(notEnforceable[0].detail).toContain('né redirect né status');
+  });
+
+  test('un rifiuto con redirect va bene', () => {
+    const r = checkAccessInvariants(
+      (url, user) => (user ? { allowed: true } : { allowed: false, redirect: '/login' }),
+      zm, {}
+    );
+    expect(r.problems.filter((p) => p.actual === 'deny-not-enforceable')).toEqual([]);
+  });
+
+  test('un rifiuto con status va bene', () => {
+    const r = checkAccessInvariants(
+      (url, user) => (user ? { allowed: true } : { allowed: false, status: 403 }),
+      zm, {}
+    );
+    expect(r.problems.filter((p) => p.actual === 'deny-not-enforceable')).toEqual([]);
+  });
+
+  test('`allowed: false` da solo non supera più il controllo', () => {
+    // La forma esatta che la decisione restituiva nello scenario del fail-open.
+    const r = checkAccessInvariants(() => ({ allowed: false }), zm, {});
+    const denies = r.problems.filter((p) => p.expected === 'deny');
+    expect(denies.length).toBeGreaterThan(0);
+    expect(denies.every((p) => p.actual === 'deny-not-enforceable')).toBe(true);
+  });
+
+  test('un rifiuto atteso ALLOW resta segnalato come prima', () => {
+    const r = checkAccessInvariants(() => ({ allowed: false, status: 403 }), zm, { loginUrl: LOGIN });
+    const login = r.problems.find((p) => p.url === LOGIN);
+    expect(login.expected).toBe('allow');
+    expect(login.actual).toBe('deny');
   });
 });

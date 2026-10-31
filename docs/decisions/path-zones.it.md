@@ -462,7 +462,7 @@ perimetro ad aver prodotto A1.
 | 0 — Conferma del naming | ✅ **chiusa** (2026-10-30) |
 | 1 — La mappa (`core/pathZoneResolver.js`) | ✅ **implementata e revisionata** (2026-10-30) — 132 test |
 | 2 — `baseline` in `accessManager` | ✅ **implementata** (2026-10-31) — +28 test sul motore |
-| 3 — Invarianti + box `[ACCESS]` | ✅ **implementata** (2026-10-31) — +34 test |
+| 3 — Invarianti + box `[ACCESS]` | ✅ **implementata e revisionata** (2026-10-31) — +56 test |
 | 4 — Segnaposti nei `.default` + migrazione | ⬜ da fare |
 | 5 — Adozione negli altri consumatori | ⬜ da fare |
 | 6 — Consolidamento `runtimeGate` | ⬜ da fare |
@@ -687,6 +687,35 @@ rotte dei plugin) e il nuovo aggiunge ciò che solo il motore sa. È un **predic
 condiviso fra due percorsi**, non due validatori che devono concordare — il progetto
 ha già visto divergere validatore e dispatcher su `access` (`CLAUDE.md`, nota su
 `routeContract.test.js`).
+
+#### Revisione della Fase 3 — cinque difetti, e uno era un FAIL-OPEN
+
+La Fase 3 è stata sottoposta a revisione dopo la stesura, come la Fase 1. Il rilievo
+principale è il più imbarazzante possibile per questa decisione: **un fail-open nel
+percorso di enforcement, invisibile al presidio che la Fase 3 aveva appena costruito.**
+
+| # | Difetto | Danno | Correzione |
+|---|---|---|---|
+| ① | Nel middleware un rifiuto che non porta **né `redirect` né `status`** cadeva fuori dall'`if` e raggiungeva `await next()` | **La pagina veniva SERVITA a chi era stato negato.** Raggiungibile con `defaultPolicy: { action: "allow" }` — plausibile, manca solo `redirectOnDenied` — e su **ogni** URL di zona chiusa priva di regola. Misurato: `checkAccess` rispondeva `{allowed: false, redirect: undefined, status: null}` e la pagina usciva | Un rifiuto senza esito applicabile **nega** con 403 e lo dichiara nel log: `allowed: false` non può mai significare « servi la pagina » |
+| ② | Le sonde leggevano **solo `verdict.allowed`** | È il motivo per cui ① è passato sotto il presidio di tutta la Fase 3: la sonda vedeva « negato » e si dichiarava soddisfatta, mentre la richiesta HTTP veniva servita. 19 sonde, zero violazioni, e la pagina fuori | Su un rifiuto atteso si verifica anche che sia **applicabile** (`redirect` o `status`), con il nuovo esito `deny-not-enforceable` |
+| ③ | `validateCandidate` ricadeva su `this.defaultPolicy` quando il candidato non la dichiarava | Validava una configurazione **diversa** da quella che stava per scrivere: un file privo di `defaultPolicy` passava il controllo e poi non faceva partire il CMS. Cioè **esattamente** « un file che non farebbe ripartire il CMS » che veniva salvato — l'invariante che la Fase 3 esiste per garantire | Nessun fallback sullo stato vivo: si valida ciò che finirebbe su disco, e nient'altro |
+| ④ | Una `defaultPolicy` assente arrivava a `checkAccess`, che dereferenziava `undefined` | Il boot era fail-closed, ma la diagnosi era « Cannot read properties of undefined (reading 'redirectOnDenied') » ripetuta sei volte: contro il criterio deciso (« il messaggio deve far capire dov'è il problema ») | `describeDefaultPolicyDefect` controlla la forma nei **due** percorsi → problema `default-policy-invalid`, e le sonde vengono **saltate** quando la policy è inutilizzabile (venti problemi accurati valgono meno di uno chiaro) |
+| ⑤ | `#reportProblems` scriveva `this.rulesetProblems` anche su un rifiuto a runtime | Lo stato dichiarava problemi su una configurazione **non in vigore**, mentre quella in vigore era sana. Nessun consumatore esterno (verificato), quindi latente | `rulesetProblems` descrive solo ciò che è in vigore; i problemi del candidato scartato arrivano nel valore di ritorno |
+
+**Una presa in più, arrivata con ④.** Il controllo di forma rifiuta anche un refuso in
+`defaultPolicy.action` (`"alow"`, `"Deny"`): il `default:` di `applyDefaultPolicy`
+ricadeva su « allow », quindi un refuso rendeva **pubblico in silenzio** un sito che
+l'amministratore aveva scritto per essere chiuso.
+
+**Nono tipo di problema:** `default-policy-invalid`, fatale come gli altri otto.
+
+**La lezione di metodo, che vale oltre questo intervento.** Il presidio della Fase 3
+misurava la **funzione di decisione**, non l'**enforcement**, e fra i due c'era un
+difetto. È la stessa forma del difetto che questa decisione esiste per chiudere —
+due livelli che devono concordare e che nessuno teneva allineati — comparsa un piano
+sotto a dove avevo messo le sonde. La correzione di ② non elimina il divario (le sonde
+restano a livello di decisione) ma lo rende **attraversabile solo da una decisione
+applicabile**, che è il massimo che un modulo puro possa garantire.
 
 #### Due difetti della mia stessa stesura, trovati e corretti
 
