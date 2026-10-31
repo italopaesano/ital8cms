@@ -349,6 +349,86 @@ function resolvePathZones(ital8Conf) {
 }
 
 /**
+ * Il requisito d'accesso EFFETTIVO: il più stretto fra ciò che chiede una regola e
+ * il `baseline` della sua zona. È l'enunciato di D4 — « una regola può solo
+ * stringere, mai allentare » — ridotto a una funzione.
+ *
+ * ─── PERCHÉ NON SI INTERSECANO I RUOLI ───────────────────────────────────────
+ * Nel motore `allowedRoles: []` significa « qualsiasi utente autenticato », NON
+ * « nessuno » (`accessManager.checkAccess()` controlla i ruoli solo se l'elenco è
+ * non vuoto). Intersecare `[2]` con un baseline `[0, 1]` darebbe `[]`, che
+ * verrebbe quindi riletto come « chiunque sia autenticato »: un ALLENTAMENTO
+ * ottenuto da un'operazione che doveva stringere. Perciò:
+ *
+ *   • la regola restringe davvero solo se elenca un **sottoinsieme non vuoto**
+ *     del baseline → vince la regola;
+ *   • in ogni altro caso → vince il baseline.
+ *
+ * Una regola che concede un ruolo che il baseline vieta non viene « risolta » in
+ * silenzio: è un errore di configurazione, rilevato al caricamento
+ * (`violatesBaseline` → problema `baseline-violation`).
+ *
+ * @param {object} requirement - `{ requiresAuth, allowedRoles }` della regola.
+ * @param {object|null} baseline - Il `baseline` della zona, o `null` (nessun minimo).
+ * @returns {{requiresAuth: boolean, allowedRoles: number[]}} Requisito effettivo.
+ * @throws {TypeError} se `requirement` non è un oggetto.
+ */
+function tightenAccess(requirement, baseline) {
+  if (!isPlainObject(requirement)) {
+    throw new TypeError('tightenAccess: requirement must be an object');
+  }
+  const reqAuth = requirement.requiresAuth === true;
+  const reqRoles = Array.isArray(requirement.allowedRoles) ? requirement.allowedRoles : [];
+
+  // `baseline: null` è la zona `api`, il cui accesso lo decide il route-wrap.
+  if (!isPlainObject(baseline)) {
+    return { requiresAuth: reqAuth, allowedRoles: [...reqRoles] };
+  }
+
+  const baseAuth = baseline.requiresAuth === true;
+  const baseRoles = Array.isArray(baseline.allowedRoles) ? baseline.allowedRoles : [];
+  const requiresAuth = reqAuth || baseAuth;
+
+  // Un baseline aperto, o che non nomina ruoli, non ha ruoli da imporre.
+  if (!baseAuth || baseRoles.length === 0) {
+    return { requiresAuth, allowedRoles: [...reqRoles] };
+  }
+
+  const narrows = reqRoles.length > 0 && reqRoles.every((role) => baseRoles.includes(role));
+  return { requiresAuth, allowedRoles: narrows ? [...reqRoles] : [...baseRoles] };
+}
+
+/**
+ * Questa regola ALLENTA attivamente il `baseline` della sua zona?
+ *
+ * « Attivamente » è la parola che conta, perché distingue due casi che meritano
+ * trattamenti opposti:
+ *
+ *   • `allowedRoles: []` in una zona chiusa — l'autore ha scritto « serve il
+ *     login » senza nominare i ruoli. Non ha concesso niente di vietato: è
+ *     **sottospecificato**, e `tightenAccess` lo completa in silenzio.
+ *   • `requiresAuth: false`, oppure un elenco che include un ruolo che il
+ *     baseline non ammette — qui l'autore ha scritto qualcosa che **non può
+ *     valere**. Va detto, non corretto di nascosto.
+ *
+ * @param {object} requirement - `{ requiresAuth, allowedRoles }` della regola.
+ * @param {object|null} baseline - Il `baseline` della zona.
+ * @returns {boolean} `true` solo per gli allentamenti attivi.
+ */
+function violatesBaseline(requirement, baseline) {
+  if (!isPlainObject(requirement) || !isPlainObject(baseline)) return false;
+  if (baseline.requiresAuth !== true) return false; // zona aperta: niente da allentare
+  if (requirement.requiresAuth !== true) return true; // nega l'auth dove la zona la impone
+
+  const baseRoles = Array.isArray(baseline.allowedRoles) ? baseline.allowedRoles : [];
+  if (baseRoles.length === 0) return false; // il baseline non nomina ruoli
+  const reqRoles = Array.isArray(requirement.allowedRoles) ? requirement.allowedRoles : [];
+  if (reqRoles.length === 0) return false; // sottospecificato, non un allentamento attivo
+
+  return !reqRoles.every((role) => baseRoles.includes(role));
+}
+
+/**
  * A quale zona appartiene un path (o un pattern già risolto)?
  *
  * Longest-match **per segmenti**: `/administrator` non sta sotto `/admin`. Un pattern
@@ -620,6 +700,37 @@ function resolveRuleset(rules, zoneMap) {
     derived.push(twin);
   }
 
+  // ── 4. Monotonia (D4): nessuna regola può ALLENTARE il baseline della sua zona ──
+  //
+  // Si controllano solo le regole scritte, non le derivate: una derivata porta la
+  // stessa regola del suo gemello, quindi segnalarla raddoppierebbe la diagnostica.
+  //
+  // LIMITE: un pattern `regex:` non ha una zona determinabile dal testo
+  // (`zoneForPath` → null), quindi la sua violazione non si vede qui. La protezione
+  // però non manca: a runtime il motore ricava la zona dalla URL richiesta, non dal
+  // pattern, e `tightenAccess` applica il baseline comunque. Il controllo al
+  // caricamento dice « questa regola non può valere » in anticipo; quello a runtime
+  // garantisce che non valga. Servono entrambi, e coprono insiemi diversi.
+  for (const [pattern, rule] of Object.entries(out)) {
+    if (!isPlainObject(rule) || rule.derivedFrom !== undefined) continue;
+    const zone = zoneForPath(pattern, zoneMap.zones);
+    if (!zone || !violatesBaseline(rule, zone.baseline)) continue;
+
+    problems.push(Object.freeze({
+      kind: 'baseline-violation',
+      pattern,
+      zone: zone.name,
+      ruleAccess: Object.freeze({
+        requiresAuth: rule.requiresAuth === true,
+        allowedRoles: Object.freeze(Array.isArray(rule.allowedRoles) ? [...rule.allowedRoles] : []),
+      }),
+      baseline: zone.baseline,
+      detail: rule.requiresAuth === true
+        ? 'la regola concede ruoli che il baseline della zona non ammette: la concessione non può valere'
+        : 'la regola nega l\'autenticazione in una zona che la impone',
+    }));
+  }
+
   return { rules: out, problems: Object.freeze(problems), derived: Object.freeze(derived) };
 }
 
@@ -628,5 +739,7 @@ module.exports = {
   resolveRuleset,
   resolvePattern,
   zoneForPath,
+  tightenAccess,
+  violatesBaseline,
   ZONE_NAMES,
 };

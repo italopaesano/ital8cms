@@ -2,9 +2,10 @@
 # Decisione: zone dello spazio URL, segnaposti di percorso e `baseline` per zona
 
 > **Stato: IN IMPLEMENTAZIONE** — design e naming approvati il 2026-10-30.
-> **Fasi 0 e 1 completate** (`core/pathZoneResolver.js`, 132 test, revisione del
-> codice chiusa con 9 difetti corretti); nessun
-> consumatore ancora collegato, quindi il comportamento del CMS è **invariato**.
+> **Fasi 0, 1 e 2 completate.** Il `baseline` di zona è **attivo nel motore**:
+> **A1 e A3 sono chiusi nei fatti**, e lo sono già con le regole non ancora
+> migrate. Restano le fasi 3-6 (box `[ACCESS]` e fatalità, migrazione dei
+> `.default`, adozione negli altri consumatori, consolidamento `runtimeGate`).
 > Dettaglio in *Stato di implementazione*. Chiude alla radice [`REVIEW.md` → A1](../../REVIEW.md#a1--cambiare-adminprefix-apre-il-pannello-admin-a-chiunque)
 > e, come effetto collaterale, [A3](../../REVIEW.md#a3--le-regole-hardcoded-del-controllo-accessi-non-sono-immutabili).
 
@@ -459,11 +460,18 @@ perimetro ad aver prodotto A1.
 |---|---|
 | 0 — Conferma del naming | ✅ **chiusa** (2026-10-30) |
 | 1 — La mappa (`core/pathZoneResolver.js`) | ✅ **implementata e revisionata** (2026-10-30) — 132 test |
-| 2 — `baseline` in `accessManager` | ⬜ da fare |
+| 2 — `baseline` in `accessManager` | ✅ **implementata** (2026-10-31) — +28 test sul motore |
 | 3 — Invarianti + box `[ACCESS]` | ⬜ da fare |
 | 4 — Segnaposti nei `.default` + migrazione | ⬜ da fare |
 | 5 — Adozione negli altri consumatori | ⬜ da fare |
 | 6 — Consolidamento `runtimeGate` | ⬜ da fare |
+
+> ⚠️ **A1 e A3 sono chiusi da qui, non dalla Fase 4.** Le regole nei `.default`
+> sono ancora letterali, e il pannello è già protetto a qualunque `adminPrefix`
+> perché il `baseline` della zona vive in codice. La migrazione dei pattern a
+> segnaposti resta utile — rende il file leggibile e coerente — ma non è ciò che
+> corregge il difetto. In `REVIEW.md` le due voci si spuntano a **Fase 3**
+> completata, quando un ruleset non capito smetterà anche di far partire il sito.
 
 ### Fase 1 — cosa è stato scritto
 
@@ -477,6 +485,101 @@ perimetro ad aver prodotto A1.
   `adminPrefix` diverso da `"admin"`.
 - **Nessun consumatore collegato**, come previsto dal piano: il comportamento del
   CMS a questa fase è **invariato**.
+
+### Fase 2 — cosa è stato scritto
+
+- **`core/pathZoneResolver.js`**: due funzioni pure in più —
+  `tightenAccess(requirement, baseline)` (il più stretto fra i due) e
+  `violatesBaseline(requirement, baseline)` (solo gli allentamenti **attivi**) — più
+  il controllo di monotonia al caricamento in `resolveRuleset`, che emette il
+  problema `baseline-violation`.
+- **`plugins/adminAccessControl/lib/accessManager.js`**: costruisce `this.pathZones`
+  nel costruttore, risolve il ruleset in `loadRules()`, conserva i problemi in
+  `this.rulesetProblems` e li segnala; `checkAccess()` ricava la zona dalla **URL
+  richiesta** e applica `tightenAccess`.
+- **`plugins/adminAccessControl/accessControl.default.json5`**: le `hardcodedRules`
+  **restano** (decisione del maintainer) ma il commento ora dichiara che sono
+  **documentazione e non più la fonte di verità**, con il perché e le conseguenze.
+- **Test**: `tests/unit/accessManagerBaseline.test.js` (28, nuovo) +
+  `tests/unit/core/pathZoneResolver.test.js` (155).
+
+**La formulazione che tiene insieme D3 e D4.** Una regola sola copre sia « nessuna
+regola matcha » sia la monotonia:
+
+> Il requisito effettivo = **il più stretto fra** ciò che dicono la regola (o la
+> `defaultPolicy`) **e** il `baseline` della zona.
+
+| Situazione | Esito |
+|---|---|
+| nessuna regola + zona **chiusa** | decide il `baseline` → **A1** |
+| nessuna regola + zona **aperta** | decide la `defaultPolicy` → resta dell'amministratore |
+| regola più **lasca** del `baseline` | vince il `baseline` → **A3** |
+| regola più **stretta** | vince la regola |
+
+**Perché la `defaultPolicy` non è stata rimossa.** Sulle zone aperte è ancora lei a
+decidere, e resta la fonte di `redirectOnDenied`. Conseguenza misurata: sulle zone
+aperte il comportamento è **identico** a prima (`tightenAccess` con un baseline
+aperto restituisce la regola intatta), quindi il cambiamento riguarda **solo** le tre
+zone chiuse. Superarla del tutto richiede il `baseline` della zona `site`
+configurabile, che è un punto rimandato.
+
+**La trappola dei ruoli, e perché non si intersecano.** Nel motore
+`allowedRoles: []` significa « qualsiasi utente autenticato », non « nessuno »
+(`checkAccess` controlla i ruoli solo se l'elenco è non vuoto). Intersecare `[2]` con
+un baseline `[0, 1]` darebbe `[]`, che il motore rileggerebbe come « chiunque sia
+autenticato »: un **allentamento** ottenuto da un'operazione che doveva stringere.
+Quindi la regola restringe solo se elenca un **sottoinsieme non vuoto** del baseline;
+in ogni altro caso vince il baseline. E si distingue il **sottospecificato**
+(`allowedRoles: []` in zona chiusa — l'autore non ha concesso nulla di vietato:
+completato in silenzio) dall'**allentamento attivo** (`requiresAuth: false`, o un
+ruolo che il baseline non ammette: segnalato).
+
+**Due livelli, e coprono insiemi diversi.** Il controllo al **caricamento** non vede
+le violazioni dei pattern `regex:`, perché la zona di una regex non è determinabile
+leggendone il testo. Quello a **runtime** sì, perché ricava la zona dalla URL
+richiesta e non dal pattern. Il primo dice « questa regola non può valere » in
+anticipo; il secondo garantisce che non valga. Presidiato da un test.
+
+#### Il risultato misurato
+
+A1 si chiude **prima** della migrazione dei pattern: con `adminPrefix: "backoffice"` e
+le regole ancora scritte come letterali `/admin` — cioè la configurazione esatta che
+produceva il difetto — un anonimo su `/backoffice/usersManagment/index.ejs` è
+**respinto**, con il motivo che nomina il baseline della zona. La Fase 4 diventa
+quindi una **pulizia**, non la correzione.
+
+E la protezione non dipende più dal contenuto del file:
+
+| Stato di `accessControl.json5` | Pannello admin | Sito pubblico |
+|---|---|---|
+| completo | protetto | servito |
+| regole **svuotate** | **protetto** | servito |
+| sezioni **assenti** | **protetto** | servito |
+| file **illeggibile** | **protetto** | servito |
+| file **cancellato** | **protetto** | servito |
+
+Prima della Fase 2, in ognuno dei quattro casi degradati il pannello si apriva a
+chiunque.
+
+#### Un cambiamento di comportamento da conoscere
+
+`GET /admin-theme-resources/...` da anonimo ora risponde **302** verso il login
+invece di **200**. Non è un effetto collaterale: la zona `adminThemeResources` ha
+`baseline` chiuso nella tabella D1, e il codice conosceva già la fuga — il commento
+di `core/priorityMiddlewares/runtimeGate.js:232` dice che senza il gate riservato
+quelle risorse « resterebbero servite a chiunque e rivelerebbero l'esistenza del
+pannello ». Fino alla Fase 2 quella riga copriva solo `reserved stop`; ora la zona è
+chiusa sempre.
+
+**La pagina di login non è toccata**: le `pluginPages` non sono contesto admin
+(`isAdminContext` non viene impostato da `pluginPagesSystem`), quindi usano il tema
+**pubblico**, la cui zona resta aperta. Verificato: l'unico riferimento a
+`adminThemeResourcesPrefix` nei template sta dentro il pannello
+(`core/admin/webPages/systemSettings/index.ejs`).
+
+`tests/integration/httpVerbs.test.js` è stato adeguato: lo status atteso è ora
+**per-superficie** invece di un `200` fisso, così il test resta non vacuo e dichiara
+quale superficie è pubblica e quale no.
 
 ### Scelte di dettaglio prese in implementazione
 
@@ -589,6 +692,13 @@ sull'admin.
 - **`dirListing` sul file server admin** (`index.js:563`, l'unico acceso dei
   cinque). Non è parte di questa decisione, ma è uno dei tre fattori aggravanti
   di A1: va valutato a sé.
+- **La forma della risposta nelle zone di sole RISORSE.** Un `GET` anonimo su
+  `{{adminThemeResources}}/css/theme.css` riceve un **302 verso una pagina HTML di
+  login**: corretto come decisione d'accesso, strano come risposta a una richiesta
+  di foglio di stile. La filosofia del `reservedGate` — rispondere **404**, senza
+  rivelare — sarebbe più coerente per le zone che non servono pagine. Emerso in
+  Fase 2, fuori dal suo scopo: cambiare la forma della risposta per zona è una
+  decisione a sé.
 
 ## Conseguenze
 

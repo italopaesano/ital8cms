@@ -15,6 +15,8 @@ const {
   resolveRuleset,
   resolvePattern,
   zoneForPath,
+  tightenAccess,
+  violatesBaseline,
   ZONE_NAMES,
 } = require('../../../core/pathZoneResolver');
 
@@ -412,15 +414,18 @@ describe('resolveRuleset', () => {
     });
 
     test('due pattern che risolvono uguale con regole DIVERSE sono un problema', () => {
+      // Fixture nella zona `site`, che è APERTA: così si misura la collisione e
+      // SOLO la collisione. Con una fixture permissiva in zona `admin` scatterebbe
+      // anche `baseline-violation` (giustamente), e il test misurerebbe due cose.
       const zm = resolvePathZones(conf());
       const { problems } = resolveRuleset({
-        '{{admin}}/**': ADMIN_RULE,
-        '/admin/**': { requiresAuth: false, allowedRoles: [] },
+        '{{site}}/about.ejs': { requiresAuth: true, allowedRoles: [] },
+        '/about.ejs': { requiresAuth: false, allowedRoles: [] },
       }, zm);
       expect(problems).toHaveLength(1);
       expect(problems[0].kind).toBe('collision');
-      expect(problems[0].pattern).toBe('/admin/**');
-      expect(problems[0].sources).toEqual(['{{admin}}/**', '/admin/**']);
+      expect(problems[0].pattern).toBe('/about.ejs');
+      expect(problems[0].sources).toEqual(['{{site}}/about.ejs', '/about.ejs']);
     });
 
     test('l\'ordine delle chiavi non cambia il verdetto', () => {
@@ -678,7 +683,11 @@ describe('regressioni dalla revisione', () => {
 
       expect(derived).toEqual([]);
       expect(rules['/admin/docs/**']).toBeUndefined();
-      expect(problems.map((p) => p.kind)).toEqual(['underivable-pattern']);
+      // Due problemi, e sono entrambi giusti: il gemello non derivabile, e — da
+      // Fase 2 — il fatto che una regola permissiva in zona `admin` allenta il
+      // `baseline`. Il secondo è il presidio che rende innocuo il primo.
+      expect(problems.map((p) => p.kind).sort())
+        .toEqual(['baseline-violation', 'underivable-pattern']);
 
       // E il file che sarebbe stato esposto resta fuori da quella regola.
       expect(matcher.findMatchingRule('/admin/docs/db-dump.sql', rules)).toBeNull();
@@ -857,5 +866,178 @@ describe('regressioni dalla revisione', () => {
       // `/api` e `/apifoo`: niente confine di segmento, nessuna sovrapposizione.
       expect(resolvePathZones(conf({ adminPrefix: 'apifoo' })).problems).toEqual([]);
     });
+  });
+});
+
+/**
+ * FASE 2 — il `baseline` di zona entra nel motore (D3) e la monotonia diventa
+ * codice (D4). Qui le due funzioni pure; il comportamento del motore è in
+ * `tests/unit/accessManagerBaseline.test.js`.
+ */
+describe('tightenAccess — il più stretto fra regola e baseline', () => {
+  const CLOSED = { requiresAuth: true, allowedRoles: [0, 1] };
+  const OPEN = { requiresAuth: false, allowedRoles: [] };
+
+  test('una regola APERTA in zona chiusa non vince: vince il baseline', () => {
+    expect(tightenAccess({ requiresAuth: false, allowedRoles: [] }, CLOSED))
+      .toEqual({ requiresAuth: true, allowedRoles: [0, 1] });
+  });
+
+  test('una regola SOTTOSPECIFICATA (ruoli []) viene completata dal baseline', () => {
+    // `allowedRoles: []` significa « qualsiasi autenticato »: il baseline la
+    // restringe ai suoi ruoli, in silenzio, perché l'autore non ha concesso nulla.
+    expect(tightenAccess({ requiresAuth: true, allowedRoles: [] }, CLOSED))
+      .toEqual({ requiresAuth: true, allowedRoles: [0, 1] });
+  });
+
+  test('una regola più STRETTA vince: [0] è un sottoinsieme di [0,1]', () => {
+    expect(tightenAccess({ requiresAuth: true, allowedRoles: [0] }, CLOSED))
+      .toEqual({ requiresAuth: true, allowedRoles: [0] });
+  });
+
+  test('una regola che concede un ruolo VIETATO non lo ottiene', () => {
+    // La trappola che l'intersezione avrebbe aperto: [2] ∩ [0,1] = [], che il
+    // motore rileggerebbe come « qualsiasi autenticato » — un ALLENTAMENTO
+    // ottenuto da un'operazione che doveva stringere.
+    expect(tightenAccess({ requiresAuth: true, allowedRoles: [2] }, CLOSED))
+      .toEqual({ requiresAuth: true, allowedRoles: [0, 1] });
+  });
+
+  test('un ruolo vietato non si cola nemmeno dentro un elenco misto', () => {
+    expect(tightenAccess({ requiresAuth: true, allowedRoles: [0, 2] }, CLOSED).allowedRoles)
+      .toEqual([0, 1]);
+  });
+
+  test('in zona APERTA la regola passa intatta', () => {
+    expect(tightenAccess({ requiresAuth: true, allowedRoles: [3] }, OPEN))
+      .toEqual({ requiresAuth: true, allowedRoles: [3] });
+  });
+
+  test('con baseline null (zona `api`) decide solo la regola', () => {
+    expect(tightenAccess({ requiresAuth: true, allowedRoles: [5] }, null))
+      .toEqual({ requiresAuth: true, allowedRoles: [5] });
+    expect(tightenAccess({ requiresAuth: false, allowedRoles: [] }, undefined))
+      .toEqual({ requiresAuth: false, allowedRoles: [] });
+  });
+
+  test('un baseline che impone auth ma non ruoli lascia i ruoli alla regola', () => {
+    const authOnly = { requiresAuth: true, allowedRoles: [] };
+    expect(tightenAccess({ requiresAuth: false, allowedRoles: [7] }, authOnly))
+      .toEqual({ requiresAuth: true, allowedRoles: [7] });
+  });
+
+  test('non restituisce mai un riferimento agli array di partenza', () => {
+    const roles = [0];
+    const out = tightenAccess({ requiresAuth: true, allowedRoles: roles }, CLOSED);
+    expect(out.allowedRoles).not.toBe(roles);
+    expect(out.allowedRoles).not.toBe(CLOSED.allowedRoles);
+  });
+
+  test('tollera regole malformate senza lanciare', () => {
+    expect(tightenAccess({}, CLOSED)).toEqual({ requiresAuth: true, allowedRoles: [0, 1] });
+    expect(tightenAccess({ requiresAuth: 'yes', allowedRoles: 'x' }, CLOSED))
+      .toEqual({ requiresAuth: true, allowedRoles: [0, 1] });
+  });
+
+  test('lancia se il requisito non è un oggetto (errore del chiamante)', () => {
+    expect(() => tightenAccess(null, CLOSED)).toThrow(TypeError);
+  });
+
+  test('è idempotente: ristringere un requisito già stretto non lo cambia', () => {
+    const once = tightenAccess({ requiresAuth: false, allowedRoles: [] }, CLOSED);
+    expect(tightenAccess(once, CLOSED)).toEqual(once);
+  });
+});
+
+describe('violatesBaseline — solo gli allentamenti ATTIVI', () => {
+  const CLOSED = { requiresAuth: true, allowedRoles: [0, 1] };
+
+  test('negare l\'autenticazione in una zona che la impone è una violazione', () => {
+    expect(violatesBaseline({ requiresAuth: false, allowedRoles: [] }, CLOSED)).toBe(true);
+  });
+
+  test('concedere un ruolo che il baseline non ammette è una violazione', () => {
+    expect(violatesBaseline({ requiresAuth: true, allowedRoles: [2] }, CLOSED)).toBe(true);
+    expect(violatesBaseline({ requiresAuth: true, allowedRoles: [0, 2] }, CLOSED)).toBe(true);
+  });
+
+  test('essere SOTTOSPECIFICATI non è una violazione', () => {
+    // Chi scrive `allowedRoles: []` non ha concesso nulla di vietato: ha scritto
+    // « serve il login ». `tightenAccess` completa, senza rumore.
+    expect(violatesBaseline({ requiresAuth: true, allowedRoles: [] }, CLOSED)).toBe(false);
+  });
+
+  test('essere più stretti non è una violazione', () => {
+    expect(violatesBaseline({ requiresAuth: true, allowedRoles: [0] }, CLOSED)).toBe(false);
+  });
+
+  test('in zona aperta o senza baseline non c\'è niente da allentare', () => {
+    expect(violatesBaseline({ requiresAuth: false }, { requiresAuth: false, allowedRoles: [] })).toBe(false);
+    expect(violatesBaseline({ requiresAuth: false }, null)).toBe(false);
+  });
+});
+
+describe('resolveRuleset — la monotonia è rilevata al caricamento', () => {
+  test('una regola che nega l\'auth in zona chiusa è un problema', () => {
+    const zm = resolvePathZones(conf());
+    const { problems } = resolveRuleset({ '{{admin}}/**': { requiresAuth: false, allowedRoles: [] } }, zm);
+    expect(problems).toHaveLength(1);
+    expect(problems[0].kind).toBe('baseline-violation');
+    expect(problems[0].zone).toBe('admin');
+    expect(problems[0].detail).toContain('nega');
+  });
+
+  test('una regola che concede un ruolo vietato è un problema', () => {
+    const zm = resolvePathZones(conf());
+    const { problems } = resolveRuleset({ '{{admin}}/**': { requiresAuth: true, allowedRoles: [2] } }, zm);
+    expect(problems).toHaveLength(1);
+    expect(problems[0].kind).toBe('baseline-violation');
+    expect(problems[0].ruleAccess.allowedRoles).toEqual([2]);
+    expect(problems[0].baseline).toEqual({ requiresAuth: true, allowedRoles: [0, 1] });
+  });
+
+  test('le regole legittime non producono problemi', () => {
+    const zm = resolvePathZones(conf());
+    const { problems } = resolveRuleset({
+      '{{admin}}/**': { requiresAuth: true, allowedRoles: [0, 1] },
+      '{{admin}}/root-only.ejs': { requiresAuth: true, allowedRoles: [0] },
+      '{{admin}}/any-logged.ejs': { requiresAuth: true, allowedRoles: [] },
+      '{{pluginPages}}/adminUsers/login.ejs': { requiresAuth: false, allowedRoles: [] },
+      '/about.ejs': { requiresAuth: false, allowedRoles: [] },
+    }, zm);
+    expect(problems).toEqual([]);
+  });
+
+  test('la violazione è segnalata una volta, non anche per la regola derivata', () => {
+    const zm = resolvePathZones({ ...conf(), ...hideExt('adminPrefix') });
+    const { problems, derived } = resolveRuleset(
+      { '{{admin}}/x.ejs': { requiresAuth: false, allowedRoles: [] } }, zm
+    );
+    expect(derived).toEqual(['/admin/x']);
+    expect(problems.filter((p) => p.kind === 'baseline-violation')).toHaveLength(1);
+  });
+
+  test('segue il prefisso configurato: la zona si riconosce comunque', () => {
+    const zm = resolvePathZones(conf({ adminPrefix: 'backoffice' }));
+    const { problems } = resolveRuleset({ '{{admin}}/**': { requiresAuth: false } }, zm);
+    expect(problems.map((p) => p.kind)).toEqual(['baseline-violation']);
+  });
+
+  test('il config SPEDITO non produce violazioni', () => {
+    // Presidio contro una regressione del .default: i varchi pubblici (login,
+    // logout, access-denied) vivono in `pluginPages`, zona APERTA, quindi il loro
+    // `requiresAuth: false` è legittimo. Se qualcuno spostasse un varco in una
+    // zona chiusa, questo test lo direbbe.
+    const realConf = require('../../../core/loadJson5')(
+      require('path').join(__dirname, '../../../ital8Config.default.json5')
+    );
+    const realRules = require('../../../core/loadJson5')(
+      require('path').join(__dirname, '../../../plugins/adminAccessControl/accessControl.default.json5')
+    );
+    const zm = resolvePathZones(realConf);
+    const merged = { ...realRules.customRules, ...realRules.hardcodedRules };
+    const { problems } = resolveRuleset(merged, zm);
+    expect(problems).toEqual([]);
+    expect(zm.problems).toEqual([]);
   });
 });

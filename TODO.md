@@ -919,9 +919,12 @@ Fonte: [`docs/decisions/path-zones.it.md`](./docs/decisions/path-zones.it.md)
 (design **approvato** il 2026-10-30, strada B — « costruire il muro »).
 Chiude alla radice [`REVIEW.md`](./REVIEW.md) → **A1** e **A3**.
 
-**Fasi 0 e 1 fatte** (2026-10-30): esiste `core/pathZoneResolver.js` con 132 test, ma
-**nessun consumatore è collegato**, quindi il comportamento del CMS è ancora invariato.
-Il primo cambiamento visibile arriva con la Fase 2.
+**Fasi 0, 1 e 2 fatte** (2026-10-30/31). Il `baseline` di zona è **attivo nel motore**:
+**A1 e A3 sono chiusi nei fatti**, e lo sono già con le regole non ancora migrate —
+con `adminPrefix: "backoffice"` e i letterali `/admin` ancora nel file, un anonimo sul
+pannello è respinto. Il pannello resta protetto anche con `accessControl.json5`
+svuotato, illeggibile o cancellato (prima, in tutti e tre i casi, si apriva a
+chiunque). Le voci A1/A3 di `REVIEW.md` si spuntano a **Fase 3** completata.
 
 - [x] ~~**Fase 0 — conferma del naming.**~~ **Chiusa il 2026-10-30:** tutti i nomi
       approvati (`{{admin}}`, `pathZones`/`core/pathZoneResolver.js`,
@@ -939,11 +942,18 @@ Il primo cambiamento visibile arriva con la Fase 2.
       collisioni rovesciata, derivazione solo in una direzione, chiave vuota,
       annidamento fra zone, lookup sul prototipo). Dettaglio nel registro di
       decisione → *Revisione del codice*. Nessun consumatore collegato.
-- [ ] **Fase 2 — `baseline` di zona in `accessManager`.** Il `baseline` entra nel motore;
-      la `defaultPolicy` globale viene superata; **monotonia** applicata e testata
-      (« una regola può solo stringere, mai allentare, il `baseline` della sua zona »).
-      Le `hardcodedRules` diventano ridondanti → decidere se restano come
-      documentazione o spariscono.
+- [x] ~~**Fase 2 — `baseline` di zona in `accessManager`.**~~ **Fatta il 2026-10-31.**
+      `tightenAccess` + `violatesBaseline` nel core, problema `baseline-violation` al
+      caricamento, `checkAccess` che ricava la zona dalla **URL richiesta** (così il
+      baseline vale anche dove il controllo al caricamento non arriva: i pattern
+      `regex:`). La `defaultPolicy` è **affiancata, non rimossa**: sulle zone aperte
+      decide ancora lei, quindi il comportamento del sito pubblico è identico a prima
+      e il cambiamento riguarda solo le tre zone chiuse. Le `hardcodedRules`
+      **restano** come documentazione (decisione del maintainer), con il commento che
+      dichiara che non sono più la fonte di verità. +28 test sul motore.
+      **Un cambiamento da conoscere:** `GET {{adminThemeResources}}/...` da anonimo
+      ora risponde 302 invece di 200 — fuga che il commento di `runtimeGate.js:232`
+      già descriveva; la pagina di login non è toccata (usa il tema pubblico).
 - [ ] **Fase 3 — invarianti + box `[ACCESS]`: `core/accessInvariantCheck.js`.**
       Tabella delle sonde invocata dentro `loadRules()` (copre boot, salvataggio
       GUI e reload a server acceso con un solo punto); fatale al boot, rifiuto del ruleset a runtime. Test che presidia la

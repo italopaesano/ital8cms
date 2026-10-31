@@ -5,13 +5,37 @@
   "lastModified": "2026-01-28T10:00:00Z",
 
   // ==========================================================================
-  // REGOLE HARDCODED (non modificabili via UI)
+  // REGOLE HARDCODED — DOCUMENTAZIONE, NON PIU' LA FONTE DI VERITA'
   // ==========================================================================
-  // Queste regole proteggono aree critiche del sistema e hanno priorità massima.
-  // Il campo "editable: false" impedisce la modifica via interfaccia admin.
+  // Queste regole restano qui perche' sono LEGGIBILI: dicono a chi apre il file
+  // qual e' il minimo d'accesso del pannello. Ma la protezione del pannello NON
+  // dipende piu' da loro.
   //
-  // IMPORTANTE: Queste regole sono presenti nel file solo per chiarezza e documentazione.
-  // La validazione impedisce qualsiasi modifica della sezione hardcodedRules via UI.
+  // PERCHE' E' CAMBIATO. Fin qui la protezione era scritta come TESTO (`/admin`),
+  // mentre la posizione reale del pannello e' una VARIABILE
+  // (`ital8Config.json5 -> adminPrefix`). Nessun codice sincronizzava le due cose:
+  // bastava cambiare `adminPrefix` in `backoffice` perche' nessuna regola matchasse
+  // piu', e allora si applicava la `defaultPolicy` — che di serie e' `allow`. Le
+  // pagine admin finivano servite a un anonimo, e chi aveva cambiato il prefisso lo
+  // aveva fatto CREDENDO di aumentare la sicurezza. (REVIEW.md -> A1)
+  //
+  // COSA PROTEGGE IL PANNELLO ADESSO. Ogni zona dello spazio URL porta il proprio
+  // minimo d'accesso — il suo `baseline` — scritto IN CODICE, in
+  // `core/pathZoneResolver.js`. La zona `admin` ha `baseline` chiuso ai ruoli
+  // [0, 1] qualunque sia il prefisso configurato. Conseguenza da conoscere: se
+  // questo file viene svuotato, corrotto o cancellato, il pannello resta
+  // PROTETTO (prima, in tutti e tre i casi, si apriva a chiunque).
+  //
+  // COSA PUO' FARE UNA REGOLA. Solo STRINGERE il `baseline` della sua zona, mai
+  // allentarlo. Una regola che negasse l'autenticazione in zona `admin`, o che
+  // concedesse un ruolo che il `baseline` non ammette, viene segnalata al
+  // caricamento e il `baseline` vince comunque.
+  //
+  // Il campo "editable: false" continua a impedire la modifica via interfaccia
+  // admin, e la validazione continua a rifiutare qualsiasi modifica di questa
+  // sezione dalla UI.
+  //
+  // -> docs/decisions/path-zones.it.md
   // ==========================================================================
   "hardcodedRules": {
     "/admin": {
