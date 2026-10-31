@@ -2,11 +2,12 @@
 # Decisione: zone dello spazio URL, segnaposti di percorso e `baseline` per zona
 
 > **Stato: IN IMPLEMENTAZIONE** — design e naming approvati il 2026-10-30.
-> **Fasi 0, 1 e 2 completate.** Il `baseline` di zona è **attivo nel motore**:
-> **A1 e A3 sono chiusi nei fatti**, e lo sono già con le regole non ancora
-> migrate. Restano le fasi 3-6 (box `[ACCESS]` e fatalità, migrazione dei
-> `.default`, adozione negli altri consumatori, consolidamento `runtimeGate`).
-> Dettaglio in *Stato di implementazione*. Chiude alla radice [`REVIEW.md` → A1](../../REVIEW.md#a1--cambiare-adminprefix-apre-il-pannello-admin-a-chiunque)
+> **Fasi 0-3 completate. A1 e A3 sono CHIUSI e spuntati in `REVIEW.md`.** Un
+> ruleset non applicabile non fa più partire il CMS; una modifica che non
+> passerebbe il boot non può essere salvata dalla GUI. Restano le fasi 4-6
+> (migrazione dei `.default`, adozione negli altri consumatori, consolidamento
+> `runtimeGate`) — **pulizia e propagazione, non correzione**. Dettaglio in
+> *Stato di implementazione*. Chiude alla radice [`REVIEW.md` → A1](../../REVIEW.md#a1--cambiare-adminprefix-apre-il-pannello-admin-a-chiunque)
 > e, come effetto collaterale, [A3](../../REVIEW.md#a3--le-regole-hardcoded-del-controllo-accessi-non-sono-immutabili).
 
 ## Contesto
@@ -438,7 +439,7 @@ perimetro ad aver prodotto A1.
 | **0 — Conferma del naming** | ✅ **CHIUSA (2026-10-30).** Tutti i nomi approvati, vedi *Naming*. Nessun codice. |
 | **1 — La mappa (modulo puro)** | ✅ **FATTA (2026-10-30).** `core/pathZoneResolver.js`: zone, risoluzione `{{…}}`, errore su segnaposto sconosciuto, rilevamento collisioni, derivazione delle forme senza estensione. Test unitari esaustivi, incluso `adminPrefix: "backoffice"`. **Nessun consumatore ancora collegato.** |
 | **2 — `baseline` di zona in `accessManager`** | ✅ **FATTA (2026-10-31).** Il `baseline` entra nel motore; `defaultPolicy` globale affiancata e poi superata; monotonia (D4) applicata e testata. `hardcodedRules` diventano ridondanti. |
-| **3 — Invarianti + box `[ACCESS]`** | `core/accessInvariantCheck.js`: tabella delle sonde, invocata dentro `loadRules()`; fatale al boot, rifiuto a runtime (D7); test che presidia la presenza di `adminAccessControl` in `essentialPlugins`. |
+| **3 — Invarianti + box `[ACCESS]`** | ✅ **FATTA (2026-10-31).** `core/accessInvariantCheck.js`: sonde invocate dentro `loadRules()`; fatale al boot, rifiuto a runtime (D7); test che presidia la presenza di `adminAccessControl` in `essentialPlugins`. |
 | **4 — Segnaposti nei `.default` + migrazione** | I `.default` passano dai letterali ai segnaposti; derivazione `hideExtension` sostituisce le regole duplicate; `migrations/` + bump di `schemaVersion` (vedi *Migrazione*). |
 | **5 — Adozione negli altri consumatori** | `sentinel`, `seo`, `rateLimiter`, `csrfProtection`, `urlRedirect`, `botDetector`: i 20 letterali censiti passano ai segnaposti, uno plugin per volta. |
 | **6 — Consolidamento `runtimeGate`** | Il `reservedGate` deriva il perimetro dalla mappa invece di ricalcolarlo. |
@@ -461,7 +462,7 @@ perimetro ad aver prodotto A1.
 | 0 — Conferma del naming | ✅ **chiusa** (2026-10-30) |
 | 1 — La mappa (`core/pathZoneResolver.js`) | ✅ **implementata e revisionata** (2026-10-30) — 132 test |
 | 2 — `baseline` in `accessManager` | ✅ **implementata** (2026-10-31) — +28 test sul motore |
-| 3 — Invarianti + box `[ACCESS]` | ⬜ da fare |
+| 3 — Invarianti + box `[ACCESS]` | ✅ **implementata** (2026-10-31) — +34 test |
 | 4 — Segnaposti nei `.default` + migrazione | ⬜ da fare |
 | 5 — Adozione negli altri consumatori | ⬜ da fare |
 | 6 — Consolidamento `runtimeGate` | ⬜ da fare |
@@ -580,6 +581,122 @@ chiusa sempre.
 `tests/integration/httpVerbs.test.js` è stato adeguato: lo status atteso è ora
 **per-superficie** invece di un `200` fisso, così il test resta non vacuo e dichiara
 quale superficie è pubblica e quale no.
+
+### Fase 3 — cosa è stato scritto
+
+- **`core/accessInvariantCheck.js`** (nuovo, modulo puro): `describeAccessInvariants`
+  · `checkAccessInvariants` · `formatAccessProblemsBox`. Riceve la funzione di
+  decisione come **parametro**: il core dichiara *cosa* deve valere, il plugin
+  fornisce *chi* decide.
+- **`accessManager`**: `checkAccess(url, user, context)` — terzo parametro
+  **opzionale** che valuta la decisione contro un ruleset **dato** invece di quello
+  vivo; `loadRules()` non committa più nulla finché i controlli non passano;
+  `validateCandidate(jsonString)` verifica un ruleset non ancora su disco;
+  `saveRules()` lo chiama **prima di scrivere**; `reloadRules()` propaga l'esito.
+- **`main.js`**: un salvataggio rifiutato risponde **400** con l'elenco dei
+  problemi, non 500 — è un errore dell'input, e l'admin deve sapere cosa correggere.
+- **Test**: `tests/unit/core/accessInvariantCheck.test.js` (26, nuovo) + 8 aggiunti a
+  `accessManagerBaseline.test.js`.
+
+#### Le sonde si DERIVANO dalle zone, non si elencano
+
+La tabella di D6 era scritta a mano. In implementazione è diventata **derivata**:
+per ogni zona con `baseline` chiuso si generano le sonde « l'anonimo è negato », « un
+ruolo non ammesso è negato », « ogni ruolo ammesso è consentito », su due path (la
+radice e uno in profondità). Sulla configurazione distribuita sono **19 sonde**.
+
+Il motivo è che una tabella scritta a mano diventa stantia nel momento in cui qualcuno
+aggiunge una zona: la zona nuova non comparirebbe, e nessuno se ne accorgerebbe. Così
+una zona chiusa aggiunta domani è coperta **senza toccare quel file**.
+
+Le sonde verificano anche il **verso opposto** — che ogni ruolo ammesso entri — perché
+un presidio chiuso troppo non è sicurezza: è un pannello irraggiungibile al suo
+amministratore.
+
+#### L'unica sonda non derivabile, e la più importante
+
+« Un anonimo deve poter raggiungere la pagina di login » non si deduce dalle zone, e
+la sua violazione è la peggiore della famiglia: chi viene rifiutato è mandato a una
+pagina che lo rifiuta a sua volta — **un loop di redirect** — e nessuno può più
+autenticarsi per correggere la configurazione dalla GUI. È irrecuperabile
+dall'interfaccia.
+
+L'URL non è cablato: si prende da `defaultPolicy.redirectOnDenied`, cioè dalla pagina
+verso cui il motore stesso manda chi rifiuta. La sonda diventa **auto-coerente**.
+
+**Verificato che non vieti una configurazione legittima:** il config spedito passa le
+19 sonde con `defaultPolicy` ad `allow`, `requireAuth` **e** `deny`, zero violazioni
+in tutti e tre i casi, perché esenta esplicitamente login e logout. La sonda scatta
+solo su una configurazione in cui il login è davvero irraggiungibile.
+
+#### Una sonda di D6 è stata esclusa, di proposito
+
+D6 includeva « un anonimo deve raggiungere `{{publicThemeResources}}` ». **Non è un
+invariante:** un amministratore può legittimamente mettere dietro autenticazione
+l'intero sito, risorse comprese, e renderlo fatale vieterebbe una configurazione
+valida. Se è un errore, il guasto è **visibile** (il sito esce senza stile) e
+**recuperabile** (si corregge dalla GUI, a cui si accede ancora). Il login no: per
+quello non c'è né visibilità né recupero.
+
+#### `throw`, non `process.exit` (domanda A, deciso dal maintainer)
+
+D7 diceva `process.exit`. In implementazione si è scelto **`throw`**: la fatalità
+appartiene a `pluginSys`, che per un plugin in `essentialPlugins` emette `[FATAL]` e
+termina. Un `process.exit` da dentro un plugin scavalcherebbe quella macchina e
+ignorerebbe una dichiarazione del maintainer.
+
+Il rovescio è reale: togliendo `adminAccessControl` da `essentialPlugins`, un
+controllo accessi non applicabile non spegnerebbe il boot — il plugin verrebbe
+soltanto saltato, e il sito servito **senza guardia**. L'invariante regge per
+**configurazione**, quindi è presidiata da un test, non da questo codice.
+
+**Verificato sul server reale:** con un segnaposto sconosciuto nel config vivo, il
+boot stampa il box `[ACCESS]` che nomina il file, il pattern e i sette nomi di zona
+validi, poi `pluginSys` stampa `[FATAL]` e il processo esce con **1**. Con il config
+sano: 10 pattern, **19 invarianti verificate**, zero righe `[ACCESS]`.
+
+#### Tutti gli otto problemi sono fatali, con messaggi DIAGNOSTICI (domanda B)
+
+Non prescrittivi. Per la maggior parte di questi problemi l'intento dell'autore non è
+desumibile — una `collision` fra due regole diverse può volersi risolvere in entrambi
+i versi — e un suggerimento inventato dentro un box di sicurezza è peggio del
+silenzio, oltre a essere testo da mantenere allineato. Ogni riga dice **quale file**,
+**quale pattern o chiave**, **cosa non va**. L'unica eccezione è
+`unknown-placeholder`, dove la risposta è **chiusa**: i nomi di zona validi.
+
+I due problemi di **zona** sono attribuiti a `ital8Config.json5` nella radice del
+progetto, non al file delle regole: è lì che nascono, e mandare chi legge a cercarli
+nella cartella del plugin sarebbe un messaggio diagnostico che punta al file sbagliato.
+
+#### Il salvataggio dalla GUI non può più impedire il boot successivo (domanda C)
+
+Il difetto, trovato leggendo `main.js:178`: la GUI validava con
+`ruleValidator.validateFromUI` — che non conosce zone, segnaposti né `baseline` —
+**poi scriveva**, poi ricaricava. Con la Fase 3 scritta ingenuamente la sequenza
+sarebbe stata: validazione superata → file **scritto** → ricarica **rifiutata** →
+la GUI dice « salvato » → al riavvio successivo il CMS non parte.
+
+La correzione: il controllo entra in `saveRules`, che è il **punto unico** da cui
+passa ogni scrittura, **prima** di scrivere. L'invariante che si ottiene:
+
+> **Un file che non farebbe ripartire il CMS non può essere salvato.**
+
+I due validatori **non si sostituiscono**: `validateFromUI` conserva il suo mestiere
+(sintassi JSON5, immutabilità delle hardcoded, esistenza dei ruoli, conflitti con le
+rotte dei plugin) e il nuovo aggiunge ciò che solo il motore sa. È un **predicato
+condiviso fra due percorsi**, non due validatori che devono concordare — il progetto
+ha già visto divergere validatore e dispatcher su `access` (`CLAUDE.md`, nota su
+`routeContract.test.js`).
+
+#### Due difetti della mia stessa stesura, trovati e corretti
+
+| Difetto | Perché contava |
+|---|---|
+| `loadRules()` assegnava `this.rules` **prima** di verificare | Su un rifiuto a runtime il ruleset precedente era già perduto: l'opposto di D7, cioè un sito con **meno** protezioni di quelle che aveva un istante prima. Ora niente viene committato finché i controlli non passano |
+| `reloadRules()` non propagava l'esito | Chi ricarica non poteva sapere se la ricarica era stata accettata, e presumeva che fosse andata |
+
+Più un terzo nel fallback: un file diventato illeggibile **a runtime** non deve far
+perdere il ruleset che sta funzionando. Il fallback a zero regole resta solo al boot.
 
 ### Scelte di dettaglio prese in implementazione
 

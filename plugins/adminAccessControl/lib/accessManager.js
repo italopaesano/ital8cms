@@ -20,6 +20,10 @@ const {
   zoneForPath,
   tightenAccess,
 } = require('../../../core/pathZoneResolver');
+const {
+  checkAccessInvariants,
+  formatAccessProblemsBox,
+} = require('../../../core/accessInvariantCheck');
 const path = require('path');
 
 class AccessManager {
@@ -50,12 +54,23 @@ class AccessManager {
     // → docs/decisions/path-zones.it.md
     this.pathZones = resolvePathZones(ital8Conf);
 
-    // Problemi rilevati al caricamento del ruleset. In Fase 3 diventeranno il box
-    // `[ACCESS]` e un errore fatale al boot; per ora sono conservati e segnalati.
+    // Problemi rilevati al caricamento del ruleset: risoluzione, collisioni,
+    // violazioni del baseline, e le invarianti (le sonde). Al BOOT un problema è
+    // fatale; a runtime il ruleset nuovo è rifiutato e resta in vigore il vecchio.
     this.rulesetProblems = [];
 
-    // Carica regole all'inizializzazione
+    // Il primo `loadRules()` è quello del boot. Serve a distinguere i due
+    // comportamenti di D7: al boot si lancia (e `pluginSys`, per cui questo plugin
+    // è `essential`, fa `[FATAL]` + exit), a runtime si rifiuta tenendo il vecchio.
+    this.bootCompleted = false;
+
+    // Carica regole all'inizializzazione. Se qui qualcosa non torna, `loadRules`
+    // LANCIA: `pluginSys` lo tratta come fallimento di un `essentialPlugin` →
+    // `[FATAL]` + exit. Vedi #reportProblems.
     this.loadRules();
+
+    // Da qui in avanti ogni ricarica è « a runtime »: rifiuta e conserva.
+    this.bootCompleted = true;
   }
 
   /**
@@ -80,30 +95,151 @@ class AccessManager {
       // `resolveRuleset` SCARTA i pattern che non ha capito: un segnaposto non
       // risolto non diventa mai un letterale (contratto fail-closed, D2).
       const resolved = resolveRuleset(declared, this.pathZones);
-      this.rules = resolved.rules;
-      this.rulesetProblems = [...this.pathZones.problems, ...resolved.problems];
 
-      this.defaultPolicy = config.defaultPolicy;
+      // ⚠ NIENTE viene assegnato a `this` finché i controlli non sono passati.
+      // A runtime un candidato rifiutato deve lasciare in vigore il ruleset
+      // PRECEDENTE (D7): committare prima e rifiutare dopo lo avrebbe già distrutto,
+      // ottenendo l'opposto di ciò che la regola vuole — un sito con MENO protezioni
+      // di quelle che aveva un istante prima.
+      const candidate = {
+        rules: resolved.rules,
+        pathZones: this.pathZones,
+        defaultPolicy: config.defaultPolicy,
+      };
+
+      // Le INVARIANTI: non si guarda com'è scritto il file, si guarda cosa
+      // risponderebbe il sistema. Le sonde girano sul CANDIDATO, non sul ruleset
+      // vivo — che a runtime è ancora il precedente, cioè proprio quello che non
+      // vogliamo misurare.
+      const invariants = checkAccessInvariants(
+        (url, user) => this.checkAccess(url, user, candidate),
+        this.pathZones,
+        { loginUrl: candidate.defaultPolicy && candidate.defaultPolicy.redirectOnDenied }
+      );
+
+      const problems = [
+        ...this.pathZones.problems,
+        ...resolved.problems,
+        ...invariants.problems,
+      ];
+
+      if (problems.length > 0) {
+        // Al boot lancia; a runtime stampa e si esce da qui senza committare.
+        this.#reportProblems(problems);
+        console.warn('[AccessManager] ruleset candidato SCARTATO: resta in vigore il precedente'
+          + ` (${this.rules ? Object.keys(this.rules).length : 0} pattern)`);
+        return { accepted: false, problems };
+      }
+
+      // Controlli superati: adesso si committa.
+      this.rules = candidate.rules;
+      this.defaultPolicy = candidate.defaultPolicy;
+      this.rulesetProblems = [];
 
       console.log(`[AccessManager] Rules loaded: ${Object.keys(this.rules).length} patterns`
-        + (resolved.derived.length > 0 ? ` (${resolved.derived.length} derivate da hideExtension)` : ''));
+        + (resolved.derived.length > 0 ? ` (${resolved.derived.length} derivate da hideExtension)` : '')
+        + ` · ${invariants.probed} invarianti verificate`);
 
-      // Fase 2: si segnala. In Fase 3 questi diventano il box `[ACCESS]` e un
-      // errore fatale al boot — un ruleset non capito non deve servire un sito.
-      for (const problem of this.rulesetProblems) {
-        console.warn(`[AccessManager] ⚠  ${problem.kind}: ${problem.detail || ''}`
-          + (problem.pattern ? ` — pattern "${problem.pattern}"` : '')
-          + (problem.zone ? ` — zona "${problem.zone}"` : ''));
-      }
+      return { accepted: true, problems: [] };
     } catch (err) {
+      // Un problema delle invarianti non è un errore di lettura: va rilanciato così
+      // com'è, altrimenti il fallback qui sotto lo trasformerebbe in « file
+      // illeggibile » e il boot proseguirebbe con zero regole.
+      if (err && err.ital8AccessProblems) throw err;
+
       console.error('[AccessManager] Failed to load accessControl.json5', err);
-      // Fallback: nessuna regola. NON è più un fallback aperto: il `baseline` delle
-      // zone chiuse vive in codice (`core/pathZoneResolver.js`), quindi con zero
-      // regole il pannello admin resta comunque protetto. È il punto dell'intera
-      // decisione — prima di essa un accessControl.json5 illeggibile apriva il
-      // pannello a chiunque.
+
+      // Fallback: nessuna regola — e solo al BOOT, perché a runtime un file
+      // diventato illeggibile non deve far perdere il ruleset che sta funzionando.
+      if (this.bootCompleted) {
+        console.warn('[AccessManager] file illeggibile: resta in vigore il ruleset precedente');
+        return { accepted: false, problems: [{ kind: 'config-unreadable', detail: err.message }] };
+      }
+
+      // NON è più un fallback aperto: il `baseline` delle zone chiuse vive in codice
+      // (`core/pathZoneResolver.js`), quindi con zero regole il pannello admin resta
+      // comunque protetto. È il punto dell'intera decisione — prima di essa un
+      // accessControl.json5 illeggibile apriva il pannello a chiunque.
       this.rules = {};
       this.defaultPolicy = { action: 'allow', redirectOnDenied: '/pluginPages/adminUsers/login.ejs' };
+      this.rulesetProblems = [{ kind: 'config-unreadable', detail: err.message }];
+      return { accepted: false, problems: this.rulesetProblems };
+    }
+  }
+
+  /**
+   * Verifica un ruleset CANDIDATO — una stringa JSON5 non ancora su disco — con gli
+   * stessi controlli che girano al boot: risoluzione dei segnaposti, collisioni,
+   * monotonia del `baseline`, e le invarianti (le sonde).
+   *
+   * Non tocca `this.rules`: la valutazione gira contro il candidato grazie al terzo
+   * parametro di `checkAccess`. Senza di esso si potrebbe sondare solo il ruleset
+   * già in vigore, cioè accorgersi del guasto dopo averlo installato.
+   *
+   * @param {string} jsonString - Contenuto JSON5 proposto.
+   * @returns {{valid: boolean, problems: object[]}}
+   */
+  validateCandidate(jsonString) {
+    let parsed;
+    try {
+      parsed = require('json5').parse(jsonString);
+    } catch (err) {
+      return { valid: false, problems: [{ kind: 'json5-syntax', detail: err.message }] };
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { valid: false, problems: [{ kind: 'json5-syntax', detail: 'il contenuto non è un oggetto' }] };
+    }
+
+    const declared = { ...parsed.customRules, ...parsed.hardcodedRules };
+    const defaultPolicy = parsed.defaultPolicy || this.defaultPolicy;
+
+    let resolved;
+    try {
+      resolved = resolveRuleset(declared, this.pathZones);
+    } catch (err) {
+      return { valid: false, problems: [{ kind: 'ruleset-unusable', detail: err.message }] };
+    }
+
+    const candidate = { rules: resolved.rules, pathZones: this.pathZones, defaultPolicy };
+    const invariants = checkAccessInvariants(
+      (url, user) => this.checkAccess(url, user, candidate),
+      this.pathZones,
+      { loginUrl: defaultPolicy && defaultPolicy.redirectOnDenied }
+    );
+
+    const problems = [...resolved.problems, ...invariants.problems];
+    return { valid: problems.length === 0, problems };
+  }
+
+  /**
+   * Stampa il box `[ACCESS]` e applica il comportamento asimmetrico di D7.
+   *
+   * Al BOOT **lancia**, invece di chiamare `process.exit`: la fatalità appartiene a
+   * `pluginSys`, che per un plugin in `essentialPlugins` emette `[FATAL]` e termina.
+   * Un `process.exit` da dentro un plugin scavalcherebbe quella macchina e
+   * ignorerebbe una dichiarazione del maintainer. Il rovescio — se qualcuno togliesse
+   * `adminAccessControl` da `essentialPlugins` il plugin verrebbe solo saltato, e il
+   * sito servito senza guardia — è presidiato da un test, non da questo codice.
+   *
+   * A RUNTIME non lancia: il chiamante (`reloadRules`/`saveRules`) scarta il
+   * candidato e tiene in vigore il ruleset precedente.
+   * @private
+   */
+  #reportProblems(problems) {
+    const rulesFile = path.join(this.pathPluginFolder, 'accessControl.json5');
+    const fatal = !this.bootCompleted;
+    this.rulesetProblems = problems;
+    const box = formatAccessProblemsBox(problems, { fatal, rulesFile });
+    const emit = fatal ? console.error : console.warn;
+    for (const line of box) emit(line);
+
+    if (fatal) {
+      const err = new Error(
+        `[adminAccessControl] controllo accessi non applicabile: `
+        + `${problems.length} problemi (vedi il box [ACCESS] sopra)`
+      );
+      err.ital8AccessProblems = problems;
+      throw err;
     }
   }
 
@@ -112,7 +248,9 @@ class AccessManager {
    */
   reloadRules() {
     console.log('[AccessManager] Reloading rules...');
-    this.loadRules();
+    // L'esito va PROPAGATO: dopo la Fase 3 una ricarica può essere rifiutata, e chi
+    // l'ha chiesta deve poterlo sapere invece di presumere che sia andata.
+    return this.loadRules();
   }
 
   /**
@@ -121,16 +259,28 @@ class AccessManager {
    * @param {object} user - Oggetto user da ctx.session.user (o null se non autenticato)
    * @returns {object} - { allowed: boolean, redirect: string|null, status: number|null, reason: string }
    */
-  checkAccess(url, user = null) {
+  checkAccess(url, user = null, context = null) {
+    // `context` permette di valutare la decisione contro un ruleset DATO invece che
+    // contro quello vivo. Serve a due cose che prima erano impossibili:
+    //   • sondare un ruleset CANDIDATO prima di scriverlo su disco (vedi saveRules),
+    //     così un file che non farebbe ripartire il CMS non può essere salvato;
+    //   • testare la logica di decisione senza istanziare un manager né toccare il
+    //     filesystem.
+    // Senza di esso le sonde potrebbero misurare solo il ruleset già in vigore —
+    // cioè accorgersi del guasto dopo averlo installato.
+    const rules = context ? context.rules : this.rules;
+    const pathZones = context ? context.pathZones : this.pathZones;
+    const defaultPolicy = context ? context.defaultPolicy : this.defaultPolicy;
+
     // 1. Trova regola matching
-    const rule = this.patternMatcher.findMatchingRule(url, this.rules);
+    const rule = this.patternMatcher.findMatchingRule(url, rules);
 
     // 2. Il `baseline` della ZONA a cui la URL appartiene (D3).
     //
     // La zona si ricava dalla URL RICHIESTA, non dal pattern: così il minimo
     // d'accesso vale anche dove il controllo al caricamento non arriva (una regola
     // `regex:`, di cui non si sa la zona leggendone il testo).
-    const zone = zoneForPath(url, this.pathZones.zones);
+    const zone = zoneForPath(url, pathZones.zones);
     const baseline = zone ? zone.baseline : null;
 
     // 3. Nessuna regola E nessun minimo da imporre → `defaultPolicy`, come sempre.
@@ -142,7 +292,7 @@ class AccessManager {
     // « nessuna regola » non significa più « pubblico » — ed è esattamente il difetto
     // A1: cambiare `adminPrefix` faceva cadere il pannello qui, su `action: "allow"`.
     if (!rule && (!baseline || baseline.requiresAuth !== true)) {
-      return this.applyDefaultPolicy(user);
+      return this.applyDefaultPolicy(user, defaultPolicy);
     }
 
     // 4. Requisito EFFETTIVO: il più stretto fra la regola e il baseline (D4,
@@ -157,7 +307,7 @@ class AccessManager {
     if (effective.requiresAuth && !user) {
       return {
         allowed: false,
-        redirect: this.defaultPolicy.redirectOnDenied,
+        redirect: defaultPolicy.redirectOnDenied,
         status: null, // Redirect, non status code
         reason: rule ? 'Authentication required' : `Authentication required (zone "${zone.name}" baseline)`
       };
@@ -195,8 +345,9 @@ class AccessManager {
    * @param {object} user - Utente (o null)
    * @returns {object} - { allowed: boolean, redirect: string|null, status: number|null, reason: string }
    */
-  applyDefaultPolicy(user) {
-    switch (this.defaultPolicy.action) {
+  applyDefaultPolicy(user, defaultPolicy = null) {
+    const policy = defaultPolicy || this.defaultPolicy;
+    switch (policy.action) {
       case 'allow':
         // Pubblico, tutti possono accedere
         return {
@@ -220,7 +371,7 @@ class AccessManager {
         if (!user) {
           return {
             allowed: false,
-            redirect: this.defaultPolicy.redirectOnDenied,
+            redirect: policy.redirectOnDenied,
             status: null,
             reason: 'Default policy: requireAuth'
           };
@@ -371,6 +522,33 @@ class AccessManager {
     try {
       const fs = require('fs');
       const configPath = path.join(this.pathPluginFolder, 'accessControl.json5');
+
+      // ── Gli STESSI controlli del boot, PRIMA di scrivere ──────────────────
+      //
+      // `saveRules` è il punto unico da cui passa ogni scrittura, quindi è qui che
+      // va il presidio. Senza, la sequenza era: valida (col validatore della GUI,
+      // che non conosce zone né segnaposti) → SCRIVE → ricarica → la ricarica
+      // rifiuta → la GUI dice « salvato » → al riavvio successivo il CMS non parte.
+      // Un salvataggio apparentemente riuscito che spegne il sito dopo.
+      //
+      // L'invariante che si ottiene: un file che non farebbe ripartire il CMS non
+      // può essere salvato.
+      //
+      // I due validatori NON si sostituiscono: `ruleValidator.validateFromUI`
+      // (sintassi JSON5, immutabilità delle hardcoded, esistenza dei ruoli,
+      // conflitti con le rotte dei plugin) resta dove sta e conserva il suo
+      // mestiere; questo aggiunge ciò che solo il motore sa. Un predicato
+      // condiviso fra due percorsi, non due validatori che devono concordare —
+      // il progetto ha già visto divergere validatore e dispatcher su `access`.
+      const verdict = this.validateCandidate(jsonString);
+      if (!verdict.valid) {
+        return {
+          success: false,
+          error: 'Il ruleset proposto non supera i controlli del controllo accessi: '
+            + 'il file NON è stato modificato.',
+          problems: verdict.problems,
+        };
+      }
 
       // Scrivi file (con backup temporaneo)
       // Salva la stringa JSON5 originale per preservare commenti e formattazione

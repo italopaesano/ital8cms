@@ -190,10 +190,19 @@ module.exports = {
             const saveResult = accessManager.saveRules(jsonContent);
 
             if (!saveResult.success) {
-              ctx.status = 500;
+              // `saveRules` rifiuta un ruleset che non supererebbe i controlli del
+              // boot, PRIMA di scriverlo (vedi accessManager.validateCandidate):
+              // è un errore dell'input, non del server, quindi 400 e non 500. I
+              // problemi vanno mostrati, altrimenti l'admin non sa cosa correggere.
+              const rejected = Array.isArray(saveResult.problems) && saveResult.problems.length > 0;
+              ctx.status = rejected ? 400 : 500;
               ctx.body = {
                 success: false,
-                error: saveResult.error
+                error: saveResult.error,
+                errors: rejected
+                  ? saveResult.problems.map((p) => [p.kind, p.pattern, p.url, p.detail]
+                    .filter(Boolean).join(' · '))
+                  : undefined
               };
               return;
             }

@@ -42,9 +42,9 @@ modifica al file citato.
 
 | # | Problema | Impatto | Stato |
 |---|---|---|---|
-| A1 | [Cambiare `adminPrefix` apre il pannello admin a chiunque](#a1--cambiare-adminprefix-apre-il-pannello-admin-a-chiunque) | Accesso anonimo alle pagine admin | - [ ] |
+| A1 | [Cambiare `adminPrefix` apre il pannello admin a chiunque](#a1--cambiare-adminprefix-apre-il-pannello-admin-a-chiunque) | Accesso anonimo alle pagine admin | - [x] |
 | A2 | [Le due reti di sicurezza sulle chiavi di sessione sono entrambe morte](#a2--le-due-reti-di-sicurezza-sulle-chiavi-di-sessione-sono-entrambe-morte) | Impersonazione root senza credenziali | - [ ] |
-| A3 | [Le regole hardcoded del controllo accessi non sono immutabili](#a3--le-regole-hardcoded-del-controllo-accessi-non-sono-immutabili) | Una regola custom scavalca la protezione admin | - [ ] |
+| A3 | [Le regole hardcoded del controllo accessi non sono immutabili](#a3--le-regole-hardcoded-del-controllo-accessi-non-sono-immutabili) | Una regola custom scavalca la protezione admin | - [x] |
 | A4 | [Regex non ancorate e mix `*`/`**` che sbaglia in silenzio](#a4--regex-non-ancorate-e-mix--che-sbaglia-in-silenzio) | Regole che proteggono l'insieme sbagliato di URL | - [ ] |
 | A5 | [Nessun security header, e cookie di sessione senza `secure`](#a5--nessun-security-header-e-cookie-di-sessione-senza-secure) | XSS/clickjacking/furto cookie non mitigati | - [ ] |
 | A6 | [`checkInTemplate` — la guardia documentata per i template non protegge](#a6--checkintemplate--la-guardia-documentata-per-i-template-non-protegge) | Pagina protetta servita per intero nel corpo del 302 | - [ ] |
@@ -86,7 +86,16 @@ modifica al file citato.
 
 ## A1 · Cambiare `adminPrefix` apre il pannello admin a chiunque
 
-**Severità:** 🔴 alta · **Sforzo:** medio · **Presidio mancante:** test con `adminPrefix` non di default
+> ✅ **CORRETTO (2026-10-31), fasi 1-3 di [`docs/decisions/path-zones.it.md`](./docs/decisions/path-zones.it.md).**
+> La correzione non è quella proposta qui sotto: invece di sincronizzare la regola
+> col prefisso, il **minimo d'accesso di ogni zona dello spazio URL vive in codice**
+> (`core/pathZoneResolver.js`), quindi la protezione del pannello non sta più in un
+> file. Misurato: con `adminPrefix: "backoffice"` **e le regole ancora letterali**
+> un anonimo è respinto; e il pannello resta protetto anche con
+> `accessControl.json5` svuotato, illeggibile o cancellato. Il presidio richiesto in
+> fondo alla scheda esiste, parametrizzato su cinque prefissi, più 19 sonde eseguite
+> a ogni caricamento del ruleset e un box `[ACCESS]` che rende fatale al boot un
+> ruleset non applicabile.
 
 ### Dove
 
@@ -287,6 +296,13 @@ d'ambiente, come il commento del `.default` già suggerisce. Rimuoverebbe la cla
 problema alla radice invece di presidiarla.
 
 ---
+
+> ✅ **CORRETTO (2026-10-31), come effetto della monotonia introdotta dalle fasi
+> 1-3 di [`docs/decisions/path-zones.it.md`](./docs/decisions/path-zones.it.md).**
+> Una regola può solo **stringere**, mai allentare, il `baseline` della sua zona:
+> a runtime vince il `baseline`, e al caricamento il tentativo è un problema
+> `baseline-violation` che da Fase 3 non fa partire il CMS. Le `hardcodedRules`
+> restano nel `.default` come documentazione, non più come fonte di verità.
 
 ## A3 · Le regole hardcoded del controllo accessi non sono immutabili
 

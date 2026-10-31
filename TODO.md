@@ -919,12 +919,12 @@ Fonte: [`docs/decisions/path-zones.it.md`](./docs/decisions/path-zones.it.md)
 (design **approvato** il 2026-10-30, strada B — « costruire il muro »).
 Chiude alla radice [`REVIEW.md`](./REVIEW.md) → **A1** e **A3**.
 
-**Fasi 0, 1 e 2 fatte** (2026-10-30/31). Il `baseline` di zona è **attivo nel motore**:
-**A1 e A3 sono chiusi nei fatti**, e lo sono già con le regole non ancora migrate —
-con `adminPrefix: "backoffice"` e i letterali `/admin` ancora nel file, un anonimo sul
-pannello è respinto. Il pannello resta protetto anche con `accessControl.json5`
-svuotato, illeggibile o cancellato (prima, in tutti e tre i casi, si apriva a
-chiunque). Le voci A1/A3 di `REVIEW.md` si spuntano a **Fase 3** completata.
+**Fasi 0-3 fatte** (2026-10-30/31). **A1 e A3 sono CHIUSI e spuntati in `REVIEW.md`.**
+Il pannello è protetto a qualunque `adminPrefix` e anche con `accessControl.json5`
+svuotato, illeggibile o cancellato; un ruleset non applicabile non fa partire il CMS
+(box `[ACCESS]` + `[FATAL]`, verificato sul server reale); una modifica che non
+passerebbe il boot non può essere salvata dalla GUI. Le fasi 4-6 che restano sono
+**pulizia e propagazione, non correzione**.
 
 - [x] ~~**Fase 0 — conferma del naming.**~~ **Chiusa il 2026-10-30:** tutti i nomi
       approvati (`{{admin}}`, `pathZones`/`core/pathZoneResolver.js`,
@@ -954,12 +954,20 @@ chiunque). Le voci A1/A3 di `REVIEW.md` si spuntano a **Fase 3** completata.
       **Un cambiamento da conoscere:** `GET {{adminThemeResources}}/...` da anonimo
       ora risponde 302 invece di 200 — fuga che il commento di `runtimeGate.js:232`
       già descriveva; la pagina di login non è toccata (usa il tema pubblico).
-- [ ] **Fase 3 — invarianti + box `[ACCESS]`: `core/accessInvariantCheck.js`.**
-      Tabella delle sonde invocata dentro `loadRules()` (copre boot, salvataggio
-      GUI e reload a server acceso con un solo punto); fatale al boot, rifiuto del ruleset a runtime. Test che presidia la
-      presenza di `adminAccessControl` in `essentialPlugins` — oggi l'unica cosa che
-      impedisce a un'installazione senza guardia di partire.
-      **Solo a fine fase** si spuntano A1 e A3 in `REVIEW.md`.
+- [x] ~~**Fase 3 — invarianti + box `[ACCESS]`: `core/accessInvariantCheck.js`.**~~
+      **Fatta il 2026-10-31.** Le sonde si **derivano** dalle zone invece di essere
+      elencate (19 sulla configurazione distribuita), così una zona chiusa aggiunta
+      domani è coperta senza toccare il file; verificano anche il verso opposto (ogni
+      ruolo ammesso deve entrare, perché un pannello irraggiungibile al suo
+      amministratore non è sicurezza). L'unica sonda non derivabile è la più
+      importante: il login raggiungibile da anonimo, con l'URL preso da
+      `defaultPolicy.redirectOnDenied` — senza, un rifiutato finisce su una pagina che
+      lo rifiuta e nessuno può più autenticarsi per correggere. Al boot si **lancia**
+      (la fatalità è di `pluginSys`, non un `process.exit` dal plugin); a runtime si
+      rifiuta tenendo il ruleset precedente. `saveRules` esegue gli stessi controlli
+      **prima di scrivere**: un file che non farebbe ripartire il CMS non può essere
+      salvato. Tutti e otto i problemi sono fatali, con messaggi **diagnostici** e non
+      prescrittivi. +34 test. **A1 e A3 spuntati in `REVIEW.md`.**
 - [ ] **Fase 4 — segnaposti nei `.default` + migrazione.** I letterali passano a
       `{{…}}`; la derivazione `hideExtension` sostituisce le regole scritte due volte;
       `migrations/` + bump di `schemaVersion` del descrittore per ogni pacchetto
