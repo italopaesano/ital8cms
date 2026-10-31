@@ -437,7 +437,7 @@ perimetro ad aver prodotto A1.
 |---|---|
 | **0 — Conferma del naming** | ✅ **CHIUSA (2026-10-30).** Tutti i nomi approvati, vedi *Naming*. Nessun codice. |
 | **1 — La mappa (modulo puro)** | ✅ **FATTA (2026-10-30).** `core/pathZoneResolver.js`: zone, risoluzione `{{…}}`, errore su segnaposto sconosciuto, rilevamento collisioni, derivazione delle forme senza estensione. Test unitari esaustivi, incluso `adminPrefix: "backoffice"`. **Nessun consumatore ancora collegato.** |
-| **2 — `baseline` di zona in `accessManager`** | Il `baseline` entra nel motore; `defaultPolicy` globale affiancata e poi superata; monotonia (D4) applicata e testata. `hardcodedRules` diventano ridondanti. |
+| **2 — `baseline` di zona in `accessManager`** | ✅ **FATTA (2026-10-31).** Il `baseline` entra nel motore; `defaultPolicy` globale affiancata e poi superata; monotonia (D4) applicata e testata. `hardcodedRules` diventano ridondanti. |
 | **3 — Invarianti + box `[ACCESS]`** | `core/accessInvariantCheck.js`: tabella delle sonde, invocata dentro `loadRules()`; fatale al boot, rifiuto a runtime (D7); test che presidia la presenza di `adminAccessControl` in `essentialPlugins`. |
 | **4 — Segnaposti nei `.default` + migrazione** | I `.default` passano dai letterali ai segnaposti; derivazione `hideExtension` sostituisce le regole duplicate; `migrations/` + bump di `schemaVersion` (vedi *Migrazione*). |
 | **5 — Adozione negli altri consumatori** | `sentinel`, `seo`, `rateLimiter`, `csrfProtection`, `urlRedirect`, `botDetector`: i 20 letterali censiti passano ai segnaposti, uno plugin per volta. |
