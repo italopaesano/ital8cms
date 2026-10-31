@@ -1,10 +1,18 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 2,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   "active": 1,
   "weight": 5,
   "dependency": {},
   "nodeModuleDependency": {},
+
+  // ── Segnaposti di percorso ──────────────────────────────────────────
+  // I pattern possono usare {{admin}}, {{pluginPages}}, … al posto del
+  // prefisso concreto: il CMS lo risolve al caricamento leggendo le zone.
+  // Un segnaposto sconosciuto è un ERRORE, mai un letterale.
+  // Elenco completo e regole → docs/decisions/path-zones.it.md
+  // ────────────────────────────────────────────────────────────────────
+
   "custom": {
 
     // Interruttore globale del plugin. Se false, il guard è inattivo:
@@ -95,11 +103,23 @@
       // Percorsi SEMPRE esenti dall'enforcement (pattern PatternMatcher: * e **).
       // Includi l'area admin (per non auto-bloccarti) e le risorse dei temi
       // (così un'eventuale pagina di blocco può caricare CSS/JS).
-      // NOTA: adegua questi percorsi se usi un globalPrefix non vuoto.
+      //
+      // I SEGNAPOSTI SEGUONO LA CONFIGURAZIONE, I LETTERALI NO. Fino alla v3.30.0
+      // qui c'erano "/admin/**" e i due prefissi dei temi scritti a mano: testo,
+      // mentre quei prefissi sono VARIABILI di ital8Config.json5. Chi cambiava
+      // `adminPrefix` perdeva l'esenzione senza un avviso, e la conseguenza non è
+      // « una regola che non protegge » ma « l'amministratore si fa limitare sul
+      // proprio pannello », cioè perde lo strumento con cui correggerebbe.
+      //
+      // Il globalPrefix NON si scrive qui, e non va più adeguato a mano: da
+      // v3.30.0 il middleware lo toglie dal path prima del confronto, come già
+      // facevano accessManager e sentinel. (Prima lo confrontava col path grezzo,
+      // quindi su un'istanza con globalPrefix valorizzato nessuna esenzione
+      // combaciava — ed è il motivo per cui qui c'era scritto di adeguarli.)
       "exemptPaths": [
-        "/admin/**",
-        "/public-theme-resources/**",
-        "/admin-theme-resources/**",
+        "{{admin}}/**",
+        "{{publicThemeResources}}/**",
+        "{{adminThemeResources}}/**",
       ],
     },
 

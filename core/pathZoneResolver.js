@@ -556,6 +556,76 @@ function resolvePattern(pattern, zonesByName) {
 }
 
 /**
+ * Risolve i segnaposti in un ARRAY di pattern.
+ *
+ * Terza della famiglia, per cardinalità: `resolvePattern` ne risolve uno,
+ * `resolveRuleset` un record `pattern → regola`, questa una lista nuda. È la
+ * forma in cui i pattern arrivano fuori da `adminAccessControl`:
+ * `rateLimiter.exemptPaths`, `sentinel` (`match.path`), `seo` (`robots.disallow`).
+ *
+ * ─── UN PATTERN CON PROBLEMI VIENE SCARTATO, NON TENUTO ───────────────────────
+ * Stessa regola delle sorelle, e per lo stesso motivo: un segnaposto che non si
+ * risolve non deve diventare un letterale (D2). Ma qui la conseguenza dello
+ * scarto dipende dal chiamante, e nessuno di questi tre casi è innocuo:
+ *
+ *   • `exemptPaths` → un'esenzione in meno rende il rate limiter PIÙ aggressivo:
+ *     l'amministratore può ritrovarsi limitato sul proprio pannello;
+ *   • `match.path`  → la regola non matcha più, quindi si smette di osservare;
+ *   • `disallow`    → una riga in meno in robots.txt.
+ *
+ * Perciò `problems` non è un dettaglio da ignorare: il chiamante DEVE trattarlo
+ * come un errore di configurazione, non come « qualche pattern in meno ».
+ *
+ * ─── NON DERIVA LE FORME SENZA ESTENSIONE, DI PROPOSITO ───────────────────────
+ * `resolveRuleset` lo fa perché una regola porta semantica d'accesso, che deve
+ * valere su entrambe le forme di URL servite. Una lista nuda non dice cosa
+ * significhi appartenervi — esente, osservato, escluso dai crawler — e derivare
+ * in silenzio aggiungerebbe elementi che il chiamante non ha chiesto, a una
+ * lista di cui non conosciamo la semantica. Chi ha bisogno di coprire entrambe
+ * le forme usa `**`, che le copre entrambe per costruzione.
+ *
+ * ─── I PATH SONO LOGICI, SENZA `globalPrefix` ─────────────────────────────────
+ * Come tutto il modulo: `globalPrefix` è il prefisso di deploy che precede le
+ * zone, non una zona. Un chiamante che confronta con `ctx.path` deve toglierlo
+ * prima del match — come già fanno `accessManager` e `sentinel` — e un chiamante
+ * che EMETTE un URL verso l'esterno (robots.txt) deve anteporlo.
+ *
+ * @param {string[]} patterns - I pattern come arrivano dal `.json5`.
+ * @param {{zones: object[], byName: Map}} zoneMap - Il risultato di `resolvePathZones`.
+ * @returns {{patterns: string[], problems: object[]}}
+ * @throws {TypeError} se `patterns` non è un array, o se un elemento non è una
+ *   stringa. Un elemento non-stringa non è un pattern malformato ma un file
+ *   malformato: stessa scelta di `resolvePattern`, sollevata di un livello.
+ */
+function resolvePatternList(patterns, zoneMap) {
+  if (!Array.isArray(patterns)) {
+    throw new TypeError('resolvePatternList: patterns must be an array');
+  }
+  if (!zoneMap || !(zoneMap.byName instanceof Map)) {
+    throw new TypeError('resolvePatternList: zoneMap must come from resolvePathZones()');
+  }
+
+  const resolved = [];
+  const problems = [];
+
+  for (const pattern of patterns) {
+    if (typeof pattern !== 'string') {
+      throw new TypeError(
+        `resolvePatternList: ogni elemento deve essere una stringa, trovato ${typeof pattern}`
+      );
+    }
+    const outcome = resolvePattern(pattern, zoneMap.byName);
+    if (outcome.problems.length > 0) {
+      problems.push(...outcome.problems);
+      continue;
+    }
+    resolved.push(outcome.pattern);
+  }
+
+  return { patterns: resolved, problems: Object.freeze(problems) };
+}
+
+/**
  * Risolve e espande un intero ruleset. È l'operazione che la Fase 2 chiamerà da
  * `accessManager.loadRules()`.
  *
@@ -738,6 +808,7 @@ module.exports = {
   resolvePathZones,
   resolveRuleset,
   resolvePattern,
+  resolvePatternList,
   zoneForPath,
   tightenAccess,
   violatesBaseline,

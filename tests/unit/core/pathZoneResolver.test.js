@@ -14,6 +14,7 @@ const {
   resolvePathZones,
   resolveRuleset,
   resolvePattern,
+  resolvePatternList,
   zoneForPath,
   tightenAccess,
   violatesBaseline,
@@ -1039,5 +1040,99 @@ describe('resolveRuleset — la monotonia è rilevata al caricamento', () => {
     const { problems } = resolveRuleset(merged, zm);
     expect(problems).toEqual([]);
     expect(zm.problems).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// resolvePatternList — la variante per gli array (Fase 5)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Terza della famiglia per cardinalità. I test che contano sono quelli sulle
+// proprietà che la distinguono: NON deriva, SCARTA ciò che non risolve, e lascia
+// intatti i letterali estranei — quest'ultima è vitale perché `sentinel` ha una
+// ventina di pattern di tecnologie altrui (`/wp-admin/**`, `/phpmyadmin/**`) che
+// non sono zone di ital8cms e non devono diventare problemi.
+describe('resolvePatternList', () => {
+  test('risolve i segnaposti e lascia intatti i letterali', () => {
+    const zm = resolvePathZones(conf());
+    const out = resolvePatternList(
+      ['{{admin}}/**', '{{api}}/adminUsers/login', '/wp-admin/**', '/.env'],
+      zm
+    );
+    expect(out.patterns).toEqual(['/admin/**', '/api/adminUsers/login', '/wp-admin/**', '/.env']);
+    expect(out.problems).toEqual([]);
+  });
+
+  test('segue un adminPrefix non di default', () => {
+    const zm = resolvePathZones(conf({ adminPrefix: 'backoffice' }));
+    expect(resolvePatternList(['{{admin}}/**'], zm).patterns).toEqual(['/backoffice/**']);
+  });
+
+  test('un segnaposto ignoto SCARTA il pattern e lo dichiara', () => {
+    const zm = resolvePathZones(conf());
+    const out = resolvePatternList(['{{admin}}/**', '{{nonEsiste}}/x'], zm);
+    // Il fail-closed del modulo: un segnaposto irrisolto non diventa un letterale.
+    expect(out.patterns).toEqual(['/admin/**']);
+    expect(out.problems.map((p) => p.kind)).toEqual(['unknown-placeholder']);
+  });
+
+  test('un nome del PROTOTIPO non pesca dalla catena', () => {
+    // Stessa classe di REVIEW.md → B4: `{{constructor}}` non deve diventare
+    // "undefined/x", che è un letterale che non matcha nulla.
+    const zm = resolvePathZones(conf());
+    const out = resolvePatternList(['{{constructor}}/x', '{{toString}}/y'], zm);
+    expect(out.patterns).toEqual([]);
+    expect(out.problems.map((p) => p.kind)).toEqual(['unknown-placeholder', 'unknown-placeholder']);
+  });
+
+  test('NON deriva le forme senza estensione, anche con hideExtension acceso', () => {
+    // Deliberato: una lista nuda non dichiara cosa significhi appartenervi, e
+    // aggiungere elementi non richiesti a una lista di semantica ignota è peggio
+    // che non aggiungerli. Chi deve coprire entrambe le forme usa `**`.
+    const zm = resolvePathZones(conf(hideExt('pluginPagesPrefix')));
+    const out = resolvePatternList(['{{pluginPages}}/adminUsers/login.ejs'], zm);
+    expect(out.patterns).toEqual(['/pluginPages/adminUsers/login.ejs']);
+  });
+
+  test('conserva l ordine, che per alcuni chiamanti è semantico', () => {
+    // `urlRedirect` è first-match-wins, e un riordino cambierebbe quale regola
+    // vince. Qui non c'è riordino da nessuna parte: si fissa che resti così.
+    const zm = resolvePathZones(conf());
+    const out = resolvePatternList(['/z', '{{admin}}/a', '/b', '{{api}}/c'], zm);
+    expect(out.patterns).toEqual(['/z', '/admin/a', '/b', '/api/c']);
+  });
+
+  test('una lista vuota è valida e non è un problema', () => {
+    const zm = resolvePathZones(conf());
+    expect(resolvePatternList([], zm)).toEqual({ patterns: [], problems: [] });
+  });
+
+  test('i path sono LOGICI: globalPrefix non entra', () => {
+    // globalPrefix è il prefisso di deploy, non una zona. Chi confronta con
+    // ctx.path lo toglie prima; chi emette un URL lo antepone.
+    const zm = resolvePathZones(conf({ globalPrefix: '/mysite' }));
+    expect(resolvePatternList(['{{admin}}/**'], zm).patterns).toEqual(['/admin/**']);
+  });
+
+  test('un elemento non-stringa è un file malformato, non un pattern malformato', () => {
+    const zm = resolvePathZones(conf());
+    expect(() => resolvePatternList(['/ok', 123], zm)).toThrow(TypeError);
+    expect(() => resolvePatternList(['/ok', null], zm)).toThrow(/stringa/);
+  });
+
+  test('rifiuta argomenti che non sono quelli attesi', () => {
+    const zm = resolvePathZones(conf());
+    expect(() => resolvePatternList('/admin/**', zm)).toThrow(/must be an array/);
+    expect(() => resolvePatternList(['/x'], {})).toThrow(/resolvePathZones/);
+    expect(() => resolvePatternList(['/x'], null)).toThrow(/resolvePathZones/);
+  });
+
+  test('un pattern regex: con quantificatori NON è scartato', () => {
+    // La trappola trovata in revisione sulla Fase 1: `\d{1,3}` ha graffe singole
+    // legittime, e un controllo indiscriminato buttava via la regola.
+    const zm = resolvePathZones(conf());
+    const out = resolvePatternList(['regex:^/ip/\\d{1,3}$'], zm);
+    expect(out.patterns).toEqual(['regex:^/ip/\\d{1,3}$']);
+    expect(out.problems).toEqual([]);
   });
 });

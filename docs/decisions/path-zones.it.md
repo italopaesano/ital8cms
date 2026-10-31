@@ -441,7 +441,7 @@ perimetro ad aver prodotto A1.
 | **2 — `baseline` di zona in `accessManager`** | ✅ **FATTA (2026-10-31).** Il `baseline` entra nel motore; `defaultPolicy` globale affiancata e poi superata; monotonia (D4) applicata e testata. `hardcodedRules` diventano ridondanti. |
 | **3 — Invarianti + box `[ACCESS]`** | ✅ **FATTA (2026-10-31).** `core/accessInvariantCheck.js`: sonde invocate dentro `loadRules()`; fatale al boot, rifiuto a runtime (D7); test che presidia la presenza di `adminAccessControl` in `essentialPlugins`. |
 | **4 — Segnaposti nei `.default` + migrazione** | ✅ **FATTA (2026-10-31).** 10 regole dichiarate → 6 (le tre forme pulite sono ora **derivate**); `migrations/` con lo step v3→v4 (script testuale, idempotente, fail-soft) e bump del descrittore a `4`; stanza canonica D8 + presidio. Migrazione applicata con la CLI reale e verificata con `adminPrefix: "backoffice"`. |
-| **5 — Adozione negli altri consumatori** | `sentinel`, `seo`, `rateLimiter`, `csrfProtection`, `urlRedirect`, `botDetector`: i 20 letterali censiti passano ai segnaposti, uno plugin per volta. |
+| **5 — Adozione negli altri consumatori** | ✅ **FATTA (2026-10-31).** `sentinel`, `rateLimiter`, `seo` convertiti; `resolvePatternList` nel core; tre migrazioni (due basate su oggetto). Accertato che i path vivono in **due spazi** (logico per chi confronta, servito per chi emette) e corretti i due outlier. `csrfProtection`, `urlRedirect` e `botDetector` non hanno letterali di zona nei config: fuori perimetro. |
 | **6 — Consolidamento `runtimeGate`** | Il `reservedGate` deriva il perimetro dalla mappa invece di ricalcolarlo. |
 
 **Corsia trasversale (in ogni fase, non alla fine):**
@@ -464,7 +464,7 @@ perimetro ad aver prodotto A1.
 | 2 — `baseline` in `accessManager` | ✅ **implementata** (2026-10-31) — +28 test sul motore |
 | 3 — Invarianti + box `[ACCESS]` | ✅ **implementata e revisionata ×2** (2026-10-31) — +72 test |
 | 4 — Segnaposti nei `.default` + migrazione | ✅ **implementata** (2026-10-31) — +20 test, 1 adeguato |
-| 5 — Adozione negli altri consumatori | ⬜ da fare |
+| 5 — Adozione negli altri consumatori | ✅ **implementata** (2026-10-31) — +27 test, 2 adeguati |
 | 6 — Consolidamento `runtimeGate` | ⬜ da fare |
 
 > ⚠️ **A1 e A3 sono chiusi da qui, non dalla Fase 4.** Le regole nei `.default`
@@ -848,6 +848,140 @@ mutazioni: spegnere la derivazione rompe 5 casi, togliere `isAuthEntryPoint` a
 > i segnaposti, e lo fa **in silenzio** se le sue asserzioni sono negative
 > (« non è riservata » passa anche quando nessuna regola matcha più niente).
 
+### Fase 5 — cosa è stato scritto
+
+Tre consumatori passano ai segnaposti: `sentinel`, `rateLimiter`, `seo`. Ma la
+fase ha prodotto un risultato concettuale che la decisione non aveva previsto, ed
+è la parte da ricordare.
+
+#### Lo spazio dei path è DUE spazi, non uno
+
+Accertato consumatore per consumatore, prima di convertire niente:
+
+| Consumatore | Spazio | Come |
+|---|---|---|
+| `accessManager` | **logico** | toglie `globalPrefix` prima del match (`accessManager.js:469`) |
+| `sentinel` | **logico** | lo toglie (`lib/ruleMatcher.js:80`), e il suo validatore lo enuncia come regola |
+| `rateLimiter` | **servito** | confrontava `ctx.path` grezzo |
+| `seo` → robots.txt | **servito** | emette i path verbatim, e i crawler li leggono su URL reali |
+
+Chi **confronta** una richiesta vive nello spazio logico; chi **emette** un URL
+verso l'esterno vive in quello servito. `resolvePathZones` restituisce path
+logici (`globalPrefix` non è una zona, D1), quindi i due casi vanno trattati in
+modo opposto: il primo **toglie** il prefisso di deploy, il secondo lo
+**antepone**.
+
+I due outlier erano difetti **preesistenti**, indipendenti dai segnaposti:
+
+- `rateLimiter` confrontava il path grezzo, quindi su un'istanza con
+  `globalPrefix` valorizzato **nessuna** esenzione combaciava — e la conseguenza
+  non è « una regola che non protegge » ma « l'amministratore si fa limitare sul
+  proprio pannello ». Il config lo ammetteva in un commento: « *adegua questi
+  percorsi se usi un globalPrefix non vuoto* ». Un config che chiede di tenere a
+  mano un valore che il CMS già conosce è la forma di difetto che questa
+  decisione chiude; e con i segnaposti quel « adegua a mano » diventava
+  **impossibile da seguire**. Ora il middleware toglie `globalPrefix` come gli
+  altri due, e il commento è stato rimosso perché non serve più.
+- `seo` non menzionava `globalPrefix` da nessuna parte: `Disallow: /admin/` su
+  un'istanza montata sotto `/mysite` non escludeva niente. Convertire senza
+  correggere avrebbe scritto in robots.txt una protezione non in vigore — A1 di
+  nuovo, in un file pubblico. Corretto insieme (`lib/robotsTxtGenerator.js` →
+  `toServedPaths`), su decisione del maintainer.
+
+#### `resolvePatternList` — la terza della famiglia
+
+`resolvePattern` ne risolve uno, `resolveRuleset` un record `pattern → regola`,
+`resolvePatternList` una **lista nuda** — la forma in cui i pattern arrivano
+fuori da `adminAccessControl`. Due proprietà sono scelte, non omissioni:
+
+- **non deriva** le forme senza estensione: una lista nuda non dichiara cosa
+  significhi appartenervi (esente? osservato? escluso dai crawler?), e aggiungere
+  elementi non richiesti a una lista di semantica ignota è peggio che non
+  aggiungerli. Chi deve coprire entrambe le forme usa `**`;
+- **scarta** ciò che non risolve, come le sorelle — ma qui lo scarto non è
+  innocuo in nessuno dei tre casi, quindi `problems` va trattato come un errore
+  di configurazione e non come « qualche pattern in meno ». Tutti e tre i
+  chiamanti lo loggano nominando la conseguenza.
+
+#### I letterali estranei restano letterali
+
+Dei pattern di `sentinel` la grande maggioranza sono tecnologie **altrui** —
+`/wp-admin/**`, `/phpmyadmin/**`, `/.env`, `/typo3/**` — e non vanno convertiti:
+non sono zone di ital8cms e non seguono alcuna sua configurazione. L'unica regola
+distribuita che nomina percorsi nostri è `auth-surface-noise`.
+`resolvePatternList` li lascia intatti per costruzione (tocca solo ciò che
+contiene `{{…}}`), e un test lo presidia.
+
+#### In `sentinel` la risoluzione precede la validazione, e deve
+
+Il validatore rifiuta un path che non cominci con `/` o `regex:`. Un
+`{{api}}/adminUsers/login` comincia con `{`, quindi dopo la validazione non ci
+arriverebbe mai: verrebbe respinto come path malformato, con un messaggio che
+parla di tutt'altro. `resolveMatchPaths` gira prima, e il validatore continua a
+vedere solo path concreti — com'è giusto, perché è lui che conosce ReDoS e forma.
+
+Con una **guardia**: `loadPlugin` ingoia in silenzio un `ital8Config.json5`
+illeggibile (`catch { ital8Conf = {} }`) e `resolvePathZones({})` ricade sui
+prefissi di **default** senza segnalare nulla. Su un'istanza con
+`adminPrefix: "backoffice"` i segnaposti si risolverebbero a `/admin`: una regola
+che sembra configurata e non osserva niente, cioè A1 riprodotto dentro la sua
+stessa correzione. Quindi senza config globale non si risolve: i `{{…}}` restano,
+il validatore li respinge, e tutto viene detto.
+
+#### Un difetto di ORDINE, trovato dal vivo
+
+Bumpare la `schemaVersion` di un `.default` **prima** di dichiarare la migrazione
+**brucia il trigger**. È accaduto in questa sessione: dopo il bump, un boot ha
+portato i vivi di `rateLimiter` e `seo` a `schemaVersion: 2` lasciando i valori
+letterali — ricevuta avanzata, contenuto no, e la migrazione `from: 1` non
+scatterebbe mai più.
+
+Il meccanismo è quello che `CLAUDE.md` descrive — i config con una migrazione
+pendente sono **esclusi** dal merge additivo — ma l'esclusione si popola **dalle
+migrazioni dichiarate**: senza dichiarazione non c'è esclusione, e il merge
+allinea la versione senza fare il lavoro. **L'ordine è obbligatorio: prima
+`migrations/`, poi il bump.** Nessun presidio lo impone oggi (registrato fra i
+punti rimandati).
+
+#### Le tre migrazioni, e perché due non sono testuali
+
+| Pacchetto | Step | Forma |
+|---|---|---|
+| `rateLimiter` | v1 → v2 | `setJson5Key(['custom','enforcement','exemptPaths'])` |
+| `seo` | v1 → v2 | `setJson5Key(['custom','robotsTxtRules','disallow'])` |
+| `sentinel` | v6 → v7 | sostituzione testuale di **una riga**, ancorata al testo esatto |
+
+Le prime due sono **basate su oggetto**: la chiave è indirizzabile, quindi non
+serve chirurgia testuale, e `setJson5Key` preserva i commenti. È la lezione della
+revisione della Fase 4, dove i due difetti di perdita dati venivano entrambi
+dalla manipolazione testuale di una struttura annidata. `sentinel` non può —
+`rules` è un array e la riga vive dentro una regola — e allora segue il
+precedente del suo stesso step 5→6: si ancora al testo **esatto** e rinuncia se
+non lo trova, invece di indovinare.
+
+Tutte e tre convertono un elemento **solo se è esattamente uno di quelli
+distribuiti**, preservano l'ordine, e **dichiarano** ciò che lasciano. Applicate
+con la CLI reale su un'installazione ricostruita « alla v1 »: valori convertiti,
+`schemaVersion` avanzata, e **tutti i commenti conservati** (51/67/326/258
+invariati prima e dopo).
+
+#### Due presidi hanno colto la propria cecità
+
+- **Il rilevatore di D8 era cieco ai VALORI.** `placeholderStanza.test.js`
+  cercava i segnaposti nella sola forma-**chiave** (`"{{admin}}": {`), perché in
+  Fase 4 esistevano solo lì. In Fase 5 compaiono come **valori** dentro array, e
+  il predicato non li vedeva: `seo` e `sentinel` risultavano « senza segnaposti »
+  e quindi senza obbligo di stanza. Ora toglie i commenti (la stanza cita essa
+  stessa `{{admin}}`) e cerca in chiavi e valori.
+- **Un mio test era VACUO, e l'ha detto una mutazione.** Il test « non tocca un
+  valore MODIFICATO » usava `/pannello/**`, che non discrimina: una conversione
+  sbagliata **per prefisso** lo lascerebbe comunque in pace, quindi il test
+  passava anche con lo script rotto — verificato mutandolo. Ora usa un
+  **restringimento** del percorso distribuito (`/admin/usersManagment/**`), che è
+  anche la personalizzazione realistica e l'unico input su cui uguaglianza esatta
+  e match per prefisso danno risposte diverse. Baseline 25 verdi, mutazione 2
+  fallimenti.
+
 ### Scelte di dettaglio prese in implementazione
 
 Nessuna devia dalla decisione; tre **aggiungono** un caso che la decisione
@@ -957,6 +1091,14 @@ sull'admin.
   proposta iniziale). Molta più macchina — risoluzione di percorsi, cicli, tipi
   non-stringa, valori che contengono `/` o `..` — per casi d'uso che oggi non
   esistono.
+- **Nessun presidio impone l'ordine « prima `migrations/`, poi il bump ».**
+  Emerso dal vivo in Fase 5: bumpare la `schemaVersion` di un `.default` senza
+  aver già dichiarato lo step fa allineare il vivo dal merge additivo al primo
+  boot, **bruciando il trigger** — ricevuta avanzata, lavoro non fatto, e la
+  migrazione non scatterà mai più. Un test potrebbe verificare che ogni coppia
+  `.default`/vivo con `schemaVersion` disallineata abbia uno step dichiarato che
+  la copre. Fuori dallo scopo della Fase 5.
+
 - **Un presidio di boot per `essentialPlugins`.** Un test copre l'installazione in
   cui gira, non quella di chi scarica il CMS: chi rimuove `adminAccessControl` da
   `essentialPlugins` ottiene un sito servito senza middleware di controllo accessi,

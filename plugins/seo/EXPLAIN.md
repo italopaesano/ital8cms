@@ -118,7 +118,11 @@ Il blocco WebSite richiede solo `siteName`.
 "robotsTxtRules": {
   "userAgent": "*",
   "allow": ["/"],
-  "disallow": ["/admin/", "/api/", "/pluginPages/"]
+  // Segnaposti di percorso: seguono i prefissi configurati. A differenza degli
+  // altri consumatori questi percorsi vengono EMESSI (i crawler li leggono sul
+  // sito reale), quindi il generatore vi antepone il globalPrefix invece di
+  // toglierlo. → docs/decisions/path-zones.it.md
+  "disallow": ["{{admin}}/", "{{api}}/", "{{pluginPages}}/"]
 }
 ```
 Il link alla sitemap (`Sitemap: https://...`) viene aggiunto automaticamente se sia `enableSitemap` che `siteUrl` sono configurati.

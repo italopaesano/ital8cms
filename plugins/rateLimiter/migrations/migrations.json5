@@ -1,0 +1,23 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// Migrazioni del plugin rateLimiter.
+//
+// Il clock è la `schemaVersion` del DESCRITTORE (`pluginConfig.default.json5`):
+// uno step si applica quando il descrittore vivo è a `from` e il `.default` è a
+// `to`. Qui il config che cambia È il descrittore, quindi coincidono.
+//
+// Vedi docs/decisions/config-migrations.it.md e core/migrationRunner.js.
+{
+  steps: [
+    {
+      from: 1,
+      to: 2,
+      title: "exemptPaths passa ai segnaposti di percorso",
+      automatic: true,
+      script: "from-v1-to-v2.js",
+      touches: ["pluginConfig.json5"],
+      reason:
+        "I percorsi di `exemptPaths` erano letterali (`/admin/**`) mentre i prefissi a  cui puntano sono VARIABILI di ital8Config.json5: cambiare `adminPrefix`  faceva perdere l'esenzione senza che nulla lo segnalasse. La conseguenza qui  e piu grave che in altri config: `exemptPaths` esiste per non auto-bloccare  l'amministratore sul pannello, quindi un'esenzione che non combacia gli  toglie proprio lo strumento con cui correggerebbe la cosa. Serve una  migrazione perche il merge additivo del boot sa solo aggiungere chiavi, e qui  le chiavi sono le stesse: cambiano i valori dentro un array, che il merge  tratta come un valore opaco. Lo script converte un elemento solo se e  esattamente uno dei tre distribuiti, preserva l'ordine, e dichiara cio che  non ha convertito: un percorso aggiunto o modificato dall'amministratore non  viene toccato.",
+    },
+  ],
+}

@@ -67,6 +67,17 @@
 // nessuno collegherebbe mai al plugin di sicurezza.
 // ─────────────────────────────────────────────────────────────────────────────
 {
+  // ── Segnaposti di percorso ──────────────────────────────────────────
+  // I pattern possono usare {{admin}}, {{pluginPages}}, … al posto del
+  // prefisso concreto: il CMS lo risolve al caricamento leggendo le zone.
+  // Un segnaposto sconosciuto è un ERRORE, mai un letterale.
+  // Elenco completo e regole → docs/decisions/path-zones.it.md
+  // ────────────────────────────────────────────────────────────────────
+  //
+  // I path di TECNOLOGIE ALTRUI restano letterali, ed è giusto: /wp-admin,
+  // /phpmyadmin, /.env non sono zone di ital8cms e non seguono alcuna sua
+  // configurazione. I segnaposti servono ai percorsi NOSTRI.
+
   schemaVersion: 1,
 
   rules: [
@@ -279,7 +290,7 @@
       appliesTo: "anonymous",
       match: {
         all: [
-          { path: ["/api/adminUsers/login", "/api/adminUsers/logout", "/pluginPages/adminUsers/**"] },
+          { path: ["{{api}}/adminUsers/login", "{{api}}/adminUsers/logout", "{{pluginPages}}/adminUsers/**"] },
           { fingerprintClass: { headerProfile: "minimal" } },
         ],
       },

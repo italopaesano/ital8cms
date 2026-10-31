@@ -110,7 +110,7 @@ if (loginOk) {
 | `enforcement.globalLongBlock` | `true` | IP con long block attivo → negato su tutte le pagine fall-through |
 | `enforcement.status` | `429` | Status del diniego dell'enforcement |
 | `enforcement.redirectTo` | `""` | Pagina di redirect al posto dello status (vuoto = status) |
-| `enforcement.exemptPaths` | `["/admin/**", ...]` | Percorsi sempre esenti (pattern PatternMatcher) |
+| `enforcement.exemptPaths` | `["{{admin}}/**", ...]` | Percorsi sempre esenti (pattern PatternMatcher). **Segnaposti di percorso** da v3.31.0: `{{admin}}` segue `adminPrefix` invece di restare un letterale che smette di combaciare appena lo cambi — e un'esenzione che non combacia ti fa limitare sul tuo pannello. → [`path-zones.it.md`](../../docs/decisions/path-zones.it.md) |
 | `sweepIntervalSeconds` | `60` | Pulizia periodica dei blocchi scaduti |
 | `enableLogging` | `true` | Log a console degli eventi |
 | `strictValidation` | `false` | Se `true`, errori di validazione fanno crashare il boot |
@@ -142,7 +142,10 @@ attraverso il router (pagine statiche/EJS), non sulle rotte API già matchate
    `pathPattern`; se il percorso richiesto matcha (PatternMatcher: `*`/`**`/`regex:`)
    e l'IP è bloccato per quella regola (short o long), l'accesso è negato.
 
-I percorsi in `enforcement.exemptPaths` passano sempre (di default l'area admin e
+I percorsi in `enforcement.exemptPaths` passano sempre. Si scrivono **senza**
+`globalPrefix`, che il middleware toglie dal path prima del confronto (da
+v3.31.0; prima confrontava il path grezzo, quindi su un'istanza con
+`globalPrefix` valorizzato nessuna esenzione combaciava). Di default l'area admin e
 le risorse dei temi, per evitare l'auto-blocco e permettere lo styling di
 un'eventuale pagina di blocco).
 

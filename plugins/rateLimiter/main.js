@@ -39,11 +39,20 @@ const StateStore = require('./lib/stateStore');
 const AttemptLog = require('./lib/attemptLog');
 const { resolveClientId } = require('./lib/keyResolver');
 const { validate } = require('./lib/configValidator');
+const { resolvePathZones, resolvePatternList } = require('../../core/pathZoneResolver');
 
 const LOG_PREFIX = 'rateLimiter';
 
 const ital8Conf = loadJson5(path.join(__dirname, '../../ital8Config.json5'));
 const isDebugMode = ital8Conf.debugMode >= 1;
+
+// globalPrefix: il prefisso di deploy che precede tutte le zone. NON è una zona,
+// quindi i pattern si scrivono senza — e qui va TOLTO dal path prima del match.
+const globalPrefix = ital8Conf.globalPrefix || '';
+
+// La mappa delle zone, costruita una volta: i prefissi vengono dal config globale
+// e non cambiano a caldo (cambiarli richiede un riavvio comunque).
+const zoneMap = resolvePathZones(ital8Conf);
 
 let pluginFolder = null;
 let custom = null; // pluginConfig.custom
@@ -102,6 +111,51 @@ function reloadRules() {
 }
 
 /**
+ * Espande i segnaposti di percorso in `custom.enforcement.exemptPaths`, in place.
+ *
+ * ─── PERCHE NON BASTA IL LETTERALE ────────────────────────────────────────────
+ * `exemptPaths` esisteva come `["/admin/**", ...]`: testo, mentre la posizione
+ * del pannello è una VARIABILE (`adminPrefix`). Nessun codice teneva allineate le
+ * due cose, e la conseguenza qui è peggiore che altrove — non « una regola che
+ * non protegge » ma « l'amministratore si fa limitare sul proprio pannello »,
+ * cioè perde l'accesso allo strumento con cui correggerebbe la cosa. Il file lo
+ * ammetteva in un commento: « adegua questi percorsi se usi un globalPrefix non
+ * vuoto ». Un config che chiede all'amministratore di tenere a mano un valore che
+ * il CMS già conosce è la forma di difetto che path-zones chiude.
+ *
+ * ─── UN PATTERN NON RISOLTO VIENE SCARTATO, E SI DICE ─────────────────────────
+ * `resolvePatternList` scarta ciò che non risolve (un segnaposto irrisolto non
+ * deve diventare un letterale). Qui lo scarto rende il limiter PIÙ aggressivo, e
+ * nella direzione che blocca l'amministratore: per questo si logga a livello
+ * `error` e si nomina il pattern. Non si lancia — rateLimiter non deve togliere
+ * il sito per un'esenzione malscritta — ma non resta nemmeno silenzioso.
+ *
+ * @param {object} customConfig - l'oggetto `custom` appena letto dal pluginConfig
+ */
+function resolveExemptPaths(customConfig) {
+  const enf = customConfig && customConfig.enforcement;
+  if (!enf || !Array.isArray(enf.exemptPaths)) return;
+
+  let outcome;
+  try {
+    outcome = resolvePatternList(enf.exemptPaths, zoneMap);
+  } catch (err) {
+    // Un elemento non-stringa: file malformato. Si lascia la lista come era —
+    // letterali compresi — invece di svuotarla, che sarebbe il danno peggiore.
+    logger.error(LOG_PREFIX, `exemptPaths non risolvibile (${err.message}) — lista lasciata come scritta`);
+    return;
+  }
+
+  for (const problem of outcome.problems) {
+    logger.error(LOG_PREFIX,
+      `exemptPaths: pattern SCARTATO "${problem.pattern}" (${problem.kind}) — `
+      + 'quel percorso NON è più esente dal rate limiting');
+  }
+
+  enf.exemptPaths = outcome.patterns;
+}
+
+/**
  * Re-legge pluginConfig.json5 e aggiorna `custom` a caldo (defaults, enforcement,
  * response, ...). Le policy effettive e l'enforcement L2 leggono `custom` live,
  * quindi le modifiche hanno effetto senza riavvio. I parametri infrastrutturali
@@ -112,6 +166,7 @@ function reloadConfig() {
   try {
     const cfg = loadJson5(path.join(pluginFolder, 'pluginConfig.json5'));
     custom = cfg.custom || {};
+    resolveExemptPaths(custom);
     cachedRules = null; // le policy effettive dipendono anche dai defaults
   } catch (err) {
     logger.warn(LOG_PREFIX, `reloadConfig fallito: ${err.message}`);
@@ -126,6 +181,7 @@ module.exports = {
 
     const cfg = loadJson5(path.join(pathPluginFolder, 'pluginConfig.json5'));
     custom = cfg.custom || {};
+    resolveExemptPaths(custom);
 
     if (custom.enabled === false) {
       logger.info(LOG_PREFIX, 'disabilitato (custom.enabled=false) — guard inattivo');
@@ -226,7 +282,18 @@ module.exports = {
           return;
         }
 
-        const urlPath = ctx.path;
+        // Path LOGICO: senza globalPrefix, cioè nello stesso spazio in cui sono
+        // scritti i pattern. È la convenzione che accessManager (accessManager.js)
+        // e sentinel (lib/ruleMatcher.js) applicano già, e che il validatore di
+        // sentinel enuncia: « i path si scrivono a partire da / e SENZA
+        // globalPrefix ». rateLimiter era l'unico a confrontare il path grezzo:
+        // su un'istanza con globalPrefix valorizzato NESSUNA esenzione combaciava
+        // e l'amministratore poteva farsi limitare sul proprio pannello.
+        // Senza globalPrefix è un no-op.
+        let urlPath = ctx.path;
+        if (globalPrefix && urlPath.startsWith(globalPrefix)) {
+          urlPath = urlPath.slice(globalPrefix.length) || '/';
+        }
 
         // Percorsi esenti (admin, risorse tema, ecc.)
         const exemptPaths = Array.isArray(enf.exemptPaths) ? enf.exemptPaths : [];

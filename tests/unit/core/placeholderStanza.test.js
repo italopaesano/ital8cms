@@ -50,6 +50,10 @@ const CANONICAL_STANZA = [
  */
 const FILES_WITH_PLACEHOLDERS = [
   'plugins/adminAccessControl/accessControl.default.json5',
+  // Fase 5 — un consumatore per volta:
+  'plugins/rateLimiter/pluginConfig.default.json5',
+  'plugins/seo/pluginConfig.default.json5',
+  'plugins/sentinel/sentinelRules.default.json5',
 ];
 
 describe('stanza canonica dei segnaposti', () => {
@@ -102,8 +106,23 @@ describe('stanza canonica dei segnaposti', () => {
 
     const usesPlaceholders = candidates.filter((rel) => {
       const content = fs.readFileSync(path.join(REPO, rel), 'utf8');
-      // Un segnaposto dentro una CHIAVE, cioè un pattern — non in un commento.
-      return /^\s*["']\{\{[A-Za-z]/m.test(content);
+      // Un segnaposto in una CHIAVE o in un VALORE, mai in un commento.
+      //
+      // Il rilevatore della Fase 4 cercava solo la forma-chiave (`"{{admin}}": {`),
+      // perché allora i segnaposti esistevano solo lì. In Fase 5 compaiono come
+      // VALORI — dentro array (`exemptPaths`, `match.path`, `disallow`) — e il
+      // vecchio predicato non li vedeva: `seo` e `sentinel` risultavano senza
+      // segnaposti e quindi senza obbligo di stanza. Il presidio ha colto la
+      // propria cecità appena la Fase 5 l'ha esercitata.
+      //
+      // I commenti vanno tolti PRIMA: la stanza canonica cita essa stessa
+      // `{{admin}}` e `{{pluginPages}}`, quindi ogni file che la porta
+      // risulterebbe « usa segnaposti » anche senza averne nessuno.
+      const withoutComments = content
+        .split('\n')
+        .filter((line) => !/^\s*\/\//.test(line))
+        .join('\n');
+      return /\{\{[A-Za-z]/.test(withoutComments);
     });
 
     expect(usesPlaceholders.sort()).toEqual([...FILES_WITH_PLACEHOLDERS].sort());

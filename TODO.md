@@ -1020,17 +1020,44 @@ passerebbe il boot non può essere salvata dalla GUI. Le fasi 4-6 che restano so
       « forma senza estensione » esercitano davvero `hideExtension` acceso, e i casi
       « non riservata » girano su entrambi i ruleset. Verificato con due mutazioni
       (5 e 3 fallimenti).
-- [ ] **Fase 5 — adozione negli altri consumatori.** ⚠️ **Regola emersa in Fase 4:**
-      ogni consumatore — codice **o test** — che legge pattern da un config deve
-      passare per `resolvePathZones` + `resolveRuleset`. Un test che confronta pattern
-      grezzi con URL concreti smette di misurare qualcosa nel momento in cui quel file
-      adotta i segnaposti, e lo fa **in silenzio** se le sue asserzioni sono negative
-      (« non è riservata » passa anche quando nessuna regola matcha più niente).
-      I **20 letterali** censiti in
-      `sentinel` (6), `seo` (2), `rateLimiter` (1) e `adminAccessControl` (11) passano
-      ai segnaposti, un plugin per volta. Coinvolti anche `csrfProtection`,
-      `urlRedirect`, `adminSeo` e `core/botDetector.js` (8 consumatori di
-      `core/patternMatcher.js` in tutto).
+- [x] ~~**Fase 5 — adozione negli altri consumatori.**~~ **Fatta il 2026-10-31.**
+      `sentinel`, `rateLimiter` e `seo` convertiti ai segnaposti, più
+      `resolvePatternList` nel core (terza della famiglia per cardinalità: uno,
+      un record, una lista nuda). **Il risultato concettuale non era previsto
+      dalla decisione:** i path vivono in **due spazi**, non uno — chi *confronta*
+      una richiesta sta nello spazio **logico** (e toglie `globalPrefix`), chi
+      *emette* un URL verso l'esterno sta in quello **servito** (e lo antepone).
+      Accertato consumatore per consumatore prima di convertire, e ha fatto
+      emergere due difetti **preesistenti**: `rateLimiter` confrontava il path
+      grezzo (su un'istanza con `globalPrefix` **nessuna** esenzione combaciava, e
+      l'amministratore poteva farsi limitare sul proprio pannello — il config lo
+      ammetteva chiedendo di « adeguare questi percorsi a mano », cosa che coi
+      segnaposti diventava impossibile), e `seo` ignorava `globalPrefix` del tutto
+      (`Disallow: /admin/` sotto `/mysite` non escludeva niente). Corretti
+      entrambi, il secondo su decisione del maintainer.
+      I circa venti pattern di **tecnologie altrui** di `sentinel` (`/wp-admin`,
+      `/phpmyadmin`, `/.env`) **restano letterali**, ed è deliberato.
+      In `sentinel` la risoluzione precede la **validazione** (il validatore
+      rifiuta un path che non cominci con `/`), con una guardia: senza config
+      globale non si risolve niente, perché `resolvePathZones({})` ricade sui
+      prefissi di default e risolverebbe `{{admin}}` a `/admin` su un'istanza
+      `backoffice` — A1 riprodotto dentro la sua stessa correzione.
+      Tre migrazioni, **due basate su oggetto** (`setJson5Key` su path annidato,
+      che preserva i commenti) e una testuale ancorata al testo esatto dove la
+      struttura non è indirizzabile. Applicate con la CLI reale su un'installazione
+      ricostruita « alla v1 »: tutti i commenti conservati (51/67/326/258).
+      **+27 test**, con copertura delle forme su cui uno script del genere perde
+      dati — la lezione della revisione della Fase 4.
+      **Due presidi hanno colto la propria cecità:** il rilevatore di D8 cercava i
+      segnaposti nella sola forma-chiave e non vedeva quelli nei **valori**; e un
+      mio test era **vacuo** (il valore scelto non discriminava fra uguaglianza
+      esatta e match per prefisso), trovato mutando lo script.
+      **🐞 Un difetto di ORDINE, trovato dal vivo:** bumpare la `schemaVersion` di
+      un `.default` **prima** di dichiarare la migrazione **brucia il trigger** —
+      il merge additivo allinea il vivo al primo boot, la ricevuta avanza e il
+      lavoro non viene fatto. Accaduto in sessione su `rateLimiter` e `seo`.
+      L'ordine è obbligatorio: prima `migrations/`, poi il bump. Nessun presidio
+      lo impone (registrato fra i punti rimandati).
 - [ ] **Fase 6 — consolidamento `runtimeGate`.** Il `reservedGate` deriva il perimetro
       dalla mappa invece di ricalcolarlo: oggi `runtimeGate.js:60` e `:275` leggono
       `adminPrefix` **correttamente**, `accessControl.json5` no, ed è proprio questa

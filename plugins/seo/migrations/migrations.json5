@@ -1,0 +1,23 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// Migrazioni del plugin seo.
+//
+// Il clock è la `schemaVersion` del DESCRITTORE (`pluginConfig.default.json5`):
+// uno step si applica quando il descrittore vivo è a `from` e il `.default` è a
+// `to`. Qui il config che cambia È il descrittore, quindi coincidono.
+//
+// Vedi docs/decisions/config-migrations.it.md e core/migrationRunner.js.
+{
+  steps: [
+    {
+      from: 1,
+      to: 2,
+      title: "robotsTxtRules.disallow passa ai segnaposti di percorso",
+      automatic: true,
+      script: "from-v1-to-v2.js",
+      touches: ["pluginConfig.json5"],
+      reason:
+        "I percorsi di `robotsTxtRules.disallow` erano letterali (`/admin/`) mentre i  prefissi a cui puntano sono VARIABILI di ital8Config.json5: cambiare  `adminPrefix` lasciava in robots.txt una riga che non escludeva piu niente, e  non escludeva la nuova. A differenza degli altri consumatori di segnaposti  questi percorsi non vengono CONFRONTATI con una richiesta ma EMESSI in un  file che i crawler leggono sul sito reale, quindi vivono nello spazio dei  path SERVITI: da v3.30.0 il generatore antepone il globalPrefix, che prima  ignorava del tutto (difetto preesistente, corretto insieme alla conversione  perche convertire senza correggere avrebbe scritto in robots.txt una  protezione non in vigore). Serve una migrazione perche il merge additivo sa  solo aggiungere chiavi e qui cambiano i valori dentro un array. Lo script  converte solo gli elementi esattamente uguali a quelli distribuiti e dichiara  cio che lascia.",
+    },
+  ],
+}
