@@ -24,42 +24,30 @@ const {
   checkAccessInvariants,
   formatAccessProblemsBox,
 } = require('../../../core/accessInvariantCheck');
+const RuleValidator = require('./ruleValidator');
 const path = require('path');
-
-/** Le tre azioni che `applyDefaultPolicy` sa applicare. */
-const DEFAULT_POLICY_ACTIONS = Object.freeze(['allow', 'deny', 'requireAuth']);
 
 /**
  * La `defaultPolicy` dichiarata è usabile? Ritorna il difetto, o `null`.
  *
- * Serve a DUE percorsi (il caricamento e la validazione di un candidato), quindi sta
- * qui una volta sola. Ricalca `describePrefixDefect` di `core/pathZoneResolver.js`.
+ * DELEGA a `RuleValidator.validateDefaultPolicy`, che è il punto unico in cui la
+ * forma della policy viene decisa. Reimplementarla qui significava avere due
+ * validatori sulla stessa chiave: la prima stesura della Fase 3 li ha fatti
+ * divergere subito — questo dichiarava `redirectOnDenied` obbligatorio mentre
+ * quello la dichiarava opzionale, così il percorso GUI dava prima un via libera e
+ * poi un rifiuto. È la stessa classe di difetto che CLAUDE.md registra come già
+ * avvenuta su `access`.
  *
- * Perché è un controllo e non una tolleranza:
- *   • `redirectOnDenied` assente → un rifiuto per autenticazione non porta né
- *     redirect né status, e fino alla revisione della Fase 3 il middleware lo
- *     serviva. Ora lo nega con 403, ma la causa va detta: senza questo controllo la
- *     diagnosi era un `TypeError` su `undefined` dentro il messaggio della sonda.
- *   • `action` ignota → il `default:` di `applyDefaultPolicy` ricade su « allow ».
- *     Un refuso (`"alow"`, `"Deny"`) renderebbe quindi PUBBLICO un sito che
- *     l'amministratore ha scritto per essere chiuso, in silenzio.
+ * Qui resta solo la TRADUZIONE: dall'elenco di errori del validatore al difetto
+ * singolo che il box `[ACCESS]` mostra.
  */
 function describeDefaultPolicyDefect(policy) {
-  if (policy === undefined || policy === null) {
-    return 'la chiave `defaultPolicy` manca: senza di essa un rifiuto non ha un esito su cui agire';
-  }
-  if (typeof policy !== 'object' || Array.isArray(policy)) {
-    return '`defaultPolicy` non è un oggetto';
-  }
-  if (!DEFAULT_POLICY_ACTIONS.includes(policy.action)) {
-    return `\`defaultPolicy.action\` vale ${JSON.stringify(policy.action)}, che non è fra `
-      + `${DEFAULT_POLICY_ACTIONS.join(' | ')}: verrebbe trattata come "allow"`;
-  }
-  if (typeof policy.redirectOnDenied !== 'string' || policy.redirectOnDenied.trim() === '') {
-    return '`defaultPolicy.redirectOnDenied` manca o è vuota: un rifiuto per autenticazione '
-      + 'non porterebbe alcun esito applicabile';
-  }
-  return null;
+  const errors = RuleValidator.validateDefaultPolicy(policy);
+  if (errors.length === 0) return null;
+
+  // Il primo errore basta: sono tutti sulla stessa chiave, e un messaggio chiaro
+  // vale più di tre accurati (criterio del box `[ACCESS]`).
+  return `${errors[0]} — senza una policy usabile un rifiuto non ha un esito su cui agire`;
 }
 
 class AccessManager {
@@ -565,18 +553,36 @@ class AccessManager {
   checkInTemplate(ctx, requirements) {
     const user = ctx.session?.user || null;
 
+    // Il `baseline` della zona vale ANCHE qui. Dalla Fase 2 `checkAccess` lo
+    // applica e questo metodo no: due percorsi di decisione con conoscenza diversa,
+    // cioè la forma esatta del difetto che path-zones esiste per chiudere.
+    //
+    // Oggi la divergenza non è sfruttabile — il middleware gira prima sulla stessa
+    // richiesta, quindi un template viene reso solo se il middleware ha già
+    // consentito, e questo controllo può solo aggiungere restrizioni. Resta una
+    // trappola: basterebbe usare `checkInTemplate` su un percorso che il middleware
+    // non copre perché applicasse una decisione priva del minimo di zona.
+    const zone = zoneForPath(canonicalizePath(ctx.path || ''), this.pathZones.zones);
+    const effective = tightenAccess(
+      {
+        requiresAuth: requirements.requiresAuth === true,
+        allowedRoles: Array.isArray(requirements.allowedRoles) ? requirements.allowedRoles : [],
+      },
+      zone ? zone.baseline : null
+    );
+
     // Verifica autenticazione (redirect prefissato col globalPrefix)
-    if (requirements.requiresAuth && !user) {
+    if (effective.requiresAuth && !user) {
       ctx.redirect((this.globalPrefix || '') + this.defaultPolicy.redirectOnDenied);
       return;
     }
 
     // Verifica ruoli
-    if (requirements.allowedRoles && requirements.allowedRoles.length > 0) {
+    if (effective.allowedRoles && effective.allowedRoles.length > 0) {
       // Gestisci sia roleIds (array) che roleId (singolo) per backward compatibility
       const userRoles = user?.roleIds ||
                         (user?.roleId !== undefined ? [user.roleId] : []);
-      const hasRequiredRole = userRoles.some(roleId => requirements.allowedRoles.includes(roleId));
+      const hasRequiredRole = userRoles.some(roleId => effective.allowedRoles.includes(roleId));
 
       if (!hasRequiredRole) {
         ctx.redirect((this.globalPrefix || '') + '/pluginPages/adminAccessControl/access-denied.ejs');
@@ -645,8 +651,20 @@ class AccessManager {
       fs.writeFileSync(tempPath, jsonString, 'utf8');
       fs.renameSync(tempPath, configPath);
 
-      // Reload regole
-      this.reloadRules();
+      // Reload regole. L'esito NON si scarta: `validateCandidate` ha validato la
+      // STRINGA, `loadRules` rilegge il FILE. Se la scrittura fosse parziale, o il
+      // file venisse toccato fra il rename e la rilettura, la ricarica potrebbe
+      // essere rifiutata — e senza questo controllo la GUI direbbe « salvato »
+      // mentre in memoria restano le regole precedenti.
+      const reload = this.reloadRules();
+      if (reload && reload.accepted === false) {
+        return {
+          success: false,
+          error: 'Il file è stato scritto, ma la ricarica è stata RIFIUTATA: '
+            + 'restano in vigore le regole precedenti. Rileggere il file salvato.',
+          problems: reload.problems,
+        };
+      }
 
       return { success: true, error: null };
     } catch (err) {

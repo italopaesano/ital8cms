@@ -448,14 +448,27 @@ describe('saveRules: un file che non farebbe ripartire il CMS non può essere sa
 });
 
 describe('presidio: la fatalità del boot dipende da `essentialPlugins`', () => {
-  test('`adminAccessControl` è fra gli essentialPlugins del config spedito', () => {
-    // `loadRules` LANCIA invece di chiamare `process.exit`, quindi la terminazione la
-    // decide `pluginSys`: lo fa solo per i plugin in questa lista. Togliendo questo
-    // nome, un controllo accessi non applicabile non spegnerebbe il boot — il plugin
-    // verrebbe soltanto saltato, e il sito servito SENZA GUARDIA. L'invariante regge
-    // per configurazione, quindi va presidiata qui.
+  // `loadRules` LANCIA invece di chiamare `process.exit`, quindi la terminazione la
+  // decide `pluginSys`: lo fa solo per i plugin in questa lista. Togliendo questo
+  // nome, un controllo accessi non applicabile non spegnerebbe il boot — il plugin
+  // verrebbe soltanto saltato, e il sito servito SENZA GUARDIA.
+  //
+  // Si controllano DUE file, e per ragioni diverse:
+  //   • il `.default` → che il valore spedito non regredisca mai;
+  //   • il VIVO → che questa installazione sia davvero coperta. È `ital8Config.json5`
+  //     (git-ignored, editabile a mano) a decidere il comportamento a runtime, quindi
+  //     guardare solo il default presidiava un file che non governa nulla.
+  //
+  // Limite dichiarato: un test copre l'installazione in cui gira. Un presidio valido
+  // per QUALUNQUE installazione dovrebbe stare al boot, nel core — chi monta il
+  // middleware di controllo accessi dovrebbe accorgersi se quel plugin non è
+  // essenziale. Fuori dallo scopo della Fase 3, registrato fra i punti rimandati.
+  test.each([
+    ['il config SPEDITO', '../../ital8Config.default.json5'],
+    ['il config VIVO di questa installazione', '../../ital8Config.json5'],
+  ])('`adminAccessControl` è fra gli essentialPlugins in %s', (_label, relPath) => {
     const realLoadJson5 = jest.requireActual('../../core/loadJson5');
-    const conf = realLoadJson5(require('path').join(__dirname, '../../ital8Config.default.json5'));
+    const conf = realLoadJson5(require('path').join(__dirname, relPath));
     expect(Array.isArray(conf.essentialPlugins)).toBe(true);
     expect(conf.essentialPlugins).toContain('adminAccessControl');
   });
@@ -583,6 +596,88 @@ describe('regressioni dalla revisione della Fase 3', () => {
       expect(outcome.problems.map((p) => p.kind)).toContain('unknown-placeholder');
       // Il ruleset in vigore è quello di prima, ed è sano: lo stato deve dirlo.
       expect(am.rulesetProblems).toEqual([]);
+    });
+  });
+});
+
+/**
+ * SECONDO GIRO DI REVISIONE DELLA FASE 3 (2026-10-31).
+ */
+describe('secondo giro di revisione', () => {
+  test('① i due validatori della defaultPolicy CONCORDANO', () => {
+    // La prima stesura li aveva fatti divergere: `ruleValidator` dichiarava
+    // `redirectOnDenied` opzionale, il motore la pretendeva. Nel percorso GUI ciò
+    // dava un via libera seguito da un rifiuto. Ora c'è un predicato solo.
+    const RuleValidator = require('../../plugins/adminAccessControl/lib/ruleValidator');
+    const am = managerWith({});
+    for (const policy of [{ action: 'allow' }, { action: 'alow', redirectOnDenied: '/l' }, 'allow', null]) {
+      const validatorRejects = RuleValidator.validateDefaultPolicy(policy).length > 0;
+      const engineRejects = !am.validateCandidate(JSON.stringify({
+        hardcodedRules: {}, customRules: {}, defaultPolicy: policy,
+      })).valid;
+      expect(engineRejects).toBe(validatorRejects);
+    }
+  });
+
+  test('③ `saveRules` segnala se la ricarica non ha avuto effetto', () => {
+    // `validateCandidate` valida la STRINGA, `loadRules` rilegge il FILE: senza
+    // questo controllo la GUI diceva « salvato » mentre in memoria restavano le
+    // regole precedenti.
+    const am = managerWith({});
+    const fs = require('fs');
+    jest.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
+    jest.spyOn(fs, 'renameSync').mockImplementation(() => {});
+
+    const sane = JSON.stringify({
+      hardcodedRules: LITERAL_RULES.hardcodedRules,
+      customRules: LITERAL_RULES.customRules,
+      defaultPolicy: { action: 'allow', redirectOnDenied: LOGIN_ENTRY },
+    });
+    // Il file riletto è DIVERSO da quello scritto: la ricarica deve rifiutare.
+    loadJson5.mockImplementation((p) => (String(p).endsWith('ital8Config.json5') ? {} : {
+      hardcodedRules: {},
+      customRules: { '{{bogus}}/**': { requiresAuth: true } },
+      defaultPolicy: { action: 'allow', redirectOnDenied: LOGIN_ENTRY },
+    }));
+
+    const result = am.saveRules(sane);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('ricarica');
+    expect(result.problems.map((p) => p.kind)).toContain('unknown-placeholder');
+  });
+
+  describe('⑤ `checkInTemplate` applica il baseline di zona come `checkAccess`', () => {
+    function templateCheck(am, path, requirements, session = {}) {
+      const ctx = { path, session, redirect(to) { this.redirectedTo = to; } };
+      am.checkInTemplate(ctx, requirements);
+      return ctx.redirectedTo || null;
+    }
+
+    test('un template in zona admin non può dichiararsi pubblico', () => {
+      const am = managerWith({});
+      // Prima: `requiresAuth: false` passava, perché il metodo non consultava la
+      // zona — due percorsi di decisione con conoscenza diversa.
+      expect(templateCheck(am, '/admin/pagina.ejs', { requiresAuth: false, allowedRoles: [] }))
+        .toBe(LOGIN_ENTRY);
+    });
+
+    test('e non può concedere un ruolo che il baseline vieta', () => {
+      const am = managerWith({});
+      const to = templateCheck(am, '/admin/pagina.ejs',
+        { requiresAuth: true, allowedRoles: [2] }, { user: EDITOR });
+      expect(to).toContain('access-denied');
+    });
+
+    test('un ruolo ammesso entra', () => {
+      const am = managerWith({});
+      expect(templateCheck(am, '/admin/pagina.ejs',
+        { requiresAuth: true, allowedRoles: [] }, { user: ADMIN })).toBeNull();
+    });
+
+    test('in zona aperta il comportamento non cambia', () => {
+      const am = managerWith({});
+      expect(templateCheck(am, '/about.ejs', { requiresAuth: false, allowedRoles: [] })).toBeNull();
+      expect(templateCheck(am, '/about.ejs', { requiresAuth: true, allowedRoles: [] })).toBe(LOGIN_ENTRY);
     });
   });
 });

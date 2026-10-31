@@ -168,6 +168,13 @@
               <div class="col-md-6 mb-2">
                 <label class="form-label">Ruoli (comma-separated):</label>
                 <input type="text" id="test-roles" class="form-control" placeholder="0, 1, 2" value="0, 1">
+                <div class="form-check mt-2">
+                  <input class="form-check-input" type="checkbox" id="test-anonymous"
+                         onchange="document.getElementById('test-roles').disabled = this.checked">
+                  <label class="form-check-label" for="test-anonymous">
+                    Visitatore <strong>anonimo</strong> (non autenticato) &mdash; ignora i ruoli
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -255,6 +262,7 @@
   async function testAccess() {
     const url = document.getElementById('test-url').value.trim();
     const rolesStr = document.getElementById('test-roles').value.trim();
+    const anonymous = document.getElementById('test-anonymous').checked;
 
     if (!url) {
       showAlert('error', 'Inserisci un URL da testare');
@@ -264,8 +272,10 @@
     // Parse ruoli (comma-separated)
     const roleIds = rolesStr.split(',').map(r => parseInt(r.trim())).filter(r => !isNaN(r));
 
-    if (roleIds.length === 0) {
-      showAlert('error', 'Inserisci almeno un ruolo (es: 0, 1, 2)');
+    // Un anonimo non ha ruoli per definizione: pretenderne almeno uno rendeva
+    // impossibile provare proprio l'attore che conta di piu.
+    if (!anonymous && roleIds.length === 0) {
+      showAlert('error', 'Inserisci almeno un ruolo (es: 0, 1, 2), oppure spunta « visitatore anonimo »');
       return;
     }
 
@@ -275,7 +285,7 @@
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ url, roleIds })
+        body: JSON.stringify(anonymous ? { url, anonymous: true } : { url, roleIds })
       });
 
       const data = await response.json();

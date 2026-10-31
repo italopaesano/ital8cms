@@ -462,7 +462,7 @@ perimetro ad aver prodotto A1.
 | 0 — Conferma del naming | ✅ **chiusa** (2026-10-30) |
 | 1 — La mappa (`core/pathZoneResolver.js`) | ✅ **implementata e revisionata** (2026-10-30) — 132 test |
 | 2 — `baseline` in `accessManager` | ✅ **implementata** (2026-10-31) — +28 test sul motore |
-| 3 — Invarianti + box `[ACCESS]` | ✅ **implementata e revisionata** (2026-10-31) — +56 test |
+| 3 — Invarianti + box `[ACCESS]` | ✅ **implementata e revisionata ×2** (2026-10-31) — +72 test |
 | 4 — Segnaposti nei `.default` + migrazione | ⬜ da fare |
 | 5 — Adozione negli altri consumatori | ⬜ da fare |
 | 6 — Consolidamento `runtimeGate` | ⬜ da fare |
@@ -717,6 +717,35 @@ sotto a dove avevo messo le sonde. La correzione di ② non elimina il divario (
 restano a livello di decisione) ma lo rende **attraversabile solo da una decisione
 applicabile**, che è il massimo che un modulo puro possa garantire.
 
+#### Secondo giro di revisione — sei difetti, e un'ironia
+
+Un secondo giro sulla Fase 3, dopo le correzioni del primo. Il rilievo principale è
+istruttivo: **la correzione del primo giro aveva creato esattamente la divergenza
+contro cui era stato argomentato il predicato condiviso.**
+
+| # | Difetto | Danno | Correzione |
+|---|---|---|---|
+| ① | `describeDefaultPolicyDefect` pretendeva `redirectOnDenied`, mentre `ruleValidator.validateDefaultPolicy` la dichiarava **opzionale** | Due validatori, la stessa chiave, verdetti opposti: nel percorso GUI l'admin riceveva un via libera da `validateFromUI` e un rifiuto da `saveRules`. È la classe di difetto che `CLAUDE.md` registra come già avvenuta su `access` — e la Fase 3 l'ha reintrodotta | `validateDefaultPolicy` diventa il predicato **unico** (statico, con delegato d'istanza per i chiamanti esistenti) e **richiede** `redirectOnDenied`; `describeDefaultPolicyDefect` vi **delega**, traducendo solo il messaggio |
+| ② | Il controllo su `action` era re-implementato | La lista delle azioni valide viveva in due file | Una sola, `RuleValidator.DEFAULT_POLICY_ACTIONS` |
+| ③ | `saveRules` scartava l'esito di `reloadRules()` | `validateCandidate` valida la **stringa**, `loadRules` rilegge il **file**: su una scrittura parziale la ricarica può essere rifiutata e la GUI direbbe « salvato » mentre in memoria restano le regole precedenti | L'esito è controllato; se la ricarica è rifiutata la risposta lo dice |
+| ④ | Il presidio su `essentialPlugins` leggeva solo il `.default` | Il comportamento a runtime lo decide il file **vivo**: chi rimuovesse il plugin da quella lista avrebbe un sito servito senza middreware di controllo accessi, col test verde | Controlla **entrambi** i file, con il limite dichiarato nel test |
+| ⑤ | `checkInTemplate` non consultava il `baseline` di zona | Dalla Fase 2 `checkAccess` lo applica e questo no: due percorsi di decisione con conoscenza diversa. Non sfruttabile oggi (il middleware gira prima), ma trappola latente | Passa per `tightenAccess` con il `baseline` della zona |
+| ⑥ | `/test-access` non poteva simulare un **anonimo** | `{ roleIds: [] }` è truthy, quindi simulava un utente autenticato senza ruoli; e il form della GUI pretendeva almeno un ruolo. Dalle fasi 2-3 l'anonimo è l'attore centrale della protezione, e non era provabile | La rotta accetta `anonymous: true` e la GUI ha la casella corrispondente |
+
+**Il difetto ① merita una riga in più**, perché è la lezione del giro. Correggendo
+la diagnosi povera del primo giro ho scritto un secondo validatore della stessa
+chiave, nello stesso intervento in cui avevo argomentato che « due validatori che
+devono concordare prima o poi divergono ». Sono divergiti **subito**: uno dichiarava
+`redirectOnDenied` opzionale, l'altro la pretendeva. La correzione non è stata
+allinearli ma **togliere il secondo**.
+
+**Un cambiamento di contratto, dichiarato:** `redirectOnDenied` è ora
+**obbligatoria**. Quattro test di `ruleValidator` la fissavano come opzionale, uno
+chiamato « accepts policy without redirectOnDenied (optional) ». Dichiararla
+opzionale era innocuo soltanto finché nessuno controllava: il motore la restituisce
+su **ogni** rifiuto per autenticazione, e un rifiuto che non la porta era quello
+che il middleware serviva.
+
 #### Due difetti della mia stessa stesura, trovati e corretti
 
 | Difetto | Perché contava |
@@ -835,6 +864,12 @@ sull'admin.
   proposta iniziale). Molta più macchina — risoluzione di percorsi, cicli, tipi
   non-stringa, valori che contengono `/` o `..` — per casi d'uso che oggi non
   esistono.
+- **Un presidio di boot per `essentialPlugins`.** Un test copre l'installazione in
+  cui gira, non quella di chi scarica il CMS: chi rimuove `adminAccessControl` da
+  `essentialPlugins` ottiene un sito servito senza middleware di controllo accessi,
+  e nessuno lo avverte. Il posto giusto è il **core**, al boot: chi monta il
+  middleware di controllo accessi dovrebbe accorgersi se quel plugin non è
+  essenziale. Fuori dallo scopo della Fase 3.
 - **`dirListing` sul file server admin** (`index.js:563`, l'unico acceso dei
   cinque). Non è parte di questa decisione, ma è uno dei tre fattori aggravanti
   di A1: va valutato a sé.

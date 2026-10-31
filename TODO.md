@@ -967,7 +967,7 @@ passerebbe il boot non può essere salvata dalla GUI. Le fasi 4-6 che restano so
       rifiuta tenendo il ruleset precedente. `saveRules` esegue gli stessi controlli
       **prima di scrivere**: un file che non farebbe ripartire il CMS non può essere
       salvato. Tutti e otto i problemi sono fatali, con messaggi **diagnostici** e non
-      prescrittivi. +56 test. **A1 e A3 spuntati in `REVIEW.md`.**
+      prescrittivi. +72 test. **A1 e A3 spuntati in `REVIEW.md`.**
       **Revisionata**, con cinque difetti corretti, di cui uno era un **fail-open nel
       percorso di enforcement**: un rifiuto che non portava né redirect né status
       cadeva su `await next()` e la pagina veniva servita a chi era stato negato —

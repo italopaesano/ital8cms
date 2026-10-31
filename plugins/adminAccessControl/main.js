@@ -232,19 +232,28 @@ module.exports = {
         },
         handler: async (ctx) => {
           try {
-            const { url, roleIds } = ctx.request.body;
+            const { url, roleIds, anonymous } = ctx.request.body;
 
-            if (!url || !Array.isArray(roleIds)) {
+            // `anonymous: true` è l'unico modo di provare il visitatore ANONIMO, che
+            // dalle fasi 2-3 di path-zones è l'attore centrale della protezione.
+            // Prima non era esprimibile: `mockUser = { roleIds }` è truthy anche con
+            // `roleIds: []`, quindi un elenco vuoto simulava un utente AUTENTICATO
+            // senza ruoli — verdetto e redirect diversi da quelli di un anonimo. E il
+            // form della GUI pretendeva almeno un ruolo, quindi il caso più
+            // importante non era provabile affatto.
+            const asAnonymous = anonymous === true;
+
+            if (!url || (!asAnonymous && !Array.isArray(roleIds))) {
               ctx.status = 400;
               ctx.body = {
                 success: false,
-                error: 'Missing url or roleIds in request body'
+                error: 'Missing url, or roleIds (omit them with anonymous: true)'
               };
               return;
             }
 
-            // Simula utente con ruoli specificati
-            const mockUser = { roleIds };
+            // Simula utente con ruoli specificati, oppure nessun utente.
+            const mockUser = asAnonymous ? null : { roleIds };
 
             // Testa accesso
             const accessResult = accessManager.checkAccess(url, mockUser);
