@@ -4,6 +4,13 @@
   "version": "1.0.0",
   "lastModified": "2026-01-28T10:00:00Z",
 
+  // ── Segnaposti di percorso ──────────────────────────────────────────
+  // I pattern possono usare {{admin}}, {{pluginPages}}, … al posto del
+  // prefisso concreto: il CMS lo risolve al caricamento leggendo le zone.
+  // Un segnaposto sconosciuto è un ERRORE, mai un letterale.
+  // Elenco completo e regole → docs/decisions/path-zones.it.md
+  // ────────────────────────────────────────────────────────────────────
+
   // ==========================================================================
   // REGOLE HARDCODED — DOCUMENTAZIONE, NON PIU' LA FONTE DI VERITA'
   // ==========================================================================
@@ -38,13 +45,13 @@
   // -> docs/decisions/path-zones.it.md
   // ==========================================================================
   "hardcodedRules": {
-    "/admin": {
+    "{{admin}}": {
       "requiresAuth": true,
       "allowedRoles": [0, 1], // root (0), admin (1)
-      "priority": 1000, // Higher priority than /admin/** (exact match wins)
+      "priority": 1000, // Higher priority than {{admin}}/** (exact match wins)
       "editable": false
     },
-    "/admin/**": {
+    "{{admin}}/**": {
       "requiresAuth": true,
       "allowedRoles": [0, 1], // root (0), admin (1)
       "priority": 100,
@@ -74,13 +81,9 @@
   // ==========================================================================
   "customRules": {
     // Pagina profilo utente: accessibile solo a utenti autenticati (qualsiasi ruolo)
-    "/pluginPages/adminUsers/userProfile.ejs": {
+    "{{pluginPages}}/adminUsers/userProfile.ejs": {
       "requiresAuth": true,
       "allowedRoles": [] // Tutti gli utenti autenticati
-    },
-    "/pluginPages/adminUsers/userProfile": {
-      "requiresAuth": true,
-      "allowedRoles": [] // idem, forma senza estensione (hideExtension attivo)
     },
 
     // ── Varchi di autenticazione: pagine PUBBLICHE che appartengono comunque
@@ -92,37 +95,30 @@
     // anche a superficie chiusa, annunciando l'esistenza dell'area riservata —
     // esattamente cio che l'assetto vetrina vuole evitare.
     //
-    // PERCHE' OGNI PAGINA HA DUE REGOLE: con `hideExtension.pluginPagesPrefix`
-    // attivo l'URL servito e senza estensione (`.../login`), e una regola su
-    // `login.ejs` non lo intercetterebbe.
+    // UNA SOLA FORMA PER PAGINA, ED E' UN CAMBIAMENTO. Fino alla v3.29.0 ogni
+    // pagina qui dentro aveva DUE regole — `login.ejs` e `login` — perche con
+    // `hideExtension.pluginPagesPrefix` attivo l'URL servito e senza estensione, e
+    // una regola su `login.ejs` non lo intercetterebbe. Era il sintomo curato a
+    // mano, non la causa: adesso la forma pulita viene DERIVATA al caricamento
+    // quando `hideExtension` e attivo per quella zona, e scritta a mano sarebbe
+    // solo un duplicato da tenere allineato. Vedi path-zones.it.md, D5.
     //
-    // Le due forme sono scritte come match ESATTI, non come wildcard `login*`:
-    // il wildcard singolo di patternMatcher traduce `*` in `[^/]+` — UNO O PIU'
-    // caratteri — quindi `login*` copre `login.ejs` ma NON `login`, cioe
-    // proprio la forma che doveva coprire (verificato). In piu' catturerebbe
-    // per sbaglio pagine vicine come `loginHelper.ejs`. Il match esatto e anche
-    // quello a priorita' massima.
+    // I pattern sono match ESATTI, non wildcard `login*`: il wildcard singolo di
+    // patternMatcher traduce `*` in `[^/]+` — UNO O PIU' caratteri — quindi
+    // `login*` coprirebbe `login.ejs` ma NON `login` (verificato), e in piu'
+    // catturerebbe per sbaglio pagine vicine come `loginHelper.ejs`. Il match
+    // esatto e anche quello a priorita' massima.
     // Vedi docs/cli-control-plane.it.md → "Superficie riservata".
 
     // Pagina di login (deve essere pubblica, o nessuno potrebbe autenticarsi)
-    "/pluginPages/adminUsers/login.ejs": {
-      "requiresAuth": false,
-      "allowedRoles": [],
-      "isAuthEntryPoint": true
-    },
-    "/pluginPages/adminUsers/login": {
+    "{{pluginPages}}/adminUsers/login.ejs": {
       "requiresAuth": false,
       "allowedRoles": [],
       "isAuthEntryPoint": true
     },
 
     // Pagina di logout: varco in uscita, stessa logica
-    "/pluginPages/adminUsers/logout.ejs": {
-      "requiresAuth": false,
-      "allowedRoles": [],
-      "isAuthEntryPoint": true
-    },
-    "/pluginPages/adminUsers/logout": {
+    "{{pluginPages}}/adminUsers/logout.ejs": {
       "requiresAuth": false,
       "allowedRoles": [],
       "isAuthEntryPoint": true
@@ -130,12 +126,7 @@
 
     // Pagina "accesso negato": non richiede autenticazione, ma la sua sola
     // esistenza annuncia che esiste un sistema di controllo accessi
-    "/pluginPages/adminAccessControl/access-denied.ejs": {
-      "requiresAuth": false,
-      "allowedRoles": [],
-      "isAuthEntryPoint": true
-    },
-    "/pluginPages/adminAccessControl/access-denied": {
+    "{{pluginPages}}/adminAccessControl/access-denied.ejs": {
       "requiresAuth": false,
       "allowedRoles": [],
       "isAuthEntryPoint": true
@@ -152,7 +143,10 @@
   //   - "deny": Accesso negato (403 Forbidden)
   //   - "requireAuth": Solo utenti autenticati
   //
-  // redirectOnDenied: URL di redirect quando l'accesso è negato
+  // redirectOnDenied: URL di redirect quando l'accesso è negato.
+  //   ⚠ NON accetta segnaposti, ed è voluto: non è un pattern da confrontare ma
+  //   una URL che finisce in `ctx.redirect()`, cioè nella barra del browser.
+  //   I segnaposti si risolvono sui PATTERN, al caricamento del ruleset.
   // ==========================================================================
   "defaultPolicy": {
     "action": "allow", // "allow" | "deny" | "requireAuth"

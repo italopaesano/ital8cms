@@ -440,7 +440,7 @@ perimetro ad aver prodotto A1.
 | **1 — La mappa (modulo puro)** | ✅ **FATTA (2026-10-30).** `core/pathZoneResolver.js`: zone, risoluzione `{{…}}`, errore su segnaposto sconosciuto, rilevamento collisioni, derivazione delle forme senza estensione. Test unitari esaustivi, incluso `adminPrefix: "backoffice"`. **Nessun consumatore ancora collegato.** |
 | **2 — `baseline` di zona in `accessManager`** | ✅ **FATTA (2026-10-31).** Il `baseline` entra nel motore; `defaultPolicy` globale affiancata e poi superata; monotonia (D4) applicata e testata. `hardcodedRules` diventano ridondanti. |
 | **3 — Invarianti + box `[ACCESS]`** | ✅ **FATTA (2026-10-31).** `core/accessInvariantCheck.js`: sonde invocate dentro `loadRules()`; fatale al boot, rifiuto a runtime (D7); test che presidia la presenza di `adminAccessControl` in `essentialPlugins`. |
-| **4 — Segnaposti nei `.default` + migrazione** | I `.default` passano dai letterali ai segnaposti; derivazione `hideExtension` sostituisce le regole duplicate; `migrations/` + bump di `schemaVersion` (vedi *Migrazione*). |
+| **4 — Segnaposti nei `.default` + migrazione** | ✅ **FATTA (2026-10-31).** 10 regole dichiarate → 6 (le tre forme pulite sono ora **derivate**); `migrations/` con lo step v3→v4 (script testuale, idempotente, fail-soft) e bump del descrittore a `4`; stanza canonica D8 + presidio. Migrazione applicata con la CLI reale e verificata con `adminPrefix: "backoffice"`. |
 | **5 — Adozione negli altri consumatori** | `sentinel`, `seo`, `rateLimiter`, `csrfProtection`, `urlRedirect`, `botDetector`: i 20 letterali censiti passano ai segnaposti, uno plugin per volta. |
 | **6 — Consolidamento `runtimeGate`** | Il `reservedGate` deriva il perimetro dalla mappa invece di ricalcolarlo. |
 
@@ -463,7 +463,7 @@ perimetro ad aver prodotto A1.
 | 1 — La mappa (`core/pathZoneResolver.js`) | ✅ **implementata e revisionata** (2026-10-30) — 132 test |
 | 2 — `baseline` in `accessManager` | ✅ **implementata** (2026-10-31) — +28 test sul motore |
 | 3 — Invarianti + box `[ACCESS]` | ✅ **implementata e revisionata ×2** (2026-10-31) — +72 test |
-| 4 — Segnaposti nei `.default` + migrazione | ⬜ da fare |
+| 4 — Segnaposti nei `.default` + migrazione | ✅ **implementata** (2026-10-31) — +20 test, 1 adeguato |
 | 5 — Adozione negli altri consumatori | ⬜ da fare |
 | 6 — Consolidamento `runtimeGate` | ⬜ da fare |
 
@@ -756,6 +756,98 @@ che il middleware serviva.
 Più un terzo nel fallback: un file diventato illeggibile **a runtime** non deve far
 perdere il ruleset che sta funzionando. Il fallback a zero regole resta solo al boot.
 
+### Fase 4 — cosa è stato scritto
+
+I `.default` passano dai letterali ai segnaposti. È la fase che **non corregge
+niente** — A1 e A3 erano già chiusi dalla Fase 3 — e serve a rendere il file
+coerente con il meccanismo che lo interpreta: finché i pattern restavano
+letterali, chi apriva `accessControl.json5` leggeva ancora `/admin` e poteva
+credere che fosse quello a proteggere il pannello.
+
+#### Dieci regole dichiarate diventano sei
+
+| | Prima | Dopo |
+|---|---|---|
+| `hardcodedRules` | `/admin`, `/admin/**` | `{{admin}}`, `{{admin}}/**` |
+| Varchi di autenticazione | 6 regole: `login.ejs` **e** `login`, `logout.ejs` **e** `logout`, `access-denied.ejs` **e** `access-denied` | 3 regole, solo la forma con estensione |
+| `userProfile` | 1 regola letterale | 1 regola con segnaposto |
+| **Totale dichiarato** | **10** | **6** |
+
+Le tre regole in forma pulita non sono state *cancellate*: sono diventate
+**derivate** (D5). Il boot lo conferma — `6 patterns · 19 invarianti verificate`
+— e con `hideExtension.pluginPagesPrefix` acceso il ruleset effettivo torna a
+nove pattern, generati al caricamento invece che tenuti allineati a mano.
+
+#### La `schemaVersion` di `accessControl.json5` resta 3, ed è voluto
+
+Il clock delle migrazioni è la `schemaVersion` del **descrittore**
+(`pluginConfig.default.json5`, portata da `3` a `4`), non quella del config
+secondario: è la regola di `config-migrations.it.md`, e bumpare entrambe
+significherebbe dichiarare due orologi per lo stesso pacchetto. `accessControl`
+conserva la propria `schemaVersion` come versione della *sua* struttura — che in
+questo intervento non cambia: cambiano i **valori** delle chiavi, non le chiavi.
+
+#### Lo script di migrazione è testuale, e il motivo conta
+
+`from-v3-to-v4.js` lavora sul **testo** del file vivo, non sull'oggetto
+deserializzato: un `saveJson5` dell'oggetto intero perderebbe i commenti, e in
+questo file i commenti sono la parte che spiega all'amministratore perché le
+`hardcodedRules` non sono più la fonte di verità. Tre proprietà, tutte verificate
+sul file reale:
+
+- **idempotente** — rieseguirlo non fa niente (riconosce i pattern già convertiti);
+- **fail-soft** — un pattern che non riconosce lo **lascia** e lo segnala, invece
+  di indovinare: un vivo personalizzato non viene riscritto a forza;
+- **conservativo sui commenti** — verificato contandoli prima e dopo, incluso
+  quello *inline* che accompagna la regola rimossa e che esce con lei.
+
+Rimuove anche le tre regole in forma pulita, ma **solo se sono identiche a quelle
+distribuite**: una forma pulita che l'amministratore ha modificato resta dov'è,
+perché toglierla cambierebbe il comportamento del suo sito.
+
+#### Verificata sul percorso reale, non simulata
+
+La migrazione è stata applicata con la CLI vera (`npm run cli -- migrate
+adminAccessControl`) su un vivo alla v3: **6 pattern convertiti, 3 forme pulite
+rimosse, ricevuta scritta, backup creato**. Poi un boot pulito — nessun box
+`[MIGRATE]`, `[SCHEMA]` o `[ACCESS]` — e la prova che conta: con
+`adminPrefix: "backoffice"` i pattern migrati risolvono a `/backoffice` e
+`/backoffice/**`, quindi il pannello è protetto **dalla regola**, non solo dal
+`baseline` che lo proteggeva già.
+
+I file di backup che il runner lascia accanto al config (`*.backup-v3`) sono
+copie di un file git-ignored: sono stati aggiunti a `.gitignore`, perché un
+backup del config vivo di uno sviluppatore non appartiene al repository.
+
+#### Il presidio anti-deriva di D8
+
+`tests/unit/core/placeholderStanza.test.js` verifica che ogni `.default` che usa
+segnaposti porti la stanza canonica che li spiega. L'elenco `FILES_WITH_PLACEHOLDERS`
+è il punto in cui la Fase 5 aggiungerà ogni file convertito: un file che adotta i
+segnaposti senza documentarli fa fallire il test.
+
+#### Un test ha dovuto cambiare, e la sua lezione vale per la Fase 5
+
+`tests/unit/reservedSurfaceCoverage.test.js` è diventato rosso su 12 casi, e
+**aveva ragione**: leggeva i pattern **grezzi** dal `.default` e li confrontava
+con URL concreti. Con i segnaposti non combaciano più — ma il difetto non era nei
+segnaposti, era nel test, che misurava la *scrittura* invece dell'*effetto*. Ora
+passa per `resolvePathZones` + `resolveRuleset`, la stessa pipeline del motore.
+
+Il cambiamento lo ha reso **più fedele**, non più permissivo: i casi « forma senza
+estensione » ora esercitano davvero la configurazione con `hideExtension` acceso,
+invece di appoggiarsi a due regole scritte a mano; e i casi « NON riservata »
+girano su **entrambi** i ruleset, perché è quando si aggiungono pattern derivati
+che un perimetro diventa onnivoro senza che nessuno lo noti. Verificato con due
+mutazioni: spegnere la derivazione rompe 5 casi, togliere `isAuthEntryPoint` a
+`logout` ne rompe 3.
+
+> **Regola per la Fase 5.** Ogni consumatore — codice o test — che legge pattern
+> da un config deve passare per il resolver. Un test che confronta pattern grezzi
+> con URL concreti smette di misurare qualcosa nel momento in cui quel file adotta
+> i segnaposti, e lo fa **in silenzio** se le sue asserzioni sono negative
+> (« non è riservata » passa anche quando nessuna regola matcha più niente).
+
 ### Scelte di dettaglio prese in implementazione
 
 Nessuna devia dalla decisione; tre **aggiungono** un caso che la decisione
@@ -850,10 +942,11 @@ sull'admin.
 
 ## Punti rimandati
 
-- **`hardcodedRules` restano nel `.default` come documentazione o spariscono?**
-  Dopo D3 sono ridondanti. Tenerle costa una possibile confusione (« a cosa
-  servono se non proteggono? »); toglierle costa un passaggio di migrazione in
-  più. Da decidere in Fase 2.
+- ~~**`hardcodedRules` restano nel `.default` come documentazione o spariscono?**~~
+  **Deciso dal maintainer in Fase 2: restano come documentazione**, con il commento
+  che dichiara esplicitamente che non sono più la fonte di verità. In Fase 4 sono
+  passate a segnaposti come tutte le altre, così il file non insegna più una forma
+  che il motore non userebbe.
 - **`baseline` della zona `site`: in quale file si configura?**
   (`ital8Config.json5` o il config del plugin). Il nome della chiave è deciso,
   la sua collocazione no. Il caso d'uso « sito privato » è reale ma non urgente.

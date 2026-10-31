@@ -1,4 +1,4 @@
-<!-- ital8doc v1-1 · tipo: EXPLAIN · lang: it · rev: 1 · ref -->
+<!-- ital8doc v1-1 · tipo: EXPLAIN · lang: it · rev: 2 · ref -->
 > 🌐 Italian reference edition (always up to date). English `EXPLAIN.md` is a stub until release.
 # adminAccessControl — Deep-dive tecnico
 
@@ -73,13 +73,21 @@ Passi: 1) identifica il tipo di rotta (pubblica/autenticata/per-ruolo); 2) aggiu
 |---------|-------------------|
 | Server non parte: `Configuration validation failed … Invalid regex pattern` | Sintassi regex errata in `accessControl.json5` |
 | `FATAL: Rule conflict detected!` (pattern matcha una rotta di plugin) | Rimuovi il pattern dalle custom rules — le rotte plugin dichiarano `access` nel codice |
-| `Cannot modify hardcodedRules section` | Modifica solo `customRules`; le hardcoded proteggono path critici |
+| `Cannot modify hardcodedRules section` | Modifica solo `customRules`. Nota: le hardcoded **non** sono ciò che protegge i path critici — lo fa il `baseline` di zona in codice; sono immutabili dalla UI perché documentano il minimo d'accesso |
 | `Role 999 not found in userRole.json5 (WARNING)` | Assicurati che l'ID ruolo esista in `userRole.json5` |
 | Pattern che non matcha | Verifica sintassi (esatto/wildcard/`regex:`) e priorità (vince il più specifico); controlla i log AccessManager |
 
 ## Best practice
 
-1. Usa le **hardcoded rules** per i path critici (es. `/admin/**` → `[0, 1]`, `editable: false`).
+1. ⚠️ **NON affidarti alle `hardcodedRules` per i path critici** — è il consiglio
+   che questa guida dava fino alla v3.29.0, e che [`REVIEW.md`](../../REVIEW.md) → A1
+   ha smentito: una regola scritta `/admin/**` è **testo**, mentre la posizione del
+   pannello è una **variabile** (`adminPrefix`), e nessun codice teneva allineate le
+   due cose. Chi cambiava prefisso credendo di irrobustire il sito finiva per servire
+   le pagine admin a un anonimo. I path critici sono protetti dal **`baseline` di
+   zona**, in codice (`core/pathZoneResolver.js`); le `hardcodedRules` restano nel
+   file come documentazione leggibile, e vi si scrivono i **segnaposti**
+   (`{{admin}}/**`), non i letterali.
 2. Preferisci pattern **specifici** ai wildcard ampi.
 3. **Sempre** il campo `access` nelle rotte dei plugin, esplicito.
 4. Usa i **ruoli custom** (100+) per permessi granulari.
@@ -98,5 +106,6 @@ Testabile manualmente (curl su rotte pubbliche/protette, login con/senza ruolo, 
 - [ ] Regole basate su IP / fascia oraria
 - [ ] Rate limiting per-rotta
 - [ ] Funzione template `passData.accessControl.check()` per controllo a livello di pagina
+- [ ] Adozione dei segnaposti `{{…}}` negli altri consumatori di pattern (`sentinel`, `seo`, `rateLimiter`, `urlRedirect`, `csrfProtection`) → Fase 5 di [`path-zones.it.md`](../../docs/decisions/path-zones.it.md)
 - [ ] Export/import delle configurazioni
 - [ ] Rule builder visuale (senza editare JSON)

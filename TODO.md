@@ -585,6 +585,26 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       plugin attivo dei test minimi richiesti (un test per metodo esportato, uno per
       rotta incluso `access`, validazione dei JSON5, lifecycle hooks). Default
       warning, `testingStrictMode: true` per promuoverli a fatali.
+- [ ] **🐞 Gli harness di boot riscrivono il `ital8Config.json5` VIVO con
+      `JSON.stringify`, e lo ripristinano solo in `afterAll`.** *(Emerso verificando la
+      Fase 4 di path-zones: due test fallivano e la causa era lo stato lasciato da una
+      run precedente interrotta.)* `spawnServer()` in `tests/integration/dirListing.test.js`
+      — e lo stesso schema in `httpVerbs`, `hideExtension`, `rejectNonCanonicalPaths`,
+      `httpsServer` — fotografa il file, ci scrive sopra
+      `JSON.stringify(testConf, null, 2)` e lo riscrive da `originalRaw` alla fine. Due
+      conseguenze: **(a)** durante la run il config vivo dello sviluppatore è
+      riserializzato, cioè **senza i suoi 230 commenti**; **(b)** se la run è
+      interrotta (worker ucciso, Ctrl-C, `afterAll` non eseguito) quel file **resta**
+      riserializzato e puntato alle fixture — trovato così: `httpPort: 19310`
+      (il `PORT_OFF` di `dirListing`), `wwwPath: "/tests/www"`, `activeTheme:
+      "themeForTesting"`, zero commenti. E il danno è silenzioso finché non lo nota un
+      test che *pretende* quei commenti (`themesManagment` → « preserva i commenti
+      JSON5 »), che allora fallisce per una causa che non ha niente a che vedere con sé.
+      Il ripristino dal `.default` risolve, ma nessuno sa che va fatto. Due strade:
+      scrivere il config di prova in una **copia** e lanciare il server con un override
+      (nessuna scrittura sul vivo), oppure registrare il ripristino su
+      `process.on('exit')` invece che nel solo `afterAll`. La prima è la vera
+      correzione; la seconda limita i danni. Stessa famiglia della voce qui sotto.
 - [ ] **Safety net filesystem nei test**: hook che verifichi che nessun test scriva
       dentro `plugins/*/` o `themes/*/` reali (oggi è solo una convenzione).
 
@@ -976,11 +996,37 @@ passerebbe il boot non può essere salvata dalla GUI. Le fasi 4-6 che restano so
       **applicabile**, e `validateCandidate` non sostituisce più la policy viva a
       quella mancante (altrimenti salvava un file che al boot non parte). Dettaglio
       nel registro → *Revisione della Fase 3*.
-- [ ] **Fase 4 — segnaposti nei `.default` + migrazione.** I letterali passano a
-      `{{…}}`; la derivazione `hideExtension` sostituisce le regole scritte due volte;
-      `migrations/` + bump di `schemaVersion` del descrittore per ogni pacchetto
-      toccato (è un **cambio di valore**: il merge additivo non lo copre).
-- [ ] **Fase 5 — adozione negli altri consumatori.** I **20 letterali** censiti in
+- [x] ~~**Fase 4 — segnaposti nei `.default` + migrazione.**~~ **Fatta il 2026-10-31.**
+      In `accessControl.default.json5` le **10 regole dichiarate diventano 6**: i
+      letterali passano a `{{admin}}`/`{{pluginPages}}`, e le tre forme senza
+      estensione non sono più scritte a mano ma **derivate** quando `hideExtension` è
+      acceso per quella zona (D5). `migrations/` con lo step v3→v4 e bump del
+      descrittore (`pluginConfig.default.json5`) a `4`: il clock è il descrittore,
+      quindi la `schemaVersion` di `accessControl` resta **3** di proposito — cambiano
+      i valori delle chiavi, non le chiavi. Lo script è **testuale** (un `saveJson5`
+      dell'oggetto perderebbe i commenti, che qui sono la parte che spiega perché le
+      `hardcodedRules` non sono più la fonte di verità), **idempotente** e
+      **fail-soft**: un pattern che non riconosce lo lascia e lo segnala, e una forma
+      pulita modificata dall'amministratore non viene rimossa. Verificata con la CLI
+      reale (6 pattern convertiti, 3 forme pulite rimosse, ricevuta + backup), poi boot
+      pulito e la prova che conta: con `adminPrefix: "backoffice"` i pattern risolvono
+      a `/backoffice` e il pannello è protetto **dalla regola**, non solo dal
+      `baseline`. +20 test.
+      **Un test ha dovuto cambiare, ed è la lezione per la Fase 5:**
+      `reservedSurfaceCoverage` leggeva i pattern **grezzi** e li confrontava con URL
+      concreti — con i segnaposti non combaciano più, e il test aveva ragione a
+      fallire perché misurava la *scrittura* invece dell'*effetto*. Ora passa per il
+      resolver, come il motore. Reso **più fedele**, non più permissivo: i casi
+      « forma senza estensione » esercitano davvero `hideExtension` acceso, e i casi
+      « non riservata » girano su entrambi i ruleset. Verificato con due mutazioni
+      (5 e 3 fallimenti).
+- [ ] **Fase 5 — adozione negli altri consumatori.** ⚠️ **Regola emersa in Fase 4:**
+      ogni consumatore — codice **o test** — che legge pattern da un config deve
+      passare per `resolvePathZones` + `resolveRuleset`. Un test che confronta pattern
+      grezzi con URL concreti smette di misurare qualcosa nel momento in cui quel file
+      adotta i segnaposti, e lo fa **in silenzio** se le sue asserzioni sono negative
+      (« non è riservata » passa anche quando nessuna regola matcha più niente).
+      I **20 letterali** censiti in
       `sentinel` (6), `seo` (2), `rateLimiter` (1) e `adminAccessControl` (11) passano
       ai segnaposti, un plugin per volta. Coinvolti anche `csrfProtection`,
       `urlRedirect`, `adminSeo` e `core/botDetector.js` (8 consumatori di

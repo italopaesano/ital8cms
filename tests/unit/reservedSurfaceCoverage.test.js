@@ -22,6 +22,7 @@ const fs = require('fs');
 const path = require('path');
 const PatternMatcher = require('../../core/patternMatcher');
 const loadJson5 = require('../../core/loadJson5');
+const { resolvePathZones, resolveRuleset } = require('../../core/pathZoneResolver');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 const ACCESS_CONTROL_DEFAULT = path.join(
@@ -34,9 +35,39 @@ const ACCESS_CONTROL_DEFAULT = path.join(
 // qui — non lasciata implicita in un'omissione.
 const AUTH_SURFACE_PLUGINS = ['adminUsers', 'adminAccessControl'];
 
-function loadRules() {
+/**
+ * Le regole EFFETTIVE, non quelle scritte.
+ *
+ * Dalla Fase 4 di path-zones i pattern del `.default` sono SEGNAPOSTI
+ * (`{{pluginPages}}/...`), e le forme senza estensione non sono più scritte a
+ * mano ma DERIVATE al caricamento. Leggere i pattern grezzi e confrontarli con
+ * URL concreti quindi non misura più niente: bisogna passare per lo stesso
+ * resolver che usa il motore.
+ *
+ * Il parametro `hideExtensionOn` non è un dettaglio: le forme senza estensione
+ * esistono SOLO in quella configurazione, e i test che le riguardano ora la
+ * esercitano davvero invece di appoggiarsi a duplicati scritti a mano.
+ */
+function loadRules({ hideExtensionOn = false } = {}) {
   const config = loadJson5(ACCESS_CONTROL_DEFAULT);
-  return { ...config.customRules, ...config.hardcodedRules };
+  const declared = { ...config.customRules, ...config.hardcodedRules };
+
+  const ital8Conf = loadJson5(path.join(PROJECT_ROOT, 'ital8Config.default.json5'));
+  if (hideExtensionOn) {
+    ital8Conf.hideExtension = ital8Conf.hideExtension || {};
+    ital8Conf.hideExtension.pluginPagesPrefix = { enabled: true, ext: '.ejs' };
+  }
+
+  const resolved = resolveRuleset(declared, resolvePathZones(ital8Conf));
+  if (resolved.problems.length > 0) {
+    // Un problema qui significherebbe un `.default` che il motore non caricherebbe:
+    // va detto COSI', non travestito da «pagina non riservata» in venti test.
+    throw new Error(
+      'accessControl.default.json5 non risolvibile:\n' +
+      resolved.problems.map((p) => `  • [${p.kind}] ${p.message}`).join('\n')
+    );
+  }
+  return resolved.rules;
 }
 
 // Enumera le pagine realmente presenti su disco, con l'URL pubblico con cui il
@@ -60,6 +91,8 @@ function isReservedByRules(url, rules, matcher) {
 describe('copertura della superficie riservata', () => {
   const matcher = new PatternMatcher();
   const rules = loadRules();
+  // Le forme senza estensione esistono solo con `hideExtension` acceso.
+  const rulesWithCleanUrls = loadRules({ hideExtensionOn: true });
 
   const pages = AUTH_SURFACE_PLUGINS.flatMap(discoverPluginPages);
 
@@ -86,7 +119,7 @@ describe('copertura della superficie riservata', () => {
   ]))(
     '%s (forma senza estensione, hideExtension attivo) è dichiarata riservata',
     (extensionlessUrl) => {
-      expect(isReservedByRules(extensionlessUrl, rules, matcher)).toBe(true);
+      expect(isReservedByRules(extensionlessUrl, rulesWithCleanUrls, matcher)).toBe(true);
     }
   );
 
@@ -98,8 +131,12 @@ describe('copertura della superficie riservata', () => {
     ['/pluginPages/adminUsers/loginHelper.ejs'],
     ['/pluginPages/altroPlugin/pagina.ejs'],
     ['/admin-guide.ejs'],
-  ])('%s NON è dichiarata riservata', (publicUrl) => {
+  ])('%s NON è dichiarata riservata (con e senza hideExtension)', (publicUrl) => {
+    // Entrambe le configurazioni: la derivazione delle forme pulite AGGIUNGE
+    // pattern, ed è proprio quando si aggiungono pattern che un perimetro
+    // diventa onnivoro senza che nessuno lo noti.
     expect(isReservedByRules(publicUrl, rules, matcher)).toBe(false);
+    expect(isReservedByRules(publicUrl, rulesWithCleanUrls, matcher)).toBe(false);
   });
 
   // I varchi sono pubblici per necessità: se qualcuno li marcasse `requiresAuth`
@@ -110,7 +147,10 @@ describe('copertura della superficie riservata', () => {
     ['/pluginPages/adminUsers/login'],
     ['/pluginPages/adminUsers/logout.ejs'],
   ])('%s resta PUBBLICA (isAuthEntryPoint, non requiresAuth)', (entryPointUrl) => {
-    const rule = matcher.findMatchingRule(entryPointUrl, rules);
+    // Il ruleset con le forme pulite è un SOVRAINSIEME di quello base (la
+    // derivazione aggiunge il gemello, non sostituisce l'originale), quindi
+    // copre qui entrambe le forme di URL.
+    const rule = matcher.findMatchingRule(entryPointUrl, rulesWithCleanUrls);
     expect(rule).toBeTruthy();
     expect(rule.requiresAuth).toBe(false);
     expect(rule.isAuthEntryPoint).toBe(true);

@@ -58,6 +58,16 @@ themes/*/node_modules/
 /plugins/adminSentinel/backups/
 /plugins/adminUsers/userAccount.json5
 /plugins/adminUsers/userRole.json5
+
+# Backup che il runner delle migrazioni crea prima di ogni step
+# (core/migrationRunner.js: `${file}.backup-v${from}-${stamp}`).
+#
+# Sono copie di config VIVI, quindi dati per-istanza come i vivi stessi: vanno
+# ignorati per la stessa ragione. Senza questa riga comparivano fra i file non
+# tracciati a ogni migrazione applicata — e la prima a essere eseguita davvero
+# nel repo (adminAccessControl v3→v4) l'ha fatto notare. Vale per QUALUNQUE
+# pacchetto con `migrations/`, non solo per quello.
+*.backup-v[0-9]*
 # Descrittori vivi (plugin + temi): generati dai .default; isInstalled (stato
 # runtime) scritto al boot — per i plugin da pluginSys, per i temi bundled da
 # ensureThemesInstalled (Fase 5). I .default restano la fonte di verità.

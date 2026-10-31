@@ -1,6 +1,9 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "schemaVersion": 3,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 4,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  //
+  // È anche il CLOCK delle migrazioni del pacchetto: v4 porta i pattern di
+  // accessControl ai segnaposti di percorso. Vedi migrations/migrations.json5.
   "active": 1,
   "weight": -5, // Peso negativo per caricare PRIMA degli altri plugin (il middleware deve intercettare prima)
 
