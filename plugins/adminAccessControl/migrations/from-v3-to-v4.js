@@ -38,14 +38,38 @@
  * dello strato JSON5 — che all'epoca non esisteva, ed è il motivo per cui era
  * stata riscritta a mano. → docs/decisions/json5-key-operations.it.md
  *
- * ─── PERCHE LE RINOMINE RESTANO TESTUALI ──────────────────────────────────────
- * Rinominare una chiave PRESERVANDO posizione e commenti non è esprimibile come
- * `setJson5Key` + `removeJson5Key`: il primo inserisce in testa al blocco o dopo
- * una chiave indicata, quindi la regola rinominata si SPOSTEREBBE e perderebbe il
- * blocco di commento che la precede — che in questo file è la parte che la
- * spiega. Sarebbe una sesta operazione (`renameJson5Key`), fuori perimetro. Per
- * le rinomine la strada testuale ha funzionato: il difetto 3 era la diagnostica
- * silenziosa, non la corruzione, e qui è corretto.
+ * ─── ANCORATE AL CODICE (v3.37.0), DOPO ALTRI DUE DIFETTI ─────────────────────
+ * Questa intestazione affermava che « per le rinomine la strada testuale ha
+ * funzionato: il difetto 3 era la diagnostica silenziosa, non la corruzione ».
+ * Era FALSO, e la revisione del codice l'ha dimostrato con due casi riprodotti:
+ *
+ *   • `String.replace` con un pattern STRINGA sostituisce solo la PRIMA
+ *     occorrenza, e l'ancora non era vincolata al codice. Un'ancora dentro un
+ *     COMMENTO — per esempio una regola commentata per disabilitarla, che è il
+ *     modo naturale di disabilitarla — veniva riscritta al posto della regola
+ *     vera, che restava letterale. Con il log che diceva « 1 pattern convertiti »;
+ *   • la stessa chiave in DUE blocchi (`hardcodedRules` e `customRules`) ne
+ *     vedeva convertita una sola, e alla riesecuzione la guardia « già
+ *     convertito » la dichiarava fatta: il letterale residuo non veniva più
+ *     nominato mai. Permanente, e silenzioso.
+ *
+ * L'argomento che aveva portato a tenerle testuali era giusto, ma riguardava una
+ * rinomina fatta COMPONENDO `setJson5Key` + `removeJson5Key` — che sposta la
+ * chiave e le fa perdere il blocco di commento che la precede. Una rinomina IN
+ * POSTO non sposta niente: è uno splice su `[keyStart, keyEnd)`, e `locatePath`
+ * quei due indici li calcolava già. Di qui `core/renameJson5Key.js`, la SESTA
+ * operazione dello strato, che chiude entrambi i difetti alla radice: una chiave
+ * dentro un commento è mascherata e non viene mai trovata, e il path include il
+ * blocco che la ospita, quindi due omonime sono due bersagli distinti.
+ *
+ * ─── UNA CONSEGUENZA DA CONOSCERE ─────────────────────────────────────────────
+ * Il caso « la regola esiste ma l'ancoraggio non combacia (file riformattato) »
+ * NON ESISTE PIÙ: era un limite della ricerca testuale, mentre lo scanner legge
+ * qualunque formattazione JSON5 valida — `"/admin/**" : {` con lo spazio prima
+ * dei due punti compreso. Il difetto 5 della revisione precedente (lo stesso
+ * messaggio per due cause diverse) è quindi DISSOLTO e non corretto: una delle
+ * due cause non è più raggiungibile, e un file riformattato ora si converte
+ * invece di essere dichiarato non convertibile.
  */
 
 'use strict';
@@ -54,15 +78,26 @@ const fs = require('fs');
 const path = require('path');
 
 const removeJson5Key = require('../../../core/removeJson5Key');
+const renameJson5Key = require('../../../core/renameJson5Key');
 
-/** Rinomine di chiave: dal letterale al segnaposto. */
+/**
+ * Rinomine di chiave: dal letterale al segnaposto.
+ *
+ * Coppie `[vecchia, nuova]`, non ancore testuali. Fino alla v3.37.0 qui c'erano
+ * frammenti di testo (`'"/admin": {'`) cercati con `String.replace`, e ne sono
+ * usciti due difetti — vedi *ANCORATE AL CODICE* nell'intestazione.
+ *
+ * Quale blocco le ospiti non si dichiara: si cercano in TUTTI e due
+ * (`hardcodedRules` e `customRules`), perché un file scritto a mano può averle
+ * dove vuole, e la stessa chiave può stare in entrambi.
+ */
 const KEY_RENAMES = Object.freeze([
-  ['"/admin": {', '"{{admin}}": {'],
-  ['"/admin/**": {', '"{{admin}}/**": {'],
-  ['"/pluginPages/adminUsers/userProfile.ejs": {', '"{{pluginPages}}/adminUsers/userProfile.ejs": {'],
-  ['"/pluginPages/adminUsers/login.ejs": {', '"{{pluginPages}}/adminUsers/login.ejs": {'],
-  ['"/pluginPages/adminUsers/logout.ejs": {', '"{{pluginPages}}/adminUsers/logout.ejs": {'],
-  ['"/pluginPages/adminAccessControl/access-denied.ejs": {', '"{{pluginPages}}/adminAccessControl/access-denied.ejs": {'],
+  ['/admin', '{{admin}}'],
+  ['/admin/**', '{{admin}}/**'],
+  ['/pluginPages/adminUsers/userProfile.ejs', '{{pluginPages}}/adminUsers/userProfile.ejs'],
+  ['/pluginPages/adminUsers/login.ejs', '{{pluginPages}}/adminUsers/login.ejs'],
+  ['/pluginPages/adminUsers/logout.ejs', '{{pluginPages}}/adminUsers/logout.ejs'],
+  ['/pluginPages/adminAccessControl/access-denied.ejs', '{{pluginPages}}/adminAccessControl/access-denied.ejs'],
 ]);
 
 /**
@@ -154,68 +189,74 @@ async function migrate(ctx) {
       + 'sono: se la differenza non ti serve piu, rimuovile a mano.');
   }
 
-  // ── 2. Rinomine, sul testo ─────────────────────────────────────────────────
-  const before = fs.readFileSync(rulesPath, 'utf8');
-  let text = before;
-  const renamed = [];
-  const notFound = [];
+  // ── 2. Rinomine, ANCORATE AL CODICE ───────────────────────────────────────
+  //
+  // Si decide sull'oggetto deserializzato e si agisce con `renameJson5Key`, che
+  // localizza la chiave fra i caratteri che la mask marca come CODICE. Fino alla
+  // v3.37.0 qui si lavorava sul testo con `String.replace`: vedi l'intestazione.
+  const doc = loadJson5(rulesPath);
+  const toRename = [];
   const alreadyDone = [];
+  const absent = [];
+  const renameCollisions = [];
 
-  for (const [from, to] of KEY_RENAMES) {
-    // Si guarda la SINGOLA chiave, non tutto il file. La prima stesura faceva
-    // `if (text.includes(to)) continue` — quindi un `{{admin}}` scritto a mano in
-    // una regola QUALSIASI sopprimeva la conversione del letterale `/admin`, e
-    // senza nominarlo: ne' convertito ne' dichiarato (difetto 3).
-    if (text.includes(to)) { alreadyDone.push(to); continue; }
-    if (!text.includes(from)) { notFound.push(from); continue; }
-    text = text.replace(from, to);
-    renamed.push(from);
+  for (const [oldKey, newKey] of KEY_RENAMES) {
+    let seenSomewhere = false;
+    for (const block of ['hardcodedRules', 'customRules']) {
+      const rulesBlock = doc[block];
+      if (rulesBlock === null || typeof rulesBlock !== 'object' || Array.isArray(rulesBlock)) continue;
+      const hasOld = Object.prototype.hasOwnProperty.call(rulesBlock, oldKey);
+      const hasNew = Object.prototype.hasOwnProperty.call(rulesBlock, newKey);
+      if (hasOld && hasNew) { renameCollisions.push(`${block} → ${oldKey}`); seenSomewhere = true; }
+      else if (hasOld) { toRename.push({ block, oldKey, newKey }); seenSomewhere = true; }
+      else if (hasNew) { alreadyDone.push(`${block} → ${newKey}`); seenSomewhere = true; }
+    }
+    if (!seenSomewhere) absent.push(oldKey);
   }
 
-  // Diagnostica che NON afferma una causa non verificata (difetto 5). La prima
-  // stesura diceva « l'ancoraggio non combacia (file riformattato o
-  // personalizzato) » anche per una regola semplicemente ASSENTE, mandando a
-  // cercare un problema di formattazione che non c'era.
-  if (notFound.length > 0) {
-    const stillLiteral = notFound.filter((anchor) => {
-      const key = anchor.slice(1, anchor.indexOf('": {'));
-      return Object.prototype.hasOwnProperty.call(rules, key)
-        || Object.prototype.hasOwnProperty.call(loadJson5(rulesPath).hardcodedRules || {}, key);
-    });
-    const absent = notFound.filter((a) => !stillLiteral.includes(a));
-
-    if (absent.length > 0) {
-      logger.info('migrate',
-        `adminAccessControl: queste regole non esistono in questo file, quindi non c'era `
-        + `niente da convertire: ${absent.map((a) => a.slice(1, a.indexOf('": {'))).join(', ')}`);
-    }
-    if (stillLiteral.length > 0) {
-      logger.warn('migrate',
-        'adminAccessControl: queste regole ESISTONO ma il loro ancoraggio testuale non '
-        + `combacia, quindi restano letterali: ${stillLiteral.map((a) => a.slice(1, a.indexOf('": {'))).join(', ')}. `
-        + 'Il file e stato riformattato: convertile a mano sostituendo il prefisso col '
-        + 'nome della zona fra doppie graffe.');
-    }
+  // Diagnostica. Non esiste più il caso « esiste ma l'ancoraggio non combacia »:
+  // era un limite della ricerca testuale, e lo scanner legge qualunque
+  // formattazione JSON5 valida — spazio prima dei due punti compreso. Il difetto
+  // 5 della revisione precedente (lo stesso messaggio per due cause diverse) è
+  // quindi DISSOLTO, non corretto: una delle due cause non è più raggiungibile.
+  if (absent.length > 0) {
+    logger.info('migrate',
+      'adminAccessControl: queste regole non esistono in questo file, quindi non c\'era '
+      + `niente da convertire: ${absent.join(', ')}`);
+  }
+  if (renameCollisions.length > 0) {
+    logger.warn('migrate',
+      'adminAccessControl: queste regole hanno GIA\' accanto la propria forma col '
+      + `segnaposto, quindi non sono state rinominate: ${renameCollisions.join(', ')}. `
+      + 'Rinominarle produrrebbe due chiavi omonime, e una perderebbe il proprio valore '
+      + 'in silenzio. Decidi tu quale tenere e rimuovi l\'altra a mano.');
   }
 
-  if (alreadyDone.length === KEY_RENAMES.length && toRemove.length === 0) {
-    logger.info('migrate', 'adminAccessControl: accessControl.json5 già convertito, nessuna modifica');
+  if (toRename.length === 0 && toRemove.length === 0) {
+    if (alreadyDone.length > 0 && renameCollisions.length === 0) {
+      logger.info('migrate', 'adminAccessControl: accessControl.json5 già convertito, nessuna modifica');
+    }
     return;
   }
 
   if (dryRun) {
     logger.info('migrate',
-      `adminAccessControl [dry-run]: ${renamed.length} pattern da rinominare, `
+      `adminAccessControl [dry-run]: ${toRename.length} pattern da rinominare, `
       + `${toRemove.length} forme pulite da rimuovere`
       + (keptBecauseCustomised.length > 0 ? `, ${keptBecauseCustomised.length} conservate perche personalizzate` : ''));
     return;
   }
 
-  // ── 3. Si scrive il testo rinominato: una volta ────────────────────────────
-  if (text !== before) {
-    const tempPath = `${rulesPath}.migrating`;
-    fs.writeFileSync(tempPath, text, 'utf8');
-    fs.renameSync(tempPath, rulesPath);
+  // ── 3. Le rinomine, una scrittura per chiave ──────────────────────────────
+  //
+  // Stessa economia delle rimozioni qui sotto, e la stessa giustificazione: ogni
+  // scrittura è atomica, ogni stato intermedio è JSON5 valido, lo step è sotto il
+  // backup del runner, e la ricevuta `schemaVersion` avanza solo a esito riuscito
+  // — quindi una catena interrotta riprende da dove si è fermata.
+  const renamed = [];
+  for (const { block, oldKey, newKey } of toRename) {
+    const outcome = await renameJson5Key(rulesPath, [block, oldKey], newKey);
+    if (outcome.changed) renamed.push(`${block} → ${newKey}`);
   }
 
   // ── 4. Le rimozioni, via removeJson5Key ───────────────────────────────────

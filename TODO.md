@@ -585,6 +585,24 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       plugin attivo dei test minimi richiesti (un test per metodo esportato, uno per
       rotta incluso `access`, validazione dei JSON5, lifecycle hooks). Default
       warning, `testingStrictMode: true` per promuoverli a fatali.
+- [ ] **🐞 `sentinel/migrations/from-v6-to-v7.js` ha la stessa famiglia di difetto
+      delle rinomine testuali.** *(Emerso durante la correzione del rilievo 2 della
+      revisione del codice; **fuori dal perimetro** che il maintainer aveva dato, quindi
+      non toccato.)* Fa `before.replace(SHIPPED_LINE, PLACEHOLDER_LINE)`: `String.replace`
+      con un pattern stringa sostituisce solo la **prima** occorrenza, e l'ancora non è
+      vincolata al codice. Più difficile da innescare della versione di
+      `adminAccessControl` — l'ancora è una riga **intera** con dieci spazi di
+      indentazione e il blocco `{ path: […] },` completo, non una semplice chiave — ma
+      il caso resta: la stessa riga presente **due volte** (una regola duplicata) ne
+      vede convertita una sola, e alla riesecuzione la guardia
+      `before.includes(PLACEHOLDER_LINE)` dichiara « già convertita », quindi il
+      letterale residuo non viene più nominato mai.
+      **`renameJson5Key` non è lo strumento giusto qui**, perché quella riga è un
+      VALORE (un elemento di `match.any`), non una chiave. Lo strumento è `editJson5`
+      sull'array, che dalla v3.37.0 ricorre per indice **anche dentro gli elementi** e
+      ne preserva i commenti: la correzione del rilievo 1 ha reso disponibile la strada
+      pulita che prima non c'era. Da valutare insieme al resto delle migrazioni di
+      `sentinel`.
 - [ ] **🐞 Gli harness di boot riscrivono il `ital8Config.json5` VIVO con
       `JSON.stringify`, e lo ripristinano solo in `afterAll`.** *(Emerso verificando la
       Fase 4 di path-zones: due test fallivano e la causa era lo stato lasciato da una

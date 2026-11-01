@@ -499,7 +499,9 @@ valore sbagliato al path, e sono stati fermati **prima della scrittura**.
       `setJson5Key` + `removeJson5Key`: il primo inserisce in testa al blocco o
       dopo una chiave indicata, quindi la regola **si sposterebbe** e perderebbe
       il blocco di commento che la spiega. Sarebbe una **sesta** operazione
-      (`renameJson5Key`), fuori perimetro.
+      (`renameJson5Key`) — che in v3.37.0 è stata poi realizzata, perché una
+      rinomina IN POSTO non è una composizione delle altre due ma uno splice su
+      `[keyStart, keyEnd)`. Vedi *Fuori perimetro*.
 - [x] ~~Test: 5 nuovi~~ (21 in tutto), con le due riproduzioni della revisione in
       testa. Due **mutazioni**, entrambe colte: via il confronto del corpo → 2
       fallimenti; criterio « uguale a quella spedita » → 1 fallimento, esattamente
@@ -588,13 +590,19 @@ finestra che avevo guardato.
   esadecimali. Non sarebbe un sostituto diretto, e introdurrebbe una dipendenza
   disallineata dai moduli esistenti. Valutabile con dati alla mano se qualcuno lo
   chiede, non a memoria.
-- **`renameJson5Key`.** Una rinomina che preservi **posizione e commenti** non è
-  esprimibile come `setJson5Key` + `removeJson5Key`: il primo inserisce in cima
-  all'oggetto o dopo una chiave indicata, quindi la chiave rinominata si
-  **sposterebbe** e perderebbe il blocco di commento che la precede. Sarebbe una
-  terza operazione, da valutare quando serve davvero. Le rinomine di
-  `from-v3-to-v4.js` restano testuali, e per le rinomine quella strada ha
-  funzionato (il difetto 3 è diagnostica, non corruzione).
+- ~~**`renameJson5Key`.**~~ **Non è più fuori perimetro: realizzata in v3.37.0**
+  come `core/renameJson5Key.js`, la **sesta** operazione dello strato. La
+  motivazione qui sopra era giusta ma riguardava una rinomina fatta *componendo*
+  `setJson5Key` + `removeJson5Key`, che sposta la chiave. Una rinomina **in
+  posto** non sposta niente: è uno splice su `[keyStart, keyEnd)`, e `locatePath`
+  quei due indici li calcolava già.
+  La frase finale — « per le rinomine quella strada ha funzionato (il difetto 3
+  è diagnostica, non corruzione) » — era **falsa**, e la revisione del codice
+  l'ha smentita con due casi riprodotti: un'ancora dentro un **commento** veniva
+  riscritta al posto della regola vera (che restava letterale, col log che
+  dichiarava successo), e la stessa chiave in **due blocchi** ne vedeva convertita
+  una sola, poi mascherata per sempre dalla guardia « già convertito ». Era stata
+  giudicata sicura senza essere provata.
 - **Una primitiva per gli array** (modificare un elemento per posizione o per
   valore). È l'operazione generale dietro il corollario di D3, ma oggi il caso
   d'uso conta tre stringhe in due file: la sostituzione per elemento si può fare

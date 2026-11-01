@@ -189,36 +189,115 @@ describe('fail-soft: un file di sicurezza non si riscrive a tentoni', () => {
 }
 `;
 
-  test('su un file riformattato lascia tutto INTATTO', async () => {
-    writeLive(REFORMATTED);
-    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
-    expect(readLive()).toBe(REFORMATTED);
-  });
-
-  test('e DICHIARA i pattern che non ha potuto convertire', async () => {
-    writeLive(REFORMATTED);
-    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
-    expect(logs.warn.join(' ')).toContain('ancoraggio testuale non combacia');
-    expect(logs.warn.join(' ')).toContain('/admin/**');
-  });
-
-  test('DISTINGUE « esiste ma riformattata » da « non esiste »', async () => {
-    // È il difetto 5 della revisione, e la correzione sta tutta qui: la prima
-    // stesura dava LO STESSO messaggio nei due casi — « l'ancoraggio non combacia
-    // (file riformattato o personalizzato) » — anche per una regola semplicemente
-    // ASSENTE, mandando a cercare un problema di formattazione che non c'era.
+  test('su un file riformattato CONVERTE comunque', async () => {
+    // ⚠ CAMBIO DI COMPORTAMENTO DICHIARATO (v3.37.0). Prima questo test
+    // asseriva il contrario — « lascia tutto INTATTO » — e aveva ragione: le
+    // rinomine erano ancore TESTUALI, e `'"/admin/**": {'` non combacia con
+    // `"/admin/**" : {` (spazio prima dei due punti). Era un limite della
+    // ricerca testuale, non una cautela.
     //
-    // In REFORMATTED `/admin/**` C'È (riformattata) e `/admin` NON c'è.
+    // Con `renameJson5Key` la chiave si localizza con lo scanner, che legge
+    // qualunque formattazione JSON5 valida: il file si converte. La famiglia di
+    // guasti « esiste ma non è ancorabile » è DISSOLTA, non aggirata.
     writeLive(REFORMATTED);
     await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
+    expect(patternsOf(loadJson5(livePath()))).toEqual(['{{admin}}/**']);
+    expect(logs.info.join(' ')).toContain('1 pattern convertiti');
+  });
 
-    // Quella che esiste: WARN, con il rimando alla conversione a mano.
-    expect(logs.warn.join(' ')).toContain('/admin/**');
-    expect(logs.warn.join(' ')).toContain('a mano');
+  test('e non inventa più un problema di formattazione che non c\'è', async () => {
+    // L'altra faccia: con lo scanner non esiste più un pattern « che non ha
+    // potuto convertire » per ragioni di formato, quindi quell'avviso non deve
+    // comparire. Prima compariva, e mandava a sistemare a mano un file che era
+    // perfettamente valido.
+    writeLive(REFORMATTED);
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
+    expect(logs.warn.join(' ')).not.toContain('ancoraggio testuale non combacia');
+    expect(logs.warn.join(' ')).not.toContain('a mano sostituendo il prefisso');
+  });
 
-    // Quella che non esiste: INFO, e NON un avviso sul formato.
+  test('una regola ASSENTE resta un info, non un avviso', async () => {
+    // Metà sopravvissuta del difetto 5: la distinzione fra « esiste ma
+    // riformattata » e « non esiste » è dissolta perché il primo caso non c'è
+    // più, ma il secondo sì — e deve restare un INFO. In REFORMATTED `/admin`
+    // non c'è, e cercarlo non è un problema da segnalare all'amministratore.
+    writeLive(REFORMATTED);
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
     expect(logs.info.join(' ')).toContain('non esistono in questo file');
-    expect(logs.warn.join(' ')).not.toContain('riformattato o personalizzato');
+    expect(logs.info.join(' ')).toContain('/admin,');
+    expect(logs.warn.join(' ')).not.toContain('/admin,');
+  });
+
+  test('🐞 un ancora dentro un COMMENTO non viene toccata, e la regola vera sì', async () => {
+    // REGRESSIONE. `String.replace` con un pattern stringa sostituisce la PRIMA
+    // occorrenza, e l'ancora non era vincolata al codice: il COMMENTO veniva
+    // riscritto al posto della regola, che restava letterale — col log che
+    // diceva « 1 pattern convertiti ». Commentare una regola per disabilitarla
+    // è il modo naturale di disabilitarla, quindi il caso è raggiungibile dal
+    // percorso supportato dal prodotto.
+    writeLive(`{
+  // esempio, per riferimento:  "/admin": { "requiresAuth": true }
+  "hardcodedRules": {
+    "/admin": { "requiresAuth": true, "allowedRoles": [0, 1] }
+  },
+  "customRules": {},
+  "defaultPolicy": { "action": "allow", "redirectOnDenied": "/l" }
+}
+`);
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
+    const after = readLive();
+    // il commento è intatto…
+    expect(after).toContain('// esempio, per riferimento:  "/admin": { "requiresAuth": true }');
+    // …e la regola VERA è convertita
+    expect(patternsOf(loadJson5(livePath()))).toEqual(['{{admin}}']);
+  });
+
+  test('🐞 la stessa chiave in DUE blocchi viene convertita in entrambi', async () => {
+    // REGRESSIONE. `replace` ne cambiava una sola; alla riesecuzione la guardia
+    // « già convertito » (che guardava `text.includes`) dichiarava il lavoro
+    // fatto, e il letterale residuo non veniva più nominato MAI — permanente e
+    // silenzioso. Esito: una regola di access control che punta a un prefisso
+    // inesistente appena `adminPrefix` cambia, cioè la forma residua di A1 che
+    // questa migrazione esiste per prevenire.
+    writeLive(`{
+  "hardcodedRules": {
+    "/admin/**": { "requiresAuth": true, "allowedRoles": [0, 1] }
+  },
+  "customRules": {
+    "/admin/**": { "requiresAuth": true, "allowedRoles": [0] }
+  },
+  "defaultPolicy": { "action": "allow", "redirectOnDenied": "/l" }
+}
+`);
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
+    const parsed = loadJson5(livePath());
+    expect(Object.keys(parsed.hardcodedRules)).toEqual(['{{admin}}/**']);
+    expect(Object.keys(parsed.customRules)).toEqual(['{{admin}}/**']);
+    expect(logs.info.join(' ')).toContain('2 pattern convertiti');
+    // i valori distinti NON si confondono: ciascuna conserva il proprio
+    expect(parsed.hardcodedRules['{{admin}}/**'].allowedRoles).toEqual([0, 1]);
+    expect(parsed.customRules['{{admin}}/**'].allowedRoles).toEqual([0]);
+  });
+
+  test('una COLLISIONE non si risolve a tentoni: si dichiara e si lascia stare', async () => {
+    // Il letterale e il segnaposto convivono nello stesso blocco. Rinominare
+    // produrrebbe due chiavi omonime: `json5.parse` ne terrebbe UNA sola e
+    // l'altra perderebbe il proprio valore in silenzio. Si rifiuta e si nomina.
+    writeLive(`{
+  "hardcodedRules": {
+    "/admin/**": { "requiresAuth": true, "allowedRoles": [0, 1] },
+    "{{admin}}/**": { "requiresAuth": true, "allowedRoles": [0] }
+  },
+  "customRules": {},
+  "defaultPolicy": { "action": "allow", "redirectOnDenied": "/l" }
+}
+`);
+    const before = readLive();
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
+    expect(readLive()).toBe(before);                      // niente toccato
+    expect(logs.warn.join(' ')).toContain('due chiavi omonime');
+    expect(logs.warn.join(' ')).toContain('hardcodedRules');
+    expect(logs.info.join(' ')).not.toContain('già convertito');
   });
 
   test('NON dice « già convertito » quando non ha convertito niente', async () => {
