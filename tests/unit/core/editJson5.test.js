@@ -1005,6 +1005,67 @@ describe('sostituzione per chiave: i commenti restano dove sono', () => {
     expect(json5.parse(readFile(filePath)).exemptPaths).toEqual(['{{admin}}/**', '/area/**']);
   });
 
+  test('🐞 droppedComments NON riporta il contenuto delle stringhe come commenti', async () => {
+    // REGRESSIONE. Il riconoscitore cercava `mask[i] === 1 && source[i] === '/'`,
+    // ma la mask marcava con 1 sia il corpo delle STRINGHE sia i commenti: una
+    // stringa che contiene `//` veniva riportata come commento perduto. Misurato
+    // su questo stesso file: la voce era
+    //   `"//example.com\",   // la base canonica"`
+    // cioè contenuto di stringa spacciato per commento, col commento VERO
+    // inglobato nella stessa voce. L'inventario che il modulo offre come
+    // garanzia era quindi sbagliato in entrambe le direzioni.
+    const filePath = writeFile('cfg.json5', `{
+  "seo": {
+    "canonicalBase": "https://example.com",   // la base canonica
+    "mode": "strict",
+  },
+}
+`);
+    const out = await editJson5(filePath, 'seo', 'ora una stringa');
+    expect(out.droppedComments).toEqual([
+      { path: ['seo'], text: '// la base canonica' },
+    ]);
+  });
+
+  test('🐞 una stringa che contiene /* non inghiotte i commenti veri', async () => {
+    // REGRESSIONE, forma GRAVE. Con `/*` dentro una stringa — plausibilissimo in
+    // `accessControl.json5`, dove vivono i pattern `regex:` — il riconoscitore
+    // cercava la chiusura `*/`, non la trovava, e clampava a fine span: i DUE
+    // commenti veri più il codice in mezzo diventavano UNA voce falsa. Misurato:
+    // 1 voce invece di 2, e nessuno dei due commenti leggibile nel resoconto.
+    const filePath = writeFile('cfg.json5', `{
+  "rule": {
+    "pattern": "regex:/*.php",
+    // questo commento spiega la soglia
+    "limit": 5,
+    // e questo la finestra
+    "window": 60,
+  },
+}
+`);
+    const out = await editJson5(filePath, 'rule', 'ora una stringa');
+    expect(out.droppedComments).toEqual([
+      { path: ['rule'], text: '// questo commento spiega la soglia' },
+      { path: ['rule'], text: '// e questo la finestra' },
+    ]);
+  });
+
+  test('un // dentro un commento di BLOCCO resta una voce sola', async () => {
+    // L'altro verso: distinguere stringa da commento non deve spezzare un
+    // commento di blocco che contiene a sua volta dei marcatori.
+    const filePath = writeFile('cfg.json5', `{
+  "rule": {
+    /* nota di blocco: vedi // il paragrafo 3 */
+    "limit": 5,
+  },
+}
+`);
+    const out = await editJson5(filePath, 'rule', 'stringa');
+    expect(out.droppedComments).toEqual([
+      { path: ['rule'], text: '/* nota di blocco: vedi // il paragrafo 3 */' },
+    ]);
+  });
+
   test('la formattazione delle parti non toccate non è normalizzata', async () => {
     const filePath = writeFile('cfg.json5', '{\n  "o": {\n    "a":    1,\n\t"b":\t2,\n  },\n}\n');
     await editJson5(filePath, 'o', { a: 1, b: 9 });

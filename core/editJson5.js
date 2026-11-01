@@ -224,7 +224,10 @@ function collectCommentsIn(source, mask, from, to) {
   const found = [];
   let i = from;
   while (i < to) {
-    if (mask[i] === 1 && (source[i] === '/' && (source[i + 1] === '/' || source[i + 1] === '*'))) {
+    // `mask[i] === 2` è « dentro un COMMENTO ». Con `=== 1` (il corpo di una
+    // stringa) questo riconoscitore prendeva `//` o `/*` scritti DENTRO una
+    // stringa per l'inizio di un commento — vedi la nota su buildCodeMask.
+    if (mask[i] === 2 && (source[i] === '/' && (source[i + 1] === '/' || source[i + 1] === '*'))) {
       const isLine = source[i + 1] === '/';
       let end;
       if (isLine) {

@@ -30,8 +30,9 @@
  * → docs/decisions/json5-key-operations.it.md
  *
  * ─── LE FUNZIONI, IN ORDINE DI DIPENDENZA ─────────────────────────────────────
- *   buildCodeMask(source)                → mask[i]=1 se il carattere i è dentro
- *                                          una stringa o un commento
+ *   buildCodeMask(source)                → mask[i]≠0 se il carattere i NON è
+ *                                          codice: 1 dentro una stringa,
+ *                                          2 dentro un commento
  *   buildDepthArray(source, mask)        → profondità di annidamento a ogni
  *                                          posizione, contando solo il codice
  *   skipWsAndCommentsForward/Backward    → navigazione che ignora spazi e commenti
@@ -59,11 +60,26 @@
 
 // ── Pre-scan: build a "code mask" identifying chars inside strings/comments ──
 //
-// mask[i] === 1 means: char at i is INSIDE a string body or anywhere within a
-// comment (markers + body). String delimiter quotes themselves remain mask=0
-// (they are structural tokens we want to find). This lets us safely look for
-// `:`, `{`, `,` in code while ignoring punctuation that lives inside strings
-// or comments.
+// mask[i] === 0 means: char at i IS code. Everything else is not, and il valore
+// dice QUALE delle due cose non-codice è:
+//
+//   0 → codice (comprese le virgolette che delimitano una stringa: sono token
+//       strutturali, e vogliamo poterli trovare)
+//   1 → il CORPO di una stringa
+//   2 → un commento, marcatori compresi
+//
+// Così si possono cercare `:`, `{`, `,` nel codice ignorando la punteggiatura che
+// vive dentro stringhe o commenti — ed è ciò che fa ogni consumatore di questo
+// modulo, interrogando la mask con `=== 0` o `!== 0`.
+//
+// ⚠ PERCHE DUE VALORI E NON UNO. Finché stringhe e commenti erano indistinguibili
+// (entrambi `1`), chi doveva riconoscere un COMMENTO non poteva: `editJson5`
+// raccoglieva i commenti perduti cercando `mask[i] === 1 && source[i] === '/'`, e
+// su un valore come `"regex:/*.php"` — plausibilissimo in `accessControl.json5` —
+// vedeva `/*` dentro la stringa, lo prendeva per l'inizio di un commento e si
+// inghiottiva il resto dello span in un'unica voce falsa che nascondeva i
+// commenti veri. Distinguere non costa niente: questa funzione sa già in quale
+// dei due casi si trova.
 
 function buildCodeMask(source) {
   const n = source.length;
@@ -77,7 +93,7 @@ function buildCodeMask(source) {
     // Single-line comment // …
     if (c === '/' && next === '/') {
       while (i < n && source[i] !== '\n') {
-        mask[i] = 1;
+        mask[i] = 2;
         i++;
       }
       continue;
@@ -85,15 +101,15 @@ function buildCodeMask(source) {
 
     // Multi-line comment /* … */
     if (c === '/' && next === '*') {
-      mask[i] = 1; mask[i + 1] = 1;
+      mask[i] = 2; mask[i + 1] = 2;
       i += 2;
       while (i < n) {
         if (source[i] === '*' && i + 1 < n && source[i + 1] === '/') {
-          mask[i] = 1; mask[i + 1] = 1;
+          mask[i] = 2; mask[i + 1] = 2;
           i += 2;
           break;
         }
-        mask[i] = 1;
+        mask[i] = 2;
         i++;
       }
       continue;
