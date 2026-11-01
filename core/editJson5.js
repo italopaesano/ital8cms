@@ -542,8 +542,13 @@ async function editJson5(filePath, fieldNameOrPath, newValue) {
   }
 
   // No-op: field already has the requested value — skip write entirely.
+  //
+  // `droppedComments` è nella forma di ritorno ANCHE qui, vuoto. L'header lo
+  // dichiara sempre presente, e ometterlo faceva lanciare `TypeError` a chi
+  // leggeva `.length` — proprio nel caso innocuo: un salvataggio idempotente
+  // dalla GUI, con l'amministratore che preme Salva senza aver cambiato nulla.
   if (deepEqual(oldValue, newValue)) {
-    return { changed: false, oldValue, newValue };
+    return { changed: false, oldValue, newValue, droppedComments: [] };
   }
 
   // Sostituzione per chiave (vedi replaceValueAtPath): ricorre invece di

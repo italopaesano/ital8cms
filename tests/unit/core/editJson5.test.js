@@ -1005,6 +1005,26 @@ describe('sostituzione per chiave: i commenti restano dove sono', () => {
     expect(json5.parse(readFile(filePath)).exemptPaths).toEqual(['{{admin}}/**', '/area/**']);
   });
 
+  test('🐞 droppedComments è presente ANCHE sul no-op, vuoto', async () => {
+    // REGRESSIONE. Il ritorno del no-op era `{ changed, oldValue, newValue }`
+    // senza `droppedComments`, che l'header dichiara sempre presente (« array di
+    // {path, text}, VUOTO quando nulla è stato ricostruito »). Chi leggeva
+    // `.length` prendeva un TypeError — e proprio nel caso innocuo: un
+    // salvataggio idempotente dalla GUI, con l'admin che preme Salva senza aver
+    // cambiato nulla.
+    const filePath = writeFile('cfg.json5', '{\n  // nota\n  "a": 1,\n}\n');
+
+    const out = await editJson5(filePath, 'a', 1);           // stesso valore
+    expect(out.changed).toBe(false);
+    expect(out.droppedComments).toEqual([]);
+    expect(() => out.droppedComments.length).not.toThrow();  // il caso che lanciava
+
+    // la forma di ritorno è la STESSA dei due rami, così chi la consuma non deve
+    // sapere quale ha girato
+    const changed = await editJson5(filePath, 'a', 2);
+    expect(Object.keys(out).sort()).toEqual(Object.keys(changed).sort());
+  });
+
   test('🐞 droppedComments NON riporta il contenuto delle stringhe come commenti', async () => {
     // REGRESSIONE. Il riconoscitore cercava `mask[i] === 1 && source[i] === '/'`,
     // ma la mask marcava con 1 sia il corpo delle STRINGHE sia i commenti: una
