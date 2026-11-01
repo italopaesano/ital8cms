@@ -519,26 +519,66 @@ ogni stato intermedio è JSON5 valido, lo step è sotto il backup del runner, e 
 ricevuta `schemaVersion` avanza **solo a esito riuscito** — quindi una catena
 interrotta riprende da dove si è fermata, e questo script è idempotente.
 
-### Fase 5 — Rilettura manuale di TUTTI i commenti
+### Fase 5 — Rilettura manuale di TUTTI i commenti ✅ FATTA (2026-11-01)
 
 Non è una rifinitura: è la seconda metà di D3. La funzione conserva i commenti
 senza giudicarli, quindi dopo la conversione **qualcuno deve rileggerli**.
 
-- [ ] Rileggere **tutti** i commenti dei file toccati dalle fasi 1-4 e decidere
-      quali riscrivere. In particolare i commenti che accompagnano valori
-      cambiati: un commento che parlava della *scrittura* di un pattern
-      (« letterale, da convertire ») è diventato falso quando il pattern è
-      diventato un segnaposto.
-- [ ] Stessa rilettura sui file già convertiti dalle **Fasi 4 e 5 di
-      path-zones**, dove le sostituzioni sono già avvenute:
-      `plugins/adminAccessControl/accessControl.json5`,
-      `plugins/rateLimiter/pluginConfig.json5`,
-      `plugins/seo/pluginConfig.json5`,
-      `plugins/sentinel/sentinelRules.json5`.
-- [ ] Verificare che nessun commento descriva un comportamento superato — è la
+- [x] ~~Rileggere **tutti** i commenti dei file toccati dalle fasi 1-4.~~ Integri:
+      l'header di `editJson5.js` era già stato riscritto in Fase 3, e `json5Scan.js`,
+      `removeJson5Key.js` e `from-v3-to-v4.js` mettono la storia all'imperfetto
+      (« copriva », « cercava ») invece di affermarla al presente.
+- [x] ~~Stessa rilettura sui file già convertiti dalle **Fasi 4 e 5 di
+      path-zones**.~~ Sui `.default`, che sono i committati e la fonte della
+      documentazione: `rateLimiter` e `seo` erano già scritti per lo stato nuovo
+      (« Fino alla v3.30.0 qui c'erano… »). Negli altri due, **tre** commenti
+      insegnavano ancora la forma abbandonata, e sono stati corretti:
+      - `sentinelRules.default.json5` — un ⚠ diceva di scrivere i path **CON**
+        `apiPrefix` e `pluginPagesPrefix` letterali, **contraddicendo** il blocco
+        venti righe sotto, e avvertiva del guasto silenzioso che i segnaposti hanno
+        eliminato. Nelle stesse righe una quarta inesattezza: il `globalPrefix`
+        « viene anteposto dal codice », mentre `lib/ruleMatcher.js` lo **toglie**
+        dal path della richiesta;
+      - `accessControl.default.json5` — i due esempi di sintassi
+        (`regex:/api/user/\d+` e `es: /admin/**`) insegnavano un letterale di zona.
+        Verificato che i segnaposti risolvono **anche dentro** un `regex:`
+        (`regex:{{api}}/user/\d+` → `regex:/api/user/\d+`, zero problemi), quindi
+        l'esempio buono esisteva ed era quello.
+- [x] ~~Verificare che nessun commento descriva un comportamento superato~~ — è la
       forma di A1 applicata alla documentazione, e in Fase 4 è già capitata
       (`EXPLAIN.it.md` di `adminAccessControl` consigliava di usare le
       `hardcodedRules` per i path critici, cioè la cosa che A1 aveva smentito).
+      **Trovato un quarto caso, fuori dai config:**
+      `plugins/adminSeo/lib/seoFileManager.js` dichiarava che salvando le
+      impostazioni globali « comments INSIDE the old custom block are lost
+      (**expected** — the block is the unit of substitution) ». La Fase 2 l'ha reso
+      falso, e il « (expected) » è la parte che faceva danno: dichiarava
+      accettabile una perdita che non avviene più. Misurato sul salvataggio GUI
+      simulato: **10 commenti prima, 10 dopo**, `droppedComments: []`. L'unità di
+      sostituzione è la **chiave**, non il blocco.
+
+**Lasciati dal maintainer, come scelta e non per omissione:** la prosa di
+`accessControl.default.json5` che situa la GUI « in `/admin/adminAccessControl/` »
+(descrittiva, non un pattern da copiare: giusta sul default, falsa con
+`adminPrefix` cambiato), e il §*Contesto* di questo documento, che resta al
+presente (« lo strato **copre** quattro operazioni su cinque »; « `editJson5`
+**dichiara** nel proprio header », citando un testo che la Fase 3 ha rimosso).
+
+**Un rilievo era sbagliato, e va detto:** avevo segnalato come mancante
+l'avvertimento su `defaultPolicy.redirectOnDenied` — letterale in mezzo ai
+segnaposti. Esiste già, cinque righe sopra la chiave, e dice esattamente ciò che la
+verifica ha confermato (« NON accetta segnaposti, ed è voluto: non è un pattern da
+confrontare ma una URL che finisce in `ctx.redirect()` » — `resolveRuleset` riceve
+solo le regole, quindi un `{{…}}` lì finirebbe tale e quale nella barra del
+browser). Il separatore `// ====` lo separa dalla chiave, e non è entrato nella
+finestra che avevo guardato.
+
+> **Limite architetturale della fase, da conoscere.** Le correzioni stanno nei
+> `.default`, che sono i committati. I **vivi** sono git-ignored e il merge
+> additivo tocca i *valori*, non i commenti: un'installazione esistente conserva
+> il commento vecchio nel proprio vivo finché non lo si rigenera
+> (`npm run cli -- reset <plugin>`). È inerente al ciclo di vita dei config, non
+> un residuo di questa fase.
 
 ## Fuori perimetro
 

@@ -597,7 +597,16 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       interrotta (worker ucciso, Ctrl-C, `afterAll` non eseguito) quel file **resta**
       riserializzato e puntato alle fixture — trovato così: `httpPort: 19310`
       (il `PORT_OFF` di `dirListing`), `wwwPath: "/tests/www"`, `activeTheme:
-      "themeForTesting"`, zero commenti. E il danno è silenzioso finché non lo nota un
+      "themeForTesting"`, zero commenti. **Seconda ricaduta il 2026-11-01**, durante
+      la Fase 5 di json5-key-operations: `httpPort: 19311`, `activeTheme:
+      "themeForTesting"`, `rejectNonCanonicalPaths: false`,
+      `https.hotReload.debounceMs` **sparita** e `cli.socketPath` puntato a
+      `/tmp/ital8cms-sentinel-int-….sock` — quest'ultimo nomina una suite che
+      l'elenco qui sopra **non ha**, quindi lo schema è più diffuso di quanto
+      registrato. Innescata da un `npx jest` **nudo**, che rastrella anche gli
+      `.spec.js` di Playwright esclusi da `tests/jest.config.js`: la suite di
+      progetto (`--config=tests/jest.config.js`) resta verde e **non** distrugge il
+      vivo. E il danno è silenzioso finché non lo nota un
       test che *pretende* quei commenti (`themesManagment` → « preserva i commenti
       JSON5 »), che allora fallisce per una causa che non ha niente a che vedere con sé.
       Il ripristino dal `.default` risolve, ma nessuno sa che va fatto. Due strade:
@@ -1144,13 +1153,27 @@ gemello più permissivo.
       due riproduzioni della revisione), 2 mutazioni colte, e la migrazione
       riapplicata con la **CLI reale** su un'installazione ricostruita alla v3:
       97 commenti su 98, zero temporanei, boot pulito.
-- [ ] **Fase 5 — RILETTURA MANUALE DI TUTTI I COMMENTI.** Non è una rifinitura: è
-      la seconda metà di D3. La funzione conserva i commenti **senza giudicarli**
-      (decisione del maintainer: « in questa prima fase conserverei i commenti
-      senza fare altro e senza chiedermi cosa dicono »), quindi a conversione
-      fatta **qualcuno deve rileggerli tutti** e decidere quali riscrivere. Un
-      commento che parlava della *scrittura* di un pattern (« letterale, da
-      convertire ») è diventato falso quando il pattern è diventato un segnaposto.
-      Riguarda anche i file **già convertiti** dalle Fasi 4 e 5 di path-zones:
-      `accessControl.json5`, `rateLimiter/pluginConfig.json5`,
-      `seo/pluginConfig.json5`, `sentinel/sentinelRules.json5`.
+- [x] ~~**Fase 5 — RILETTURA MANUALE DI TUTTI I COMMENTI.**~~ **Fatta il
+      2026-11-01.** Non era una rifinitura: era la seconda metà di D3 — la funzione
+      conserva i commenti **senza giudicarli** (decisione del maintainer: « in
+      questa prima fase conserverei i commenti senza fare altro e senza chiedermi
+      cosa dicono »), quindi a conversione fatta qualcuno doveva rileggerli.
+      **Quattro corretti**, tutti della stessa famiglia — insegnavano la forma che
+      la conversione ha abbandonato: l'⚠ di `sentinelRules.default.json5` che
+      diceva di scrivere i path **CON** `apiPrefix`/`pluginPagesPrefix` letterali
+      (contraddicendo il blocco venti righe sotto, e avvertendo del guasto
+      silenzioso che i segnaposti hanno eliminato) più, nelle stesse righe, il
+      `globalPrefix` descritto come « anteposto dal codice » quando
+      `ruleMatcher.js` lo **toglie**; i due esempi di sintassi di
+      `accessControl.default.json5` (verificato che i segnaposti risolvono **anche
+      dentro** un `regex:`); e — fuori dai config —
+      `plugins/adminSeo/lib/seoFileManager.js`, che dichiarava « comments INSIDE
+      the old custom block are lost (**expected**) »: la Fase 2 l'ha reso falso, e
+      il « (expected) » dichiarava accettabile una perdita che non avviene più
+      (misurato: 10 commenti prima, 10 dopo, `droppedComments: []`).
+      Le correzioni stanno nei `.default`, i committati: un'installazione esistente
+      conserva il commento vecchio nel proprio vivo finché non lo rigenera
+      (`npm run cli -- reset <plugin>`), perché il merge additivo tocca i valori e
+      non i commenti. Lasciati per scelta del maintainer: la prosa che situa la GUI
+      in `/admin/adminAccessControl/` e il §*Contesto* del decision record, che
+      resta al presente.

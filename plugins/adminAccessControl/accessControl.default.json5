@@ -69,13 +69,17 @@
   //   - Match esatto: "/dashboard.ejs"
   //   - Wildcard singolo: "/content/*.ejs" (non ricorsivo)
   //   - Wildcard ricorsivo: "/content/**" (tutti i livelli)
-  //   - Regex: "regex:/api/user/\\d+" (prefisso "regex:" obbligatorio)
+  //   - Regex: "regex:{{api}}/user/\\d+" (prefisso "regex:" obbligatorio)
+  //
+  // I segnaposti valgono anche DENTRO un "regex:": vengono risolti sul corpo
+  // prima che diventi una RegExp, quindi le graffe singole della regex
+  // (`\\d{1,3}`) restano sintassi e non vengono confuse con un segnaposto.
   //
   // Priorità automatica (da alta a bassa):
   //   1. Match esatto (es: /dashboard.ejs)
-  //   2. Regex (es: regex:/api/user/\\d+)
+  //   2. Regex (es: regex:{{api}}/user/\\d+)
   //   3. Wildcard singolo (es: /content/*.ejs)
-  //   4. Wildcard ricorsivo (es: /admin/**)
+  //   4. Wildcard ricorsivo (es: {{admin}}/**)
   //
   // In caso di conflitto, la regola più specifica vince.
   // ==========================================================================

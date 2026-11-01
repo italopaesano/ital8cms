@@ -91,9 +91,11 @@ async function saveGlobalSettings(seoPluginPath, customData, backupDir, maxBacku
 
     // Surgical edit: replace ONLY the "custom" block, preserving all comments
     // and formatting in the rest of pluginConfig.json5 (active, isInstalled,
-    // weight, dependency, ecc.). editJson5 substitutes the whole "custom"
-    // value; comments INSIDE the old custom block are lost (expected — the
-    // block is the unit of substitution), but everything outside is preserved.
+    // weight, dependency, ecc.). Since v3.33.0 editJson5 recurses PER KEY
+    // instead of rebuilding the block, so the comments INSIDE "custom" survive
+    // as well — for every key whose value it can still match. Whatever it
+    // cannot preserve (an array replaced by one of a different length, a type
+    // change) it declares in `droppedComments`: nothing is lost silently.
     await editJson5(configPath, 'custom', customData);
 
     return { success: true };

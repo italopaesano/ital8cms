@@ -48,12 +48,15 @@
 // Foglie: path, extension, method, userAgent, header, query, ip, authenticated,
 //         roleIds, fingerprint, fingerprintClass, canary, sessionAnomaly,
 //         reputation.
-// I path si scrivono SENZA globalPrefix, che viene anteposto dal codice.
+// I path si scrivono SENZA globalPrefix: è il codice a TOGLIERLO dal path della
+// richiesta prima del confronto (lib/ruleMatcher.js).
 //
-// ⚠ I path si scrivono invece CON apiPrefix e pluginPagesPrefix — "/api/...",
-// "/pluginPages/..." — che a differenza di globalPrefix NON vengono anteposti dal
-// codice. Sono configurabili in ital8Config.json5: se li cambi, le regole che li
-// nominano (qui sotto: auth-surface-noise) smettono di matchare in silenzio.
+// I prefissi NOSTRI — apiPrefix, pluginPagesPrefix, adminPrefix — si scrivono
+// invece come SEGNAPOSTI: {{api}}, {{pluginPages}}, {{admin}} (blocco qui sotto).
+// Sono VARIABILI di ital8Config.json5, e il segnaposto le segue da sé. Scritti a
+// mano come testo no: fino alla v3.30.0 `auth-surface-noise` diceva
+// "/api/adminUsers/login", e cambiare `apiPrefix` le faceva smettere di matchare
+// in silenzio. È la ragione per cui i segnaposti esistono.
 //
 // ⚠ CON `hideExtension` ATTIVO: le regole per `extension` non cambiano (una sonda
 // .php arriva sempre con l'estensione), ma una regola per `path` verso una pagina
