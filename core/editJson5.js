@@ -70,6 +70,10 @@ const {
   buildCodeMask,
   buildDepthArray,
   locatePath,
+  findRemovalSpan,
+  findInsertionPoint,
+  scanValue,
+  skipWsAndCommentsForward,
 } = require('./json5Scan');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -117,6 +121,194 @@ function formatNewValue(value, baseIndent) {
     out.push(baseIndent + lines[i]);
   }
   return out.join('\n');
+}
+
+// ── Sostituzione per chiave: perché non si riscrive il blocco ───────────────
+//
+// Sostituire il blocco intero con il valore riserializzato perde TUTTI i
+// commenti che stavano dentro, compresi quelli di chiavi il cui valore non
+// cambia. Misurato: cambiando solo `retryAfter` in un oggetto di tre chiavi,
+// sparivano anche le spiegazioni di `status` e `maxHits`, i cui valori erano
+// rimasti identici. Non è un limite tecnico — le chiavi danno IDENTITÀ, quindi
+// si sa esattamente a chi appartiene ogni commento: era una scorciatoia.
+//
+// La realizzazione di « conserva i commenti » è: NON ricostruire. Se il blocco
+// di testo non viene rifatto, i commenti non vanno spostati — e quindi non si
+// possono spostare male.
+//
+//   oggetto → oggetto                  ricorre per CHIAVE
+//   array → array, stessa lunghezza    ricorre per INDICE
+//   lunghezze diverse / cambio di tipo  sostituzione del blocco + resoconto
+//
+// → docs/decisions/json5-key-operations.it.md (D3, D5)
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** Il valore a un path su un oggetto deserializzato, o `undefined`. */
+function readAtPath(root, pathSegments) {
+  let node = root;
+  for (const seg of pathSegments) {
+    if (node === null || typeof node !== 'object') return undefined;
+    if (!Object.prototype.hasOwnProperty.call(node, seg)) return undefined;
+    node = node[seg];
+  }
+  return node;
+}
+
+/**
+ * I commenti contenuti in un intervallo di testo, per il resoconto.
+ *
+ * Serve solo quando il blocco DEVE essere ricostruito: il chiamante dichiara
+ * cosa ha perso invece di lasciarlo dedurre. Un commento perso in silenzio è il
+ * difetto; uno perso e dichiarato è una conseguenza.
+ */
+function collectCommentsIn(source, mask, from, to) {
+  const found = [];
+  let i = from;
+  while (i < to) {
+    if (mask[i] === 1 && (source[i] === '/' && (source[i + 1] === '/' || source[i + 1] === '*'))) {
+      const isLine = source[i + 1] === '/';
+      let end;
+      if (isLine) {
+        end = source.indexOf('\n', i);
+        if (end === -1 || end > to) end = to;
+      } else {
+        end = source.indexOf('*/', i);
+        end = end === -1 || end + 2 > to ? to : end + 2;
+      }
+      found.push(source.substring(i, end).trim());
+      i = end;
+      continue;
+    }
+    i += 1;
+  }
+  return found;
+}
+
+/**
+ * Le span dei singoli elementi di un array, in ordine.
+ *
+ * `scanValue` sa dove finisce un valore; qui si scorre il contenuto fra `[` e
+ * `]` saltando spazi, commenti e virgole. Resta PRIVATA: è l'unica consumatrice
+ * oggi, e promuoverla in `json5Scan` prima che serva a un secondo chiamante
+ * sarebbe la decisione presa al momento sbagliato.
+ */
+function enumerateArrayElements(source, mask, arrayStart, arrayEnd) {
+  const spans = [];
+  let i = arrayStart + 1;                 // dopo `[`
+  const limit = arrayEnd - 1;             // prima di `]`
+  while (i < limit) {
+    i = skipWsAndCommentsForward(source, mask, i);
+    if (i >= limit) break;
+    if (source[i] === ',') { i += 1; continue; }
+    const end = scanValue(source, mask, i);
+    if (end === -1 || end > arrayEnd) break;
+    spans.push({ start: i, end });
+    i = end;
+  }
+  return spans;
+}
+
+/**
+ * Sostituisce il valore a un path, ricorrendo invece di ricostruire.
+ *
+ * @param {string} source
+ * @param {string[]} pathSegments
+ * @param {*} newValue
+ * @param {string} filePath - per i messaggi d'errore
+ * @param {Array} dropped - raccoglie i commenti non preservabili (in place)
+ * @returns {string} il testo nuovo
+ */
+function replaceValueAtPath(source, pathSegments, newValue, filePath, dropped) {
+  const oldValue = readAtPath(json5.parse(source), pathSegments);
+
+  // ── Oggetto → oggetto: per chiave ─────────────────────────────────────────
+  if (isPlainObject(oldValue) && isPlainObject(newValue)) {
+    let text = source;
+    const newKeys = Object.keys(newValue);
+
+    // 1. Chiavi presenti in entrambi, con valore diverso → ricorsione.
+    for (const key of newKeys) {
+      if (!Object.prototype.hasOwnProperty.call(oldValue, key)) continue;
+      if (deepEqual(oldValue[key], newValue[key])) continue;
+      text = replaceValueAtPath(text, [...pathSegments, key], newValue[key], filePath, dropped);
+    }
+
+    // 2. Chiavi nuove → inserimento DOPO la precedente del nuovo oggetto, così
+    //    l'ordine che il chiamante ha scritto viene rispettato. Inserirle tutte
+    //    in testa al blocco sarebbe più semplice e cambierebbe l'ordine.
+    for (let i = 0; i < newKeys.length; i += 1) {
+      const key = newKeys[i];
+      if (Object.prototype.hasOwnProperty.call(oldValue, key)) continue;
+      const mask = buildCodeMask(text);
+      const depth = buildDepthArray(text, mask);
+      const predecessor = i > 0 ? newKeys[i - 1] : null;
+      const point = findInsertionPoint(text, mask, depth, pathSegments, predecessor, filePath);
+      let insertion = `\n${point.indent}"${key}": ${formatNewValue(newValue[key], point.indent)},`;
+      if (point.blockIsEmpty) insertion += `\n${point.parentIndent}`;
+      text = text.substring(0, point.offset)
+        + (point.needsComma ? ',' : '')
+        + insertion
+        + text.substring(point.offset);
+    }
+
+    // 3. Chiavi che non ci sono più → rimozione, con i loro commenti (D2).
+    for (const key of Object.keys(oldValue)) {
+      if (Object.prototype.hasOwnProperty.call(newValue, key)) continue;
+      const mask = buildCodeMask(text);
+      const depth = buildDepthArray(text, mask);
+      const occ = locatePath(text, mask, depth, [...pathSegments, key], filePath);
+      const span = findRemovalSpan(text, mask, occ);
+      text = text.substring(0, span.from) + text.substring(span.to);
+    }
+
+    return text;
+  }
+
+  // ── Array → array di pari lunghezza: per indice ───────────────────────────
+  if (Array.isArray(oldValue) && Array.isArray(newValue)
+      && oldValue.length === newValue.length && oldValue.length > 0) {
+    let text = source;
+    // A ritroso: così lo splice di un elemento non sposta gli offset di quelli
+    // che restano da fare, e non serve rifare la scansione a ogni giro.
+    const mask = buildCodeMask(text);
+    const depth = buildDepthArray(text, mask);
+    const occ = locatePath(text, mask, depth, pathSegments, filePath);
+    const spans = enumerateArrayElements(text, mask, occ.valueStart, occ.valueEnd);
+    if (spans.length === oldValue.length) {
+      for (let i = spans.length - 1; i >= 0; i -= 1) {
+        if (deepEqual(oldValue[i], newValue[i])) continue;
+        const indentMatch = /\n([ \t]*)$/.exec(text.substring(0, spans[i].start));
+        const elementIndent = indentMatch ? indentMatch[1] : '';
+        text = text.substring(0, spans[i].start)
+          + formatNewValue(newValue[i], elementIndent)
+          + text.substring(spans[i].end);
+      }
+      return text;
+    }
+    // Le span contate non corrispondono alla lunghezza dell'array: non si
+    // indovina, si ricade sulla sostituzione del blocco qui sotto.
+  }
+
+  // ── Fallback: sostituzione del blocco ─────────────────────────────────────
+  const mask = buildCodeMask(source);
+  const depth = buildDepthArray(source, mask);
+  const occ = locatePath(source, mask, depth, pathSegments, filePath);
+
+  for (const text of collectCommentsIn(source, mask, occ.valueStart, occ.valueEnd)) {
+    dropped.push({ path: [...pathSegments], text });
+  }
+
+  let lineStart = occ.keyStart;
+  while (lineStart > 0 && source[lineStart - 1] !== '\n') lineStart -= 1;
+  const indentRaw = source.substring(lineStart, occ.keyStart);
+  const baseIndent = /^\s*$/.test(indentRaw) ? indentRaw : '';
+  const leafKey = pathSegments[pathSegments.length - 1];
+  const replacement = `"${leafKey}": ${formatNewValue(newValue, baseIndent)}`;
+
+  return source.substring(0, occ.keyStart) + replacement + source.substring(occ.valueEnd);
 }
 
 // ── Main API ─────────────────────────────────────────────────────────────────
@@ -213,29 +405,14 @@ async function editJson5(filePath, fieldNameOrPath, newValue) {
     return { changed: false, oldValue, newValue };
   }
 
-  // Locate the key+value in the raw source for surgical replacement.
-  const mask = buildCodeMask(source);
-  const depth = buildDepthArray(source, mask);
-  const occ = locatePath(source, mask, depth, pathSegments, filePath);
-
-  const { keyStart, valueEnd } = occ;
-
-  // Compute base indentation: the whitespace from the previous newline up to
-  // the field's key. Used to align multi-line new values (objects/arrays).
-  let lineStart = keyStart;
-  while (lineStart > 0 && source[lineStart - 1] !== '\n') lineStart--;
-  const indentRaw = source.substring(lineStart, keyStart);
-  const baseIndent = /^\s*$/.test(indentRaw) ? indentRaw : '';
-
-  // The replacement uses the LAST segment as the (always-quoted) key name.
-  const leafKey = pathSegments[pathSegments.length - 1];
-  const newValueText = formatNewValue(newValue, baseIndent);
-  const replacement = `"${leafKey}": ${newValueText}`;
-
-  const newSource =
-    source.substring(0, keyStart) +
-    replacement +
-    source.substring(valueEnd);
+  // Sostituzione per chiave (vedi replaceValueAtPath): ricorre invece di
+  // ricostruire il blocco, così i commenti restano dove sono. Tutti gli splice
+  // avvengono IN MEMORIA e la scrittura resta UNA — un'operazione per chiave
+  // tramite le API a livello di file costerebbe N scritture e un fallimento a
+  // metà lascerebbe il file parzialmente aggiornato, con ogni stato intermedio
+  // valido e quindi invisibile.
+  const droppedComments = [];
+  const newSource = replaceValueAtPath(source, pathSegments, newValue, filePath, droppedComments);
 
   // Post-edit validation: must be valid JSON5 and the value at the path must
   // deep-equal newValue. Catches any case where the locator targeted an
@@ -267,7 +444,7 @@ async function editJson5(filePath, fieldNameOrPath, newValue) {
   // Atomic write: saveJson5 with a string preserves the content as-is.
   await saveJson5(resolvedPath, newSource);
 
-  return { changed: true, oldValue, newValue };
+  return { changed: true, oldValue, newValue, droppedComments };
 }
 
 module.exports = editJson5;

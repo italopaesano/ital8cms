@@ -408,8 +408,240 @@ function locatePath(source, mask, depth, pathSegments, filePath) {
   return lastOcc;
 }
 
+// ── Span da rimuovere: la coppia più i commenti che le appartengono ─────────
+//
+// È ANALISI, non modifica: ritorna due indici e non tocca il testo. Vive qui
+// perché « dove intervenire » è una domanda di lettura, mentre lo splice è una
+// scrittura e resta negli editor. Così `removeJson5Key` e la sostituzione per
+// chiave di `editJson5` condividono un solo criterio invece di tenerne due
+// d'accordo.
+//
+// LA POLICY, IN UNA FRASE: risalendo dalla riga della chiave appartiene a lei
+// ogni riga composta SOLO da un commento; si ferma alla prima riga vuota o che
+// contiene codice. In discesa: la virgola strutturale, il commento in linea che
+// la segue, e il fine riga.
+// → docs/decisions/json5-key-operations.it.md (D2)
+
+/**
+ * L'indice di inizio della riga che contiene `pos`.
+ */
+function lineStartOf(source, pos) {
+  let i = pos;
+  while (i > 0 && source[i - 1] !== '\n') i -= 1;
+  return i;
+}
+
+/**
+ * Una riga è « solo un commento »?
+ *
+ * Conservativa di proposito: accetta una riga di commento `//` e un blocco
+ * `/* … *\/` COMPLETO su una riga. Un blocco aperto e non chiuso sulla stessa
+ * riga non qualifica — vedi *COSA NON SI AZZARDA* nell'intestazione.
+ */
+function isCommentOnlyLine(lineText) {
+  const trimmed = lineText.trim();
+  if (trimmed === '') return false;                      // vuota: FERMA (D2)
+  if (trimmed.startsWith('//')) return true;
+  if (trimmed.startsWith('/*') && trimmed.endsWith('*/') && trimmed.length >= 4) return true;
+  return false;
+}
+
+/**
+ * Estende la span verso l'ALTO secondo D2: le righe di solo commento che
+ * precedono la chiave, fermandosi alla prima riga vuota o con codice.
+ */
+function extendUpwards(source, keyStart) {
+  let from = lineStartOf(source, keyStart);
+
+  // Se fra l'inizio della riga e la chiave c'è altro che spazi, la chiave non è
+  // la prima cosa della riga (`"a": 1, "b": 2` su una riga): non si risale, e si
+  // parte dalla chiave stessa per non toccare ciò che le sta accanto.
+  if (!/^[ \t]*$/.test(source.slice(from, keyStart))) return keyStart;
+
+  while (from > 0) {
+    const prevLineStart = lineStartOf(source, from - 1);
+    const prevLine = source.slice(prevLineStart, from - 1); // senza il \n
+    if (!isCommentOnlyLine(prevLine)) break;
+    from = prevLineStart;
+  }
+  return from;
+}
+
+/**
+ * Estende la span verso il BASSO: la virgola che chiude la coppia, il commento
+ * in linea che la segue, e il fine riga.
+ *
+ * Il `mask` serve a non confondere una virgola DENTRO una stringa con quella
+ * strutturale: `"k": "a,b"` finisce dopo la stringa, e la virgola da mangiare è
+ * quella dopo, non quella interna.
+ */
+function extendDownwards(source, mask, valueEnd) {
+  let to = valueEnd;
+
+  // spazi e tab
+  while (to < source.length && (source[to] === ' ' || source[to] === '\t')) to += 1;
+
+  // la virgola strutturale, se c'è
+  if (to < source.length && source[to] === ',' && mask[to] === 0) {
+    to += 1;
+    while (to < source.length && (source[to] === ' ' || source[to] === '\t')) to += 1;
+  }
+
+  // un commento in linea fino a fine riga (D2, caso B)
+  const lineEnd = source.indexOf('\n', to);
+  const restOfLine = source.slice(to, lineEnd === -1 ? source.length : lineEnd);
+  if (restOfLine.trim().startsWith('//')
+      || (restOfLine.trim().startsWith('/*') && restOfLine.trim().endsWith('*/'))) {
+    to += restOfLine.length;
+  }
+
+  // il fine riga: si rimuovono RIGHE intere, così non resta una riga vuota
+  if (to < source.length && source[to] === '\n') to += 1;
+  else if (source.slice(to, to + 2) === '\r\n') to += 2;
+
+  return to;
+}
+
+/**
+ * La span di testo da rimuovere per far sparire una coppia chiave-valore.
+ *
+ * @param {string} source
+ * @param {Int8Array|number[]} mask - da `buildCodeMask`
+ * @param {{keyStart: number, valueEnd: number}} occ - da `locatePath`
+ * @returns {{from: number, to: number}} indici per `source.slice(0, from) + source.slice(to)`
+ */
+function findRemovalSpan(source, mask, occ) {
+  return {
+    from: extendUpwards(source, occ.keyStart),
+    to: extendDownwards(source, mask, occ.valueEnd),
+  };
+}
+
+// ── Punto d'inserimento di una chiave nuova ─────────────────────────────────
+//
+// Gemella di `findRemovalSpan`, e anche questa è ANALISI: ritorna un offset,
+// l'indentazione da usare e se serve una virgola prima. Lo splice resta al
+// chiamante.
+//
+// Unifica due meccanismi che `setJson5Key` teneva separati: l'inserimento
+// top-level lavorava per RIGHE (`split('\n')`, `findIndex`, `splice`) e quello
+// annidato per OFFSET. Due strade per la stessa operazione, che si comportavano
+// in modo diverso — per esempio `afterKey` era onorato solo dal primo.
+
+/**
+ * Dove scrivere una chiave nuova dentro un oggetto.
+ *
+ * @param {string} source
+ * @param {Int8Array|number[]} mask - da `buildCodeMask`
+ * @param {Int32Array|number[]} depth - da `buildDepthArray`
+ * @param {string[]} [parentPath] - path dell'oggetto che ospiterà la chiave;
+ *   `[]` (default) significa l'oggetto RADICE.
+ * @param {string|null} [afterKey] - se presente e trovata nel blocco, si
+ *   inserisce subito dopo quella chiave invece che in testa al blocco.
+ * @param {string} [filePath] - solo per i messaggi d'errore.
+ * @returns {{offset: number, indent: string, needsComma: boolean, parentIndent: string, blockIsEmpty: boolean}}
+ *   `parentIndent` e `blockIsEmpty` servono a chiudere bene un blocco che era
+ *   vuoto: senza, la `}` resterebbe sulla riga della chiave appena inserita
+ *   (`{ "nuova": 9,}` — valido ma illeggibile, e questi file li legge una persona).
+ * @throws se il path del parent non esiste, o non è un oggetto.
+ */
+function findInsertionPoint(source, mask, depth, parentPath = [], afterKey = null, filePath = '<source>') {
+  let openBrace;
+  let blockEnd;      // indice della `}` che chiude il blocco
+  let parentIndent;
+
+  if (parentPath.length === 0) {
+    // Oggetto radice: la prima `{` che è CODICE (non dentro una stringa o un
+    // commento — un file che comincia con l'intestazione `// …` ne ha una prima).
+    openBrace = -1;
+    for (let i = 0; i < source.length; i += 1) {
+      if (source[i] === '{' && mask[i] === 0) { openBrace = i; break; }
+    }
+    if (openBrace === -1) {
+      throw new Error(`findInsertionPoint: ${filePath} non contiene un oggetto radice`);
+    }
+    const end = scanValue(source, mask, openBrace);
+    if (end === -1) {
+      throw new Error(`findInsertionPoint: l'oggetto radice di ${filePath} non è chiuso`);
+    }
+    blockEnd = end - 1;
+    parentIndent = '';
+  } else {
+    const occ = locatePath(source, mask, depth, parentPath, filePath);
+    if (source[occ.valueStart] !== '{') {
+      const pathDesc = parentPath.map((seg) => `"${seg}"`).join(' → ');
+      throw new Error(
+        `findInsertionPoint: il path ${pathDesc} in ${filePath} non è un oggetto: `
+        + 'non ci si può inserire una chiave'
+      );
+    }
+    openBrace = occ.valueStart;
+    blockEnd = occ.valueEnd - 1;
+    let lineStart = occ.keyStart;
+    while (lineStart > 0 && source[lineStart - 1] !== '\n') lineStart -= 1;
+    const raw = source.substring(lineStart, occ.keyStart);
+    parentIndent = /^\s*$/.test(raw) ? raw : '';
+  }
+
+  // Indentazione: ricalcata dalla prima riga non vuota DENTRO il blocco, così il
+  // file resta formattato come lo si trova. Fallback: due spazi in più del parent.
+  const inner = source.substring(openBrace + 1, blockEnd);
+  const innerMatch = inner.match(/\n([ \t]+)\S/);
+  const indent = innerMatch ? innerMatch[1] : `${parentIndent}  `;
+
+  // Offset: in testa al blocco, oppure a fine riga di `afterKey` se la si trova.
+  let offset = openBrace + 1;
+  if (afterKey) {
+    const occs = findKeyOccurrencesInRegion(
+      source, mask, depth, afterKey, openBrace + 1, blockEnd, depth[openBrace] + 1
+    );
+    if (occs.length === 1) {
+      // La fine della RIGA, non del valore: un commento in linea su quella riga
+      // appartiene ad `afterKey` e deve restarle attaccato.
+      //
+      // MA la riga va CLAMPATA al blocco. Su un blocco scritto inline
+      // (`"inner": { "a": 1, "b": 2 }`) la riga di `afterKey` continua OLTRE la
+      // `}`, quindi inserire a fine riga metterebbe la chiave nuova FUORI
+      // dall'oggetto che doveva ospitarla. Il difetto è stato colto dalla
+      // postcondizione di `editJson5` — il valore al path non combaciava più —
+      // e non da una lettura del codice.
+      const nl = source.indexOf('\n', occs[0].valueEnd);
+      if (nl !== -1 && nl <= blockEnd) {
+        offset = nl;
+      } else {
+        // Blocco INLINE: la riga continua oltre la `}`, quindi si sta subito
+        // dopo il valore — e DOPO la sua virgola, se c'è. Fermarsi prima della
+        // virgola produceva `"d": 4,,`: `needsComma` guarda INDIETRO e vedeva il
+        // valore, mentre la virgola stava AVANTI all'offset.
+        const afterValue = skipWsAndCommentsForward(source, mask, occs[0].valueEnd);
+        offset = (source[afterValue] === ',' && mask[afterValue] === 0)
+          ? afterValue + 1
+          : occs[0].valueEnd;
+      }
+    }
+  }
+
+  // Serve una virgola prima? Se l'ultimo carattere di codice davanti all'offset
+  // non è `,` né l'apertura del blocco, la coppia precedente non ne ha una — e
+  // senza, il file diventerebbe non parsabile. (Capita con l'ultima chiave di un
+  // oggetto scritto senza virgola finale.)
+  const prev = skipWsAndCommentsBackward(source, mask, offset - 1);
+  const prevChar = prev >= 0 ? source[prev] : '';
+  const needsComma = prev >= 0 && prevChar !== ',' && prev !== openBrace;
+
+  return {
+    offset,
+    indent,
+    needsComma,
+    parentIndent,
+    blockIsEmpty: inner.trim() === '',
+  };
+}
+
 module.exports = {
   buildCodeMask,
+  findRemovalSpan,
+  findInsertionPoint,
   buildDepthArray,
   skipWsAndCommentsForward,
   skipWsAndCommentsBackward,

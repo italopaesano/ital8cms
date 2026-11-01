@@ -375,27 +375,63 @@ parsabile. È documentato nell'intestazione del modulo e coperto da un test;
 riportarlo nel valore di ritorno avrebbe richiesto un nome nuovo da approvare per
 un caso che i config del progetto non producono (usano `//` ovunque).
 
-### Fase 2 — Sostituzione per chiave in `editJson5`
+### Fase 2 — Sostituzione per chiave in `editJson5` ✅ FATTA (2026-11-01)
 
-- [ ] Nel caso **oggetto**, sostituire il blocco intero con una ricorsione per
-      chiave: `editJson5` per le chiavi presenti, `setJson5Key` per le nuove,
-      `removeJson5Key` per quelle che non ci sono più.
-- [ ] Nel caso **array a lunghezza invariata**, ricorrere **per indice** (D3).
-      Richiede di estendere `editJson5` alla navigazione dentro gli array per
-      indice, oggi dichiarata fuori perimetro nel suo *Scope*.
-- [ ] A lunghezza diversa o su cambio di tipo: sostituzione del blocco, e il
-      commento perduto finisce in `droppedComments` con il suo percorso.
-- [ ] **Non** classificare i commenti per significato: non è lavoro della
-      funzione (D3).
-- [ ] Test:
-      - [ ] il caso misurato in *Contesto*: cambiando `retryAfter`, i commenti di
-            `status` e `maxHits` **sopravvivono**;
-      - [ ] chiave nuova inserita fra chiavi esistenti, commenti delle vicine intatti;
-      - [ ] chiave rimossa porta via il proprio commento e **solo** quello;
-      - [ ] annidamento a più livelli;
-      - [ ] cambio di tipo → `droppedComments` lo riporta;
-      - [ ] la suite esistente di `editJson5` e `setJson5Key` resta **verde**: è il
-            vincolo duro, perché da qui passa ogni scrittura di config del CMS.
+- [x] ~~Caso **oggetto**: ricorsione per chiave.~~ Aggiornamento ricorsivo per le
+      chiavi presenti, inserimento per le nuove, rimozione per quelle che non ci
+      sono più. **Tutti gli splice avvengono in memoria e la scrittura resta
+      UNA:** chiamare le API a livello di file una per chiave sarebbe costato N
+      scritture, e un fallimento a metà avrebbe lasciato il file parzialmente
+      aggiornato — con ogni stato intermedio JSON5 **valido**, quindi invisibile.
+- [x] ~~Caso **array a lunghezza invariata**: ricorsione per indice.~~ **Senza**
+      estendere i path pubblici agli indici (`['list', 0, 'name']`), che il piano
+      dava per necessario: basta enumerare le span degli elementi con `scanValue`
+      e splicciare solo quelli cambiati, procedendo **a ritroso** così gli splice
+      non spostano gli offset ancora da fare. Il contratto pubblico di
+      `editJson5` resta identico, e « la riga più costosa della checklist » è
+      stata cancellata invece che pagata.
+- [x] ~~Lunghezza diversa o cambio di tipo → blocco rifatto, commenti in
+      `droppedComments` **con il loro percorso**.~~ « Un commento è andato
+      perso » non è azionabile; « in `custom.policy` » sì.
+- [x] ~~**Nessuna** classificazione per significato~~ (D3): la funzione conserva
+      o dichiara, non giudica.
+- [x] ~~L'analisi condivisa estratta in `json5Scan`.~~ `findRemovalSpan` (dove
+      finisce una coppia, commenti suoi inclusi) e `findInsertionPoint` (dove
+      scrivere una chiave nuova, con indentazione e virgola) — entrambe
+      **lettura**, perché « dove intervenire » è una domanda di analisi e lo
+      splice è una scrittura. Così `removeJson5Key` e la ricorsione condividono
+      **un solo** criterio invece di tenerne due d'accordo.
+- [x] ~~I due meccanismi d'inserimento di `setJson5Key` **unificati**.~~ Il
+      top-level lavorava per RIGHE (`split('\n')` + `findIndex` + `splice`),
+      l'annidato per OFFSET: due strade per la stessa operazione, con
+      comportamenti diversi — `afterKey` era onorato solo dal primo, e solo il
+      secondo deduceva l'indentazione dal blocco. Ora entrambi passano da
+      `findInsertionPoint`, e `afterKey` vale a qualunque livello.
+- [x] ~~Test: 13 nuovi~~, con il difetto misurato in testa. Più: la formattazione
+      delle parti non toccate non normalizzata, l'ordine delle chiavi aggiunte
+      rispettato, `droppedComments` vuoto quando nulla viene ricostruito, e
+      nessun file temporaneo residuo (la scrittura è una).
+- [x] ~~La suite preesistente di `editJson5` e `setJson5Key` resta verde.~~ Era
+      il vincolo duro, perché da quei due passa ogni scrittura di config del CMS:
+      106 test invariati dopo l'estrazione, e il boot reale conserva i commenti
+      dei config vivi (51/67/230) scrivendo `isInstalled` dal percorso unificato.
+
+#### Due difetti colti dalla POSTCONDIZIONE, non da una lettura del codice
+
+Entrambi su un blocco scritto **inline** (`"inner": { "a": 1, "b": 2 }`), e
+entrambi hanno fatto fallire un test **preesistente** di `editJson5`:
+
+1. **la chiave nuova finiva FUORI dall'oggetto.** `findInsertionPoint` con
+   `afterKey` si posiziona a « fine della riga di `afterKey` » per lasciarle il
+   suo commento in linea — ma su un blocco inline quella riga continua **oltre
+   la `}`**. L'offset va clampato al blocco.
+2. **doppia virgola** (`"d": 4,,`). `needsComma` guarda **indietro** e vedeva il
+   valore di `afterKey`, mentre la sua virgola stava **avanti** all'offset. Il
+   punto d'inserimento deve stare dopo quella virgola.
+
+Il secondo è istruttivo sul perché la postcondizione di `editJson5` vale quanto
+il codice che protegge: entrambi producevano un file **non parsabile** o un
+valore sbagliato al path, e sono stati fermati **prima della scrittura**.
 
 ### Fase 3 — Specifiche e documentazione
 
@@ -514,3 +550,10 @@ senza giudicarli, quindi dopo la conversione **qualcuno deve rileggerli**.
   modulo condiviso, **`core/json5Scan.js`** (nome scelto fra tre alternative).
   Confermato anche il nome di questo documento. **Nessuna decisione aperta: la
   Fase 1 può partire.**
+- **2026-11-01** — **Fase 1 e Fase 2 implementate.** `core/json5Scan.js`
+  (estratto, sola lettura) + `core/removeJson5Key.js` (nuovo) + la ricorsione per
+  chiave in `editJson5`, più l'unificazione dei due meccanismi d'inserimento di
+  `setJson5Key`. `findRemovalSpan` e `findInsertionPoint` approvate come analisi
+  condivisa. Due difetti della mia stesura colti dalla postcondizione su blocchi
+  inline (chiave inserita fuori dall'oggetto, doppia virgola). Restano le Fasi
+  3-5.

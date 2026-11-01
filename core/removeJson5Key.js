@@ -19,6 +19,7 @@
  * → docs/decisions/json5-key-operations.it.md
  *
  * ─── COSA SE NE VA CON LA CHIAVE (D2) ─────────────────────────────────────────
+ * La policy vive in `json5Scan.findRemovalSpan`, condivisa con `editJson5`.
  * Una regola sola: risalendo dalla riga della chiave, appartiene a lei ogni riga
  * **composta solo da un commento**; si ferma alla prima riga **vuota** o che
  * contiene **codice**. Più, in discesa, la virgola e il commento in linea che la
@@ -63,87 +64,8 @@ const {
   buildCodeMask,
   buildDepthArray,
   locatePath,
+  findRemovalSpan,
 } = require('./json5Scan');
-
-/**
- * L'indice di inizio della riga che contiene `pos`.
- */
-function lineStartOf(source, pos) {
-  let i = pos;
-  while (i > 0 && source[i - 1] !== '\n') i -= 1;
-  return i;
-}
-
-/**
- * Una riga è « solo un commento »?
- *
- * Conservativa di proposito: accetta una riga di commento `//` e un blocco
- * `/* … *\/` COMPLETO su una riga. Un blocco aperto e non chiuso sulla stessa
- * riga non qualifica — vedi *COSA NON SI AZZARDA* nell'intestazione.
- */
-function isCommentOnlyLine(lineText) {
-  const trimmed = lineText.trim();
-  if (trimmed === '') return false;                      // vuota: FERMA (D2)
-  if (trimmed.startsWith('//')) return true;
-  if (trimmed.startsWith('/*') && trimmed.endsWith('*/') && trimmed.length >= 4) return true;
-  return false;
-}
-
-/**
- * Estende la span verso l'ALTO secondo D2: le righe di solo commento che
- * precedono la chiave, fermandosi alla prima riga vuota o con codice.
- */
-function extendUpwards(source, keyStart) {
-  let from = lineStartOf(source, keyStart);
-
-  // Se fra l'inizio della riga e la chiave c'è altro che spazi, la chiave non è
-  // la prima cosa della riga (`"a": 1, "b": 2` su una riga): non si risale, e si
-  // parte dalla chiave stessa per non toccare ciò che le sta accanto.
-  if (!/^[ \t]*$/.test(source.slice(from, keyStart))) return keyStart;
-
-  while (from > 0) {
-    const prevLineStart = lineStartOf(source, from - 1);
-    const prevLine = source.slice(prevLineStart, from - 1); // senza il \n
-    if (!isCommentOnlyLine(prevLine)) break;
-    from = prevLineStart;
-  }
-  return from;
-}
-
-/**
- * Estende la span verso il BASSO: la virgola che chiude la coppia, il commento
- * in linea che la segue, e il fine riga.
- *
- * Il `mask` serve a non confondere una virgola DENTRO una stringa con quella
- * strutturale: `"k": "a,b"` finisce dopo la stringa, e la virgola da mangiare è
- * quella dopo, non quella interna.
- */
-function extendDownwards(source, mask, valueEnd) {
-  let to = valueEnd;
-
-  // spazi e tab
-  while (to < source.length && (source[to] === ' ' || source[to] === '\t')) to += 1;
-
-  // la virgola strutturale, se c'è
-  if (to < source.length && source[to] === ',' && mask[to] === 0) {
-    to += 1;
-    while (to < source.length && (source[to] === ' ' || source[to] === '\t')) to += 1;
-  }
-
-  // un commento in linea fino a fine riga (D2, caso B)
-  const lineEnd = source.indexOf('\n', to);
-  const restOfLine = source.slice(to, lineEnd === -1 ? source.length : lineEnd);
-  if (restOfLine.trim().startsWith('//')
-      || (restOfLine.trim().startsWith('/*') && restOfLine.trim().endsWith('*/'))) {
-    to += restOfLine.length;
-  }
-
-  // il fine riga: si rimuovono RIGHE intere, così non resta una riga vuota
-  if (to < source.length && source[to] === '\n') to += 1;
-  else if (source.slice(to, to + 2) === '\r\n') to += 2;
-
-  return to;
-}
 
 /**
  * Cammina il path su un oggetto deserializzato. Ritorna `undefined` se un
@@ -239,8 +161,10 @@ async function removeJson5Key(filePath, fieldNameOrPath) {
   // fra testo e struttura e non va aggirata.
   const occ = locatePath(source, mask, depth, pathSegments, filePath);
 
-  const from = extendUpwards(source, occ.keyStart);
-  const to = extendDownwards(source, mask, occ.valueEnd);
+  // La span la calcola `json5Scan`: è lo stesso criterio che usa la sostituzione
+  // per chiave di `editJson5`, e tenerne due d'accordo è precisamente il difetto
+  // che questo strato esiste per evitare.
+  const { from, to } = findRemovalSpan(source, mask, occ);
   const next = source.slice(0, from) + source.slice(to);
 
   // ── Postcondizione: si verifica PRIMA di scrivere ──────────────────────────
