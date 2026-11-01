@@ -583,6 +583,28 @@ function findInsertionPoint(source, mask, depth, parentPath = [], afterKey = nul
     parentIndent = /^\s*$/.test(raw) ? raw : '';
   }
 
+  return findInsertionPointInBlock(
+    source, mask, depth, { openBrace, blockEnd, parentIndent }, afterKey, filePath
+  );
+}
+
+/**
+ * Lo stesso calcolo, su un blocco GIÀ individuato.
+ *
+ * Esiste perché non tutto ciò che ospita una chiave ha un path: un elemento
+ * d'ARRAY non è raggiungibile da `parentPath` (gli indici non sono segmenti
+ * validi, per contratto di `editJson5`), eppure la sostituzione per chiave deve
+ * poterci scendere. Chi conosce già la span del blocco la passa qui;
+ * `findInsertionPoint` è il wrapper che la ricava da un path.
+ *
+ * @param {{openBrace: number, blockEnd: number, parentIndent: string}} block
+ *   `openBrace`: indice della `{` che apre il blocco; `blockEnd`: indice della
+ *   `}` che lo chiude; `parentIndent`: indentazione della riga che lo ospita.
+ * @returns {{offset: number, indent: string, needsComma: boolean, parentIndent: string, blockIsEmpty: boolean}}
+ */
+function findInsertionPointInBlock(source, mask, depth, block, afterKey = null, filePath = '<source>') {
+  const { openBrace, blockEnd, parentIndent } = block;
+
   // Indentazione: ricalcata dalla prima riga non vuota DENTRO il blocco, così il
   // file resta formattato come lo si trova. Fallback: due spazi in più del parent.
   const inner = source.substring(openBrace + 1, blockEnd);
@@ -642,6 +664,7 @@ module.exports = {
   buildCodeMask,
   findRemovalSpan,
   findInsertionPoint,
+  findInsertionPointInBlock,
   buildDepthArray,
   skipWsAndCommentsForward,
   skipWsAndCommentsBackward,

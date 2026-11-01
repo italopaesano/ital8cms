@@ -37,7 +37,16 @@
  *   | array → array, lunghezza diversa | blocco rifatto       | `droppedComments` |
  *   | cambio di tipo                   | blocco rifatto       | `droppedComments` |
  *
- * Le ultime due righe non sono pigrizia: a lunghezza diversa non c'è
+ * La ricorsione NON si ferma al primo livello: un elemento d'array che è a sua
+ * volta un oggetto viene percorso per chiave, e così via in profondità. Il motore
+ * è `replaceValueInSpan`, che lavora su un INTERVALLO di testo invece che su un
+ * path — ed è ciò che le permette di scendere dentro un elemento, che un path non
+ * raggiunge (gli indici non sono segmenti validi). Fino alla v3.36.0 il ramo
+ * array ricorreva sì per indice, ma poi RIFACEVA l'elemento cambiato come blocco:
+ * i suoi commenti morivano e `droppedComments` restava vuoto, cioè la perdita
+ * silenziosa che questo modulo esiste per impedire, un livello più sotto.
+ *
+ * Le ultime due righe della tabella non sono pigrizia: a lunghezza diversa non c'è
  * corrispondenza fra gli elementi vecchi e i nuovi, e a tipo cambiato i commenti
  * interni non hanno più niente a cui attaccarsi. In quei casi il contratto è
  * DICHIARARE invece di tacere — `droppedComments` porta il testo **e il percorso**
@@ -117,7 +126,8 @@ const {
   buildDepthArray,
   locatePath,
   findRemovalSpan,
-  findInsertionPoint,
+  findInsertionPointInBlock,
+  findKeyOccurrencesInRegion,
   scanValue,
   skipWsAndCommentsForward,
 } = require('./json5Scan');
@@ -258,28 +268,77 @@ function enumerateArrayElements(source, mask, arrayStart, arrayEnd) {
 }
 
 /**
- * Sostituisce il valore a un path, ricorrendo invece di ricostruire.
+ * Sostituisce il valore che occupa una SPAN, ricorrendo invece di ricostruire.
+ *
+ * Gemella di `findRemovalSpan` nel modo di ragionare: lavora su un INTERVALLO di
+ * testo e non su un path, ed è precisamente questo che le permette di scendere
+ * dentro un elemento d'ARRAY — che un path non raggiunge, perché gli indici non
+ * sono segmenti validi (vedi *AMBITO*). Finché la ricorsione passava per i path,
+ * un elemento cambiato veniva RIFATTO come blocco: i suoi commenti morivano, e
+ * `droppedComments` restava vuoto perché nessuno li raccoglieva. La tabella qui
+ * sopra prometteva il contrario.
+ *
+ * Il frammento `source[span.start..span.end)` è un valore COMPLETO, quindi è un
+ * universo a sé: la sua `{` sta a profondità 0 e le sue chiavi a profondità 1.
+ * Per questo la scansione può essere rifatta a ogni passo senza inseguire gli
+ * spostamenti del testo intorno — ed è il motivo per cui la ricorsione si compone.
  *
  * @param {string} source
- * @param {string[]} pathSegments
+ * @param {{start: number, end: number, keyStart?: number}} span - l'intervallo
+ *   del VALORE; `keyStart`, se c'è, dice dove comincia la chiave che lo nomina.
+ *   Un elemento d'array non ne ha, e il ritorno copre allora il solo valore.
+ * @param {*} oldValue - il valore che occupa la span, già deserializzato
  * @param {*} newValue
+ * @param {string[]} reportPath - per i `droppedComments` e per i messaggi: dove
+ *   si sta intervenendo (gli indici d'array vi entrano come numeri)
  * @param {string} filePath - per i messaggi d'errore
  * @param {Array} dropped - raccoglie i commenti non preservabili (in place)
- * @returns {string} il testo nuovo
+ * @returns {string} il testo che prende il posto di
+ *   `source[(span.keyStart ?? span.start)..span.end)`
  */
-function replaceValueAtPath(source, pathSegments, newValue, filePath, dropped) {
-  const oldValue = readAtPath(json5.parse(source), pathSegments);
+function replaceValueInSpan(source, span, oldValue, newValue, reportPath, filePath, dropped) {
+  let fragment = source.slice(span.start, span.end);
+
+  // Il testo della chiave, da riemettere intatto quando la ricorsione lavora.
+  const keyPrefix = span.keyStart === undefined ? '' : source.slice(span.keyStart, span.start);
+
+  // L'indentazione si misura dalla CHIAVE quando c'è — un valore nominato sta
+  // sulla riga della sua chiave — altrimenti dal valore stesso, che è il caso
+  // dell'elemento d'array.
+  const indentEnd = span.keyStart === undefined ? span.start : span.keyStart;
+  let lineStart = indentEnd;
+  while (lineStart > 0 && source[lineStart - 1] !== '\n') lineStart -= 1;
+  const rawIndent = source.substring(lineStart, indentEnd);
+  const baseIndent = /^\s*$/.test(rawIndent) ? rawIndent : '';
 
   // ── Oggetto → oggetto: per chiave ─────────────────────────────────────────
   if (isPlainObject(oldValue) && isPlainObject(newValue)) {
-    let text = source;
     const newKeys = Object.keys(newValue);
 
     // 1. Chiavi presenti in entrambi, con valore diverso → ricorsione.
     for (const key of newKeys) {
       if (!Object.prototype.hasOwnProperty.call(oldValue, key)) continue;
       if (deepEqual(oldValue[key], newValue[key])) continue;
-      text = replaceValueAtPath(text, [...pathSegments, key], newValue[key], filePath, dropped);
+      const mask = buildCodeMask(fragment);
+      const depth = buildDepthArray(fragment, mask);
+      const occs = findKeyOccurrencesInRegion(
+        fragment, mask, depth, key, 1, fragment.length - 1, 1
+      );
+      if (occs.length !== 1) {
+        throw new Error(
+          `editJson5: la chiave ${[...reportPath, key].map((p) => `"${p}"`).join(' → ')} `
+          + `di "${filePath}" ${occs.length === 0
+            ? 'non è localizzabile nel testo (feature JSON5 non supportata dal locator?)'
+            : `compare ${occs.length} volte alla stessa profondità: rifiuto di modificare in modo ambiguo`}`
+        );
+      }
+      fragment = fragment.substring(0, occs[0].keyStart)
+        + replaceValueInSpan(
+          fragment,
+          { start: occs[0].valueStart, end: occs[0].valueEnd, keyStart: occs[0].keyStart },
+          oldValue[key], newValue[key], [...reportPath, key], filePath, dropped
+        )
+        + fragment.substring(occs[0].valueEnd);
     }
 
     // 2. Chiavi nuove → inserimento DOPO la precedente del nuovo oggetto, così
@@ -288,73 +347,106 @@ function replaceValueAtPath(source, pathSegments, newValue, filePath, dropped) {
     for (let i = 0; i < newKeys.length; i += 1) {
       const key = newKeys[i];
       if (Object.prototype.hasOwnProperty.call(oldValue, key)) continue;
-      const mask = buildCodeMask(text);
-      const depth = buildDepthArray(text, mask);
-      const predecessor = i > 0 ? newKeys[i - 1] : null;
-      const point = findInsertionPoint(text, mask, depth, pathSegments, predecessor, filePath);
+      const mask = buildCodeMask(fragment);
+      const depth = buildDepthArray(fragment, mask);
+      const point = findInsertionPointInBlock(
+        fragment, mask, depth,
+        { openBrace: 0, blockEnd: fragment.length - 1, parentIndent: baseIndent },
+        i > 0 ? newKeys[i - 1] : null, filePath
+      );
       let insertion = `\n${point.indent}"${key}": ${formatNewValue(newValue[key], point.indent)},`;
       if (point.blockIsEmpty) insertion += `\n${point.parentIndent}`;
-      text = text.substring(0, point.offset)
+      fragment = fragment.substring(0, point.offset)
         + (point.needsComma ? ',' : '')
         + insertion
-        + text.substring(point.offset);
+        + fragment.substring(point.offset);
     }
 
     // 3. Chiavi che non ci sono più → rimozione, con i loro commenti (D2).
     for (const key of Object.keys(oldValue)) {
       if (Object.prototype.hasOwnProperty.call(newValue, key)) continue;
-      const mask = buildCodeMask(text);
-      const depth = buildDepthArray(text, mask);
-      const occ = locatePath(text, mask, depth, [...pathSegments, key], filePath);
-      const span = findRemovalSpan(text, mask, occ);
-      text = text.substring(0, span.from) + text.substring(span.to);
+      const mask = buildCodeMask(fragment);
+      const depth = buildDepthArray(fragment, mask);
+      const occs = findKeyOccurrencesInRegion(
+        fragment, mask, depth, key, 1, fragment.length - 1, 1
+      );
+      if (occs.length !== 1) {
+        throw new Error(
+          `editJson5: la chiave da rimuovere ${[...reportPath, key].map((p) => `"${p}"`).join(' → ')} `
+          + `di "${filePath}" non è localizzabile in modo univoco (${occs.length} occorrenze)`
+        );
+      }
+      const removal = findRemovalSpan(fragment, mask, occs[0]);
+      fragment = fragment.substring(0, removal.from) + fragment.substring(removal.to);
     }
 
-    return text;
+    return keyPrefix + fragment;
   }
 
   // ── Array → array di pari lunghezza: per indice ───────────────────────────
   if (Array.isArray(oldValue) && Array.isArray(newValue)
       && oldValue.length === newValue.length && oldValue.length > 0) {
-    let text = source;
-    // A ritroso: così lo splice di un elemento non sposta gli offset di quelli
-    // che restano da fare, e non serve rifare la scansione a ogni giro.
-    const mask = buildCodeMask(text);
-    const depth = buildDepthArray(text, mask);
-    const occ = locatePath(text, mask, depth, pathSegments, filePath);
-    const spans = enumerateArrayElements(text, mask, occ.valueStart, occ.valueEnd);
+    const mask = buildCodeMask(fragment);
+    const spans = enumerateArrayElements(fragment, mask, 0, fragment.length);
     if (spans.length === oldValue.length) {
+      // A ritroso: così lo splice di un elemento non sposta gli offset di quelli
+      // che restano da fare, e non serve rifare la scansione a ogni giro.
       for (let i = spans.length - 1; i >= 0; i -= 1) {
         if (deepEqual(oldValue[i], newValue[i])) continue;
-        const indentMatch = /\n([ \t]*)$/.exec(text.substring(0, spans[i].start));
-        const elementIndent = indentMatch ? indentMatch[1] : '';
-        text = text.substring(0, spans[i].start)
-          + formatNewValue(newValue[i], elementIndent)
-          + text.substring(spans[i].end);
+        fragment = fragment.substring(0, spans[i].start)
+          + replaceValueInSpan(
+            fragment, spans[i], oldValue[i], newValue[i],
+            [...reportPath, String(i)], filePath, dropped
+          )
+          + fragment.substring(spans[i].end);
       }
-      return text;
+      return keyPrefix + fragment;
     }
     // Le span contate non corrispondono alla lunghezza dell'array: non si
     // indovina, si ricade sulla sostituzione del blocco qui sotto.
   }
 
   // ── Fallback: sostituzione del blocco ─────────────────────────────────────
+  //
+  // Qui il blocco si RIFA, quindi i commenti che ci stavano dentro non hanno
+  // più niente a cui attaccarsi: si DICHIARANO invece di tacerli.
+  // Solo un CONTENITORE può aver ospitato commenti. Su uno scalare la raccolta
+  // non è soltanto inutile: è dannosa, perché il riconoscitore guarda `mask`, che
+  // marca anche il contenuto delle stringhe — e una stringa come `"/admin/**"`
+  // verrebbe riportata come un commento perduto che non è mai esistito.
+  if (isPlainObject(oldValue) || Array.isArray(oldValue)) {
+    const mask = buildCodeMask(fragment);
+    for (const text of collectCommentsIn(fragment, mask, 0, fragment.length)) {
+      dropped.push({ path: [...reportPath], text });
+    }
+  }
+
+  const formatted = formatNewValue(newValue, baseIndent);
+  // La chiave viene riscritta in forma normalizzata SOLO qui, dove il valore è
+  // davvero rifatto: è il comportamento storico del modulo, presidiato da due
+  // test (`isInstalled: 0` → `"isInstalled": 1`). Nei rami che ricorrono la
+  // chiave non si tocca, perché « la formattazione delle parti non toccate non
+  // è normalizzata ».
+  if (span.keyStart === undefined) return formatted;
+  return `"${reportPath[reportPath.length - 1]}": ${formatted}`;
+}
+
+/**
+ * Sostituisce il valore a un path: risolve il path in una span e delega.
+ */
+function replaceValueAtPath(source, pathSegments, newValue, filePath, dropped) {
+  const oldValue = readAtPath(json5.parse(source), pathSegments);
   const mask = buildCodeMask(source);
   const depth = buildDepthArray(source, mask);
   const occ = locatePath(source, mask, depth, pathSegments, filePath);
 
-  for (const text of collectCommentsIn(source, mask, occ.valueStart, occ.valueEnd)) {
-    dropped.push({ path: [...pathSegments], text });
-  }
-
-  let lineStart = occ.keyStart;
-  while (lineStart > 0 && source[lineStart - 1] !== '\n') lineStart -= 1;
-  const indentRaw = source.substring(lineStart, occ.keyStart);
-  const baseIndent = /^\s*$/.test(indentRaw) ? indentRaw : '';
-  const leafKey = pathSegments[pathSegments.length - 1];
-  const replacement = `"${leafKey}": ${formatNewValue(newValue, baseIndent)}`;
-
-  return source.substring(0, occ.keyStart) + replacement + source.substring(occ.valueEnd);
+  return source.substring(0, occ.keyStart)
+    + replaceValueInSpan(
+      source,
+      { start: occ.valueStart, end: occ.valueEnd, keyStart: occ.keyStart },
+      oldValue, newValue, pathSegments, filePath, dropped
+    )
+    + source.substring(occ.valueEnd);
 }
 
 // ── Main API ─────────────────────────────────────────────────────────────────
