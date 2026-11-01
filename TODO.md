@@ -1093,13 +1093,22 @@ perso), e il **contenuto non veniva mai guardato**, quindi una regola che
 l'amministratore aveva **stretto** veniva cancellata e il suo URL ricadeva sul
 gemello più permissivo.
 
-- [ ] **Fase 1 — `core/removeJson5Key.js`** con i suoi test. Prima va proposto il
-      nome del modulo di **scansione** estratto (regola 3) e deciso **dove vive**
-      (oggi è `editJson5._internals`, che per convenzione significa « esposto ai
-      test »). I test devono coprire **le forme su cui `dropRuleBlock` ha
-      sbagliato**: valore inline, stringhe che contengono graffe, ultima chiave
-      senza virgola, commento in linea su una chiave vicina. Con **mutazioni**: in
-      questo intervento due presidi sono già risultati vacui.
+- [x] ~~**Fase 1 — `core/removeJson5Key.js`** con i suoi test.~~ **Fatta il
+      2026-11-01.** La scansione è stata estratta in **`core/json5Scan.js`**
+      (modulo di sola lettura, nome approvato): sette funzioni, zero dipendenze
+      esterne nel blocco, `editJson5.js` **da 628 a 278 righe** e la suite
+      invariata a dimostrarlo. `editJson5._internals` **rimosso** — il suo unico
+      consumatore di produzione era `setJson5Key.js:180`, che ora importa
+      `json5Scan` direttamente. `removeJson5Key` ha la firma simmetrica ai
+      fratelli, no-op su chiave assente (idempotenza), rifiuto su path ambiguo, e
+      una **postcondizione in due parti verificata prima di scrivere**: il path
+      non esiste più *e* tutto il resto del documento è identico — la seconda è la
+      rete che impedisce al difetto storico di ripetersi in silenzio, perché una
+      cancellazione che si porta via la coppia successiva lascia un file ancora
+      parsabile. **40 test** e **3 mutazioni**, tutte colte; la prima stesura di
+      una era *infedele* (cercava `'},'` invece di `'\n  },'`, cioè newline più
+      indentazione, che è il motivo per cui il difetto saltava la propria
+      chiusura) e corretta uccide il test giusto.
 - [ ] **Fase 2 — sostituzione per chiave in `editJson5`.** Oggi, cambiando *una*
       chiave di un oggetto, spariscono i commenti di **tutte** le altre, anche di
       quelle il cui valore non cambia — misurato. La correzione è non ricostruire

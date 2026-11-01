@@ -320,53 +320,60 @@ il contrario.
 
 ## Roadmap
 
-### Fase 1 — `removeJson5Key`
+### Fase 1 — `removeJson5Key` ✅ FATTA (2026-11-01)
 
-- [ ] Estrarre la scansione da `editJson5.js` in **`core/json5Scan.js`** (D4);
-      `editJson5` lo importa e **non cambia comportamento** — la suite esistente
-      resta verde, ed è la rete che dimostra che l'estrazione è neutra.
-- [ ] `json5Scan.js` esporta le funzioni come **superficie pubblica**, non come
-      `_internals`: è il punto della decisione.
-- [ ] Scrivere `core/removeJson5Key.js`:
-      - [ ] firma `removeJson5Key(filePath, key)` con `key` stringa **o array di
-            segmenti**, per simmetria con `setJson5Key`;
-      - [ ] localizza la chiave con la scansione; la span base è `keyStart … valueEnd`,
-            la stessa che `editJson5` usa per sostituire;
-      - [ ] estende la span alla **virgola** successiva e al commento in linea che
-            la segue (D2, caso B);
-      - [ ] estende la span **verso l'alto** secondo D2 (righe di solo commento,
-            fermata su riga vuota o codice);
-      - [ ] riassorbe la riga rimasta vuota, senza toccare l'indentazione del resto;
-      - [ ] **chiave assente → no-op** che lo riporta, **non** un throw (le
-            migrazioni devono essere idempotenti: la seconda esecuzione non trova
-            più la chiave);
-      - [ ] **ambiguità → rifiuta**, non indovina: `editJson5` già si ferma se un
-            segmento compare più volte alla profondità attesa, e la rimozione
-            eredita quella severità (cancellare la chiave sbagliata è peggio che
-            non cancellare);
-      - [ ] postcondizione: ri-parsa e verifica che il path **non esista più**, e
-            che tutto il resto dell'oggetto sia `deepEqual` a prima;
-      - [ ] scrittura atomica via `saveJson5(path, rawString)`, come i fratelli;
-      - [ ] ritorna `{ changed, removedValue, droppedComments }`.
-- [ ] Test, con **le forme su cui `dropRuleBlock` ha sbagliato** in testa:
-      - [ ] valore **inline** (`"k": { "a": 1 },`) — il caso che inghiottiva la
-            regola successiva;
-      - [ ] valore multiriga, e valore annidato a più livelli;
-      - [ ] valore **array**, inline e multiriga;
-      - [ ] stringa che contiene graffe o parentesi (`"regex:\\d{1,3}"`, `"}"`) —
-            la scansione deve ignorarle;
-      - [ ] **ultima chiave** dell'oggetto, senza virgola finale;
-      - [ ] **unica chiave** dell'oggetto (resta `{}`);
-      - [ ] chiave con commento in linea, con blocco sopra, con blocco separato da
-            riga vuota (i tre casi di D2);
-      - [ ] commento in linea su una chiave **precedente**: non deve partire;
-      - [ ] chiave assente → no-op; chiave ambigua → rifiuto;
-      - [ ] **idempotenza**: seconda esecuzione, nessuna modifica;
-      - [ ] nessun file temporaneo lasciato dietro.
-- [ ] **Mutazioni** su almeno le due proprietà che in Fase 4 sono mancate: che la
-      span non superi la regola aperta, e che il commento di una chiave vicina non
-      venga preso. Un test che sopravvive alla mutazione non presidia niente — è
-      già capitato due volte in questo intervento.
+- [x] ~~Estrarre la scansione da `editJson5.js` in **`core/json5Scan.js`** (D4).~~
+      Sette funzioni, **zero dipendenze esterne** nel blocco estratto, quindi
+      l'estrazione è stata meccanica. `editJson5.js` **da 628 a 278 righe**, e la
+      suite è rimasta identica — 178 suite / 5285 test — che è la prova che
+      l'estrazione è neutra.
+- [x] ~~`json5Scan.js` esporta come **superficie pubblica**, non `_internals`.~~
+      E `editJson5._internals` è stato **rimosso**: l'unico consumatore di
+      produzione era `setJson5Key.js:180`, che ora importa `json5Scan`
+      direttamente. Era l'odore che D4 voleva togliere, e precedeva questo
+      intervento.
+- [x] ~~Scrivere `core/removeJson5Key.js`.~~ Firma simmetrica ai fratelli
+      (`filePath`, chiave stringa o array di segmenti), span da `locatePath`
+      estesa in giù (virgola + commento in linea + fine riga) e in su (D2),
+      chiave assente → no-op, path ambiguo → rifiuto, scrittura atomica via
+      `saveJson5`.
+      - [x] **Postcondizione in due parti, verificata PRIMA di scrivere:** il path
+            non esiste più **e** tutto il resto del documento è identico. La
+            seconda è quella che conta — è la rete che impedisce al difetto
+            storico di ripetersi in silenzio, perché una cancellazione che si
+            porta via la coppia successiva lascia un file ancora **parsabile**.
+      - [x] Confronto via `JSON.stringify` dell'oggetto atteso contro quello
+            riletto, **invece di `deepEqual`**: quella utility è già duplicata
+            in `editJson5` e `setJson5Key`, e una terza copia era peggio che
+            evitarla. (La duplicazione esistente resta, registrata fra i punti
+            rimandati.)
+      - [x] Lookup dei segmenti via `hasOwnProperty`: senza, `constructor` o
+            `toString` pescherebbero dal **prototipo** un valore truthy e la
+            funzione crederebbe che la chiave esista. Stessa classe di
+            `REVIEW.md` → B4, già incontrata in Fase 1 di path-zones.
+- [x] ~~Test: 40, con le forme su cui `dropRuleBlock` ha sbagliato in testa.~~
+      Tutte le voci previste, più: due coppie inline di fila, una stringa che
+      **contiene** una graffa di chiusura, una virgola **dentro** una stringa,
+      chiavi non quotate e apici singoli (JSON5), due coppie sulla **stessa
+      riga**, ordine delle chiavi superstiti, e la formattazione del resto del
+      file **non normalizzata**.
+- [x] ~~**Mutazioni.**~~ Tre, tutte colte — e la prima stesura di una era
+      **infedele**, il che è a sua volta la lezione del file: cercava `'},'`
+      mentre il difetto vero cercava `'\n  },'`, cioè newline **più
+      indentazione**, ed è proprio per questo che su una coppia inline saltava la
+      propria chiusura. Corretta, uccide **il test giusto**: « valore INLINE: la
+      coppia successiva NON sparisce ». Le altre due: la riga vuota che non ferma
+      più la risalita, e la guardia sulla coppia scritta a metà riga.
+
+**Scostamento dal piano, dichiarato.** Il piano prevedeva un ritorno
+`{ changed, removedValue, droppedComments }`. `droppedComments` **non c'è**: i
+commenti dentro il valore rimosso se ne vanno *perché il valore se ne va*, che è
+il comportamento voluto e non una perdita da riportare. L'unico caso di commento
+non preso è il blocco `/* … */` su **più righe** sopra la chiave, che resta dov'è
+— orfano ma inerte, perché portarne via una parte produrrebbe un file non
+parsabile. È documentato nell'intestazione del modulo e coperto da un test;
+riportarlo nel valore di ritorno avrebbe richiesto un nome nuovo da approvare per
+un caso che i config del progetto non producono (usano `//` ovunque).
 
 ### Fase 2 — Sostituzione per chiave in `editJson5`
 
@@ -471,6 +478,12 @@ senza giudicarli, quindi dopo la conversione **qualcuno deve rileggerli**.
   nello script senza una primitiva nuova.
 
 ## Punti rimandati
+
+- [ ] **`deepEqual` è duplicata** in `editJson5.js` e `setJson5Key.js` (precede
+      questo intervento). `removeJson5Key` l'ha **evitata** confrontando via
+      `JSON.stringify`, per non farne una terza copia, ma le due restano. Il posto
+      naturale sarebbe un'utility del core — da valutare se e quando serva a un
+      terzo chiamante davvero.
 
 - [ ] **Nessun presidio impone l'ordine « prima `migrations/`, poi il bump »**
       (ereditato dalla Fase 5 di path-zones): bumpare la `schemaVersion` di un

@@ -22,7 +22,7 @@
  * installazioni esistenti (vedi docs/decisions/config-migrations.it.md).
  * Il parent deve già esistere ed essere un oggetto: se manca, va inserito lui
  * (con il proprio contenuto) al livello in cui manca. La localizzazione del
- * blocco parent riusa il locator di editJson5 (`_internals`), non una seconda
+ * blocco parent riusa il locator di `core/json5Scan.js`, non una seconda
  * implementazione.
  *
  * Scope: valore JSON-serializzabile scritto inline con `JSON.stringify`;
@@ -46,6 +46,7 @@ const fs = require('fs').promises;
 const json5 = require('json5');
 const loadJson5 = require('./loadJson5');
 const editJson5 = require('./editJson5');
+const json5Scan = require('./json5Scan');
 const saveJson5 = require('./saveJson5');
 
 function deepEqual(a, b) {
@@ -177,7 +178,7 @@ async function setJson5Key(filePath, key, value, options = {}) {
  */
 async function insertNested(filePath, segments, value, serialized) {
   const source = await fs.readFile(filePath, 'utf8');
-  const { buildCodeMask, buildDepthArray, locatePath } = editJson5._internals;
+  const { buildCodeMask, buildDepthArray, locatePath } = json5Scan;
 
   const mask = buildCodeMask(source);
   const depth = buildDepthArray(source, mask);
