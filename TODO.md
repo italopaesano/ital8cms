@@ -1074,3 +1074,55 @@ passerebbe il boot non può essere salvata dalla GUI. Le fasi 4-6 che restano so
 - [ ] **`dirListing` acceso sul file server admin** (`index.js:563`, l'unico dei cinque).
       Non fa parte della decisione, ma è uno dei tre fattori che trasformano A1 da
       disallineamento di configurazione a esposizione dell'intero albero del pannello.
+
+## 10. Operazioni su chiave `.json5` — `removeJson5Key` e la sostituzione per chiave
+
+Fonte: [`docs/decisions/json5-key-operations.it.md`](./docs/decisions/json5-key-operations.it.md)
+(decisioni D1-D5 prese il 2026-11-01, implementazione da fare).
+Origine: revisione della **Fase 4** di [`path-zones.it.md`](./docs/decisions/path-zones.it.md).
+
+**Il buco.** Lo strato di chirurgia testuale del core copre **quattro operazioni
+su cinque**: leggere (`loadJson5`), riscrivere tutto (`saveJson5`), aggiornare una
+chiave (`editJson5`), aggiungere-o-aggiornare (`setJson5Key`). **Rimuovere una
+chiave non esiste** — ed è stata riscritta a mano dentro uno script di migrazione
+(`dropRuleBlock`), con `indexOf` invece della macchina di scansione che viveva
+venti righe più in là. Ne sono usciti due difetti di perdita dati, entrambi
+riprodotti: una regola scritta **inline** faceva cancellare anche quella
+**successiva** (8 regole custom diventate 3 invece di 4, con `isAuthEntryPoint`
+perso), e il **contenuto non veniva mai guardato**, quindi una regola che
+l'amministratore aveva **stretto** veniva cancellata e il suo URL ricadeva sul
+gemello più permissivo.
+
+- [ ] **Fase 1 — `core/removeJson5Key.js`** con i suoi test. Prima va proposto il
+      nome del modulo di **scansione** estratto (regola 3) e deciso **dove vive**
+      (oggi è `editJson5._internals`, che per convenzione significa « esposto ai
+      test »). I test devono coprire **le forme su cui `dropRuleBlock` ha
+      sbagliato**: valore inline, stringhe che contengono graffe, ultima chiave
+      senza virgola, commento in linea su una chiave vicina. Con **mutazioni**: in
+      questo intervento due presidi sono già risultati vacui.
+- [ ] **Fase 2 — sostituzione per chiave in `editJson5`.** Oggi, cambiando *una*
+      chiave di un oggetto, spariscono i commenti di **tutte** le altre, anche di
+      quelle il cui valore non cambia — misurato. La correzione è non ricostruire
+      il blocco ma **ricorrere**: per chiave sugli oggetti, per indice sugli array
+      a lunghezza invariata. Richiede di estendere `editJson5` alla navigazione
+      dentro gli array per indice, oggi fuori perimetro. **`removeJson5Key` è il
+      prerequisito**, non il contrario: la ricorsione ha bisogno di « rimuovi »
+      per le chiavi che il nuovo valore non ha più.
+- [ ] **Fase 3 — specifiche e documentazione.** Riscrivere lo *Scope* di
+      `editJson5`; correggere la **sovra-affermazione della Fase 5 di path-zones**
+      (i `.md` delle migrazioni di `rateLimiter` e `seo` dicono che `setJson5Key`
+      « preserva i commenti del file vivo » senza la riserva sugli array), e il
+      **test cieco** che la verifica mettendo i commenti solo *fuori* dall'array.
+- [ ] **Fase 4 — `from-v3-to-v4.js` riscritta** sopra `removeJson5Key`, più il
+      confronto del corpo (difetto 2), la diagnostica non più silenziosa
+      (difetto 3) e quella che non afferma cause non verificate (difetto 5).
+- [ ] **Fase 5 — RILETTURA MANUALE DI TUTTI I COMMENTI.** Non è una rifinitura: è
+      la seconda metà di D3. La funzione conserva i commenti **senza giudicarli**
+      (decisione del maintainer: « in questa prima fase conserverei i commenti
+      senza fare altro e senza chiedermi cosa dicono »), quindi a conversione
+      fatta **qualcuno deve rileggerli tutti** e decidere quali riscrivere. Un
+      commento che parlava della *scrittura* di un pattern (« letterale, da
+      convertire ») è diventato falso quando il pattern è diventato un segnaposto.
+      Riguarda anche i file **già convertiti** dalle Fasi 4 e 5 di path-zones:
+      `accessControl.json5`, `rateLimiter/pluginConfig.json5`,
+      `seo/pluginConfig.json5`, `sentinel/sentinelRules.json5`.
