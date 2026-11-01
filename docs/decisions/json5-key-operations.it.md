@@ -459,31 +459,65 @@ valore sbagliato al path, e sono stati fermati **prima della scrittura**.
       indice fallisce (verificato: 2 fallimenti, uno per plugin). Da test che
       guardava altrove a presidio di ciò che la Fase 2 ha guadagnato.
 
-### Fase 4 — `from-v3-to-v4.js` riscritta, e il confronto del corpo
+### Fase 4 — `from-v3-to-v4.js` riscritta ✅ FATTA (2026-11-01)
 
-- [ ] Eliminare `dropRuleBlock`.
-- [ ] La cancellazione delle forme pulite passa per `removeJson5Key` (chiude il
-      **difetto 1**).
-- [ ] Aggiungere il **confronto del corpo** (chiude il **difetto 2**): `loadJson5`
-      dice *se* la regola è quella distribuita, `removeJson5Key` *dove*. Criterio
-      da scegliere fra « uguale a quella spedita » e « ancora identica al proprio
-      gemello `.ejs` » — il secondo è più aderente al motivo della rimozione (si
-      toglie perché è un duplicato, quindi si toglie se è *ancora* un duplicato).
-- [ ] Rendere **non silenzioso** il salto delle rinomine (**difetto 3**): oggi un
-      `{{…}}` presente altrove nel file fa `continue` prima della lista degli
-      scartati, quindi il letterale non viene convertito **né segnalato**.
-- [ ] Correggere la diagnostica che **afferma una causa non verificata**
-      (**difetto 5**): una regola semplicemente assente riceve il messaggio
-      « l'ancoraggio non combacia (file riformattato o personalizzato)… conviene
-      convertirli a mano », riferito a una regola che non esiste.
-- [ ] Test sulle forme che perdono dati, come in Fase 1, più le due riproduzioni
-      del *Contesto* (regola inline, forma pulita modificata) come test di
-      regressione.
-- [ ] `.gitignore`: il temporaneo `.migrating` non è coperto (**difetto 7**).
-- [ ] Riapplicare la migrazione su un'installazione ricostruita « alla v3 » con la
-      CLI reale, e verificare che i commenti sopravvivano contandoli prima e dopo.
+- [x] ~~`dropRuleBlock` eliminata.~~ La cancellazione passa per
+      `core/removeJson5Key.js` — la quinta operazione, che all'epoca della prima
+      stesura **non esisteva**, ed è il motivo per cui era stata riscritta a mano
+      con `indexOf` invece della scansione del core.
+- [x] ~~**Difetto 1 chiuso** (la regola successiva inghiottita).~~ Riprodotto come
+      test di regressione: su una `login` scritta **inline**, le quattro forme con
+      estensione restano **quattro** (erano diventate tre), e `logout.ejs` conserva
+      il proprio `isAuthEntryPoint` — senza il quale `reserved stop` tornerebbe a
+      servire la pagina di logout.
+- [x] ~~**Difetto 2 chiuso** (il contenuto mai guardato).~~ Il criterio scelto è
+      « **è ancora un duplicato del suo gemello `.ejs`?** », non « è ancora quella
+      spedita ». I due differiscono in due casi reali, e il secondo li sbaglia:
+      se l'amministratore ha modificato **il `.ejs`** e non la forma pulita,
+      rimuoverla farebbe produrre alla derivazione il corpo **modificato** — un
+      cambiamento di comportamento silenzioso; e se li ha modificati **entrambi**
+      allo stesso modo, è ancora un duplicato e va rimossa. Il criterio del
+      gemello è aderente al MOTIVO della rimozione, quindi risponde giusto in
+      tutti e quattro i casi. La cautela è **per-regola**: le altre tre vengono
+      rimosse comunque.
+- [x] ~~**Difetto 3 chiuso** (il salto silenzioso).~~ La guardia « già convertito »
+      guardava **tutto il file**, quindi un `{{admin}}` scritto a mano in una
+      regola qualsiasi sopprimeva la conversione del letterale `/admin` — né
+      convertito né dichiarato. Ora guarda la singola chiave.
+- [x] ~~**Difetto 5 chiuso** (la causa non verificata).~~ Lo stesso messaggio
+      serviva due casi diversi: « l'ancoraggio non combacia (file riformattato o
+      personalizzato) » arrivava anche per una regola **semplicemente assente**,
+      mandando a cercare un problema di formattazione che non c'era. Ora i due
+      casi sono distinti: `info` per « non esiste in questo file », `warn` con il
+      rimando alla conversione a mano per « esiste ma l'ancoraggio non combacia ».
+      Presidiato da un test che verifica la **distinzione**, non il testo.
+- [x] ~~**Difetto 7 chiuso**: `*.json5.migrating` in `.gitignore`.~~ È una copia
+      **completa** di un file vivo, e sopravvive se il processo muore fra il write
+      e il rename: va ignorato per la stessa ragione dei vivi.
+- [x] ~~Le **rinomine restano testuali**, e il perché è scritto nello script.~~
+      Rinominare preservando posizione e commenti non è esprimibile come
+      `setJson5Key` + `removeJson5Key`: il primo inserisce in testa al blocco o
+      dopo una chiave indicata, quindi la regola **si sposterebbe** e perderebbe
+      il blocco di commento che la spiega. Sarebbe una **sesta** operazione
+      (`renameJson5Key`), fuori perimetro.
+- [x] ~~Test: 5 nuovi~~ (21 in tutto), con le due riproduzioni della revisione in
+      testa. Due **mutazioni**, entrambe colte: via il confronto del corpo → 2
+      fallimenti; criterio « uguale a quella spedita » → 1 fallimento, esattamente
+      il test che distingue i due criteri.
+- [x] ~~Riapplicata con la **CLI reale** su un'installazione ricostruita « alla
+      v3 ».~~ 6 pattern convertiti, 4 forme pulite rimosse, descrittore da 3 a 4,
+      `accessControl.schemaVersion` che resta **3** (il clock è il descrittore),
+      **97 commenti su 98** — l'unico perduto è quello inline che accompagnava una
+      regola rimossa, e se ne va con lei — zero temporanei residui. Boot pulito:
+      `6 patterns · 19 invarianti verificate`.
 
----
+#### Una nota sulle scritture, dichiarata
+
+Le rimozioni costano **una scrittura per regola**, perché `removeJson5Key` lavora
+sul file. È accettabile qui e **non** in una primitiva: ogni scrittura è atomica,
+ogni stato intermedio è JSON5 valido, lo step è sotto il backup del runner, e la
+ricevuta `schemaVersion` avanza **solo a esito riuscito** — quindi una catena
+interrotta riprende da dove si è fermata, e questo script è idempotente.
 
 ### Fase 5 — Rilettura manuale di TUTTI i commenti
 

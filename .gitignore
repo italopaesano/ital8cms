@@ -68,6 +68,13 @@ themes/*/node_modules/
 # nel repo (adminAccessControl v3→v4) l'ha fatto notare. Vale per QUALUNQUE
 # pacchetto con `migrations/`, non solo per quello.
 *.backup-v[0-9]*
+
+# Temporaneo delle scritture atomiche (temp + rename) sui config vivi.
+# Esiste per frazioni di secondo, ma se il processo muore fra il write e il
+# rename resta sul disco — ed e una copia COMPLETA di un file vivo, quindi va
+# ignorato per la stessa ragione dei vivi stessi. Emerso in revisione della
+# migrazione adminAccessControl v3→v4.
+*.json5.migrating
 # Descrittori vivi (plugin + temi): generati dai .default; isInstalled (stato
 # runtime) scritto al boot — per i plugin da pluginSys, per i temi bundled da
 # ensureThemesInstalled (Fase 5). I .default restano la fonte di verità.

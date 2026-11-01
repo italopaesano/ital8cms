@@ -113,7 +113,7 @@ afterEach(() => {
 describe('conversione ai segnaposti', () => {
   test('rinomina le sei chiavi e rimuove le quattro forme pulite', async () => {
     writeLive(V3_LIVE);
-    await migrate({ packageDir: workDir, logger, dryRun: false });
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
 
     expect(patternsOf(loadJson5(livePath()))).toEqual([
       '{{pluginPages}}/adminUsers/userProfile.ejs',
@@ -129,7 +129,7 @@ describe('conversione ai segnaposti', () => {
     // È il motivo per cui la migrazione è TESTUALE e non riserializza l'oggetto.
     writeLive(V3_LIVE);
     const commentsBefore = (V3_LIVE.match(/^\s*\/\//gm) || []).length;
-    await migrate({ packageDir: workDir, logger, dryRun: false });
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
     const commentsAfter = (readLive().match(/^\s*\/\//gm) || []).length;
 
     // TUTTI i commenti a riga intera sopravvivono.
@@ -149,7 +149,7 @@ describe('conversione ai segnaposti', () => {
 
   test('il file resta JSON5 valido e conserva defaultPolicy e schemaVersion', async () => {
     writeLive(V3_LIVE);
-    await migrate({ packageDir: workDir, logger, dryRun: false });
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
     const parsed = loadJson5(livePath());
     expect(parsed.schemaVersion).toBe(3); // il clock è il descrittore, non questo file
     expect(parsed.defaultPolicy).toEqual({
@@ -160,23 +160,23 @@ describe('conversione ai segnaposti', () => {
 
   test('è IDEMPOTENTE: il secondo passaggio non cambia nulla', async () => {
     writeLive(V3_LIVE);
-    await migrate({ packageDir: workDir, logger, dryRun: false });
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
     const afterFirst = readLive();
     logs.info = [];
-    await migrate({ packageDir: workDir, logger, dryRun: false });
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
     expect(readLive()).toBe(afterFirst);
     expect(logs.info.join(' ')).toContain('già convertito');
   });
 
   test('`dryRun` non scrive nulla', async () => {
     writeLive(V3_LIVE);
-    await migrate({ packageDir: workDir, logger, dryRun: true });
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: true });
     expect(readLive()).toBe(V3_LIVE);
     expect(logs.info.join(' ')).toContain('dry-run');
   });
 
   test('senza file vivo non fa nulla: lo materializzerà il boot dal .default', async () => {
-    await expect(migrate({ packageDir: workDir, logger, dryRun: false })).resolves.toBeUndefined();
+    await expect(migrate({ packageDir: workDir, loadJson5, logger, dryRun: false })).resolves.toBeUndefined();
     expect(logs.info.join(' ')).toContain('non esiste');
   });
 });
@@ -191,15 +191,34 @@ describe('fail-soft: un file di sicurezza non si riscrive a tentoni', () => {
 
   test('su un file riformattato lascia tutto INTATTO', async () => {
     writeLive(REFORMATTED);
-    await migrate({ packageDir: workDir, logger, dryRun: false });
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
     expect(readLive()).toBe(REFORMATTED);
   });
 
   test('e DICHIARA i pattern che non ha potuto convertire', async () => {
     writeLive(REFORMATTED);
-    await migrate({ packageDir: workDir, logger, dryRun: false });
-    expect(logs.warn.join(' ')).toContain('NON sono stati convertiti');
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
+    expect(logs.warn.join(' ')).toContain('ancoraggio testuale non combacia');
     expect(logs.warn.join(' ')).toContain('/admin/**');
+  });
+
+  test('DISTINGUE « esiste ma riformattata » da « non esiste »', async () => {
+    // È il difetto 5 della revisione, e la correzione sta tutta qui: la prima
+    // stesura dava LO STESSO messaggio nei due casi — « l'ancoraggio non combacia
+    // (file riformattato o personalizzato) » — anche per una regola semplicemente
+    // ASSENTE, mandando a cercare un problema di formattazione che non c'era.
+    //
+    // In REFORMATTED `/admin/**` C'È (riformattata) e `/admin` NON c'è.
+    writeLive(REFORMATTED);
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
+
+    // Quella che esiste: WARN, con il rimando alla conversione a mano.
+    expect(logs.warn.join(' ')).toContain('/admin/**');
+    expect(logs.warn.join(' ')).toContain('a mano');
+
+    // Quella che non esiste: INFO, e NON un avviso sul formato.
+    expect(logs.info.join(' ')).toContain('non esistono in questo file');
+    expect(logs.warn.join(' ')).not.toContain('riformattato o personalizzato');
   });
 
   test('NON dice « già convertito » quando non ha convertito niente', async () => {
@@ -207,9 +226,8 @@ describe('fail-soft: un file di sicurezza non si riscrive a tentoni', () => {
     // arrivava prima dell'avviso, quindi un file interamente riformattato
     // sembrava a posto e i pattern da sistemare non comparivano.
     writeLive(REFORMATTED);
-    await migrate({ packageDir: workDir, logger, dryRun: false });
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
     expect(logs.info.join(' ')).not.toContain('già convertito');
-    expect(logs.info.join(' ')).toContain('nessun ancoraggio combaciava');
   });
 
   test('una regola in forma pulita AGGIUNTA dall\'admin non viene toccata', async () => {
@@ -232,7 +250,7 @@ describe('fail-soft: un file di sicurezza non si riscrive a tentoni', () => {
     }`
     );
     writeLive(withCustom);
-    await migrate({ packageDir: workDir, logger, dryRun: false });
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
     const parsed = loadJson5(livePath());
     expect(parsed.customRules['/area-riservata']).toEqual({ requiresAuth: true, allowedRoles: [100] });
   });
@@ -251,7 +269,7 @@ describe('equivalenza: il ruleset IN VIGORE non cambia', () => {
     const before = loadJson5(livePath());
     const beforeResolved = resolveRuleset({ ...before.customRules, ...before.hardcodedRules }, zm);
 
-    await migrate({ packageDir: workDir, logger, dryRun: false });
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
     const after = loadJson5(livePath());
     const afterResolved = resolveRuleset({ ...after.customRules, ...after.hardcodedRules }, zm);
 
@@ -262,7 +280,7 @@ describe('equivalenza: il ruleset IN VIGORE non cambia', () => {
 
   test('il file migrato coincide, per chiavi, col `.default` spedito', async () => {
     writeLive(V3_LIVE);
-    await migrate({ packageDir: workDir, logger, dryRun: false });
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
     expect(patternsOf(loadJson5(livePath())).sort())
       .toEqual(patternsOf(loadJson5(path.join(PLUGIN, 'accessControl.default.json5'))).sort());
   });
@@ -301,5 +319,113 @@ describe('coerenza della dichiarazione', () => {
     for (const pattern of patternsOf(shipped)) {
       expect(pattern.startsWith('{{')).toBe(true);
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Regressione: i due difetti di PERDITA DATI trovati in revisione
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Entrambi venivano da `dropRuleBlock`, la cancellazione scritta a mano dentro
+// questo script quando `removeJson5Key` non esisteva ancora. Entrambi erano
+// passati con 16 test verdi, perché i test provavano lo script contro l'input da
+// cui era stato scritto — il `.default` appena spedito.
+//
+// Questi due riproducono le forme su cui perdeva dati, e girano sulla versione
+// riscritta sopra `core/removeJson5Key.js`.
+// → docs/decisions/json5-key-operations.it.md (Fase 4)
+describe('regressione: i difetti di perdita dati della prima stesura', () => {
+  test('REGOLA INLINE: la regola SUCCESSIVA non viene inghiottita', async () => {
+    // Il difetto 1. `dropRuleBlock` cercava « la prima riga di chiusura dopo la
+    // chiave »: su una regola scritta inline la cancellazione arrivava alla
+    // chiusura di quella SUCCESSIVA. Misurato allora: 8 regole custom diventate
+    // 3 invece di 4, con `isAuthEntryPoint` di logout sparito e il file ancora
+    // parsabile — quindi nessun errore da nessuna parte.
+    //
+    // È raggiungibile dal percorso supportato dal prodotto: `saveRules()` scrive
+    // la stringa grezza dell'amministratore, proprio per conservarne la forma.
+    const inlineLogin = V3_LIVE.replace(
+      `    "/pluginPages/adminUsers/login": {
+      "requiresAuth": false,
+      "allowedRoles": [],
+      "isAuthEntryPoint": true
+    },`,
+      '    "/pluginPages/adminUsers/login": { "requiresAuth": false, "allowedRoles": [], "isAuthEntryPoint": true },'
+    );
+    expect(inlineLogin).not.toBe(V3_LIVE);   // l'ancoraggio del fixture esiste
+
+    writeLive(inlineLogin);
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
+
+    const after = loadJson5(livePath());
+    // QUATTRO forme con estensione, non tre: logout.ejs deve essere ancora qui.
+    expect(Object.keys(after.customRules)).toEqual([
+      '{{pluginPages}}/adminUsers/userProfile.ejs',
+      '{{pluginPages}}/adminUsers/login.ejs',
+      '{{pluginPages}}/adminUsers/logout.ejs',
+      '{{pluginPages}}/adminAccessControl/access-denied.ejs',
+    ]);
+    // E con il suo marcatore: senza, `reserved stop` tornerebbe a servire logout.
+    expect(after.customRules['{{pluginPages}}/adminUsers/logout.ejs'].isAuthEntryPoint).toBe(true);
+  });
+
+  test('FORMA PULITA STRETTA dall admin: conservata, e dichiarata', async () => {
+    // Il difetto 2. `dropRuleBlock` riceveva il nome della chiave e nient'altro,
+    // quindi non poteva distinguere la regola distribuita da una modificata —
+    // mentre commento, registro, CHANGELOG e messaggio di commit promettevano il
+    // contrario. Con `hideExtension` acceso l'URL ricadeva sul gemello derivato
+    // (`allowedRoles: []` = qualunque autenticato): una restrizione a root/admin
+    // allentata in silenzio.
+    const narrowed = V3_LIVE.replace(
+      '      "allowedRoles": [] // idem, forma senza estensione (hideExtension attivo)',
+      '      "allowedRoles": [0, 1] // STRETTO dall\'amministratore'
+    );
+    expect(narrowed).not.toBe(V3_LIVE);
+
+    writeLive(narrowed);
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
+
+    const after = loadJson5(livePath());
+    // La regola stretta è ancora qui, col suo valore.
+    expect(after.customRules['/pluginPages/adminUsers/userProfile']).toEqual({
+      requiresAuth: true,
+      allowedRoles: [0, 1],
+    });
+    // E lo DICHIARA, nominando la conseguenza di toglierla.
+    expect(logs.warn.join(' ')).toContain('/pluginPages/adminUsers/userProfile');
+    expect(logs.warn.join(' ')).toContain('cambierebbe il comportamento');
+    // Le altre tre sono state rimosse: la cautela è per-regola, non globale.
+    expect(after.customRules['/pluginPages/adminUsers/login']).toBeUndefined();
+    expect(after.customRules['/pluginPages/adminUsers/logout']).toBeUndefined();
+  });
+
+  test('il criterio è « ancora un duplicato », non « ancora quella spedita »', async () => {
+    // Se l'amministratore ha modificato il gemello `.ejs` e NON la forma pulita,
+    // rimuoverla cambierebbe il comportamento: la derivazione produrrebbe al suo
+    // posto il corpo MODIFICATO. « Uguale a quella spedita » sbaglierebbe qui.
+    const ejsModified = V3_LIVE.replace(
+      `    "/pluginPages/adminUsers/userProfile.ejs": {
+      "requiresAuth": true,
+      "allowedRoles": []
+    },`,
+      `    "/pluginPages/adminUsers/userProfile.ejs": {
+      "requiresAuth": true,
+      "allowedRoles": [0, 1, 2] // ALLARGATO dall'amministratore
+    },`
+    );
+    expect(ejsModified).not.toBe(V3_LIVE);
+
+    writeLive(ejsModified);
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
+
+    const after = loadJson5(livePath());
+    expect(after.customRules['/pluginPages/adminUsers/userProfile']).toBeDefined();
+    expect(logs.warn.join(' ')).toContain('/pluginPages/adminUsers/userProfile');
+  });
+
+  test('non lascia dietro il temporaneo .migrating', async () => {
+    writeLive(V3_LIVE);
+    await migrate({ packageDir: workDir, loadJson5, logger, dryRun: false });
+    expect(fs.readdirSync(workDir).filter((f) => f.endsWith('.migrating'))).toEqual([]);
   });
 });

@@ -1129,9 +1129,21 @@ gemello più permissivo.
       5 dopo, i tre dentro l'array compresi. Il **test cieco** è stato sostituito
       con uno che mette i commenti *dentro* l'array: spegnendo la ricorsione per
       indice fallisce (2 fallimenti, uno per plugin).
-- [ ] **Fase 4 — `from-v3-to-v4.js` riscritta** sopra `removeJson5Key`, più il
-      confronto del corpo (difetto 2), la diagnostica non più silenziosa
-      (difetto 3) e quella che non afferma cause non verificate (difetto 5).
+- [x] ~~**Fase 4 — `from-v3-to-v4.js` riscritta** sopra `removeJson5Key`.~~
+      **Fatta il 2026-11-01.** `dropRuleBlock` eliminata; chiusi i difetti **1**
+      (la regola successiva inghiottita su una regola scritta inline), **2** (il
+      contenuto mai guardato), **3** (il salto silenzioso delle rinomine), **5**
+      (la diagnostica che affermava una causa non verificata) e **7** (il
+      temporaneo `.migrating` non ignorato). Il criterio del confronto del corpo è
+      « **è ancora un duplicato del suo gemello `.ejs`?** » e non « è ancora
+      quella spedita »: i due differiscono in due casi reali e il secondo li
+      sbaglia — se l'admin ha modificato il `.ejs` e non la forma pulita,
+      rimuoverla farebbe produrre alla derivazione il corpo **modificato**. Le
+      rinomine restano testuali, e il perché è scritto: una rinomina che preservi
+      posizione e commenti sarebbe una **sesta** operazione. 21 test (+5, con le
+      due riproduzioni della revisione), 2 mutazioni colte, e la migrazione
+      riapplicata con la **CLI reale** su un'installazione ricostruita alla v3:
+      97 commenti su 98, zero temporanei, boot pulito.
 - [ ] **Fase 5 — RILETTURA MANUALE DI TUTTI I COMMENTI.** Non è una rifinitura: è
       la seconda metà di D3. La funzione conserva i commenti **senza giudicarli**
       (decisione del maintainer: « in questa prima fase conserverei i commenti
