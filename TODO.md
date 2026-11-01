@@ -585,6 +585,21 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       plugin attivo dei test minimi richiesti (un test per metodo esportato, uno per
       rotta incluso `access`, validazione dei JSON5, lifecycle hooks). Default
       warning, `testingStrictMode: true` per promuoverli a fatali.
+- [ ] **`droppedComments` arriva al chiamante, ma nessun chiamante lo MOSTRA.**
+      *(Metà rimanente del rilievo 5 della revisione del codice, dichiarata invece di
+      lasciata implicita.)* Dalla v3.37.0 `editJson5` e `setJson5Key` restituiscono
+      entrambi `droppedComments` in tutti i rami, quindi l'informazione non viene più
+      **distrutta**. Ma l'audit di tutti i call site mostra che **nessuno cattura il
+      valore di ritorno**: sono tutti `await setJson5Key(…)` nudi. Quindi « un commento
+      perso e dichiarato » oggi è dichiarato a nessuno.
+      Il consumatore naturale è **`core/migrationRunner.js`**, che ha già un logger ed è
+      il contesto in cui « questa migrazione ha perso un commento, qui » interessa a un
+      amministratore. Caso concreto già presente: `core/migrations/adminConfig/from-v1-to-v2.js:57`
+      chiama `setJson5Key(configPath, 'menuOrder', updated)` su un **array** — se la
+      lunghezza cambia, i commenti interni si perdono e nessuno lo dice. Da valutare se
+      il runner debba leggere il resoconto degli step, o se ogni script debba loggarlo
+      da sé (il primo è uniforme, il secondo non obbliga il runner a conoscere la forma
+      di ritorno di ogni operazione).
 - [ ] **🐞 `sentinel/migrations/from-v6-to-v7.js` ha la stessa famiglia di difetto
       delle rinomine testuali.** *(Emerso durante la correzione del rilievo 2 della
       revisione del codice; **fuori dal perimetro** che il maintainer aveva dato, quindi

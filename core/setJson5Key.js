@@ -32,8 +32,16 @@
  *
  * API:
  *   setJson5Key(filePath, key, value, { afterKey }) →
- *     Promise<{ action: 'updated'|'inserted'|'unchanged', value }>
+ *     Promise<{ action: 'updated'|'inserted'|'unchanged', value, droppedComments }>
  *     key: string | string[]
+ *
+ * `droppedComments` è il resoconto di `editJson5` PROPAGATO, non scartato: è `[]`
+ * su `unchanged` e su `inserted` (un inserimento non sostituisce niente, quindi
+ * non può aver perso commenti), e su `updated` porta ciò che la sostituzione non
+ * ha potuto preservare. Scartarlo rendeva la perdita di nuovo **silenziosa**
+ * proprio attraverso l'API che il boot e le migrazioni usano.
+ * ⚠ Oggi **nessun chiamante lo consuma**: l'informazione è disponibile, ma perché
+ * arrivi a una persona serve che un chiamante la mostri — registrato in TODO.md.
  *
  * Throws su: argomenti non validi; file mancante / JSON5 non valido; root non
  * oggetto; parent inesistente o non-oggetto; `{` di apertura non su riga propria;
@@ -110,10 +118,15 @@ async function setJson5Key(filePath, key, value, options = {}) {
   // navigare i path annidati).
   if (Object.prototype.hasOwnProperty.call(parent, leafKey)) {
     if (deepEqual(parent[leafKey], value)) {
-      return { action: 'unchanged', value };
+      return { action: 'unchanged', value, droppedComments: [] };
     }
-    await editJson5(filePath, segments.length === 1 ? leafKey : segments, value);
-    return { action: 'updated', value };
+    // Il resoconto di editJson5 viene PROPAGATO, non scartato. Scartarlo
+    // rendeva la perdita di commenti di nuovo silenziosa proprio attraverso
+    // l'API che boot e migrazioni usano — cioè l'opposto del motivo per cui
+    // `droppedComments` esiste: « un commento perso in silenzio è il difetto,
+    // uno perso e dichiarato è una conseguenza ».
+    const outcome = await editJson5(filePath, segments.length === 1 ? leafKey : segments, value);
+    return { action: 'updated', value, droppedComments: outcome.droppedComments };
   }
 
   // ── Chiave assente → inserimento testuale ─────────────────────────────────
@@ -156,7 +169,11 @@ async function setJson5Key(filePath, key, value, options = {}) {
     throw new Error(`setJson5Key: validazione post-scrittura fallita per il path ${pathDesc} in "${filePath}"`);
   }
 
-  return { action: 'inserted', value };
+  // Un inserimento non sostituisce niente, quindi non può aver perso commenti:
+  // `[]` è il valore giusto, non un segnaposto. La forma di ritorno resta
+  // comunque la STESSA nei tre rami, così chi la consuma non deve sapere quale
+  // ha girato.
+  return { action: 'inserted', value, droppedComments: [] };
 }
 
 module.exports = setJson5Key;

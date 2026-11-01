@@ -195,6 +195,68 @@ describe('setJson5Key', () => {
     });
   });
 
+  describe('droppedComments: il resoconto viene PROPAGATO, non scartato', () => {
+    test('🐞 su `updated` arriva al chiamante ciò che editJson5 non ha potuto preservare', async () => {
+      // REGRESSIONE. `setJson5Key` chiamava `editJson5` scartandone il risultato
+      // (`await editJson5(…); return { action: 'updated', value }`), quindi
+      // attraverso questa API la perdita di commenti tornava **silenziosa** —
+      // l'opposto del motivo per cui `droppedComments` esiste. E questa è l'API
+      // che il boot e le migrazioni usano.
+      //
+      // Array di lunghezza DIVERSA → nessuna corrispondenza fra gli elementi
+      // vecchi e i nuovi → blocco rifatto → i commenti dentro si dichiarano.
+      const p = writeFile('cfg.json5', `{
+  "rules": [
+    // la prima regola, spiegata
+    "a",
+    // la seconda
+    "b",
+  ],
+}
+`);
+      const res = await setJson5Key(p, 'rules', ['a', 'b', 'c']);
+
+      expect(res.action).toBe('updated');
+      expect(res.droppedComments).toEqual([
+        { path: ['rules'], text: '// la prima regola, spiegata' },
+        { path: ['rules'], text: '// la seconda' },
+      ]);
+    });
+
+    test('su `unchanged` è un array vuoto, non undefined', async () => {
+      const p = writeFile('cfg.json5', '{\n  "a": 1,\n}\n');
+      const res = await setJson5Key(p, 'a', 1);
+
+      expect(res.action).toBe('unchanged');
+      expect(res.droppedComments).toEqual([]);
+      expect(() => res.droppedComments.length).not.toThrow();
+    });
+
+    test('su `inserted` è vuoto, e NON è un segnaposto: non c\'era nulla da perdere', async () => {
+      const p = writeFile('cfg.json5', '{\n  // nota di a\n  "a": 1,\n}\n');
+      const res = await setJson5Key(p, 'b', 2);
+
+      expect(res.action).toBe('inserted');
+      expect(res.droppedComments).toEqual([]);
+      // e infatti il commento esistente non è stato toccato
+      expect(read(p)).toContain('// nota di a');
+    });
+
+    test('la forma di ritorno è la STESSA nei tre rami', async () => {
+      // Così chi la consuma non deve sapere quale ramo ha girato — è la stessa
+      // ragione per cui il no-op di `editJson5` dichiara `droppedComments: []`.
+      const p = writeFile('cfg.json5', '{\n  "a": 1,\n}\n');
+      const unchanged = await setJson5Key(p, 'a', 1);
+      const updated = await setJson5Key(p, 'a', 2);
+      const inserted = await setJson5Key(p, 'nuova', 3);
+
+      const shape = Object.keys(unchanged).sort();
+      expect(shape).toEqual(['action', 'droppedComments', 'value']);
+      expect(Object.keys(updated).sort()).toEqual(shape);
+      expect(Object.keys(inserted).sort()).toEqual(shape);
+    });
+  });
+
   describe('error handling', () => {
     test('throws when the file does not exist', async () => {
       await expect(
