@@ -21,6 +21,18 @@
  * doveva rinominare CHIAVI e quindi lavorare sul testo: lì la chirurgia testuale
  * era inevitabile, qui no — e dove si puo evitarla, si evita.
  *
+ * ─── E I COMMENTI DENTRO L'ARRAY? ─────────────────────────────────────────────
+ * Sopravvivono anche loro, da v3.33.0. Fino alla v3.32.0 no: `setJson5Key`
+ * delegava a `editJson5`, che sostituiva il BLOCCO dell'array e con esso ogni
+ * commento interno — quindi un amministratore che aveva annotato una propria
+ * esenzione la perdeva, e questa intestazione affermava il contrario.
+ *
+ * Ora `editJson5` ricorre PER INDICE quando la lunghezza dell'array non cambia,
+ * e qui non cambia mai: lo script usa `declared.map(...)`, che per costruzione
+ * restituisce un array della stessa lunghezza. Quindi l'affermazione è vera
+ * senza riserve per questa migrazione — non perché il caso difficile non esista,
+ * ma perché questa migrazione non lo produce.
+ *
  * ─── SOSTITUISCE SOLO I LETTERALI DISTRIBUITI ─────────────────────────────────
  * Un elemento viene convertito solo se è ESATTAMENTE uno dei tre spediti col
  * plugin. Tutto il resto — percorsi aggiunti, modificati, riordinati — resta dov'è

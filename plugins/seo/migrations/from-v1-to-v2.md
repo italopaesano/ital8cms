@@ -44,7 +44,18 @@ indovinare l'ordine e sovrascrivere le scelte dell'amministratore.
 2. Converte un elemento **solo se è esattamente uno di quelli distribuiti**.
 3. Lascia tutto il resto dov'è e com'è — percorsi aggiunti, modificati,
    riordinati — e **dichiara** ciò che non ha convertito.
-4. Scrive con `setJson5Key` sul path annidato, che preserva i commenti del vivo.
+4. Scrive con `setJson5Key` sul path annidato, che preserva i commenti del vivo —
+   **anche quelli DENTRO l'array**, da v3.33.0.
+
+> **Perché « anche quelli dentro », e perché solo da v3.33.0.** Fino alla v3.32.0
+> `setJson5Key` delegava a `editJson5`, che sostituiva il **blocco** dell'array e
+> con esso ogni commento interno: un amministratore che aveva annotato una propria
+> voce la perdeva. Ora `editJson5` ricorre **per indice** quando la lunghezza
+> dell'array non cambia — e qui non cambia mai, perché lo script usa
+> `declared.map(...)`, che per costruzione restituisce un array della stessa
+> lunghezza. L'affermazione è quindi vera **senza riserve per questa migrazione**:
+> non perché il caso difficile non esista, ma perché questa migrazione non lo
+> produce. → [`json5-key-operations.it.md`](../../../docs/decisions/json5-key-operations.it.md)
 
 È **idempotente**: i segnaposti non sono fra i letterali da convertire, quindi
 una seconda esecuzione non fa niente.

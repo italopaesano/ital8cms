@@ -1,59 +1,105 @@
 /**
- * editJson5 — Edit-by-position editor for JSON5 files.
+ * editJson5 — editor per posizione di file `.json5`.
  *
- * Modifies a single field (top-level or nested) in a .json5 file while
- * preserving all comments, trailing commas, formatting, and other JSON5
- * features outside the modified field.
+ * Modifica un singolo campo (top-level o annidato) preservando commenti,
+ * virgole finali, formattazione e ogni altra caratteristica JSON5 di tutto ciò
+ * che non viene toccato.
  *
- * Approach:
- *   1. Parse the file with json5 to validate it and confirm the path exists.
- *   2. Pre-scan the source to identify code regions vs. strings/comments.
- *   3. Walk the path step by step, locating each segment within its parent's
- *      value range, until the leaf is found.
- *   4. Replace the matched key+value with the normalized form
- *      `"fieldName": <newValue>` where newValue is JSON-serialized.
- *   5. Validate the result by re-parsing with json5 and comparing the value
- *      at the path.
- *   6. Write atomically via saveJson5(path, rawString).
+ * ─── COME PROCEDE ─────────────────────────────────────────────────────────────
+ *   1. Parsa il file con json5 per validarlo e confermare che il path esista.
+ *   2. Scansiona il testo (`json5Scan`): dove è codice, dove stringa o commento,
+ *      la profondità di annidamento, dove finisce ogni valore.
+ *   3. Cammina il path e localizza la foglia.
+ *   4. Sostituisce RICORRENDO, non rifacendo il blocco (vedi sotto).
+ *   5. Valida il risultato ri-parsando e confrontando il valore al path.
+ *   6. Scrive atomicamente via `saveJson5`, UNA volta sola.
  *
- * Scope (v3):
- *   - Field must already exist at the specified path. No creation of new
- *     fields (intermediate or leaf).
- *   - The path can be a string for top-level fields or an array of strings
- *     for nested paths. Array indexes (e.g., navigating into an array element)
- *     are not supported.
- *   - Intermediate path segments must point to plain objects. Arrays and
- *     scalars are not navigable.
- *   - The OLD value at the leaf can be any JSON5 value: scalar, object, array.
- *   - The NEW value can be any JSON-serializable value: scalar, object, array.
- *   - When replacing an object/array LEAF, comments INSIDE the old value are
- *     lost (the whole block is substituted). Comments at any other position
- *     in the file — including inside ancestor blocks but outside the leaf —
- *     are preserved.
- *   - Output is normalized for the modified pair only: quoted key, single
- *     space after colon, JSON.stringify for the value with 2-space indent.
- *   - Caller is responsible for value-type semantics (no true→1 normalization).
+ * ─── SOSTITUZIONE PER CHIAVE: LA PARTE CHE CONTA ──────────────────────────────
+ * Fino alla v3.32.0 il passo 4 sostituiva il BLOCCO intero con il valore
+ * riserializzato, e con esso spariva ogni commento che ci stava dentro —
+ * compresi quelli di chiavi il cui valore NON cambiava. Era dichiarato come
+ * limite in questa stessa intestazione, ma non era un limite tecnico: le chiavi
+ * danno IDENTITÀ, quindi si sa esattamente a chi appartiene ogni commento.
  *
- * Out of scope:
- *   - Adding new fields (intermediate or leaf).
- *   - Editing inside arrays via index (e.g., path = ['list', 0, 'name']).
- *   - Editing inside arrays via push/splice.
+ * Misurato: su `{status: 429, retryAfter: 60, maxHits: 5}`, cambiando SOLO
+ * `retryAfter`, sparivano anche le spiegazioni di `status` e `maxHits`. Riscrivere
+ * `"status": 429` in `"status": 429` e nel farlo cancellare il perché di quel 429
+ * è danno gratuito.
  *
- * API:
+ * La realizzazione di « conserva i commenti » è NON RICOSTRUIRE: se il blocco di
+ * testo non viene rifatto, i commenti non vanno spostati — e quindi non si
+ * possono spostare male.
+ *
+ *   | vecchio → nuovo                  | strategia            | commenti        |
+ *   |----------------------------------|----------------------|-----------------|
+ *   | oggetto → oggetto                | ricorre per CHIAVE   | restano         |
+ *   | array → array, stessa lunghezza  | ricorre per INDICE   | restano         |
+ *   | array → array, lunghezza diversa | blocco rifatto       | `droppedComments` |
+ *   | cambio di tipo                   | blocco rifatto       | `droppedComments` |
+ *
+ * Le ultime due righe non sono pigrizia: a lunghezza diversa non c'è
+ * corrispondenza fra gli elementi vecchi e i nuovi, e a tipo cambiato i commenti
+ * interni non hanno più niente a cui attaccarsi. In quei casi il contratto è
+ * DICHIARARE invece di tacere — `droppedComments` porta il testo **e il percorso**
+ * in cui stava, perché « un commento è andato perso » non è azionabile e « in
+ * custom.policy » sì.
+ *
+ * ⚠️ La funzione NON giudica i commenti che conserva. Non valuta se un commento
+ * sia ancora vero dopo la sostituzione, non li classifica e non li marca da
+ * rivedere: quella è un'attività editoriale, separata e umana (decisione D3). Il
+ * motivo è che sotto incertezza le due opzioni non sono simmetriche — un commento
+ * obsoleto conservato è **visibile** a chi apre il file e si riscrive, uno valido
+ * cancellato è **invisibile** e non si recupera.
+ *
+ * ─── UNA SOLA SCRITTURA ───────────────────────────────────────────────────────
+ * Tutti gli splice della ricorsione avvengono in memoria. Chiamare le API a
+ * livello di file una per chiave sarebbe costato N scritture, e un fallimento a
+ * metà avrebbe lasciato il file parzialmente aggiornato — con ogni stato
+ * intermedio JSON5 **valido**, quindi invisibile.
+ *
+ * ─── AMBITO ───────────────────────────────────────────────────────────────────
+ *   - Il campo deve GIÀ esistere al path indicato: la creazione di campi nuovi
+ *     (intermedi o foglia) è di `setJson5Key`.
+ *   - Il path è una stringa (campo top-level) o un array di stringhe (annidato).
+ *     Gli INDICI d'array non sono path validi — e non servono: la ricorsione per
+ *     indice enumera le span degli elementi internamente, quindi il contratto
+ *     pubblico resta sui soli nomi di chiave.
+ *   - I segmenti intermedi devono puntare a oggetti semplici: array e scalari non
+ *     sono navigabili.
+ *   - Il valore VECCHIO può essere qualsiasi valore JSON5; il NUOVO qualsiasi
+ *     valore JSON-serializzabile.
+ *   - La normalizzazione (chiave quotata, uno spazio dopo i due punti,
+ *     `JSON.stringify` con indentazione 2) si applica solo a ciò che viene
+ *     effettivamente riscritto. Una chiave il cui valore non cambia non viene
+ *     toccata, quindi conserva la propria formattazione.
+ *   - La semantica dei tipi resta al chiamante (nessuna normalizzazione true→1).
+ *
+ * ─── FUORI AMBITO ─────────────────────────────────────────────────────────────
+ *   - Aggiungere campi nuovi (→ `setJson5Key`) o rimuoverne (→ `removeJson5Key`).
+ *   - Inserire o togliere elementi da un array (push/splice).
+ *
+ * ─── API ──────────────────────────────────────────────────────────────────────
  *   editJson5(filePath, fieldName, newValue)
  *   editJson5(filePath, ['parent', 'child', ...], newValue)
  *
- * Returns: Promise<{ changed, oldValue, newValue }>
- *   - changed=false if the field already had the requested value (no-op).
+ * Ritorna: Promise<{ changed, oldValue, newValue, droppedComments }>
+ *   - `changed: false` se il campo aveva già il valore richiesto (no-op, nessuna
+ *     scrittura);
+ *   - `droppedComments`: array di `{ path, text }`, **vuoto** quando nulla è stato
+ *     ricostruito.
  *
- * Throws on:
- *   - Invalid JSON5 in the source file.
- *   - Root is not a JSON5 object.
- *   - Path not found, or any intermediate segment missing.
- *   - Any intermediate segment is not a plain object (array or scalar).
- *   - Any segment appears multiple times at its expected depth (duplicates).
- *   - NEW value is not JSON-serializable (undefined, function, BigInt, etc.).
- *   - Post-edit validation failure (parse error or value mismatch).
+ * ─── LANCIA SE ────────────────────────────────────────────────────────────────
+ *   - Il file non è JSON5 valido, o la radice non è un oggetto.
+ *   - Il path non esiste, o un segmento intermedio manca.
+ *   - Un segmento intermedio non è un oggetto semplice (array o scalare).
+ *   - Un segmento compare più volte alla profondità attesa (path AMBIGUO):
+ *     modificare la chiave sbagliata è peggio che non modificare.
+ *   - Il valore nuovo non è JSON-serializzabile (undefined, funzione, BigInt…).
+ *   - La postcondizione fallisce (parse error, o valore diverso al path). In quel
+ *     caso NIENTE viene scritto — ed è il controllo che ha colto due difetti
+ *     della ricorsione su blocchi scritti inline, prima che toccassero un file.
+ *
+ * → docs/decisions/json5-key-operations.it.md
  */
 
 'use strict';

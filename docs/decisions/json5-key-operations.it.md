@@ -433,18 +433,31 @@ Il secondo è istruttivo sul perché la postcondizione di `editJson5` vale quant
 il codice che protegge: entrambi producevano un file **non parsabile** o un
 valore sbagliato al path, e sono stati fermati **prima della scrittura**.
 
-### Fase 3 — Specifiche e documentazione
+### Fase 3 — Specifiche e documentazione ✅ FATTA (2026-11-01)
 
-- [ ] Riscrivere l'header di `editJson5.js` secondo D5 (lo *Scope* attuale cita
-      la perdita come limite: va sostituito, non annotato).
-- [ ] Aggiornare `CLAUDE.md` → *Riferimento ai file importanti* con il modulo
-      nuovo e quello di scansione.
-- [ ] Correggere la **sovra-affermazione della Fase 5**: i `.md` delle migrazioni
-      di `rateLimiter` e `seo` dicono che `setJson5Key` « preserva i commenti del
-      file vivo » senza la riserva sugli array.
-- [ ] Correggere il **test cieco della Fase 5**: `conserva i commenti del file
-      vivo` mette i commenti solo *fuori* dall'array; aggiungerne dentro.
-- [ ] Voce in `CHANGELOG.md`; voce di tracciamento in `TODO.md`.
+- [x] ~~Riscritto l'header di `editJson5.js` secondo D5.~~ Lo *Scope* citava la
+      perdita dei commenti interni come **limite**: sostituito, non annotato. La
+      nuova intestazione porta la tabella delle quattro strategie, il difetto
+      misurato che ha aperto la fase, il perché di **una sola scrittura**, e la
+      riserva di D3 — la funzione **non giudica** i commenti che conserva.
+- [x] ~~`CLAUDE.md` aggiornato~~: `json5Scan` e `removeJson5Key` fra i file
+      importanti, la nuova semantica di `editJson5`, e la riga sulle migrazioni
+      che ora conosce **cinque** operazioni invece di due.
+- [x] **La sovra-affermazione della Fase 5 non andava corretta: la Fase 2 l'ha
+      resa VERA.** I `.md` delle migrazioni di `rateLimiter` e `seo` dicevano che
+      `setJson5Key` « preserva i commenti del file vivo » senza la riserva sugli
+      array — e all'epoca era falso dentro l'array. Ora è vero **senza riserve
+      per quelle migrazioni**, e il motivo è scritto dove serve: `editJson5`
+      ricorre per indice a lunghezza invariata, e quelle migrazioni usano
+      `declared.map(...)`, che per costruzione **non cambia la lunghezza**. Non
+      perché il caso difficile non esista: perché quelle migrazioni non lo
+      producono. Verificato su un config con tre commenti **dentro** l'array:
+      5 commenti prima, 5 dopo.
+- [x] ~~Il test cieco della Fase 5 sostituito.~~ Metteva i commenti **solo fuori**
+      dall'array, quindi passava qualunque cosa accadesse dentro. Il nuovo li
+      mette **dentro** e asserisce che sopravvivano; spegnendo la ricorsione per
+      indice fallisce (verificato: 2 fallimenti, uno per plugin). Da test che
+      guardava altrove a presidio di ciò che la Fase 2 ha guadagnato.
 
 ### Fase 4 — `from-v3-to-v4.js` riscritta, e il confronto del corpo
 

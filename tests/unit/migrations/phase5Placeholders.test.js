@@ -108,13 +108,34 @@ describe.each([
     expect(read(loadJson5(path.join(dir, 'pluginConfig.json5')))).toEqual(expected);
   });
 
-  test('conserva i commenti del file vivo', async () => {
+  test('conserva i commenti del file vivo, FUORI dall array', async () => {
     const dir = makeSandbox({ 'pluginConfig.json5': wrap(shipped) });
     await migrate(ctxFor(dir, recordingLogger()));
     const after = fs.readFileSync(path.join(dir, 'pluginConfig.json5'), 'utf8');
     // setJson5Key scrive la sola chiave: il resto del file resta parola per parola.
     expect(after).toContain('un commento che deve sopravvivere');
     expect(after).toContain('// commento inline');
+  });
+
+  test('conserva i commenti DENTRO l array (e prima no)', async () => {
+    // ERA UN TEST CIECO. La versione precedente metteva i commenti solo FUORI
+    // dall'array, quindi passava qualunque cosa accadesse dentro — e dentro
+    // accadeva che sparissero tutti: fino alla v3.32.0 `setJson5Key` delegava a
+    // `editJson5`, che sostituiva il BLOCCO dell'array. Un amministratore che
+    // aveva annotato una propria voce la perdeva, e i `.md` di questa migrazione
+    // affermavano il contrario.
+    //
+    // Da v3.33.0 `editJson5` ricorre per INDICE a lunghezza invariata, e qui la
+    // lunghezza non cambia mai perché lo script usa `declared.map(...)`.
+    const annotated = wrap(shipped).replace(
+      JSON.stringify(shipped[0]),
+      `// nota dell'amministratore sul primo percorso\n        ${JSON.stringify(shipped[0])}`
+    );
+    const dir = makeSandbox({ 'pluginConfig.json5': annotated });
+    await migrate(ctxFor(dir, recordingLogger()));
+    const after = fs.readFileSync(path.join(dir, 'pluginConfig.json5'), 'utf8');
+    expect(after).toContain("nota dell'amministratore sul primo percorso");
+    expect(read(loadJson5(path.join(dir, 'pluginConfig.json5')))).toEqual(expected);
   });
 
   test('NON tocca un valore che l\'amministratore ha aggiunto', async () => {

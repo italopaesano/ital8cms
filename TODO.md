@@ -1117,11 +1117,18 @@ gemello più permissivo.
       dentro gli array per indice, oggi fuori perimetro. **`removeJson5Key` è il
       prerequisito**, non il contrario: la ricorsione ha bisogno di « rimuovi »
       per le chiavi che il nuovo valore non ha più.
-- [ ] **Fase 3 — specifiche e documentazione.** Riscrivere lo *Scope* di
-      `editJson5`; correggere la **sovra-affermazione della Fase 5 di path-zones**
-      (i `.md` delle migrazioni di `rateLimiter` e `seo` dicono che `setJson5Key`
-      « preserva i commenti del file vivo » senza la riserva sugli array), e il
-      **test cieco** che la verifica mettendo i commenti solo *fuori* dall'array.
+- [x] ~~**Fase 3 — specifiche e documentazione.**~~ **Fatta il 2026-11-01.**
+      Riscritto l'header di `editJson5` (lo *Scope* citava la perdita dei commenti
+      come **limite**: sostituito, non annotato); `CLAUDE.md` aggiornato, con la
+      riga sulle migrazioni che ora conosce **cinque** operazioni invece di due.
+      **La sovra-affermazione della Fase 5 non andava corretta: la Fase 2 l'ha
+      resa vera.** `editJson5` ricorre per indice a lunghezza invariata, e quelle
+      migrazioni usano `declared.map(...)`, che per costruzione non cambia la
+      lunghezza — quindi l'affermazione è vera senza riserve *per quelle
+      migrazioni*, e il perché è scritto dove serve. Verificato: 5 commenti prima,
+      5 dopo, i tre dentro l'array compresi. Il **test cieco** è stato sostituito
+      con uno che mette i commenti *dentro* l'array: spegnendo la ricorsione per
+      indice fallisce (2 fallimenti, uno per plugin).
 - [ ] **Fase 4 — `from-v3-to-v4.js` riscritta** sopra `removeJson5Key`, più il
       confronto del corpo (difetto 2), la diagnostica non più silenziosa
       (difetto 3) e quella che non afferma cause non verificate (difetto 5).
