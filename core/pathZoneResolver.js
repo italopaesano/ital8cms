@@ -165,8 +165,11 @@ function normalizePrefix(raw) {
 
 /**
  * Confronto per SEGMENTI, non per stringa: `/administrator` NON sta sotto `/admin`.
- * Replica esatta di `pathIsUnderSegment` in `core/priorityMiddlewares/runtimeGate.js`,
- * così la Fase 6 può consolidare i due senza cambiare comportamento.
+ * FONTE UNICA dal v3.38.0 (Fase 6 di path-zones): era una replica esatta di quella
+ * in `core/priorityMiddlewares/runtimeGate.js`, tenuta tale in attesa che la
+ * direzione di dipendenza diventasse quella giusta — `runtimeGate` che usa la
+ * mappa, e non il contrario. Adesso lo è, quindi la copia è sparita e il gate
+ * importa questa.
  */
 function pathIsUnderSegment(candidate, prefix) {
   return candidate === prefix || candidate.startsWith(`${prefix}/`);
@@ -805,6 +808,7 @@ function resolveRuleset(rules, zoneMap) {
 }
 
 module.exports = {
+  pathIsUnderSegment,
   resolvePathZones,
   resolveRuleset,
   resolvePattern,

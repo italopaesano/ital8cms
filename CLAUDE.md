@@ -1193,7 +1193,7 @@ elenco da mantenere:
 | `access.requiresAuth: true` | rotta autenticata | route-wrap di `pluginSys` |
 | `access.isAuthEntryPoint: true` | rotta **pubblica** che appartiene comunque alla superficie riservata (login, logout, sonde) | route-wrap di `pluginSys` |
 | regola di `accessControl.json5` con `requiresAuth`/`isAuthEntryPoint` | pagina riservata | middleware di `adminAccessControl` |
-| prefissi `adminPrefix` / `adminThemeResourcesPrefix` + indice dei path riservati | pannello, risorse tema admin, e il **405** di `allowedMethods()` | `createReservedGate` |
+| zone con `baseline.requiresAuth: true` nella **mappa dei percorsi** + indice dei path riservati | pannello, risorse tema admin, `viewsPrefix`, e il **405** di `allowedMethods()` | `createReservedGate` |
 
 Un plugin nuovo eredita il comportamento **senza dichiarare nulla**: `access` è già
 obbligatorio. Il marcatore `isAuthEntryPoint` serve **solo** alle rotte/pagine
@@ -1206,7 +1206,12 @@ Con anche `public stop` le esenzioni del maintenance gate sono **sospese** → 5
 uniforme. Nei template: `passData.reservedClosed`.
 
 Modulo: `core/priorityMiddlewares/runtimeGate.js` (ospita entrambi i gate a runtime:
-il maintenance **esenta** i due prefissi admin, il reserved li **prende di mira**).
+il maintenance **esenta** i due prefissi admin, il reserved **prende di mira** ogni zona
+che dichiara `requiresAuth`). Dalla v3.38.0 il perimetro del reserved è **derivato** da
+`core/pathZoneResolver.js` invece di essere un elenco di prefissi: una zona nuova lo
+eredita senza dichiarare nulla, e `viewsPrefix` — che dichiarava `requiresAuth` ma non
+era nell'elenco — è entrato nel perimetro, dove perdeva un **302 verso il login** invece
+del 404.
 
 ### Creare plugin / temi (usa le skill di scaffolding)
 

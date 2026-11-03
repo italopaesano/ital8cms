@@ -442,7 +442,7 @@ perimetro ad aver prodotto A1.
 | **3 — Invarianti + box `[ACCESS]`** | ✅ **FATTA (2026-10-31).** `core/accessInvariantCheck.js`: sonde invocate dentro `loadRules()`; fatale al boot, rifiuto a runtime (D7); test che presidia la presenza di `adminAccessControl` in `essentialPlugins`. |
 | **4 — Segnaposti nei `.default` + migrazione** | ✅ **FATTA (2026-10-31).** 10 regole dichiarate → 6 (le tre forme pulite sono ora **derivate**); `migrations/` con lo step v3→v4 (script testuale, idempotente, fail-soft) e bump del descrittore a `4`; stanza canonica D8 + presidio. Migrazione applicata con la CLI reale e verificata con `adminPrefix: "backoffice"`. |
 | **5 — Adozione negli altri consumatori** | ✅ **FATTA (2026-10-31).** `sentinel`, `rateLimiter`, `seo` convertiti; `resolvePatternList` nel core; tre migrazioni (due basate su oggetto). Accertato che i path vivono in **due spazi** (logico per chi confronta, servito per chi emette) e corretti i due outlier. `csrfProtection`, `urlRedirect` e `botDetector` non hanno letterali di zona nei config: fuori perimetro. |
-| **6 — Consolidamento `runtimeGate`** | Il `reservedGate` deriva il perimetro dalla mappa invece di ricalcolarlo. |
+| **6 — Consolidamento `runtimeGate`** | ✅ **FATTA (2026-11-03).** `isReservedPrefixPath` interroga la mappa (`zoneForPath` + `baseline.requiresAuth`) invece dei due prefissi scritti a mano; `pathIsUnderSegment` ha una **fonte unica** in `pathZoneResolver` e la copia nel gate è sparita. 🐞 Il perimetro derivato ha incluso `views`, che dichiarava `requiresAuth` ma non era nell'elenco: con `reserved stop` perdeva un **302 verso la pagina di login** invece del 404 — misurato su istanza reale, non latente. |
 
 **Corsia trasversale (in ogni fase, non alla fine):**
 
@@ -465,7 +465,7 @@ perimetro ad aver prodotto A1.
 | 3 — Invarianti + box `[ACCESS]` | ✅ **implementata e revisionata ×2** (2026-10-31) — +72 test |
 | 4 — Segnaposti nei `.default` + migrazione | ✅ **implementata** (2026-10-31) — +20 test, 1 adeguato |
 | 5 — Adozione negli altri consumatori | ✅ **implementata** (2026-10-31) — +27 test, 2 adeguati |
-| 6 — Consolidamento `runtimeGate` | ⬜ da fare |
+| 6 — Consolidamento `runtimeGate` | ✅ **implementata** (2026-11-03) — +6 test netti (4 riscritti sulla firma nuova, 1 presidia la fuga su `views`) |
 
 > ⚠️ **A1 e A3 sono chiusi da qui, non dalla Fase 4.** Le regole nei `.default`
 > sono ancora letterali, e il pannello è già protetto a qualunque `adminPrefix`
@@ -1045,11 +1045,13 @@ sostituito **verbatim**, quindi un prefisso che contenesse metacaratteri regex
 (`adminPrefix: "a.b"`) allargherebbe la regex. Non è un fail-open — una regex più
 larga su una regola `requiresAuth` protegge *più* URL, non meno — ma va saputo.
 
-**Il confronto per segmenti è replicato, non condiviso:** `pathIsUnderSegment` è
-copiata da `core/priorityMiddlewares/runtimeGate.js:228` invece di essere importata,
-perché la direzione di dipendenza corretta è l'opposta (sarà `runtimeGate` a usare la
-mappa, in Fase 6). La replica è esatta, così il consolidamento non cambierà
-comportamento.
+**Il confronto per segmenti era replicato, ora è condiviso (Fase 6, v3.38.0):**
+`pathIsUnderSegment` era copiata da `core/priorityMiddlewares/runtimeGate.js` invece
+di essere importata, perché la direzione di dipendenza corretta era l'opposta —
+`runtimeGate` che usa la mappa, e non il contrario. Adesso lo è: questo modulo la
+**esporta**, il gate la importa, e la copia è sparita. La replica era esatta, quindi il
+consolidamento non ha cambiato comportamento: l'unico delta è stato l'ingresso di
+`views` nel perimetro, verificato caso per caso su cinque configurazioni.
 
 ## Migrazione
 

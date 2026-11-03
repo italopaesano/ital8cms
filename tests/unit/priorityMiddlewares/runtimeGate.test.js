@@ -342,6 +342,7 @@ describe('createMaintenanceGate', () => {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 const { createReservedGate, isReservedPrefixPath } = require('../../../core/priorityMiddlewares/runtimeGate');
+const { resolvePathZones } = require('../../../core/pathZoneResolver');
 
 // Contesto Koa minimo: al gate servono path, status, type, body e set().
 function fakeCtx(reqPath) {
@@ -352,29 +353,82 @@ function fakeCtx(reqPath) {
   };
 }
 
-describe('isReservedPrefixPath', () => {
-  // Specchio esatto di isExemptPath: il maintenance gate ESENTA questi due
-  // prefissi, il reserved gate li PRENDE DI MIRA.
-  test('targets the admin panel prefix', () => {
-    expect(isReservedPrefixPath('/admin', 'admin', 'admin-theme-resources', '')).toBe(true);
-    expect(isReservedPrefixPath('/admin/usersManagment/index.ejs', 'admin', 'admin-theme-resources', '')).toBe(true);
+describe('isReservedPrefixPath — il perimetro è DERIVATO dalla mappa delle zone', () => {
+  // Dalla v3.38.0 (Fase 6 di path-zones) la firma prende le `zones` invece di due
+  // prefissi scritti a mano: il perimetro è l'insieme delle zone che dichiarano
+  // `requiresAuth` nel proprio baseline, non un elenco da mantenere qui.
+  const zonesFor = (conf) => resolvePathZones(conf).zones;
+
+  // Specchio di isExemptPath: il maintenance gate ESENTA i due prefissi admin,
+  // il reserved gate PRENDE DI MIRA tutte le zone che chiedono autenticazione.
+  test('prende di mira il pannello admin', () => {
+    const zones = zonesFor({});
+    expect(isReservedPrefixPath('/admin', zones, '')).toBe(true);
+    expect(isReservedPrefixPath('/admin/usersManagment/index.ejs', zones, '')).toBe(true);
   });
 
   // Nessuna regola di accessControl.json5 copre le risorse del tema admin:
-  // senza questo caso resterebbero servite a chiunque, rivelando il pannello.
-  test('targets the admin theme resources prefix', () => {
-    expect(isReservedPrefixPath('/admin-theme-resources/css/theme.css', 'admin', 'admin-theme-resources', '')).toBe(true);
+  // senza il loro baseline resterebbero servite a chiunque, rivelando il pannello.
+  test('prende di mira le risorse del tema admin', () => {
+    const zones = zonesFor({});
+    expect(isReservedPrefixPath('/admin-theme-resources/css/theme.css', zones, '')).toBe(true);
   });
 
-  test('leaves the public site alone', () => {
-    expect(isReservedPrefixPath('/', 'admin', 'admin-theme-resources', '')).toBe(false);
-    expect(isReservedPrefixPath('/chi-siamo.ejs', 'admin', 'admin-theme-resources', '')).toBe(false);
-    expect(isReservedPrefixPath('/public-theme-resources/css/main.css', 'admin', 'admin-theme-resources', '')).toBe(false);
+  test('🆕 prende di mira anche la zona `views`, che l elenco a mano NON copriva', () => {
+    // La zona `views` dichiara `requiresAuth: true` nel baseline, ma i due
+    // prefissi scritti a mano erano solo `adminPrefix` e
+    // `adminThemeResourcesPrefix`: una divergenza latente — niente è servito sotto
+    // `/views` oggi — che nessuno avrebbe notato se qualcosa ci fosse finito.
+    // Derivando il perimetro, una zona nuova lo eredita senza dichiarare nulla.
+    const zones = zonesFor({});
+    expect(isReservedPrefixPath('/views', zones, '')).toBe(true);
+    expect(isReservedPrefixPath('/views/qualcosa.ejs', zones, '')).toBe(true);
   });
 
-  test('honours custom prefixes and globalPrefix', () => {
-    expect(isReservedPrefixPath('/myapp/backoffice/x', 'backoffice', 'admin-theme-resources', '/myapp')).toBe(true);
-    expect(isReservedPrefixPath('/backoffice/x', 'backoffice', 'admin-theme-resources', '/myapp')).toBe(false);
+  test('lascia in pace il sito pubblico', () => {
+    const zones = zonesFor({});
+    expect(isReservedPrefixPath('/', zones, '')).toBe(false);
+    expect(isReservedPrefixPath('/chi-siamo.ejs', zones, '')).toBe(false);
+    expect(isReservedPrefixPath('/public-theme-resources/css/main.css', zones, '')).toBe(false);
+  });
+
+  test('`api` NON è riservata per prefisso: il suo baseline è null', () => {
+    // Sotto `apiPrefix` convivono rotte pubbliche e protette, quindi la copertura
+    // viene dall'indice dei path riservati più il route-wrap — non da un prefisso
+    // cieco. Se questo diventasse `true`, `reserved stop` spegnerebbe anche il
+    // login, che è un `isAuthEntryPoint` pubblico per necessità.
+    const zones = zonesFor({});
+    expect(isReservedPrefixPath('/api/adminUsers/login', zones, '')).toBe(false);
+  });
+
+  test('il confronto è per SEGMENTO: `/admin-guide.ejs` resta pubblico', () => {
+    const zones = zonesFor({});
+    expect(isReservedPrefixPath('/admin-guide.ejs', zones, '')).toBe(false);
+  });
+
+  test('onora un adminPrefix personalizzato, e solo quello', () => {
+    const zones = zonesFor({ adminPrefix: 'backoffice' });
+    expect(isReservedPrefixPath('/backoffice/x', zones, '')).toBe(true);
+    expect(isReservedPrefixPath('/admin/x', zones, '')).toBe(false);  // non è più una zona
+  });
+
+  test('onora globalPrefix togliendolo, perché chi COMPARA lo toglie', () => {
+    const zones = zonesFor({ adminPrefix: 'backoffice', globalPrefix: '/myapp' });
+    expect(isReservedPrefixPath('/myapp/backoffice/x', zones, '/myapp')).toBe(true);
+    expect(isReservedPrefixPath('/backoffice/x', zones, '/myapp')).toBe(false);
+  });
+
+  test('🐞 un path FUORI dal mount point non è in nessuna zona', () => {
+    // Trovato confrontando il perimetro derivato col vecchio caso per caso, non
+    // leggendo il codice: senza il ritorno anticipato, su un'istanza montata
+    // sotto `/mysite` un `/admin/x` veniva letto come se fosse `/admin/x`
+    // LOGICO — quindi riservato — mentre l'elenco a mano lo lasciava libero.
+    // Un path che non sta sotto `globalPrefix` non ha controparte logica.
+    const zones = zonesFor({ globalPrefix: '/mysite' });
+    expect(isReservedPrefixPath('/admin/x', zones, '/mysite')).toBe(false);
+    expect(isReservedPrefixPath('/views/x', zones, '/mysite')).toBe(false);
+    // e il confronto del mount point è per segmento: `/mysiteother` non ci sta sotto
+    expect(isReservedPrefixPath('/mysiteother/admin/x', zones, '/mysite')).toBe(false);
   });
 });
 
@@ -389,6 +443,34 @@ describe('createReservedGate', () => {
     expect(nextCalled).toBe(true);
     expect(ctx.status).toBe(200);
     expect(gate.isClosed()).toBe(false);
+  });
+
+  test('🐞 stopped: la zona `views` viene FERMATA dal gate, non lasciata al redirect', async () => {
+    // REGRESSIONE, misurata su un'istanza reale. Prima della Fase 6 il perimetro
+    // era un elenco a mano di due prefissi, e `/views` non ci era dentro: con
+    // `reserved stop` la richiesta passava oltre il gate e finiva al middleware di
+    // `adminAccessControl`, che risponde
+    //
+    //     302 → http://…/pluginPages/adminUsers/login.ejs
+    //
+    // Cioè rivelava che una superficie riservata esiste E l'URL della sua pagina
+    // di login — contro la policy del gate, che è « sempre 404, mai 403, mai
+    // redirect » proprio perché una risposta diversa rende la superficie
+    // ENUMERABILE. Non era latente: `/views/` risponde 302 anche a superficie
+    // aperta, perché il baseline della zona è applicato da `accessManager`.
+    //
+    // Ora il gate la ferma prima, come qualunque altra zona che chiede auth.
+    const gate = createReservedGate({ ital8Conf: conf, initialState: 'stopped' });
+    const ctx = fakeCtx('/views/qualcosa.ejs');
+    let nextCalled = false;
+    await gate.middleware(ctx, async () => { nextCalled = true; });
+
+    // `next()` NON viene chiamato: è la parte che conta, perché è ciò che impedisce
+    // al middleware di access control di emettere il redirect.
+    expect(nextCalled).toBe(false);
+    expect(ctx.status).toBe(404);
+    expect(ctx.headers.Location).toBeUndefined();
+    expect(ctx.body).toContain('The requested URL was not found on this server.');
   });
 
   test('stopped: answers 404 on the admin prefix, in the site 404 shape', async () => {

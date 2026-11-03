@@ -585,6 +585,22 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       plugin attivo dei test minimi richiesti (un test per metodo esportato, uno per
       rotta incluso `access`, validazione dei JSON5, lifecycle hooks). Default
       warning, `testingStrictMode: true` per promuoverli a fatali.
+- [ ] **🐞 La rimozione di `globalPrefix` è scritta a mano in TRE punti, e due usano
+      `startsWith` nudo.** *(Emerso chiudendo la Fase 6 di path-zones; il maintainer ha
+      scelto di tenerla inline nel gate e registrare il consolidamento.)*
+      `plugins/sentinel/lib/ruleMatcher.js:80`, `plugins/rateLimiter/main.js:294` e
+      `core/priorityMiddlewares/runtimeGate.js` fanno tutti la stessa cosa: togliere
+      `globalPrefix` dal path prima del confronto, perché **chi compara lo toglie**
+      (i due spazi di path, D-path-zones).
+      **Ma i primi due lo fanno con `startsWith(globalPrefix)` nudo**, cioè senza il
+      separatore: con `globalPrefix: "/my"` un path `/mysite/x` viene tagliato in
+      `site/x`. È la stessa famiglia di **B5** in `REVIEW.md` (prefisso senza
+      separatore). L'effetto non è un falso positivo ma una regola che **manca il
+      proprio bersaglio** — silenziosamente. La versione nel gate usa
+      `pathIsUnderSegment` e non ha il difetto.
+      Da consolidare in un'unica funzione condivisa (nome da proporre), così le tre
+      copie non possono più divergere — è il pattern che la sezione *F* di `REVIEW.md`
+      indica come il filo comune di quattro difetti su ventuno.
 - [ ] **`droppedComments` arriva al chiamante, ma nessun chiamante lo MOSTRA.**
       *(Metà rimanente del rilievo 5 della revisione del codice, dichiarata invece di
       lasciata implicita.)* Dalla v3.37.0 `editJson5` e `setJson5Key` restituiscono
