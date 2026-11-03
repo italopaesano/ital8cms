@@ -315,3 +315,22 @@ describe('postcondizione: cambia SOLO il nome della chiave', () => {
     expect(Object.keys(parse(file))).toEqual(['p', 'Q', 'r']);
   });
 });
+
+describe("attribuzione dei messaggi d'errore", () => {
+  test('un guasto dello SCANNER non viene attribuito a `editJson5`', async () => {
+    // 🐞 REGRESSIONE. I messaggi di `json5Scan` erano prefissati `editJson5:`,
+    // eredità dell'estrazione: quando la scansione viveva in quel file era
+    // esatto. Con quattro consumatori, un guasto di QUESTA operazione mandava a
+    // cercare in un'operazione che il chiamante non aveva nemmeno invocato —
+    // stessa classe del difetto 5 chiuso in Fase 4.
+    const file = sandbox('{\n  "a": 1,\n  "a": 2,\n}\n');   // path ambiguo
+    const error = await renameJson5Key(file, 'a', 'z').catch((e) => e);
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).not.toContain('editJson5');
+    expect(error.message).toContain('json5Scan');
+    // e ciò che rende il messaggio azionabile c'è: il file e il path
+    expect(error.message).toContain('"a"');
+    expect(error.message).toContain(file);
+  });
+});

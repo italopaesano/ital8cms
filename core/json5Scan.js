@@ -46,6 +46,20 @@
  * `locatePath` è la porta d'ingresso: la span `keyStart … valueEnd` è ciò che
  * `editJson5` sostituisce e ciò che `removeJson5Key` toglie.
  *
+ * ─── I MESSAGGI D'ERRORE NOMINANO QUESTO MODULO ───────────────────────────────
+ * Fino alla v3.37.0 erano prefissati `editJson5:`, eredità dell'estrazione: quando
+ * la scansione viveva dentro quel file era esatto. Oggi i consumatori sono QUATTRO
+ * (`editJson5`, `setJson5Key`, `removeJson5Key`, `renameJson5Key`), e un guasto di
+ * una rimozione attribuiva la causa a un'operazione che il chiamante non aveva
+ * nemmeno invocato — la stessa classe del difetto 5 chiuso in Fase 4, una
+ * diagnostica che indirizza verso una causa che non ha verificato.
+ *
+ * I messaggi nominano `json5Scan` e NON l'operazione chiamante, di proposito: per
+ * dirla servirebbe passare un'etichetta attraverso `locatePath` e
+ * `findKeyOccurrencesInRegion`, e ciò che rende il messaggio azionabile — il file e
+ * il path — c'è già; chi l'ha chiamata la dice lo stack. Se un giorno quei messaggi
+ * finiscono in un log dove lo stack non arriva, l'etichetta diventa necessaria.
+ *
  * ─── GARANZIE ─────────────────────────────────────────────────────────────────
  *   - le graffe e le parentesi dentro le STRINGHE non contano (`"regex:\\d{1,3}"`
  *     non altera la profondità): è `buildCodeMask` a renderlo vero;
@@ -359,7 +373,7 @@ function findKeyOccurrencesInRegion(source, mask, depth, fieldName, regionStart,
     const valueEnd = scanValue(source, mask, valueStart);
     if (valueEnd === -1 || valueEnd > regionEnd) {
       throw new Error(
-        `editJson5: field "${fieldName}" found at depth ${expectedDepth} but ` +
+        `json5Scan: field "${fieldName}" found at depth ${expectedDepth} but ` +
         `its value could not be parsed (malformed or unsupported value form)`
       );
     }
@@ -388,14 +402,14 @@ function locatePath(source, mask, depth, pathSegments, filePath) {
     if (occs.length === 0) {
       const pathDesc = pathSegments.slice(0, step + 1).map(s => `"${s}"`).join(' → ');
       throw new Error(
-        `editJson5: path ${pathDesc} not found in "${filePath}" ` +
+        `json5Scan: path ${pathDesc} not found in "${filePath}" ` +
         `(parsed but locator failed — likely an unsupported JSON5 feature)`
       );
     }
     if (occs.length > 1) {
       const pathDesc = pathSegments.slice(0, step + 1).map(s => `"${s}"`).join(' → ');
       throw new Error(
-        `editJson5: path ${pathDesc} appears ${occs.length} times in "${filePath}" ` +
+        `json5Scan: path ${pathDesc} appears ${occs.length} times in "${filePath}" ` +
         `(duplicate keys at the same depth). Refusing to edit ambiguously.`
       );
     }
@@ -410,7 +424,7 @@ function locatePath(source, mask, depth, pathSegments, filePath) {
     if (valChar !== '{') {
       const pathDesc = pathSegments.slice(0, step + 1).map(s => `"${s}"`).join(' → ');
       throw new Error(
-        `editJson5: cannot descend into ${pathDesc} in "${filePath}" — ` +
+        `json5Scan: cannot descend into ${pathDesc} in "${filePath}" — ` +
         `value is not a plain object (arrays and scalars are not navigable)`
       );
     }
