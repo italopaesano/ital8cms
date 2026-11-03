@@ -541,10 +541,41 @@ function extendDownwards(source, mask, valueEnd) {
  * @returns {{from: number, to: number}} indici per `source.slice(0, from) + source.slice(to)`
  */
 function findRemovalSpan(source, mask, occ) {
-  return {
-    from: extendUpwards(source, occ.keyStart),
-    to: extendDownwards(source, mask, occ.valueEnd),
-  };
+  const from = extendUpwards(source, occ.keyStart);
+  const to = extendDownwards(source, mask, occ.valueEnd);
+
+  // ── Postcondizione dell'ANALISI: la span non taglia un commento a metà ─────
+  //
+  // Con input corretti non può succedere: `from` è un inizio di riga o l'inizio
+  // di una chiave, `to` parte dalla fine di un valore, e tutti e tre sono CODICE.
+  // È quindi una rete contro un difetto di `extendUpwards`/`extendDownwards` —
+  // il genere di difetto che questo strato ha già avuto due volte.
+  //
+  // PERCHE SERVE, misurato. Dei tre modi di tagliare un commento, DUE sono già
+  // colti dai controlli che i consumatori fanno dopo:
+  //   • il `//` che inghiotte il codice che segue → la STRUTTURA cambia;
+  //   • un blocco `/* */` spezzato                → il file non è più PARSABILE.
+  // Il terzo è silenzioso, ed è questo: una span interamente dentro il TESTO di
+  // un `//`, con il marcatore e il fine riga che sopravvivono. Il file resta
+  // parsabile, la struttura identica, e il commento esce mutilato senza che
+  // niente lo segnali.
+  //
+  // `mask[i] === 2` è « dentro un commento ». Due posizioni consecutive a 2 sono
+  // sempre lo STESSO commento: fra due `//` c'è un fine riga, che è codice.
+  if (from > 0 && mask[from] === 2 && mask[from - 1] === 2) {
+    throw new Error(
+      'json5Scan: la span da rimuovere comincia DENTRO un commento '
+      + `(offset ${from}) — lo taglierebbe a metà. Niente è stato scritto`
+    );
+  }
+  if (to > 0 && to < source.length && mask[to] === 2 && mask[to - 1] === 2) {
+    throw new Error(
+      'json5Scan: la span da rimuovere finisce DENTRO un commento '
+      + `(offset ${to}) — lo taglierebbe a metà. Niente è stato scritto`
+    );
+  }
+
+  return { from, to };
 }
 
 // ── Punto d'inserimento di una chiave nuova ─────────────────────────────────

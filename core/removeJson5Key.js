@@ -44,8 +44,18 @@
  *     di fallimento giusta;
  *   - un path AMBIGUO fa lanciare (eredita la severità di `locatePath`):
  *     cancellare la chiave sbagliata è peggio che non cancellare;
- *   - la postcondizione verifica che la chiave sia sparita E che TUTTO IL RESTO
- *     del documento sia identico. Se non lo è, non si scrive.
+ *   - la postcondizione verifica, PRIMA di scrivere, che la chiave sia sparita e
+ *     che la STRUTTURA del resto sia identica. Dice « struttura » e non « tutto
+ *     il resto del documento », come affermava fino alla v3.37.0: il confronto
+ *     passa da `JSON.stringify` degli oggetti deserializzati, e i commenti non
+ *     sono valori. In un modulo il cui scopo è preservarli, quella frase faceva
+ *     credere coperto ciò che non lo era.
+ *     Il taglio di un commento è presidiato a monte, da `findRemovalSpan`, che
+ *     rifiuta una span che cominci o finisca DENTRO un commento. Serve perché
+ *     dei tre modi di tagliarne uno, due sono già colti qui (il `//` che
+ *     inghiotte il codice che segue cambia la struttura; un blocco `/* … *\/`
+ *     spezzato rende il file non parsabile) e il terzo — una span dentro il
+ *     testo di un `//`, coi delimitatori intatti — passerebbe in SILENZIO.
  *
  * ─── CHIAVE ASSENTE: NO-OP, NON ERRORE ────────────────────────────────────────
  * A differenza di `editJson5`, che lancia su un path inesistente. Le migrazioni

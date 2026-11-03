@@ -394,3 +394,81 @@ describe("attribuzione dei messaggi d'errore", () => {
     expect(error.message).toContain(file);
   });
 });
+
+describe('la span non taglia un commento a metà', () => {
+  // Si chiama `findRemovalSpan` DIRETTAMENTE perché con input corretti la
+  // condizione non è producibile: `from` è un inizio di riga o di chiave e `to`
+  // parte dalla fine di un valore, tutti e tre CODICE. La guardia è una rete
+  // contro un difetto di `extendUpwards`/`extendDownwards`, e un test che non
+  // potesse raggiungerla non presidierebbe niente.
+  const { buildCodeMask, findRemovalSpan } = require('../../../core/json5Scan');
+
+  const spanOf = (source, occ) => findRemovalSpan(source, buildCodeMask(source), occ);
+
+  test('rifiuta una span che COMINCIA dentro un commento', () => {
+    const source = '{\n  // nota lunga di a da non perdere\n  "a": 1,\n}\n';
+    const keyStart = source.indexOf('lunga');             // in mezzo al commento
+    expect(() => spanOf(source, { keyStart, valueEnd: source.indexOf('1,') + 1 }))
+      .toThrow(/comincia DENTRO un commento/);
+  });
+
+  test('rifiuta una span che FINISCE dentro un commento', () => {
+    const source = '{\n  "a": 1,\n  // nota lunga di b da non perdere\n  "b": 2,\n}\n';
+    // valueEnd cade dentro il commento di b: `extendDownwards` partirebbe da lì
+    const valueEnd = source.indexOf('lunga');
+    expect(() => spanOf(source, { keyStart: source.indexOf('"a"'), valueEnd }))
+      .toThrow(/DENTRO un commento/);
+  });
+
+  test('🐞 il caso SILENZIOSO è proprio questo, e i controlli a valle non lo prendono', () => {
+    // Misurato: dei tre modi di tagliare un commento, due sono già colti dalla
+    // postcondizione di `removeJson5Key` — il `//` che inghiotte il codice che
+    // segue cambia la STRUTTURA, un blocco `/* */` spezzato rende il file non
+    // PARSABILE. Questo terzo no: il marcatore e il fine riga sopravvivono,
+    // quindi il file resta parsabile e la struttura identica, e il commento esce
+    // mutilato in silenzio. È la ragione per cui la guardia esiste a monte.
+    const json5 = require('json5');
+    const source = '{\n  // nota lunga di a da non perdere\n  "a": 1,\n}\n';
+    const from = source.indexOf('lunga');
+    const to = source.indexOf(' da non');
+    const mutilato = source.slice(0, from) + source.slice(to);
+
+    // i due controlli a valle sono SODDISFATTI…
+    expect(() => json5.parse(mutilato)).not.toThrow();
+    expect(JSON.stringify(json5.parse(mutilato))).toBe(JSON.stringify(json5.parse(source)));
+    // …e il commento è comunque rovinato
+    expect(mutilato).toContain('//');
+    expect(mutilato).not.toContain('nota lunga di a da non perdere');
+  });
+
+  test('un commento a COLONNA 0 non è un taglio: la span comincia sul suo `/`', async () => {
+    // Trovato da una MUTAZIONE: una guardia che si fermasse a `mask[from] === 2`
+    // rifiuterebbe questo caso. Senza indentazione `extendUpwards` restituisce
+    // l'inizio della riga, che è il `/` stesso del commento — quindi `mask[from]`
+    // è 2 pur essendo l'INIZIO del commento e non il suo interno. La distinzione
+    // la fa `mask[from - 1]`: prima c'è il fine riga, che è codice.
+    //
+    // Non è un cavillo: significa che la guardia distingue « preso dall'inizio »
+    // da « tagliato nel mezzo », che è precisamente il suo compito.
+    const file = sandbox('{\n"a": 1,\n// nota di b senza indentazione\n"b": 2,\n}\n');
+    const out = await removeJson5Key(file, 'b');
+
+    expect(out.changed).toBe(true);
+    const after = read(file);
+    expect(after).not.toContain('// nota di b');     // se ne è andato con la chiave
+    expect(json5.parse(after)).toEqual({ a: 1 });
+  });
+
+  test('una span LEGITTIMA che porta via un commento intero non viene rifiutata', () => {
+    // Il verso opposto: la policy D2 vuole che il commento della chiave se ne
+    // vada CON lei. La guardia deve distinguere « preso tutto » da « tagliato ».
+    const source = '{\n  "a": 1,\n  // nota di b\n  "b": 2,\n}\n';
+    const file = sandbox(source);
+    return removeJson5Key(file, 'b').then(() => {
+      const after = read(file);
+      expect(after).not.toContain('// nota di b');   // se ne è andato con la chiave
+      expect(after).toContain('"a": 1,');
+      expect(json5.parse(after)).toEqual({ a: 1 });
+    });
+  });
+});
