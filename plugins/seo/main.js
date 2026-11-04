@@ -22,6 +22,7 @@
 
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
+const { resolvePathZones } = require('../../core/pathZoneResolver');
 const PatternMatcher = require('../../core/patternMatcher');
 const { generateMetaTags } = require('./lib/metaTagGenerator');
 const { generateStructuredData } = require('./lib/structuredData');
@@ -245,7 +246,12 @@ module.exports = {
 
     // ── ROBOTS.TXT ──
     if (this.config.enableRobotsTxt) {
-      const robotsTxt = generateRobotsTxt(this.config);
+      // zoneMap + globalPrefix: i percorsi di robots.txt sono URL emessi verso
+      // l'esterno, quindi vanno nello spazio dei path SERVITI (vedi toServedPaths).
+      const robotsTxt = generateRobotsTxt(this.config, {
+        zoneMap: this.ital8Conf ? resolvePathZones(this.ital8Conf) : null,
+        globalPrefix: (this.ital8Conf && this.ital8Conf.globalPrefix) || '',
+      });
       const robotsPath = path.join(this.wwwAbsolutePath, 'robots.txt');
       report.robotsTxt = writeRobotsTxtIfChanged(robotsPath, robotsTxt);
       if (report.robotsTxt.changed) {

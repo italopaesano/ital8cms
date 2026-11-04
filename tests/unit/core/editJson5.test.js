@@ -817,3 +817,373 @@ describe('editJson5', () => {
   });
 
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sostituzione per chiave (Fase 2 di json5-key-operations)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Fino alla v3.32.0, sostituire un valore oggetto/array riscriveva il BLOCCO
+// intero, e con esso spariva ogni commento che ci stava dentro — compresi quelli
+// di chiavi il cui valore non cambiava. Non era un limite tecnico: le chiavi
+// danno identità, quindi si sa a chi appartiene ogni commento.
+//
+// Il primo test è il difetto MISURATO che ha aperto la fase. I successivi
+// coprono i rami in cui la conservazione NON è possibile, dove il contratto è
+// dichiararlo invece di tacerlo.
+//
+// → docs/decisions/json5-key-operations.it.md (D3, D5)
+describe('sostituzione per chiave: i commenti restano dove sono', () => {
+  test('cambiando UNA chiave, i commenti delle altre sopravvivono', async () => {
+    // Il difetto misurato: cambiando solo `retryAfter`, sparivano anche le
+    // spiegazioni di `status` e `maxHits`, i cui valori restavano identici.
+    const filePath = writeFile('cfg.json5', `{
+  "policy": {
+    // perché 429 e non 403: è un limite temporaneo
+    "status": 429,
+    "retryAfter": 60,   // secondi
+    // soglia concordata col cliente
+    "maxHits": 5,
+  },
+}
+`);
+    const out = await editJson5(filePath, 'policy', { status: 429, retryAfter: 120, maxHits: 5 });
+    const content = readFile(filePath);
+    expect(content).toContain('limite temporaneo');
+    expect(content).toContain('// secondi');          // sulla riga CAMBIATA
+    expect(content).toContain('soglia concordata col cliente');
+    expect(json5.parse(content).policy.retryAfter).toBe(120);
+    expect(out.droppedComments).toEqual([]);          // niente è stato ricostruito
+  });
+
+  test('la ricorsione scende su più livelli', async () => {
+    const filePath = writeFile('cfg.json5', `{
+  "a": {
+    // nota di a
+    "b": {
+      // nota di b
+      "c": {
+        // nota di c
+        "valore": 1,
+      },
+    },
+  },
+}
+`);
+    await editJson5(filePath, 'a', { b: { c: { valore: 2 } } });
+    const content = readFile(filePath);
+    expect(content).toContain('nota di a');
+    expect(content).toContain('nota di b');
+    expect(content).toContain('nota di c');
+    expect(json5.parse(content).a.b.c.valore).toBe(2);
+  });
+
+  test('ARRAY di pari lunghezza: ricorre per indice', async () => {
+    // È il caso delle migrazioni della Fase 5 di path-zones: tre letterali che
+    // diventano tre segnaposti. Il commento sopra l'elemento CAMBIATO resta.
+    const filePath = writeFile('cfg.json5', `{
+  "exemptPaths": [
+    // il pannello, per non auto-bloccarsi
+    "/admin/**",
+    // la mia area riservata
+    "/area/**",
+  ],
+}
+`);
+    const out = await editJson5(filePath, 'exemptPaths', ['{{admin}}/**', '/area/**']);
+    const content = readFile(filePath);
+    expect(content).toContain('il pannello, per non auto-bloccarsi');
+    expect(content).toContain('la mia area riservata');
+    expect(json5.parse(content).exemptPaths).toEqual(['{{admin}}/**', '/area/**']);
+    expect(out.droppedComments).toEqual([]);
+  });
+
+  test('ARRAY di OGGETTI: un elemento cambiato conserva i propri commenti', async () => {
+    // 🐞 REGRESSIONE. Fino alla v3.36.0 il ramo array ricorreva per indice ma
+    // RIFACEVA l'elemento cambiato come blocco: i commenti al suo interno
+    // morivano, e `droppedComments` restava VUOTO perché nessuno li raccoglieva.
+    // Misurato allora su questo stesso file: 2 commenti prima, 0 dopo, resoconto
+    // vuoto — cioè la perdita silenziosa che la sostituzione per chiave esiste
+    // per impedire, riprodotta un livello sotto, dentro un array, e peggiore
+    // perché autocertificata come innocua.
+    //
+    // Il commento di `window` è la parte che conta: il suo valore NON cambia,
+    // quindi è il caso « riscrive 60 in 60 e cancella il perché di quel 60 ».
+    const filePath = writeFile('cfg.json5', `{
+  "rules": [
+    {
+      // soglia concordata col cliente: non alzarla senza chiedere
+      "limit": 5,
+      // finestra in secondi
+      "window": 60,
+    },
+    {
+      "limit": 99,
+    },
+  ],
+}
+`);
+    const out = await editJson5(filePath, 'rules', [
+      { limit: 10, window: 60 },
+      { limit: 99 },
+    ]);
+    const content = readFile(filePath);
+    expect(content).toContain('soglia concordata col cliente');
+    expect(content).toContain('finestra in secondi');
+    expect(out.droppedComments).toEqual([]);
+    expect(json5.parse(content).rules).toEqual([{ limit: 10, window: 60 }, { limit: 99 }]);
+    // la formattazione della chiave NON toccata resta quella originale
+    expect(content).toContain('"window": 60,');
+  });
+
+  test('ARRAY di OGGETTI: ricorre anche in profondità dentro l elemento', async () => {
+    // La ricorsione dentro un elemento non si ferma al primo livello: un oggetto
+    // annidato dentro l'elemento è a sua volta percorso per chiave.
+    const filePath = writeFile('cfg.json5', `{
+  "rules": [
+    {
+      "name": "login",
+      "policy": {
+        // perché 429 e non 403: è un limite temporaneo
+        "status": 429,
+        // concordato col cliente
+        "retryAfter": 60,
+      },
+    },
+  ],
+}
+`);
+    const out = await editJson5(filePath, 'rules', [
+      { name: 'login', policy: { status: 429, retryAfter: 120 } },
+    ]);
+    const content = readFile(filePath);
+    expect(content).toContain('perché 429 e non 403');
+    expect(content).toContain('concordato col cliente');
+    expect(content).toContain('"status": 429,');   // intatta, non riscritta
+    expect(out.droppedComments).toEqual([]);
+    expect(json5.parse(content).rules[0].policy.retryAfter).toBe(120);
+  });
+
+  test('ARRAY di OGGETTI: ciò che NON è preservabile viene DICHIARATO col suo indice', async () => {
+    // L'altra metà del contratto: quando l'elemento cambia TIPO il blocco si rifa
+    // per forza, e allora i commenti perduti finiscono in `droppedComments` con
+    // il percorso che li situa — indice dell'elemento compreso, perché « un
+    // commento è andato perso » non è azionabile e « in rules.0 » sì.
+    const filePath = writeFile('cfg.json5', `{
+  "rules": [
+    {
+      // questa regola andava spiegata
+      "limit": 5,
+    },
+    {
+      "limit": 99,
+    },
+  ],
+}
+`);
+    const out = await editJson5(filePath, 'rules', ['soloUnaStringa', { limit: 99 }]);
+    expect(out.droppedComments).toEqual([
+      { path: ['rules', '0'], text: '// questa regola andava spiegata' },
+    ]);
+    expect(json5.parse(readFile(filePath)).rules[0]).toBe('soloUnaStringa');
+  });
+
+  test('ARRAY di SCALARI: nessun commento inventato da una stringa che contiene /**', async () => {
+    // 🐞 REGRESSIONE. La raccolta dei commenti perduti riconosce un commento
+    // guardando `mask`, che marca anche il CONTENUTO delle stringhe: su un
+    // elemento scalare come "/admin/**" vedeva `/**` e riportava un commento che
+    // non è mai esistito. Uno scalare non può aver ospitato commenti, quindi non
+    // si raccoglie affatto.
+    const filePath = writeFile('cfg.json5', `{
+  "exemptPaths": [
+    "/admin/**",
+    "/area/**",
+  ],
+}
+`);
+    const out = await editJson5(filePath, 'exemptPaths', ['{{admin}}/**', '/area/**']);
+    expect(out.droppedComments).toEqual([]);
+    expect(json5.parse(readFile(filePath)).exemptPaths).toEqual(['{{admin}}/**', '/area/**']);
+  });
+
+  test('🐞 droppedComments è presente ANCHE sul no-op, vuoto', async () => {
+    // REGRESSIONE. Il ritorno del no-op era `{ changed, oldValue, newValue }`
+    // senza `droppedComments`, che l'header dichiara sempre presente (« array di
+    // {path, text}, VUOTO quando nulla è stato ricostruito »). Chi leggeva
+    // `.length` prendeva un TypeError — e proprio nel caso innocuo: un
+    // salvataggio idempotente dalla GUI, con l'admin che preme Salva senza aver
+    // cambiato nulla.
+    const filePath = writeFile('cfg.json5', '{\n  // nota\n  "a": 1,\n}\n');
+
+    const out = await editJson5(filePath, 'a', 1);           // stesso valore
+    expect(out.changed).toBe(false);
+    expect(out.droppedComments).toEqual([]);
+    expect(() => out.droppedComments.length).not.toThrow();  // il caso che lanciava
+
+    // la forma di ritorno è la STESSA dei due rami, così chi la consuma non deve
+    // sapere quale ha girato
+    const changed = await editJson5(filePath, 'a', 2);
+    expect(Object.keys(out).sort()).toEqual(Object.keys(changed).sort());
+  });
+
+  test('🐞 droppedComments NON riporta il contenuto delle stringhe come commenti', async () => {
+    // REGRESSIONE. Il riconoscitore cercava `mask[i] === 1 && source[i] === '/'`,
+    // ma la mask marcava con 1 sia il corpo delle STRINGHE sia i commenti: una
+    // stringa che contiene `//` veniva riportata come commento perduto. Misurato
+    // su questo stesso file: la voce era
+    //   `"//example.com\",   // la base canonica"`
+    // cioè contenuto di stringa spacciato per commento, col commento VERO
+    // inglobato nella stessa voce. L'inventario che il modulo offre come
+    // garanzia era quindi sbagliato in entrambe le direzioni.
+    const filePath = writeFile('cfg.json5', `{
+  "seo": {
+    "canonicalBase": "https://example.com",   // la base canonica
+    "mode": "strict",
+  },
+}
+`);
+    const out = await editJson5(filePath, 'seo', 'ora una stringa');
+    expect(out.droppedComments).toEqual([
+      { path: ['seo'], text: '// la base canonica' },
+    ]);
+  });
+
+  test('🐞 una stringa che contiene /* non inghiotte i commenti veri', async () => {
+    // REGRESSIONE, forma GRAVE. Con `/*` dentro una stringa — plausibilissimo in
+    // `accessControl.json5`, dove vivono i pattern `regex:` — il riconoscitore
+    // cercava la chiusura `*/`, non la trovava, e clampava a fine span: i DUE
+    // commenti veri più il codice in mezzo diventavano UNA voce falsa. Misurato:
+    // 1 voce invece di 2, e nessuno dei due commenti leggibile nel resoconto.
+    const filePath = writeFile('cfg.json5', `{
+  "rule": {
+    "pattern": "regex:/*.php",
+    // questo commento spiega la soglia
+    "limit": 5,
+    // e questo la finestra
+    "window": 60,
+  },
+}
+`);
+    const out = await editJson5(filePath, 'rule', 'ora una stringa');
+    expect(out.droppedComments).toEqual([
+      { path: ['rule'], text: '// questo commento spiega la soglia' },
+      { path: ['rule'], text: '// e questo la finestra' },
+    ]);
+  });
+
+  test('un // dentro un commento di BLOCCO resta una voce sola', async () => {
+    // L'altro verso: distinguere stringa da commento non deve spezzare un
+    // commento di blocco che contiene a sua volta dei marcatori.
+    const filePath = writeFile('cfg.json5', `{
+  "rule": {
+    /* nota di blocco: vedi // il paragrafo 3 */
+    "limit": 5,
+  },
+}
+`);
+    const out = await editJson5(filePath, 'rule', 'stringa');
+    expect(out.droppedComments).toEqual([
+      { path: ['rule'], text: '/* nota di blocco: vedi // il paragrafo 3 */' },
+    ]);
+  });
+
+  test('la formattazione delle parti non toccate non è normalizzata', async () => {
+    const filePath = writeFile('cfg.json5', '{\n  "o": {\n    "a":    1,\n\t"b":\t2,\n  },\n}\n');
+    await editJson5(filePath, 'o', { a: 1, b: 9 });
+    const content = readFile(filePath);
+    expect(content).toContain('"a":    1,');   // spaziatura originale intatta
+  });
+
+  test('chiave AGGIUNTA: entra nell ordine del nuovo oggetto', async () => {
+    const filePath = writeFile('cfg.json5', '{\n  "cfg": {\n    // nota di x\n    "x": 1,\n  },\n}\n');
+    await editJson5(filePath, 'cfg', { x: 1, y: 2, z: 3 });
+    const content = readFile(filePath);
+    expect(content).toContain('nota di x');
+    expect(Object.keys(json5.parse(content).cfg)).toEqual(['x', 'y', 'z']);
+  });
+
+  test('chiave RIMOSSA: porta via il SUO commento e solo quello', async () => {
+    const filePath = writeFile('cfg.json5', `{
+  "cfg": {
+    // nota di x
+    "x": 1,
+    // nota di y
+    "y": 2,
+  },
+}
+`);
+    await editJson5(filePath, 'cfg', { x: 1 });
+    const content = readFile(filePath);
+    expect(content).toContain('nota di x');
+    expect(content).not.toContain('nota di y');
+    expect(json5.parse(content).cfg).toEqual({ x: 1 });
+  });
+
+  test('aggiunta e rimozione nello stesso passaggio', async () => {
+    const filePath = writeFile('cfg.json5', `{
+  "cfg": {
+    // nota di x
+    "x": 1,
+    // nota di y
+    "y": 2,
+  },
+}
+`);
+    await editJson5(filePath, 'cfg', { x: 1, z: 3 });
+    const content = readFile(filePath);
+    expect(content).toContain('nota di x');
+    expect(content).not.toContain('nota di y');
+    expect(json5.parse(content).cfg).toEqual({ x: 1, z: 3 });
+  });
+
+  test('blocco INLINE: la chiave nuova entra DENTRO, senza doppia virgola', async () => {
+    // Due difetti colti qui dalla postcondizione, non da una lettura del codice:
+    // su un blocco inline la « fine della riga di afterKey » cade oltre la `}`,
+    // quindi la chiave nuova finiva FUORI dall'oggetto; e fermarsi prima della
+    // virgola di afterKey produceva `"d": 4,,` perché needsComma guarda indietro.
+    const filePath = writeFile('cfg.json5', '{\n  "outer": {\n    "inner": { "a": 1, "b": 2 },\n    "next": 99,\n  },\n}\n');
+    await editJson5(filePath, ['outer', 'inner'], { c: 3, d: 4 });
+    const content = readFile(filePath);
+    expect(() => json5.parse(content)).not.toThrow();
+    expect(json5.parse(content).outer.inner).toEqual({ c: 3, d: 4 });
+    expect(json5.parse(content).outer.next).toBe(99);
+    expect(content).not.toContain(',,');
+  });
+});
+
+describe('sostituzione per chiave: ciò che NON si può conservare, si dichiara', () => {
+  test('ARRAY di lunghezza diversa: blocco rifatto, commenti dichiarati', async () => {
+    // Niente congetture: a lunghezza diversa non c'è corrispondenza fra gli
+    // elementi vecchi e i nuovi, quindi i commenti interni non sono ricollocabili.
+    const filePath = writeFile('cfg.json5', '{\n  "lista": [\n    // commento interno\n    1,\n    2,\n  ],\n}\n');
+    const out = await editJson5(filePath, 'lista', [1, 2, 3]);
+    expect(json5.parse(readFile(filePath)).lista).toEqual([1, 2, 3]);
+    expect(out.droppedComments).toEqual([{ path: ['lista'], text: '// commento interno' }]);
+  });
+
+  test('CAMBIO DI TIPO: i commenti interni non hanno a cosa attaccarsi', async () => {
+    const filePath = writeFile('cfg.json5', '{\n  "a": {\n    // commento interno\n    "x": 1,\n  },\n}\n');
+    const out = await editJson5(filePath, 'a', 'ora una stringa');
+    expect(json5.parse(readFile(filePath)).a).toBe('ora una stringa');
+    expect(out.droppedComments).toHaveLength(1);
+    expect(out.droppedComments[0].text).toBe('// commento interno');
+  });
+
+  test('il resoconto porta il PATH, non solo il testo', async () => {
+    // « Un commento è andato perso » non è azionabile; « in custom.policy » sì.
+    const filePath = writeFile('cfg.json5', '{\n  "custom": {\n    "policy": [\n      // dentro policy\n      1,\n    ],\n  },\n}\n');
+    const out = await editJson5(filePath, ['custom', 'policy'], [1, 2]);
+    expect(out.droppedComments[0].path).toEqual(['custom', 'policy']);
+  });
+
+  test('droppedComments è VUOTO quando nulla viene ricostruito', async () => {
+    const filePath = writeFile('cfg.json5', '{\n  "a": 1,\n}\n');
+    const out = await editJson5(filePath, 'a', 2);
+    expect(out.droppedComments).toEqual([]);
+  });
+
+  test('una sola scrittura: nessun file temporaneo residuo', async () => {
+    const filePath = writeFile('cfg.json5', '{\n  "o": { "a": 1, "b": 2, "c": 3 },\n}\n');
+    await editJson5(filePath, 'o', { a: 9, b: 8, c: 7 });
+    expect(fs.readdirSync(tmpDir)).toEqual(['cfg.json5']);
+  });
+});

@@ -1,4 +1,4 @@
-<!-- ital8doc v1-1 · tipo: README · lang: it · rev: 1 · ref -->
+<!-- ital8doc v1-1 · tipo: README · lang: it · rev: 2 · ref -->
 > 🌐 Italian reference edition (always up to date). English `README.md` is a stub until release.
 # adminAccessControl
 
@@ -12,6 +12,8 @@ Sistema di **controllo accessi basato su pattern** per gestire i permessi su tut
 - **Priorità automatica:** i pattern più specifici vincono i conflitti.
 - **Campo `access` obbligatorio:** tutte le rotte dei plugin DEVONO dichiarare i requisiti di accesso.
 - **Architettura ibrida:** regole JSON per le pagine + protezione a livello di codice (campo `access`) per le rotte dei plugin.
+- **`baseline` di zona in codice:** ogni zona dello spazio URL porta il proprio minimo d'accesso, indipendente da questo file. Il pannello admin resta protetto **a qualunque `adminPrefix`** e anche con `accessControl.json5` svuotato, illeggibile o cancellato.
+- **Segnaposti di percorso `{{…}}`:** i pattern nominano la **zona**, non il prefisso concreto.
 - **Admin UI:** editor visuale con sintassi JSON5.
 - **Validazione al boot:** previene configurazioni errate (il server non parte se invalide).
 - **Regole hardcoded immutabili:** le protezioni core non sono modificabili dalla UI.
@@ -23,9 +25,10 @@ Sistema di **controllo accessi basato su pattern** per gestire i permessi su tut
 {
   "version": "1.0.0",
 
-  // REGOLE HARDCODED (immutabili, non modificabili via UI)
+  // REGOLE HARDCODED — documentazione leggibile, NON la fonte di verità:
+  // il pannello è protetto dal `baseline` della zona, scritto in codice.
   "hardcodedRules": {
-    "/admin/**": {
+    "{{admin}}/**": {              // {{admin}} → ital8Config.json5 → adminPrefix
       "requiresAuth": true,
       "allowedRoles": [0, 1],   // solo root (0) e admin (1)
       "priority": 100,           // opzionale: auto-calcolata se omessa
@@ -36,6 +39,7 @@ Sistema di **controllo accessi basato su pattern** per gestire i permessi su tut
   // REGOLE CUSTOM (definite dall'utente, gestite via admin UI)
   "customRules": {
     "/my-protected-page": { "requiresAuth": true, "allowedRoles": [0, 1, 102] },
+    "{{pluginPages}}/adminUsers/userProfile.ejs": { "requiresAuth": true, "allowedRoles": [] },
     "/public/**": { "requiresAuth": false, "allowedRoles": [] },
     "regex:^/download/.*\\.pdf$": { "requiresAuth": true, "allowedRoles": [0, 1, 2] }
   },
@@ -56,6 +60,44 @@ Sistema di **controllo accessi basato su pattern** per gestire i permessi su tut
 | `allowedRoles` | sì | Array\<Number\> | ID dei ruoli abilitati (vuoto = tutti gli autenticati) |
 | `priority` | no | Number | Priorità manuale (auto-calcolata se omessa) |
 | `editable` | no | Boolean | Marca le regole hardcoded (`false` = immutabile) |
+
+## Segnaposti di percorso e `baseline` di zona
+
+Un pattern può nominare la **zona** invece del prefisso concreto. `{{admin}}` si
+risolve al caricamento leggendo `ital8Config.json5`: cambiare `adminPrefix` in
+`backoffice` sposta la regola insieme al pannello, invece di lasciarla orfana.
+
+| Segnaposto | Zona | Risolve da |
+|---|---|---|
+| `{{admin}}` | pannello admin | `adminPrefix` |
+| `{{adminThemeResources}}` | risorse del tema admin | `adminThemeResourcesPrefix` |
+| `{{api}}` | rotte dei plugin | `apiPrefix` |
+| `{{pluginPages}}` | pagine dei plugin | `pluginPagesPrefix` |
+| `{{publicThemeResources}}` | risorse del tema pubblico | `publicThemeResourcesPrefix` |
+| `{{views}}` | views | `viewsPrefix` |
+| `{{site}}` | sito pubblico (`/`) | — |
+
+Tre proprietà da conoscere:
+
+- **Vocabolario chiuso.** Un segnaposto sconosciuto o malformato è un **errore**,
+  mai un letterale: un pattern che non si capisce non diventa silenziosamente una
+  regola che non protegge niente.
+- **I letterali continuano a funzionare.** `/admin/**` resta valido; il segnaposto
+  è migliore perché non va tenuto allineato a mano.
+- **Le forme senza estensione sono DERIVATE.** Con `hideExtension` acceso per una
+  zona, una regola su `login.ejs` copre anche `login` senza che vada scritta due volte.
+
+Sopra le regole c'è il **`baseline` di zona**, scritto in `core/pathZoneResolver.js`
+e non in questo file: è il minimo d'accesso della zona. Una regola può solo
+**stringerlo**, mai allentarlo — una regola che negasse l'autenticazione in zona
+`admin` viene segnalata al caricamento e il `baseline` vince comunque. Conseguenza:
+se questo file viene svuotato o cancellato, il pannello **resta protetto**.
+
+Un ruleset che il sistema non sa applicare **non fa partire il CMS** (box
+`[ACCESS]`), e una modifica che non passerebbe il boot **non può essere salvata
+dalla GUI**: sono gli stessi controlli.
+
+→ Registro di decisione: [`docs/decisions/path-zones.it.md`](../../docs/decisions/path-zones.it.md)
 
 ## Pattern matching e priorità automatica
 
@@ -127,9 +169,11 @@ Accesso: `/admin/adminAccessControl/` (ruoli root/admin `[0, 1]`). Editor JSON5 
 | File | Scopo |
 |------|-------|
 | `main.js` | Logica plugin, middleware, endpoint |
-| `accessControl.json5` | Regole di accesso (hardcoded + custom) |
+| `accessControl.json5` | Regole di accesso (hardcoded + custom) · vivo, git-ignored |
+| `accessControl.default.json5` | Fonte di verità committata, da cui il vivo è materializzato al boot |
+| `migrations/` | Migrazioni dei config del pacchetto (vedi `migrations/CHANGELOG.md`) |
 | `lib/accessManager.js` | Logica core, creazione middleware, caricamento regole |
-| `lib/patternMatcher.js` | Motore di pattern matching + calcolo priorità |
+| `core/patternMatcher.js` *(del core, condiviso)* | Motore di pattern matching + calcolo priorità |
 | `lib/ruleValidator.js` | Motore di validazione (sintassi, ruoli, conflitti, pattern) |
 | `adminWebSections/adminAccessControl/index.ejs` | Editor visuale |
 | `webPages/access-denied.ejs` | Pagina 403 custom |

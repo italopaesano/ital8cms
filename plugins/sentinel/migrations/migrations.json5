@@ -81,5 +81,15 @@
       reason:
         "Il pattern di `shell-probe` si fermava al punto e intercettava nomi di  file ordinari: /js/shell.js, /assets/cmd.css, /docs/webshell.pdf. Il  problema non è il rumore nel log: è che il percorso di promozione  documentato nel file delle regole NON PUÒ accorgersene. Dice di guardare  `authenticatedHits` e promuovere se è zero, e un asset chiesto da  visitatori anonimi lo lascia a zero per sempre — quindi la regola  appariva come la più sicura da promuovere proprio mentre promuoverla  avrebbe restituito 404 su una pagina pubblica, con una diagnosi che parte  dal posto sbagliato (il 404 di block è indistinguibile da un file  mancante). Serve una migrazione perché `rules` è un array e il merge del  boot lo tratta come un valore, come per gli step 1→2 e 2→3; a differenza  di quelli, però, questo CAMBIA una regola che l'amministratore potrebbe  aver già promosso, quindi lo script si ferma senza toccare nulla se il  pattern in vigore non è esattamente quello distribuito.",
     },
+    {
+      from: 6,
+      to: 7,
+      title: "I path NOSTRI di auth-surface-noise passano ai segnaposti",
+      automatic: true,
+      script: "from-v6-to-v7.js",
+      touches: ["sentinelRules.json5"],
+      reason:
+        "`auth-surface-noise` e la sola regola distribuita che nomina percorsi del  CMS, e li nominava come TESTO (`/api/adminUsers/login`) mentre apiPrefix e  pluginPagesPrefix sono VARIABILI di ital8Config.json5. Chi li cambia  ottiene una regola che non osserva piu niente, senza che nulla lo segnali:  la regola resta nel file, valida e inerte. Serve una migrazione perche  `rules` e un array e il merge del boot lo tratta come un valore, come per  gli step precedenti. Converte SOLO i path nostri: i circa venti pattern di  tecnologie altrui (/wp-admin, /phpmyadmin, /.env) restano letterali, ed e  giusto, perche non sono zone di ital8cms. Come lo step 5→6 si ancora al  testo esatto della riga distribuita e rinuncia se non lo trova, invece di  riscrivere a tentoni un file che l'amministratore puo aver personalizzato.",
+    },
   ],
 }

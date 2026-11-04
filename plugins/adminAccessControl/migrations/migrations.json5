@@ -1,0 +1,32 @@
+// This file follows the JSON5 standard - comments and trailing commas are supported
+//
+// Migrazioni del plugin adminAccessControl.
+//
+// Il clock è la `schemaVersion` del DESCRITTORE (`pluginConfig.default.json5`),
+// che è la versione di struttura dell'intero pacchetto: uno step si applica
+// quando il descrittore vivo è a `from` e il `.default` è a `to`. Lo step qui
+// sotto modifica però un config SECONDARIO — `accessControl.json5` — ed è
+// proprio per questo che il descrittore va bumpato insieme: è la regola
+// dell'orologio, senza la quale il runner non partirebbe mai.
+//
+// `accessControl.default.json5` conserva la propria `schemaVersion: 3` di
+// proposito. Bumparla farebbe scattare la riconciliazione additiva su quella
+// coppia, che qui non ha nulla da aggiungere — il lavoro è una RINOMINA di
+// chiavi e una RIMOZIONE, due cose che il merge additivo non sa fare — e
+// segnalerebbe un `unresolved` fuorviante.
+//
+// Vedi docs/decisions/config-migrations.it.md e core/migrationRunner.js.
+{
+  steps: [
+    {
+      from: 3,
+      to: 4,
+      title: "Pattern di accessControl ai segnaposti di percorso",
+      automatic: true,
+      script: "from-v3-to-v4.js",
+      touches: ["accessControl.json5"],
+      reason:
+        "Il merge additivo sa solo AGGIUNGERE chiavi, e qui il lavoro e l'opposto:  le chiavi delle regole vengono RINOMINATE (`/admin/**` diventa  `{{admin}}/**`) e quattro vengono RIMOSSE, perche la forma pulita delle  pagine di pluginPages ora si DERIVA al caricamento invece di essere scritta  a mano. Due operazioni che il merge non sa fare, quindi serve uno script.  SENZA QUESTO STEP l'installazione resta funzionante — i letterali  continuano a essere accettati e il `baseline` di zona protegge il pannello  comunque — ma le regole esplicite sul pannello diventano INERTI appena  `adminPrefix` non e piu quello di default: puntano a un prefisso che non  esiste. Il file descriverebbe una protezione che non e quella in vigore, ed  e precisamente il difetto A1 di REVIEW.md nella sua forma residua. Lo  script e TESTUALE perche i commenti del file vivo sono meta del suo valore,  e FAIL-SOFT: su un file riformattato o personalizzato gli ancoraggi non  combaciano, e in quel caso salta la singola sostituzione e la dichiara  invece di riscrivere a tentoni un file di sicurezza.",
+    },
+  ],
+}

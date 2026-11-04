@@ -216,8 +216,16 @@ espliciti: `all`, `any`, `not`.
 > colleziona 404», la risposta di oggi sono i sospetti scanner, non questa
 > foglia.
 
-**I path si scrivono senza `globalPrefix`**, che viene anteposto dal codice —
-stessa convenzione di `maintenance.exemptPaths`.
+**I path si scrivono senza `globalPrefix`**, che il codice toglie dal path prima
+del confronto — stessa convenzione di `maintenance.exemptPaths` e, da v3.31.0, di
+`rateLimiter.exemptPaths`.
+
+Per i percorsi **del CMS** si usano i **segnaposti di percorso**
+(`{{api}}/adminUsers/login`, `{{pluginPages}}/adminUsers/**`), risolti al
+caricamento: un letterale smette di combaciare appena cambi `apiPrefix`, e la
+regola resta nel file valida e inerte. I path di **tecnologie altrui**
+(`/wp-admin`, `/phpmyadmin`, `/.env`) restano letterali, ed è giusto: non sono
+zone di ital8cms. → [`path-zones.it.md`](../../docs/decisions/path-zones.it.md)
 
 **I path si scrivono invece *con* `apiPrefix` e `pluginPagesPrefix`** — quelli
 non vengono anteposti dal codice. Sono configurabili in `ital8Config.json5`: se

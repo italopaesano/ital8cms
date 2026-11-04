@@ -547,7 +547,27 @@ describe('input degenere', () => {
 });
 
 describe('set di regole distribuito', () => {
-  const shipped = loadJson5(path.join(__dirname, '../../sentinelRules.default.json5'));
+  // I pattern del file distribuito sono SEGNAPOSTI (`{{api}}/...`) dalla v3.30.0, e
+  // il validatore rifiuta un path che non cominci con `/`: va risolto prima, come fa
+  // `loadRules()`. Si usa `resolveMatchPaths` del plugin, non una sua copia — un
+  // walker riscritto qui sarebbe una seconda implementazione da tenere allineata.
+  const { resolveMatchPaths } = require('../../main')._internals;
+  const { resolvePathZones } = require('../../../../core/pathZoneResolver');
+
+  function shippedResolved() {
+    const data = loadJson5(path.join(__dirname, '../../sentinelRules.default.json5'));
+    const problems = resolveMatchPaths(data, resolvePathZones({
+      apiPrefix: 'api', adminPrefix: 'admin', pluginPagesPrefix: 'pluginPages',
+      viewsPrefix: 'views', publicThemeResourcesPrefix: 'public-theme-resources',
+      adminThemeResourcesPrefix: 'admin-theme-resources',
+    }));
+    // Un segnaposto scartato qui sarebbe un errore del file distribuito, e va detto
+    // come tale invece di riaffacciarsi come « regola non valida » più sotto.
+    expect(problems).toEqual([]);
+    return data;
+  }
+
+  const shipped = shippedResolved();
 
   test('il file distribuito è valido così com è', () => {
     const r = validateRules(shipped, { allowedRedirectHosts: [] });

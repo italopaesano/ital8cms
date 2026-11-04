@@ -1,7 +1,14 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "schemaVersion": 1,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 2,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   "active": 1,
+
+  // ── Segnaposti di percorso ──────────────────────────────────────────
+  // I pattern possono usare {{admin}}, {{pluginPages}}, … al posto del
+  // prefisso concreto: il CMS lo risolve al caricamento leggendo le zone.
+  // Un segnaposto sconosciuto è un ERRORE, mai un letterale.
+  // Elenco completo e regole → docs/decisions/path-zones.it.md
+  // ────────────────────────────────────────────────────────────────────
   "weight": 5,
   "dependency": {},
   "nodeModuleDependency": {},
@@ -85,10 +92,18 @@
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // Il file robots.txt viene generato come file fisico in wwwPath (es. /www/robots.txt).
     // Il link alla sitemap viene aggiunto automaticamente se enableSitemap è true.
+    //
+    // I percorsi qui sotto sono URL EMESSI, non pattern di confronto: i crawler
+    // li leggono sul sito reale. Quindi, a differenza di tutti gli altri
+    // consumatori di segnaposti, qui il `globalPrefix` viene ANTEPOSTO dal
+    // generatore invece che tolto — un `Disallow: /admin/` su un'istanza montata
+    // sotto `/mysite` non escluderebbe niente, perché il percorso vero è
+    // `/mysite/admin/`. (Fino alla v3.30.0 `seo` ignorava del tutto il
+    // globalPrefix: difetto preesistente, corretto insieme alla conversione.)
     "robotsTxtRules": {
       "userAgent": "*",
       "allow": ["/"],
-      "disallow": ["/admin/", "/api/", "/pluginPages/"]
+      "disallow": ["{{admin}}/", "{{api}}/", "{{pluginPages}}/"]
     }
   }
 }

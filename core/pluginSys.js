@@ -1185,5 +1185,5 @@ module.exports = pluginSys ;
 // Esposto perché `core/testHelpers/routeRunner.js` usi LO STESSO predicato del
 // runtime invece di riscriverlo: la parte in comune fra validatore e dispatcher
 // è già tornata a divergere una volta (difetto 🟡 di v3.10.0). Stessa forma di
-// `editJson5._internals`.
+// `core/json5Scan.js`.
 module.exports.declaresAccess = declaresAccess;

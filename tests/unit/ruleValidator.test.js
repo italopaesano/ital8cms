@@ -378,19 +378,19 @@ describe('RuleValidator', () => {
   // ─── validateDefaultPolicy ────────────────────────────────────────────────
 
   describe('validateDefaultPolicy', () => {
-    test('accepts valid "allow" policy', () => {
-      const errors = validator.validateDefaultPolicy({ action: 'allow' });
+    // `redirectOnDenied` è OBBLIGATORIO dalla revisione della Fase 3 di path-zones:
+    // `accessManager.checkAccess()` lo restituisce su ogni rifiuto per
+    // autenticazione e il middleware agisce su quello. Senza, il rifiuto non porta
+    // né redirect né status — e un rifiuto così veniva SERVITO. Dichiararlo
+    // opzionale era innocuo soltanto finché nessuno controllava.
+    test.each(['allow', 'deny', 'requireAuth'])('accepts a complete "%s" policy', (action) => {
+      const errors = validator.validateDefaultPolicy({ action, redirectOnDenied: '/login' });
       expect(errors).toHaveLength(0);
     });
 
-    test('accepts valid "deny" policy', () => {
-      const errors = validator.validateDefaultPolicy({ action: 'deny' });
-      expect(errors).toHaveLength(0);
-    });
-
-    test('accepts valid "requireAuth" policy', () => {
-      const errors = validator.validateDefaultPolicy({ action: 'requireAuth' });
-      expect(errors).toHaveLength(0);
+    test.each(['allow', 'deny', 'requireAuth'])('rejects "%s" without redirectOnDenied', (action) => {
+      const errors = validator.validateDefaultPolicy({ action });
+      expect(errors).toContainEqual(expect.stringContaining('"redirectOnDenied" must be a string'));
     });
 
     test('reports missing action', () => {
@@ -403,14 +403,6 @@ describe('RuleValidator', () => {
       expect(errors).toContainEqual(expect.stringContaining('must be one of'));
     });
 
-    test('accepts valid redirectOnDenied string', () => {
-      const errors = validator.validateDefaultPolicy({
-        action: 'allow',
-        redirectOnDenied: '/login',
-      });
-      expect(errors).toHaveLength(0);
-    });
-
     test('reports non-string redirectOnDenied', () => {
       const errors = validator.validateDefaultPolicy({
         action: 'allow',
@@ -419,9 +411,29 @@ describe('RuleValidator', () => {
       expect(errors).toContainEqual(expect.stringContaining('"redirectOnDenied" must be a string'));
     });
 
-    test('accepts policy without redirectOnDenied (optional)', () => {
-      const errors = validator.validateDefaultPolicy({ action: 'deny' });
+    test('accepts valid redirectOnDenied string', () => {
+      const errors = validator.validateDefaultPolicy({ action: 'allow', redirectOnDenied: '/login' });
       expect(errors).toHaveLength(0);
+    });
+
+    test('rejects an empty redirectOnDenied', () => {
+      const errors = validator.validateDefaultPolicy({ action: 'deny', redirectOnDenied: '   ' });
+      expect(errors).toContainEqual(expect.stringContaining('must not be empty'));
+    });
+
+    test.each([undefined, null, 'allow', ['allow']])('rejects a non-object policy: %p', (policy) => {
+      expect(validator.validateDefaultPolicy(policy).length).toBeGreaterThan(0);
+    });
+
+    test('è richiamabile come STATICO, senza costruire un validatore', () => {
+      // `accessManager.describeDefaultPolicyDefect` delega qui invece di
+      // reimplementare: due validatori sulla stessa chiave divergono, e la prima
+      // stesura della Fase 3 li ha fatti divergere subito (questo dichiarava
+      // `redirectOnDenied` opzionale, quello obbligatorio).
+      const RuleValidatorClass = require('../../plugins/adminAccessControl/lib/ruleValidator');
+      expect(typeof RuleValidatorClass.validateDefaultPolicy).toBe('function');
+      expect(RuleValidatorClass.validateDefaultPolicy({ action: 'allow' }).length).toBeGreaterThan(0);
+      expect(RuleValidatorClass.DEFAULT_POLICY_ACTIONS).toEqual(['allow', 'deny', 'requireAuth']);
     });
   });
 
@@ -651,12 +663,29 @@ describe('RuleValidator', () => {
       const jsonString = JSON.stringify({
         hardcodedRules: originalHardcoded,
         customRules: { '/page': { requiresAuth: false, allowedRoles: [] } },
-        defaultPolicy: { action: 'allow' },
+        // `redirectOnDenied` è obbligatoria dalla revisione della Fase 3: il
+        // motore la restituisce su ogni rifiuto per autenticazione.
+        defaultPolicy: { action: 'allow', redirectOnDenied: '/pluginPages/adminUsers/login.ejs' },
       });
       const result = validator.validateFromUI(jsonString, originalHardcoded);
       expect(result.valid).toBe(true);
       expect(result.parsed).toBeDefined();
       expect(result.errors).toHaveLength(0);
+    });
+
+    test('rifiuta una defaultPolicy priva di redirectOnDenied', () => {
+      // Il punto della correzione: questo validatore e quello del motore davano
+      // verdetti OPPOSTI sulla stessa chiave. Ora c'è un predicato solo, quindi la
+      // GUI rifiuta qui — dove i messaggi sono fatti per essere letti — invece di
+      // far passare il primo controllo e rifiutare al secondo.
+      const jsonString = JSON.stringify({
+        hardcodedRules: originalHardcoded,
+        customRules: {},
+        defaultPolicy: { action: 'allow' },
+      });
+      const result = validator.validateFromUI(jsonString, originalHardcoded);
+      expect(result.valid).toBe(false);
+      expect(result.errors.join(' ')).toContain('redirectOnDenied');
     });
 
     test('rejects invalid JSON5 syntax', () => {

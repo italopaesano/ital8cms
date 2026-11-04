@@ -281,7 +281,7 @@ Il merge additivo sa solo **aggiungere** chiavi. Quando un `.default` evolve con
 - **Tre strategie**, derivate senza campi extra: `automatic: true` **senza** script → basta il merge ricorsivo (caso più frequente); `automatic: true` **con** script → rinomine/rimozioni/valori; `automatic: false` → umano o AI guidato dal `.md`, sbloccato da `verify()` o `--confirm-manual`. `reason` è **obbligatorio sempre**, anche nel caso automatico.
 - **Esecuzione:** il boot **rileva** e basta (box `[MIGRATE]`); si applica con `npm run cli -- migrate <target>` (`--dry-run`, `--theme`, `--confirm-manual`). L'auto-apply degli step automatici richiede `ital8Config.json5 → migrations.autoApply: true` (default `false`). Backup automatico dei file in `touches` prima di ogni step.
 - **La `schemaVersion` avanza solo a esito riuscito** (è una ricevuta, non un contatore di tentativi), e i config con una migrazione pendente sono **esclusi** dal merge additivo — che altrimenti li allineerebbe bruciando il trigger.
-- Negli script preferisci `setJson5Key`/`editJson5` a un `saveJson5` dell'oggetto intero: quest'ultimo **perde i commenti** del config vivo.
+- Negli script preferisci le operazioni **chirurgiche** a un `saveJson5` dell'oggetto intero, che **perde i commenti** del config vivo. Lo strato copre sei operazioni: leggere (`loadJson5`), aggiornare (`editJson5`), aggiungere-o-aggiornare (`setJson5Key`), **rimuovere** (`removeJson5Key`), **rinominare** (`renameJson5Key`, in posto: non sposta la chiave e non ne perde i commenti), più la scansione di sola lettura su cui poggiano (`json5Scan`). Da v3.33.0 `editJson5` sostituisce un oggetto/array **per chiave** invece di rifare il blocco, quindi i commenti **dentro** il valore sopravvivono quando la corrispondenza è determinabile — e ciò che non è preservabile è dichiarato in `droppedComments`. → [`docs/decisions/json5-key-operations.it.md`](./docs/decisions/json5-key-operations.it.md)
 
 → [`docs/decisions/config-migrations.it.md`](./docs/decisions/config-migrations.it.md) · modulo: `core/migrationRunner.js`
 
@@ -1193,7 +1193,7 @@ elenco da mantenere:
 | `access.requiresAuth: true` | rotta autenticata | route-wrap di `pluginSys` |
 | `access.isAuthEntryPoint: true` | rotta **pubblica** che appartiene comunque alla superficie riservata (login, logout, sonde) | route-wrap di `pluginSys` |
 | regola di `accessControl.json5` con `requiresAuth`/`isAuthEntryPoint` | pagina riservata | middleware di `adminAccessControl` |
-| prefissi `adminPrefix` / `adminThemeResourcesPrefix` + indice dei path riservati | pannello, risorse tema admin, e il **405** di `allowedMethods()` | `createReservedGate` |
+| zone con `baseline.requiresAuth: true` nella **mappa dei percorsi** + indice dei path riservati | pannello, risorse tema admin, `viewsPrefix`, e il **405** di `allowedMethods()` | `createReservedGate` |
 
 Un plugin nuovo eredita il comportamento **senza dichiarare nulla**: `access` è già
 obbligatorio. Il marcatore `isAuthEntryPoint` serve **solo** alle rotte/pagine
@@ -1206,7 +1206,12 @@ Con anche `public stop` le esenzioni del maintenance gate sono **sospese** → 5
 uniforme. Nei template: `passData.reservedClosed`.
 
 Modulo: `core/priorityMiddlewares/runtimeGate.js` (ospita entrambi i gate a runtime:
-il maintenance **esenta** i due prefissi admin, il reserved li **prende di mira**).
+il maintenance **esenta** i due prefissi admin, il reserved **prende di mira** ogni zona
+che dichiara `requiresAuth`). Dalla v3.38.0 il perimetro del reserved è **derivato** da
+`core/pathZoneResolver.js` invece di essere un elenco di prefissi: una zona nuova lo
+eredita senza dichiarare nulla, e `viewsPrefix` — che dichiarava `requiresAuth` ma non
+era nell'elenco — è entrato nel perimetro, dove perdeva un **302 verso il login** invece
+del 404.
 
 ### Creare plugin / temi (usa le skill di scaffolding)
 
@@ -1533,6 +1538,9 @@ Spostato in [`docs/deployment.it.md`](./docs/deployment.it.md).
 - `/core/materializeFromDefault.js` → `.sync` - Variante **sincrona** della materializzazione di una coppia, per i config letti prima che il boot entri in codice asincrono (`koaSession.json5`)
 - `/core/resetConfigsToDefault.js` - Reset: rimuove i vivi di una cartella (rigenerati dai default al boot); usata dal comando CLI `ital8cms-cli reset`
 - `/core/setJson5Key.js` - Ciclo di vita config: upsert (add-or-update) di una chiave in un `.json5` preservando i commenti (usata dal boot per scrivere `isInstalled`/`version`); accetta anche **path annidati** (`['custom','dataPath']`); complementare a `editJson5` (che solo aggiorna)
+- `/core/json5Scan.js` - Scansione **testuale** di un `.json5`: dice dov'è cosa. Modulo di **sola lettura** (mask codice/stringhe/commenti, profondità di annidamento, `scanValue` per la fine di un valore, `locatePath` per un path annidato). È la base su cui poggiano `editJson5`, `setJson5Key`, `removeJson5Key` e `renameJson5Key` — estratto da `editJson5` quando è servito a un secondo modulo di produzione. → [`docs/decisions/json5-key-operations.it.md`](./docs/decisions/json5-key-operations.it.md)
+- `/core/removeJson5Key.js` - **Rimuove** una chiave da un `.json5` preservando commenti e formattazione del resto (la quinta operazione dello strato, prima mancante). Chiave assente = **no-op** (le migrazioni sono idempotenti); path ambiguo = **rifiuto**; postcondizione che verifica che sia sparita **solo** quella chiave, prima di scrivere
+- `/core/renameJson5Key.js` - **Rinomina** una chiave di un `.json5` **in posto** (la sesta operazione): splice sul solo intervallo della chiave, quindi posizione, valore, commenti e formattazione restano intatti. Chiave assente o nome già uguale = **no-op**; `newKey` già presente nello stesso blocco = **rifiuto** (due chiavi omonime sono JSON5 valido, e `json5.parse` ne terrebbe una sola, in silenzio); postcondizione che verifica l'**ordine** prima di scrivere. Ancorata al codice da `locatePath`, quindi una chiave dentro un commento non viene mai trovata
 - `/core/pluginStateResolver.js` - Ciclo di vita config: modulo **puro** per gli stati dei plugin — `checkNpmDeps` + `resolvePluginStates` (cascata a punto fisso + rilevamento cicli); usato da `pluginSys.initialize()`
 - `/core/pluginLoadOrder.js` - Ordine di caricamento: modulo **puro** `resolveLoadOrder(installables)` — ordinamento **topologico** con il `weight` come criterio di scelta fra i pronti, più il rilevamento dei pesi che le dipendenze rendono impossibili (box `[WEIGHT]`); gemello di `pluginStateResolver` (quello decide CHI si carica, questo QUANDO)
 - `/core/reconcileSchemaVersion.js` - Ciclo di vita config: drift di `schemaVersion` per UNA coppia default↔vivo + **merge additivo ricorsivo** (aggiunge le chiavi nuove a ogni profondità, preserva i valori)
@@ -1566,7 +1574,7 @@ Spostato in [`docs/deployment.it.md`](./docs/deployment.it.md).
 
 ### File dei plugin
 
-Ogni plugin documenta i propri file nel rispettivo `README.it.md`/`EXPLAIN.it.md` (vedi i puntatori nelle sezioni dei plugin sopra). Utility core trasversali: `core/patternMatcher.js` (pattern matching condiviso), `core/servingRootResolver.js` (isolamento path), `core/editJson5.js` (modifica chirurgica di chiavi JSON5 — update-only), `core/setJson5Key.js` (upsert di una chiave, anche annidata, preserva i commenti), `core/loadJson5.js`, `core/logger.js`, `core/escapeHtml.js`, `core/sessionSecurity.js`, `core/processSafetyNet.js`.
+Ogni plugin documenta i propri file nel rispettivo `README.it.md`/`EXPLAIN.it.md` (vedi i puntatori nelle sezioni dei plugin sopra). Utility core trasversali: `core/patternMatcher.js` (pattern matching condiviso), `core/servingRootResolver.js` (isolamento path), `core/editJson5.js` (modifica chirurgica di chiavi JSON5 — update-only; da v3.33.0 sostituisce un oggetto/array **per chiave** invece di rifare il blocco, quindi i commenti delle chiavi che non cambiano **sopravvivono**, e ciò che non è preservabile è dichiarato in `droppedComments`), `core/setJson5Key.js` (upsert di una chiave, anche annidata, preserva i commenti), `core/loadJson5.js`, `core/logger.js`, `core/escapeHtml.js`, `core/sessionSecurity.js`, `core/processSafetyNet.js`.
 
 ### Database
 

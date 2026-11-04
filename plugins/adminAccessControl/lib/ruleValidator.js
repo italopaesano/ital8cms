@@ -190,22 +190,51 @@ class RuleValidator {
    * @param {object} policy - Oggetto defaultPolicy
    * @returns {array} - Array di errori
    */
+  /**
+   * Delegato d'istanza: conserva i chiamanti esistenti
+   * (`this.validateDefaultPolicy(...)` e i test) ora che la logica è statica,
+   * perché `accessManager` deve poterla invocare senza costruire un validatore.
+   */
   validateDefaultPolicy(policy) {
+    return RuleValidator.validateDefaultPolicy(policy);
+  }
+
+  static validateDefaultPolicy(policy) {
     const errors = [];
+
+    // Oggetto: senza, ogni accesso qui sotto andrebbe in TypeError.
+    if (policy === undefined || policy === null) {
+      errors.push('defaultPolicy: missing');
+      return errors;
+    }
+    if (typeof policy !== 'object' || Array.isArray(policy)) {
+      errors.push('defaultPolicy: must be an object');
+      return errors;
+    }
 
     // Verifica action
     if (!policy.action) {
       errors.push('defaultPolicy: Missing required field "action"');
-    } else {
-      const validActions = ['allow', 'deny', 'requireAuth'];
-      if (!validActions.includes(policy.action)) {
-        errors.push(`defaultPolicy: "action" must be one of: ${validActions.join(', ')}`);
-      }
+    } else if (!RuleValidator.DEFAULT_POLICY_ACTIONS.includes(policy.action)) {
+      errors.push(`defaultPolicy: "action" must be one of: `
+        + `${RuleValidator.DEFAULT_POLICY_ACTIONS.join(', ')}`);
     }
 
-    // Verifica redirectOnDenied (opzionale ma se presente deve essere string)
-    if (policy.redirectOnDenied !== undefined && typeof policy.redirectOnDenied !== 'string') {
+    // `redirectOnDenied` è OBBLIGATORIO, e dalla Fase 3 di path-zones non è più una
+    // formalità: `accessManager.checkAccess()` lo restituisce su OGNI rifiuto per
+    // autenticazione, e il middleware agisce su quello. Senza, il rifiuto non porta
+    // né redirect né status — e fino alla revisione della Fase 3 un rifiuto così
+    // veniva SERVITO. Dichiararlo opzionale era innocuo soltanto finché nessuno
+    // controllava.
+    //
+    // Questo è l'UNICO punto in cui la forma della defaultPolicy viene decisa:
+    // `accessManager.describeDefaultPolicyDefect()` delega qui invece di
+    // reimplementare. Due validatori sulla stessa chiave divergono — il progetto
+    // l'ha già visto accadere su `access` (CLAUDE.md, nota su routeContract).
+    if (typeof policy.redirectOnDenied !== 'string') {
       errors.push('defaultPolicy: "redirectOnDenied" must be a string');
+    } else if (policy.redirectOnDenied.trim() === '') {
+      errors.push('defaultPolicy: "redirectOnDenied" must not be empty');
     }
 
     return errors;
@@ -323,5 +352,8 @@ class RuleValidator {
     };
   }
 }
+
+/** Le tre azioni che `accessManager.applyDefaultPolicy` sa applicare. */
+RuleValidator.DEFAULT_POLICY_ACTIONS = Object.freeze(['allow', 'deny', 'requireAuth']);
 
 module.exports = RuleValidator;

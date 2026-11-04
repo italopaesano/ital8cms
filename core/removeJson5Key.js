@@ -1,0 +1,215 @@
+/**
+ * removeJson5Key — rimuove una chiave da un file `.json5` preservando i commenti,
+ * la formattazione e le virgole finali di tutto ciò che non si tocca.
+ *
+ * ─── LA QUINTA OPERAZIONE ─────────────────────────────────────────────────────
+ * Lo strato di chirurgia testuale del core copriva quattro operazioni su cinque:
+ * leggere (`loadJson5`), riscrivere tutto (`saveJson5`, che perde i commenti),
+ * aggiornare una chiave (`editJson5`), aggiungere-o-aggiornare (`setJson5Key`).
+ * Rimuovere una chiave non c'era — ed è la più difficile delle cinque, perché
+ * deve capire dove FINISCE un valore e non solo dove comincia la sua chiave.
+ *
+ * Il costo della sua assenza si è già pagato: la rimozione era stata riscritta a
+ * mano dentro uno script di migrazione, con `indexOf` invece di `scanValue`, e ne
+ * sono usciti due difetti di perdita dati. Il peggiore: su una regola scritta
+ * INLINE la cancellazione si portava via anche la regola SUCCESSIVA, perché
+ * cercava « la prima riga di chiusura dopo la chiave » invece della chiusura di
+ * quella chiave. Misurato: 8 regole diventate 3 invece di 4, con un marcatore di
+ * sicurezza sparito e il file ancora parsabile, quindi nessun errore.
+ * → docs/decisions/json5-key-operations.it.md
+ *
+ * ─── COSA SE NE VA CON LA CHIAVE (D2) ─────────────────────────────────────────
+ * La policy vive in `json5Scan.findRemovalSpan`, condivisa con `editJson5`.
+ * Una regola sola: risalendo dalla riga della chiave, appartiene a lei ogni riga
+ * **composta solo da un commento**; si ferma alla prima riga **vuota** o che
+ * contiene **codice**. Più, in discesa, la virgola e il commento in linea che la
+ * seguono.
+ *
+ *   "userProfile": { … },   // nota di userProfile   ← riga CON codice: FERMA
+ *   "login": { … },                                  ← la nota resta a userProfile
+ *
+ *   // Pagina di login (deve essere pubblica,
+ *   // o nessuno potrebbe autenticarsi)              ← entrambe se ne vanno
+ *   "login": { … },         // varco pubblico        ← anche questa
+ *
+ * La fermata sulla riga vuota non è un dettaglio: nei config del progetto una
+ * riga vuota separa la documentazione di SEZIONE da quella della singola chiave.
+ * Senza, rimuovendo una regola di `accessControl.json5` se ne andrebbero 10 righe
+ * invece di 1, fra cui la spiegazione valida per tutte le regole vicine.
+ *
+ * ─── COSA NON SI AZZARDA ──────────────────────────────────────────────────────
+ *   - un blocco `/* … *\/` su PIÙ righe sopra la chiave NON viene preso: portarne
+ *     via una parte produrrebbe un file non più parsabile, e il progetto usa `//`
+ *     in tutti i suoi config. Resta dov'è — orfano ma inerte, che è la direzione
+ *     di fallimento giusta;
+ *   - un path AMBIGUO fa lanciare (eredita la severità di `locatePath`):
+ *     cancellare la chiave sbagliata è peggio che non cancellare;
+ *   - la postcondizione verifica, PRIMA di scrivere, che la chiave sia sparita e
+ *     che la STRUTTURA del resto sia identica. Dice « struttura » e non « tutto
+ *     il resto del documento », come affermava fino alla v3.37.0: il confronto
+ *     passa da `JSON.stringify` degli oggetti deserializzati, e i commenti non
+ *     sono valori. In un modulo il cui scopo è preservarli, quella frase faceva
+ *     credere coperto ciò che non lo era.
+ *     Il taglio di un commento è presidiato a monte, da `findRemovalSpan`, che
+ *     rifiuta una span che cominci o finisca DENTRO un commento. Serve perché
+ *     dei tre modi di tagliarne uno, due sono già colti qui (il `//` che
+ *     inghiotte il codice che segue cambia la struttura; un blocco `/* … *\/`
+ *     spezzato rende il file non parsabile) e il terzo — una span dentro il
+ *     testo di un `//`, coi delimitatori intatti — passerebbe in SILENZIO.
+ *
+ * ─── CHIAVE ASSENTE: NO-OP, NON ERRORE ────────────────────────────────────────
+ * A differenza di `editJson5`, che lancia su un path inesistente. Le migrazioni
+ * devono essere idempotenti: alla seconda esecuzione la chiave non c'è più, e
+ * quello è il risultato atteso, non un guasto.
+ *
+ * @module core/removeJson5Key
+ */
+
+'use strict';
+
+const fs = require('fs').promises;
+const json5 = require('json5');
+const saveJson5 = require('./saveJson5');
+const {
+  buildCodeMask,
+  buildDepthArray,
+  locatePath,
+  findRemovalSpan,
+} = require('./json5Scan');
+
+/**
+ * Cammina il path su un oggetto deserializzato. Ritorna `undefined` se un
+ * segmento qualsiasi non esiste — cioè se non c'è niente da rimuovere.
+ *
+ * Il lookup passa da `hasOwnProperty`: i segmenti arrivano da un file di
+ * configurazione, e senza questo controllo `constructor` o `toString`
+ * pescherebbero dal PROTOTIPO un valore truthy, facendo credere che la chiave
+ * esista. È la stessa classe di difetto di REVIEW.md → B4.
+ */
+function readPath(root, pathSegments) {
+  let node = root;
+  for (let i = 0; i < pathSegments.length; i += 1) {
+    if (node === null || typeof node !== 'object' || Array.isArray(node)) return undefined;
+    if (!Object.prototype.hasOwnProperty.call(node, pathSegments[i])) return undefined;
+    node = node[pathSegments[i]];
+  }
+  return { value: node };
+}
+
+/** Cancella il path da un oggetto deserializzato (per la postcondizione). */
+function deletePath(root, pathSegments) {
+  let node = root;
+  for (let i = 0; i < pathSegments.length - 1; i += 1) node = node[pathSegments[i]];
+  delete node[pathSegments[pathSegments.length - 1]];
+}
+
+/**
+ * Rimuove una chiave da un file `.json5`.
+ *
+ * @param {string} filePath - percorso del file
+ * @param {string|string[]} fieldNameOrPath - chiave top-level, o path annidato
+ * @returns {Promise<{changed: boolean, removedValue: *}>}
+ *   `changed: false` se la chiave non c'era (no-op idempotente).
+ * @throws se `filePath` o la chiave hanno un tipo sbagliato, se il file non è
+ *   JSON5 valido, se la radice non è un oggetto, se il path è ambiguo, o se la
+ *   postcondizione non regge (in quest'ultimo caso NIENTE viene scritto).
+ */
+async function removeJson5Key(filePath, fieldNameOrPath) {
+  if (typeof filePath !== 'string' || filePath.length === 0) {
+    throw new Error('removeJson5Key: filePath must be a non-empty string');
+  }
+
+  // Normalizzazione identica a editJson5/setJson5Key: i tre fratelli accettano
+  // la stessa forma di argomento, e divergere sarebbe una trappola.
+  let pathSegments;
+  if (typeof fieldNameOrPath === 'string') {
+    if (fieldNameOrPath.length === 0) {
+      throw new Error('removeJson5Key: fieldName must be a non-empty string');
+    }
+    pathSegments = [fieldNameOrPath];
+  } else if (Array.isArray(fieldNameOrPath)) {
+    if (fieldNameOrPath.length === 0) {
+      throw new Error('removeJson5Key: path array must contain at least one segment');
+    }
+    for (const seg of fieldNameOrPath) {
+      if (typeof seg !== 'string' || seg.length === 0) {
+        throw new Error('removeJson5Key: every path segment must be a non-empty string');
+      }
+    }
+    pathSegments = fieldNameOrPath;
+  } else {
+    throw new Error(
+      'removeJson5Key: second argument must be a string (top-level field name) or '
+      + 'an array of strings (nested path)'
+    );
+  }
+
+  const source = await fs.readFile(filePath, 'utf8');
+
+  let parsed;
+  try {
+    parsed = json5.parse(source);
+  } catch (err) {
+    throw new Error(`removeJson5Key: ${filePath} is not valid JSON5 — ${err.message}`);
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`removeJson5Key: the root of ${filePath} is not a JSON5 object`);
+  }
+
+  // Chiave assente → no-op. Si decide sull'oggetto DESERIALIZZATO e non sul
+  // testo: è l'unica fonte che risponde senza ambiguità, e costa una parse che
+  // serve comunque per validare il file.
+  const found = readPath(parsed, pathSegments);
+  if (found === undefined) {
+    return { changed: false, removedValue: undefined };
+  }
+
+  const mask = buildCodeMask(source);
+  const depth = buildDepthArray(source, mask);
+  // Lancia se il path è ambiguo o non localizzabile nel testo: a questo punto
+  // sappiamo che esiste nell'oggetto, quindi un fallimento qui è una discrepanza
+  // fra testo e struttura e non va aggirata.
+  const occ = locatePath(source, mask, depth, pathSegments, filePath);
+
+  // La span la calcola `json5Scan`: è lo stesso criterio che usa la sostituzione
+  // per chiave di `editJson5`, e tenerne due d'accordo è precisamente il difetto
+  // che questo strato esiste per evitare.
+  const { from, to } = findRemovalSpan(source, mask, occ);
+  const next = source.slice(0, from) + source.slice(to);
+
+  // ── Postcondizione: si verifica PRIMA di scrivere ──────────────────────────
+  //
+  // Due controlli, e il secondo è quello che conta: non basta che la chiave sia
+  // sparita, deve essere sparita SOLO lei. È la verifica che il difetto storico
+  // — una cancellazione che si portava via la coppia successiva — non può
+  // ripetersi in silenzio: il file sarebbe rimasto parsabile, e nessuno se ne
+  // sarebbe accorto.
+  let reparsed;
+  try {
+    reparsed = json5.parse(next);
+  } catch (err) {
+    throw new Error(
+      `removeJson5Key: la rimozione di "${pathSegments.join('.')}" da ${filePath} `
+      + `avrebbe prodotto un file non valido (${err.message}) — niente è stato scritto`
+    );
+  }
+  if (readPath(reparsed, pathSegments) !== undefined) {
+    throw new Error(
+      `removeJson5Key: "${pathSegments.join('.')}" è ancora presente dopo la `
+      + `rimozione in ${filePath} — niente è stato scritto`
+    );
+  }
+  const expected = json5.parse(source);
+  deletePath(expected, pathSegments);
+  if (JSON.stringify(expected) !== JSON.stringify(reparsed)) {
+    throw new Error(
+      `removeJson5Key: la rimozione di "${pathSegments.join('.')}" da ${filePath} `
+      + 'avrebbe cambiato anche altro nel documento — niente è stato scritto'
+    );
+  }
+
+  await saveJson5(filePath, next);
+  return { changed: true, removedValue: found.value };
+}
+
+module.exports = removeJson5Key;

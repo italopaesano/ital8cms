@@ -22,7 +22,7 @@
  * installazioni esistenti (vedi docs/decisions/config-migrations.it.md).
  * Il parent deve già esistere ed essere un oggetto: se manca, va inserito lui
  * (con il proprio contenuto) al livello in cui manca. La localizzazione del
- * blocco parent riusa il locator di editJson5 (`_internals`), non una seconda
+ * blocco parent riusa il locator di `core/json5Scan.js`, non una seconda
  * implementazione.
  *
  * Scope: valore JSON-serializzabile scritto inline con `JSON.stringify`;
@@ -32,8 +32,16 @@
  *
  * API:
  *   setJson5Key(filePath, key, value, { afterKey }) →
- *     Promise<{ action: 'updated'|'inserted'|'unchanged', value }>
+ *     Promise<{ action: 'updated'|'inserted'|'unchanged', value, droppedComments }>
  *     key: string | string[]
+ *
+ * `droppedComments` è il resoconto di `editJson5` PROPAGATO, non scartato: è `[]`
+ * su `unchanged` e su `inserted` (un inserimento non sostituisce niente, quindi
+ * non può aver perso commenti), e su `updated` porta ciò che la sostituzione non
+ * ha potuto preservare. Scartarlo rendeva la perdita di nuovo **silenziosa**
+ * proprio attraverso l'API che il boot e le migrazioni usano.
+ * ⚠ Oggi **nessun chiamante lo consuma**: l'informazione è disponibile, ma perché
+ * arrivi a una persona serve che un chiamante la mostri — registrato in TODO.md.
  *
  * Throws su: argomenti non validi; file mancante / JSON5 non valido; root non
  * oggetto; parent inesistente o non-oggetto; `{` di apertura non su riga propria;
@@ -46,6 +54,7 @@ const fs = require('fs').promises;
 const json5 = require('json5');
 const loadJson5 = require('./loadJson5');
 const editJson5 = require('./editJson5');
+const json5Scan = require('./json5Scan');
 const saveJson5 = require('./saveJson5');
 
 function deepEqual(a, b) {
@@ -59,7 +68,8 @@ function deepEqual(a, b) {
  * @param {string|string[]} key - Nome della chiave, o path di segmenti annidati.
  * @param {*} value - Valore JSON-serializzabile.
  * @param {object} [options]
- * @param {string} [options.afterKey] - Inserisci dopo questa chiave (solo top-level; se assente: dopo `{`).
+ * @param {string} [options.afterKey] - Inserisci dopo questa chiave (a qualunque
+ *   livello da v3.32.0; se assente o non trovata: in testa al blocco).
  * @returns {Promise<{action: string, value: *}>}
  */
 async function setJson5Key(filePath, key, value, options = {}) {
@@ -108,106 +118,45 @@ async function setJson5Key(filePath, key, value, options = {}) {
   // navigare i path annidati).
   if (Object.prototype.hasOwnProperty.call(parent, leafKey)) {
     if (deepEqual(parent[leafKey], value)) {
-      return { action: 'unchanged', value };
+      return { action: 'unchanged', value, droppedComments: [] };
     }
-    await editJson5(filePath, segments.length === 1 ? leafKey : segments, value);
-    return { action: 'updated', value };
+    // Il resoconto di editJson5 viene PROPAGATO, non scartato. Scartarlo
+    // rendeva la perdita di commenti di nuovo silenziosa proprio attraverso
+    // l'API che boot e migrazioni usano — cioè l'opposto del motivo per cui
+    // `droppedComments` esiste: « un commento perso in silenzio è il difetto,
+    // uno perso e dichiarato è una conseguenza ».
+    const outcome = await editJson5(filePath, segments.length === 1 ? leafKey : segments, value);
+    return { action: 'updated', value, droppedComments: outcome.droppedComments };
   }
 
-  // Chiave assente in un oggetto ANNIDATO → inserimento subito dopo la `{` del
-  // parent, localizzata con il locator di editJson5.
-  if (segments.length > 1) {
-    return insertNested(filePath, segments, value, serialized);
-  }
+  // ── Chiave assente → inserimento testuale ─────────────────────────────────
+  //
+  // UN SOLO meccanismo per top-level e annidato. Fino alla v3.32.0 erano due:
+  // il top-level lavorava per RIGHE (`split('\n')` + `findIndex` + `splice`) e
+  // l'annidato per OFFSET, e si comportavano in modo diverso — `afterKey` era
+  // onorato solo dal primo, e solo il secondo deduceva l'indentazione dal blocco.
+  // Ora il punto d'inserimento lo calcola `json5Scan.findInsertionPoint`, che è
+  // la gemella di `findRemovalSpan`: entrambe sono ANALISI, lo splice sta qui.
+  const source = await fs.readFile(filePath, 'utf8');
+  const mask = json5Scan.buildCodeMask(source);
+  const depth = json5Scan.buildDepthArray(source, mask);
 
-  // Chiave assente al top-level → inserimento testuale.
-  const raw = await fs.readFile(filePath, 'utf8');
-  const lines = raw.split('\n');
+  const point = json5Scan.findInsertionPoint(
+    source, mask, depth, segments.slice(0, -1), options.afterKey || null, filePath
+  );
 
-  const braceIdx = lines.findIndex((l) => l.trim() === '{');
-  if (braceIdx === -1) {
-    throw new Error(`setJson5Key: "${filePath}" non ha la '{' di apertura su riga propria (inserimento non supportato)`);
-  }
+  let insertion = `\n${point.indent}"${leafKey}": ${serialized},`;
+  // Blocco che era vuoto: senza questo la `}` resterebbe sulla riga della chiave
+  // appena inserita (`{ "k": 1,}` — valido, ma questi file li legge una persona).
+  if (point.blockIsEmpty) insertion += `\n${point.parentIndent}`;
 
-  // Posizione di inserimento: dopo afterKey se richiesto e presente, altrimenti dopo `{`.
-  let insertAfter = braceIdx;
-  if (options.afterKey) {
-    const anchorRe = new RegExp(`^\\s*["']?${options.afterKey}["']?\\s*:`);
-    for (let i = braceIdx + 1; i < lines.length; i++) {
-      if (anchorRe.test(lines[i])) { insertAfter = i; break; }
-    }
-  }
-
-  // Indentazione: ricalcata dalla prima proprietà del root, fallback 2 spazi.
-  let indent = '  ';
-  for (let i = braceIdx + 1; i < lines.length; i++) {
-    const m = lines[i].match(/^(\s+)\S/);
-    if (m) { indent = m[1]; break; }
-  }
-
-  const newLine = `${indent}"${leafKey}": ${serialized},`;
-  lines.splice(insertAfter + 1, 0, newLine);
-  const updated = lines.join('\n');
+  const updated = source.substring(0, point.offset)
+    + (point.needsComma ? ',' : '')
+    + insertion
+    + source.substring(point.offset);
 
   // saveJson5 valida la stringa (json5.parse) e scrive atomico (temp + rename).
   await saveJson5(filePath, updated);
-
-  // Sanity post-scrittura.
-  const after = loadJson5(filePath);
-  if (!deepEqual(after[leafKey], value)) {
-    throw new Error(`setJson5Key: validazione post-scrittura fallita per la chiave "${leafKey}" in "${filePath}"`);
-  }
-
-  return { action: 'inserted', value };
-}
-
-/**
- * Inserisce una chiave dentro un oggetto ANNIDATO già esistente.
- *
- * Localizza il blocco del parent con il locator di editJson5 e scrive la nuova
- * proprietà subito dopo la sua `{`. L'indentazione è dedotta dalla prima riga
- * del blocco (fallback: due spazi in più del parent), così il file resta
- * formattato come lo trova.
- *
- * @param {string} filePath
- * @param {string[]} segments - Path completo (l'ultimo è il leaf da creare).
- * @param {*} value
- * @param {string} serialized - `JSON.stringify(value)`, già calcolato dal chiamante.
- * @returns {Promise<{action: string, value: *}>}
- */
-async function insertNested(filePath, segments, value, serialized) {
-  const source = await fs.readFile(filePath, 'utf8');
-  const { buildCodeMask, buildDepthArray, locatePath } = editJson5._internals;
-
-  const mask = buildCodeMask(source);
-  const depth = buildDepthArray(source, mask);
-  const parentSegments = segments.slice(0, -1);
-  const leafKey = segments[segments.length - 1];
-
-  const parentOcc = locatePath(source, mask, depth, parentSegments, filePath);
-  if (source[parentOcc.valueStart] !== '{') {
-    const pathDesc = parentSegments.map((s) => `"${s}"`).join(' → ');
-    throw new Error(`setJson5Key: il path ${pathDesc} in "${filePath}" non è un oggetto: impossibile inserirci una chiave`);
-  }
-
-  // Indentazione del parent (dalla sua riga) e del suo contenuto.
-  let parentLineStart = parentOcc.keyStart;
-  while (parentLineStart > 0 && source[parentLineStart - 1] !== '\n') parentLineStart--;
-  const parentIndentRaw = source.substring(parentLineStart, parentOcc.keyStart);
-  const parentIndent = /^\s*$/.test(parentIndentRaw) ? parentIndentRaw : '';
-
-  // Prima riga non vuota dentro il blocco → ne ricalca l'indentazione.
-  const insertAt = parentOcc.valueStart + 1; // subito dopo `{`
-  const blockInner = source.substring(insertAt, parentOcc.valueEnd - 1);
-  const innerMatch = blockInner.match(/\n([ \t]+)\S/);
-  const indent = innerMatch ? innerMatch[1] : parentIndent + '  ';
-
-  const newSource =
-    source.substring(0, insertAt) +
-    `\n${indent}"${leafKey}": ${serialized},` +
-    source.substring(insertAt);
-
-  await saveJson5(filePath, newSource);
 
   // Sanity post-scrittura: il valore deve essere leggibile al path richiesto.
   const after = loadJson5(filePath);
@@ -220,7 +169,11 @@ async function insertNested(filePath, segments, value, serialized) {
     throw new Error(`setJson5Key: validazione post-scrittura fallita per il path ${pathDesc} in "${filePath}"`);
   }
 
-  return { action: 'inserted', value };
+  // Un inserimento non sostituisce niente, quindi non può aver perso commenti:
+  // `[]` è il valore giusto, non un segnaposto. La forma di ritorno resta
+  // comunque la STESSA nei tre rami, così chi la consuma non deve sapere quale
+  // ha girato.
+  return { action: 'inserted', value, droppedComments: [] };
 }
 
 module.exports = setJson5Key;

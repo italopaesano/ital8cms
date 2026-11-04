@@ -26,6 +26,7 @@ Distinzione con gli altri due registri:
 6. [Sicurezza](#6-sicurezza)
 7. [Dipendenze](#7-dipendenze)
 8. [Direzioni ampie](#8-direzioni-ampie)
+9. [Zone dello spazio URL e segnaposti di percorso](#9-zone-dello-spazio-url-e-segnaposti-di-percorso)
 
 ---
 
@@ -38,6 +39,16 @@ spetta al maintainer. Chi riprende in mano il progetto può partire da qui.
 Le voci con un rimando hanno la trattazione completa nella sezione indicata; quelle
 senza rimando sono descritte per intero qui perché non hanno una voce propria altrove.
 
+- [x] ~~**Quattro nomi da confermare per le zone dello spazio URL** → §9.~~
+      **Chiusi il 2026-10-30.** Confermati `{{admin}}` (nome di **zona**, non di chiave:
+      la zona `site` non ha un `sitePrefix`, quindi lo schema « nome della chiave » non
+      coprirebbe tutte le zone) e `[ACCESS]`. Affinati gli altri due: concetto e modulo
+      portano nomi distinti — `pathZones` → `core/pathZoneResolver.js`,
+      `accessInvariants` → `core/accessInvariantCheck.js`, entrambi ricalcati su moduli
+      che esistono già. E **`posture` è diventato `baseline`**, perché D4 rende quella
+      chiave un *pavimento* e non un *default*: `defaultAccess` avrebbe suggerito il
+      modello mentale sbagliato. Fase 0 chiusa → Fase 1 sbloccata. Fonte:
+      [`docs/decisions/path-zones.it.md`](./docs/decisions/path-zones.it.md) → *Naming*.
 - [x] ~~**`urlRedirect` e `HEAD`** *(due decisioni collegate)* → §7.~~ **Deciso e
       applicato in v3.4.0.** **(a)** Il guard è esteso a `HEAD`: RFC 9110 §9.3.2
       definisce `HEAD` come `GET` senza corpo, quindi la divergenza non era una scelta
@@ -574,6 +585,84 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       plugin attivo dei test minimi richiesti (un test per metodo esportato, uno per
       rotta incluso `access`, validazione dei JSON5, lifecycle hooks). Default
       warning, `testingStrictMode: true` per promuoverli a fatali.
+- [ ] **🐞 La rimozione di `globalPrefix` è scritta a mano in TRE punti, e due usano
+      `startsWith` nudo.** *(Emerso chiudendo la Fase 6 di path-zones; il maintainer ha
+      scelto di tenerla inline nel gate e registrare il consolidamento.)*
+      `plugins/sentinel/lib/ruleMatcher.js:80`, `plugins/rateLimiter/main.js:294` e
+      `core/priorityMiddlewares/runtimeGate.js` fanno tutti la stessa cosa: togliere
+      `globalPrefix` dal path prima del confronto, perché **chi compara lo toglie**
+      (i due spazi di path, D-path-zones).
+      **Ma i primi due lo fanno con `startsWith(globalPrefix)` nudo**, cioè senza il
+      separatore: con `globalPrefix: "/my"` un path `/mysite/x` viene tagliato in
+      `site/x`. È la stessa famiglia di **B5** in `REVIEW.md` (prefisso senza
+      separatore). L'effetto non è un falso positivo ma una regola che **manca il
+      proprio bersaglio** — silenziosamente. La versione nel gate usa
+      `pathIsUnderSegment` e non ha il difetto.
+      Da consolidare in un'unica funzione condivisa (nome da proporre), così le tre
+      copie non possono più divergere — è il pattern che la sezione *F* di `REVIEW.md`
+      indica come il filo comune di quattro difetti su ventuno.
+- [ ] **`droppedComments` arriva al chiamante, ma nessun chiamante lo MOSTRA.**
+      *(Metà rimanente del rilievo 5 della revisione del codice, dichiarata invece di
+      lasciata implicita.)* Dalla v3.37.0 `editJson5` e `setJson5Key` restituiscono
+      entrambi `droppedComments` in tutti i rami, quindi l'informazione non viene più
+      **distrutta**. Ma l'audit di tutti i call site mostra che **nessuno cattura il
+      valore di ritorno**: sono tutti `await setJson5Key(…)` nudi. Quindi « un commento
+      perso e dichiarato » oggi è dichiarato a nessuno.
+      Il consumatore naturale è **`core/migrationRunner.js`**, che ha già un logger ed è
+      il contesto in cui « questa migrazione ha perso un commento, qui » interessa a un
+      amministratore. Caso concreto già presente: `core/migrations/adminConfig/from-v1-to-v2.js:57`
+      chiama `setJson5Key(configPath, 'menuOrder', updated)` su un **array** — se la
+      lunghezza cambia, i commenti interni si perdono e nessuno lo dice. Da valutare se
+      il runner debba leggere il resoconto degli step, o se ogni script debba loggarlo
+      da sé (il primo è uniforme, il secondo non obbliga il runner a conoscere la forma
+      di ritorno di ogni operazione).
+- [ ] **🐞 `sentinel/migrations/from-v6-to-v7.js` ha la stessa famiglia di difetto
+      delle rinomine testuali.** *(Emerso durante la correzione del rilievo 2 della
+      revisione del codice; **fuori dal perimetro** che il maintainer aveva dato, quindi
+      non toccato.)* Fa `before.replace(SHIPPED_LINE, PLACEHOLDER_LINE)`: `String.replace`
+      con un pattern stringa sostituisce solo la **prima** occorrenza, e l'ancora non è
+      vincolata al codice. Più difficile da innescare della versione di
+      `adminAccessControl` — l'ancora è una riga **intera** con dieci spazi di
+      indentazione e il blocco `{ path: […] },` completo, non una semplice chiave — ma
+      il caso resta: la stessa riga presente **due volte** (una regola duplicata) ne
+      vede convertita una sola, e alla riesecuzione la guardia
+      `before.includes(PLACEHOLDER_LINE)` dichiara « già convertita », quindi il
+      letterale residuo non viene più nominato mai.
+      **`renameJson5Key` non è lo strumento giusto qui**, perché quella riga è un
+      VALORE (un elemento di `match.any`), non una chiave. Lo strumento è `editJson5`
+      sull'array, che dalla v3.37.0 ricorre per indice **anche dentro gli elementi** e
+      ne preserva i commenti: la correzione del rilievo 1 ha reso disponibile la strada
+      pulita che prima non c'era. Da valutare insieme al resto delle migrazioni di
+      `sentinel`.
+- [ ] **🐞 Gli harness di boot riscrivono il `ital8Config.json5` VIVO con
+      `JSON.stringify`, e lo ripristinano solo in `afterAll`.** *(Emerso verificando la
+      Fase 4 di path-zones: due test fallivano e la causa era lo stato lasciato da una
+      run precedente interrotta.)* `spawnServer()` in `tests/integration/dirListing.test.js`
+      — e lo stesso schema in `httpVerbs`, `hideExtension`, `rejectNonCanonicalPaths`,
+      `httpsServer` — fotografa il file, ci scrive sopra
+      `JSON.stringify(testConf, null, 2)` e lo riscrive da `originalRaw` alla fine. Due
+      conseguenze: **(a)** durante la run il config vivo dello sviluppatore è
+      riserializzato, cioè **senza i suoi 230 commenti**; **(b)** se la run è
+      interrotta (worker ucciso, Ctrl-C, `afterAll` non eseguito) quel file **resta**
+      riserializzato e puntato alle fixture — trovato così: `httpPort: 19310`
+      (il `PORT_OFF` di `dirListing`), `wwwPath: "/tests/www"`, `activeTheme:
+      "themeForTesting"`, zero commenti. **Seconda ricaduta il 2026-11-01**, durante
+      la Fase 5 di json5-key-operations: `httpPort: 19311`, `activeTheme:
+      "themeForTesting"`, `rejectNonCanonicalPaths: false`,
+      `https.hotReload.debounceMs` **sparita** e `cli.socketPath` puntato a
+      `/tmp/ital8cms-sentinel-int-….sock` — quest'ultimo nomina una suite che
+      l'elenco qui sopra **non ha**, quindi lo schema è più diffuso di quanto
+      registrato. Innescata da un `npx jest` **nudo**, che rastrella anche gli
+      `.spec.js` di Playwright esclusi da `tests/jest.config.js`: la suite di
+      progetto (`--config=tests/jest.config.js`) resta verde e **non** distrugge il
+      vivo. E il danno è silenzioso finché non lo nota un
+      test che *pretende* quei commenti (`themesManagment` → « preserva i commenti
+      JSON5 »), che allora fallisce per una causa che non ha niente a che vedere con sé.
+      Il ripristino dal `.default` risolve, ma nessuno sa che va fatto. Due strade:
+      scrivere il config di prova in una **copia** e lanciare il server con un override
+      (nessuna scrittura sul vivo), oppure registrare il ripristino su
+      `process.on('exit')` invece che nel solo `afterAll`. La prima è la vera
+      correzione; la seconda limita i danni. Stessa famiglia della voce qui sotto.
 - [ ] **Safety net filesystem nei test**: hook che verifichi che nessun test scriva
       dentro `plugins/*/` o `themes/*/` reali (oggi è solo una convenzione).
 
@@ -901,3 +990,239 @@ Non sono debito, ma direzioni: il dettaglio vive in
 - [ ] **Build frontend** (bundling degli asset)
 - [ ] **Cleanup dei plugin allo shutdown** coordinato da `pluginSys`, oggi lasciato
       a ogni plugin (es. `urlRedirect/hitCounter.js` gestisce i propri segnali)
+
+## 9. Zone dello spazio URL e segnaposti di percorso
+
+Fonte: [`docs/decisions/path-zones.it.md`](./docs/decisions/path-zones.it.md)
+(design **approvato** il 2026-10-30, strada B — « costruire il muro »).
+Chiude alla radice [`REVIEW.md`](./REVIEW.md) → **A1** e **A3**.
+
+**Fasi 0-3 fatte** (2026-10-30/31). **A1 e A3 sono CHIUSI e spuntati in `REVIEW.md`.**
+Il pannello è protetto a qualunque `adminPrefix` e anche con `accessControl.json5`
+svuotato, illeggibile o cancellato; un ruleset non applicabile non fa partire il CMS
+(box `[ACCESS]` + `[FATAL]`, verificato sul server reale); una modifica che non
+passerebbe il boot non può essere salvata dalla GUI. Le fasi 4-6 che restano sono
+**pulizia e propagazione, non correzione**.
+
+- [x] ~~**Fase 0 — conferma del naming.**~~ **Chiusa il 2026-10-30:** tutti i nomi
+      approvati (`{{admin}}`, `pathZones`/`core/pathZoneResolver.js`,
+      `accessInvariants`/`core/accessInvariantCheck.js`, `[ACCESS]`, `baseline`).
+- [x] ~~**Fase 1 — la mappa: `core/pathZoneResolver.js`** (modulo puro).~~
+      **Fatta il 2026-10-30.** `resolvePathZones` · `resolveRuleset` · `resolvePattern` ·
+      `zoneForPath` · `ZONE_NAMES`; 132 test in `tests/unit/core/pathZoneResolver.test.js`,
+      parametrizzati su cinque prefissi diversi (`admin`, `backoffice`, `pannello`,
+      `a-b_c`, `MixedCase`). In corso d'opera sono emersi due fail-open silenziosi non
+      previsti dalla decisione (delimitatore di segnaposto spaiato, due zone sullo stesso
+      prefisso concreto): aggiunti come terzo e quarto tipo di problema. Il modulo è
+      poi stato **revisionato**: nove difetti di implementazione corretti, sei dei
+      quali erano fail-open silenziosi (quantificatori regex scartati, estensione non
+      normalizzata, `**` derivato in largo, prefisso non validato, precedenza delle
+      collisioni rovesciata, derivazione solo in una direzione, chiave vuota,
+      annidamento fra zone, lookup sul prototipo). Dettaglio nel registro di
+      decisione → *Revisione del codice*. Nessun consumatore collegato.
+- [x] ~~**Fase 2 — `baseline` di zona in `accessManager`.**~~ **Fatta il 2026-10-31.**
+      `tightenAccess` + `violatesBaseline` nel core, problema `baseline-violation` al
+      caricamento, `checkAccess` che ricava la zona dalla **URL richiesta** (così il
+      baseline vale anche dove il controllo al caricamento non arriva: i pattern
+      `regex:`). La `defaultPolicy` è **affiancata, non rimossa**: sulle zone aperte
+      decide ancora lei, quindi il comportamento del sito pubblico è identico a prima
+      e il cambiamento riguarda solo le tre zone chiuse. Le `hardcodedRules`
+      **restano** come documentazione (decisione del maintainer), con il commento che
+      dichiara che non sono più la fonte di verità. +28 test sul motore.
+      **Un cambiamento da conoscere:** `GET {{adminThemeResources}}/...` da anonimo
+      ora risponde 302 invece di 200 — fuga che il commento di `runtimeGate.js:232`
+      già descriveva; la pagina di login non è toccata (usa il tema pubblico).
+- [x] ~~**Fase 3 — invarianti + box `[ACCESS]`: `core/accessInvariantCheck.js`.**~~
+      **Fatta il 2026-10-31.** Le sonde si **derivano** dalle zone invece di essere
+      elencate (19 sulla configurazione distribuita), così una zona chiusa aggiunta
+      domani è coperta senza toccare il file; verificano anche il verso opposto (ogni
+      ruolo ammesso deve entrare, perché un pannello irraggiungibile al suo
+      amministratore non è sicurezza). L'unica sonda non derivabile è la più
+      importante: il login raggiungibile da anonimo, con l'URL preso da
+      `defaultPolicy.redirectOnDenied` — senza, un rifiutato finisce su una pagina che
+      lo rifiuta e nessuno può più autenticarsi per correggere. Al boot si **lancia**
+      (la fatalità è di `pluginSys`, non un `process.exit` dal plugin); a runtime si
+      rifiuta tenendo il ruleset precedente. `saveRules` esegue gli stessi controlli
+      **prima di scrivere**: un file che non farebbe ripartire il CMS non può essere
+      salvato. Tutti e otto i problemi sono fatali, con messaggi **diagnostici** e non
+      prescrittivi. +72 test. **A1 e A3 spuntati in `REVIEW.md`.**
+      **Revisionata**, con cinque difetti corretti, di cui uno era un **fail-open nel
+      percorso di enforcement**: un rifiuto che non portava né redirect né status
+      cadeva su `await next()` e la pagina veniva servita a chi era stato negato —
+      raggiungibile con una `defaultPolicy` priva di `redirectOnDenied`, e invisibile
+      alle sonde perché leggevano solo `allowed`. Ora un rifiuto deve essere
+      **applicabile**, e `validateCandidate` non sostituisce più la policy viva a
+      quella mancante (altrimenti salvava un file che al boot non parte). Dettaglio
+      nel registro → *Revisione della Fase 3*.
+- [x] ~~**Fase 4 — segnaposti nei `.default` + migrazione.**~~ **Fatta il 2026-10-31.**
+      In `accessControl.default.json5` le **10 regole dichiarate diventano 6**: i
+      letterali passano a `{{admin}}`/`{{pluginPages}}`, e le tre forme senza
+      estensione non sono più scritte a mano ma **derivate** quando `hideExtension` è
+      acceso per quella zona (D5). `migrations/` con lo step v3→v4 e bump del
+      descrittore (`pluginConfig.default.json5`) a `4`: il clock è il descrittore,
+      quindi la `schemaVersion` di `accessControl` resta **3** di proposito — cambiano
+      i valori delle chiavi, non le chiavi. Lo script è **testuale** (un `saveJson5`
+      dell'oggetto perderebbe i commenti, che qui sono la parte che spiega perché le
+      `hardcodedRules` non sono più la fonte di verità), **idempotente** e
+      **fail-soft**: un pattern che non riconosce lo lascia e lo segnala, e una forma
+      pulita modificata dall'amministratore non viene rimossa. Verificata con la CLI
+      reale (6 pattern convertiti, 3 forme pulite rimosse, ricevuta + backup), poi boot
+      pulito e la prova che conta: con `adminPrefix: "backoffice"` i pattern risolvono
+      a `/backoffice` e il pannello è protetto **dalla regola**, non solo dal
+      `baseline`. +20 test.
+      **Un test ha dovuto cambiare, ed è la lezione per la Fase 5:**
+      `reservedSurfaceCoverage` leggeva i pattern **grezzi** e li confrontava con URL
+      concreti — con i segnaposti non combaciano più, e il test aveva ragione a
+      fallire perché misurava la *scrittura* invece dell'*effetto*. Ora passa per il
+      resolver, come il motore. Reso **più fedele**, non più permissivo: i casi
+      « forma senza estensione » esercitano davvero `hideExtension` acceso, e i casi
+      « non riservata » girano su entrambi i ruleset. Verificato con due mutazioni
+      (5 e 3 fallimenti).
+- [x] ~~**Fase 5 — adozione negli altri consumatori.**~~ **Fatta il 2026-10-31.**
+      `sentinel`, `rateLimiter` e `seo` convertiti ai segnaposti, più
+      `resolvePatternList` nel core (terza della famiglia per cardinalità: uno,
+      un record, una lista nuda). **Il risultato concettuale non era previsto
+      dalla decisione:** i path vivono in **due spazi**, non uno — chi *confronta*
+      una richiesta sta nello spazio **logico** (e toglie `globalPrefix`), chi
+      *emette* un URL verso l'esterno sta in quello **servito** (e lo antepone).
+      Accertato consumatore per consumatore prima di convertire, e ha fatto
+      emergere due difetti **preesistenti**: `rateLimiter` confrontava il path
+      grezzo (su un'istanza con `globalPrefix` **nessuna** esenzione combaciava, e
+      l'amministratore poteva farsi limitare sul proprio pannello — il config lo
+      ammetteva chiedendo di « adeguare questi percorsi a mano », cosa che coi
+      segnaposti diventava impossibile), e `seo` ignorava `globalPrefix` del tutto
+      (`Disallow: /admin/` sotto `/mysite` non escludeva niente). Corretti
+      entrambi, il secondo su decisione del maintainer.
+      I circa venti pattern di **tecnologie altrui** di `sentinel` (`/wp-admin`,
+      `/phpmyadmin`, `/.env`) **restano letterali**, ed è deliberato.
+      In `sentinel` la risoluzione precede la **validazione** (il validatore
+      rifiuta un path che non cominci con `/`), con una guardia: senza config
+      globale non si risolve niente, perché `resolvePathZones({})` ricade sui
+      prefissi di default e risolverebbe `{{admin}}` a `/admin` su un'istanza
+      `backoffice` — A1 riprodotto dentro la sua stessa correzione.
+      Tre migrazioni, **due basate su oggetto** (`setJson5Key` su path annidato,
+      che preserva i commenti) e una testuale ancorata al testo esatto dove la
+      struttura non è indirizzabile. Applicate con la CLI reale su un'installazione
+      ricostruita « alla v1 »: tutti i commenti conservati (51/67/326/258).
+      **+27 test**, con copertura delle forme su cui uno script del genere perde
+      dati — la lezione della revisione della Fase 4.
+      **Due presidi hanno colto la propria cecità:** il rilevatore di D8 cercava i
+      segnaposti nella sola forma-chiave e non vedeva quelli nei **valori**; e un
+      mio test era **vacuo** (il valore scelto non discriminava fra uguaglianza
+      esatta e match per prefisso), trovato mutando lo script.
+      **🐞 Un difetto di ORDINE, trovato dal vivo:** bumpare la `schemaVersion` di
+      un `.default` **prima** di dichiarare la migrazione **brucia il trigger** —
+      il merge additivo allinea il vivo al primo boot, la ricevuta avanza e il
+      lavoro non viene fatto. Accaduto in sessione su `rateLimiter` e `seo`.
+      L'ordine è obbligatorio: prima `migrations/`, poi il bump. Nessun presidio
+      lo impone (registrato fra i punti rimandati).
+- [ ] **Fase 6 — consolidamento `runtimeGate`.** Il `reservedGate` deriva il perimetro
+      dalla mappa invece di ricalcolarlo: oggi `runtimeGate.js:60` e `:275` leggono
+      `adminPrefix` **correttamente**, `accessControl.json5` no, ed è proprio questa
+      divergenza fra due derivazioni dello stesso perimetro ad aver prodotto A1.
+
+**Punti rimandati** (dal registro di decisione, §*Punti rimandati*):
+
+- [ ] `baseline` della zona `site`: il nome della chiave è deciso, **la sua collocazione no**
+      (caso d'uso « sito privato », reale ma non urgente).
+- [ ] Vocabolario **estendibile dai plugin**: chiuso per v1; aprirlo introduce uno
+      spazio di nomi condiviso, quindi richiede un prefisso di namespace.
+- [ ] Lettura di chiavi arbitrarie da file arbitrari (la forma generale della proposta
+      iniziale): molta più macchina per casi d'uso che oggi non esistono.
+- [ ] **`dirListing` acceso sul file server admin** (`index.js:563`, l'unico dei cinque).
+      Non fa parte della decisione, ma è uno dei tre fattori che trasformano A1 da
+      disallineamento di configurazione a esposizione dell'intero albero del pannello.
+
+## 10. Operazioni su chiave `.json5` — `removeJson5Key` e la sostituzione per chiave
+
+Fonte: [`docs/decisions/json5-key-operations.it.md`](./docs/decisions/json5-key-operations.it.md)
+(decisioni D1-D5 prese il 2026-11-01, implementazione da fare).
+Origine: revisione della **Fase 4** di [`path-zones.it.md`](./docs/decisions/path-zones.it.md).
+
+**Il buco.** Lo strato di chirurgia testuale del core copre **quattro operazioni
+su cinque**: leggere (`loadJson5`), riscrivere tutto (`saveJson5`), aggiornare una
+chiave (`editJson5`), aggiungere-o-aggiornare (`setJson5Key`). **Rimuovere una
+chiave non esiste** — ed è stata riscritta a mano dentro uno script di migrazione
+(`dropRuleBlock`), con `indexOf` invece della macchina di scansione che viveva
+venti righe più in là. Ne sono usciti due difetti di perdita dati, entrambi
+riprodotti: una regola scritta **inline** faceva cancellare anche quella
+**successiva** (8 regole custom diventate 3 invece di 4, con `isAuthEntryPoint`
+perso), e il **contenuto non veniva mai guardato**, quindi una regola che
+l'amministratore aveva **stretto** veniva cancellata e il suo URL ricadeva sul
+gemello più permissivo.
+
+- [x] ~~**Fase 1 — `core/removeJson5Key.js`** con i suoi test.~~ **Fatta il
+      2026-11-01.** La scansione è stata estratta in **`core/json5Scan.js`**
+      (modulo di sola lettura, nome approvato): sette funzioni, zero dipendenze
+      esterne nel blocco, `editJson5.js` **da 628 a 278 righe** e la suite
+      invariata a dimostrarlo. `editJson5._internals` **rimosso** — il suo unico
+      consumatore di produzione era `setJson5Key.js:180`, che ora importa
+      `json5Scan` direttamente. `removeJson5Key` ha la firma simmetrica ai
+      fratelli, no-op su chiave assente (idempotenza), rifiuto su path ambiguo, e
+      una **postcondizione in due parti verificata prima di scrivere**: il path
+      non esiste più *e* tutto il resto del documento è identico — la seconda è la
+      rete che impedisce al difetto storico di ripetersi in silenzio, perché una
+      cancellazione che si porta via la coppia successiva lascia un file ancora
+      parsabile. **40 test** e **3 mutazioni**, tutte colte; la prima stesura di
+      una era *infedele* (cercava `'},'` invece di `'\n  },'`, cioè newline più
+      indentazione, che è il motivo per cui il difetto saltava la propria
+      chiusura) e corretta uccide il test giusto.
+- [ ] **Fase 2 — sostituzione per chiave in `editJson5`.** Oggi, cambiando *una*
+      chiave di un oggetto, spariscono i commenti di **tutte** le altre, anche di
+      quelle il cui valore non cambia — misurato. La correzione è non ricostruire
+      il blocco ma **ricorrere**: per chiave sugli oggetti, per indice sugli array
+      a lunghezza invariata. Richiede di estendere `editJson5` alla navigazione
+      dentro gli array per indice, oggi fuori perimetro. **`removeJson5Key` è il
+      prerequisito**, non il contrario: la ricorsione ha bisogno di « rimuovi »
+      per le chiavi che il nuovo valore non ha più.
+- [x] ~~**Fase 3 — specifiche e documentazione.**~~ **Fatta il 2026-11-01.**
+      Riscritto l'header di `editJson5` (lo *Scope* citava la perdita dei commenti
+      come **limite**: sostituito, non annotato); `CLAUDE.md` aggiornato, con la
+      riga sulle migrazioni che ora conosce **cinque** operazioni invece di due.
+      **La sovra-affermazione della Fase 5 non andava corretta: la Fase 2 l'ha
+      resa vera.** `editJson5` ricorre per indice a lunghezza invariata, e quelle
+      migrazioni usano `declared.map(...)`, che per costruzione non cambia la
+      lunghezza — quindi l'affermazione è vera senza riserve *per quelle
+      migrazioni*, e il perché è scritto dove serve. Verificato: 5 commenti prima,
+      5 dopo, i tre dentro l'array compresi. Il **test cieco** è stato sostituito
+      con uno che mette i commenti *dentro* l'array: spegnendo la ricorsione per
+      indice fallisce (2 fallimenti, uno per plugin).
+- [x] ~~**Fase 4 — `from-v3-to-v4.js` riscritta** sopra `removeJson5Key`.~~
+      **Fatta il 2026-11-01.** `dropRuleBlock` eliminata; chiusi i difetti **1**
+      (la regola successiva inghiottita su una regola scritta inline), **2** (il
+      contenuto mai guardato), **3** (il salto silenzioso delle rinomine), **5**
+      (la diagnostica che affermava una causa non verificata) e **7** (il
+      temporaneo `.migrating` non ignorato). Il criterio del confronto del corpo è
+      « **è ancora un duplicato del suo gemello `.ejs`?** » e non « è ancora
+      quella spedita »: i due differiscono in due casi reali e il secondo li
+      sbaglia — se l'admin ha modificato il `.ejs` e non la forma pulita,
+      rimuoverla farebbe produrre alla derivazione il corpo **modificato**. Le
+      rinomine restano testuali, e il perché è scritto: una rinomina che preservi
+      posizione e commenti sarebbe una **sesta** operazione. 21 test (+5, con le
+      due riproduzioni della revisione), 2 mutazioni colte, e la migrazione
+      riapplicata con la **CLI reale** su un'installazione ricostruita alla v3:
+      97 commenti su 98, zero temporanei, boot pulito.
+- [x] ~~**Fase 5 — RILETTURA MANUALE DI TUTTI I COMMENTI.**~~ **Fatta il
+      2026-11-01.** Non era una rifinitura: era la seconda metà di D3 — la funzione
+      conserva i commenti **senza giudicarli** (decisione del maintainer: « in
+      questa prima fase conserverei i commenti senza fare altro e senza chiedermi
+      cosa dicono »), quindi a conversione fatta qualcuno doveva rileggerli.
+      **Quattro corretti**, tutti della stessa famiglia — insegnavano la forma che
+      la conversione ha abbandonato: l'⚠ di `sentinelRules.default.json5` che
+      diceva di scrivere i path **CON** `apiPrefix`/`pluginPagesPrefix` letterali
+      (contraddicendo il blocco venti righe sotto, e avvertendo del guasto
+      silenzioso che i segnaposti hanno eliminato) più, nelle stesse righe, il
+      `globalPrefix` descritto come « anteposto dal codice » quando
+      `ruleMatcher.js` lo **toglie**; i due esempi di sintassi di
+      `accessControl.default.json5` (verificato che i segnaposti risolvono **anche
+      dentro** un `regex:`); e — fuori dai config —
+      `plugins/adminSeo/lib/seoFileManager.js`, che dichiarava « comments INSIDE
+      the old custom block are lost (**expected**) »: la Fase 2 l'ha reso falso, e
+      il « (expected) » dichiarava accettabile una perdita che non avviene più
+      (misurato: 10 commenti prima, 10 dopo, `droppedComments: []`).
+      Le correzioni stanno nei `.default`, i committati: un'installazione esistente
+      conserva il commento vecchio nel proprio vivo finché non lo rigenera
+      (`npm run cli -- reset <plugin>`), perché il merge additivo tocca i valori e
+      non i commenti. Lasciati per scelta del maintainer: la prosa che situa la GUI
+      in `/admin/adminAccessControl/` e il §*Contesto* del decision record, che
+      resta al presente.

@@ -43,6 +43,7 @@
 const fs = require('fs');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
+const { resolvePathZones, resolvePatternList } = require('../../core/pathZoneResolver');
 const logger = require('../../core/logger');
 const PatternMatcher = require('../../core/patternMatcher');
 
@@ -120,6 +121,71 @@ function log(level, message) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Espande i segnaposti di percorso in TUTTI i campi `path` dell'albero `match`.
+ *
+ * ─── PERCHE PRIMA DELLA VALIDAZIONE, E NON DOPO ───────────────────────────────
+ * Il validatore rifiuta un path che non cominci con `/` o `regex:`
+ * (`lib/ruleValidator.js`: « i path si scrivono a partire da "/" e SENZA
+ * globalPrefix »). Un `{{api}}/adminUsers/login` comincia con `{`, quindi dopo la
+ * validazione non ci arriverebbe mai: verrebbe respinto come path malformato, con
+ * un messaggio che parla di tutt'altro. La risoluzione deve precedere il
+ * validatore, che così continua a vedere solo path concreti — ed è giusto che sia
+ * lui a giudicarli, perché è lui che conosce ReDoS e forma.
+ *
+ * ─── L'ALBERO ─────────────────────────────────────────────────────────────────
+ * `match` non è piatto: `all` e `any` sono array di nodi, `not` è un nodo singolo,
+ * e `path` può essere una stringa o un array. Si scende ovunque, si tocca solo
+ * `path`: gli altri campi (`extension`, `fingerprintClass`, `method`…) non sono
+ * percorsi e un'espansione lì sarebbe una sorpresa.
+ *
+ * ─── I LETTERALI ESTRANEI RESTANO ─────────────────────────────────────────────
+ * La maggioranza dei path di questo file non sono zone di ital8cms ma tecnologie
+ * altrui — `/wp-admin/**`, `/phpmyadmin/**`, `/.env` — e devono restare
+ * esattamente come sono. `resolvePatternList` li lascia intatti per costruzione:
+ * tocca solo ciò che contiene `{{…}}`.
+ *
+ * @param {object} rulesData - contenuto appena letto di sentinelRules.json5
+ * @param {object} zoneMap - il risultato di `resolvePathZones`
+ * @returns {Array<{rule: string, problem: object}>} i pattern scartati, col nome
+ *   della regola che li conteneva: senza, la diagnostica direbbe « un pattern »
+ *   senza dire di chi, in un file che ne ha un centinaio.
+ */
+function resolveMatchPaths(rulesData, zoneMap) {
+  const found = [];
+  if (!rulesData || !Array.isArray(rulesData.rules)) return found;
+
+  const walk = (node, ruleName) => {
+    if (!node || typeof node !== 'object') return;
+
+    for (const combinator of ['all', 'any']) {
+      if (Array.isArray(node[combinator])) {
+        for (const child of node[combinator]) walk(child, ruleName);
+      }
+    }
+    if (node.not !== undefined) walk(node.not, ruleName);
+
+    if (node.path === undefined) return;
+    const declared = Array.isArray(node.path) ? node.path : [node.path];
+    let outcome;
+    try {
+      outcome = resolvePatternList(declared, zoneMap);
+    } catch (err) {
+      // Elemento non-stringa: lo lascia al validatore, che ha il messaggio giusto
+      // (« path: pattern non valido ») e la posizione esatta nell'albero.
+      return;
+    }
+    for (const problem of outcome.problems) found.push({ rule: ruleName, problem });
+    node.path = outcome.patterns;
+  };
+
+  for (const rule of rulesData.rules) {
+    if (!rule || typeof rule !== 'object') continue;
+    walk(rule.match, typeof rule.name === 'string' ? rule.name : '(senza nome)');
+  }
+  return found;
+}
+
+/**
  * Legge, valida e compila sentinelRules.json5.
  *
  * FAIL-OPEN: in caso di errore si resta senza regole (nessun filtro) ma il sito
@@ -154,6 +220,37 @@ function loadRules() {
     return [];
   }
   rulesUnavailableLogged = false;
+
+  // ── Segnaposti → prefissi concreti, PRIMA della validazione ────────────────
+  //
+  // GUARDIA: senza il config globale non si risolve NIENTE. `loadPlugin` ingoia in
+  // silenzio un ital8Config.json5 illeggibile (`catch { ital8Conf = {} }`), e
+  // `resolvePathZones({})` ricade sui prefissi di DEFAULT senza segnalare nulla:
+  // su un'istanza con `adminPrefix: "backoffice"` i segnaposti si risolverebbero a
+  // `/admin`, cioè a un percorso che non esiste — una regola che sembra configurata
+  // e non osserva niente. È la forma esatta di A1, e non va riprodotta qui.
+  //
+  // Quindi: se il config globale non c'è, i `{{…}}` restano come sono. Il
+  // validatore li respinge (« i path si scrivono a partire da "/" »), le regole che
+  // li usano cadono, e tutto viene detto. Fail-closed e rumoroso invece di
+  // fail-silent sul prefisso sbagliato.
+  const globalConfigLoaded = typeof ital8Conf.adminPrefix === 'string';
+  if (!globalConfigLoaded) {
+    log('error', 'ital8Config.json5 non disponibile: i segnaposti di percorso NON '
+      + 'vengono risolti e le regole che li usano saranno respinte dal validatore. '
+      + 'Nessun pattern viene indovinato sui prefissi di default.');
+  }
+  const placeholderProblems = globalConfigLoaded
+    ? resolveMatchPaths(rulesData, resolvePathZones(ital8Conf))
+    : [];
+  for (const { rule, problem } of placeholderProblems) {
+    log('error',
+      `regola "${rule}": pattern SCARTATO "${problem.pattern}" (${problem.kind}) — `
+      + 'quel percorso non sarà più osservato da questa regola');
+  }
+  if (placeholderProblems.length > 0 && custom.strictValidation) {
+    throw new Error('[sentinel] segnaposti non risolvibili in sentinelRules.json5 (strictValidation=true)');
+  }
 
   const result = validateRules(rulesData, {
     knownRateLimiterRules: getRateLimiterRuleNames(),
@@ -1445,4 +1542,9 @@ module.exports._internals = {
     try { engine.observeOutcome(ctx, {}); } finally { custom = prevConf; outcomeCensus = prevCensus; }
   },
   resolveDataDir,
+  // Esposta ai test perché il set di regole distribuito va validato DOPO la
+  // risoluzione dei segnaposti: duplicare il walker nel test creerebbe due
+  // implementazioni da tenere d'accordo, cioè la divergenza che path-zones esiste
+  // per chiudere. Il test esercita lo stesso codice del motore.
+  resolveMatchPaths,
 };

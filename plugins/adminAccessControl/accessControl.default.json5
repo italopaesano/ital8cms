@@ -4,23 +4,54 @@
   "version": "1.0.0",
   "lastModified": "2026-01-28T10:00:00Z",
 
+  // ── Segnaposti di percorso ──────────────────────────────────────────
+  // I pattern possono usare {{admin}}, {{pluginPages}}, … al posto del
+  // prefisso concreto: il CMS lo risolve al caricamento leggendo le zone.
+  // Un segnaposto sconosciuto è un ERRORE, mai un letterale.
+  // Elenco completo e regole → docs/decisions/path-zones.it.md
+  // ────────────────────────────────────────────────────────────────────
+
   // ==========================================================================
-  // REGOLE HARDCODED (non modificabili via UI)
+  // REGOLE HARDCODED — DOCUMENTAZIONE, NON PIU' LA FONTE DI VERITA'
   // ==========================================================================
-  // Queste regole proteggono aree critiche del sistema e hanno priorità massima.
-  // Il campo "editable: false" impedisce la modifica via interfaccia admin.
+  // Queste regole restano qui perche' sono LEGGIBILI: dicono a chi apre il file
+  // qual e' il minimo d'accesso del pannello. Ma la protezione del pannello NON
+  // dipende piu' da loro.
   //
-  // IMPORTANTE: Queste regole sono presenti nel file solo per chiarezza e documentazione.
-  // La validazione impedisce qualsiasi modifica della sezione hardcodedRules via UI.
+  // PERCHE' E' CAMBIATO. Fin qui la protezione era scritta come TESTO (`/admin`),
+  // mentre la posizione reale del pannello e' una VARIABILE
+  // (`ital8Config.json5 -> adminPrefix`). Nessun codice sincronizzava le due cose:
+  // bastava cambiare `adminPrefix` in `backoffice` perche' nessuna regola matchasse
+  // piu', e allora si applicava la `defaultPolicy` — che di serie e' `allow`. Le
+  // pagine admin finivano servite a un anonimo, e chi aveva cambiato il prefisso lo
+  // aveva fatto CREDENDO di aumentare la sicurezza. (REVIEW.md -> A1)
+  //
+  // COSA PROTEGGE IL PANNELLO ADESSO. Ogni zona dello spazio URL porta il proprio
+  // minimo d'accesso — il suo `baseline` — scritto IN CODICE, in
+  // `core/pathZoneResolver.js`. La zona `admin` ha `baseline` chiuso ai ruoli
+  // [0, 1] qualunque sia il prefisso configurato. Conseguenza da conoscere: se
+  // questo file viene svuotato, corrotto o cancellato, il pannello resta
+  // PROTETTO (prima, in tutti e tre i casi, si apriva a chiunque).
+  //
+  // COSA PUO' FARE UNA REGOLA. Solo STRINGERE il `baseline` della sua zona, mai
+  // allentarlo. Una regola che negasse l'autenticazione in zona `admin`, o che
+  // concedesse un ruolo che il `baseline` non ammette, viene segnalata al
+  // caricamento e il `baseline` vince comunque.
+  //
+  // Il campo "editable: false" continua a impedire la modifica via interfaccia
+  // admin, e la validazione continua a rifiutare qualsiasi modifica di questa
+  // sezione dalla UI.
+  //
+  // -> docs/decisions/path-zones.it.md
   // ==========================================================================
   "hardcodedRules": {
-    "/admin": {
+    "{{admin}}": {
       "requiresAuth": true,
       "allowedRoles": [0, 1], // root (0), admin (1)
-      "priority": 1000, // Higher priority than /admin/** (exact match wins)
+      "priority": 1000, // Higher priority than {{admin}}/** (exact match wins)
       "editable": false
     },
-    "/admin/**": {
+    "{{admin}}/**": {
       "requiresAuth": true,
       "allowedRoles": [0, 1], // root (0), admin (1)
       "priority": 100,
@@ -38,25 +69,25 @@
   //   - Match esatto: "/dashboard.ejs"
   //   - Wildcard singolo: "/content/*.ejs" (non ricorsivo)
   //   - Wildcard ricorsivo: "/content/**" (tutti i livelli)
-  //   - Regex: "regex:/api/user/\\d+" (prefisso "regex:" obbligatorio)
+  //   - Regex: "regex:{{api}}/user/\\d+" (prefisso "regex:" obbligatorio)
+  //
+  // I segnaposti valgono anche DENTRO un "regex:": vengono risolti sul corpo
+  // prima che diventi una RegExp, quindi le graffe singole della regex
+  // (`\\d{1,3}`) restano sintassi e non vengono confuse con un segnaposto.
   //
   // Priorità automatica (da alta a bassa):
   //   1. Match esatto (es: /dashboard.ejs)
-  //   2. Regex (es: regex:/api/user/\\d+)
+  //   2. Regex (es: regex:{{api}}/user/\\d+)
   //   3. Wildcard singolo (es: /content/*.ejs)
-  //   4. Wildcard ricorsivo (es: /admin/**)
+  //   4. Wildcard ricorsivo (es: {{admin}}/**)
   //
   // In caso di conflitto, la regola più specifica vince.
   // ==========================================================================
   "customRules": {
     // Pagina profilo utente: accessibile solo a utenti autenticati (qualsiasi ruolo)
-    "/pluginPages/adminUsers/userProfile.ejs": {
+    "{{pluginPages}}/adminUsers/userProfile.ejs": {
       "requiresAuth": true,
       "allowedRoles": [] // Tutti gli utenti autenticati
-    },
-    "/pluginPages/adminUsers/userProfile": {
-      "requiresAuth": true,
-      "allowedRoles": [] // idem, forma senza estensione (hideExtension attivo)
     },
 
     // ── Varchi di autenticazione: pagine PUBBLICHE che appartengono comunque
@@ -68,37 +99,30 @@
     // anche a superficie chiusa, annunciando l'esistenza dell'area riservata —
     // esattamente cio che l'assetto vetrina vuole evitare.
     //
-    // PERCHE' OGNI PAGINA HA DUE REGOLE: con `hideExtension.pluginPagesPrefix`
-    // attivo l'URL servito e senza estensione (`.../login`), e una regola su
-    // `login.ejs` non lo intercetterebbe.
+    // UNA SOLA FORMA PER PAGINA, ED E' UN CAMBIAMENTO. Fino alla v3.29.0 ogni
+    // pagina qui dentro aveva DUE regole — `login.ejs` e `login` — perche con
+    // `hideExtension.pluginPagesPrefix` attivo l'URL servito e senza estensione, e
+    // una regola su `login.ejs` non lo intercetterebbe. Era il sintomo curato a
+    // mano, non la causa: adesso la forma pulita viene DERIVATA al caricamento
+    // quando `hideExtension` e attivo per quella zona, e scritta a mano sarebbe
+    // solo un duplicato da tenere allineato. Vedi path-zones.it.md, D5.
     //
-    // Le due forme sono scritte come match ESATTI, non come wildcard `login*`:
-    // il wildcard singolo di patternMatcher traduce `*` in `[^/]+` — UNO O PIU'
-    // caratteri — quindi `login*` copre `login.ejs` ma NON `login`, cioe
-    // proprio la forma che doveva coprire (verificato). In piu' catturerebbe
-    // per sbaglio pagine vicine come `loginHelper.ejs`. Il match esatto e anche
-    // quello a priorita' massima.
+    // I pattern sono match ESATTI, non wildcard `login*`: il wildcard singolo di
+    // patternMatcher traduce `*` in `[^/]+` — UNO O PIU' caratteri — quindi
+    // `login*` coprirebbe `login.ejs` ma NON `login` (verificato), e in piu'
+    // catturerebbe per sbaglio pagine vicine come `loginHelper.ejs`. Il match
+    // esatto e anche quello a priorita' massima.
     // Vedi docs/cli-control-plane.it.md → "Superficie riservata".
 
     // Pagina di login (deve essere pubblica, o nessuno potrebbe autenticarsi)
-    "/pluginPages/adminUsers/login.ejs": {
-      "requiresAuth": false,
-      "allowedRoles": [],
-      "isAuthEntryPoint": true
-    },
-    "/pluginPages/adminUsers/login": {
+    "{{pluginPages}}/adminUsers/login.ejs": {
       "requiresAuth": false,
       "allowedRoles": [],
       "isAuthEntryPoint": true
     },
 
     // Pagina di logout: varco in uscita, stessa logica
-    "/pluginPages/adminUsers/logout.ejs": {
-      "requiresAuth": false,
-      "allowedRoles": [],
-      "isAuthEntryPoint": true
-    },
-    "/pluginPages/adminUsers/logout": {
+    "{{pluginPages}}/adminUsers/logout.ejs": {
       "requiresAuth": false,
       "allowedRoles": [],
       "isAuthEntryPoint": true
@@ -106,12 +130,7 @@
 
     // Pagina "accesso negato": non richiede autenticazione, ma la sua sola
     // esistenza annuncia che esiste un sistema di controllo accessi
-    "/pluginPages/adminAccessControl/access-denied.ejs": {
-      "requiresAuth": false,
-      "allowedRoles": [],
-      "isAuthEntryPoint": true
-    },
-    "/pluginPages/adminAccessControl/access-denied": {
+    "{{pluginPages}}/adminAccessControl/access-denied.ejs": {
       "requiresAuth": false,
       "allowedRoles": [],
       "isAuthEntryPoint": true
@@ -128,7 +147,10 @@
   //   - "deny": Accesso negato (403 Forbidden)
   //   - "requireAuth": Solo utenti autenticati
   //
-  // redirectOnDenied: URL di redirect quando l'accesso è negato
+  // redirectOnDenied: URL di redirect quando l'accesso è negato.
+  //   ⚠ NON accetta segnaposti, ed è voluto: non è un pattern da confrontare ma
+  //   una URL che finisce in `ctx.redirect()`, cioè nella barra del browser.
+  //   I segnaposti si risolvono sui PATTERN, al caricamento del ruleset.
   // ==========================================================================
   "defaultPolicy": {
     "action": "allow", // "allow" | "deny" | "requireAuth"

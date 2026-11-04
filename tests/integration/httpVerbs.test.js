@@ -163,23 +163,40 @@ afterAll(async () => {
 
 // Le sei superfici che servono contenuto, una per istanza di koa-classic-server
 // più il router. Se domani ne nascesse una settima, il buco si vedrebbe qui.
+//
+// Il terzo elemento è lo status che un ANONIMO deve ricevere su quella superficie.
+// Era 200 per tutte e sei fino alla Fase 2 di path-zones: da allora la zona
+// `adminThemeResources` ha un `baseline` chiuso ai ruoli [0, 1], quindi un anonimo
+// riceve il redirect al login invece del foglio di stile. Non è una regressione, è
+// la chiusura di una fuga che il codice già conosceva — il commento di
+// `core/priorityMiddlewares/runtimeGate.js:232` la descriveva così: « le risorse del
+// tema NON sono coperte da alcuna regola di accessControl.json5 (che conosce solo
+// /admin e /admin/**): senza questa riga resterebbero servite a chiunque e
+// rivelerebbero l'esistenza del pannello ». Fino alla Fase 2 quella riga copriva
+// solo il caso `reserved stop`; ora la zona è chiusa sempre.
+// La pagina di login NON è toccata: le pluginPages non sono contesto admin
+// (`isAdminContext` non viene impostato da pluginPagesSystem), quindi usano il tema
+// PUBBLICO, la cui zona resta aperta.
+// → docs/decisions/path-zones.it.md
 const SURFACES = [
-  ['/robots.txt',                            'file statico di www'],
-  ['/index.ejs',                             'template EJS di www'],
-  ['/public-theme-resources/css/theme.css',  'risorsa del tema pubblico'],
-  ['/admin-theme-resources/css/theme.css',   'risorsa del tema admin'],
-  ['/pluginPages/adminUsers/login.ejs',      'pagina di un plugin'],
-  ['/api/adminUsers/logged',                 'rotta del router'],
+  ['/robots.txt',                            'file statico di www',          200],
+  ['/index.ejs',                             'template EJS di www',          200],
+  ['/public-theme-resources/css/theme.css',  'risorsa del tema pubblico',    200],
+  ['/admin-theme-resources/css/theme.css',   'risorsa del tema admin',       302],
+  ['/pluginPages/adminUsers/login.ejs',      'pagina di un plugin',          200],
+  ['/api/adminUsers/logged',                 'rotta del router',             200],
 ];
 
 describe('HEAD rispecchia GET su ogni superficie (RFC 9110 §9.3.2)', () => {
-  test.each(SURFACES)('%s — stesso status, stesso Content-Length, corpo vuoto (%s)', async (urlPath) => {
+  test.each(SURFACES)('%s — stesso status, stesso Content-Length, corpo vuoto (%s)', async (urlPath, _label, expectedStatus) => {
     const get = await request('GET', urlPath);
     const head = await request('HEAD', urlPath);
 
-    // Precondizione: la risorsa deve esistere, altrimenti il test confronterebbe
-    // due 404 e si dichiarerebbe soddisfatto senza aver verificato niente.
-    expect(get.status).toBe(200);
+    // Precondizione: lo status deve essere quello ATTESO per quella superficie,
+    // altrimenti il test confronterebbe due 404 e si dichiarerebbe soddisfatto
+    // senza aver verificato niente. Lo status è per-superficie e non 200 fisso
+    // perché non tutte le superfici sono pubbliche (vedi SURFACES).
+    expect(get.status).toBe(expectedStatus);
 
     expect(head.status).toBe(get.status);
     expect(head.headers['content-length']).toBe(get.headers['content-length']);

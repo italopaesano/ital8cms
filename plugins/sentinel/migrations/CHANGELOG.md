@@ -8,6 +8,23 @@ che è la versione di struttura dell'intero pacchetto.
 
 ---
 
+## v6 → v7 — i path NOSTRI di `auth-surface-noise` ai segnaposti
+
+**Con script** (`from-v6-to-v7.js`), automatico e idempotente. Una sostituzione
+uno-a-uno della riga dei path, ancorata al testo esatto: come lo step 5→6
+rinuncia senza toccare nulla se la regola è stata modificata o riformattata.
+
+I tre percorsi del CMS nominati da quella regola passano ai **segnaposti di
+percorso** (`{{api}}/…`, `{{pluginPages}}/…`), così seguono `apiPrefix` e
+`pluginPagesPrefix` invece di restare inerti appena li si cambia. I circa venti
+pattern di tecnologie altrui (`/wp-admin`, `/phpmyadmin`, `/.env`) **restano
+letterali**, ed è deliberato: non sono zone di ital8cms.
+
+Fase 5 di [`path-zones.it.md`](../../../docs/decisions/path-zones.it.md).
+Dettaglio e verifica → [`from-v6-to-v7.md`](./from-v6-to-v7.md).
+
+---
+
 ## v5 → v6 — `shell-probe` richiede un'estensione eseguibile
 
 **Con script** (`from-v5-to-v6.js`), automatico e idempotente. È il primo step

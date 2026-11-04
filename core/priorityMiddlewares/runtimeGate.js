@@ -2,6 +2,14 @@ const fs = require('fs');
 const path = require('path');
 const ejs = require('ejs');
 
+// La mappa delle zone di percorso: il perimetro della superficie riservata si
+// DERIVA da lì invece di essere elencato qui. La direzione della dipendenza è
+// questa — `runtimeGate` usa la mappa — ed è ciò che la Fase 6 di path-zones ha
+// consolidato; fino alla v3.38.0 il confronto per segmenti era REPLICATO dentro
+// `pathZoneResolver` proprio in attesa di questo passaggio.
+// → docs/decisions/path-zones.it.md
+const { resolvePathZones, zoneForPath, pathIsUnderSegment } = require('../pathZoneResolver');
+
 // Percorsi pubblici esenti dal gate quando `maintenance.exemptPaths` è ASSENTE.
 //
 // Perché un default nel codice e non solo nel config: il merge additivo del boot
@@ -221,24 +229,66 @@ const NOT_FOUND_HEADERS = {
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
 };
 
-// Confronto per SEGMENTO, non per semplice prefisso di stringa: `startsWith`
-// nudo su `/admin` cattura anche `/admin-guide.ejs`, cioè contenuto pubblico
-// legittimo (verificato: dava 404 a superficie chiusa). Un prefisso vale quando
-// il path È il prefisso oppure prosegue con `/`.
-function pathIsUnderSegment(reqPath, prefixPath) {
-  return reqPath === prefixPath || reqPath.startsWith(`${prefixPath}/`);
-}
+// `pathIsUnderSegment` arriva da `core/pathZoneResolver.js` (import in testa):
+// confronto per SEGMENTO e non per semplice prefisso di stringa, perché uno
+// `startsWith` nudo su `/admin` cattura anche `/admin-guide.ejs`, cioè contenuto
+// pubblico legittimo (verificato: dava 404 a superficie chiusa). Fino alla
+// v3.38.0 questo modulo ne aveva una copia propria, identica: la Fase 6 di
+// path-zones l'ha eliminata insieme al perimetro scritto a mano.
 
-// Un path appartiene alla superficie riservata "per prefisso" quando ricade sotto
-// il pannello admin o sotto le risorse del tema admin. Le risorse del tema NON
-// sono coperte da alcuna regola di accessControl.json5 (che conosce solo `/admin`
-// e `/admin/**`): senza questa riga resterebbero servite a chiunque e
-// rivelerebbero l'esistenza del pannello.
-function isReservedPrefixPath(reqPath, adminPrefix, adminThemeResourcesPrefix, globalPrefix) {
+// Un path appartiene alla superficie riservata "per prefisso" quando la sua ZONA
+// dichiara `requiresAuth` nel proprio baseline.
+//
+// ─── PERCHE DERIVATO E NON ELENCATO ────────────────────────────────────
+// Fino alla v3.38.0 qui c'erano due prefissi scritti a mano, `adminPrefix` e
+// `adminThemeResourcesPrefix`. Funzionava, ma era un elenco da mantenere: la zona
+// `views` dichiara `requiresAuth: true` nel proprio baseline e **non era coperta**
+// — latente oggi, perché niente è servito sotto `/views`, ma una divergenza che
+// nessuno avrebbe notato se qualcosa ci fosse finito.
+//
+// Derivandolo, il perimetro è per costruzione l'insieme delle zone che chiedono
+// autenticazione: oggi `admin`, `adminThemeResources` e `views`. Una zona nuova lo
+// eredita senza che nessuno debba ricordarsene — la stessa logica per cui una
+// rotta nuova eredita la superficie riservata dal suo `access` obbligatorio.
+//
+// Le risorse del tema admin restano nel perimetro, e il motivo per cui ci devono
+// stare non è cambiato: NON sono coperte da alcuna regola di
+// `accessControl.json5` (che conosce solo `/admin` e `/admin/**`), quindi senza il
+// loro baseline resterebbero servite a chiunque e rivelerebbero l'esistenza del
+// pannello.
+//
+// `baseline: null` (la zona `api`) NON è riservata per prefisso, ed è corretto:
+// sotto `apiPrefix` convivono rotte pubbliche e protette, e la copertura viene
+// dall'indice dei path riservati più il route-wrap, non da un prefisso cieco.
+//
+// @param {string} reqPath - path SERVITO (quello di `ctx.path`, con globalPrefix)
+// @param {object[]} zones - `zones` di `resolvePathZones`, già ordinate
+// @param {string} globalPrefix
+function isReservedPrefixPath(reqPath, zones, globalPrefix) {
+  // I due spazi di path: chi COMPARA toglie `globalPrefix`, chi EMETTE lo
+  // antepone. La mappa lavora in spazio LOGICO, quindi qui si toglie.
+  //
+  // Il confronto è per SEGMENTO anche qui: con `globalPrefix: "/my"` uno
+  // `startsWith` nudo taglierebbe `/mysite/x` in `site/x`. È la stessa famiglia di
+  // B5 (prefisso senza separatore), e le due rimozioni scritte a mano in
+  // `sentinel/lib/ruleMatcher.js` e `rateLimiter/main.js` la hanno — registrato
+  // in TODO.md insieme al consolidamento delle tre copie.
   const base = globalPrefix || '';
-  if (adminPrefix && pathIsUnderSegment(reqPath, `${base}/${adminPrefix}`)) return true;
-  if (adminThemeResourcesPrefix && pathIsUnderSegment(reqPath, `${base}/${adminThemeResourcesPrefix}`)) return true;
-  return false;
+  let logicalPath = reqPath;
+  if (base) {
+    // Un path che NON sta sotto `globalPrefix` è fuori dallo spazio servito da
+    // questa istanza: non ha una controparte logica, quindi non appartiene ad
+    // alcuna zona. Senza questo ritorno, su un'istanza montata sotto `/mysite`
+    // un `/admin/x` sarebbe stato letto come se fosse `/admin/x` logico — cioè
+    // riservato — mentre prima della derivazione era libero. Trovato
+    // confrontando il perimetro nuovo col vecchio caso per caso, non leggendo
+    // il codice.
+    if (!pathIsUnderSegment(reqPath, base)) return false;
+    logicalPath = reqPath.slice(base.length) || '/';
+  }
+
+  const zone = zoneForPath(logicalPath, zones);
+  return !!(zone && zone.baseline && zone.baseline.requiresAuth === true);
 }
 
 // Normalizzazione per il confronto con l'indice dei path riservati.
@@ -272,11 +322,14 @@ function createReservedGate(options) {
   // principale sulle rotte. Vedi pluginSys.getReservedRoutePaths().
   let reservedRoutePaths = new Set();
 
-  const adminPrefix = ital8Conf.adminPrefix || 'admin';
-  const adminThemeResourcesPrefix = ital8Conf.adminThemeResourcesPrefix || 'admin-theme-resources';
   const globalPrefix = ital8Conf.globalPrefix || '';
-
   const apiPrefix = ital8Conf.apiPrefix || 'api';
+
+  // La mappa si risolve UNA volta alla creazione del gate: i prefissi vengono da
+  // `ital8Conf`, che non cambia a runtime. `resolvePathZones` non lancia su una
+  // configurazione incoerente — riporta i problemi e restituisce comunque le zone
+  // — e la coerenza del ruleset è già presidiata al boot dalla Fase 3.
+  const { zones } = resolvePathZones(ital8Conf);
 
   // Risposta unica per tutti i punti di enforcement, nella forma che il sito
   // userebbe per quella stessa famiglia di path (vedi commento in testa alla
@@ -299,7 +352,7 @@ function createReservedGate(options) {
   }
 
   function isReservedPath(reqPath) {
-    return isReservedPrefixPath(reqPath, adminPrefix, adminThemeResourcesPrefix, globalPrefix) ||
+    return isReservedPrefixPath(reqPath, zones, globalPrefix) ||
       reservedRoutePaths.has(normalizeReservedPath(reqPath));
   }
 
