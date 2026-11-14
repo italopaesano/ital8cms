@@ -1516,6 +1516,11 @@ Spostato in [`docs/deployment.it.md`](./docs/deployment.it.md).
 
 ## Riferimento ai file importanti
 
+### Architettura e decisioni
+
+- [`docs/architettura.it.md`](./docs/architettura.it.md) - Mappa architetturale del sistema (boot, richiesta, config, plugin, temi, admin, sicurezza, operatività)
+- [`docs/storia-e-albero-delle-scelte.it.md`](./docs/storia-e-albero-delle-scelte.it.md) - Albero delle decisioni (D0-D7): perché, alternative, critiche
+
 ### File di configurazione
 
 - `/ital8Config.json5` - Configurazione principale dell'applicazione
