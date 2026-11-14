@@ -7,6 +7,11 @@ Indice della documentazione. La guida operativa per l'AI e l'architettura in sin
 
 - [`ITAL8DOC-latest.md`](./ITAL8DOC-latest.md) — Standard di Documentazione del progetto (**ital8doc**, versione corrente). Le versioni passate sono archiviate come `ITAL8DOC-v<x-y>.md`.
 
+## Architettura e scelte di progetto
+
+- [`architettura.it.md`](./architettura.it.md) — la **mappa architetturale**: com'è fatto il sistema oggi (boot, richiesta, config, plugin, temi, admin, sicurezza, operatività), con rimandi ai deep-dive. Dichiara in testa la convenzione di scrittura STE-inspired.
+- [`storia-e-albero-delle-scelte.it.md`](./storia-e-albero-delle-scelte.it.md) — il **perché**: albero delle decisioni (D0-D7) con alternative scartate, evidenze da git/CHANGELOG/ADR, e la sezione finale di critiche e suggerimenti.
+
 ## Guide
 
 - [`deployment.it.md`](./deployment.it.md) — deploy in produzione (checklist, PM2, reverse proxy)
