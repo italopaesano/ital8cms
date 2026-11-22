@@ -37,32 +37,32 @@
   "author": "Italo Paesano <italopaesano@protonmail.com> (https://github.com/italopaesano)",
   "license": "ISC",
   "dependencies": {
-    "@koa/router": "^15.7.0",
+    "@koa/router": "^15.7.1",
     "bcryptjs": "^3.0.3",
-    "bootstrap": "^5.3.8",
-    "bootstrap-icons": "^1.13.1",
+    "bootstrap": "^5.3.9",
+    "bootstrap-icons": "^1.13.2",
     "ccxt": "^4.1.70",
-    "chart.js": "^4.5.1",
-    "commander": "^15.0.0",
-    "ejs": "^6.0.1",
-    "handlebars": "^4.7.9",
-    "inquirer": "^14.2.0",
+    "chart.js": "^4.6.1",
+    "commander": "^15.1.0",
+    "ejs": "^7.0.2",
+    "handlebars": "^4.7.10",
+    "inquirer": "^14.3.1",
     "json5": "^2.2.3",
-    "koa": "^3.2.1",
+    "koa": "^3.3.0",
     "koa-bodyparser": "^4.4.1",
-    "koa-classic-server": "^5.3.0",
+    "koa-classic-server": "^5.3.1",
     "koa-session": "^7.0.2",
-    "nodemailer": "^9.1.0",
+    "nodemailer": "^10.6.1",
     "nodemon": "^3.1.14",
-    "semver": "^7.8.5"
+    "semver": "^7.8.6"
   },
   "engines": {
     "node": ">=22.13.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1",
+    "@playwright/test": "^1.65.1",
     "@types/jest": "^30.0.0",
-    "jest": "^30.5.0"
+    "jest": "^30.5.2"
   },
   "overrides": {
     "@istanbuljs/load-nyc-config": {

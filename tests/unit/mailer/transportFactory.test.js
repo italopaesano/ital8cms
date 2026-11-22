@@ -1,14 +1,21 @@
 /**
  * Unit tests for mailer/lib/transportFactory.js
  *
- * Note: nodemailer is a plugin-only dependency (not in the main package.json),
- * so it is mocked here to avoid installation requirements for testing.
+ * nodemailer è mockato qui perché questi test esercitano la FABBRICA dei
+ * transport, non la libreria SMTP: un mock evita connessioni reali e rende i
+ * test deterministici.
+ *
+ * ⚠️ La nota storica diceva « plugin-only dependency (not in the main
+ * package.json) », e non è vero: `nodemailer` è una dipendenza della root
+ * (`^10.6.1`). La conseguenza di quella premessa sbagliata è che NESSUN test
+ * caricava il pacchetto vero — vedi il blocco « il pacchetto vero » in fondo,
+ * aggiunto con l'aggiornamento a 10.x.
  */
 
 'use strict';
 
-// nodemailer is a plugin-only dependency not installed in the main project.
-// Use { virtual: true } to mock a module that isn't in node_modules.
+// `virtual: true` resta per tolleranza: il mock regge anche in un albero dove
+// nodemailer non fosse installato (un plugin disinstallato, un clone parziale).
 jest.mock('nodemailer', () => ({
   createTransport: jest.fn().mockReturnValue({
     sendMail: jest.fn().mockResolvedValue({ messageId: 'smtp-test-id' }),
@@ -233,5 +240,40 @@ describe('FakeTransport', () => {
     // Most recent first
     expect(content.entries[0].subject).toBe('Third');
     expect(content.entries[1].subject).toBe('Second');
+  });
+});
+
+
+// ── Il pacchetto VERO, non il mock ───────────────────────────────────────────
+// Aggiunto aggiornando nodemailer 9.1.0 → 10.6.1 (v3.41.0), per chiudere un buco
+// che il rinvio del major aveva nominato e che nessuno aveva colmato: tutto ciò
+// che riguarda nodemailer, in questa suite, parla con un mock. Quindi una suite
+// verde NON diceva nulla sul pacchetto — e la 10.0.0 ha riscritto il pacchetto in
+// TypeScript con doppia build ESM + CommonJS, cioè ha cambiato esattamente la
+// cosa che un mock non esercita: la risoluzione del modulo.
+//
+// Non apre connessioni: costruisce il transporter con le stesse opzioni di
+// smtpTransport.js e guarda che ci sia la superficie che il plugin chiama.
+describe('nodemailer — il pacchetto vero, non il mock', () => {
+  const nodemailerReale = jest.requireActual('nodemailer');
+
+  test('`require(\'nodemailer\')` risolve la build CommonJS', () => {
+    expect(typeof nodemailerReale.createTransport).toBe('function');
+  });
+
+  test('createTransport espone i tre metodi che il plugin usa', () => {
+    // Le stesse opzioni di smtpTransport._buildTransporter().
+    const transporter = nodemailerReale.createTransport({
+      host: 'localhost', port: 25, secure: false,
+      auth: { user: 'u', pass: 'p' },
+    });
+    try {
+      // send() → sendMail, verify() → verify, e il finally di send() → close.
+      expect(typeof transporter.sendMail).toBe('function');
+      expect(typeof transporter.verify).toBe('function');
+      expect(typeof transporter.close).toBe('function');
+    } finally {
+      transporter.close();
+    }
   });
 });

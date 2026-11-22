@@ -309,6 +309,20 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       è la stessa ipotesi sbagliata che questa sezione ha già inseguito per mesi, ed
       è stata inseguita di nuovo. Da riaprire **con i dati** alla prossima occorrenza,
       che ora sarà leggibile.
+- [ ] **Sostituire il guard sull'ordine `filter`/`validate` di inquirer con un test
+      di COMPORTAMENTO.** *(Emerso aggiornando inquirer 14.2.0 → 14.3.1, v3.41.0.)*
+      `tests/unit/scripts/validators.test.js` verifica una premessa reale — `validate`
+      deve ricevere la stringa **grezza**, altrimenti il guard di `validators.port()`
+      si riapre — ma lo fa leggendo il **sorgente** di `node_modules/inquirer/dist/ui/
+      prompt.js` con una regex. Si è rotto all'aggiornamento **pur tenendo
+      l'invariante**: la chiamata è passata da `filter(answer, …)` a
+      `runAsync(filter)(answer, …)`. La regex ora accetta entrambe le forme, ma un
+      presidio che cade su un cambiamento cosmetico insegna a « sistemare la regex »
+      invece di verificare l'invariante — il contrario di ciò che deve fare.
+      La sostituzione: pilotare un prompt vero su stream finti (`input`/`output`
+      accettano stream, `PassThrough` + risposta con `\n`) e osservare che `validate`
+      riceve il grezzo mentre `filter` trasforma dopo. Da valutare il rischio di
+      flakiness su TTY simulato prima di adottarlo.
 - [ ] **Consolidare l'harness di boot duplicato** fra `bootLifecycle.test.js` e
       `pluginNpmInstall.test.js`: `runBoot`, `killProc` e ora anche
       `expectBootListening` sono copie **identiche** nei due file, e la v2.95.0 ha già
@@ -764,18 +778,38 @@ Da affrontare in una review dedicata:
 
 Fonte: `docs/roadmap.it.md` punto 16 — aggiornamenti rinviati dal bulk del 2026-05-19.
 
-**Ultimo giro di routine: 2026-08-31** (v3.24.0) — `npm outdated` pulito e
-`npm audit` a **0 vulnerabilità** su root e `plugins/adminMedia`, con la sola
-esclusione di `ccxt` per policy.
+**Ultimo giro di routine: 2026-11-22** (v3.41.0) — `npm outdated` pulito su root e
+`plugins/adminMedia` tranne `ccxt` (escluso per policy), **due major** inclusi
+(`ejs` 7.0.2, `nodemailer` 10.6.1) e `npm audit` da **25 a 21** advisory: la sola
+**critica** del progetto è chiusa (era `handlebars` 4.7.9) e un'alta è sparita
+(`nodemailer`). Le 21 che restano hanno tutte come « fix » un **downgrade**, e sono
+elencate nella voce qui sotto.
 
-⚠ **Quello zero vale meno di quanto sembri, ed è stato misurato.** La 2.3.0 di
-`multer` chiude **quattro CVE** — fra cui un crash di processo da una sola
-richiesta (`CVE-2026-77078`, CVSS 7.5) — e `npm audit` su una cartella con la
-sola `multer@2.2.0` rispondeva `found 0 vulnerabilities`: non sono (ancora) nel
-database advisory di npm. `npm outdated` le ha fatte emergere, l'audit no. Un
-giro che si fermi all'audit non vede niente.
+⚠ **`npm audit` e `npm outdated` guardano insiemi diversi: servono entrambi, a ogni
+giro.** Misurato in **entrambe** le direzioni, in due giri distinti. (a) L'audit non
+vede ciò che non è ancora in database: la 2.3.0 di `multer` chiude **quattro CVE** —
+fra cui un crash di processo da una sola richiesta (`CVE-2026-77078`, CVSS 7.5) — e
+`npm audit` su una cartella con la sola `multer@2.2.0` rispondeva `found 0
+vulnerabilities`; le ha fatte emergere `npm outdated`. (b) `npm outdated` non vede le
+**transitive**, che elenca solo le dirette: oggi `qs` (via `koa-bodyparser` →
+`co-body`) e `brace-expansion` erano vulnerabili e **già risolvibili dentro i range
+dichiarati** — le ha chiuse `npm audit fix`, e nessuna delle 9 PR Dependabot aperte le
+nominava.
 
-- [ ] **`ccxt`** (plugin `ccxt`), `4.5.58` → `4.5.76`: verificare se è ancora usato e
+
+- [ ] **Le 21 advisory residue: il « fix » proposto da npm è un DOWNGRADE in tutti e
+      tre i casi.** Misurato con `fixAvailable` (v3.41.0), quindi non applicate:
+      - **`koa-session` → `zod` (2 alte, PRODUZIONE).** `zod` è vulnerabile sotto la
+        **4.6.6** e `koa-session@7.0.2` — l'ultima pubblicata — dichiara `zod: ^3.24.1`:
+        il suo range **non può** accettare la 4.x. npm propone `koa-session@6.4.0`, cioè
+        indietro di un major sul middleware di sessione. Nessuna correzione esiste oggi:
+        tocca a monte, e un `overrides` che forzasse `zod@4` darebbe a `koa-session` un
+        major che non ha mai dichiarato. **Da riprendere quando `koa-session` passa a
+        `zod` 4**, non prima.
+      - **`glob`/`minimatch`/`test-exclude` (19 moderate, SOLO sviluppo).** Arrivano da
+        `jest` e `nodemon`. npm propone `jest@29.7.0` (indietro di un major) e
+        `nodemon@3.1.11`. Nessuna delle due tocca il codice spedito.
+- [ ] **`ccxt`** (plugin `ccxt`), `4.5.58` → `4.5.93`: verificare se è ancora usato e
       se la superficie API è cambiata fra le minor; testare le rotte prima del bump.
       *Escluso dagli update di routine per policy (CLAUDE.md regola 12): release molto
       frequenti legate alle API degli exchange.*
