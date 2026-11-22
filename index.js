@@ -135,6 +135,26 @@ materializeCoreConfig(
   path.join(__dirname, 'core/priorityMiddlewares/koaSession.json5'),
 );
 
+// ── Gate sulle chiavi di sessione ───────────────────────────────────────────
+// Chiavi PUBBLICHE (i segnaposto CHANGE_ME_* spediti col progetto, o i quattro
+// placeholder storici leggibili nella storia di git) → il CMS non parte. Le
+// sessioni sono cookie firmati: chi conosce le chiavi forgia un cookie da
+// amministratore senza password, quindi servire il sito con quelle chiavi
+// significa non avere autenticazione affatto. Stessa scelta fail-closed già
+// adottata per i box [CONFIG], [FATAL] e [ACCESS]: una configurazione di
+// sicurezza non valida non ottiene un sito in funzione.
+//
+// Il controllo sta QUI, e non dov'era prima (in fondo a startApp(), dopo
+// httpsManager.start()): là il server era già in ascolto da undici righe, quindi
+// un gate fatale avrebbe accettato richieste — con cookie forgiabili — nel
+// frattempo. Qui il file vivo esiste appena e nessuno l'ha ancora letto.
+//
+// Chiavi DEBOLI (corte ma non note) → box di avviso e il boot prosegue: quello è
+// un giudizio euristico, e non si spegne un'installazione su un sospetto.
+if (require('./core/sessionSecurity').checkSessionKeys(ital8Conf) === 'fatal') {
+  process.exit(1);
+}
+
 // Log discreto se la sezione admin è stata disabilitata via CLI (o a mano).
 if (!ital8Conf.enableAdmin) {
   console.log('[cliBridge] sezione admin disattivata (enableAdmin=false)');
@@ -632,9 +652,9 @@ async function startApp() {
     require('./core/demoNotice').printDemoBootWarning();
   }
 
-  // Avviso chiavi di sessione insicure (placeholder di default): puramente
-  // segnaletico, non blocca l'avvio. Salta da sé se la sessione è disabilitata.
-  require('./core/sessionSecurity').checkSessionKeys(ital8Conf);
+  // NB: il controllo sulle chiavi di sessione NON sta più qui. È diventato un
+  // gate a livello di modulo, prima del montaggio dei priority middleware: qui
+  // i server sono già in ascolto, quindi era troppo tardi per poter rifiutare.
 
 }// END startApp()
 

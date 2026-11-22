@@ -43,7 +43,7 @@ modifica al file citato.
 | # | Problema | Impatto | Stato |
 |---|---|---|---|
 | A1 | [Cambiare `adminPrefix` apre il pannello admin a chiunque](#a1--cambiare-adminprefix-apre-il-pannello-admin-a-chiunque) | Accesso anonimo alle pagine admin | - [x] |
-| A2 | [Le due reti di sicurezza sulle chiavi di sessione sono entrambe morte](#a2--le-due-reti-di-sicurezza-sulle-chiavi-di-sessione-sono-entrambe-morte) | Impersonazione root senza credenziali | - [ ] |
+| A2 | [Le due reti di sicurezza sulle chiavi di sessione sono entrambe morte](#a2--le-due-reti-di-sicurezza-sulle-chiavi-di-sessione-sono-entrambe-morte) | Impersonazione root senza credenziali | - [x] |
 | A3 | [Le regole hardcoded del controllo accessi non sono immutabili](#a3--le-regole-hardcoded-del-controllo-accessi-non-sono-immutabili) | Una regola custom scavalca la protezione admin | - [x] |
 | A4 | [Regex non ancorate e mix `*`/`**` che sbaglia in silenzio](#a4--regex-non-ancorate-e-mix--che-sbaglia-in-silenzio) | Regole che proteggono l'insieme sbagliato di URL | - [ ] |
 | A5 | [Nessun security header, e cookie di sessione senza `secure`](#a5--nessun-security-header-e-cookie-di-sessione-senza-secure) | XSS/clickjacking/furto cookie non mitigati | - [ ] |
@@ -199,6 +199,43 @@ riceva 200. Senza quel test il difetto rientra alla prima rifattorizzazione.
 ---
 
 ## A2 · Le due reti di sicurezza sulle chiavi di sessione sono entrambe morte
+
+> ✅ **CORRETTO (2026-11-16), v3.39.0.** Chiavi di sessione **pubbliche** → box
+> `[SESSION]` + `exit 1`: il CMS non parte. La correzione non è quella proposta in
+> fondo alla scheda (predicato robusto + avviso): su decisione del maintainer
+> l'avviso è diventato un **gate fail-closed**, perché quando l'unica difesa è un
+> avviso, un avviso che non scatta equivale ad assenza di difesa. Scala a tre
+> livelli in `core/sessionSecurity.js → classifySessionKeys()`: `fatal` (pubblica
+> — prefisso `CHANGE_ME_` **o** placeholder storico) / `weak` (sotto i 16
+> caratteri → avviso, il boot prosegue) / `ok`.
+>
+> **Due rilievi della scheda vanno corretti, sulla base della misura.**
+>
+> 1. **Il difetto non era un drift: era nato così.** La scheda dice che il commento
+>    « Valori attualmente presenti » *« non è più vero »*, implicando una
+>    divergenza successiva. In realtà la denylist è arrivata su `main` **già
+>    disallineata**: il 12/06/2026 la PR #289 rinominò le chiavi alle 22:19, la PR
+>    #290 introdusse la denylist alle **22:43** elencando quelle appena rimosse
+>    (ramo biforcato prima, nessun conflitto git, test verdi su entrambi i lati).
+>    `keysAreInsecure(chiavi spedite)` ritorna `false` dal primo commit in cui la
+>    protezione esiste: **inerte dal giorno uno.**
+> 2. **Le chiavi storiche non sono « deboli », sono pubbliche.** Col criterio
+>    strutturale proposto, **tre dei quattro** placeholder storici passerebbero per
+>    buoni (`key.secondaryKey123`: 19 caratteri, quattro classi). Nessuna euristica
+>    rileva « è nota a tutti ». L'elenco esatto resta quindi nel livello `fatal`.
+>
+> **Due conseguenze che la scheda non menzionava:** il wizard non si limitava a
+> preselezionare « Mantieni », **stampava** `✓ Le chiavi attuali risultano già
+> personalizzate` — una rassicurazione falsa; e il percorso « Inserisci chiavi
+> personalizzate » **accettava `CHANGE_ME_session_key_1` verbatim**.
+>
+> **Impatto verificato end-to-end** (non per lettura): un cookie firmato con le
+> sole chiavi del `.default` pubblico è accettato con `roleIds: [0]`; con firma
+> invalida è rifiutato. **Presidio aggiunto**, quello che la scheda chiedeva: un
+> test legge il `.default` **realmente spedito** e pretende che il gate lo rifiuti
+> — più un test d'integrazione che avvia l'app con chiavi pubbliche e asserisce
+> `exit 1` senza che il server sia mai stato in ascolto. Tre mutazioni colte, fra
+> cui la riproduzione della collisione del 12 giugno.
 
 **Severità:** 🔴 critica · **Sforzo:** minimo (una riga + un test) · **Presidio mancante:** test che leghi denylist e `.default`
 

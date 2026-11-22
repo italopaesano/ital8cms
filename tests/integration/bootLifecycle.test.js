@@ -174,7 +174,16 @@ describe('boot — ciclo di vita config (integration)', () => {
       ['core/admin/adminConfig.json5', 'letto da adminSystem.initialize(), dentro startApp()'],
     ];
 
-    test.each(CORE_PAIRS)('%s mancante → rigenerato al boot, server avviato', async (relLive) => {
+    // La proprietà sotto test è UNA — « il vivo mancante rinasce dal .default,
+    // byte per byte » — e vale per entrambi i file. Cambia ciò che succede DOPO,
+    // e solo per koaSession: il suo .default spedisce i segnaposti pubblici, che
+    // dalla correzione di REVIEW.md → A2 non fanno partire il CMS.
+    //
+    // È il comportamento giusto, e va detto perché non è ovvio: un'installazione
+    // configurata che perde `koaSession.json5` (un `git clean -X`, un ripristino
+    // parziale) lo rigenera con chiavi PUBBLICHE, e ripartire con quelle
+    // ricreerebbe A2 passando da un comando di pulizia. Meglio fermarsi e dirlo.
+    test.each(CORE_PAIRS)('%s mancante → rigenerato al boot dal suo .default', async (relLive) => {
       const { dir } = await buildFixture();
       const live = path.join(dir, relLive);
       const dflt = live.replace(/\.json5$/, '.default.json5');
@@ -184,21 +193,73 @@ describe('boot — ciclo di vita config (integration)', () => {
       const res = await runBoot(dir);
 
       expect(res.timedOut).toBeFalsy();
-      expect(res.started).toBe(true);
       expect(fs.existsSync(live)).toBe(true);
       // Copia byte-fedele: il vivo nasce identico al default, commenti inclusi.
       expect(fs.readFileSync(live, 'utf8')).toBe(fs.readFileSync(dflt, 'utf8'));
     });
 
-    test('entrambi mancanti → entrambi rigenerati nello stesso boot', async () => {
+    test('adminConfig.json5 rigenerato → il boot COMPLETA', async () => {
       const { dir } = await buildFixture();
-      const lives = CORE_PAIRS.map(([rel]) => path.join(dir, rel));
-      lives.forEach((live) => fs.rmSync(live));
+      fs.rmSync(path.join(dir, 'core/admin/adminConfig.json5'));
 
       const res = await runBoot(dir);
 
       expect(res.started).toBe(true);
-      lives.forEach((live) => expect(fs.existsSync(live)).toBe(true));
+      await killProc(res.proc);
+    });
+
+    test('koaSession.json5 rigenerato → il gate [SESSION] ferma il boot', async () => {
+      // Il file c'è (lo verifica il test parametrizzato sopra), ma porta i
+      // segnaposti pubblici del .default: il boot si ferma qui invece di servire
+      // il sito con chiavi che chiunque conosce.
+      const { dir } = await buildFixture();
+      fs.rmSync(path.join(dir, 'core/priorityMiddlewares/koaSession.json5'));
+
+      const res = await runBoot(dir);
+
+      expect(res.exited).toBe(true);
+      expect(res.code).toBe(1);
+      expect(res.started).toBe(false);
+      expect(res.output).toMatch(/\[SESSION\]/);
+      expect(res.output).toMatch(/npm run start-configure/);
+    });
+
+    test('entrambi mancanti → koaSession al primo boot, adminConfig al secondo', async () => {
+      // Prima della correzione di A2 questi due nascevano nello stesso boot.
+      // Non più, e la ragione è la COLLOCAZIONE del gate sulle chiavi: sta a
+      // livello di modulo, prima di startApp(), quindi interrompe il boot fra la
+      // materializzazione di koaSession (riga ~135) e quella di adminConfig
+      // (dentro startApp()).
+      //
+      // È una scelta, non un effetto collaterale: con chiavi pubbliche non si
+      // vuole che girino il bind del canale CLI, il caricamento dei 22 plugin e
+      // la creazione dei symlink. Il prezzo è che un'installazione che ha perso
+      // PIÙ config del core si risana in due avvii invece di uno — e questo test
+      // lo mette nero su bianco, così un domani la si cambia sapendo cosa.
+      const { dir } = await buildFixture();
+      const koaSession = path.join(dir, 'core/priorityMiddlewares/koaSession.json5');
+      const adminConfig = path.join(dir, 'core/admin/adminConfig.json5');
+      fs.rmSync(koaSession);
+      fs.rmSync(adminConfig);
+
+      // Boot 1 — koaSession rinasce (pubblico), il gate ferma il boot: adminConfig
+      // non è ancora stato raggiunto.
+      let res = await runBoot(dir);
+      expect(res.code).toBe(1);
+      expect(res.output).toMatch(/\[SESSION\]/);
+      expect(fs.existsSync(koaSession)).toBe(true);
+      expect(fs.existsSync(adminConfig)).toBe(false);
+
+      // Chiavi sistemate (è ciò che farebbe il wizard) → boot 2 completa il resto.
+      await editJson5(koaSession, 'keys', [
+        'Zx9_random-secure-key-abcdef0123456789AAA',
+        'Qw8-another-secure-key-zyxwvu9876543210BBB',
+      ]);
+
+      res = await runBoot(dir);
+      expect(res.started).toBe(true);
+      expect(fs.existsSync(adminConfig)).toBe(true);
+      await killProc(res.proc);
     });
 
     // Senza il .default non c'è nulla da cui rigenerare: è un'installazione
@@ -371,4 +432,89 @@ module.exports = {
     expect(readCalls()).toHaveLength(1);
     await killProc(res.proc);
   }, 180000);
+
+  // ── Gate sulle chiavi di sessione (REVIEW.md → A2) ─────────────────────────
+  // È il presidio che la scheda A2 chiedeva per primo: « un test che avvii
+  // l'app con chiavi pubbliche e asserisca che non parta ». Sta qui, al livello
+  // di processo, perché è l'unico posto dove si osserva ciò che conta davvero —
+  // l'exit code — invece del valore di ritorno di una funzione.
+  describe('chiavi di sessione', () => {
+    const KOA_SESSION = 'core/priorityMiddlewares/koaSession.json5';
+
+    test('chiavi PUBBLICHE (CHANGE_ME_*) → box [SESSION] + exit 1, server NON avviato', async () => {
+      const { dir } = await buildFixture();
+      // Esattamente ciò che il .default spedisce: la condizione di
+      // un'installazione mai configurata, o configurata a mano.
+      await editJson5(path.join(dir, KOA_SESSION), 'keys', [
+        'CHANGE_ME_session_key_1', 'CHANGE_ME_session_key_2', 'CHANGE_ME_session_key_3',
+      ]);
+
+      const res = await runBoot(dir);
+
+      expect(res.exited).toBe(true);
+      expect(res.code).toBe(1);
+      expect(res.started).toBe(false);
+      expect(res.output).toMatch(/\[SESSION\]/);
+      expect(res.output).toMatch(/il CMS non parte/);
+      expect(res.output).toMatch(/npm run start-configure/);
+    });
+
+    test('un placeholder STORICO è pubblico quanto quelli correnti → exit 1', async () => {
+      // Il caso che un'euristica strutturale mancherebbe: 20 caratteri, forma
+      // plausibile, ma leggibile nella storia di git. Vedi la nota in
+      // core/sessionSecurity.js sul perché l'elenco esatto non è sostituibile.
+      const { dir } = await buildFixture();
+      await editJson5(path.join(dir, KOA_SESSION), 'keys', ['key.segretussimmmmmm']);
+
+      const res = await runBoot(dir);
+
+      expect(res.exited).toBe(true);
+      expect(res.code).toBe(1);
+      expect(res.started).toBe(false);
+      expect(res.output).toMatch(/storia di git/);
+    });
+
+    test('il gate scatta PRIMA che il server sia in ascolto', async () => {
+      // Il difetto che la correzione ha dovuto evitare: il controllo stava in
+      // fondo a startApp(), DOPO httpsManager.start(). Lì un gate fatale
+      // avrebbe accettato richieste — con cookie forgiabili — per il tempo che
+      // separa l'ascolto dall'uscita. Qui si verifica che nell'output non
+      // compaia mai l'avvio del server.
+      const { dir } = await buildFixture();
+      await editJson5(path.join(dir, KOA_SESSION), 'keys', ['CHANGE_ME_session_key_1']);
+
+      const res = await runBoot(dir);
+
+      expect(res.code).toBe(1);
+      expect(res.output).not.toMatch(/server started on port/);
+    });
+
+    test('chiavi DEBOLI (corte ma non note) → avviso, il boot COMPLETA', async () => {
+      // Il livello 2 è una stima, non un fatto: non si spegne un'installazione
+      // su un sospetto. Questo test è il contrappeso dei tre sopra — senza, una
+      // fix che rendesse fatale anche il livello debole passerebbe inosservata.
+      const { dir } = await buildFixture();
+      await editJson5(path.join(dir, KOA_SESSION), 'keys', ['corta1', 'corta2']);
+
+      const res = await runBoot(dir);
+
+      expect(res.started).toBe(true);
+      expect(res.output).toMatch(/\[SESSION\]/);
+      expect(res.output).toMatch(/Il server parte comunque/);
+      expect(res.output).not.toMatch(/il CMS non parte/);
+      await killProc(res.proc);
+    });
+
+    test('con chiavi a posto il gate tace del tutto', async () => {
+      // Un gate che parla sempre smette di essere letto: la fixture nasce con le
+      // chiavi generate da globalSetup, quindi non deve produrre alcun [SESSION].
+      const { dir } = await buildFixture();
+
+      const res = await runBoot(dir);
+
+      expect(res.started).toBe(true);
+      expect(res.output).not.toMatch(/\[SESSION\]/);
+      await killProc(res.proc);
+    });
+  });
 });

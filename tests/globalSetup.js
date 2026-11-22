@@ -30,6 +30,10 @@ const path = require('path');
 const materializeMissingConfigs = require('../core/materializeMissingConfigs');
 const materializeFromDefault = require('../core/materializeFromDefault');
 const ensureThemesInstalled = require('../core/ensureThemesInstalled');
+const editJson5 = require('../core/editJson5');
+const loadJson5 = require('../core/loadJson5');
+const { classifySessionKeys } = require('../core/sessionSecurity');
+const { generateSessionKeys } = require('../scripts/lib/sessionKeyManager');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 
@@ -39,6 +43,39 @@ const CORE_PAIRS = [
   ['core/priorityMiddlewares/koaSession.default.json5', 'core/priorityMiddlewares/koaSession.json5'],
   ['core/admin/adminConfig.default.json5', 'core/admin/adminConfig.json5'],
 ];
+
+const KOA_SESSION_LIVE = path.join(PROJECT_ROOT, 'core/priorityMiddlewares/koaSession.json5');
+
+/**
+ * Sostituisce le chiavi di sessione PUBBLICHE con chiavi casuali vere.
+ *
+ * Serve perché il `.default` spedisce i segnaposti `CHANGE_ME_*`, e dalla
+ * correzione di REVIEW.md → A2 quelle chiavi non fanno partire il CMS. Senza
+ * questo passo ogni run materializzerebbe un `koaSession.json5` che il gate
+ * rifiuta, e tutte le integration che avviano l'app morirebbero al boot.
+ *
+ * La scelta è deliberata: generare chiavi vere invece di dare ai test una via di
+ * fuga (una variabile d'ambiente che disattivi il gate). Una via di fuga
+ * reintrodurrebbe l'« ignorabile » che il gate esiste per rimuovere, e lascerebbe
+ * la suite a esercitare un percorso che in produzione non esiste. Così invece
+ * l'ambiente di test somiglia a un'installazione CONFIGURATA, che è la
+ * condizione in cui il CMS è pensato per girare.
+ *
+ * Idempotente: non tocca nulla se le chiavi già passano il gate — quindi in
+ * sviluppo, dopo la prima run, è un no-op silenzioso. Usa `editJson5` e non una
+ * riscrittura dell'oggetto per non perdere i commenti del file (decisione D1).
+ */
+async function ensureUsableSessionKeys() {
+  let keys;
+  try {
+    keys = loadJson5(KOA_SESSION_LIVE).keys;
+  } catch {
+    return false; // file assente o illeggibile: non è questo il posto dove segnalarlo
+  }
+  if (classifySessionKeys(keys).tier !== 'fatal') return false;
+  await editJson5(KOA_SESSION_LIVE, 'keys', generateSessionKeys());
+  return true;
+}
 
 module.exports = async function globalSetup() {
   let created = 0;
@@ -56,10 +93,16 @@ module.exports = async function globalSetup() {
     if (res && res.created) created += 1;
   }
 
-  // 3. isInstalled:1 sui temi bundled appena materializzati (come al boot).
+  // 3. Chiavi di sessione usabili (il wizard, che normalmente le genera, non gira).
+  const keysRotated = await ensureUsableSessionKeys();
+
+  // 4. isInstalled:1 sui temi bundled appena materializzati (come al boot).
   await ensureThemesInstalled(path.join(PROJECT_ROOT, 'themes'));
 
   if (created > 0) {
     console.log(`[test globalSetup] materializzati ${created} config vivi dai .default`);
+  }
+  if (keysRotated) {
+    console.log('[test globalSetup] chiavi di sessione pubbliche sostituite con chiavi casuali');
   }
 };
