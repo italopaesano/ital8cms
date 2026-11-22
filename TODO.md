@@ -283,9 +283,40 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
 - [x] ~~Il fallimento era **indiagnosticabile**~~ — `expect(res.started).toBe(true)`
       stampava solo «Expected: true / Received: false» e buttava via l'output del
       processo, cioè l'unica cosa che spiega l'uscita. È il motivo per cui questa voce
-      è rimasta senza causa: nei log CI non c'era niente da leggere. Ora si asserisce
-      sull'oggetto (`{ started, code, output }`), così il messaggio d'errore porta con
-      sé stdout+stderr e il codice d'uscita.
+      è rimasta senza causa: nei log CI non c'era niente da leggere.
+      **Chiusa due volte, perché la prima correzione non funzionava** (v3.40.0):
+      l'asserzione sull'oggetto `expect({ started, code, output }).toMatchObject({
+      started: true })` — adottata nella v2.95.0 proprio per « portare con sé
+      stdout+stderr » — stampa **solo le chiavi che differiscono**. Misurato il
+      22/11/2026 con una mutazione: il messaggio è `- "started": true / + "started":
+      false` e nient'altro, quindi `code` e `output` restavano invisibili **esattamente
+      come con `toBe(true)`**. Era un presidio che si credeva esistente e che non
+      diagnosticava niente — la stessa forma dei difetti di `REVIEW.md`. Ora un helper
+      `expectBootListening(res)` **lancia un Error**, il cui messaggio jest stampa per
+      intero: exit code, `timedOut`/`exited` e le ultime 30 righe di stdout+stderr.
+      Verificato con la stessa mutazione: il box `[SESSION]` del processo compare nel
+      messaggio di fallimento. Applicato a **tutti e 13 i siti** dei due harness (11 in
+      `bootLifecycle`, che non aveva ricevuto nulla nella v2.95.0, e 2 in
+      `pluginNpmInstall`).
+- [ ] **Flake in CI del 22/11/2026, causa IGNOTA** — `bootLifecycle.test.js` →
+      « boot graceful: plugin NON essenziale con dep npm inesistente » è caduto su
+      **Node 24** (`started: false`, `timedOut` falsy → il processo è **uscito**),
+      verde su Node 22 e verde al **rilancio dello stesso commit**: quindi non
+      deterministico. L'output del processo non era allegato al messaggio (vedi la voce
+      sopra), quindi dai log CI non c'era niente da leggere e la causa non è stata
+      catturata. **Non è la sovrapposizione dei range di porte** della voce qui sotto:
+      `maxWorkers: 1` serializza la suite e due server non sono mai vivi insieme —
+      è la stessa ipotesi sbagliata che questa sezione ha già inseguito per mesi, ed
+      è stata inseguita di nuovo. Da riaprire **con i dati** alla prossima occorrenza,
+      che ora sarà leggibile.
+- [ ] **Consolidare l'harness di boot duplicato** fra `bootLifecycle.test.js` e
+      `pluginNpmInstall.test.js`: `runBoot`, `killProc` e ora anche
+      `expectBootListening` sono copie **identiche** nei due file, e la v2.95.0 ha già
+      mostrato il costo (la correzione del ramo `'exit'`/`'close'` andava applicata due
+      volte, e quella sulla diagnosticabilità ne ha raggiunto **uno solo** per cinque
+      mesi). Serve un modulo di helper condivisi per i test — **non esiste ancora**
+      `tests/helpers/`, quindi il nome del file e della cartella va proposto al
+      maintainer prima di scrivere.
 - [ ] **Range di porte sovrapposti fra i due harness di boot** (scoperto indagando il
       punto sopra, **non** la causa di quel fallimento): `pluginNpmInstall` sceglie in
       `35000..36499`, `bootLifecycle` in `34000..35499` — 500 porte in comune. Oggi è
