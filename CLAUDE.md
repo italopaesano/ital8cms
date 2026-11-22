@@ -1,3 +1,4 @@
+<!-- ital8doc v1-1 · tipo: guide · lang: it -->
 # CLAUDE.md — Guida per assistenti AI di ital8cms
 
 ## Panoramica del progetto
