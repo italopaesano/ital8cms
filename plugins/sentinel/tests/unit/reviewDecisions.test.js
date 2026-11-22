@@ -312,11 +312,25 @@ describe('D4 — la migrazione v5→v6 che porta la regola sulle installazioni e
   const logger = { info: () => {}, warn: () => {} };
   let dir;
 
-  /** Ricostruisce il file come stava in v5: il distribuito col pattern vecchio. */
+  /**
+   * Ricostruisce il file come stava in v5: il distribuito col pattern vecchio.
+   *
+   * Sostituisce il pattern ATTUALE del file distribuito, qualunque sia, e non
+   * `NEW_PATTERN`: il fixture ricostruisce il passato partendo dal presente, e
+   * il presente si muove. Ancorarlo a `NEW_PATTERN` ha funzionato finché la riga
+   * di `shell-probe` è rimasta quella della v6 — poi lo step 7→8 l'ha riscritta
+   * per l'ancoraggio delle regex (REVIEW.md → A4), `NEW_PATTERN` non era più nel
+   * file, la `replace` diventava un no-op silenzioso e il fixture nasceva già
+   * migrato. Leggere il pattern dal file rende il test indipendente dalle
+   * riscritture future di quella riga.
+   */
   function installazioneV5() {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-mig-'));
-    const text = fs.readFileSync(DEFAULT_RULES, 'utf8')
-      .replace(JSON.stringify(NEW_PATTERN), JSON.stringify(OLD_PATTERN));
+    const distribuito = fs.readFileSync(DEFAULT_RULES, 'utf8');
+    const patternAttuale = json5.parse(distribuito).rules
+      .find((r) => r.name === 'shell-probe').match.path;
+    const text = distribuito
+      .replace(JSON.stringify(patternAttuale), JSON.stringify(OLD_PATTERN));
     fs.writeFileSync(path.join(dir, 'sentinelRules.json5'), text, 'utf8');
     return path.join(dir, 'sentinelRules.json5');
   }

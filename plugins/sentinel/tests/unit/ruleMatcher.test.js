@@ -67,7 +67,13 @@ describe('foglie', () => {
   test('path: esatto, wildcard e regex', () => {
     expect(evaluateNode(compile({ path: '/x' }).match, subjectFor(makeCtx({ path: '/x' })), matcher)).toBe(true);
     expect(evaluateNode(compile({ path: '/wp-admin/**' }).match, subjectFor(makeCtx({ path: '/wp-admin/a/b' })), matcher)).toBe(true);
-    expect(evaluateNode(compile({ path: 'regex:^/wp-' }).match, subjectFor(makeCtx({ path: '/wp-login.php' })), matcher)).toBe(true);
+    // Il `.*` finale è OBBLIGATORIO dalla v3.43.0: le regex sono ancorate
+    // (`^(?:corpo)$`), quindi `regex:^/wp-` descrive il path ESATTO `/wp-` e non
+    // più « tutto ciò che inizia per /wp- ». Vedi REVIEW.md → A4.
+    expect(evaluateNode(compile({ path: 'regex:^/wp-.*' }).match, subjectFor(makeCtx({ path: '/wp-login.php' })), matcher)).toBe(true);
+    // E il contrappeso, che prima non si poteva scrivere: senza il `.*` il
+    // prefisso non basta più.
+    expect(evaluateNode(compile({ path: 'regex:^/wp-' }).match, subjectFor(makeCtx({ path: '/wp-login.php' })), matcher)).toBe(false);
     expect(evaluateNode(compile({ path: '/x' }).match, subjectFor(makeCtx({ path: '/y' })), matcher)).toBe(false);
   });
 

@@ -272,4 +272,89 @@ describe('PatternMatcher', () => {
       expect(result.valid).toBe(false);
     });
   });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // REVIEW.md → A4 — la tabella che il difetto chiedeva
+  //
+  // Due difetti distinti nello stesso modulo, entrambi SILENZIOSI: nessun
+  // errore, nessun warning al boot, e `validatePattern` approvava tutto. Qui
+  // ogni riga è un caso che prima dava l'esito sbagliato.
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('A4 — regex ancorate', () => {
+    // Prima: `new RegExp(corpo).test(url)` senza ancoraggi è un match di
+    // SOTTOSTRINGA, quindi `regex:/admin/users` significava « qualunque path che
+    // contenga /admin/users ». In un modulo che protegge URL è il guasto
+    // peggiore possibile, e le regex hanno priorità 500 — sopra i wildcard —
+    // quindi una regex troppo larga soffia il match a una regola più corretta.
+    test.each([
+      ['/admin/users',        'regex:/admin/users', true,  'il path esatto matcha'],
+      ['/public/admin/users', 'regex:/admin/users', false, 'un prefisso estraneo NON matcha più'],
+      ['/admin/users/edit',   'regex:/admin/users', false, 'un suffisso in più NON matcha più'],
+      ['/x/y/admin',          'regex:/admin',       false, 'la sottostringa non basta'],
+      ['/admin',              'regex:/admin',       true,  'il path intero sì'],
+    ])('%s vs %s → %s (%s)', (url, pattern, atteso) => {
+      expect(matcher.matches(url, pattern)).toBe(atteso);
+    });
+
+    test('gli ancoraggi scritti a mano restano innocui', () => {
+      // `^(?:^/admin$)$` è ridondante ma valido: chi li ha già scritti non deve
+      // riscrivere nulla.
+      expect(matcher.matches('/admin', 'regex:^/admin$')).toBe(true);
+      expect(matcher.matches('/admin/x', 'regex:^/admin$')).toBe(false);
+    });
+
+    test('per cercare « dovunque » servono i `.*` espliciti', () => {
+      // È la forma in cui sono state riscritte le tre regole di sentinel, che
+      // RILEVA invece di proteggere (migrazione v7→v8 del plugin).
+      expect(matcher.matches('/uploads/img/shell.php', 'regex:.*/shell\\.php')).toBe(true);
+      expect(matcher.matches('/uploads/img/shell.php', 'regex:/shell\\.php')).toBe(false);
+    });
+
+    test('il gruppo non catturante protegge le alternative di primo livello', () => {
+      // Senza `(?:…)`, `^/a|/b$` significherebbe « inizia con /a OPPURE finisce
+      // con /b »; con il gruppo significa « è /a oppure è /b ».
+      expect(matcher.matches('/a', 'regex:/a|/b')).toBe(true);
+      expect(matcher.matches('/b', 'regex:/a|/b')).toBe(true);
+      expect(matcher.matches('/a/lungo', 'regex:/a|/b')).toBe(false);
+    });
+  });
+
+  describe('A4 — wildcard compilati in un solo passaggio', () => {
+    // Prima l'escape dei metacaratteri non includeva `*`, e veniva sostituito
+    // un solo tipo di wildcard: in un pattern MISTO l'asterisco singolo rimasto
+    // finiva nella regex come QUANTIFICATORE. Il difetto non era « non
+    // funziona », era un'INVERSIONE — e chi provava la regola con l'URL
+    // sbagliato la vedeva « funzionare ».
+    test.each([
+      ['/admin/x/config/y',     '/admin/*/config/**', true,  'un segmento + resto: ora matcha'],
+      ['/admin/x/config/y/z',   '/admin/*/config/**', true,  'il ** è ricorsivo'],
+      ['/admin/x/config/',      '/admin/*/config/**', true,  'il ** matcha il vuoto'],
+      ['/admin/config/y',       '/admin/*/config/**', false, 'segmento MANCANTE: non matcha più'],
+      ['/admin//config/y',      '/admin/*/config/**', false, 'segmento VUOTO: il * vuole un segmento'],
+      ['/admin/x/y/config/z',   '/admin/*/config/**', false, 'il * non scavalca lo slash'],
+    ])('%s vs %s → %s (%s)', (url, pattern, atteso) => {
+      expect(matcher.matches(url, pattern)).toBe(atteso);
+    });
+
+    test('un asterisco letterale nel pattern non è più un quantificatore', () => {
+      // Il caso di `core/pathZoneResolver.js`: un prefisso che contiene `*`.
+      // Prima `/a*b/**` compilava in `^/a*b/.*$` (zero o più `a`) e il path
+      // letterale NON matchava; oggi compila in `^/a[^/]+b/.*$`.
+      expect(matcher.matches('/a*b/index.ejs', '/a*b/**')).toBe(true);
+      expect(matcher.matches('/ab/index.ejs',  '/a*b/**')).toBe(false);
+    });
+
+    test('i metacaratteri regex nel pattern restano letterali', () => {
+      expect(matcher.matches('/a.b/x', '/a.b/**')).toBe(true);
+      expect(matcher.matches('/axb/x', '/a.b/**')).toBe(false);   // il punto non è un jolly
+      expect(matcher.matches('/a+b/x', '/a+b/**')).toBe(true);
+    });
+
+    test('la compilazione è in cache, e la cache non confonde i pattern', () => {
+      const uno = matcher.wildcardToRegex('/admin/**');
+      const due = matcher.wildcardToRegex('/admin/**');
+      expect(due).toBe(uno);                                   // stessa istanza
+      expect(matcher.wildcardToRegex('/admin/*')).not.toBe(uno);
+    });
+  });
 });

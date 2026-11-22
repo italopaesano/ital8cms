@@ -45,7 +45,7 @@ modifica al file citato.
 | A1 | [Cambiare `adminPrefix` apre il pannello admin a chiunque](#a1--cambiare-adminprefix-apre-il-pannello-admin-a-chiunque) | Accesso anonimo alle pagine admin | - [x] |
 | A2 | [Le due reti di sicurezza sulle chiavi di sessione sono entrambe morte](#a2--le-due-reti-di-sicurezza-sulle-chiavi-di-sessione-sono-entrambe-morte) | Impersonazione root senza credenziali | - [x] |
 | A3 | [Le regole hardcoded del controllo accessi non sono immutabili](#a3--le-regole-hardcoded-del-controllo-accessi-non-sono-immutabili) | Una regola custom scavalca la protezione admin | - [x] |
-| A4 | [Regex non ancorate e mix `*`/`**` che sbaglia in silenzio](#a4--regex-non-ancorate-e-mix--che-sbaglia-in-silenzio) | Regole che proteggono l'insieme sbagliato di URL | - [ ] |
+| A4 | [Regex non ancorate e mix `*`/`**` che sbaglia in silenzio](#a4--regex-non-ancorate-e-mix--che-sbaglia-in-silenzio) | Regole che proteggono l'insieme sbagliato di URL | - [x] |
 | A5 | [Nessun security header, e cookie di sessione senza `secure`](#a5--nessun-security-header-e-cookie-di-sessione-senza-secure) | XSS/clickjacking/furto cookie non mitigati | - [ ] |
 | A6 | [`checkInTemplate` — la guardia documentata per i template non protegge](#a6--checkintemplate--la-guardia-documentata-per-i-template-non-protegge) | Pagina protetta servita per intero nel corpo del 302 | - [ ] |
 | A7 | [Server di redirect HTTP→HTTPS: DoS remoto + open redirect](#a7--server-di-redirect-httphttps-dos-remoto--open-redirect) | Una richiesta spegne il processo | - [x] |
@@ -481,7 +481,63 @@ asserisca che su `/admin/qualcosa` vinca la hardcoded.
 
 ## A4 · Regex non ancorate e mix `*`/`**` che sbaglia in silenzio
 
-**Severità:** 🔴 alta · **Sforzo:** basso · **Presidio mancante:** validazione dei pattern misti
+> ✅ **CORRETTO (2026-11-22), v3.43.0.** Entrambi i difetti, con la strada più
+> invasiva delle due proposte — **ancorare**, non « pretendere gli ancoraggi » —
+> su decisione del maintainer: progetto in beta, nessun utilizzatore terzo,
+> breaking change ammesso e documentato (regola 11).
+>
+> 1. **Le regex sono ancorate:** il corpo è compilato come `^(?:corpo)$`. Il
+>    gruppo non catturante non è cosmetico — senza, un corpo con alternative di
+>    primo livello cambierebbe significato (`^/a|/b$` è « inizia con /a OPPURE
+>    finisce con /b »).
+> 2. **I wildcard sono compilati in un passaggio unico** (`wildcardToRegex`):
+>    `**` → `.*`, `*` → `[^/]+`, tutto il resto escapato. Elimina la classe di
+>    problema invece del caso singolo, quindi il rimedio-tampone proposto qui
+>    sotto — *far rifiutare i pattern misti* — **non serve più**: un pattern
+>    misto ora funziona. `*` resta `[^/]+` e non `[^/]*`: « un segmento
+>    qualsiasi » non è « nessun segmento », quindi `/admin//config` non matcha
+>    `/admin/*/config`.
+>
+> **Il raggio d'impatto era più ampio di quanto questa scheda dicesse.** Qui si
+> legge « condiviso fra `adminAccessControl` e `seo` »: i consumatori sono
+> **sette**, due nel core (`csrfProtection`, `urlRedirect`, `sentinel`,
+> `core/pathZoneResolver`, `core/botDetector`). E le semantiche volute sono
+> **opposte**: chi protegge vuole il path intero, `sentinel` — che *rileva* —
+> vuole « contiene dovunque ».
+>
+> **🐞 Conseguenza misurata, e la ragione per cui l'ancoraggio non è bastato:**
+> le due regole `path` di `sentinel` che cercano chiavi SSH e webshell passavano
+> da `true` a `false` con l'ancoraggio — `/.ssh/id_rsa` e
+> `/uploads/img/shell.php` non venivano più intercettati. Sarebbero rimaste nel
+> file, **valide e inerti**. Riscritte con i `.*` espliciti e portate sulle
+> installazioni esistenti dalla migrazione **sentinel v7 → v8**. I test del
+> plugin hanno colto il problema da soli (7 fallimenti), che è il modo in cui si
+> vorrebbe scoprire sempre una cosa così.
+>
+> **Non toccata, e verificato perché:** la regola `query` di `sentinel` usa lo
+> stesso prefisso `regex:` ma **non passa dal matcher** — `query`, `userAgent` e
+> gli header li compila il plugin in `lib/ruleValidator.js`
+> (`new RegExp(source, 'i')`, senza ancoraggi e case-insensitive). Una prima
+> stesura della migrazione la riscriveva, inutilmente.
+>
+> **Effetto collaterale a valle, dichiarato:** in `core/pathZoneResolver.js` il
+> difetto di un prefisso che contiene `*` si è **capovolto** — era
+> « la zona resta scoperta » (il `*` era un quantificatore), ora è « la zona si
+> estende a path che non sono quel prefisso ». L'avviso resta, con la ragione
+> corretta.
+>
+> **Presidi:** 58 test in `tests/unit/patternMatcher.test.js`, fra cui la tabella
+> che questa scheda chiedeva — pattern misti, regex con e senza ancoraggi,
+> wildcard su segmento vuoto, asterisco letterale, metacaratteri, cache.
+>
+> *Resta aperto, ed è il residuo di A3 che questa scheda aveva ereditato:* la
+> priorità dipende dal **tipo** di pattern e non dalla specificità, quindi fra
+> due `**` vince l'ordine di inserimento (`/x/**` batte `/x/y/**` su `/x/y/z`).
+> I due rimedi — fascia di priorità riservata alle hardcoded, tie-break sulla
+> lunghezza — sono registrati in `TODO.md` §6: cambiano la risoluzione delle
+> regole per tutti e meritano una decisione a sé, non una coda a questa.
+
+**Severità:** 🔴 alta · **Sforzo:** basso · **Presidio mancante:** validazione dei pattern misti *(non più necessaria: con il compilatore a passaggio unico un pattern misto è valido e funziona — vedi il banner)*
 
 ### Dove
 
