@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 6,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
 
   // ── Migrazioni dei file di configurazione ──────────────────────────────────
   // Quando un plugin/tema evolve la struttura dei suoi config, la cartella
@@ -104,6 +104,13 @@
     "enabled": false,                         // true = abilita HTTPS (default false: avvio HTTP pulito, nessun warning certificati)
     "port": 3443,                             // Porta HTTPS (default 443)
     "AutoRedirectHttpPortToHttpsPort": false,  // true = redirect 301 HTTP→HTTPS
+
+    // Host su cui puntare il redirect 301 (es. "www.esempio.it"). "" = usa l'header
+    // Host della richiesta, che è SCELTO DAL CLIENT: lasciandolo vuoto chiunque può
+    // ottenere un 301 del tuo sito verso un dominio arbitrario (open redirect, il
+    // mattone classico del phishing: « il link parte davvero dal tuo dominio »).
+    // Impostarlo in produzione. Vedi REVIEW.md → A7.
+    "publicHost": "",
     "certFile": "./certs/fullchain.pem",      // Percorso certificato server
     "keyFile": "./certs/privkey.pem",         // Percorso chiave privata
     "caFile": "",                             // Percorso CA intermedia (opzionale, "" = disabilitato)

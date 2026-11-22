@@ -774,6 +774,25 @@ Da affrontare in una review dedicata:
       un box che grida al lupo è il modo più rapido per insegnare a ignorarlo. Da
       riprendere solo con casi reali in mano.
 
+- [ ] **Valutare se far servire le challenge ACME a Koa anche sulla porta 80**,
+      eliminando il server HTTP grezzo del redirect. *(Alternativa « B » valutata
+      chiudendo `REVIEW.md` → A7, v3.42.0; scartata per quell'intervento perché è una
+      modifica architetturale e non una correzione.)*
+      Oggi, con `AutoRedirectHttpPortToHttpsPort: true`, la porta 80 è servita da un
+      `http.createServer` scritto a mano: **non passa dall'applicazione Koa**, quindi
+      non ha davanti né il gate dei path canonici — che rifiuterebbe `..` da sé — né
+      il safety net che Koa mette attorno agli handler. È l'unico pezzo di codice del
+      progetto esposto a Internet senza alcuno strato, ed è il motivo per cui A7
+      esisteva.
+      **Il contro, che va pesato prima:** montare la catena Koa in chiaro sulla porta
+      80 renderebbe raggiungibili senza TLS cookie e sessioni. Il server minimale è
+      minimale **di proposito**. Una via di mezzo è una mini-app Koa dedicata alla
+      sola porta 80 (redirect + challenge), che avrebbe i gate senza esporre i
+      plugin.
+      *Nota:* la duplicazione della lettura del token è **già** stata risolta
+      (`readAcmeToken`, fonte unica per entrambi i rami); qui resta solo la questione
+      dei due server.
+
 ## 7. Dipendenze
 
 Fonte: `docs/roadmap.it.md` punto 16 — aggiornamenti rinviati dal bulk del 2026-05-19.

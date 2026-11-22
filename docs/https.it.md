@@ -1,4 +1,4 @@
-<!-- ital8doc v1-1 · tipo: guide · lang: it · rev: 2 · ref -->
+<!-- ital8doc v1-1 · tipo: guide · lang: it · rev: 3 · ref -->
 > 🌐 Italian reference edition (always up to date). English `https.md` is a stub until release.
 # Configurazione HTTPS — ital8cms
 
@@ -30,6 +30,7 @@ Oltre all'avvio dei server, `httpsManager` fornisce:
     "enabled": false,                         // true = abilita HTTPS
     "port": 443,                              // Porta HTTPS (default 443)
     "AutoRedirectHttpPortToHttpsPort": false, // true = redirect 301 HTTP→HTTPS
+    "publicHost": "",                         // host del redirect; "" = usa l'header Host (vedi sotto)
     "certFile": "./certs/fullchain.pem",      // Percorso certificato server
     "keyFile": "./certs/privkey.pem",         // Percorso chiave privata
     "caFile": "",                             // CA intermedia (opzionale, "" = disabilitato)
@@ -65,6 +66,7 @@ Tabella canonica dei campi del blocco `https` (questa guida è il riferimento un
 | `expiryCriticalDays` | number | No | `15` | Giorni alla scadenza sotto i quali al boot compare un 🔴 critical |
 | `hotReload.enabled` | boolean | No | `true` | Ricarica cert/key senza riavvio quando i file cambiano (post-rinnovo) |
 | `hotReload.debounceMs` | number | No | `2000` | Attesa dopo l'ultimo evento fs prima di ricaricare (evita reload su scritture parziali) |
+| `publicHost` | string | No (**sì in produzione**) | `""` | Host su cui puntare il redirect 301. `""` = usa l'header `Host` della richiesta, che è **scelto dal client** → open redirect. Vedi *L'header Host e `publicHost`* |
 | `acmeChallenge.enabled` | boolean | No | `false` | Abilita l'endpoint `/.well-known/acme-challenge/:token` (challenge HTTP-01) |
 | `acmeChallenge.webroot` | string | Se ACME abilitato | `""` | Webroot dei token; ital8cms legge da `{webroot}/.well-known/acme-challenge/`. Compatibile con `certbot --webroot -w {webroot}` |
 
@@ -99,6 +101,44 @@ https.port:443 → App Koa completa (HTTPS)
 
 > ℹ️ I box di errore e di scadenza certificato suggeriscono comandi **generici/Debian** (`certbot renew`, `setcap ... $(which node)`). Su **NixOS** valgono gli equivalenti dichiarativi descritti più sotto (timer di `security.acme`, `AmbientCapabilities`).
 
+## L'header Host e `publicHost`
+
+Il server HTTP che fa il redirect costruisce il `Location` da un dato che **non
+controlla**: l'header `Host` della richiesta, che chi chiama scrive come vuole.
+Con `publicHost` vuoto, una richiesta come
+
+```
+GET /pagina HTTP/1.1
+Host: attaccante.example
+```
+
+ottiene `301 → https://attaccante.example/pagina`: un redirect che **parte dal tuo
+dominio** e atterra altrove. È il mattone classico del phishing (*« il link è davvero
+del tuo sito »*), e con una CDN davanti diventa un vettore di avvelenamento della
+cache.
+
+**Imposta `publicHost` con il nome pubblico del sito.** Da quel momento l'host del
+redirect è un dato dell'**installazione**, non della richiesta.
+
+| `publicHost` | `Host` ricevuto | `Location` |
+|---|---|---|
+| `www.esempio.it` | `www.esempio.it` | `https://www.esempio.it/...` |
+| `www.esempio.it` | `attaccante.example` | `https://www.esempio.it/...` ← riscritto |
+| `""` (default) | `www.esempio.it` | `https://www.esempio.it/...` |
+| `""` (default) | forma implausibile | `https://localhost/...` |
+
+Il confronto ignora maiuscolo/minuscolo e porta. Con `publicHost` vuoto il
+comportamento storico è conservato per gli host di forma plausibile, ma un valore
+fuori forma non finisce mai in un header `Location`, e all'avvio compare un
+**avviso** che ricorda di impostarlo.
+
+> **Multi-dominio.** `publicHost` è un valore **singolo**: apex e `www` non possono
+> essere conservati entrambi, il redirect li porta tutti sul nome configurato — che
+> per il SEO è anche la cosa giusta (un solo nome canonico). Se ti serve davvero
+> conservare più nomi, è il momento di mettere davanti un reverse proxy (Strada A).
+
+---
+
 ## Due architetture di produzione
 
 | | **Strada B** — TLS in ital8cms | **Strada A** — reverse proxy |
@@ -123,6 +163,7 @@ ital8cms ascolta direttamente su 80 (redirect + challenge) e 443 (sito), e legge
   "enabled": true,
   "port": 443,
   "AutoRedirectHttpPortToHttpsPort": true,
+  "publicHost": "www.esempio.it",             // il nome pubblico, non l'Host della richiesta
   "certFile": "/etc/letsencrypt/live/example.com/fullchain.pem",
   "keyFile":  "/etc/letsencrypt/live/example.com/privkey.pem",
   "caFile":   "",               // fullchain.pem include già la catena

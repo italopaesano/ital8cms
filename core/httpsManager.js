@@ -164,6 +164,99 @@ function getChallengeDir(ital8Conf) {
 }
 
 /**
+ * Forma di un token ACME http-01: base64url, 16-128 caratteri.
+ *
+ * È una WHITELIST, e la differenza rispetto a `path.basename` non è stilistica.
+ * `basename` non è una difesa da path traversal: è una funzione che estrae
+ * l'ultimo segmento di un percorso, e l'ultimo segmento di
+ * `/.well-known/acme-challenge/..` è la stringa `..`, che restituisce tale e
+ * quale. Da lì `path.join(dir, '..')` risale alla cartella padre e
+ * `readFileSync` su una directory lancia EISDIR — vedi REVIEW.md → A7.
+ * Una whitelist non ha casi limite: o il nome ha questa forma, o non si legge
+ * niente.
+ */
+const ACME_TOKEN_SHAPE = /^[A-Za-z0-9_-]{16,128}$/;
+
+/**
+ * Legge il contenuto di un token ACME, oppure restituisce null.
+ *
+ * Unico punto in cui si tocca il filesystem per le challenge: lo usano SIA il
+ * server HTTP grezzo del redirect SIA la rotta Koa, che prima avevano due copie
+ * della stessa logica — e la correzione di A7 avrebbe dovuto essere applicata
+ * due volte, che è il modo in cui una correzione ne raggiunge una sola.
+ *
+ * Non fa `existsSync` prima di leggere, di proposito: la lettura dentro
+ * try/catch copre « non esiste » (ENOENT), « è una directory » (EISDIR) e
+ * « non ho i permessi » (EACCES) con un solo ramo, e non ha la finestra fra il
+ * controllo e l'uso che esiste quando si interrogano due volte il filesystem.
+ *
+ * @param {string} challengeDir - Directory assoluta dei token
+ * @param {string} rawToken     - Il nome del token, come arriva dalla richiesta
+ * @returns {string|null} Contenuto del token, o null se non servibile
+ */
+function readAcmeToken(challengeDir, rawToken) {
+  if (!challengeDir || typeof rawToken !== 'string') return null;
+  if (!ACME_TOKEN_SHAPE.test(rawToken)) return null;
+
+  try {
+    return fs.readFileSync(path.join(challengeDir, rawToken), 'utf8');
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Estrae il nome del token dall'URL di una richiesta al path ACME.
+ *
+ * `req.url` è il target grezzo: contiene la query string, che va tolta prima di
+ * guardare il nome (`/.well-known/acme-challenge/tok?x=1` ha come ultimo
+ * segmento `tok?x=1`, che la whitelist rifiuterebbe — correttamente, ma
+ * rifiutando anche una richiesta legittima con una query in coda).
+ *
+ * @param {string} rawUrl
+ * @returns {string} L'ultimo segmento del path, o stringa vuota
+ */
+function acmeTokenFromUrl(rawUrl) {
+  const pathOnly = String(rawUrl || '').split(/[?#]/)[0];
+  return pathOnly.slice(pathOnly.lastIndexOf('/') + 1);
+}
+
+/**
+ * Hostname sintatticamente plausibile: lettere, cifre, punti e trattini.
+ *
+ * Serve anche quando `publicHost` non è configurato: l'header `Host` lo scrive
+ * il client, e un valore fuori da questa forma non deve finire in un header
+ * `Location`. (Il parser HTTP di Node rifiuta già CR/LF nella request line,
+ * quindi questa è difesa in profondità, non l'unica barriera.)
+ */
+const HOSTNAME_SHAPE = /^[A-Za-z0-9.-]{1,253}$/;
+
+/**
+ * Decide l'host su cui puntare il redirect 301.
+ *
+ * `Host` è scelto dal CLIENT: fidarsene significa che chiunque può ottenere un
+ * 301 del tuo sito verso un dominio arbitrario (REVIEW.md → A7). Con
+ * `https.publicHost` configurato l'host diventa un dato dell'installazione e
+ * non della richiesta; senza, si conserva il comportamento storico ma solo per
+ * valori di forma plausibile.
+ *
+ * @param {string|undefined} hostHeader - `req.headers.host`
+ * @param {string} publicHost           - `https.publicHost` ("" = non configurato)
+ * @returns {string} Hostname da usare nel Location
+ */
+function resolveRedirectHost(hostHeader, publicHost) {
+  const requested = String(hostHeader || '').split(':')[0];
+
+  if (publicHost) {
+    // Configurato: l'unico valore ammesso è quello. Il confronto serve solo a
+    // non riscrivere inutilmente un Host già corretto (anche con altro case).
+    return requested.toLowerCase() === publicHost.toLowerCase() ? requested : publicHost;
+  }
+
+  return HOSTNAME_SHAPE.test(requested) ? requested : 'localhost';
+}
+
+/**
  * Registra la route ACME challenge nel router Koa.
  * Deve essere chiamata prima delle istanze koa-classic-server in index.js
  * per garantire la priorità (il router Koa viene eseguito prima di koa-classic-server).
@@ -194,17 +287,16 @@ function setupAcmeChallengeRoute(router, ital8Conf) {
   }
 
   router.get('/.well-known/acme-challenge/:token', (ctx) => {
-    // path.basename previene path traversal (es. token = "../../etc/passwd")
-    const safeToken = path.basename(ctx.params.token);
-    const tokenPath = path.join(challengeDir, safeToken);
+    const token = readAcmeToken(challengeDir, ctx.params.token);
 
-    if (fs.existsSync(tokenPath)) {
-      ctx.type = 'text/plain';
-      ctx.body = fs.readFileSync(tokenPath, 'utf8');
-    } else {
+    if (token === null) {
       ctx.status = 404;
       ctx.body   = 'Token not found';
+      return;
     }
+
+    ctx.type = 'text/plain';
+    ctx.body = token;
   });
 
   console.log(`[HTTPS] ACME challenge: /.well-known/acme-challenge/:token → ${challengeDir}`);
@@ -223,25 +315,48 @@ function createHttpRedirectServer(httpsPort, ital8Conf) {
   const portSuffix       = httpsPort === 443 ? '' : ':' + httpsPort;
   const challengeDir     = getChallengeDir(ital8Conf);
   const acmeEnabled      = ital8Conf.https?.acmeChallenge?.enabled && challengeDir;
+  const publicHost       = ital8Conf.https?.publicHost || '';
+
+  if (!publicHost) {
+    console.warn('[HTTPS] ⚠  https.publicHost non configurato: il redirect 301 usa l\'header Host della richiesta, che è scelto dal client. Impostarlo per chiudere l\'open redirect (REVIEW.md → A7).');
+  }
 
   return http.createServer((req, res) => {
+    // Questo server NON passa dall'applicazione Koa: non ha davanti né il gate
+    // dei path canonici né il safety net che Koa mette attorno agli handler.
+    // Un'eccezione qui risalirebbe a `uncaughtException`, dove
+    // core/processSafetyNet.js chiude il processo con respawn: false — cioè una
+    // richiesta malformata spegnerebbe il sito (REVIEW.md → A7). Il try/catch
+    // non è prudenza generica: è l'unico strato che questo codice ha.
+    try {
+      // ACME challenge ha priorità assoluta sul redirect 301.
+      if (acmeEnabled && req.url.startsWith('/.well-known/acme-challenge/')) {
+        const token = readAcmeToken(challengeDir, acmeTokenFromUrl(req.url));
 
-    // ACME challenge ha priorità assoluta sul redirect 301
-    if (acmeEnabled && req.url.startsWith('/.well-known/acme-challenge/')) {
-      const safeToken = path.basename(req.url); // previene path traversal
-      const tokenPath = path.join(challengeDir, safeToken);
+        if (token !== null) {
+          res.writeHead(200, { 'Content-Type': 'text/plain' });
+          res.end(token);
+          return;
+        }
 
-      if (fs.existsSync(tokenPath)) {
-        res.writeHead(200, { 'Content-Type': 'text/plain' });
-        res.end(fs.readFileSync(tokenPath, 'utf8'));
+        // Un token assente o malformato risponde 404 e NON ricade sul redirect:
+        // rimandare una challenge su HTTPS la fa fallire comunque (il
+        // certificato è proprio quello che si sta tentando di ottenere), e
+        // allinea questo ramo alla rotta Koa, che il 404 lo dava già.
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Token not found');
         return;
       }
-    }
 
-    // Redirect 301 HTTP → HTTPS
-    const hostname = (req.headers.host || 'localhost').split(':')[0];
-    res.writeHead(301, { 'Location': 'https://' + hostname + portSuffix + req.url });
-    res.end();
+      // Redirect 301 HTTP → HTTPS
+      const hostname = resolveRedirectHost(req.headers.host, publicHost);
+      res.writeHead(301, { 'Location': 'https://' + hostname + portSuffix + req.url });
+      res.end();
+    } catch (err) {
+      console.warn(`[HTTPS] errore nel server di redirect (${req.method} ${req.url}): ${err.message}`);
+      if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('Internal Server Error');
+    }
   });
 }
 
@@ -554,4 +669,7 @@ function start(app, router, ital8Conf) {
 }
 
 
-module.exports = { start };
+// `start` è la superficie usata da index.js. Gli altri tre sono esportati per i
+// presìdi di REVIEW.md → A7: un handler esposto a Internet senza Koa davanti
+// deve essere verificabile in isolamento, senza certificati né spawn.
+module.exports = { start, createHttpRedirectServer, readAcmeToken, resolveRedirectHost };
