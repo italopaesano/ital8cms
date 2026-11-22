@@ -686,6 +686,49 @@ Da affrontare in una review dedicata:
 - [ ] **Supporto PAT/token gestiti** come alternativa granulare alla chiave del
       server (credenziali per-installazione invece dell'identità della macchina).
 
+### Chiavi di sessione — lavoro derivato dalla correzione di A2 (v3.39.0)
+
+- [ ] **Generare chiavi casuali alla MATERIALIZZAZIONE di `koaSession.json5`, così
+      il percorso di autoguarigione dei config non si autodisabiliti.**
+      *(Emerso implementando il gate `[SESSION]`: è l'idea che il maintainer aveva
+      proposto per prima e che avevo dichiarato **assorbita** dal gate. Non lo è, e
+      un test preesistente lo ha dimostrato.)*
+      Il ciclo di vita dei config esiste per far **rinascere** un vivo mancante dal
+      suo `.default` — il commento in `index.js` dice che bastava un `git clean -X`
+      o un ripristino parziale da backup perché l'avvio morisse. Per `koaSession`
+      quella rinascita produce ora chiavi **pubbliche**, quindi il gate ferma il
+      boot: l'installazione non muore più con uno stack trace grezzo (bene) ma
+      **non si rialza da sola** (meno bene), e chi ha perso più config del core si
+      risana in **due** avvii invece di uno.
+      Se la materializzazione di questo file generasse chiavi vere invece di
+      copiare i segnaposti, i tre percorsi migliorerebbero insieme: clone fresco →
+      gate `[INIT]` → wizard (invariato); installazione che perde il vivo → torna
+      su **sicura**, con le sole sessioni invalidate; config scritto a mano con
+      `CHANGE_ME_` → il gate scatta comunque. I due meccanismi sono
+      **complementari**, non alternativi.
+      **Da sciogliere prima di scrivere:** `core/materializeFromDefault.js` è un
+      copiatore **generico** condiviso con `ital8Config`/`adminConfig` e con i
+      descrittori di plugin/temi, quindi la generazione non va dentro di lui — serve
+      un passo dedicato subito dopo, per questo solo file (nome da proporre). E va
+      deciso se `tests/globalSetup.js` possa allora **smettere** di ruotare le
+      chiavi da sé, diventando la materializzazione a farlo.
+- [ ] **Valutare le chiavi di sessione da variabile d'ambiente**, come il commento
+      del `.default` già suggerisce.
+      *(Nota collaterale della scheda A2, non affrontata nella v3.39.0.)* Rimuoverebbe
+      la classe di problema alla radice invece di presidiarla, ed è la strada normale
+      per il multi-istanza — dove oggi le chiavi vanno inserite a mano identiche su
+      ogni nodo (voce « Inserisci chiavi esplicite » del wizard). È una decisione di
+      configurazione che merita il suo intervento: non va mescolata con una fix.
+- [ ] **Il livello `weak` guarda solo la LUNGHEZZA.**
+      *(Scelta deliberata della v3.39.0, registrata per non farla passare per
+      completezza.)* La soglia è `MIN_SESSION_KEY_LENGTH` (16), riusata dal wizard
+      invece di inventarne una nuova. Una chiave lunga ma povera — venti caratteri
+      tutti uguali, o una parola di dizionario — è classificata `ok`. Aggiungere un
+      criterio su classi di caratteri o entropia è possibile, ma **ogni irrigidimento
+      del livello `weak` è un rischio di falso positivo** su una chiave legittima, e
+      un box che grida al lupo è il modo più rapido per insegnare a ignorarlo. Da
+      riprendere solo con casi reali in mano.
+
 ## 7. Dipendenze
 
 Fonte: `docs/roadmap.it.md` punto 16 — aggiornamenti rinviati dal bulk del 2026-05-19.

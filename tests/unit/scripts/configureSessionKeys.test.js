@@ -211,17 +211,51 @@ describe('azione "keep" — non tocca il file', () => {
     expect(backupManager.backupGlobalFile).not.toHaveBeenCalled();
   });
 
-  test('con i placeholder: il file resta, ma arriva un WARNING', async () => {
-    // Mantenere i placeholder è una scelta legittima in sviluppo, ma chi installa
-    // deve uscire dallo step sapendo che l'installazione non è sicura.
+  test('con chiavi PUBBLICHE la voce "mantieni" non viene nemmeno offerta', async () => {
+    // Il cambiamento introdotto con la correzione di A2: mantenere chiavi
+    // pubbliche produce un'installazione che il gate al boot rifiuta, e una voce
+    // di menu che porta a un CMS che non parte è una voce da non mostrare.
     const configPath = scriviConfig([...PLACEHOLDER_SESSION_KEYS].slice(0, 2));
+    inquirer.prompt.mockResolvedValueOnce({ action: 'generate' });
+
+    await configureSessionKeys({
+      logger: makeLogger(), backupManager: makeBackupManager(), configPath,
+    });
+
+    const domanda = inquirer.prompt.mock.calls[0][0][0];
+    expect(domanda.choices.map((c) => c.value)).not.toContain('keep');
+    // Le altre tre restano, così il test non passerebbe per un menu vuoto.
+    expect(domanda.choices.map((c) => c.value))
+      .toEqual(['generate', 'generate-with-entropy', 'custom']);
+  });
+
+  test('con chiavi DEBOLI "mantieni" resta offerta, ma arriva un WARNING', async () => {
+    // Il livello debole è una stima, non un fatto: la decisione resta a chi
+    // installa, e l'avviso serve perché la prenda sapendo.
+    const configPath = scriviConfig(['corta']);
     const logger = makeLogger();
     inquirer.prompt.mockResolvedValueOnce({ action: 'keep' });
 
     await configureSessionKeys({ logger, backupManager: makeBackupManager(), configPath });
 
+    const domanda = inquirer.prompt.mock.calls[0][0][0];
+    expect(domanda.choices.map((c) => c.value)).toContain('keep');
     expect(logger.warning).toHaveBeenCalled();
-    expect(logger.warning.mock.calls.flat().join(' ')).toMatch(/non sicur|placeholder/i);
+    expect(logger.warning.mock.calls.flat().join(' ')).toMatch(/debol/i);
+  });
+
+  test('se "keep" viene FORZATA su chiavi pubbliche, il messaggio non mente', async () => {
+    // Percorso non raggiungibile dal menu, ma raggiungibile da un chiamante
+    // programmatico. Dire «deboli» di chiavi pubbliche sarebbe la stessa classe
+    // di difetto di A2: un messaggio che rassicura su ciò che non ha verificato.
+    const configPath = scriviConfig([...PLACEHOLDER_SESSION_KEYS].slice(0, 1));
+    const logger = makeLogger();
+    inquirer.prompt.mockResolvedValueOnce({ action: 'keep' });
+
+    await configureSessionKeys({ logger, backupManager: makeBackupManager(), configPath });
+
+    expect(logger.warning.mock.calls.flat().join(' ')).toMatch(/PUBBLICHE/);
+    expect(logger.warning.mock.calls.flat().join(' ')).not.toMatch(/debol/i);
   });
 
   test('con chiavi personalizzate NON arriva alcun warning', async () => {
@@ -328,7 +362,19 @@ describe('azione "custom" — chiavi fornite a mano', () => {
       const placeholderLungo = PLACEHOLDER_SESSION_KEYS
         .find((k) => k.length >= MIN_CUSTOM_KEY_LENGTH);
 
-      expect(validate(placeholderLungo)).toMatch(/placeholder/i);
+      // Rifiutato per IDENTITÀ, non per lunghezza: il messaggio deve dire che è
+      // pubblico, altrimenti chi lo legge prova ad allungarlo e torna al punto.
+      expect(validate(placeholderLungo)).toMatch(/pubblic/i);
+      expect(validate(placeholderLungo)).not.toMatch(/caratteri/i);
+    });
+
+    test('rifiuta anche una chiave col prefisso CHANGE_ME_, che prima passava', () => {
+      // Il buco concreto della validazione precedente: reimmettere a mano
+      // `CHANGE_ME_session_key_1` passava entrambi i controlli (23 caratteri,
+      // assente dalla denylist storica). Misurato durante la revisione di A2.
+      return prendiValidate().then((validate) => {
+        expect(validate('CHANGE_ME_session_key_1')).toMatch(/pubblic/i);
+      });
     });
 
     test('TUTTI i placeholder sono rifiutati, per una ragione o per l\'altra', async () => {

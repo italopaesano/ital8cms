@@ -1050,21 +1050,36 @@ Configurazione completa spostata in [`docs/https.it.md`](./docs/https.it.md).
 }
 ```
 
-#### Rotazione automatica delle chiavi (install + boot)
+#### Chiavi di sessione: gate al boot + rotazione all'install
 
-Due meccanismi coordinati gestiscono la sicurezza delle chiavi:
+Le chiavi firmano i cookie di sessione (`signed: true`): chi le conosce fabbrica un cookie con `authenticated: true` e `roleIds: [0]` senza alcuna credenziale. Da qui una **scala a tre livelli**, in `core/sessionSecurity.js → classifySessionKeys(keys)`:
 
-**1. Wizard d'installazione (`npm run start-configure`)** — In FASE 1 (configurazione globale) il wizard propone uno step dedicato alle chiavi di sessione (`scripts/lib/sessionKeyManager.js`):
+| Livello | Quando | Esito al boot |
+|---|---|---|
+| **`fatal`** | la chiave è **PUBBLICA**: prefisso `CHANGE_ME_` (segnaposti spediti) o uno dei 4 placeholder **storici**; oppure `keys` assente/vuoto/malformato | box `[SESSION]` + **`exit 1`, il CMS non parte** |
+| **`weak`** | la chiave è più corta di `MIN_SESSION_KEY_LENGTH` (16) | box `[SESSION]` di avviso, **il boot prosegue** |
+| **`ok`** | — | nessun output |
 
-- Menu a tre voci: **Genera nuove chiavi casuali** / **Inserisci chiavi personalizzate** / **Mantieni le chiavi correnti**.
-- **Default adattivo:** "Genera" se le chiavi correnti sono i placeholder, "Mantieni" se già personalizzate (evita di invalidare sessioni esistenti in una re-init).
-- Generazione: **3 chiavi** `crypto.randomBytes(32).toString('base64url')` (256-bit, URL-safe).
-- Scrittura tramite `core/editJson5` (sostituisce **solo** il campo `keys`, preservando tutti i commenti) con backup preventivo via `BackupManager`. I valori delle chiavi **non** vengono mai loggati.
+**Perché tre livelli e non due:** « pubblica » è un **fatto** verificabile (quelle stringhe le spedisce il repository, quindi si sa quali sono) e si può essere fatali su un fatto; « debole » è una **stima** euristica, e rifiutare l'avvio su un'euristica che può sbagliare farebbe più danni del rischio che evita. **L'elenco esatto dei placeholder storici non è sostituibile dall'euristica:** nessun criterio strutturale rileva « è nota a tutti » — misurato, 3 dei 4 valori storici superano la soglia di lunghezza, e `key.secondaryKey123` è indistinguibile da una chiave scelta a mano.
+
+**1. Gate al boot (`checkSessionKeys()`)** — Montato in `index.js` **subito dopo** la materializzazione di `koaSession.json5` e **prima** del montaggio dei priority middleware. Collocazione deliberata: prima stava in fondo a `startApp()`, dopo `httpsManager.start()`, quindi il server era già in ascolto. Il modulo **non** chiama `process.exit()` — classifica, stampa il box e ritorna il livello; a uscire è `index.js` (stesso schema di `core/accessInvariantCheck.js`). Salta da sé se la sessione è disabilitata.
+
+> ⚠️ **Conseguenza da conoscere:** un'installazione configurata che **perde** `koaSession.json5` (un `git clean -X`, un ripristino parziale) lo rigenera dal `.default` — quindi con chiavi pubbliche — e a quel punto **non parte** finché non si risistemano le chiavi. È il comportamento giusto (ripartire con quelle ricreerebbe il difetto passando da un comando di pulizia), ma significa che chi ha perso **più** config del core si risana in **due** avvii: il gate interrompe fra la materializzazione di `koaSession` e quella di `adminConfig`, che avviene dentro `startApp()`. Presidiato da `tests/integration/bootLifecycle.test.js`.
+
+**2. Wizard d'installazione (`npm run start-configure`)** — In FASE 1 uno step dedicato (`scripts/lib/sessionKeyManager.js`):
+
+- Menu: **Genera chiavi casuali** / **Genera con `entropyContribution`** / **Inserisci chiavi esplicite** / **Mantieni le correnti**.
+- **« Mantieni » non viene offerta se le chiavi sono `fatal`:** sarebbe una voce che produce un'installazione che il gate rifiuta. Resta offerta sul livello `weak`, che è una stima e la cui decisione spetta a chi installa.
+- **Default adattivo:** "Genera" se le correnti non sono a posto, "Mantieni" se lo sono (evita di invalidare le sessioni esistenti in una re-init, compresa quella dell'admin che esegue il wizard).
+- Generazione: **3 chiavi** `crypto.randomBytes(32).toString('base64url')` (256 bit, URL-safe).
+- **`entropyContribution`** (non « seme »): testo digitato dall'operatore, mescolato come `SHA-256(randomBytes(32) ‖ contributo)`. **Non aggiunge entropia misurabile** quando il CSPRNG funziona — 256 bit sono già il tetto — ed esiste per un caso preciso: un generatore **rotto o prevedibile** (il bug OpenSSL di Debian del 2008, una VM al primo avvio con pool vuoto). La proprietà garantita dall'ordine degli argomenti è **« mai peggio di `randomBytes` da solo »**; la forma da non scrivere è `SHA-256(contributo)`, che restringerebbe lo spazio delle chiavi all'entropia della frase. Il contributo **non è conservato** e la generazione **non è riproducibile**: per questo non si chiama seme — un seme lo si custodirebbe come backup delle chiavi.
+- La validazione delle chiavi esplicite **delega a `classifySessionKeys`**, quindi il wizard non può accettare chiavi che il boot poi rifiuta.
+- Scrittura tramite `core/editJson5` (solo il campo `keys`, commenti preservati) con backup via `BackupManager`. I valori **non** vengono mai loggati.
 - Gira sia per il profilo `production` sia `demo`; saltato solo nella re-init `plugins`.
 
-**2. Avviso al boot (`core/sessionSecurity.js → checkSessionKeys()`)** — All'avvio del server (`index.js`), se la sessione è attiva e le chiavi sono ancora placeholder, viene emesso un box ASCII di warning (stile `httpsManager.warnMissingCertificates()`). Il server parte comunque (non bloccante). Salta da sé se la sessione è disabilitata.
+**Fonte unica** (`core/sessionSecurity.js`): `classifySessionKeys()`, `keysAreInsecure()`, `PLACEHOLDER_SESSION_KEYS` e `MIN_SESSION_KEY_LENGTH` sono condivisi fra wizard (install-time) e gate (runtime), con la direzione di dipendenza corretta (tooling → core). `scripts/lib/sessionKeyManager.js` re-esporta la soglia come `MIN_CUSTOM_KEY_LENGTH` per retrocompatibilità.
 
-**Fonte unica della logica di rilevamento** (`core/sessionSecurity.js`): la denylist `PLACEHOLDER_SESSION_KEYS` e il predicato `keysAreInsecure(keys)` sono condivisi tra il wizard (install-time) e il warning al boot (runtime), mantenendo la direzione di dipendenza corretta (tooling → core).
+> **Il presidio che mancava** (`REVIEW.md` → A2, corretto): un test legge il `koaSession.default.json5` **realmente spedito** e pretende che il gate lo rifiuti. Senza, il difetto originale è vissuto cinque mesi — la denylist elencava i placeholder *precedenti*, perché due PR parallele del 12/06/2026 (rename alle 22:19, denylist alle 22:43) hanno divergito senza conflitto git né test rossi. In test le chiavi pubbliche sono sostituite da `tests/globalSetup.js` con chiavi casuali vere, invece di dare alla suite una via di fuga che disattivi il gate.
 
 ### Configurazione specifica del plugin
 
@@ -1554,7 +1569,7 @@ Spostato in [`docs/deployment.it.md`](./docs/deployment.it.md).
 - `/core/ensureThemesInstalled.js` - Ciclo di vita config (Fase 5): scrive `isInstalled: 1` al boot sui temi **bundled** (con `.default`) il cui vivo ne è privo; gemello, per i temi, della persistenza fatta da `pluginSys`
 - `/core/servingRootResolver.js` - Utility di isolamento del path di serving
 - `/core/patternMatcher.js` - Utility di pattern matching degli URL (esatto, wildcard, regex) — condivisa dai plugin adminAccessControl e seo
-- `/core/sessionSecurity.js` - Sicurezza delle chiavi di sessione: denylist dei placeholder, `keysAreInsecure()`, warning al boot `checkSessionKeys()` (fonte di verità unica)
+- `/core/sessionSecurity.js` - Sicurezza delle chiavi di sessione, **fonte di verità unica**: scala a tre livelli `classifySessionKeys()` (`fatal` = chiave PUBBLICA → il CMS non parte / `weak` = troppo corta → avviso / `ok`), denylist dei placeholder **storici**, soglia `MIN_SESSION_KEY_LENGTH`, predicato `keysAreInsecure()`, e i box del gate al boot `checkSessionKeys()`. **Non** chiama `process.exit()`: ritorna il livello, a uscire è `index.js` (come `accessInvariantCheck`)
 - `/core/processSafetyNet.js` - Rete di sicurezza a livello di processo: handler globali `uncaughtException`/`unhandledRejection` → box `[FATAL]` + chiusura ordinata (`installProcessSafetyNet()`, `warnFatalError()`); installata early in `index.js`
 - `/scripts/lib/sessionKeyManager.js` - Tooling install-time per le chiavi di sessione: `generateSessionKeys()` + step interattivo del wizard `configureSessionKeys()`
 
