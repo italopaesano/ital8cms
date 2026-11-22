@@ -91,5 +91,15 @@
       reason:
         "`auth-surface-noise` e la sola regola distribuita che nomina percorsi del  CMS, e li nominava come TESTO (`/api/adminUsers/login`) mentre apiPrefix e  pluginPagesPrefix sono VARIABILI di ital8Config.json5. Chi li cambia  ottiene una regola che non osserva piu niente, senza che nulla lo segnali:  la regola resta nel file, valida e inerte. Serve una migrazione perche  `rules` e un array e il merge del boot lo tratta come un valore, come per  gli step precedenti. Converte SOLO i path nostri: i circa venti pattern di  tecnologie altrui (/wp-admin, /phpmyadmin, /.env) restano letterali, ed e  giusto, perche non sono zone di ital8cms. Come lo step 5→6 si ancora al  testo esatto della riga distribuita e rinuncia se non lo trova, invece di  riscrivere a tentoni un file che l'amministratore puo aver personalizzato.",
     },
+    {
+      from: 7,
+      to: 8,
+      title: "Le tre regole regex sopravvivono all'ancoraggio",
+      automatic: true,
+      script: "from-v7-to-v8.js",
+      touches: ["sentinelRules.json5"],
+      reason:
+        "Dalla v3.43.0 core/patternMatcher.js compila il corpo di un `regex:` come  `^(?:corpo)$` (REVIEW.md → A4): prima non lo faceva, e test() senza  ancoraggi e' un match di SOTTOSTRINGA — per chi protegge URL un difetto,  perche' `regex:/admin/users` matchava anche `/public/admin/users`. Ma  sentinel non protegge, RILEVA, e le sue tre regole distribuite usavano il  match parziale DI PROPOSITO: una chiave SSH o una webshell vanno  intercettate in qualunque cartella, le sequenze di risalita in qualunque  punto della query. Misurato senza questa riscrittura: /.ssh/id_rsa e  /uploads/img/shell.php passano da true a false, cioe' le due regole su  `path` restano nel file valide e INERTI. La regola sulla querystring NON e'  toccata: query, userAgent e header non passano da patternMatcher, sentinel  li compila da se' in lib/ruleValidator.js (new RegExp(source, 'i'), senza  ancoraggi) e l'ancoraggio non li riguarda — lo stesso  difetto dello step 6→7 per un'altra strada. Serve una migrazione perche'  `rules` e' un array e il merge del boot lo tratta come un valore. Ogni  riga e' indipendente e ancorata al testo esatto distribuito: se  l'amministratore ne ha personalizzata una, quella non viene toccata e un  avviso dice cosa fare, invece di riscrivere a tentoni.",
+    },
   ],
 }

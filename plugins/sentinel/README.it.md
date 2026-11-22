@@ -1,4 +1,4 @@
-<!-- ital8doc v1-1 · tipo: README · lang: it · rev: 1 · ref -->
+<!-- ital8doc v1-1 · tipo: README · lang: it · rev: 2 · ref -->
 > 🌐 Italian reference edition (always up to date). English `README.md` is a stub until release.
 # sentinel
 
@@ -188,7 +188,7 @@ espliciti: `all`, `any`, `not`.
 
 | Foglia | Esempio |
 |---|---|
-| `path` | `"/wp-admin/**"` · `"regex:^/wp-"` · `["/a", "/b"]` |
+| `path` | `"/wp-admin/**"` · `"regex:^/wp-.*"` · `["/a", "/b"]` |
 | `extension` | `["php", "sql"]` |
 | `method` | `["TRACE", "PROPFIND"]` |
 | `userAgent` | `"regex:^curl/"` · `"empty"` · `["curl", "wget"]` |
@@ -196,6 +196,15 @@ espliciti: `all`, `any`, `not`.
 | `query` | `"regex:union\\s+select"` |
 | `ip` | `["10.0.0.0/8", "2001:db8::/32"]` |
 | `authenticated` | `true` / `false` |
+
+> ⚠️ **`path` e il resto non si compilano allo stesso modo, e il prefisso
+> `regex:` inganna.** Il `path` passa da `core/patternMatcher`, dove dalla
+> v3.43.0 il corpo di un `regex:` è **ancorato** (`^(?:corpo)$`): descrive il
+> path intero, quindi un prefisso vuole il `.*` esplicito — `regex:^/wp-.*`, non
+> `regex:^/wp-`. `query`, `userAgent` e `header` invece li compila sentinel per
+> conto suo (`lib/ruleValidator.js → compileRegex()`, `new RegExp(source, 'i')`):
+> **senza ancoraggi e case-insensitive**, quindi `regex:union\s+select` cerca
+> « dovunque » e continua a funzionare così.
 | `roleIds` | `[0, 1]` |
 | `fingerprint` | `["a3f9c2e1b7d4"]` |
 | `fingerprintClass` | `{ coherent: false, family: "curl" }` |

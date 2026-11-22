@@ -223,21 +223,41 @@ function normalizeExtSuffix(value) {
 
 /**
  * Un prefisso concreto finisce DENTRO un pattern, quindi i metacaratteri del
- * matcher lo tradiscono: `adminPrefix: "a*b"` produce `/a*b/**`, che
- * `patternMatcher` compila in `^/a[^/]+b/.*$` — e `/a*b/index.ejs` (il path
- * letterale che il server serve) NON matcha. La zona resterebbe scoperta in
- * silenzio, cioè il difetto A1 per un'altra strada.
+ * matcher lo tradiscono: `adminPrefix: "a*b"` produce il pattern di zona
+ * `/a*b/` + `**`, e l'asterisco non è più un carattere, è un wildcard.
+ *
+ * ⚠️ IL DIFETTO SI È CAPOVOLTO con l'ancoraggio e il compilatore unico dei
+ * wildcard (v3.43.0, REVIEW.md → A4), e la nota che stava qui va corretta sulla
+ * base della misura.
+ *
+ * PRIMA: compilava in `^/a*b/.*$` — l'asterisco singolo restava un
+ * QUANTIFICATORE regex (zero o più `a`), quindi `/a*b/index.ejs`, il path
+ * letterale che il server serve, NON matchava: la zona restava **scoperta**.
+ * (La nota precedente diceva che compilava in `^/a[^/]+b/.*$`: era inesatta, ma
+ * la conclusione « non matcha » era giusta per un'altra ragione.)
+ *
+ * OGGI: compila davvero in `^/a[^/]+b/.*$`, e misurato:
+ *
+ *     /a*b/index.ejs    → true    ← la zona ORA è intercettata
+ *     /aXb/index.ejs    → true    ← ma lo è anche questo, che non è il prefisso
+ *     /aaab/index.ejs   → true
+ *     /ab/index.ejs     → false
+ *
+ * Quindi non è più « la zona resta scoperta » (under-match) ma « la zona si
+ * estende a path che non sono quel prefisso » (over-match). Resta un difetto —
+ * un prefisso deve delimitare sé stesso e nient'altro — e l'avviso resta
+ * necessario; cambia la ragione, e dirla sbagliata sarebbe peggio che tacerla.
  *
  * Lo spazio bianco non espone (viene matchato letteralmente) ma rende il pattern
  * invalido secondo `patternMatcher.validatePattern()`: incoerenza che va detta.
  *
- * MISURATO: `*` scopre la zona; `?` e lo spazio no. La GUI valida `adminPrefix` e
+ * MISURATO: `*` deforma la zona; `?` e lo spazio no. La GUI valida `adminPrefix` e
  * `apiPrefix` (`/^[a-zA-Z0-9_-]+$/` in `plugins/admin/systemSettings.js:104`) ma
  * NON `viewsPrefix`, e un `ital8Config.json5` scritto a mano non passa da nessun
  * validatore: il presidio va quindi nel punto d'uso, qui.
  */
 function describePrefixDefect(prefix) {
-  if (/[*]/.test(prefix)) return 'contiene il metacarattere * — la zona NON verrebbe intercettata';
+  if (/[*]/.test(prefix)) return 'contiene il metacarattere * — la zona intercetterebbe ANCHE path che non sono quel prefisso';
   if (/\s/.test(prefix)) return 'contiene spazi — patternMatcher.validatePattern() rifiuta il pattern risultante';
   return null;
 }

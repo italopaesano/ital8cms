@@ -742,7 +742,7 @@ Situata in `/plugins/adminUsers/userAccount.json5`
 
 ### Sistema di controllo accessi (adminAccessControl)
 
-Controllo accessi basato su pattern (esatto / wildcard `*`,`**` / `regex:`) con **priorità automatica** (il più specifico vince), regole **hardcoded immutabili** + **custom** in `accessControl.json5`, e campo **`access` obbligatorio** su ogni rotta di plugin (una rotta che non lo dichiara non viene registrata: vedi la tabella in *Rotte API dei plugin*). Admin UI con editor JSON5 e validazione (sintassi, ruoli, conflitti, immutabilità hardcoded). → [`plugins/adminAccessControl/README.it.md`](./plugins/adminAccessControl/README.it.md) · [`EXPLAIN.it.md`](./plugins/adminAccessControl/EXPLAIN.it.md)
+Controllo accessi basato su pattern (esatto / wildcard `*`,`**` / `regex:`) con **priorità automatica per tipo di pattern**, regole **hardcoded immutabili** + **custom** in `accessControl.json5`, e campo **`access` obbligatorio** su ogni rotta di plugin (una rotta che non lo dichiara non viene registrata: vedi la tabella in *Rotte API dei plugin*). Admin UI con editor JSON5 e validazione (sintassi, ruoli, conflitti, immutabilità hardcoded). → [`plugins/adminAccessControl/README.it.md`](./plugins/adminAccessControl/README.it.md) · [`EXPLAIN.it.md`](./plugins/adminAccessControl/EXPLAIN.it.md)
 
 ### SEO · Rate Limiter · Admin Rate Limiter
 
@@ -1596,7 +1596,7 @@ Spostato in [`docs/deployment.it.md`](./docs/deployment.it.md).
 
 ### File dei plugin
 
-Ogni plugin documenta i propri file nel rispettivo `README.it.md`/`EXPLAIN.it.md` (vedi i puntatori nelle sezioni dei plugin sopra). Utility core trasversali: `core/patternMatcher.js` (pattern matching condiviso), `core/servingRootResolver.js` (isolamento path), `core/editJson5.js` (modifica chirurgica di chiavi JSON5 — update-only; da v3.33.0 sostituisce un oggetto/array **per chiave** invece di rifare il blocco, quindi i commenti delle chiavi che non cambiano **sopravvivono**, e ciò che non è preservabile è dichiarato in `droppedComments`), `core/setJson5Key.js` (upsert di una chiave, anche annidata, preserva i commenti), `core/loadJson5.js`, `core/logger.js`, `core/escapeHtml.js`, `core/sessionSecurity.js`, `core/processSafetyNet.js`.
+Ogni plugin documenta i propri file nel rispettivo `README.it.md`/`EXPLAIN.it.md` (vedi i puntatori nelle sezioni dei plugin sopra). Utility core trasversali: `core/patternMatcher.js` (pattern matching condiviso — **le regex sono ancorate**, `^(?:corpo)$`: descrivono il path intero, per cercare « dovunque » servono i `.*` espliciti; i wildcard sono compilati in un passaggio unico, `**`→`.*` e `*`→`[^/]+`), `core/servingRootResolver.js` (isolamento path), `core/editJson5.js` (modifica chirurgica di chiavi JSON5 — update-only; da v3.33.0 sostituisce un oggetto/array **per chiave** invece di rifare il blocco, quindi i commenti delle chiavi che non cambiano **sopravvivono**, e ciò che non è preservabile è dichiarato in `droppedComments`), `core/setJson5Key.js` (upsert di una chiave, anche annidata, preserva i commenti), `core/loadJson5.js`, `core/logger.js`, `core/escapeHtml.js`, `core/sessionSecurity.js`, `core/processSafetyNet.js`.
 
 ### Database
 

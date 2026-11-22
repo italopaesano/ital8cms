@@ -69,7 +69,14 @@
   //   - Match esatto: "/dashboard.ejs"
   //   - Wildcard singolo: "/content/*.ejs" (non ricorsivo)
   //   - Wildcard ricorsivo: "/content/**" (tutti i livelli)
-  //   - Regex: "regex:{{api}}/user/\\d+" (prefisso "regex:" obbligatorio)
+  //   - Regex: "regex:^{{api}}/user/\\d+$" (prefisso "regex:" obbligatorio)
+  //
+  // ⚠ LE REGEX SONO ANCORATE: il corpo è compilato come `^(?:corpo)$`, quindi
+  // descrive il path INTERO e non una sua sottostringa. "regex:/admin/users"
+  // vale SOLO per /admin/users — non per /public/admin/users. Per cercare
+  // « dovunque » servono i `.*` espliciti. Fino alla v3.42.0 non era così, e una
+  // regola di protezione copriva in silenzio un insieme di URL più ampio di
+  // quello scritto (REVIEW.md → A4).
   //
   // I segnaposti valgono anche DENTRO un "regex:": vengono risolti sul corpo
   // prima che diventi una RegExp, quindi le graffe singole della regex
@@ -77,11 +84,23 @@
   //
   // Priorità automatica (da alta a bassa):
   //   1. Match esatto (es: /dashboard.ejs)
-  //   2. Regex (es: regex:{{api}}/user/\\d+)
+  //   2. Regex (es: regex:^{{api}}/user/\\d+$)
   //   3. Wildcard singolo (es: /content/*.ejs)
   //   4. Wildcard ricorsivo (es: {{admin}}/**)
   //
-  // In caso di conflitto, la regola più specifica vince.
+  // In caso di conflitto vince la priorità più alta, e la priorità dipende dal
+  // TIPO di pattern (esatto > regex > wildcard singolo > wildcard ricorsivo),
+  // NON dalla specificità. Fra due pattern dello stesso tipo — due `**`, per
+  // dire — vince il primo incontrato, che è l'ordine di inserimento nel file.
+  // La frase « vince la regola più specifica », che stava qui, non è vera:
+  // `/x/**` batte `/x/y/**` su `/x/y/z`. È il residuo dichiarato di
+  // REVIEW.md → A3, aperto; il rimedio (fascia di priorità per le hardcoded,
+  // tie-break sulla lunghezza) è registrato in TODO.md.
+  //
+  // Nota: la protezione del pannello admin NON dipende da questo file — il
+  // minimo d'accesso di ogni zona vive in codice (core/pathZoneResolver.js) e
+  // le sonde di core/accessInvariantCheck.js lo verificano a ogni caricamento
+  // del ruleset.
   // ==========================================================================
   "customRules": {
     // Pagina profilo utente: accessibile solo a utenti autenticati (qualsiasi ruolo)

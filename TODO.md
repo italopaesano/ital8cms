@@ -774,6 +774,39 @@ Da affrontare in una review dedicata:
       un box che grida al lupo è il modo più rapido per insegnare a ignorarlo. Da
       riprendere solo con casi reali in mano.
 
+- [ ] **La priorità dei pattern dipende dal TIPO, non dalla specificità.**
+      *(Residuo dichiarato di `REVIEW.md` → A3, ereditato da A4 e non chiuso con
+      esso, v3.43.0.)* `getPatternInfo` assegna 1000/500/300/100 per esatto /
+      regex / wildcard singolo / wildcard ricorsivo, e `findMatchingRule` usa `>`
+      (non `>=`): **a parità di priorità vince il primo incontrato**, cioè
+      l'ordine di inserimento nell'oggetto. Misurato: `/x/**` batte `/x/y/**` su
+      `/x/y/z`, e una custom `/**` batte una hardcoded `/admin/**`.
+      La frase « in caso di conflitto vince la regola più specifica », scritta nei
+      commenti di `accessControl.default.json5` e in `CLAUDE.md`, era **falsa**: la
+      prima è stata corretta nella v3.43.0, la seconda pure, ma il comportamento
+      resta quello.
+      **Non è più sfruttabile per il pannello** (il `baseline` delle zone vive in
+      codice e le sonde di `accessInvariantCheck` lo verificano a ogni
+      caricamento), ma fuori da quelle zone un amministratore può ancora vedere
+      applicata la regola che non si aspetta.
+      I due rimedi, da valutare insieme: **fascia di priorità riservata** alle
+      hardcoded (offset `+10000` in `loadRules`, così l'immutabilità è una
+      proprietà del codice e non dell'ordine delle chiavi) e **tie-break sulla
+      specificità** (a parità, vince il pattern più lungo o con più segmenti
+      fissi). Cambiano la risoluzione delle regole per **tutti** e sette i
+      consumatori del matcher: meritano un intervento dedicato, non una coda ad
+      A4.
+- [ ] **`core/patternMatcher` compila regex arbitrarie senza guardia ReDoS,
+      `sentinel` sì.** *(Asimmetria notata chiudendo A4, v3.43.0.)*
+      `plugins/sentinel/lib/ruleValidator.js → compileRegex()` rifiuta i corpi a
+      rischio di **backtracking catastrofico** (`hasCatastrophicBacktracking`)
+      prima di compilarli; `core/patternMatcher.matchRegex()` fa `new RegExp(...)`
+      su qualunque cosa. I corpi arrivano da file di configurazione — quindi da
+      chi ha già accesso admin, che è il motivo per cui non è una vulnerabilità —
+      ma una regola scritta male può bloccare il thread **a ogni richiesta**, e lo
+      stesso progetto ha già la guardia a due cartelle di distanza. Valutare se
+      spostarla in `core/` e usarla in entrambi i punti (stessa forma del
+      consolidamento di `isPathSafe` in B5).
 - [ ] **Valutare se far servire le challenge ACME a Koa anche sulla porta 80**,
       eliminando il server HTTP grezzo del redirect. *(Alternativa « B » valutata
       chiudendo `REVIEW.md` → A7, v3.42.0; scartata per quell'intervento perché è una
