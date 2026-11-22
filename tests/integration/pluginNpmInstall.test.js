@@ -140,6 +140,29 @@ function killProc(proc) {
   });
 }
 
+/**
+ * Asserisce che il boot sia arrivato IN ASCOLTO e, se non ci è arrivato, dice perché.
+ * Duplicato identico di quello in bootLifecycle.test.js, come già lo sono runBoot e
+ * killProc: il consolidamento in un helper condiviso è registrato in TODO.md §5.
+ *
+ * ⚠️ Sostituisce `expect({ started, code, output }).toMatchObject({ started: true })`,
+ * che questo file adottava dalla v2.95.0 per « portare con sé stdout+stderr » e che
+ * NON lo fa: toMatchObject stampa solo le chiavi che DIFFERISCONO, quindi il
+ * messaggio era `- "started": true / + "started": false` e nient'altro — misurato
+ * il 22/11/2026. `code` e `output` restavano invisibili esattamente come con
+ * `toBe(true)`. Il messaggio di un Error, invece, jest lo stampa per intero.
+ */
+function expectBootListening(res) {
+  if (res.started) return;
+  const tail = res.output.split('\n').slice(-30).join('\n');
+  throw new Error([
+    'il boot non è mai arrivato in ascolto: «server started on port» non è stato stampato.',
+    `timedOut: ${!!res.timedOut} · exited: ${!!res.exited} · exit code: ${res.code}`,
+    '─── ultime 30 righe di stdout+stderr del processo ───',
+    tail,
+  ].join('\n'));
+}
+
 afterEach(async () => {
   for (const proc of liveProcs) await killProc(proc);
   liveProcs.length = 0;
@@ -171,9 +194,7 @@ describe('npm install self-contained alla transizione d\'installazione (integrat
     const res = await runBoot(dir);
 
     expect(res.timedOut).toBeFalsy();
-    // Vedi la nota nell'altro test: l'oggetto porta l'output nel messaggio d'errore.
-    expect({ started: res.started, code: res.code, output: res.output })
-      .toMatchObject({ started: true });
+    expectBootListening(res);
 
     // self-contained fresco → riga di install + caricato + isInstalled:1 + lockfile creato
     expect(res.output).toMatch(/Plugin self-contained "zzScFresh": installo le dipendenze npm/);
@@ -202,13 +223,7 @@ describe('npm install self-contained alla transizione d\'installazione (integrat
     const res = await runBoot(dir);
 
     expect(res.timedOut).toBeFalsy();
-    // Si asserisce sull'oggetto e non sul solo booleano: quando il boot NON parte,
-    // il messaggio di jest deve dire PERCHÉ. `expect(res.started).toBe(true)` stampa
-    // "Expected: true / Received: false" e basta — l'output del processo, che è
-    // l'unica cosa che spiega l'uscita, viene buttato via. È la ragione per cui
-    // questo fallimento è rimasto senza causa in TODO.md §5.
-    expect({ started: res.started, code: res.code, output: res.output })
-      .toMatchObject({ started: true });
+    expectBootListening(res);   // se non parte, il messaggio dice perché
     expect(res.output).toMatch(/Plugin caricato: zzScInstalled/);
     // isInstalled era già 1 → transizione NON attraversata → nessun npm install
     expect(res.output).not.toMatch(/Plugin self-contained "zzScInstalled": installo le dipendenze npm/);

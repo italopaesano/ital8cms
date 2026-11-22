@@ -131,6 +131,38 @@ function killProc(proc) {
   });
 }
 
+/**
+ * Asserisce che il boot sia arrivato IN ASCOLTO e, se non ci è arrivato, dice perché.
+ *
+ * `expect(res.started).toBe(true)` stampa « Expected: true / Received: false » e
+ * butta via l'output del processo, cioè l'unica cosa che spiega l'uscita: un gate
+ * che è scattato, un box [FATAL], una porta occupata. Questo helper allega invece
+ * exit code, timedOut e la coda di stdout+stderr al messaggio di fallimento.
+ *
+ * La prova che la lacuna non era teorica: il 22/11/2026 il test « boot graceful:
+ * plugin NON essenziale con dep npm inesistente » è caduto in CI su Node 24
+ * (verde su Node 22, verde al rilancio dello STESSO commit), e dai log non c'era
+ * modo di sapere perché il processo fosse uscito. La causa resta ignota.
+ *
+ * ⚠️ Si lancia un Error invece di asserire sull'oggetto, e la differenza NON è
+ * stilistica. `expect({ started, code, output }).toMatchObject({ started: true })`
+ * — l'idioma che `pluginNpmInstall.test.js` adotta dalla v2.95.0 proprio per
+ * « portare con sé stdout+stderr » — stampa solo le chiavi che DIFFERISCONO:
+ * misurato, il messaggio è `- "started": true / + "started": false` e nient'altro.
+ * `code` e `output` non compaiono, quindi quell'idioma non diagnostica niente.
+ * Il messaggio di un Error, invece, jest lo stampa per intero.
+ */
+function expectBootListening(res) {
+  if (res.started) return;
+  const tail = res.output.split('\n').slice(-30).join('\n');
+  throw new Error([
+    'il boot non è mai arrivato in ascolto: «server started on port» non è stato stampato.',
+    `timedOut: ${!!res.timedOut} · exited: ${!!res.exited} · exit code: ${res.code}`,
+    '─── ultime 30 righe di stdout+stderr del processo ───',
+    tail,
+  ].join('\n'));
+}
+
 afterEach(async () => {
   for (const proc of liveProcs) await killProc(proc);
   liveProcs.length = 0;
@@ -204,7 +236,7 @@ describe('boot — ciclo di vita config (integration)', () => {
 
       const res = await runBoot(dir);
 
-      expect(res.started).toBe(true);
+      expectBootListening(res);
       await killProc(res.proc);
     });
 
@@ -257,7 +289,7 @@ describe('boot — ciclo di vita config (integration)', () => {
       ]);
 
       res = await runBoot(dir);
-      expect(res.started).toBe(true);
+      expectBootListening(res);
       expect(fs.existsSync(adminConfig)).toBe(true);
       await killProc(res.proc);
     });
@@ -291,7 +323,7 @@ describe('boot — ciclo di vita config (integration)', () => {
 
       const res = await runBoot(dir);
 
-      expect(res.started).toBe(true);
+      expectBootListening(res);
       expect(fs.readFileSync(live, 'utf8')).toBe(marker);
     });
   });
@@ -307,7 +339,7 @@ describe('boot — ciclo di vita config (integration)', () => {
     const res = await runBoot(dir);
 
     expect(res.timedOut).toBeFalsy();
-    expect(res.started).toBe(true);
+    expectBootListening(res);
 
     // Plugin: vivo rigenerato + isInstalled persistito da pluginSys.
     const pluginCfgPath = path.join(dir, 'plugins/bootstrap/pluginConfig.json5');
@@ -336,7 +368,7 @@ describe('boot — ciclo di vita config (integration)', () => {
     const res = await runBoot(dir);
 
     expect(res.timedOut).toBeFalsy();
-    expect(res.started).toBe(true);                  // non essenziale → il boot completa
+    expectBootListening(res);                  // non essenziale → il boot completa
     expect(res.output).toMatch(/\[PLUGINS\]/);       // box di riepilogo degli incompleti
     expect(res.output).toMatch(/zzBrokenDep/);       // cita il plugin problematico
   });
@@ -405,7 +437,7 @@ module.exports = {
     // Boot 1 — prima installazione: NON è un upgrade. L'hook non va invocato, ma
     // la versione di partenza va registrata.
     let res = await runBoot(dir);
-    expect(res.started).toBe(true);
+    expectBootListening(res);
     expect(readCalls()).toEqual([]);
     expect(liveVersion()).toBe('1.0.0');
     await killProc(res.proc);
@@ -413,7 +445,7 @@ module.exports = {
     // Boot 2 — nulla è cambiato: l'hook deve restare fermo (è QUI che prima
     // scattava, a ogni riavvio).
     res = await runBoot(dir);
-    expect(res.started).toBe(true);
+    expectBootListening(res);
     expect(readCalls()).toEqual([]);
     await killProc(res.proc);
 
@@ -421,14 +453,14 @@ module.exports = {
     // versioni corrette, e la nuova viene persistita.
     writeDescription('2.0.0');
     res = await runBoot(dir);
-    expect(res.started).toBe(true);
+    expectBootListening(res);
     expect(readCalls()).toEqual([{ oldVersion: '1.0.0', newVersion: '2.0.0' }]);
     expect(liveVersion()).toBe('2.0.0');
     await killProc(res.proc);
 
     // Boot 4 — l'upgrade è già stato eseguito: non si ripete.
     res = await runBoot(dir);
-    expect(res.started).toBe(true);
+    expectBootListening(res);
     expect(readCalls()).toHaveLength(1);
     await killProc(res.proc);
   }, 180000);
@@ -498,7 +530,7 @@ module.exports = {
 
       const res = await runBoot(dir);
 
-      expect(res.started).toBe(true);
+      expectBootListening(res);
       expect(res.output).toMatch(/\[SESSION\]/);
       expect(res.output).toMatch(/Il server parte comunque/);
       expect(res.output).not.toMatch(/il CMS non parte/);
@@ -512,7 +544,7 @@ module.exports = {
 
       const res = await runBoot(dir);
 
-      expect(res.started).toBe(true);
+      expectBootListening(res);
       expect(res.output).not.toMatch(/\[SESSION\]/);
       await killProc(res.proc);
     });
