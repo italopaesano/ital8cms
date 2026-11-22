@@ -343,7 +343,46 @@ problema alla radice invece di presidiarla.
 
 ## A3 · Le regole hardcoded del controllo accessi non sono immutabili
 
-**Severità:** 🔴 alta · **Sforzo:** basso · **Presidio mancante:** test sul tie-break
+> ✅ **CORRETTO (2026-10-31), fasi 1-3 di [`docs/decisions/path-zones.it.md`](./docs/decisions/path-zones.it.md)** —
+> dallo stesso intervento che ha chiuso A1, e **non** da una correzione del
+> tie-break. La distinzione conta, perché il meccanismo descritto qui sotto è
+> **ancora esattamente quello**: rieseguita il 22/11/2026 la verifica di questa
+> scheda sul codice di oggi, `findMatchingRule` su una custom `/**` accanto alla
+> hardcoded `/admin/**` restituisce ancora `{ pattern: '/**', requiresAuth: false }`,
+> e fra `/x/**` e `/x/y/**` vince ancora il primo. Il `>` di
+> `core/patternMatcher.js:186` non è stato toccato.
+>
+> **Cos'è cambiato, allora.** Due cose, e insieme rendono il difetto incapace di
+> produrre la sua conseguenza:
+>
+> 1. **Il minimo d'accesso del pannello non vive più in un file.** Sta nel
+>    `baseline` della zona, in codice (`core/pathZoneResolver.js`), quindi non
+>    dipende da `accessControl.json5`: misurato in A1, il pannello resta protetto
+>    anche con quel file svuotato, illeggibile o cancellato — e a maggior ragione
+>    con una custom catch-all che vince il tie-break.
+> 2. **Un ruleset in cui il difetto morderebbe non si carica in silenzio.** Le sonde
+>    di `core/accessInvariantCheck.js` sono **generate dalla mappa delle zone** (ogni
+>    zona con `baseline.requiresAuth: true` produce una sonda anonima che si aspetta
+>    `deny`) e passano per la **vera funzione di decisione**, a ogni caricamento del
+>    ruleset. Una custom `/**` con `requiresAuth: false` fa quindi fallire la sonda su
+>    `/admin/` → box `[ACCESS]`. Il modulo nomina questo caso come la ragione per cui
+>    esiste: *« non vede una regola custom che scavalca il baseline della zona — cioè
+>    A3 »*.
+>
+> **Il residuo da conoscere, e dove vive.** Resta falsa la promessa scritta nei
+> commenti del config e in `CLAUDE.md` — *« in caso di conflitto vince la regola più
+> specifica »* — perché fra due `**` la specificità non è considerata affatto: vince
+> l'ordine di inserimento. Fuori dalle zone con baseline chiuso, un amministratore
+> può ancora scrivere due regole e vedere applicata quella che non si aspetta. È la
+> stessa famiglia di **A4** (« regole che proteggono l'insieme sbagliato di URL, in
+> silenzio »), che è **aperta**: i tre interventi proposti in fondo a questa scheda —
+> fascia di priorità riservata, tie-break sulla specificità — vanno fatti **lì**, dove
+> il tema è il matching e non l'immutabilità.
+>
+> Spuntata ma senza banner per tre settimane: chi rileggeva questa scheda la trovava
+> identica all'originale e non aveva modo di sapere cosa l'avesse chiusa.
+
+**Severità:** 🔴 alta · **Sforzo:** basso · **Presidio mancante:** test sul tie-break *(il presidio aggiunto è comportamentale e sta a livello di zona — vedi il banner; un test unitario sul tie-break in sé continua a non esserci, e la sua casa naturale è A4)*
 
 ### Dove
 
