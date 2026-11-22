@@ -1,3 +1,4 @@
+<!-- ital8doc v1-1 · tipo: guide · lang: it -->
 # CLAUDE.md — Guida per assistenti AI di ital8cms
 
 ## Panoramica del progetto
@@ -1734,8 +1735,8 @@ git push                       # Push to remote
 
 ---
 
-**Last Updated:** 2026-06-27
-**Version:** 2.18.0
+**Last Updated:** 2026-11-22
+**Version:** 2.19.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 **Standard documentazione:** ital8doc v1-1 → [`docs/ITAL8DOC-latest.md`](./docs/ITAL8DOC-latest.md)
 
