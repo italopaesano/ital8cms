@@ -133,14 +133,31 @@ describe('port() — la porta HTTP del server', () => {
     // validatore vedrebbe già 3000 e /^\d+$/ passerebbe, riaprendo il difetto
     // senza che nessun altro test se ne accorga.
     //
-    // Verificato sul sorgente di inquirer 14 invece che assunto: il filtro è
+    // Verificato sul sorgente di inquirer invece che assunto: il filtro è
     // applicato nel `.then()` DOPO che il prompt ha risolto.
+    //
+    // ⚠️ Questo guard legge il SORGENTE di una dipendenza, quindi si rompe anche
+    // quando l'invariante tiene e cambia solo la forma del codice. È successo con
+    // inquirer 14.2.0 → 14.3.1: la chiamata è passata da `filter(answer, …)` a
+    // `runAsync(filter)(answer, …)` e la vecchia regex non ha più corrisposto,
+    // benché l'ordine fosse immutato. Riletto il sorgente della 14.3.1:
+    //
+    //     const { filter = (value) => value } = question;
+    //     return promptFn(question, { ...this.opt, signal })
+    //       .then(async (answer) => ({ answer: await runAsync(filter)(answer, …) }))
+    //
+    // Il filtro gira nel `.then()`, quindi `validate` riceve ancora il grezzo.
+    // La regex accetta ora ENTRAMBE le forme di invocazione e si ancora a ciò che
+    // conta — il filtro applicato DOPO `promptFn` — invece che alla sintassi.
+    // La sostituzione robusta (pilotare un prompt vero su stream finti e osservare
+    // cosa riceve `validate`) è registrata in TODO.md §5.
     const fs = require('fs');
     const path = require('path');
     const sorgente = fs.readFileSync(
       path.join(__dirname, '../../../node_modules/inquirer/dist/ui/prompt.js'), 'utf8');
 
-    expect(sorgente).toMatch(/promptFn\(question[\s\S]{0,200}?answer:\s*filter\(answer/);
+    expect(sorgente).toMatch(
+      /promptFn\(question[\s\S]{0,400}?answer:\s*(?:await\s+)?(?:runAsync\()?filter\)?\(answer/);
   });
 });
 

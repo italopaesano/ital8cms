@@ -30,6 +30,29 @@ updates:
       - dependency-name: ccxt
       - dependency-name: better-sqlite3
 
+  # ── npm dependencies of the self-contained plugins (hybrid per-plugin model) ──
+  # A plugin that carries its own package.json owns a dependency tree that the root
+  # manifest never mentions, so the block above does not reach it: Dependabot scans
+  # the directories it is told about, one entry per manifest. `adminMedia` is the
+  # pilot of that model (docs/self-update.it.md) and today the only such plugin —
+  # every new one needs its own entry here, or it ships unwatched.
+  #
+  # Measured, not assumed: on 2026-09-21 the tree here sat on multer 2.3.0 while
+  # 2.4.0 (a security release) had been out for a week, with no PR ever opened.
+  - package-ecosystem: npm
+    directory: "/plugins/adminMedia"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    commit-message:
+      prefix: deps
+      prefix-development: deps-dev
+
   # ── GitHub Actions used by the workflows ──────────────────────────────────
   # Keeps actions/checkout, actions/setup-node, ... current (and patched).
   - package-ecosystem: github-actions
