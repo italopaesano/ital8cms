@@ -898,6 +898,7 @@ getRouteArray(router, pluginSys, pathPluginFolder) {
     "enabled": false,                         // true = abilita HTTPS
     "port": 443,                              // Porta HTTPS
     "AutoRedirectHttpPortToHttpsPort": false, // true = redirect 301 HTTP→HTTPS
+    "publicHost": "",                         // host del redirect 301; "" = usa l'header Host (open redirect)
     "certFile": "./certs/fullchain.pem",      // Certificato server
     "keyFile": "./certs/privkey.pem",         // Chiave privata
     "caFile": "",                             // CA intermedia (opzionale)

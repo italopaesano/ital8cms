@@ -48,7 +48,7 @@ modifica al file citato.
 | A4 | [Regex non ancorate e mix `*`/`**` che sbaglia in silenzio](#a4--regex-non-ancorate-e-mix--che-sbaglia-in-silenzio) | Regole che proteggono l'insieme sbagliato di URL | - [ ] |
 | A5 | [Nessun security header, e cookie di sessione senza `secure`](#a5--nessun-security-header-e-cookie-di-sessione-senza-secure) | XSS/clickjacking/furto cookie non mitigati | - [ ] |
 | A6 | [`checkInTemplate` — la guardia documentata per i template non protegge](#a6--checkintemplate--la-guardia-documentata-per-i-template-non-protegge) | Pagina protetta servita per intero nel corpo del 302 | - [ ] |
-| A7 | [Server di redirect HTTP→HTTPS: DoS remoto + open redirect](#a7--server-di-redirect-httphttps-dos-remoto--open-redirect) | Una richiesta spegne il processo | - [ ] |
+| A7 | [Server di redirect HTTP→HTTPS: DoS remoto + open redirect](#a7--server-di-redirect-httphttps-dos-remoto--open-redirect) | Una richiesta spegne il processo | - [x] |
 
 ### 🟠 B — Correttezza e integrità dei dati
 
@@ -680,6 +680,49 @@ il corpo della risposta **non** contenga il contenuto della pagina.
 ---
 
 ## A7 · Server di redirect HTTP→HTTPS: DoS remoto + open redirect
+
+> ✅ **CORRETTO (2026-11-22), v3.42.0.** Applicata la soluzione proposta in fondo
+> alla scheda, tutti e tre i punti.
+>
+> 1. **Whitelist invece di « sanificazione ».** `path.basename` non era una
+>    difesa — restituisce `..` tale e quale — e al suo posto c'è
+>    `ACME_TOKEN_SHAPE = /^[A-Za-z0-9_-]{16,128}$/`: o il nome ha la forma di un
+>    token ACME, o non si legge niente. Nessun caso limite da indovinare.
+> 2. **La lettura è dentro `try/catch`**, e non fa più `existsSync` prima di
+>    leggere: un solo ramo copre « non esiste » (ENOENT), « è una directory »
+>    (EISDIR — la causa del DoS) e « permessi » (EACCES), e sparisce la finestra
+>    fra il controllo e l'uso. L'intero handler del server grezzo è a sua volta
+>    avvolto in `try/catch`, perché è l'unico strato che quel codice ha: non
+>    passa da Koa, quindi un'eccezione arrivava a `uncaughtException` e
+>    `processSafetyNet` chiudeva il processo con `respawn: false`.
+> 3. **Il redirect non si fida più di `Host`.** Nuova chiave
+>    `ital8Config.json5 → https.publicHost`: se configurata, l'host del
+>    `Location` è un dato dell'**installazione** e non della richiesta. Se vuota
+>    il comportamento storico resta, ma solo per host di forma plausibile — e al
+>    boot compare un avviso. Documentata in
+>    [`docs/https.it.md`](./docs/https.it.md) → *L'header Host e `publicHost`*.
+>
+> **Le due copie sono diventate una.** La lettura del token viveva due volte —
+> nel server grezzo e nella rotta Koa — e la correzione andava quindi applicata
+> due volte: è la forma con cui una correzione ne raggiunge **una sola** (è
+> appena accaduto altrove, v3.41.0). Ora entrambe chiamano `readAcmeToken()`.
+>
+> **Un cambiamento di comportamento da conoscere:** sul server di redirect un
+> token assente o malformato risponde ora **404** invece di ricadere sul 301.
+> Rimandare una challenge su HTTPS la farebbe fallire comunque — il certificato
+> è proprio quello che si sta tentando di ottenere — e così i due rami dicono la
+> stessa cosa (la rotta Koa il 404 lo dava già).
+>
+> **Presidi, i due chiesti qui sotto più i casi positivi:** 32 test in
+> `tests/unit/core/httpsManager.test.js`. Le richieste di traversal sono scritte
+> su un **socket grezzo**, non con `http.request`, perché il client HTTP di Node
+> può normalizzare il path e un test che non mette `..` sul filo verificherebbe
+> un'altra cosa. **Due mutazioni, entrambe colte:** rimettere `path.basename`
+> senza `try/catch` → **8 fallimenti**; rifidarsi dell'header `Host` → **4**.
+>
+> *Resta aperta, e non è un residuo di questa scheda:* far servire le challenge
+> a Koa anche sulla porta 80, eliminando il server grezzo. Registrata in
+> `TODO.md` §6 — è una modifica architetturale, non una correzione.
 
 **Severità:** 🔴 alta · **Sforzo:** minimo · **Condizione:** configurazione Let's Encrypt
 
