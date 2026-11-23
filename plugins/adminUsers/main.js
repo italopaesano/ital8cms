@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
 const { isAuthenticated, sessionUser } = require('../../core/isAuthenticated');
+const { validatePassword } = require('../../core/passwordPolicy');
 const { updateJson5Serialized } = require('../../core/json5UpdateQueue');
 const escapeHtml = require('../../core/escapeHtml');
 
@@ -609,10 +610,14 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
 
           // Modifica password se fornita
           if (newPassword) {
-            // Validazione password
-            if (newPassword.length < 6) {
+            // ── Policy CONDIVISA (REVIEW.md → C4) ──────────────────────
+            // Prima qui bastavano 6 caratteri, mentre il wizard ne pretendeva 8
+            // con maiuscola, minuscola e cifra, e la creazione utente non
+            // controllava NULLA. Tre regole diverse per la stessa cosa: ora una.
+            const esitoPassword = validatePassword(newPassword);
+            if (!esitoPassword.valid) {
               ctx.body = {
-                error: 'La nuova password deve contenere almeno 6 caratteri.',
+                error: esitoPassword.error,
                 errorField: 'newPassword'
               };
               return;

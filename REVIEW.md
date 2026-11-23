@@ -59,7 +59,7 @@ modifica al file citato.
 | B3 | [Salvare da System Settings distrugge il config e può impedire il boot](#b3--salvare-da-system-settings-distrugge-il-config-e-può-impedire-il-boot) | Installazione non più avviabile | - [x] |
 | B4 | [Oggetti indicizzati con input utente senza `hasOwnProperty`](#b4--oggetti-indicizzati-con-input-utente-senza-hasownproperty) | 500 non autenticato sul login | - [x] |
 | B5 | [`isPathSafe` confronta il prefisso senza separatore](#b5--ispathsafe-confronta-il-prefisso-senza-separatore) | Scrittura di file fuori da `/www` | - [x] |
-| B6 | [Il contratto `getObjectToShareToOthersPlugin` è documentato con tre parametri, il runtime ne passa uno](#b6--il-contratto-getobjecttosharetoothersplugin-è-documentato-con-tre-parametri-il-runtime-ne-passa-uno) | Trappola per chi scrive plugin | - [ ] |
+| B6 | [Il contratto `getObjectToShareToOthersPlugin` è documentato con tre parametri, il runtime ne passa uno](#b6--il-contratto-getobjecttosharetoothersplugin-è-documentato-con-tre-parametri-il-runtime-ne-passa-uno) | Trappola per chi scrive plugin | - [x] |
 | B7 | [Storage a file senza lock — l'architettura non regge il multi-processo](#b7--storage-a-file-senza-lock--larchitettura-non-regge-il-multi-processo) | Corruzione dati con `pm2 -i` | - [ ] |
 
 ### 🟡 C — Altri punti sostanziali
@@ -69,10 +69,10 @@ modifica al file citato.
 | C1 | [`GET /logged` è pubblico e stampa l'intera sessione](#c1--get-logged-è-pubblico-e-stampa-lintera-sessione) | Fuga del token CSRF | - [x] |
 | C2 | [Rate limiting inefficace su IPv6, e senza tetto](#c2--rate-limiting-inefficace-su-ipv6-e-senza-tetto) | Brute-force non rallentato | - [ ] |
 | C3 | [Enumerazione utenti per timing sul login](#c3--enumerazione-utenti-per-timing-sul-login) | Scoperta degli username validi | - [x] |
-| C4 | [Policy password incoerente fra i due punti di scrittura](#c4--policy-password-incoerente-fra-i-due-punti-di-scrittura) | Password deboli sull'utente root | - [ ] |
+| C4 | [Policy password incoerente fra i due punti di scrittura](#c4--policy-password-incoerente-fra-i-due-punti-di-scrittura) | Password deboli sull'utente root | - [x] |
 | C5 | [Due definizioni diverse di « autenticato »](#c5--due-definizioni-diverse-di--autenticato) | Invariante non presidiata | - [x] |
 | C6 | [`cliBridge`: `chmod` dopo `listen`, e fallimento non fatale](#c6--clibridge-chmod-dopo-listen-e-fallimento-non-fatale) | Canale di controllo con permessi ignoti | - [x] |
-| C7 | [Il ruolo `admin` (1) equivale a esecuzione di codice remoto](#c7--il-ruolo-admin-1-equivale-a-esecuzione-di-codice-remoto) | RBAC documentato in modo fuorviante | - [ ] |
+| C7 | [Il ruolo `admin` (1) equivale a esecuzione di codice remoto](#c7--il-ruolo-admin-1-equivale-a-esecuzione-di-codice-remoto) | RBAC documentato in modo fuorviante | - [x] |
 
 ### ✅ D — [Cosa è stato verificato e risulta solido](#d--cosa-è-stato-verificato-e-risulta-solido)
 
@@ -1524,6 +1524,18 @@ file, righe 175/220/260, restituiscono correttamente un errore).
 
 ## B6 · Il contratto `getObjectToShareToOthersPlugin` è documentato con tre parametri, il runtime ne passa uno
 
+> ✅ **CORRETTO (2026-11-23), v3.48.0.** Scelta la strada **(a)**: i parametri
+> vengono passati, quindi la documentazione torna vera e il pattern « Twin Admin »
+> raccomandato da `CLAUDE.md` diventa possibile come descritto. Due righe, nei
+> due call site — `pathPluginFolder` è il metadato che `pluginSys` inietta già su
+> ogni plugin caricato.
+>
+> **Presidi:** tre test in `tests/unit/pluginSys.test.js` che usano plugin
+> sintetici i quali **scrivono su disco** cosa hanno ricevuto, così il test lo
+> rilegge: uno sul percorso al boot (*push*), uno su `getSharedObject` (*pull*),
+> e uno che pretende che il `pathPluginFolder` sia quello del **provider** e non
+> del chiamante — l'errore facile da fare passando i parametri.
+
 **Severità:** 🟠 media (latente) · **Sforzo:** basso
 
 ### Dove
@@ -1795,6 +1807,32 @@ tempo di risposta diventa indistinguibile.
 
 ## C4 · Policy password incoerente fra i due punti di scrittura
 
+> ✅ **CORRETTO (2026-11-23), v3.48.0.** Una sola policy, in
+> `core/passwordPolicy.js`, usata da **tutti** i punti che scrivono una password.
+>
+> **Le policy erano TRE, non due:** la terza, che la scheda non cita, è quella del
+> wizard (`scripts/lib/validators.js`) — ≥ 8 caratteri con maiuscola, minuscola e
+> cifra. È la **più stretta** delle tre, ed è diventata quella condivisa:
+> adottarla non indebolisce nessun percorso, li allinea tutti al più severo.
+> (Il modulo sta in `core/` e non in `plugins/adminUsers/lib/` come suggeriva la
+> scheda, perché anche il wizard deve usarlo e la direzione tooling → core è la
+> regola del progetto.)
+>
+> **E la denylist, come la scheda chiedeva — con un reperto.** L'esempio di
+> password **valida** nel test del wizard era `Password1`: soddisfa tutti i
+> requisiti di composizione ed è fra le password più usate al mondo. Un criterio
+> che approva il proprio controesempio è la ragione per cui la denylist serve;
+> l'esempio è stato sostituito e il caso è diventato un presidio.
+>
+> La validazione in `userUsert` sta **prima** dell'hash: non si spendono 100 ms di
+> bcrypt per rifiutare. Dieci fixture di test usavano la stringa `'password'`,
+> ora rifiutata: aggiornati a una password conforme, perché l'oggetto di quei test
+> è lo **username** e una password non valida mascherava l'errore da osservare.
+>
+> **Presidi:** 23 test in `tests/unit/core/passwordPolicy.test.js`, fra cui quattro
+> **strutturali**: i tre punti importano la policy, il minimo di 6 non compare più,
+> e la validazione precede l'hash (verificato sulle posizioni nel sorgente).
+
 **Dove:** `plugins/adminUsers/main.js:574` e `plugins/adminUsers/userManagement.js:21`
 
 Due punti creano o modificano una password, con due regole diverse:
@@ -1918,6 +1956,23 @@ proteggersi non deve esistere.
 ---
 
 ## C7 · Il ruolo `admin` (1) equivale a esecuzione di codice remoto
+
+> ✅ **CORRETTO (2026-11-23), v3.48.0 — strada (a): detto.** Non è un difetto di
+> implementazione ma una caratteristica che la documentazione contraddiceva:
+> `CLAUDE.md` descriveva il ruolo 0 come « accesso completo al sistema » e il
+> ruolo 1 come « accesso completo alle risorse admin », lasciando intendere una
+> gerarchia **che non esiste**.
+>
+> Ora la sezione RBAC dice a voce alta che **0 e 1 sono equivalenti dal punto di
+> vista della sicurezza**, e che assegnare il ruolo 1 significa **concedere il
+> controllo del server** — perché un `.ejs` è codice eseguito dal server, e
+> installare un plugin da un repo arbitrario lo esegue al boot successivo.
+>
+> La strada **(b)** — restringere a `[0]` le operazioni che scrivono codice
+> eseguibile — è registrata in `TODO.md` per l'uscita dall'alpha, come la scheda
+> consiglia: è il momento in cui la distinzione fra « amministra il sito » e
+> « amministra il server » diventa quella che rende utile avere due ruoli. Prima è
+> un vincolo senza beneficiario.
 
 **Dove:** `plugins/admin/pagesManagment.js` e `plugins/admin/pluginsInstall.js` —
 tutte le rotte dichiarano `allowedRoles: [0, 1]`
