@@ -707,6 +707,24 @@ fs.renameSync(tempPath, userAccountPath)
 **Ruoli di sistema hardcoded (0-99):**
 - **0 (root):** accesso completo al sistema, incluse le operazioni critiche
 - **1 (admin):** accesso completo a tutte le risorse admin
+
+> ⚠️ **0 e 1 sono EQUIVALENTI dal punto di vista della sicurezza, e la gerarchia
+> che questi due righe suggeriscono non esiste** (`REVIEW.md` → C7). Chi ha il
+> ruolo 1 può scrivere file `.ejs` arbitrari sotto `/www` — e un template `.ejs`
+> è **codice eseguito dal server**, che può fare `require('child_process')` —
+> e può installare plugin da un repository Git arbitrario, il cui `main.js`
+> viene caricato ed eseguito al boot successivo.
+>
+> **Assegnare il ruolo 1 significa concedere il controllo del server.** Non è una
+> falla: è lo strumento di lavoro di un CMS *developer-first* che rifiuta
+> l'approccio zero-knowledge. Ma va detto, perché la descrizione qui sopra
+> lasciava intendere una separazione fra « amministra il sito » e « amministra il
+> server » che in pratica non c'è.
+>
+> La distinzione si potrà rendere vera restringendo a `[0]` le operazioni che
+> scrivono codice eseguibile (`pagesManagment`, `pluginsInstall`,
+> `themesInstall`): è registrato in `TODO.md` per quando il progetto uscirà
+> dall'alpha, perché è il momento in cui avere due ruoli diventa utile.
 - **2 (editor):** crea, legge, aggiorna, elimina TUTTI i contenuti (compresi quelli di altri utenti)
 - **3 (selfEditor):** crea, legge, aggiorna, elimina SOLO i PROPRI contenuti
 

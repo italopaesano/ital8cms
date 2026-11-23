@@ -956,3 +956,95 @@ describe('pluginSys.loadRoutes() — handler mancante o non invocabile', () => {
     expect(router.get.mock.calls[0][0]).toBe('/api/zzMisto/sana');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REVIEW.md → B6 — il contratto a TRE parametri, finalmente vero
+//
+// `CLAUDE.md` e `plugins/exampleComplete` dichiarano da sempre
+// `getObjectToShareToOthersPlugin(forPlugin, pluginSys, pathPluginFolder)`, ma
+// entrambi i punti del runtime ne passavano UNO: gli altri due arrivavano
+// sempre `undefined`. Il difetto era LATENTE — i quattro plugin che dichiarano
+// la firma completa non li usavano — e aspettava il primo che li usasse davvero.
+//
+// Ed era probabile che arrivasse presto: il pattern « Twin Admin » raccomandato
+// da CLAUDE.md prescrive di risolvere la cartella del plugin gemello, e chi lo
+// fa da qui otteneva un TypeError al boot, mescolato al caricamento dei plugin.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('initialize() — il provider riceve tutti e tre i parametri', () => {
+  /** Un provider che SCRIVE su disco cosa ha ricevuto, così il test lo legge. */
+  const MAIN_PROVIDER = `const fs = require('fs');
+const path = require('path');
+module.exports = {
+  getRouteArray() { return []; },
+  getObjectToShareToOthersPlugin(forPlugin, pluginSys, pathPluginFolder) {
+    fs.writeFileSync(path.join(__dirname, 'ricevuto.json'), JSON.stringify({
+      forPlugin,
+      haPluginSys: !!(pluginSys && typeof pluginSys.getPluginState === 'function'),
+      pathPluginFolder: pathPluginFolder || null,
+    }), 'utf8');
+    return { api: 1 };
+  },
+  async loadPlugin() {},
+};
+`;
+
+  const MAIN_CONSUMER = `module.exports = {
+  getRouteArray() { return []; },
+  setSharedObject() {},
+  async loadPlugin() {},
+};
+`;
+
+  /** Legge il verbale che il provider ha scritto. */
+  const verbale = (root, nome) =>
+    JSON.parse(fs.readFileSync(path.join(root, nome, 'ricevuto.json'), 'utf8'));
+
+  test('al boot (push): forPlugin, pluginSys e pathPluginFolder sono tutti definiti', async () => {
+    const root = makePluginsRoot();
+    writePlugin(root, 'fornitore', { isInstalled: 1, main: MAIN_PROVIDER });
+    writePlugin(root, 'consumatore', { isInstalled: 1, main: MAIN_CONSUMER });
+
+    const sys = new pluginSys({ essentialPlugins: [] }, root);
+    await sys.initialize();
+
+    expect(verbale(root, 'fornitore')).toEqual({
+      forPlugin: 'consumatore',
+      haPluginSys: true,                                   // prima: undefined
+      pathPluginFolder: path.join(root, 'fornitore'),      // prima: undefined
+    });
+  });
+
+  test('a runtime (pull): getSharedObject passa gli stessi tre', async () => {
+    const root = makePluginsRoot();
+    writePlugin(root, 'fornitore', { isInstalled: 1, main: MAIN_PROVIDER });
+
+    const sys = new pluginSys({ essentialPlugins: [] }, root);
+    await sys.initialize();
+
+    // Con un solo plugin il push non avviene (non c'è un altro a cui dare
+    // l'oggetto): questa chiamata è il percorso di pull, isolato.
+    const condiviso = sys.getSharedObject('fornitore', 'qualcunAltro');
+
+    expect(condiviso).toEqual({ api: 1 });
+    expect(verbale(root, 'fornitore')).toEqual({
+      forPlugin: 'qualcunAltro',
+      haPluginSys: true,
+      pathPluginFolder: path.join(root, 'fornitore'),
+    });
+  });
+
+  test('il pathPluginFolder è quello del PROVIDER, non del chiamante', async () => {
+    // Sarebbe l'errore facile da fare passando i parametri: dare la cartella di
+    // chi chiede invece di quella di chi fornisce.
+    const root = makePluginsRoot();
+    writePlugin(root, 'fornitore', { isInstalled: 1, main: MAIN_PROVIDER });
+    writePlugin(root, 'consumatore', { isInstalled: 1, main: MAIN_CONSUMER });
+
+    const sys = new pluginSys({ essentialPlugins: [] }, root);
+    await sys.initialize();
+
+    expect(verbale(root, 'fornitore').pathPluginFolder).not.toContain('consumatore');
+  });
+});
+

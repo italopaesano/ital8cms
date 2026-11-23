@@ -1,3 +1,5 @@
+const { validatePassword } = require('../../core/passwordPolicy')
+
 // Questo file segue lo standard del progetto ital8cms
 
 /**
@@ -110,12 +112,14 @@ const validators = {
    * Valida password
    */
   password: (value) => {
-    if (!value || value.trim() === '') return 'Password obbligatoria'
-    if (value.length < 8) return 'Password troppo corta (minimo 8 caratteri)'
-    if (!/[A-Z]/.test(value)) return 'Password deve contenere almeno una lettera maiuscola'
-    if (!/[a-z]/.test(value)) return 'Password deve contenere almeno una lettera minuscola'
-    if (!/[0-9]/.test(value)) return 'Password deve contenere almeno un numero'
-    return true
+    // Delega a `core/passwordPolicy` (REVIEW.md → C4): la regola che stava qui
+    // era la più stretta delle TRE presenti nel progetto, ed è diventata quella
+    // condivisa. Qui resta solo l'adattamento alla convenzione di inquirer
+    // (`true` oppure il messaggio d'errore).
+    //
+    // Direzione della dipendenza: tooling → core, come per `sessionSecurity`.
+    const esito = validatePassword(value)
+    return esito.valid ? true : esito.error
   },
 
   /**

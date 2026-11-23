@@ -186,7 +186,20 @@ class pluginSys{
             this.#activePlugins.forEach( ( plugin1, nomePlugin1 ) => {
                 if( nomePlugin0 !== nomePlugin1){// mi assicuro che il plugin non richiami le funzioni su sse stesso
                   if(plugin1.setSharedObject){// mi assicuro che la funzione appropiata esiste
-                    plugin1.setSharedObject( nomePlugin0, plugin0.getObjectToShareToOthersPlugin( nomePlugin1 ) );
+                    // I TRE parametri che il contratto documenta (REVIEW.md → B6).
+                    // Prima se ne passava uno solo, quindi `pluginSys` e
+                    // `pathPluginFolder` arrivavano sempre `undefined`: il
+                    // difetto era LATENTE — i quattro plugin che dichiarano la
+                    // firma completa non li usavano — e aspettava il primo che
+                    // li usasse davvero. Ed è probabile che arrivasse presto,
+                    // perché il pattern « Twin Admin » raccomandato da CLAUDE.md
+                    // prescrive proprio di risolvere la cartella del gemello da
+                    // qui. `pathPluginFolder` è il metadato che pluginSys
+                    // inietta su ogni plugin caricato (riga 176).
+                    plugin1.setSharedObject(
+                      nomePlugin0,
+                      plugin0.getObjectToShareToOthersPlugin( nomePlugin1, this, plugin0.pathPluginFolder )
+                    );
                   }
                 }
             });
@@ -1174,13 +1187,19 @@ class pluginSys{
    * @param {string} providerPluginName - Nome del plugin che espone l'oggetto condiviso
    * @param {string} [callerName] - Nome opzionale del plugin richiedente (per oggetti personalizzati)
    * @returns {object|null} - Oggetto condiviso o null se plugin non attivo o non espone oggetti
+   *
+   * Il provider riceve tre argomenti — `(forPlugin, pluginSys, pathPluginFolder)` —
+   * come il contratto in CLAUDE.md dichiara da sempre e come il runtime NON
+   * faceva fino alla v3.48.0 (REVIEW.md → B6).
    */
   getSharedObject(providerPluginName, callerName) {
     const provider = this.#activePlugins.get(providerPluginName);
     if (!provider || !provider.getObjectToShareToOthersPlugin) {
       return null;
     }
-    return provider.getObjectToShareToOthersPlugin(callerName) || null;
+    // Stessi tre parametri del percorso al boot (REVIEW.md → B6): un provider
+    // non deve ricevere un contesto diverso a seconda di CHI lo interroga.
+    return provider.getObjectToShareToOthersPlugin(callerName, this, provider.pathPluginFolder) || null;
   }
 
 }

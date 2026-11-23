@@ -166,8 +166,21 @@ describe('password() — la policy dell\'account ROOT', () => {
   // protegge l'utente più privilegiato del CMS, scelta una volta sola al primo
   // avvio. Ogni requisito è verificato in ISOLAMENTO — una password che manca di
   // una cosa sola — altrimenti un test che passa non dice quale regola ha agito.
+  // ⚠️ L'esempio di password VALIDA di questo test era `Password1` — che
+  // soddisfa tutti i requisiti di composizione ed è fra le password più usate al
+  // mondo. Dalla v3.48.0 la policy ha anche una denylist
+  // (`core/passwordPolicy.js`) e lo rifiuta: un criterio di composizione che
+  // approva il proprio controesempio è il motivo per cui la denylist serve.
+  test('rifiuta le password più comuni, anche se soddisfano i requisiti', () => {
+    for (const comune of ['Password1', 'Welcome1', 'Qwerty123', 'Admin123']) {
+      const messaggio = validators.password(comune);
+      expect(typeof messaggio).toBe('string');
+      expect(messaggio).toMatch(/comune/i);
+    }
+  });
+
   test('accetta una password che soddisfa tutti i requisiti', () => {
-    accetta(validators.password('Password1'));
+    accetta(validators.password('Zx9-montagna-Lenta'));
   });
 
   test.each([

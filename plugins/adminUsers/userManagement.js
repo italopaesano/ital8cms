@@ -4,6 +4,7 @@ const bcryptjs = require('bcryptjs');
 const { error } = require('console');
 const loadJson5 = require('../../core/loadJson5');
 const { updateJson5Serialized } = require('../../core/json5UpdateQueue');
+const { validatePassword } = require('../../core/passwordPolicy');
 
 
 
@@ -68,6 +69,22 @@ async function userUsert(username, password, email, roleIds, isNewUser = true) {
 
     if (!isValidEmail(email)) {
         return { error: 'Errore: L\'email non è in un formato valido.', errorType: 'email' };
+    }
+
+    // ── Policy CONDIVISA (REVIEW.md → C4) ────────────────────────────────────
+    //
+    // Qui prima NON c'era alcun controllo sulla password — e questo è il punto
+    // che crea l'utente più privilegiato del sistema, incluso il primo root:
+    // una password di un carattere veniva accettata senza obiezioni. Il wizard
+    // ne pretendeva 8 con maiuscola, minuscola e cifra, e il profilo utente 6:
+    // tre regole diverse per la stessa cosa, e la più permissiva era quella sul
+    // percorso più privilegiato.
+    //
+    // Sta prima dell'hash: non si spendono 100 ms di bcrypt su una password che
+    // va rifiutata.
+    const esitoPassword = validatePassword(password);
+    if (!esitoPassword.valid) {
+        return { error: `Errore: ${esitoPassword.error}.`, errorType: 'password' };
     }
 
     // Crea l'hash della password

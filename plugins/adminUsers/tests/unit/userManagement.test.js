@@ -34,6 +34,22 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+/**
+ * Password che supera la policy condivisa (`core/passwordPolicy.js`).
+ *
+ * I fixture usavano la stringa `'password'`, che dalla v3.48.0 è **rifiutata**:
+ * `userUsert` non controllava NULLA sulla password — ed è il punto che crea
+ * l'utente più privilegiato del sistema, incluso il primo root — mentre il
+ * wizard pretendeva 8 caratteri con maiuscola, minuscola e cifra e il profilo
+ * utente 6. Tre regole per la stessa cosa (REVIEW.md → C4), ora una.
+ *
+ * Qui serve una password *valida*, perché l'oggetto di questi test è lo
+ * username: l'ordine dentro `userUsert` mette tutte le validazioni di forma
+ * prima dei controlli di stato, quindi una password non conforme mascherebbe
+ * l'errore che si vuole osservare.
+ */
+const PASSWORD_VALIDA = 'Zx9-montagna-Lenta';
+
 const { userUsert } = require('../../userManagement');
 
 const PLUGIN_DIR = path.join(__dirname, '..', '..');
@@ -67,7 +83,7 @@ const validArgs = () => ['nuovoUtente', 'password-lunga-abbastanza', 'nuovo@exam
 describe('userUsert() — argomenti obbligatori', () => {
   test.each([
     ['username', 0],
-    ['password', 1],
+    [PASSWORD_VALIDA, 1],
     ['email', 2],
     ['roleIds', 3],
   ])('%s mancante → errore con errorType "all"', async (_campo, index) => {
@@ -81,7 +97,7 @@ describe('userUsert() — argomenti obbligatori', () => {
   });
 
   test('stringa vuota conta come mancante (non come valore valido)', async () => {
-    const res = await userUsert('', 'password', 'a@b.co', [2]);
+    const res = await userUsert('', PASSWORD_VALIDA, 'a@b.co', [2]);
     expect(res.errorType).toBe('all');
   });
 });
@@ -90,12 +106,12 @@ describe('userUsert() — roleIds', () => {
   test('roleIds non array → rifiutato', async () => {
     // Un numero singolo è l'errore naturale di chi non conosce il modello
     // multi-ruolo: deve essere respinto, non interpretato.
-    const res = await userUsert('utente', 'password', 'a@b.co', 2);
+    const res = await userUsert('utente', PASSWORD_VALIDA, 'a@b.co', 2);
     expect(res.errorType).toBe('roleIds');
   });
 
   test('roleIds stringa → rifiutato', async () => {
-    const res = await userUsert('utente', 'password', 'a@b.co', '2');
+    const res = await userUsert('utente', PASSWORD_VALIDA, 'a@b.co', '2');
     expect(res.errorType).toBe('roleIds');
   });
 });
@@ -108,7 +124,7 @@ describe('userUsert() — regole sullo username', () => {
     ['con spazio iniziale', ' utente'],
     ['con spazio finale', 'utente '],
   ])('%s → rifiutato', async (_caso, username) => {
-    const res = await userUsert(username, 'password', 'a@b.co', [2]);
+    const res = await userUsert(username, PASSWORD_VALIDA, 'a@b.co', [2]);
     expect(res.errorType).toBe('username');
   });
 
@@ -120,12 +136,12 @@ describe('userUsert() — regole sullo username', () => {
     ['parentesi',      'utente(1)'],
     ['virgolette',     'ut"ente'],
   ])('carattere non ammesso (%s) → rifiutato', async (_caso, username) => {
-    const res = await userUsert(username, 'password', 'a@b.co', [2]);
+    const res = await userUsert(username, PASSWORD_VALIDA, 'a@b.co', [2]);
     expect(res.errorType).toBe('username');
   });
 
   test('meno di 3 caratteri → rifiutato', async () => {
-    const res = await userUsert('ab', 'password', 'a@b.co', [2]);
+    const res = await userUsert('ab', PASSWORD_VALIDA, 'a@b.co', [2]);
     expect(res.errorType).toBe('username');
     expect(res.error).toMatch(/3/);
   });
@@ -133,7 +149,7 @@ describe('userUsert() — regole sullo username', () => {
   test('underscore e trattino sono ammessi (non devono essere respinti)', async () => {
     // Caso a specchio: verifica che la regex non sia più stretta di quanto dichiara.
     // Si ferma comunque prima di scrivere, perché l'email qui è invalida.
-    const res = await userUsert('utente_con-trattino', 'password', 'email-non-valida', [2]);
+    const res = await userUsert('utente_con-trattino', PASSWORD_VALIDA, 'email-non-valida', [2]);
     expect(res.errorType).toBe('email');   // superato il controllo sullo username
   });
 });
@@ -147,7 +163,7 @@ describe('userUsert() — formato dell\'email', () => {
     ['con spazio',           'ut ente@example.com'],
     ['solo spazi',           '   '],
   ])('%s → rifiutata', async (_caso, email) => {
-    const res = await userUsert('utenteValido', 'password', email, [2]);
+    const res = await userUsert('utenteValido', PASSWORD_VALIDA, email, [2]);
     expect(res.errorType).toBe('email');
   });
 });
@@ -156,7 +172,7 @@ describe('userUsert() — aggiornamento di un utente inesistente', () => {
   test('isNewUser: false su username assente → errore, senza scrivere', async () => {
     // Unico caso che arriva a LEGGERE userAccount.json5. Ritorna prima della
     // scrittura, e l'afterAll verifica che il file sia rimasto intatto.
-    const res = await userUsert('utenteCheNonEsisteDavvero', 'password', 'x@y.co', [2], false);
+    const res = await userUsert('utenteCheNonEsisteDavvero', PASSWORD_VALIDA, 'x@y.co', [2], false);
     expect(res.errorType).toBe('username');
     expect(res.error).toMatch(/non esiste/);
   });

@@ -838,6 +838,21 @@ Da affrontare in una review dedicata:
       ritenzione comune. Da unificare: un unico registro di cosa c'è sotto
       `backups/`, con chi l'ha creato e una potatura che li conosca tutti.
 
+- [ ] **Rendere vera la distinzione fra il ruolo 0 e il ruolo 1** restringendo a
+      `[0]` le operazioni che scrivono **codice eseguibile**: `pagesManagment`
+      (creazione/modifica pagine `.ejs`), `pluginsInstall` e `themesInstall`.
+      *(Strada (b) di `REVIEW.md` → C7; nella v3.48.0 è stata presa la (a), cioè
+      dirlo nella documentazione.)*
+      Oggi i due ruoli sono **equivalenti dal punto di vista della sicurezza**: un
+      `.ejs` è codice eseguito dal server, quindi chi può scrivere una pagina può
+      eseguire codice, e chi può installare un plugin da un repo arbitrario lo
+      esegue al boot successivo. Il ruolo 1 conserverebbe la gestione di utenti,
+      contenuti e configurazione.
+      **Costo:** ~15 dichiarazioni `access` più l'aggiornamento dei test.
+      **Quando:** all'uscita dall'alpha. È il momento in cui la distinzione fra
+      « amministra il sito » e « amministra il server » diventa quella che rende
+      utile avere due ruoli — prima è un vincolo senza beneficiario.
+
 ## 7. Dipendenze
 
 Fonte: `docs/roadmap.it.md` punto 16 — aggiornamenti rinviati dal bulk del 2026-05-19.
