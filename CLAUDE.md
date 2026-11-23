@@ -742,7 +742,17 @@ Situata in `/plugins/adminUsers/userAccount.json5`
 
 ### Sistema di controllo accessi (adminAccessControl)
 
-Controllo accessi basato su pattern (esatto / wildcard `*`,`**` / `regex:`) con **priorità automatica per tipo di pattern**, regole **hardcoded immutabili** + **custom** in `accessControl.json5`, e campo **`access` obbligatorio** su ogni rotta di plugin (una rotta che non lo dichiara non viene registrata: vedi la tabella in *Rotte API dei plugin*). Admin UI con editor JSON5 e validazione (sintassi, ruoli, conflitti, immutabilità hardcoded). → [`plugins/adminAccessControl/README.it.md`](./plugins/adminAccessControl/README.it.md) · [`EXPLAIN.it.md`](./plugins/adminAccessControl/EXPLAIN.it.md)
+Controllo accessi basato su pattern (esatto / wildcard `*`,`**` / `regex:`) con **priorità automatica per tipo di pattern**, regole **hardcoded immutabili** + **custom** in `accessControl.json5`, e campo **`access` obbligatorio** su ogni rotta di plugin (una rotta che non lo dichiara non viene registrata: vedi la tabella in *Rotte API dei plugin*). Admin UI con editor JSON5 e validazione (sintassi, ruoli, conflitti, immutabilità hardcoded).
+
+**Guardia per i template:** `passData.plugin.adminAccessControl.check({...}, passData)` redirige **e ferma il rendering** (lancia `AccessDeniedError`, che `index.js` intercetta senza assegnare il corpo). Prima faceva `ctx.redirect()` e poi `return`, ma quel `return` esce dalla funzione e non dal template: la risposta era un 302 **con la pagina protetta nel corpo** (`REVIEW.md` → A6). Variante non lanciante per decidere da sé cosa mostrare: `canAccess({...}, passData) → boolean`. → [`plugins/adminAccessControl/README.it.md`](./plugins/adminAccessControl/README.it.md) · [`EXPLAIN.it.md`](./plugins/adminAccessControl/EXPLAIN.it.md)
+
+### Header di sicurezza
+
+Middleware **core** (`core/priorityMiddlewares/securityHeaders.js`) montato subito dopo il gate canonico: `nosniff` e `Referrer-Policy` su tutte le superfici, `X-Frame-Options: DENY` **solo** su quelle riservate, HSTS **solo** con `https.enabled` (max-age prudente di 1 giorno, e **non** per contesto perché vale per l'intera connessione), **CSP spedita SPENTA** con una policy consigliata già scritta.
+
+Tre contesti in `ital8Config.json5 → securityHeaders` (`wwwPath`/`pluginPages`/`admin`, come `hideExtension`), ma il contesto di una richiesta si **deriva dalla zona** del path e non da un elenco di prefissi: `admin` = ogni zona con `baseline.requiresAuth: true`, quindi anche `views` e le risorse del tema admin, e una zona nuova lo eredita senza dichiarare nulla. Il middleware **non sovrascrive** un header già impostato da un plugin. Non copre le risposte generate da un'**eccezione** propagata: `ctx.onerror` di Koa rimuove gli header prima di scrivere.
+
+Cookie di sessione: `CONFIG.secure: "auto"` in `koaSession.json5`, risolto in booleano al montaggio da `https.enabled` (`koa-session` 7 valida con zod e rifiuta la stringa). → [`docs/security-headers.it.md`](./docs/security-headers.it.md)
 
 ### SEO · Rate Limiter · Admin Rate Limiter
 

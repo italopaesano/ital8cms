@@ -46,8 +46,8 @@ modifica al file citato.
 | A2 | [Le due reti di sicurezza sulle chiavi di sessione sono entrambe morte](#a2--le-due-reti-di-sicurezza-sulle-chiavi-di-sessione-sono-entrambe-morte) | Impersonazione root senza credenziali | - [x] |
 | A3 | [Le regole hardcoded del controllo accessi non sono immutabili](#a3--le-regole-hardcoded-del-controllo-accessi-non-sono-immutabili) | Una regola custom scavalca la protezione admin | - [x] |
 | A4 | [Regex non ancorate e mix `*`/`**` che sbaglia in silenzio](#a4--regex-non-ancorate-e-mix--che-sbaglia-in-silenzio) | Regole che proteggono l'insieme sbagliato di URL | - [x] |
-| A5 | [Nessun security header, e cookie di sessione senza `secure`](#a5--nessun-security-header-e-cookie-di-sessione-senza-secure) | XSS/clickjacking/furto cookie non mitigati | - [ ] |
-| A6 | [`checkInTemplate` — la guardia documentata per i template non protegge](#a6--checkintemplate--la-guardia-documentata-per-i-template-non-protegge) | Pagina protetta servita per intero nel corpo del 302 | - [ ] |
+| A5 | [Nessun security header, e cookie di sessione senza `secure`](#a5--nessun-security-header-e-cookie-di-sessione-senza-secure) | XSS/clickjacking/furto cookie non mitigati | - [x] |
+| A6 | [`checkInTemplate` — la guardia documentata per i template non protegge](#a6--checkintemplate--la-guardia-documentata-per-i-template-non-protegge) | Pagina protetta servita per intero nel corpo del 302 | - [x] |
 | A7 | [Server di redirect HTTP→HTTPS: DoS remoto + open redirect](#a7--server-di-redirect-httphttps-dos-remoto--open-redirect) | Una richiesta spegne il processo | - [x] |
 
 ### 🟠 B — Correttezza e integrità dei dati
@@ -624,6 +624,50 @@ e senza ancoraggi, e wildcard su segmento vuoto.
 
 ## A5 · Nessun security header, e cookie di sessione senza `secure`
 
+> ✅ **CORRETTO (2026-11-23), v3.44.0.** Middleware core
+> `core/priorityMiddlewares/securityHeaders.js`, montato subito dopo il gate
+> canonico. Di serie: `nosniff` e `Referrer-Policy:
+> strict-origin-when-cross-origin` su **tutte** le superfici, `X-Frame-Options:
+> DENY` **solo** su quelle riservate (il sito pubblico resta inquadrabile di
+> proposito), HSTS **solo** con `https.enabled` e con `max-age` di **un giorno**,
+> non di un anno. Cookie di sessione: `secure` risolto da `https.enabled`.
+>
+> **I tre contesti si derivano dalle ZONE, non da un elenco di prefissi.**
+> `admin` = ogni zona con `baseline.requiresAuth: true`, quindi anche `views` e le
+> risorse del tema admin — ed è lo stesso criterio del `reservedGate`, per la
+> stessa ragione: un elenco a mano è il difetto A1 che aspetta di tornare. Una
+> zona nuova eredita gli header senza dichiarare nulla.
+>
+> **🐞 La correzione del cookie proposta da questa scheda non funziona.** Diceva
+> `"secure": "auto"` *« koa-session lo supporta »*. Misurato avviando il server:
+> `koa-session` **7** valida le opzioni con zod e `secure` deve essere un
+> **booleano** — con la stringa il boot muore con uno `ZodError` e **il CMS non
+> parte**. Il sentinella `"auto"` resta nel file perché dice a chi legge cosa
+> accade, e viene risolto in booleano al montaggio. Conseguenza da conoscere nello
+> scenario « HTTPS e HTTP in parallelo »: il cookie viaggia solo sul lato HTTPS,
+> quindi il login funziona solo là — che è il punto.
+>
+> **La CSP è spedita SPENTA, e la decisione di accenderla ora ha una misura.**
+> Accendendo la policy consigliata su tutti e tre i contesti, la suite e2e (96
+> test su Chromium) produce **un solo fallimento**: la pagina di login di
+> `adminUsers` contiene uno `<script>` **inline** (`webPages/login.ejs:84`) che
+> `default-src 'self'` blocca. Tutto il resto, pannello compreso, passa. Le tre
+> strade sono in [`docs/security-headers.it.md`](./docs/security-headers.it.md).
+>
+> **Limite dichiarato:** gli header non coprono le risposte generate da
+> un'**eccezione** propagata — `ctx.onerror` di Koa rimuove tutti gli header
+> prima di scrivere la sua risposta. Coprono le risposte di errore « normali »
+> (404/403 assegnati). È un limite del framework, non una scelta.
+>
+> **Non sovrascrive** ciò che un plugin ha già impostato, e si vede su una
+> risposta reale: il 404 di `koa-classic-server` porta una CSP più stretta
+> (`default-src 'none'`) e un `Referrer-Policy: no-referrer` suoi, rispettati.
+>
+> **Presidi:** 24 test in `tests/unit/core/securityHeaders.test.js` (derivazione
+> del contesto zona per zona, header per superficie, HSTS gated, non-sovrascrive,
+> risposte di errore), più la verifica sulle risposte **reali** di un server
+> avviato.
+
 **Severità:** 🔴 alta (sistemica) · **Sforzo:** medio · **Natura:** lavoro nuovo, non una correzione
 
 ### Dove
@@ -694,6 +738,46 @@ supporta e degrada correttamente in HTTP locale, quindi non rompe lo sviluppo.
 ---
 
 ## A6 · `checkInTemplate` — la guardia documentata per i template non protegge
+
+> ✅ **CORRETTO (2026-11-23), v3.44.0.** Tutti e tre i difetti, con **entrambe**
+> le strade proposte in fondo alla scheda.
+>
+> 1. **Il rendering si ferma davvero.** La guardia imposta il redirect e poi
+>    lancia `AccessDeniedError` (`core/accessDeniedError.js`), che `index.js`
+>    intercetta nei suoi **tre** punti di render senza assegnare il corpo. Il
+>    redirect è impostato *prima* del lancio, quindi chi intercetta non deve
+>    fabbricare una risposta.
+> 2. **Il percorso documentato ora esiste:** `passData.plugin.adminAccessControl`,
+>    perché `pluginSys` indicizza questi oggetti per nome di plugin.
+> 3. **La firma documentata è quella vera.** Niente più `ctx` a `undefined` e
+>    `TypeError` dall'interno del template: se il secondo argomento manca, la
+>    guardia lancia un errore che **dice cosa scrivere**.
+>
+> **Il parametro non è sparito, e la ragione è misurata.** La scelta era
+> « recuperare `ctx` da `passData` » per rendere corretta la forma a un argomento
+> solo. Non è possibile: gli oggetti di `getObjectToShareToWebPages()` sono
+> costruiti **una volta al boot** (`index.js:358`) e riusati da tutte le
+> richieste, quindi non possono catturare un `ctx` per-richiesta. Servirebbe uno
+> strato di binding per-richiesta nel sistema plugin, che toccherebbe l'oggetto
+> condiviso di **ogni** plugin — fuori dalla portata di questa correzione. La
+> guardia accetta quindi `passData` (la forma documentata) o un `ctx` nudo (per
+> chi l'avesse già scritta).
+>
+> **Aggiunta la variante non lanciante:** `canAccess({...}, passData) → boolean`,
+> per chi vuole mostrare un messaggio invece di essere rediretto. La guardia che
+> *protegge* resta `check()`.
+>
+> **Un difetto in più, corretto:** quando `accessManager` non è inizializzato la
+> guardia faceva `return`, cioè **proseguiva** col rendering della pagina
+> protetta. Ora lancia: senza il gestore non si può affermare che l'accesso sia
+> consentito.
+>
+> **Presidi:** 12 test in `tests/unit/accessManagerTemplateGuard.test.js`. Quello
+> che conta rende un template EJS **vero** che chiama la guardia, con lo stesso
+> `try/catch` di `index.js`, e pretende che il corpo non contenga la pagina; più
+> un presidio **strutturale** che conta i punti di render di `index.js` e pretende
+> che ognuno sia coperto, così un quarto aggiunto domani non riapre il difetto in
+> silenzio. **Mutazione** (via il `throw`): 4 fallimenti.
 
 **Severità:** 🔴 alta (come API), 🟢 nulla (come esposizione attuale) · **Sforzo:** basso
 

@@ -1,4 +1,4 @@
-<!-- ital8doc v1-1 · tipo: guide · lang: it · rev: 1 · ref -->
+<!-- ital8doc v1-1 · tipo: guide · lang: it · rev: 2 · ref -->
 > 🌐 Italian reference edition (always up to date). English `testing.md` is a stub until release.
 # Testing — ital8cms
 
@@ -238,6 +238,52 @@ tests/unit/myPlugin/
 - Integration test: testano comportamento end-to-end (spawn server, richieste HTTP reali)
 - E2E test: usano Playwright, serviti dalla directory `tests/www/` (MAI dalla `/www/` di produzione)
 - Ogni test deve essere indipendente e non modificare file permanentemente
+
+## Eseguire gli e2e su NixOS
+
+Su NixOS gli e2e Playwright **non partono** con la configurazione di serie, e il
+messaggio non aiuta:
+
+```
+browserType.launch: Executable doesn't exist at
+  /nix/store/…-playwright-browsers/chromium_headless_shell-1234/…
+```
+
+Non è un browser mancante: è un **puntatore che non combacia**. Playwright 1.6x
+per le run headless cerca il binario *headless shell* alla build `1234`; il
+pacchetto `playwright-browsers` di nixpkgs fornisce il chromium **completo** alla
+build `1217`. Il browser c'è, con un altro nome e un'altra build. (Il
+disallineamento non dipende dall'ultimo aggiornamento: misurato, anche
+`@playwright/test` 1.62.1 chiedeva già la `1234`.)
+
+**Non installare i browser con `npx playwright install`:** su NixOS scarica
+binari con l'interprete ELF standard, che non partono — è esattamente il motivo
+per cui nixpkgs confeziona `playwright-browsers`.
+
+La soluzione è una variabile, non un pacchetto. Entrambe le config Playwright
+onorano `PW_EXECUTABLE_PATH`:
+
+```bash
+PW_EXECUTABLE_PATH=/run/current-system/sw/bin/chromium \
+  npx playwright test --config=tests/playwright.config.js
+```
+
+Verificati entrambi i binari presenti sul sistema:
+
+| Eseguibile | Versione |
+|---|---|
+| `/run/current-system/sw/bin/chromium` | 158.0.8127.36 |
+| `…-playwright-browsers/chromium-1217/chrome-linux64/chrome` | 147.0.7727.15 |
+
+La CI non è interessata: il workflow installa i browser da sé, e senza la
+variabile la risoluzione resta quella standard di Playwright.
+
+> `npm test` su una macchina con Nix si ferma prima, perché
+> `scripts/checkNixShell.js` pretende di essere dentro `nix-shell`. Fuori dalla
+> shell si lanciano direttamente `npx jest --config=tests/jest.config.js` e
+> `npx playwright test`.
+
+---
 
 ## Convenzioni di test per plugin e temi
 

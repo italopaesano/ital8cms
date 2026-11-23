@@ -17,6 +17,7 @@ jest.mock('../../core/loadJson5', () => jest.fn());
 
 const loadJson5 = require('../../core/loadJson5');
 const AccessManager = require('../../plugins/adminAccessControl/lib/accessManager');
+const AccessDeniedError = require('../../core/accessDeniedError');
 
 // Le regole COME SONO SPEDITE oggi: letterali, non segnaposti.
 const LITERAL_RULES = Object.freeze({
@@ -647,11 +648,33 @@ describe('secondo giro di revisione', () => {
   });
 
   describe('⑤ `checkInTemplate` applica il baseline di zona come `checkAccess`', () => {
+    /**
+     * Restituisce il redirect prodotto dalla guardia, o null se ha consentito.
+     *
+     * Il `catch` è necessario dalla v3.44.0: `checkInTemplate` imposta il
+     * redirect e poi LANCIA `AccessDeniedError`, perché un `return` non fermava
+     * il rendering del template (REVIEW.md → A6). L'intento di questi test non
+     * cambia — quale redirect produce il baseline di zona — cambia il meccanismo
+     * con cui la guardia lo comunica. Il test subito sotto presidia il lancio,
+     * così questo catch non può nasconderne la sparizione.
+     */
     function templateCheck(am, path, requirements, session = {}) {
       const ctx = { path, session, redirect(to) { this.redirectedTo = to; } };
-      am.checkInTemplate(ctx, requirements);
+      try {
+        am.checkInTemplate(ctx, requirements);
+      } catch (err) {
+        if (!(err instanceof AccessDeniedError)) throw err;
+      }
       return ctx.redirectedTo || null;
     }
+
+    test('negare significa LANCIARE, non solo redirigere', () => {
+      const am = managerWith({});
+      const ctx = { path: '/admin/pagina.ejs', session: {}, redirect(to) { this.redirectedTo = to; } };
+      expect(() => am.checkInTemplate(ctx, { requiresAuth: false, allowedRoles: [] }))
+        .toThrow(AccessDeniedError);
+      expect(ctx.redirectedTo).toBe(LOGIN_ENTRY);   // il redirect è impostato PRIMA del lancio
+    });
 
     test('un template in zona admin non può dichiararsi pubblico', () => {
       const am = managerWith({});

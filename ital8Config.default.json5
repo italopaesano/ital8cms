@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 6,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 7,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
 
   // ── Migrazioni dei file di configurazione ──────────────────────────────────
   // Quando un plugin/tema evolve la struttura dei suoi config, la cartella
@@ -315,6 +315,72 @@
   // superficie, questa è una preferenza del sito e resta come la scrivi qui.
   "dirListing": {
     "wwwPath": false
+  },
+
+  // ── Header di sicurezza ────────────────────────────────────────────────────
+  // Prima della v3.44.0 il CMS non mandava NESSUN header di sicurezza sulle
+  // risposte normali: i cinque nomi comparivano solo sulla pagina di manutenzione
+  // e sui rifiuti dei gate (REVIEW.md → A5).
+  //
+  // Tre contesti, come `hideExtension`. Il contesto di una richiesta si deriva
+  // dalla ZONA del suo path, non da un elenco di prefissi: `admin` è l'insieme
+  // delle zone che dichiarano `requiresAuth` (quindi anche `views` e le risorse
+  // del tema admin), `pluginPages` è la sua zona, `wwwPath` è tutto il resto
+  // (sito, risorse del tema pubblico, api).
+  //
+  // Il middleware NON sovrascrive un header già impostato da un plugin: chi sa
+  // cosa sta servendo può allentare la regola per la sua risposta.
+  "securityHeaders": {
+
+    // HSTS non è per contesto di proposito: la direttiva vale per l'intera
+    // CONNESSIONE, non per un prefisso di URL. Ed è emesso SOLO se
+    // `https.enabled` è true — in HTTP puro renderebbe il sito irraggiungibile.
+    // maxAge prudente (1 giorno): se qualcosa va storto si rientra in fretta.
+    // Alzarlo a 31536000 (1 anno) solo quando l'HTTPS è stabile da tempo.
+    "hsts": {
+      "enabled": true,
+      "maxAge": 86400
+    },
+
+    // Sito pubblico (e api). Niente X-Frame-Options: una pagina pubblica può
+    // legittimamente essere inquadrata (widget, anteprime), e deciderlo al posto
+    // di chi costruisce il sito sarebbe arbitrario.
+    "wwwPath": {
+      "nosniff": true,
+      "referrerPolicy": "strict-origin-when-cross-origin",
+      "frameOptions": "",
+      "csp": {
+        "enabled": false,
+        // Policy consigliata, SPENTA di serie: un tema può legittimamente avere
+        // script o stili inline, e accendere la CSP senza guardare le proprie
+        // pagine in un browser rompe il sito. Accendila e verifica.
+        "policy": "default-src 'self'; img-src 'self' data:; base-uri 'self'; object-src 'none'; frame-ancestors 'self'"
+      }
+    },
+
+    // Pagine pubbliche dei plugin: stesse scelte del sito.
+    "pluginPages": {
+      "nosniff": true,
+      "referrerPolicy": "strict-origin-when-cross-origin",
+      "frameOptions": "",
+      "csp": {
+        "enabled": false,
+        "policy": "default-src 'self'; img-src 'self' data:; base-uri 'self'; object-src 'none'; frame-ancestors 'self'"
+      }
+    },
+
+    // Area riservata: qui X-Frame-Options è DENY, perché il clickjacking
+    // colpirebbe azioni amministrative. La policy CSP è più stretta (nessun
+    // script inline) ma resta spenta: accendila dopo aver verificato il pannello.
+    "admin": {
+      "nosniff": true,
+      "referrerPolicy": "strict-origin-when-cross-origin",
+      "frameOptions": "DENY",
+      "csp": {
+        "enabled": false,
+        "policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'self'; object-src 'none'; frame-ancestors 'none'"
+      }
+    }
   },
 
   "globalFunctionsWhitelist": {

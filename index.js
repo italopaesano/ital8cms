@@ -3,6 +3,7 @@ const koa = require('koa');
 const app = new koa();
 const koaClassicServer = require("koa-classic-server");
 const ejs = require("ejs");
+const AccessDeniedError = require("./core/accessDeniedError");
 const loadJson5 = require('./core/loadJson5');
 const fs = require('fs');
 const path = require('path');
@@ -491,12 +492,22 @@ async function startApp() {
             // Aggiungi wrapper themeSys con metodi bound
             passData.themeSys = createThemeSysWrapper(themeSys, passData);
 
-            ctx.body = await ejs.renderFile(filePath, {
-              passData: passData,
-              // Espandi le funzioni globali (es. __() per i18n)
-              // IMPORTANTE: Le versioni locali (passData.plugin.simpleI18n.__) rimangono disponibili
-              ...globalFunctions
-            });
+            try {
+              ctx.body = await ejs.renderFile(filePath, {
+                passData: passData,
+                // Espandi le funzioni globali (es. __() per i18n)
+                // IMPORTANTE: Le versioni locali (passData.plugin.simpleI18n.__) rimangono disponibili
+                ...globalFunctions
+              });
+            } catch (accessErr) {
+              // La guardia dei template di adminAccessControl lancia AccessDeniedError per
+              // FERMARE il rendering: prima faceva ctx.redirect() e poi return, ma quel
+              // return esce dalla funzione e non dal template, quindi l'EJS proseguiva e
+              // l'assegnazione del corpo avveniva comunque — un 302 con la pagina
+              // protetta dentro (REVIEW.md → A6). Il redirect è già impostato dalla
+              // guardia: qui basta NON assegnare ctx.body.
+              if (!(accessErr instanceof AccessDeniedError)) throw accessErr;
+            }
           },
           ext: ["ejs", "EJS"], // Koa v3: sintassi moderna array literals
         },
@@ -541,10 +552,20 @@ async function startApp() {
             // Aggiungi wrapper themeSys con metodi bound
             passData.themeSys = createThemeSysWrapper(themeSys, passData);
 
-            ctx.body = await ejs.renderFile(filePath, {
-              passData: passData,
-              ...globalFunctions
-            });
+            try {
+              ctx.body = await ejs.renderFile(filePath, {
+                passData: passData,
+                ...globalFunctions
+              });
+            } catch (accessErr) {
+              // La guardia dei template di adminAccessControl lancia AccessDeniedError per
+              // FERMARE il rendering: prima faceva ctx.redirect() e poi return, ma quel
+              // return esce dalla funzione e non dal template, quindi l'EJS proseguiva e
+              // l'assegnazione del corpo avveniva comunque — un 302 con la pagina
+              // protetta dentro (REVIEW.md → A6). Il redirect è già impostato dalla
+              // guardia: qui basta NON assegnare ctx.body.
+              if (!(accessErr instanceof AccessDeniedError)) throw accessErr;
+            }
           },
           ext: ["ejs", "EJS"],
         },
@@ -612,12 +633,22 @@ async function startApp() {
               // Aggiungi wrapper themeSys con metodi bound
               passData.themeSys = createThemeSysWrapper(themeSys, passData);
 
-              ctx.body = await ejs.renderFile(filePath, {
-                passData: passData,
-                // Espandi le funzioni globali (es. __() per i18n)
-                // IMPORTANTE: Le versioni locali (passData.plugin.simpleI18n.__) rimangono disponibili
-                ...globalFunctions
-              });
+              try {
+                ctx.body = await ejs.renderFile(filePath, {
+                  passData: passData,
+                  // Espandi le funzioni globali (es. __() per i18n)
+                  // IMPORTANTE: Le versioni locali (passData.plugin.simpleI18n.__) rimangono disponibili
+                  ...globalFunctions
+                });
+              } catch (accessErr) {
+                // La guardia dei template di adminAccessControl lancia AccessDeniedError per
+                // FERMARE il rendering: prima faceva ctx.redirect() e poi return, ma quel
+                // return esce dalla funzione e non dal template, quindi l'EJS proseguiva e
+                // l'assegnazione del corpo avveniva comunque — un 302 con la pagina
+                // protetta dentro (REVIEW.md → A6). Il redirect è già impostato dalla
+                // guardia: qui basta NON assegnare ctx.body.
+                if (!(accessErr instanceof AccessDeniedError)) throw accessErr;
+              }
             },
             ext: ["ejs", "EJS"], // Koa v3: sintassi moderna array literals
           },

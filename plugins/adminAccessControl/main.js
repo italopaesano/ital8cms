@@ -280,18 +280,76 @@ module.exports = {
    * Espone helper per controllo accessi nei template
    */
   getObjectToShareToWebPages() {
+    /**
+     * Ricava il `ctx` da ciò che il template ha passato.
+     *
+     * Accetta `passData` (la forma documentata) oppure un `ctx` nudo (la forma
+     * che il codice accettava prima, conservata per non rompere chi l'avesse
+     * già scritta). Se non arriva nulla di utile LANCIA un errore che dice cosa
+     * fare: prima, con `ctx` a `undefined`, si otteneva un
+     * `TypeError: Cannot read properties of undefined` dall'interno del
+     * template — un messaggio che non nomina né la causa né il rimedio.
+     *
+     * Perché non si può recuperare da sé: gli oggetti di
+     * `getObjectToShareToWebPages()` sono costruiti UNA volta al boot
+     * (`index.js:358`) e riusati da tutte le richieste, quindi queste funzioni
+     * non possono catturare un `ctx` per-richiesta. Servirebbe uno strato di
+     * binding per-richiesta nel sistema plugin, che toccherebbe l'oggetto
+     * condiviso di ogni plugin: fuori dalla portata di questa correzione.
+     */
+    const ctxFrom = (passDataOrCtx) => {
+      if (passDataOrCtx && passDataOrCtx.ctx) return passDataOrCtx.ctx;        // passData
+      if (passDataOrCtx && (passDataOrCtx.session || passDataOrCtx.path)) return passDataOrCtx; // ctx nudo
+      throw new Error(
+        '[adminAccessControl] la guardia dei template richiede `passData` come secondo '
+        + 'argomento: <% passData.plugin.adminAccessControl.check({ requiresAuth: true }, passData) %>'
+      );
+    };
+
     return {
       /**
-       * Verifica accesso in template EJS
-       * Uso: <% passData.accessControl.check({ requiresAuth: true, allowedRoles: [102, 104] }) %>
-       * Se accesso negato, fa redirect automaticamente
+       * Guardia per i template EJS: se l'accesso è negato REDIRIGE e FERMA il
+       * rendering (lancia `AccessDeniedError`, che `index.js` intercetta senza
+       * assegnare il corpo).
+       *
+       * Uso:
+       *   <% passData.plugin.adminAccessControl.check({ requiresAuth: true, allowedRoles: [102, 104] }, passData) %>
+       *
+       * ⚠️ La docstring precedente era sbagliata su DUE punti, ed entrambi
+       * rendevano l'esempio inservibile (REVIEW.md → A6): il percorso non era
+       * `passData.accessControl` — `pluginSys` indicizza questi oggetti per nome
+       * di plugin, quindi è `passData.plugin.adminAccessControl` — e l'esempio
+       * ometteva il secondo argomento, senza il quale si otteneva un TypeError.
        */
-      check: (requirements, ctx) => {
+      check: (requirements, passDataOrCtx) => {
         if (!accessManager) {
-          console.error('[adminAccessControl] AccessManager not initialized');
-          return;
+          // Fail-closed: senza il gestore non si può affermare che l'accesso sia
+          // consentito. Prima qui si faceva `return`, cioè si proseguiva col
+          // rendering della pagina protetta.
+          throw new Error('[adminAccessControl] AccessManager non inizializzato: accesso non verificabile');
         }
-        accessManager.checkInTemplate(ctx, requirements);
+        accessManager.checkInTemplate(ctxFrom(passDataOrCtx), requirements);
+      },
+
+      /**
+       * Variante che NON redirige e NON lancia: restituisce solo `true`/`false`.
+       *
+       * Per chi vuole decidere da sé cosa mostrare — un messaggio, un pezzo di
+       * pagina in meno, un link diverso — invece di essere rediretto:
+       *
+       *   <% if (passData.plugin.adminAccessControl.canAccess({ allowedRoles: [0, 1] }, passData)) { %>
+       *     <a href="...">Pannello</a>
+       *   <% } %>
+       *
+       * Attenzione: usarla per PROTEGGERE una pagina richiede di fermare il
+       * rendering da sé (`<% if (!canAccess(...)) return %>`). Se il tuo scopo è
+       * proteggere, `check()` è la funzione giusta.
+       */
+      canAccess: (requirements, passDataOrCtx) => {
+        if (!accessManager) {
+          throw new Error('[adminAccessControl] AccessManager non inizializzato: accesso non verificabile');
+        }
+        return accessManager.evaluateTemplateAccess(ctxFrom(passDataOrCtx), requirements).allowed;
       }
     };
   }
