@@ -23,6 +23,18 @@ async function loginAs(page, username, password) {
   await page.waitForLoadState('networkidle');
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// NOTA sul contratto di `GET /api/adminUsers/logged` (REVIEW.md → C1)
+//
+// Dalla v3.46.0 la rotta risponde JSON — `{ authenticated, username }` — e non
+// più testo libero. Prima stampava `JSON.stringify(ctx.session)`, cioè TUTTA la
+// sessione, incluso il `csrfToken`: il token del chiamante finiva in un corpo di
+// risposta, da cui può arrivare ai log di un proxy o alla cronologia.
+//
+// Questi test asserivano sulla frase « complimenti sei loggato ». Ora leggono il
+// campo `authenticated`, che è il contratto vero e non la sua formulazione.
+// ─────────────────────────────────────────────────────────────────────────────
+
 // ========================================================================
 // Login Page
 // ========================================================================
@@ -76,7 +88,7 @@ test.describe('Login - Valid Credentials', () => {
     // Check logged endpoint
     await page.goto(URLS.loggedApi);
     const bodyText = await page.textContent('body');
-    expect(bodyText).toContain('complimenti sei loggato');
+    expect(JSON.parse(bodyText).authenticated).toBe(true);
     expect(bodyText).toContain(TEST_USERS.admin.username);
   });
 
@@ -85,7 +97,7 @@ test.describe('Login - Valid Credentials', () => {
 
     await page.goto(URLS.loggedApi);
     const bodyText = await page.textContent('body');
-    expect(bodyText).toContain('complimenti sei loggato');
+    expect(JSON.parse(bodyText).authenticated).toBe(true);
   });
 
   test('should login successfully with editor user', async ({ page }) => {
@@ -93,7 +105,7 @@ test.describe('Login - Valid Credentials', () => {
 
     await page.goto(URLS.loggedApi);
     const bodyText = await page.textContent('body');
-    expect(bodyText).toContain('complimenti sei loggato');
+    expect(JSON.parse(bodyText).authenticated).toBe(true);
   });
 });
 
@@ -134,7 +146,7 @@ test.describe('Login - Invalid Credentials', () => {
     // Check logged endpoint - should show not logged
     await page.goto(URLS.loggedApi);
     const bodyText = await page.textContent('body');
-    expect(bodyText).toContain('NON sei loggato');
+    expect(JSON.parse(bodyText).authenticated).toBe(false);
   });
 });
 
@@ -149,7 +161,7 @@ test.describe('Logout', () => {
     // Verify logged in
     await page.goto(URLS.loggedApi);
     let bodyText = await page.textContent('body');
-    expect(bodyText).toContain('complimenti sei loggato');
+    expect(JSON.parse(bodyText).authenticated).toBe(true);
 
     // Logout via POST (using form from logout page)
     await page.goto(URLS.logoutPage);
@@ -168,7 +180,7 @@ test.describe('Logout', () => {
     // Verify logged out
     await page.goto(URLS.loggedApi);
     bodyText = await page.textContent('body');
-    expect(bodyText).toContain('NON sei loggato');
+    expect(JSON.parse(bodyText).authenticated).toBe(false);
   });
 
   test('should display logout page', async ({ page }) => {
@@ -192,13 +204,13 @@ test.describe('Session Persistence', () => {
     // Navigate to logged endpoint - session should still be active
     await page.goto(URLS.loggedApi);
     const bodyText = await page.textContent('body');
-    expect(bodyText).toContain('complimenti sei loggato');
+    expect(JSON.parse(bodyText).authenticated).toBe(true);
   });
 
   test('should NOT have session before login', async ({ page }) => {
     await page.goto(URLS.loggedApi);
     const bodyText = await page.textContent('body');
-    expect(bodyText).toContain('NON sei loggato');
+    expect(JSON.parse(bodyText).authenticated).toBe(false);
   });
 });
 
@@ -211,7 +223,7 @@ test.describe('Login Status API (/logged)', () => {
     expect(response.status()).toBe(200);
 
     const text = await response.text();
-    expect(text).toContain('NON sei loggato');
+    expect(JSON.parse(text).authenticated).toBe(false);
   });
 
   test('should return text response with user info when logged in', async ({ page }) => {
@@ -222,6 +234,6 @@ test.describe('Login Status API (/logged)', () => {
     expect(response.status()).toBe(200);
 
     const text = await response.text();
-    expect(text).toContain('complimenti sei loggato');
+    expect(JSON.parse(text).authenticated).toBe(true);
   });
 });
