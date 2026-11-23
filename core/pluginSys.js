@@ -1,5 +1,6 @@
 
 const fs = require('fs');
+const { isAuthenticated } = require('./isAuthenticated');
 const path = require('path');
 const semver = require('semver');
 const logger = require('./logger');
@@ -1001,7 +1002,11 @@ class pluginSys{
 
       if (access.requiresAuth) {
         // Verifica autenticazione
-        if (!ctx.session || !ctx.session.authenticated) {
+        // Definizione UNICA di « autenticato » (REVIEW.md → C5): prima qui si
+        // guardava il flag e nel middleware delle pagine l'oggetto `session.user`,
+        // due criteri diversi per la stessa decisione. Coincidevano per
+        // coincidenza mantenuta a mano.
+        if (!isAuthenticated(ctx)) {
           ctx.status = 401;
           ctx.body = { error: 'Authentication required' };
           return;

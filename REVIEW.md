@@ -57,7 +57,7 @@ modifica al file citato.
 | B1 | [Il file delle credenziali è scritto in modo non atomico](#b1--il-file-delle-credenziali-è-scritto-in-modo-non-atomico) | Perdita di tutti gli account | - [x] |
 | B2 | [`updateUserProfile` — lost update fra richieste concorrenti](#b2--updateuserprofile--lost-update-fra-richieste-concorrenti) | Modifiche silenziosamente perse | - [x] |
 | B3 | [Salvare da System Settings distrugge il config e può impedire il boot](#b3--salvare-da-system-settings-distrugge-il-config-e-può-impedire-il-boot) | Installazione non più avviabile | - [x] |
-| B4 | [Oggetti indicizzati con input utente senza `hasOwnProperty`](#b4--oggetti-indicizzati-con-input-utente-senza-hasownproperty) | 500 non autenticato sul login | - [ ] |
+| B4 | [Oggetti indicizzati con input utente senza `hasOwnProperty`](#b4--oggetti-indicizzati-con-input-utente-senza-hasownproperty) | 500 non autenticato sul login | - [x] |
 | B5 | [`isPathSafe` confronta il prefisso senza separatore](#b5--ispathsafe-confronta-il-prefisso-senza-separatore) | Scrittura di file fuori da `/www` | - [ ] |
 | B6 | [Il contratto `getObjectToShareToOthersPlugin` è documentato con tre parametri, il runtime ne passa uno](#b6--il-contratto-getobjecttosharetoothersplugin-è-documentato-con-tre-parametri-il-runtime-ne-passa-uno) | Trappola per chi scrive plugin | - [ ] |
 | B7 | [Storage a file senza lock — l'architettura non regge il multi-processo](#b7--storage-a-file-senza-lock--larchitettura-non-regge-il-multi-processo) | Corruzione dati con `pm2 -i` | - [ ] |
@@ -66,11 +66,11 @@ modifica al file citato.
 
 | # | Problema | Impatto | Stato |
 |---|---|---|---|
-| C1 | [`GET /logged` è pubblico e stampa l'intera sessione](#c1--get-logged-è-pubblico-e-stampa-lintera-sessione) | Fuga del token CSRF | - [ ] |
+| C1 | [`GET /logged` è pubblico e stampa l'intera sessione](#c1--get-logged-è-pubblico-e-stampa-lintera-sessione) | Fuga del token CSRF | - [x] |
 | C2 | [Rate limiting inefficace su IPv6, e senza tetto](#c2--rate-limiting-inefficace-su-ipv6-e-senza-tetto) | Brute-force non rallentato | - [ ] |
-| C3 | [Enumerazione utenti per timing sul login](#c3--enumerazione-utenti-per-timing-sul-login) | Scoperta degli username validi | - [ ] |
+| C3 | [Enumerazione utenti per timing sul login](#c3--enumerazione-utenti-per-timing-sul-login) | Scoperta degli username validi | - [x] |
 | C4 | [Policy password incoerente fra i due punti di scrittura](#c4--policy-password-incoerente-fra-i-due-punti-di-scrittura) | Password deboli sull'utente root | - [ ] |
-| C5 | [Due definizioni diverse di « autenticato »](#c5--due-definizioni-diverse-di--autenticato) | Invariante non presidiata | - [ ] |
+| C5 | [Due definizioni diverse di « autenticato »](#c5--due-definizioni-diverse-di--autenticato) | Invariante non presidiata | - [x] |
 | C6 | [`cliBridge`: `chmod` dopo `listen`, e fallimento non fatale](#c6--clibridge-chmod-dopo-listen-e-fallimento-non-fatale) | Canale di controllo con permessi ignoti | - [ ] |
 | C7 | [Il ruolo `admin` (1) equivale a esecuzione di codice remoto](#c7--il-ruolo-admin-1-equivale-a-esecuzione-di-codice-remoto) | RBAC documentato in modo fuorviante | - [ ] |
 
@@ -1310,6 +1310,37 @@ commento presente prima sia ancora presente dopo.
 
 ## B4 · Oggetti indicizzati con input utente senza `hasOwnProperty`
 
+> ✅ **CORRETTO (2026-11-23), v3.46.0.** Tutte e quattro le misure proposte.
+>
+> 1. **`Object.hasOwn`** nei punti che indicizzano con input utente, più la mappa
+>    degli utenti costruita **senza prototipo** (`Object.create(null)`) nel login:
+>    due difese indipendenti sulla stessa classe.
+> 2. **Denylist esplicita** di `__proto__`, `constructor` e `prototype` nella
+>    validazione dello username, messa **prima** della regex di forma — così
+>    l'errore arriva presto e dice *« nome riservato del linguaggio »* invece di
+>    un rifiuto a valle per un'altra ragione.
+> 3. **`try/catch` sull'handler di login**: un endpoint pubblico non deve poter
+>    rispondere 500 per un input malformato, indipendentemente da questo caso.
+> 4. **Record validato** prima di `bcrypt.compare`: un utente presente ma senza
+>    `hashPassword` era l'altra via allo stesso 500.
+>
+> **Misurato prima della correzione** — e sono **tre** chiavi, non una come
+> riportava la scheda:
+>
+> ```
+> autenticate('constructor', …)  →  ✗ LANCIA  Illegal arguments: string, undefined
+> autenticate('toString', …)     →  ✗ LANCIA
+> autenticate('__proto__', …)    →  ✗ LANCIA
+> autenticate('pippo', …)        →  ok  false
+> ```
+>
+> **Presidi:** in `tests/unit/libAccess.test.js` cinque chiavi di prototipo
+> (`constructor`, `toString`, `valueOf`, `__proto__`, `hasOwnProperty`) che ora
+> restituiscono `false` senza lanciare, più il record malformato; e in
+> `tests/unit/adminUsersInputSurface.test.js` la denylist, con un test che
+> verifica che il rifiuto arrivi **prima** della validazione di forma — perché
+> `__proto__` passa la regex, ed è il motivo per cui la denylist serve.
+
 **Severità:** 🟠 media · **Sforzo:** minimo
 
 ### Dove
@@ -1619,6 +1650,24 @@ brevemente perché il meccanismo è più semplice, non perché siano trascurabil
 
 ## C1 · `GET /logged` è pubblico e stampa l'intera sessione
 
+> ✅ **CORRETTO (2026-11-23), v3.46.0.** `GET /logged` risponde ora
+> `{ authenticated: false }` oppure `{ authenticated: true, username }`, in JSON.
+>
+> **Il difetto era in ENTRAMBI i rami**, non solo in quello autenticato come
+> riportava la scheda: anche il ramo anonimo faceva
+> `JSON.stringify(ctx.session)`. Detto con precisione: è la sessione **del
+> chiamante**, quindi non è una fuga fra utenti — è il **proprio** token CSRF
+> messo in un corpo di risposta, da cui può finire nei log di un proxy o nella
+> cronologia del browser.
+>
+> Che fosse un endpoint di **debug rimasto acceso** lo diceva il codice stesso:
+> `${ctx.session.user}` produceva la stringa `[object Object]`.
+>
+> **Presidi:** quattro test che invocano l'handler preso dall'array di rotte
+> **vero** e pretendono che l'uscita non contenga il token, né l'email, né i
+> ruoli; più la coerenza con C5 (una sessione con `user` ma senza il flag è
+> trattata come anonima).
+
 **Dove:** `plugins/adminUsers/main.js:184`
 
 La rotta è dichiarata `requiresAuth: false` e risponde così:
@@ -1671,6 +1720,28 @@ dello stato persistito.
 
 ## C3 · Enumerazione utenti per timing sul login
 
+> ✅ **CORRETTO (2026-11-23), v3.46.0.** Il ramo « utente inesistente » confronta
+> ora la password contro un **hash equalizzatore** — un bcrypt valido di una
+> password che nessuno conosce — quindi costa come il ramo « password sbagliata ».
+>
+> **Misurato, prima e dopo**, con un utente vero presente nel file:
+>
+> | caso | prima | dopo |
+> |---|---|---|
+> | utente vero, password errata | ~80 ms | 82 ms |
+> | utente **inesistente** | **~0 ms** | 57 ms |
+> | chiave di prototipo | *500* | 56 ms |
+>
+> L'hash è una **costante** e non un valore calcolato al caricamento: calcolarlo
+> costerebbe ~100 ms a ogni boot per ottenere lo stesso effetto.
+>
+> **Il presidio verifica il MECCANISMO, non il tempo:** tre test controllano che
+> `bcrypt.compare` venga invocato anche per un utente che non esiste e per una
+> chiave di prototipo, e che l'hash equalizzatore sia un bcrypt **valido** — se
+> fosse malformato, `compare` rigetterebbe subito e l'oracolo si riaprirebbe con
+> lo stesso numero di chiamate. Un'asserzione sui millisecondi sarebbe instabile
+> su una macchina carica, e un presidio instabile viene disattivato.
+
 **Dove:** `plugins/adminUsers/lib/libAccess.js:14`
 
 ```js
@@ -1717,6 +1788,28 @@ più diffuse. Essendo una regola che cambia comportamento, va annotata in
 ---
 
 ## C5 · Due definizioni diverse di « autenticato »
+
+> ✅ **CORRETTO (2026-11-23), v3.46.0.** `core/isAuthenticated.js` è ora la
+> definizione unica, usata da entrambi i punti. Espone due funzioni:
+> `isAuthenticated(ctx)` e `sessionUser(ctx)`, che restituisce l'utente **solo
+> se** la sessione è autenticata — da usare al posto di `ctx.session?.user ||
+> null`, che è la forma che restituiva l'oggetto comunque.
+>
+> **La definizione è la più STRETTA delle due e pretende entrambi i campi:** un
+> oggetto utente senza il flag non è una sessione autenticata, e un flag senza
+> l'oggetto non permette di decidere alcun ruolo.
+>
+> **È un cambiamento di comportamento, non un refactoring, e si è visto subito:**
+> dieci test preesistenti costruivano fixture con `session: { user: … }` **senza**
+> il flag e sono diventati rossi. Non erano sbagliati — si appoggiavano alla
+> definizione larga. Allineati facendo impostare ai loro helper entrambi i campi,
+> come fa il login vero.
+>
+> **Presidi:** 15 test in `tests/unit/core/isAuthenticated.test.js`, fra cui i
+> casi « utente senza flag » e « flag senza utente », il flag di tipo sbagliato
+> (`'true'`, `1`), e tre presìdi **strutturali** che pretendono che i due punti
+> importino la funzione condivisa e che **nessuno dei due** guardi più
+> `ctx.session?.user || null` da sé.
 
 **Dove:** `core/pluginSys.js:1004` contro `plugins/adminAccessControl/lib/accessManager.js:203`
 

@@ -13,6 +13,7 @@
 
 const PatternMatcher = require('../../../core/patternMatcher');
 const AccessDeniedError = require('../../../core/accessDeniedError');
+const { sessionUser } = require('../../../core/isAuthenticated');
 const loadJson5 = require('../../../core/loadJson5');
 const { canonicalizePath } = require('../../../core/pathCanonicalizer');
 const {
@@ -471,7 +472,10 @@ class AccessManager {
       if (gp && (url === gp || url.startsWith(gp + '/'))) {
         url = url.slice(gp.length) || '/';
       }
-      const user = ctx.session?.user || null;
+      // `sessionUser` e non `ctx.session?.user`: quella forma restituisce
+      // l'oggetto anche senza il flag `authenticated`, che è la divergenza di
+      // REVIEW.md → C5.
+      const user = sessionUser(ctx);
 
       // ── Superficie riservata chiusa (CLI: `reserved stop`) ──
       // Terzo punto di enforcement, quello delle PAGINE: le rotte API le chiude il
@@ -557,7 +561,7 @@ class AccessManager {
    * @returns {{allowed: boolean, reason: string|null, redirectTo: string|null}}
    */
   evaluateTemplateAccess(ctx, requirements) {
-    const user = ctx.session?.user || null;
+    const user = sessionUser(ctx);
 
     // Il `baseline` della zona vale ANCHE qui. Dalla Fase 2 `checkAccess` lo
     // applica e questo metodo no: due percorsi di decisione con conoscenza diversa,

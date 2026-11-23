@@ -231,7 +231,7 @@ describe('AccessManager', () => {
       const middleware = accessManager.createMiddleware();
       const ctx = {
         path: '/admin/dashboard',
-        session: { user: { roleIds: [2] } },
+        session: { authenticated: true, user: { roleIds: [2] } },
         redirect: jest.fn()
       };
       const next = jest.fn();
@@ -244,7 +244,7 @@ describe('AccessManager', () => {
       const middleware = accessManager.createMiddleware();
       const ctx = {
         path: '/admin/dashboard',
-        session: { user: { roleIds: [1] } }
+        session: { authenticated: true, user: { roleIds: [1] } }
       };
       const next = jest.fn();
       await middleware(ctx, next);
@@ -282,7 +282,7 @@ describe('AccessManager', () => {
       'ruolo insufficiente [2] su %j → access-denied, NON allow',
       async (p) => {
         const middleware = accessManager.createMiddleware();
-        const ctx = { path: p, session: { user: { roleIds: [2] } }, redirect: jest.fn() };
+        const ctx = { path: p, session: { authenticated: true, user: { roleIds: [2] } }, redirect: jest.fn() };
         const next = jest.fn();
         await middleware(ctx, next);
         expect(next).not.toHaveBeenCalled();
@@ -292,7 +292,7 @@ describe('AccessManager', () => {
 
     test('ruolo corretto [1] su path non canonico → consentito', async () => {
       const middleware = accessManager.createMiddleware();
-      const ctx = { path: '/./admin/dashboard', session: { user: { roleIds: [1] } } };
+      const ctx = { path: '/./admin/dashboard', session: { authenticated: true, user: { roleIds: [1] } } };
       const next = jest.fn();
       await middleware(ctx, next);
       expect(next).toHaveBeenCalled();
@@ -345,7 +345,11 @@ describe('createMiddleware - superficie riservata', () => {
       path: reqPath,
       status: 200,
       body: null,
-      session: user ? { user } : null,
+      // `authenticated` insieme a `user`: dalla v3.46.0 « autenticato » ha una
+      // definizione sola (`core/isAuthenticated.js`) e pretende ENTRAMBI i campi,
+      // perché un `session.user` senza il flag è una sessione anonima
+      // (REVIEW.md → C5). Il login vero li imposta insieme.
+      session: user ? { authenticated: true, user } : null,
       redirect(location) { this.status = 302; this.headers = { location }; },
     };
   }
