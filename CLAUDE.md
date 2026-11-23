@@ -1529,6 +1529,8 @@ Ricette pratiche — aggiungere una rotta API, un page hook (`getHooksPage`), un
 
 Per lo storage JSON5: leggere con `loadJson5()`, scrivere in modo **atomico** (temp + `rename`) — vedi *Strategia di archiviazione dati*.
 
+> ⚠️ **Se fra la lettura e la scrittura c'è un `await`, serve la coda.** Node esegue un solo thread, quindi il ciclo leggi-modifica-scrivi è sicuro **finché non cede il controllo**: con un `await` in mezzo (un hash bcrypt, una chiamata di rete) un'altra richiesta si interpone, e la seconda scrittura si basa su una copia letta prima della prima — una modifica sparisce in silenzio, con entrambi i chiamanti che leggono « riuscito ». Usa `core/json5UpdateQueue.js → updateJson5Serialized(path, mutator)`: il mutatore riceve il contenuto **riletto dentro la coda** del file e la scrittura passa da `saveJson5` (atomica). La coda è **per processo**: con `pm2 -i max` non protegge (vedi `REVIEW.md` → B7).
+
 ## Testing
 
 Strategia, convenzioni, helper e isolamento dei test: spostato in [`docs/testing.it.md`](./docs/testing.it.md).
@@ -1606,7 +1608,7 @@ Spostato in [`docs/deployment.it.md`](./docs/deployment.it.md).
 
 ### File dei plugin
 
-Ogni plugin documenta i propri file nel rispettivo `README.it.md`/`EXPLAIN.it.md` (vedi i puntatori nelle sezioni dei plugin sopra). Utility core trasversali: `core/patternMatcher.js` (pattern matching condiviso — **le regex sono ancorate**, `^(?:corpo)$`: descrivono il path intero, per cercare « dovunque » servono i `.*` espliciti; i wildcard sono compilati in un passaggio unico, `**`→`.*` e `*`→`[^/]+`), `core/servingRootResolver.js` (isolamento path), `core/editJson5.js` (modifica chirurgica di chiavi JSON5 — update-only; da v3.33.0 sostituisce un oggetto/array **per chiave** invece di rifare il blocco, quindi i commenti delle chiavi che non cambiano **sopravvivono**, e ciò che non è preservabile è dichiarato in `droppedComments`), `core/setJson5Key.js` (upsert di una chiave, anche annidata, preserva i commenti), `core/loadJson5.js`, `core/logger.js`, `core/escapeHtml.js`, `core/sessionSecurity.js`, `core/processSafetyNet.js`.
+Ogni plugin documenta i propri file nel rispettivo `README.it.md`/`EXPLAIN.it.md` (vedi i puntatori nelle sezioni dei plugin sopra). Utility core trasversali: `core/patternMatcher.js` (pattern matching condiviso — **le regex sono ancorate**, `^(?:corpo)$`: descrivono il path intero, per cercare « dovunque » servono i `.*` espliciti; i wildcard sono compilati in un passaggio unico, `**`→`.*` e `*`→`[^/]+`), `core/servingRootResolver.js` (isolamento path), `core/editJson5.js` (modifica chirurgica di chiavi JSON5 — update-only; da v3.33.0 sostituisce un oggetto/array **per chiave** invece di rifare il blocco, quindi i commenti delle chiavi che non cambiano **sopravvivono**, e ciò che non è preservabile è dichiarato in `droppedComments`), `core/setJson5Key.js` (upsert di una chiave, anche annidata, preserva i commenti), `core/loadJson5.js`, `core/json5UpdateQueue.js` (leggi-modifica-scrivi serializzato per file + scrittura atomica), `core/logger.js`, `core/escapeHtml.js`, `core/sessionSecurity.js`, `core/accessDeniedError.js`, `core/processSafetyNet.js`.
 
 ### Database
 

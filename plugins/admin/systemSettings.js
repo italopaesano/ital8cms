@@ -33,6 +33,7 @@
 const fs = require('fs');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
+const setJson5Key = require('../../core/setJson5Key');
 
 /**
  * Ritorna la configurazione di sistema completa
@@ -180,11 +181,80 @@ function validateSystemConfig(config) {
 }
 
 /**
+ * Elenca le FOGLIE che differiscono fra il config attuale e quello proposto.
+ *
+ * Confronta solo le chiavi presenti in `proposed`: una chiave che il form non
+ * nomina non compare nel risultato, quindi non viene toccata. È il cuore della
+ * correzione di B3 — la cancellazione per omissione diventa impossibile per
+ * costruzione, non per diligenza.
+ *
+ * Gli array sono trattati come VALORI (non si fondono): sostituirli per intero è
+ * il comportamento atteso quando un form li gestisce, e fonderli significherebbe
+ * indovinare la posizione.
+ *
+ * @param {object} current
+ * @param {object} proposed
+ * @param {string[]} [prefix]
+ * @returns {Array<{keyPath: string[], value: *}>}
+ */
+function diffLeaves(current, proposed, prefix = []) {
+    const out = [];
+
+    for (const [key, proposedValue] of Object.entries(proposed || {})) {
+        const keyPath = [...prefix, key];
+        const currentValue = current ? current[key] : undefined;
+
+        const entrambiOggetti = proposedValue && typeof proposedValue === 'object' && !Array.isArray(proposedValue)
+            && currentValue && typeof currentValue === 'object' && !Array.isArray(currentValue);
+
+        if (entrambiOggetti) {
+            out.push(...diffLeaves(currentValue, proposedValue, keyPath));
+            continue;
+        }
+
+        if (JSON.stringify(currentValue) !== JSON.stringify(proposedValue)) {
+            out.push({ keyPath, value: proposedValue });
+        }
+    }
+
+    return out;
+}
+
+/**
+ * Copia `ital8Config.json5` sotto `backups/` prima di modificarlo.
+ *
+ * Non usa `BackupManager`: quello nomina le proprie cartelle `init-<timestamp>`,
+ * cioè « esecuzione del wizard », e questa non lo è. Nota per chi mette ordine:
+ * sotto `backups/` convivono ora TRE schemi di nomi (`backup-*` degli snapshot a
+ * comando, `init-*` del wizard, e questo) — registrato in TODO.md.
+ *
+ * Fail-soft: se il backup non riesce, il salvataggio prosegue. La scrittura è
+ * chirurgica e di per sé non distruttiva; impedire una modifica perché non si è
+ * potuta copiare sarebbe peggio del rischio che evita.
+ *
+ * @param {string} configPath
+ * @returns {string|null} percorso del backup, o null se non è stato possibile
+ */
+function backupConfigBeforeWrite(configPath) {
+    try {
+        const dir = path.join(__dirname, '../../backups', 'systemSettings');
+        fs.mkdirSync(dir, { recursive: true });
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const dest = path.join(dir, `${stamp}-ital8Config.json5`);
+        fs.copyFileSync(configPath, dest);
+        return dest;
+    } catch (err) {
+        console.warn(`[systemSettings] backup non riuscito (si prosegue): ${err.message}`);
+        return null;
+    }
+}
+
+/**
  * Aggiorna la configurazione di sistema
  * @param {object} newConfig - Nuova configurazione
  * @returns {object} Risultato operazione
  */
-function updateSystemConfig(newConfig) {
+async function updateSystemConfig(newConfig) {
     try {
         // Validazione configurazione
         const validation = validateSystemConfig(newConfig);
@@ -210,19 +280,52 @@ function updateSystemConfig(newConfig) {
             warnings.push('Hai modificato adminActiveTheme. Considera di usare la sezione Gestione Temi.');
         }
 
-        // Salvataggio atomico
-        const tempPath = configPath + '.tmp';
+        // ── Scrittura CHIRURGICA, chiave per chiave (REVIEW.md → B3) ─────────
+        //
+        // Prima questa funzione faceva `JSON.stringify(newConfig)` con la sola
+        // riga d'intestazione, cioè RIMPIAZZAVA il file intero con l'oggetto
+        // arrivato dal form. Due conseguenze, entrambe misurate:
+        //
+        //  1. Tutti i commenti spariscono. Misurato su un'installazione reale:
+        //     `ital8Config.json5` ridotto da 214 righe di commento a ZERO. Quei
+        //     commenti sono metà del valore del file — spiegano cosa fa ogni
+        //     chiave a chi la rilegge sei mesi dopo.
+        //  2. Ogni chiave che il form NON conosce viene CANCELLATA. Il form
+        //     copre una ventina di chiavi; il file ne ha molte di più
+        //     (`securityHeaders`, `cli`, `migrations`, `globalFunctionsWhitelist`,
+        //     `maintenance`...). Il messaggio diceva « riavvia il server per
+        //     applicare le modifiche », e il riavvio era il momento in cui
+        //     l'installazione moriva.
+        //
+        // Ora si scrive SOLO ciò che è cambiato, foglia per foglia, con
+        // `setJson5Key`: i commenti restano e le chiavi che il form non nomina
+        // non vengono toccate — non per attenzione di chi scrive il form, ma
+        // perché la scrittura non le vede.
+        const changed = diffLeaves(currentConfig, newConfig);
 
-        // Mantieni il commento JSON5 nella prima riga
-        const configContent = '// This file follows the JSON5 standard - comments and trailing commas are supported\n' +
-                             JSON.stringify(newConfig, null, 2);
+        if (changed.length === 0) {
+            return {
+                success: true,
+                message: 'Nessuna modifica da salvare.',
+                warnings: warnings.length > 0 ? warnings : null,
+                needsRestart: false
+            };
+        }
 
-        fs.writeFileSync(tempPath, configContent, 'utf8');
-        fs.renameSync(tempPath, configPath);
+        // Copia di sicurezza prima di toccare il file: una porta sbagliata si
+        // recupera, un file perso no.
+        const backupPath = backupConfigBeforeWrite(configPath);
+
+        for (const { keyPath, value } of changed) {
+            await setJson5Key(configPath, keyPath, value);
+        }
 
         return {
             success: true,
-            message: 'Configurazione aggiornata con successo. Riavvia il server per applicare le modifiche.',
+            message: `Configurazione aggiornata con successo (${changed.length} `
+                + `${changed.length === 1 ? 'chiave' : 'chiavi'}). Riavvia il server per applicare le modifiche.`,
+            changedKeys: changed.map((c) => c.keyPath.join('.')),
+            backupPath,
             warnings: warnings.length > 0 ? warnings : null,
             needsRestart: true
         };
@@ -286,7 +389,7 @@ function getRoutes() {
                         return;
                     }
 
-                    const result = updateSystemConfig(config);
+                    const result = await updateSystemConfig(config);
 
                     if (result.success) {
                         ctx.body = result;
@@ -311,5 +414,8 @@ module.exports = {
     getSystemConfig,
     updateSystemConfig,
     validateSystemConfig,
-    getRoutes
+    getRoutes,
+    // Esportata per il presidio di REVIEW.md → B3: è la funzione che rende
+    // impossibile la cancellazione per omissione, e va verificabile da sola.
+    diffLeaves
 };
