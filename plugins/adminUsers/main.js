@@ -4,6 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
+const { updateJson5Serialized } = require('../../core/json5UpdateQueue');
 const escapeHtml = require('../../core/escapeHtml');
 
 const ital8Conf = loadJson5(path.join(__dirname, '../../ital8Config.json5'));// questo serve a caricare le impostazioni generali del modulo ed in particolare lìapi Prefix
@@ -513,6 +514,10 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
 
           let successMessages = [];
           let usernameChanged = false;
+          // Le modifiche vengono RIAPPLICATE sul dato fresco al momento della
+          // scrittura (vedi il blocco finale): queste variabili sono il delta.
+          let emailChanged = false;
+          let passwordHash = null;
 
           // Modifica username se fornito
           if (newUsername && newUsername !== currentUsername) {
@@ -565,6 +570,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
             }
 
             userAccount.users[targetUsername].email = newEmail;
+            emailChanged = true;
             successMessages.push('Email modificata con successo');
           }
 
@@ -583,12 +589,49 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
             const hashedPassword = await bcrypt.hash(newPassword, 10);
 
             userAccount.users[targetUsername].hashPassword = hashedPassword;
+            passwordHash = hashedPassword;
 
             successMessages.push('Password modificata con successo');
           }
 
-          // Salva le modifiche
-          fs.writeFileSync(userFilePath, JSON.stringify(userAccount, null, 2), 'utf8');
+          // ── Salvataggio: serializzato e su dato RILETTO (REVIEW.md → B1, B2) ──
+          //
+          // Prima era `fs.writeFileSync(..., JSON.stringify(userAccount))`, con
+          // DUE difetti. (B1) La scrittura non era atomica: `userAccount.json5`
+          // contiene tutti gli account con hash e ruoli, è git-ignored per scelta
+          // — quindi senza copia nel repo — e una scrittura troncata non è un
+          // disservizio, è la perdita dell'accesso al sistema. (B2) Fra la
+          // lettura (sopra) e questa riga c'è `await bcrypt.hash`, ~100 ms di
+          // lentezza VOLUTA, durante i quali Node esegue altre richieste: due
+          // salvataggi concorrenti si basavano sulla stessa copia e uno dei due
+          // spariva, con entrambi che leggevano « Modifica riuscita ».
+          //
+          // Ora il mutatore riceve il contenuto FRESCO dentro la coda del file e
+          // riapplica il delta: il rename, l'email e l'hash. Chi arriva secondo
+          // vede le modifiche del primo.
+          const esito = await updateJson5Serialized(userFilePath, (fresh) => {
+            const presente = fresh.users[usernameChanged ? currentUsername : targetUsername];
+            if (!presente) {
+              // L'utente è stato cancellato mentre questa richiesta era in volo.
+              // Riscriverlo lo RESUSCITEREBBE: meglio non scrivere e dirlo.
+              return null;
+            }
+
+            if (usernameChanged) {
+              fresh.users[targetUsername] = { ...fresh.users[currentUsername] };
+              delete fresh.users[currentUsername];
+            }
+            if (emailChanged) fresh.users[targetUsername].email = newEmail;
+            if (passwordHash) fresh.users[targetUsername].hashPassword = passwordHash;
+
+            return fresh;
+          });
+
+          if (!esito.written) {
+            ctx.status = 409;
+            ctx.body = { error: 'L\'utente non esiste più: la modifica non è stata salvata.' };
+            return;
+          }
 
           // Se username cambiato, invalidare la sessione per forzare il re-login
           if (usernameChanged) {

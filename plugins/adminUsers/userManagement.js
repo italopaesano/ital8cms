@@ -3,6 +3,7 @@ const path = require('path');
 const bcryptjs = require('bcryptjs');
 const { error } = require('console');
 const loadJson5 = require('../../core/loadJson5');
+const { updateJson5Serialized } = require('../../core/json5UpdateQueue');
 
 
 
@@ -80,12 +81,25 @@ async function userUsert(username, password, email, roleIds, isNewUser = true) {
         }
     }
 
-    // Aggiungi il nuovo utente con roleIds (array)
-    userAccount.users[username] = { hashPassword: hashedPassword, email, roleIds };
+    // ── Scrittura serializzata e atomica (REVIEW.md → B1) ────────────────────
+    //
+    // Prima era `fs.writeFileSync` diretto. `userAccount.json5` contiene TUTTI
+    // gli account con i loro hash e ruoli, ed è git-ignored per scelta: non
+    // esiste una copia nel repository da cui ripristinarlo. Una scrittura
+    // troncata non è un disservizio, è la perdita dell'accesso al sistema.
+    //
+    // Il mutatore riceve il contenuto FRESCO dentro la coda del file, quindi
+    // questa creazione non può più sovrascrivere una modifica arrivata durante
+    // l'`await bcrypt.hash` qui sopra (B2: lo stesso schema, altro handler).
+    // Nota: `userUsert` era « corretto per caso » — l'hash avveniva PRIMA della
+    // lettura, quindi lettura e scrittura erano contigue. Un equilibrio che
+    // dipendeva dall'ordine delle righe e che nessun commento segnalava.
+    await updateJson5Serialized(usersFilePath, (fresh) => {
+        if (!fresh.users) fresh.users = {};
+        fresh.users[username] = { hashPassword: hashedPassword, email, roleIds };
+        return fresh;
+    });
 
-    // Salva il file aggiornato
-    fs.writeFileSync(usersFilePath, JSON.stringify(userAccount, null, 2));
-    //console.log('userAccount:', userAccount);
     return { success: `Utente "${username}" creato con successo.` };
 }
 

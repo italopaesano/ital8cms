@@ -54,9 +54,9 @@ modifica al file citato.
 
 | # | Problema | Impatto | Stato |
 |---|---|---|---|
-| B1 | [Il file delle credenziali è scritto in modo non atomico](#b1--il-file-delle-credenziali-è-scritto-in-modo-non-atomico) | Perdita di tutti gli account | - [ ] |
-| B2 | [`updateUserProfile` — lost update fra richieste concorrenti](#b2--updateuserprofile--lost-update-fra-richieste-concorrenti) | Modifiche silenziosamente perse | - [ ] |
-| B3 | [Salvare da System Settings distrugge il config e può impedire il boot](#b3--salvare-da-system-settings-distrugge-il-config-e-può-impedire-il-boot) | Installazione non più avviabile | - [ ] |
+| B1 | [Il file delle credenziali è scritto in modo non atomico](#b1--il-file-delle-credenziali-è-scritto-in-modo-non-atomico) | Perdita di tutti gli account | - [x] |
+| B2 | [`updateUserProfile` — lost update fra richieste concorrenti](#b2--updateuserprofile--lost-update-fra-richieste-concorrenti) | Modifiche silenziosamente perse | - [x] |
+| B3 | [Salvare da System Settings distrugge il config e può impedire il boot](#b3--salvare-da-system-settings-distrugge-il-config-e-può-impedire-il-boot) | Installazione non più avviabile | - [x] |
 | B4 | [Oggetti indicizzati con input utente senza `hasOwnProperty`](#b4--oggetti-indicizzati-con-input-utente-senza-hasownproperty) | 500 non autenticato sul login | - [ ] |
 | B5 | [`isPathSafe` confronta il prefisso senza separatore](#b5--ispathsafe-confronta-il-prefisso-senza-separatore) | Scrittura di file fuori da `/www` | - [ ] |
 | B6 | [Il contratto `getObjectToShareToOthersPlugin` è documentato con tre parametri, il runtime ne passa uno](#b6--il-contratto-getobjecttosharetoothersplugin-è-documentato-con-tre-parametri-il-runtime-ne-passa-uno) | Trappola per chi scrive plugin | - [ ] |
@@ -1002,6 +1002,22 @@ che il `Location` non lo contenga.
 
 ## B1 · Il file delle credenziali è scritto in modo non atomico
 
+> ✅ **CORRETTO (2026-11-23), v3.45.0.** Le due scritture di `userAccount.json5`
+> passano ora da `core/json5UpdateQueue.js`, che legge-modifica-scrive dentro una
+> coda **per file** e scrive tramite `saveJson5` — già atomico (temp + rename).
+> Chiude B1 e B2 con lo stesso strato, come suggeriva questa scheda, e vale per
+> qualunque store futuro.
+>
+> **Il limite, dichiarato:** la coda vive in memoria, quindi copre un **solo
+> processo**. Con `pm2 -i max` N processi hanno N code che non si conoscono: è
+> **B7**, e si affronta là. Un lockfile andrebbe gestito su crash, timeout, lock
+> orfani e NFS — più superficie di quanta ne risolva per un CMS dichiaratamente
+> single-process.
+>
+> **Presidi:** 10 test in `tests/unit/core/json5UpdateQueue.test.js`, fra cui la
+> riproduzione della finestra di `await bcrypt.hash` e lo scenario misto
+> « cancellazione + modifica » dove l'utente cancellato **non** resuscita.
+
 **Severità:** 🟠 alta · **Sforzo:** minimo · **Regola del progetto violata:** `CLAUDE.md` §1
 
 ### Dove
@@ -1077,6 +1093,19 @@ efficace contro la regressione.
 
 ## B2 · `updateUserProfile` — lost update fra richieste concorrenti
 
+> ✅ **CORRETTO (2026-11-23), v3.45.0.** Stesso strato di B1: il mutatore riceve
+> il contenuto **riletto dentro la coda**, quindi chi arriva secondo vede le
+> modifiche del primo. In `updateUserProfile` le modifiche (rename, email, hash)
+> sono ora un **delta** riapplicato sul dato fresco, invece di una copia in
+> memoria riscritta per intero.
+>
+> **Due aggiunte oltre alla scheda.** Se, riletto il file, l'utente **non esiste
+> più** — cancellato mentre la richiesta era in volo — la scrittura non avviene e
+> l'handler risponde **409** invece di resuscitarlo. E `userUsert()`, che la
+> scheda nota essere « corretto per caso » perché l'hash avveniva prima della
+> lettura, ora lo è per costruzione: l'equilibrio non dipende più dall'ordine
+> delle righe.
+
 **Severità:** 🟠 media · **Sforzo:** basso
 
 ### Dove
@@ -1150,6 +1179,38 @@ correzioni puntuali.
 ---
 
 ## B3 · Salvare da System Settings distrugge il config e può impedire il boot
+
+> ✅ **CORRETTO (2026-11-23), v3.45.0.** `updateSystemConfig` scrive ora **foglia
+> per foglia** con `setJson5Key`, non più `JSON.stringify` dell'oggetto intero.
+>
+> **Il difetto era peggiore di « perde i commenti », e l'ho visto su
+> un'installazione reale:** `ital8Config.json5` ridotto da **214 righe di
+> commento a ZERO**. Ma la parte che rompeva il boot è l'altra: il form conosce
+> una ventina di chiavi, il file ne ha **35** — `securityHeaders`, `cli`,
+> `migrations`, `globalFunctionsWhitelist`, `maintenance`… — e tutte quelle che
+> il form non nominava venivano **cancellate**. Il messaggio diceva « riavvia il
+> server per applicare le modifiche », e il riavvio era il momento in cui
+> l'installazione moriva.
+>
+> **Ora la cancellazione per omissione è impossibile per costruzione:**
+> `diffLeaves` confronta solo le chiavi **presenti** nell'oggetto proposto, quindi
+> una chiave che il form non nomina non entra nemmeno nell'elenco delle
+> modifiche. Non per diligenza di chi scriverà il prossimo form — perché la
+> scrittura non la vede.
+>
+> Più: si scrive **solo ciò che è cambiato** (zero modifiche → zero scritture, e
+> la risposta lo dice), e una **copia di sicurezza** del config finisce sotto
+> `backups/systemSettings/` prima di toccarlo (fail-soft: se la copia non riesce,
+> il salvataggio prosegue — la scrittura chirurgica non è distruttiva).
+>
+> **Presidi:** 12 test in `tests/unit/admin/systemSettings.test.js`, condotti sul
+> `.default` **realmente spedito** — i commenti contati prima e dopo, le 35 chiavi
+> verificate una per una, e un presidio **strutturale** che pretende che
+> l'handler usi `setJson5Key` e non riscriva più il file intero.
+>
+> *Nota registrata in `TODO.md`:* sotto `backups/` convivono ora **tre** schemi di
+> nomi (`backup-*` degli snapshot a comando, `init-*` del wizard, e
+> `systemSettings/`), e nessuno dei tre pota gli altri.
 
 **Severità:** 🟠 alta · **Sforzo:** medio · **Decisione del progetto violata:** D1 (scrittura chirurgica)
 

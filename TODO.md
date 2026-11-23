@@ -826,6 +826,18 @@ Da affrontare in una review dedicata:
       (`readAcmeToken`, fonte unica per entrambi i rami); qui resta solo la questione
       dei due server.
 
+- [ ] **Sotto `backups/` convivono ORA TRE schemi di nomi, e nessuno pota gli
+      altri.** *(Il terzo è arrivato chiudendo B3, v3.45.0.)* `backup-*` sono gli
+      snapshot a comando (`npm run backup`, gli unici che `backup-list`,
+      `restore` e `backup-manager` vedono); `init-*` sono i backup automatici del
+      wizard di installazione, che quei comandi **non** vedono e che quindi non
+      vengono mai potati (già registrato in `docs/backup-strategie.it.md`); e ora
+      `systemSettings/` sono le copie che la GUI fa prima di modificare
+      `ital8Config.json5`.
+      Tre meccanismi, tre convenzioni, una sola cartella e nessuna politica di
+      ritenzione comune. Da unificare: un unico registro di cosa c'è sotto
+      `backups/`, con chi l'ha creato e una potatura che li conosca tutti.
+
 ## 7. Dipendenze
 
 Fonte: `docs/roadmap.it.md` punto 16 — aggiornamenti rinviati dal bulk del 2026-05-19.
