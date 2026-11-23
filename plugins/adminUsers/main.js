@@ -4,6 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
+const { isAuthenticated, sessionUser } = require('../../core/isAuthenticated');
 const { updateJson5Serialized } = require('../../core/json5UpdateQueue');
 const escapeHtml = require('../../core/escapeHtml');
 
@@ -133,7 +134,20 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
           }
         }
 
-        if( await libAccess.autenticate( username, password ) ){// login riuscito
+        // Un endpoint PUBBLICO non deve poter rispondere 500 per un input
+        // malformato (REVIEW.md → B4): `autenticate` non lancia più, ma il
+        // try/catch resta come regola generale — qui dentro si leggono file e si
+        // calcolano hash, e qualunque errore deve diventare un login fallito, non
+        // uno stack trace e un 500 che distingue gli input dagli altri.
+        let autenticato = false;
+        try {
+          autenticato = await libAccess.autenticate( username, password );
+        } catch (err) {
+          console.error(`[adminUsers] errore durante l'autenticazione: ${err.message}`);
+          autenticato = false;
+        }
+
+        if( autenticato ){// login riuscito
 
           // Login riuscito: azzera i contatori di rate limit per questo IP
           if (rl) rl.recordSuccessCtx(ctx, 'adminLogin');
@@ -141,7 +155,16 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
           // Carica dati completi utente da userAccount.json5
           const userAccountPath = path.join(__dirname, 'userAccount.json5');
           const usersData = loadJson5(userAccountPath);
-          const userData = usersData.users[username];
+          // Terzo punto che indicizza con input utente (REVIEW.md → B4). Qui
+          // l'autenticazione è già riuscita, quindi lo username esiste davvero —
+          // ma la forma sbagliata non va lasciata in giro come esempio.
+          const userData = Object.hasOwn(usersData.users || {}, username) ? usersData.users[username] : null;
+          if (!userData) {
+            console.error(`[adminUsers] autenticazione riuscita ma utente non trovato: ${username}`);
+            ctx.status = 500;
+            ctx.body = 'Internal Server Error';
+            return;
+          }
 
           ctx.session.authenticated = true;
           ctx.session.user = {
@@ -190,25 +213,35 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
         // appartiene alla superficie riservata (404 con `reserved stop`).
         isAuthEntryPoint: true
       },
-      handler: async (ctx) => { 
-        if (!ctx.session || !ctx.session.authenticated) {
+      handler: async (ctx) => {
+        // ── JSON minimo (REVIEW.md → C1) ─────────────────────────────────────
+        //
+        // Prima stampava `JSON.stringify(ctx.session)` — in ENTRAMBI i rami, non
+        // solo in quello autenticato come riportava la scheda. Non sono « i dati
+        // dell'utente »: è TUTTA la sessione, incluso il `csrfToken` che
+        // csrfProtection custodisce lì proprio perché non sia leggibile. È la
+        // sessione del chiamante, quindi non è una fuga fra utenti — ma è il
+        // proprio token CSRF messo in un corpo di risposta, da cui può finire nei
+        // log di un proxy o nella cronologia del browser.
+        //
+        // Che fosse un endpoint di DEBUG rimasto acceso lo diceva il codice
+        // stesso: `${ctx.session.user}` produceva la stringa `[object Object]`.
+        ctx.type = 'json';
 
-          ctx.body = `NON sei loggato : ${ JSON.stringify( ctx.session) }`;
-          ctx.type = 'text';
-
-        }else{
-
-          ctx.body = `complimenti sei loggato ${ctx.session.user} sessione: ${ JSON.stringify( ctx.session) }`;
-          ctx.type = 'text';
-
+        if (!isAuthenticated(ctx)) {
+          ctx.body = { authenticated: false };
+          return;
         }
-        //ctx.set('Content-Type', 'text/plain');
-       }
+
+        ctx.body = {
+          authenticated: true,
+          username: sessionUser(ctx).username,
+        };
+      }
     },
     // NOTA: La pagina GET /logout è ora servita automaticamente dal Plugin Pages System
     // URL: /pluginPages/adminUsers/logout.ejs
     // File sorgente: /plugins/adminUsers/webPages/logout.ejs
-
     { // POST /logout - Endpoint per logout (pubblico, ma tipicamente usato da utenti autenticati)
       method: 'POST',
       path: '/logout',

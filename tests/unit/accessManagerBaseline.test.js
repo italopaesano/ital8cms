@@ -63,6 +63,22 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
+/**
+ * Normalizza la sessione finta: se porta un `user`, porta anche
+ * `authenticated: true`.
+ *
+ * Dalla v3.46.0 « autenticato » ha UNA definizione
+ * (`core/isAuthenticated.js`) e pretende **entrambi** i campi: un
+ * `session.user` senza il flag è una sessione ANONIMA. È il punto di
+ * REVIEW.md → C5 — prima il route-wrap guardava il flag e il middleware delle
+ * pagine l'oggetto, due criteri per la stessa decisione — e questi fixture
+ * si appoggiavano alla definizione larga. Il login vero imposta i due campi
+ * insieme, quindi normalizzare qui riproduce la realtà invece di aggirarla.
+ */
+function sessioneAutenticata(session) {
+  return session && session.user ? { authenticated: true, ...session } : session;
+}
+
 describe('A1 — il pannello resta protetto con qualunque adminPrefix', () => {
   test.each(['admin', 'backoffice', 'pannello', 'a-b_c'])(
     'con adminPrefix=%p un anonimo NON entra, pur con le regole letterali `/admin`',
@@ -492,7 +508,7 @@ describe('regressioni dalla revisione della Fase 3', () => {
     }
 
     async function serve(am, path, session = {}) {
-      const ctx = { path, session, redirect() { this.redirected = true; } };
+      const ctx = { path, session: sessioneAutenticata(session), redirect() { this.redirected = true; } };
       let served = false;
       await am.createMiddleware()(ctx, async () => { served = true; });
       return { served, ctx };
@@ -659,7 +675,7 @@ describe('secondo giro di revisione', () => {
      * così questo catch non può nasconderne la sparizione.
      */
     function templateCheck(am, path, requirements, session = {}) {
-      const ctx = { path, session, redirect(to) { this.redirectedTo = to; } };
+      const ctx = { path, session: sessioneAutenticata(session), redirect(to) { this.redirectedTo = to; } };
       try {
         am.checkInTemplate(ctx, requirements);
       } catch (err) {

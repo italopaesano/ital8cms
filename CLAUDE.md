@@ -780,12 +780,19 @@ Protezione CSRF (difesa in profondità: token sincronizzatore per-sessione + con
 ### Controllo dell'autenticazione nel codice
 
 ```javascript
-// In route handler
-if (!ctx.session.authenticated) {
+// In route handler — usa il predicato CONDIVISO, non il campo grezzo
+const { isAuthenticated, sessionUser } = require('./core/isAuthenticated')
+
+if (!isAuthenticated(ctx)) {
   ctx.status = 401
   ctx.body = 'Unauthorized'
   return
 }
+
+// `sessionUser(ctx)` restituisce l'utente SOLO se la sessione è autenticata:
+// `ctx.session?.user || null` lo restituirebbe anche senza il flag, ed è la
+// divergenza che REVIEW.md → C5 ha chiuso (due punti del codice decidevano
+// « autenticato » con criteri diversi — uno il flag, l'altro l'oggetto).
 
 // Access user data
 const username = ctx.session.user.username
@@ -1608,7 +1615,7 @@ Spostato in [`docs/deployment.it.md`](./docs/deployment.it.md).
 
 ### File dei plugin
 
-Ogni plugin documenta i propri file nel rispettivo `README.it.md`/`EXPLAIN.it.md` (vedi i puntatori nelle sezioni dei plugin sopra). Utility core trasversali: `core/patternMatcher.js` (pattern matching condiviso — **le regex sono ancorate**, `^(?:corpo)$`: descrivono il path intero, per cercare « dovunque » servono i `.*` espliciti; i wildcard sono compilati in un passaggio unico, `**`→`.*` e `*`→`[^/]+`), `core/servingRootResolver.js` (isolamento path), `core/editJson5.js` (modifica chirurgica di chiavi JSON5 — update-only; da v3.33.0 sostituisce un oggetto/array **per chiave** invece di rifare il blocco, quindi i commenti delle chiavi che non cambiano **sopravvivono**, e ciò che non è preservabile è dichiarato in `droppedComments`), `core/setJson5Key.js` (upsert di una chiave, anche annidata, preserva i commenti), `core/loadJson5.js`, `core/json5UpdateQueue.js` (leggi-modifica-scrivi serializzato per file + scrittura atomica), `core/logger.js`, `core/escapeHtml.js`, `core/sessionSecurity.js`, `core/accessDeniedError.js`, `core/processSafetyNet.js`.
+Ogni plugin documenta i propri file nel rispettivo `README.it.md`/`EXPLAIN.it.md` (vedi i puntatori nelle sezioni dei plugin sopra). Utility core trasversali: `core/patternMatcher.js` (pattern matching condiviso — **le regex sono ancorate**, `^(?:corpo)$`: descrivono il path intero, per cercare « dovunque » servono i `.*` espliciti; i wildcard sono compilati in un passaggio unico, `**`→`.*` e `*`→`[^/]+`), `core/servingRootResolver.js` (isolamento path), `core/editJson5.js` (modifica chirurgica di chiavi JSON5 — update-only; da v3.33.0 sostituisce un oggetto/array **per chiave** invece di rifare il blocco, quindi i commenti delle chiavi che non cambiano **sopravvivono**, e ciò che non è preservabile è dichiarato in `droppedComments`), `core/setJson5Key.js` (upsert di una chiave, anche annidata, preserva i commenti), `core/loadJson5.js`, `core/isAuthenticated.js` (definizione unica di « autenticato »: pretende flag **e** oggetto utente), `core/json5UpdateQueue.js` (leggi-modifica-scrivi serializzato per file + scrittura atomica), `core/logger.js`, `core/escapeHtml.js`, `core/sessionSecurity.js`, `core/accessDeniedError.js`, `core/processSafetyNet.js`.
 
 ### Database
 

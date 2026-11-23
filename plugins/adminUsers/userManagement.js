@@ -38,6 +38,25 @@ async function userUsert(username, password, email, roleIds, isNewUser = true) {
     }
 
     // Controlla che lo username contenga solo caratteri ammessi negli indici dello standard JSON
+    // Denylist esplicita (REVIEW.md → B4). La regex qui sotto ACCETTA `__proto__`
+    // — sono solo lettere e underscore — e `Object.keys()` non lo elenca, quindi
+    // il controllo « esiste già? » passava. Poi `userAccount.users['__proto__'] =
+    // {...}` non crea una proprietà: SOSTITUISCE il prototipo dell'oggetto.
+    // `JSON.stringify` non serializza il prototipo, quindi il file veniva scritto
+    // senza il nuovo utente — e la funzione rispondeva « creato con successo ».
+    // Il sistema dichiarava di aver fatto una cosa che non aveva fatto.
+    //
+    // Sta PRIMA della regex perché l'errore deve arrivare presto e con un
+    // messaggio comprensibile, invece di un rifiuto più a valle per un'altra
+    // ragione.
+    const RESERVED_USERNAMES = ['__proto__', 'constructor', 'prototype'];
+    if (RESERVED_USERNAMES.includes(String(username))) {
+        return {
+            error: `Errore: "${username}" è un nome riservato del linguaggio e non può essere usato come username.`,
+            errorType: 'username'
+        };
+    }
+
     const validUsernameRegex = /^[A-Za-z0-9_\-]+$/;
     if (!validUsernameRegex.test(username)) {
         return { error: 'Errore: Lo username contiene caratteri non ammessi. Sono permessi solo lettere, numeri, underscore e trattini.', errorType: 'username' };
