@@ -156,6 +156,28 @@ if (require('./core/sessionSecurity').checkSessionKeys(ital8Conf) === 'fatal') {
   process.exit(1);
 }
 
+// ── GATE: UNA SOLA ISTANZA PER CARTELLA (REVIEW.md → B7) ────────────────────
+//
+// ital8cms archivia i dati su FILE e non ha lock fra processi: la coda di
+// `core/json5UpdateQueue.js` serializza, ma vive in memoria, quindi copre un
+// processo solo. Due istanze sulla stessa cartella si sovrascrivono le modifiche
+// a vicenda, in silenzio.
+//
+// I documenti raccomandano pm2, e `pm2 start index.js -i max` — che è il motivo
+// per cui si usa pm2 — avvia N processi sulle stesse cartelle. Una riga di
+// documentazione non ferma chi non la legge; questo gate sì, e dice cosa fare.
+//
+// Il lock è deliberatamente semplice (PID + radice del progetto): un PID morto è
+// un lock orfano e si prende il posto da sé, perché un crash non deve richiedere
+// un intervento manuale; una radice diversa significa file COPIATO, e succede
+// davvero — i test d'integrazione copiano l'intero progetto in una tmpdir.
+const singleProcessLock = require('./core/singleProcessLock');
+const lockEsito = singleProcessLock.acquireSingleProcessLock({ projectRoot: __dirname });
+if (!lockEsito.acquired) {
+  singleProcessLock.warnAlreadyRunning(lockEsito.heldBy, lockEsito.lockPath);
+  process.exit(1);
+}
+
 // Log discreto se la sezione admin è stata disabilitata via CLI (o a mano).
 if (!ital8Conf.enableAdmin) {
   console.log('[cliBridge] sezione admin disattivata (enableAdmin=false)');
@@ -717,6 +739,11 @@ function gracefulShutdown(signal, opts = {}) {
   // la rete di sicurezza (processSafetyNet) passa 1 (chiusura post errore fatale).
   const normalExitCode = typeof opts.exitCode === 'number' ? opts.exitCode : 0;
   console.log(`[Shutdown] ${signal} ricevuto, chiusura server in corso${respawn ? ' (con self-respawn)' : ''}...`);
+
+  // Il lock va rilasciato PRIMA di tutto il resto: se la chiusura si impianta su
+  // un server che non si chiude, il lock non deve restare a bloccare il riavvio
+  // successivo (REVIEW.md → B7). Lo si rilascia solo se è ancora nostro.
+  singleProcessLock.releaseSingleProcessLock({ projectRoot: __dirname });
 
   // Chiusura del CLI bridge in parallelo con i server HTTP/HTTPS (non blocca).
   cliBridge.stop().catch((err) => {

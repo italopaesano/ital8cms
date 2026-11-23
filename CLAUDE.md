@@ -178,7 +178,7 @@ Lavorando su questo codebase come AI assistant — regole operative (le più cri
 - **Framework:** Koa.js v3.2.1 (web framework basato su async/await)
 - **Routing:** @koa/router v15.7.0
 - **Middleware:** koa-bodyparser, koa-session, koa-classic-server v5.3.0
-- **Archiviazione dati:** file JSON (nessun database richiesto)
+- **Archiviazione dati:** file JSON (nessun database richiesto) — **una sola istanza per cartella**: nessun lock fra processi, e il boot lo rileva con `ital8cms.lock` (`REVIEW.md` → B7, [`docs/deployment.it.md`](./docs/deployment.it.md))
 - **Autenticazione:** bcryptjs v3.0.3 (hashing delle password)
 - **Template Engine:** EJS v6.0.1
 - **Utilità:** semver v7.8.5 (versioning delle dipendenze)
