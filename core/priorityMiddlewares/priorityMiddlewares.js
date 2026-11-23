@@ -64,6 +64,19 @@ function priorityMiddleware(app, ital8Conf, options = {}){
         console.log('[PriorityMiddleware] ✗ rejectNonCanonicalPaths gate SKIPPED (disabled in config)');
     }
 
+    // ========== HEADER DI SICUREZZA (REVIEW.md → A5) ==========
+    // Montato subito dopo il gate canonico e PRIMA di tutto il resto, così gli
+    // header accompagnano anche le risposte prodotte dai gate a valle (503 di
+    // manutenzione, 404 del reserved) e non solo quelle delle pagine.
+    //
+    // Limite dichiarato: NON copre le risposte generate da un'eccezione
+    // propagata, perché `ctx.onerror` di Koa rimuove tutti gli header prima di
+    // scrivere la sua risposta. È un limite del framework, non una scelta.
+    const { createSecurityHeaders } = require('./securityHeaders');
+    const securityHeaders = createSecurityHeaders({ ital8Conf });
+    app.use(securityHeaders.middleware);
+    console.log('[PriorityMiddleware] ✓ securityHeaders loaded (core, always active)');
+
     // ========== CORE MIDDLEWARE 1: BODY PARSER (sempre attivo) ==========
     const bodyParser = require('koa-bodyparser');
     app.use(bodyParser());
@@ -80,6 +93,28 @@ function priorityMiddleware(app, ital8Conf, options = {}){
         // Applica il globalPrefix al path dei cookie di sessione
         // Se globalPrefix è vuoto, usa "/" come default (root)
         koaSessionConfig.CONFIG.path = ital8Conf.globalPrefix || '/';
+
+        // `secure: "auto"` → booleano, deciso da https.enabled (REVIEW.md → A5).
+        //
+        // ⚠️ La traduzione non è zucchero sintattico: `koa-session` 7 valida le
+        // proprie opzioni con zod e `secure` DEVE essere un booleano. Misurato:
+        // passandogli la stringa "auto" il boot muore con uno ZodError
+        // (« Expected boolean, received string ») e il CMS non parte. La scheda A5
+        // proponeva proprio `"secure": "auto"` dicendo che koa-session lo
+        // supporta: era vero per versioni precedenti, non per questa.
+        //
+        // Il sentinella "auto" resta nel file di configurazione perché dice a chi
+        // legge cosa accade — il cookie è `secure` quando il sito è su HTTPS — e
+        // qui viene risolto una volta sola al montaggio.
+        //
+        // Conseguenza da conoscere, nello scenario « HTTPS e HTTP in parallelo »
+        // (https.enabled con AutoRedirect a false): il cookie di sessione viaggia
+        // solo sul lato HTTPS, quindi il login funziona solo là. È il
+        // comportamento voluto — un cookie di sessione non deve passare in chiaro
+        // — ma è un cambiamento rispetto a prima.
+        if (koaSessionConfig.CONFIG.secure === 'auto') {
+            koaSessionConfig.CONFIG.secure = ital8Conf.https?.enabled === true;
+        }
 
         app.use(koaSession(koaSessionConfig.CONFIG, app));
         console.log('[PriorityMiddleware] ✓ session loaded (optional, enabled in config)');

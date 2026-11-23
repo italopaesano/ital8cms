@@ -12,6 +12,7 @@
  */
 
 const PatternMatcher = require('../../../core/patternMatcher');
+const AccessDeniedError = require('../../../core/accessDeniedError');
 const loadJson5 = require('../../../core/loadJson5');
 const { canonicalizePath } = require('../../../core/pathCanonicalizer');
 const {
@@ -543,14 +544,19 @@ class AccessManager {
   }
 
   /**
-   * Helper per EJS: verifica accesso in template
-   * Usato da passData.accessControl.check() nei file EJS
+   * Valuta l'accesso per un template, SENZA effetti collaterali.
    *
-   * @param {object} ctx - Contesto Koa
-   * @param {object} requirements - { requiresAuth: boolean, allowedRoles: array }
-   * @returns {void} - Fa redirect se accesso negato
+   * Estratto da `checkInTemplate` perché ora serve a due chiamanti con esiti
+   * diversi: la guardia che redirige e lancia (`check`) e quella che restituisce
+   * un booleano (`canAccess`). Un solo posto che DECIDE, due modi di reagire —
+   * invece di due copie della stessa logica che possono divergere, che è la forma
+   * di difetto che questo progetto incontra più spesso.
+   *
+   * @param {object} ctx          - Contesto Koa
+   * @param {object} requirements - { requiresAuth, allowedRoles }
+   * @returns {{allowed: boolean, reason: string|null, redirectTo: string|null}}
    */
-  checkInTemplate(ctx, requirements) {
+  evaluateTemplateAccess(ctx, requirements) {
     const user = ctx.session?.user || null;
 
     // Il `baseline` della zona vale ANCHE qui. Dalla Fase 2 `checkAccess` lo
@@ -560,8 +566,8 @@ class AccessManager {
     // Oggi la divergenza non è sfruttabile — il middleware gira prima sulla stessa
     // richiesta, quindi un template viene reso solo se il middleware ha già
     // consentito, e questo controllo può solo aggiungere restrizioni. Resta una
-    // trappola: basterebbe usare `checkInTemplate` su un percorso che il middleware
-    // non copre perché applicasse una decisione priva del minimo di zona.
+    // trappola: basterebbe usare la guardia su un percorso che il middleware non
+    // copre perché applicasse una decisione priva del minimo di zona.
     const zone = zoneForPath(canonicalizePath(ctx.path || ''), this.pathZones.zones);
     const effective = tightenAccess(
       {
@@ -571,26 +577,58 @@ class AccessManager {
       zone ? zone.baseline : null
     );
 
-    // Verifica autenticazione (redirect prefissato col globalPrefix)
     if (effective.requiresAuth && !user) {
-      ctx.redirect((this.globalPrefix || '') + this.defaultPolicy.redirectOnDenied);
-      return;
+      return {
+        allowed: false,
+        reason: 'auth',
+        redirectTo: (this.globalPrefix || '') + this.defaultPolicy.redirectOnDenied,
+      };
     }
 
-    // Verifica ruoli
     if (effective.allowedRoles && effective.allowedRoles.length > 0) {
       // Gestisci sia roleIds (array) che roleId (singolo) per backward compatibility
       const userRoles = user?.roleIds ||
                         (user?.roleId !== undefined ? [user.roleId] : []);
-      const hasRequiredRole = userRoles.some(roleId => effective.allowedRoles.includes(roleId));
+      const hasRequiredRole = userRoles.some((roleId) => effective.allowedRoles.includes(roleId));
 
       if (!hasRequiredRole) {
-        ctx.redirect((this.globalPrefix || '') + '/pluginPages/adminAccessControl/access-denied.ejs');
-        return;
+        return {
+          allowed: false,
+          reason: 'role',
+          redirectTo: (this.globalPrefix || '') + '/pluginPages/adminAccessControl/access-denied.ejs',
+        };
       }
     }
 
-    // Accesso consentito (nessun redirect)
+    return { allowed: true, reason: null, redirectTo: null };
+  }
+
+  /**
+   * Guardia per i template: redirige E FERMA IL RENDERING se l'accesso è negato.
+   *
+   * ⚠️ Lancia `AccessDeniedError` di proposito (REVIEW.md → A6). Prima faceva
+   * `ctx.redirect(...)` e poi `return`, ma quel `return` esce dalla funzione e
+   * non dal template: l'EJS proseguiva e `index.js` assegnava `ctx.body`, quindi
+   * la risposta era un 302 **con la pagina protetta nel corpo**. Un browser
+   * segue il redirect e non mostra niente; `curl` senza `-L` legge tutto.
+   *
+   * Il redirect è impostato PRIMA del lancio: chi intercetta non deve fabbricare
+   * una risposta, deve solo non assegnare il corpo.
+   *
+   * @param {object} ctx          - Contesto Koa
+   * @param {object} requirements - { requiresAuth, allowedRoles }
+   * @throws {AccessDeniedError} se l'accesso è negato
+   */
+  checkInTemplate(ctx, requirements) {
+    const verdict = this.evaluateTemplateAccess(ctx, requirements);
+    if (verdict.allowed) return;
+
+    ctx.redirect(verdict.redirectTo);
+    throw new AccessDeniedError({
+      reason: verdict.reason,
+      redirectTo: verdict.redirectTo,
+      path: ctx.path,
+    });
   }
 
   /**
