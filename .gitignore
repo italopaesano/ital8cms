@@ -127,6 +127,11 @@ themes/*/node_modules/
 # CLI control plane unix socket (created at startup, removed on shutdown)
 *.sock
 
+# Lock di istanza singola (scritto al boot, rimosso alla chiusura ordinata).
+# Contiene il PID e la radice del progetto: vedi core/singleProcessLock.js e
+# REVIEW.md → B7.
+ital8cms.lock
+
 # CLI control plane runtime state (public running/stopped), written by cliBridge:
 # stato di runtime della singola istanza, non configurazione da versionare.
 /core/cliBridge/state.json5

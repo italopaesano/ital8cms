@@ -1,6 +1,53 @@
-<!-- ital8doc v1-1 · tipo: guide · lang: it · rev: 3 · ref -->
+<!-- ital8doc v1-1 · tipo: guide · lang: it · rev: 4 · ref -->
 > 🌐 Italian reference edition (always up to date). English `deployment.md` is a stub until release.
 # Deployment — ital8cms
+
+## ⚠️ Una sola istanza per cartella (single-process)
+
+**ital8cms va eseguito come UN processo per installazione.** Non è una
+raccomandazione di prudenza: è un vincolo dell'architettura, e dalla v3.49.0 il
+boot lo **rileva**.
+
+I dati stanno su **file** — account, ruoli, configurazioni, stato del rate
+limiter, contatori dei redirect — e non c'è alcun lock fra processi. La coda di
+`core/json5UpdateQueue.js` serializza il ciclo leggi-modifica-scrivi, ma vive
+**in memoria**: copre un processo solo. Due istanze sulla stessa cartella si
+sovrascrivono le modifiche a vicenda, **in silenzio**.
+
+```bash
+pm2 start index.js -i max      # ❌ NO: avvia N processi sulle stesse cartelle
+pm2 start index.js             # ✅ un processo solo
+```
+
+Il **cluster mode** di pm2 è esattamente il motivo per cui molti usano pm2, ed è
+la trappola: una riga di documentazione non ferma chi non la legge. Per questo al
+boot il secondo processo si ferma con un box `[LOCK]` che nomina il PID già
+attivo e dice come procedere, invece di partire e corrompere i dati.
+
+**Per servire più traffico:** un reverse proxy davanti a **una** istanza (il
+collo di bottiglia è quasi sempre il TLS o gli asset statici, non Node), oppure
+più installazioni con **cartelle dati separate**.
+
+**Il lock in pratica.** `ital8cms.lock` nella radice del progetto (git-ignored)
+contiene il PID e la radice. È deliberatamente semplice:
+
+| Situazione | Esito |
+|---|---|
+| nessun lock | si parte |
+| PID nel lock **non più vivo** (crash) | lock orfano → si parte, nessun intervento manuale |
+| lock con una **radice diversa** | file copiato (succede coi test) → si ignora |
+| PID **vivo** sulla stessa radice | box `[LOCK]` + uscita |
+
+Se un lock resta dopo un `kill -9`, il boot successivo lo riconosce come orfano
+da sé. Rimuoverlo a mano (`rm ital8cms.lock`) serve solo nel caso in cui il PID
+sia stato riusato da un processo diverso.
+
+> **La decisione architetturale resta aperta:** lo storage con lock fra processi
+> è lavoro grosso, e dichiarare « single-process per sempre » vincolerebbe il
+> futuro del progetto. Quello che non resta aperto è il **silenzio**
+> (`REVIEW.md` → B7).
+
+---
 
 ## Scopo
 

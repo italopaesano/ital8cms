@@ -36,6 +36,22 @@ class RateLimitEngine {
     this.onEvent = typeof options.onEvent === 'function' ? options.onEvent : () => {};
     this.now = typeof options.now === 'function' ? options.now : () => Date.now();
 
+    /**
+     * Tetto al numero di voci tracciate (REVIEW.md → C2, punto 2).
+     *
+     * Senza, `this.state` cresce di una voce per ogni combinazione
+     * (clientId, regola) con almeno un fallimento, e `sweep()` rimuove solo
+     * quelle già scadute: sotto un attacco distribuito la mappa cresce senza
+     * limite — e siccome lo stato è **persistito su disco**, cresce anche il
+     * file, che a ogni flush viene riscritto per intero.
+     *
+     * 10.000 voci sono un tetto generoso per un CMS single-process e stanno in
+     * pochi MB; chi ha bisogno di più lo configura.
+     */
+    this.maxEntries = Number.isInteger(options.maxEntries) && options.maxEntries > 0
+      ? options.maxEntries
+      : 10000;
+
     /** @type {Map<string, object>} key = `${clientId}|${ruleName}` */
     this.state = new Map();
 
@@ -60,6 +76,60 @@ class RateLimitEngine {
       blockedUntil: 0,
       tier: 'none', // 'none' | 'short' | 'long'
     };
+  }
+
+  /**
+   * Fa posto quando la mappa supera il tetto (REVIEW.md → C2).
+   *
+   * ─── L'ORDINE DI SACRIFICIO, E PERCHÉ QUESTO ─────────────────────────────
+   * Sfrattare una voce significa **dimenticare** chi ha fallito, quindi l'ordine
+   * non è un dettaglio di performance: è una decisione di sicurezza.
+   *
+   *  1. Le voci **senza blocco attivo**, dalla meno recente: dimenticare chi non
+   *     è bloccato costa solo il contatore dei suoi tentativi.
+   *  2. Solo se non ce ne sono — cioè se TUTTE le voci sono bloccate — si
+   *     sacrifica quella il cui blocco **scade prima**: è quella più vicina a
+   *     essere rilasciata comunque, quindi è il danno minore fra quelli
+   *     possibili.
+   *
+   * Non si rifiuta di inserire la voce nuova: significherebbe non tracciare
+   * l'attaccante che sta arrivando adesso, che è il peggiore dei due mali. Per
+   * lo stesso motivo la voce appena inserita è **esclusa** dallo sfratto: nasce
+   * con `lastFailureAt: 0` — l'incremento avviene dopo — quindi sembrerebbe la
+   * meno recente di tutte e verrebbe sacrificata subito. (Misurato: senza
+   * l'esclusione, con il tetto a 1 la voce nuova sparisce appena inserita.)
+   *
+   * @param {string} [proteggi] - chiave da non sfrattare (quella appena creata)
+   * @returns {number} quante voci sono state sfrattate
+   */
+  _enforceCap(proteggi) {
+    if (this.state.size <= this.maxEntries) return 0;
+
+    const now = this.now();
+    const daSfrattare = this.state.size - this.maxEntries;
+
+    const ordinate = [...this.state.entries()]
+      .filter(([key]) => key !== proteggi)
+      .sort((a, b) => {
+        const aBloccata = a[1].blockedUntil > now;
+        const bBloccata = b[1].blockedUntil > now;
+        if (aBloccata !== bBloccata) return aBloccata ? 1 : -1;   // le non bloccate prima
+        if (aBloccata) return a[1].blockedUntil - b[1].blockedUntil;  // scade prima → prima
+        return (a[1].lastFailureAt || 0) - (b[1].lastFailureAt || 0); // meno recente → prima
+      });
+
+    let sfrattate = 0;
+    for (const [key] of ordinate) {
+      if (sfrattate >= daSfrattare) break;
+      this.state.delete(key);
+      sfrattate += 1;
+    }
+
+    if (sfrattate > 0) {
+      this.dirty = true;
+      this.onEvent({ event: 'evict', count: sfrattate, size: this.state.size, at: now });
+    }
+    return sfrattate;
   }
 
   /**
@@ -136,6 +206,9 @@ class RateLimitEngine {
     if (!entry) {
       entry = this._newEntry(clientId, ruleName, now);
       this.state.set(key, entry);
+      // Il tetto si applica all'inserimento: è l'unico momento in cui la mappa
+      // cresce (REVIEW.md → C2).
+      this._enforceCap(key);
     }
 
     this._applyExpiry(entry, policy, now);
@@ -257,6 +330,9 @@ class RateLimitEngine {
     if (!entry) {
       entry = this._newEntry(clientId, ruleName, now);
       this.state.set(key, entry);
+      // Il tetto si applica all'inserimento: è l'unico momento in cui la mappa
+      // cresce (REVIEW.md → C2).
+      this._enforceCap(key);
     }
     entry.tier = tier;
     entry.blockedUntil = now + seconds * 1000;

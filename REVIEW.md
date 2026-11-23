@@ -60,14 +60,14 @@ modifica al file citato.
 | B4 | [Oggetti indicizzati con input utente senza `hasOwnProperty`](#b4--oggetti-indicizzati-con-input-utente-senza-hasownproperty) | 500 non autenticato sul login | - [x] |
 | B5 | [`isPathSafe` confronta il prefisso senza separatore](#b5--ispathsafe-confronta-il-prefisso-senza-separatore) | Scrittura di file fuori da `/www` | - [x] |
 | B6 | [Il contratto `getObjectToShareToOthersPlugin` è documentato con tre parametri, il runtime ne passa uno](#b6--il-contratto-getobjecttosharetoothersplugin-è-documentato-con-tre-parametri-il-runtime-ne-passa-uno) | Trappola per chi scrive plugin | - [x] |
-| B7 | [Storage a file senza lock — l'architettura non regge il multi-processo](#b7--storage-a-file-senza-lock--larchitettura-non-regge-il-multi-processo) | Corruzione dati con `pm2 -i` | - [ ] |
+| B7 | [Storage a file senza lock — l'architettura non regge il multi-processo](#b7--storage-a-file-senza-lock--larchitettura-non-regge-il-multi-processo) | Corruzione dati con `pm2 -i` | - [x] |
 
 ### 🟡 C — Altri punti sostanziali
 
 | # | Problema | Impatto | Stato |
 |---|---|---|---|
 | C1 | [`GET /logged` è pubblico e stampa l'intera sessione](#c1--get-logged-è-pubblico-e-stampa-lintera-sessione) | Fuga del token CSRF | - [x] |
-| C2 | [Rate limiting inefficace su IPv6, e senza tetto](#c2--rate-limiting-inefficace-su-ipv6-e-senza-tetto) | Brute-force non rallentato | - [ ] |
+| C2 | [Rate limiting inefficace su IPv6, e senza tetto](#c2--rate-limiting-inefficace-su-ipv6-e-senza-tetto) | Brute-force non rallentato | - [x] |
 | C3 | [Enumerazione utenti per timing sul login](#c3--enumerazione-utenti-per-timing-sul-login) | Scoperta degli username validi | - [x] |
 | C4 | [Policy password incoerente fra i due punti di scrittura](#c4--policy-password-incoerente-fra-i-due-punti-di-scrittura) | Password deboli sull'utente root | - [x] |
 | C5 | [Due definizioni diverse di « autenticato »](#c5--due-definizioni-diverse-di--autenticato) | Invariante non presidiata | - [x] |
@@ -1608,6 +1608,36 @@ asserisca che riceva tre argomenti definiti.
 
 ## B7 · Storage a file senza lock — l'architettura non regge il multi-processo
 
+> ✅ **CORRETTO (2026-11-23), v3.49.0 — strada breve: dichiararlo E RILEVARLO.**
+> Lo storage con lock fra processi resta lavoro grosso, e la scelta
+> « single-process per sempre » vincolerebbe il futuro del progetto: **la
+> decisione architetturale resta aperta**. Quello che non resta aperto è il
+> **silenzio**.
+>
+> `core/singleProcessLock.js` scrive `ital8cms.lock` (PID + radice del progetto)
+> al boot e lo rilascia alla chiusura ordinata. Un secondo processo sulla stessa
+> cartella si ferma con un box `[LOCK]` che nomina il PID attivo, mostra
+> `pm2 start index.js -i max` come **il comando da non usare**, e dice come
+> procedere. **Verificato su istanze vere:** la prima parte, la seconda stampa il
+> box ed esce; il lock viene rilasciato alla chiusura.
+>
+> **Il lock è deliberatamente semplice, e i due casi che lo rendono usabile
+> sono:** un PID **non più vivo** è un lock orfano e si prende il posto da sé —
+> un crash non deve richiedere un intervento manuale, altrimenti il rimedio
+> diventa peggio del male; una **radice diversa** significa file **copiato**, e
+> succede davvero, perché i test d'integrazione copiano l'intero progetto in una
+> tmpdir e un lock copiato con un PID vivo bloccherebbe ogni fixture con un
+> errore incomprensibile.
+>
+> Se il lock non si può **scrivere** (filesystem di sola lettura) il boot
+> prosegue con un avviso: rifiutare l'avvio per questo sarebbe peggio del rischio
+> che evita, e il gate delle data dir scrivibili copre già i casi che contano.
+>
+> **Presidi:** 15 test in `tests/unit/core/singleProcessLock.test.js`, fra cui il
+> lock orfano, quello copiato, quello illeggibile, il rifiuto a rilasciare il
+> lock di qualcun altro, e due **strutturali** sul montaggio in `index.js`.
+> Documentato in [`docs/deployment.it.md`](./docs/deployment.it.md).
+
 **Severità:** 🟠 alta (architetturale) · **Sforzo:** alto · **Natura:** decisione da prendere, non solo un bug
 
 ### Dove
@@ -1733,6 +1763,41 @@ oppure rimuovere la rotta. Se serve per i test, spostarla dietro `debugMode`.
 ---
 
 ## C2 · Rate limiting inefficace su IPv6, e senza tetto
+
+> ✅ **CORRETTO (2026-11-23), v3.49.0.** Entrambi i punti.
+>
+> **(1) Gli IPv6 sono normalizzati alla /64** in `resolveClientId`, sia sul ramo
+> della socket sia su quello di `X-Forwarded-For`. Misurato: quattro indirizzi
+> della stessa /64 — che prima partivano da quattro contatori a zero —
+> condividono ora una chiave, e la stessa rete scritta in forme diverse
+> (compressa, con zeri non significativi, in maiuscolo) dà sempre la stessa.
+>
+> **Tre casi limite gestiti, e il secondo conta più degli altri:** un **IPv4** resta
+> intero (l'indirizzo *è* la chiave giusta); un **IPv4-mapped** (`::ffff:1.2.3.4`)
+> è trattato come IPv4 — troncarlo alla /64 metterebbe **tutti** gli IPv4 mappati
+> del mondo nello stesso contatore, cioè trasformerebbe la difesa in un blocco
+> globale; lo **zone id** (`%eth0`) è un dettaglio dell'host e viene scartato.
+>
+> **Il prezzo, dichiarato:** utenti legittimi *diversi* dietro la stessa /64
+> condividono il contatore. In una rete domestica è lo stesso abbonato; in uno
+> studio o in un campus possono essere persone diverse. È il compromesso che
+> rende la difesa efficace su IPv6.
+>
+> **(2) Tetto di 10.000 voci con sfratto**, applicato all'inserimento — l'unico
+> momento in cui la mappa cresce. **L'ordine di sacrificio è una decisione di
+> sicurezza, non di performance:** prima le voci **senza blocco attivo** dalla
+> meno recente; solo se tutte sono bloccate, quella il cui blocco **scade prima**
+> (la più vicina a essere rilasciata comunque). Sfrattare un blocco attivo
+> significherebbe **rilasciare un attaccante**. Lo sfratto emette un evento di
+> audit: non è una perdita silenziosa.
+>
+> **🐞 E un difetto colto dal presidio:** la voce appena inserita nasce con
+> `lastFailureAt: 0` — l'incremento avviene dopo — quindi sembrava la meno
+> recente di tutte e veniva **sfrattata subito**. Con il tetto a 1 la voce nuova
+> spariva appena creata. Ora è esclusa dallo sfratto: non tracciare chi sta
+> arrivando è il peggiore dei mali possibili.
+>
+> **Presidi:** 18 test in `plugins/rateLimiter/tests/unit/ipv6AndCap.test.js`.
 
 **Dove:** `plugins/rateLimiter/lib/keyResolver.js:22`, `plugins/rateLimiter/lib/rateLimitEngine.js:40`
 
