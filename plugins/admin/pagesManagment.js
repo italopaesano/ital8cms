@@ -119,6 +119,7 @@
  */
 
 const fs = require('fs');
+const { isInsideRoot } = require('../../core/resolveInsideRoot');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
 
@@ -237,14 +238,19 @@ function scanDirectory(dirPath, basePath) {
  */
 function isPathSafe(filePath) {
     // Ottieni il path www corrente (dinamico in base al tema)
-    const wwwPath = getWwwPath();
-
-    // Risolvi path assoluto
-    const absolutePath = path.join(wwwPath, filePath);
-    const normalizedPath = path.normalize(absolutePath);
-
-    // Verifica che il path normalizzato sia dentro wwwPath
-    return normalizedPath.startsWith(wwwPath);
+    // ── Controllo CONDIVISO (REVIEW.md → B5) ─────────────────────────────────
+    //
+    // Prima era `path.normalize(path.join(wwwPath, filePath)).startsWith(wwwPath)`.
+    // `startsWith` su un percorso SENZA il separatore finale confronta stringhe,
+    // non directory: `/…/wwwBackup/x.ejs` « inizia con » `/…/www` pur essendo
+    // un'altra cartella — e `path.normalize` non aveva nulla da risolvere, perché
+    // `path.join` aveva già consumato il `..`. La guardia approvava.
+    //
+    // La versione corretta esisteva già nel progetto, in
+    // `adminMedia/lib/mediaManager.js`, a due file di distanza da questa: una
+    // copia giusta e una sbagliata sono il modo in cui una correzione ne
+    // raggiunge una sola. Ora è una sola, in `core/`.
+    return isInsideRoot(getWwwPath(), filePath);
 }
 
 /**

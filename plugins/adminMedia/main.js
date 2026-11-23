@@ -69,6 +69,9 @@ function optimizationUnavailableReason() {
  */
 async function runGeneration(relPath, onlyMissing) {
   const absPath = mediaManager.resolveAbsPath(mediaDirAbsolute, relPath || '');
+  // `null` = tentativo di uscire dalla radice media: si rifiuta invece di
+  // dirottare l'operazione sulla radice (REVIEW.md → B5).
+  if (!absPath) return { ok: false, status: 400, error: 'Invalid path' };
   if (!fs.existsSync(absPath)) return { ok: false, status: 404, error: 'Path not found' };
 
   if (fs.statSync(absPath).isDirectory()) {
@@ -185,6 +188,12 @@ module.exports = {
 
             const sanitized = filenameSanitizer.sanitize(tmpFile.originalname);
             const targetDir = mediaManager.resolveAbsPath(mediaDirAbsolute, targetRelPath);
+            if (!targetDir) {
+              // Prima l'upload veniva dirottato sulla radice media (REVIEW.md → B5).
+              fs.unlink(tmpFile.path, () => {});
+              warnings.push({ file: tmpFile.originalname, reason: 'Invalid target path' });
+              continue;
+            }
             const finalName = filenameSanitizer.resolveCollision(targetDir, sanitized);
 
             if (!finalName) {

@@ -58,7 +58,7 @@ modifica al file citato.
 | B2 | [`updateUserProfile` — lost update fra richieste concorrenti](#b2--updateuserprofile--lost-update-fra-richieste-concorrenti) | Modifiche silenziosamente perse | - [x] |
 | B3 | [Salvare da System Settings distrugge il config e può impedire il boot](#b3--salvare-da-system-settings-distrugge-il-config-e-può-impedire-il-boot) | Installazione non più avviabile | - [x] |
 | B4 | [Oggetti indicizzati con input utente senza `hasOwnProperty`](#b4--oggetti-indicizzati-con-input-utente-senza-hasownproperty) | 500 non autenticato sul login | - [x] |
-| B5 | [`isPathSafe` confronta il prefisso senza separatore](#b5--ispathsafe-confronta-il-prefisso-senza-separatore) | Scrittura di file fuori da `/www` | - [ ] |
+| B5 | [`isPathSafe` confronta il prefisso senza separatore](#b5--ispathsafe-confronta-il-prefisso-senza-separatore) | Scrittura di file fuori da `/www` | - [x] |
 | B6 | [Il contratto `getObjectToShareToOthersPlugin` è documentato con tre parametri, il runtime ne passa uno](#b6--il-contratto-getobjecttosharetoothersplugin-è-documentato-con-tre-parametri-il-runtime-ne-passa-uno) | Trappola per chi scrive plugin | - [ ] |
 | B7 | [Storage a file senza lock — l'architettura non regge il multi-processo](#b7--storage-a-file-senza-lock--larchitettura-non-regge-il-multi-processo) | Corruzione dati con `pm2 -i` | - [ ] |
 
@@ -71,7 +71,7 @@ modifica al file citato.
 | C3 | [Enumerazione utenti per timing sul login](#c3--enumerazione-utenti-per-timing-sul-login) | Scoperta degli username validi | - [x] |
 | C4 | [Policy password incoerente fra i due punti di scrittura](#c4--policy-password-incoerente-fra-i-due-punti-di-scrittura) | Password deboli sull'utente root | - [ ] |
 | C5 | [Due definizioni diverse di « autenticato »](#c5--due-definizioni-diverse-di--autenticato) | Invariante non presidiata | - [x] |
-| C6 | [`cliBridge`: `chmod` dopo `listen`, e fallimento non fatale](#c6--clibridge-chmod-dopo-listen-e-fallimento-non-fatale) | Canale di controllo con permessi ignoti | - [ ] |
+| C6 | [`cliBridge`: `chmod` dopo `listen`, e fallimento non fatale](#c6--clibridge-chmod-dopo-listen-e-fallimento-non-fatale) | Canale di controllo con permessi ignoti | - [x] |
 | C7 | [Il ruolo `admin` (1) equivale a esecuzione di codice remoto](#c7--il-ruolo-admin-1-equivale-a-esecuzione-di-codice-remoto) | RBAC documentato in modo fuorviante | - [ ] |
 
 ### ✅ D — [Cosa è stato verificato e risulta solido](#d--cosa-è-stato-verificato-e-risulta-solido)
@@ -1429,6 +1429,36 @@ Lettura del codice, applicando la semantica standard di JavaScript:
 
 ## B5 · `isPathSafe` confronta il prefisso senza separatore
 
+> ✅ **CORRETTO (2026-11-23), v3.47.0.** Il controllo vive ora in
+> `core/resolveInsideRoot.js` e lo usano **entrambi** i punti. La versione
+> corretta esisteva già nel progetto — in `adminMedia/lib/mediaManager.js`, **a
+> due file di distanza** da quella sbagliata: una copia giusta e una sbagliata
+> sono il modo in cui una correzione ne raggiunge una sola.
+>
+> **Misurato, non descritto:** un test esegue la forma vecchia e pretende che
+> approvi `../wwwBackup/x.ejs`, poi pretende che quella nuova lo rifiuti. Il
+> difetto è così scritto nel presidio, non solo nel commento.
+>
+> **Sistemato anche il fallback silenzioso** della nota finale della scheda:
+> `resolveAbsPath` faceva `safeResolve(...) || mediaRoot`, cioè **dirottava**
+> l'operazione sulla radice invece di rifiutarla — un upload verso `../../etc`
+> finiva nella cartella media. Ora restituisce `null` e i due chiamanti
+> rispondono `400`/scartano il file. Un test preesistente asseriva il dirottamento
+> (*« falls back to mediaRoot »*): sostituito, con la spiegazione di perché il
+> comportamento è cambiato.
+>
+> **Due cambiamenti di comportamento da conoscere.** (a) La versione di
+> `mediaManager` **toglieva** i `..` iniziali prima di risolvere, quindi
+> `../fuori/x` diventava `fuori/x`: sicuro, ma una riscrittura **silenziosa** —
+> chi chiedeva un percorso fuori riceveva un percorso dentro, diverso da quello
+> chiesto. Ora è un rifiuto. (b) Un percorso **assoluto** fuori dalla radice è
+> rifiutato: `path.join(root, '/etc/passwd')` dava `root/etc/passwd` (dentro),
+> `path.resolve` dà `/etc/passwd` (fuori).
+>
+> **Presidi:** 18 test in `tests/unit/core/resolveInsideRoot.test.js`, fra cui
+> tre **strutturali** che pretendono che entrambi i punti deleghino e che la forma
+> sbagliata non compaia più nel codice.
+
 **Severità:** 🟠 media (admin-only) · **Sforzo:** minimo
 
 ### Dove
@@ -1833,6 +1863,30 @@ usata da entrambi. Rende l'invariante esplicita e la mette in un solo posto.
 ---
 
 ## C6 · `cliBridge`: `chmod` dopo `listen`, e fallimento non fatale
+
+> ✅ **CORRETTO (2026-11-23), v3.47.0.** Il socket **nasce** già con i permessi
+> giusti, e se non si possono garantire il canale **non si apre**.
+>
+> **La finestra è chiusa, non accorciata.** Il `chmod` stava dentro la callback di
+> `listen`, cioè dopo che il socket esisteva. Ora la `umask` del processo è
+> impostata attorno al bind — l'unico modo di influenzare il modo di *creazione*
+> di un socket UNIX da Node, che non accetta un'opzione di modo su `listen` — e
+> viene ripristinata appena il socket esiste, perché è globale al processo.
+> **Misurato:** il socket risulta `600` alla nascita, senza che il `chmod` sia
+> intervenuto. Il `chmod` resta come cintura, per i filesystem dove la umask non
+> avesse effetto.
+>
+> **E il fallimento è fatale.** Prima era un `console.warn` e il canale restava
+> aperto con permessi **ignoti**. Ora: socket chiuso, file rimosso, nessun canale
+> — chi usa la CLI riceve un errore di connessione, non un canale di cui non sa
+> chi ascolta. Lo stesso trattamento vale se il `chmod` **non lancia** ma il modo
+> misurato non è quello chiesto: la garanzia che conta è quella verificata.
+>
+> **Presidi:** 5 test in `tests/unit/cliBridge/socketPermissions.test.js`. Il modo
+> è **misurato sul file** per `0600` e `0660`; uno verifica che la `umask` del
+> processo venga ripristinata (lasciarla stretta cambierebbe il modo di ogni file
+> creato dopo, in tutta l'applicazione); due simulano il fallimento e pretendono
+> che il canale non si apra e che il socket non resti in giro.
 
 **Dove:** `core/cliBridge/server.js:173`
 
