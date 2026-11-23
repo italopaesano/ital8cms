@@ -14,6 +14,7 @@
 
 const fs   = require('fs');
 const path = require('path');
+const { resolveInsideRoot } = require('../../../core/resolveInsideRoot');
 
 // ── Private helpers ──────────────────────────────────────────────────────────
 
@@ -26,16 +27,16 @@ const path = require('path');
  * @returns {string|null}      - Resolved absolute path, or null if traversal detected
  */
 function safeResolve(mediaRoot, relPath) {
-  // Normalize: remove leading slashes, collapse '..' and '.'
-  const normalizedRel = path.normalize(relPath || '').replace(/^(\.\.(\/|\\|$))+/, '');
-  const resolved = path.resolve(mediaRoot, normalizedRel);
-
-  // Ensure the resolved path starts with the media root
-  const rootWithSep = mediaRoot.endsWith(path.sep) ? mediaRoot : mediaRoot + path.sep;
-  if (resolved !== mediaRoot && !resolved.startsWith(rootWithSep)) {
-    return null; // Path traversal attempt
-  }
-  return resolved;
+  // Delega a `core/resolveInsideRoot` (REVIEW.md → B5): questa era la versione
+  // CORRETTA del controllo, e viveva a due file da quella sbagliata di
+  // `plugins/admin/pagesManagment.js`. Ora ce n'è una sola, nel core.
+  //
+  // ⚠️ Cambiamento di comportamento: la versione precedente TOGLIEVA i `..`
+  // iniziali prima di risolvere, quindi `../fuori/x` diventava `fuori/x` —
+  // dentro la radice. Era sicuro ma era una riscrittura silenziosa: chi chiedeva
+  // un percorso fuori riceveva un percorso dentro, diverso da quello chiesto.
+  // Ora un tentativo di uscita restituisce `null`, e chi chiama decide.
+  return resolveInsideRoot(mediaRoot, relPath);
 }
 
 /**
@@ -122,7 +123,14 @@ function relocateVariantFolder(oldAbsFile, newAbsFile, variantResolver) {
  * @returns {string|null}
  */
 function resolveAbsPath(mediaRoot, relPath) {
-  return safeResolve(mediaRoot, relPath) || mediaRoot;
+  // ⚠️ Restituisce `null` su tentativo di uscita, NON la radice (REVIEW.md → B5,
+  // nota finale della scheda). Prima era `safeResolve(...) || mediaRoot`: un
+  // upload verso `../../etc` finiva nella cartella media invece di ricevere un
+  // errore. Non era una vulnerabilità — l'operazione restava dentro — ma era un
+  // fallimento silenzioso in un punto in cui il rifiuto esplicito è l'unica
+  // risposta leggibile, e tutte le altre funzioni di questo file un errore lo
+  // restituiscono (righe 175/220/260 nella numerazione della revisione).
+  return safeResolve(mediaRoot, relPath);
 }
 
 /**

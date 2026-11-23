@@ -170,14 +170,62 @@ async function start(ital8Conf, options = {}) {
       warnBindFailure(socketPath, err);
       resolve(null);
     });
+
+    // ── I PERMESSI PRIMA DELL'ESPOSIZIONE (REVIEW.md → C6) ───────────────────
+    //
+    // Prima il `chmod` stava DENTRO la callback di `listen`, cioè dopo che il
+    // socket esisteva: fra la sua creazione e la chiusura dei permessi c'era una
+    // finestra in cui il canale di controllo era raggiungibile con i permessi di
+    // default (0777 & ~umask). E un `chmod` fallito era solo un warning: il
+    // canale restava aperto con permessi IGNOTI.
+    //
+    // Il socket nasce ora già con il modo giusto, impostando la `umask` attorno
+    // al bind — è il solo modo di influenzare il modo di CREAZIONE di un socket
+    // UNIX da Node, che non accetta un'opzione di modo su `listen`. Il `chmod`
+    // resta come cintura: se la umask non ha avuto effetto (filesystem esotici,
+    // mount con opzioni particolari) il modo viene corretto comunque.
+    //
+    // E se nemmeno il chmod riesce, il canale NON si apre: un canale di
+    // controllo con permessi ignoti è peggio di un canale assente. Chi usa la
+    // CLI riceve un errore di connessione, non un canale che non sa chi ascolta.
+    const umaskPerModo = 0o777 & ~socketMode;
+    const umaskPrecedente = process.umask(umaskPerModo);
+
     server.listen(socketPath, () => {
+      // Ripristinata appena il socket esiste: la umask è globale al processo e
+      // non deve restare alterata per il resto della vita dell'applicazione.
+      try { process.umask(umaskPrecedente); } catch (_) { /* non fatale */ }
+
+      let modoEffettivo = null;
       try {
         fs.chmodSync(socketPath, socketMode);
+        modoEffettivo = fs.statSync(socketPath).mode & 0o777;
       } catch (err) {
-        console.warn(
-          `[cliBridge] impossibile applicare chmod ${socketMode.toString(8)} su ${socketPath}: ${err.message}`
+        // Fail-closed: si chiude il socket e si rinuncia al canale.
+        console.error(
+          `[cliBridge] impossibile garantire i permessi ${socketMode.toString(8)} su ${socketPath}: `
+          + `${err.message} — canale di controllo NON aperto (un canale con permessi ignoti è `
+          + 'peggio di un canale assente).'
         );
+        try { server.close(); } catch (_) { /* già chiuso */ }
+        try { fs.unlinkSync(socketPath); } catch (_) { /* potrebbe non esistere */ }
+        resolve(null);
+        return;
       }
+
+      if (modoEffettivo !== socketMode) {
+        // Il chmod non ha lanciato ma il modo non è quello chiesto: stesso
+        // trattamento, perché la garanzia che conta è quella misurata.
+        console.error(
+          `[cliBridge] i permessi su ${socketPath} risultano ${modoEffettivo.toString(8)} `
+          + `invece di ${socketMode.toString(8)} — canale di controllo NON aperto.`
+        );
+        try { server.close(); } catch (_) { /* già chiuso */ }
+        try { fs.unlinkSync(socketPath); } catch (_) { /* potrebbe non esistere */ }
+        resolve(null);
+        return;
+      }
+
       console.log(`[cliBridge] in ascolto su ${socketPath} (mode ${socketMode.toString(8)})`);
       resolve({ server, socketPath });
     });

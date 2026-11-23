@@ -56,10 +56,25 @@ describe('resolveAbsPath()', () => {
     expect(result).toBe(path.join(root, 'sub'));
   });
 
-  test('falls back to mediaRoot when absolute path escapes root', () => {
-    // Absolute paths outside root make safeResolve return null → falls back to mediaRoot
-    const result = resolveAbsPath(root, '/etc/passwd');
-    expect(result).toBe(root);
+  // ⚠️ Comportamento CAMBIATO nella v3.47.0 (REVIEW.md → B5, nota finale della
+  // scheda). Prima era `safeResolve(...) || mediaRoot`: un tentativo di uscire
+  // dalla radice veniva DIROTTATO sulla radice, quindi un upload verso
+  // `../../etc` finiva nella cartella media invece di ricevere un errore. Non
+  // era una vulnerabilità — l'operazione restava dentro — ma era un fallimento
+  // silenzioso in un punto dove il rifiuto esplicito è l'unica risposta
+  // leggibile, e tutte le altre funzioni dello stesso file un errore lo
+  // restituiscono. Ora restituisce `null` e chi chiama rifiuta.
+  test.each([
+    ['/etc/passwd', 'percorso assoluto fuori dalla radice'],
+    ['../fuori/x', 'risalita'],
+    ['../../etc/passwd', 'risalita doppia'],
+  ])('rifiuta con null: %s (%s)', (relPath) => {
+    expect(resolveAbsPath(root, relPath)).toBeNull();
+  });
+
+  test('la radice stessa resta valida', () => {
+    expect(resolveAbsPath(root, '')).toBe(root);
+    expect(resolveAbsPath(root, '.')).toBe(root);
   });
 });
 
