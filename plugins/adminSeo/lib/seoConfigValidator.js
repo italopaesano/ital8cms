@@ -203,6 +203,10 @@ function validateGlobalSettings(custom) {
  * @param {object} pages - The parsed seoPages object
  * @returns {{ valid: boolean, errors: string[], warnings: string[] }}
  */
+// Chiavi di primo livello che NON sono pattern: le scrive il ciclo di vita dei
+// config, non l'amministratore, e vanno saltate dalla validazione delle regole.
+const METADATA_KEYS = ['schemaVersion'];
+
 function validatePageRules(pages) {
   const errors = [];
   const warnings = [];
@@ -213,6 +217,20 @@ function validatePageRules(pages) {
   }
 
   for (const [pattern, rule] of Object.entries(pages)) {
+    // `schemaVersion` is METADATA, not a rule: it is the structure version of the
+    // file, written by the config lifecycle, and it sits at the same level as the
+    // patterns. Treating it as a pattern made the editor unable to save the very
+    // file it had just loaded: readPageRules() hands the GUI the whole raw text,
+    // the GUI posts it back, and the validator answered
+    //   "schemaVersion": rule must be an object
+    // so every save was a 400. Same defect class as the System Settings validator
+    // (REVIEW.md -> B3, v3.51.0): the two halves of one section disagreeing about
+    // the shape of the file they share. Presidio: the round-trip test in
+    // plugins/adminSeo/tests/unit/pageRulesRoundTrip.test.js
+    if (METADATA_KEYS.includes(pattern)) {
+      continue;
+    }
+
     // Validate pattern
     const patternValidation = matcher.validatePattern(pattern);
     if (!patternValidation.valid) {

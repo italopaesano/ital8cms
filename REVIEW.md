@@ -1269,6 +1269,28 @@ correzioni puntuali.
 > accetta; e ogni campo che il validatore reclama deve **esistere** nel config
 > spedito — lista ricavata interrogando il validatore stesso, così il test non la
 > duplica. Reintrodotto il difetto, cadono 4 test.
+>
+> **E non era solo. Cercando la stessa CLASSE di difetto nelle altre otto GUI
+> admin, una seconda era rotta allo stesso modo:** `adminSeo` / pageRules.
+> `schemaVersion` sta al primo livello di `seoPages.json5`, accanto ai pattern, e
+> `validatePageRules` lo trattava come un pattern — « `"schemaVersion"`: rule must
+> be an object », cioè **400 a ogni salvataggio**. `readPageRules()` consegna alla
+> GUI il testo **intero** del file, la GUI lo rimanda, e il validatore lo
+> rifiutava. Corretto saltando le chiavi di metadato.
+>
+> Le altre sei passano il giro, e una merita di essere nominata perché spiega il
+> **perché** le due rotte erano rotte: `adminAccessControl` valida il file reale
+> **a ogni boot**, quindi una deriva della forma non arriva mai alla GUI — ferma
+> l'avvio. I validatori che girano **solo** sul payload della GUI sono gli unici
+> che possono divergere in silenzio.
+>
+> **Il presidio generalizzato è un CENSIMENTO**
+> (`tests/unit/admin/guiConfigRoundTrip.test.js`): ogni coppia carica→valida è
+> provata **sul file come sta su disco**, e ogni plugin admin con una rotta POST
+> deve comparire fra le coppie o fra le esenzioni **dichiarate con la loro
+> ragione**. Verificato per mutazione su tre fronti: reintrodotto il difetto di
+> System Settings → rosso; quello di adminSeo → rosso; aggiunta una GUI nuova che
+> salva e non è censita → rosso, **con il nome del plugin** nel messaggio.
 
 **Severità:** 🟠 alta · **Sforzo:** medio · **Decisione del progetto violata:** D1 (scrittura chirurgica)
 
