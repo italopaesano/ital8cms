@@ -34,6 +34,20 @@ class StateStore {
     this.filePath = path.join(this.dir, 'activeBlocks.json5');
     this.engine = engine;
     this.flushInterval = typeof config.flushIntervalSeconds === 'number' ? config.flushIntervalSeconds : 30;
+    /**
+     * Normalizzatore dell'identificatore di client, iniettato dal plugin.
+     *
+     * Serve a RI-CHIAVARE lo stato salvato da una versione precedente: dalla
+     * v3.49.0 la chiave degli IPv6 è il prefisso /64, e un blocco scritto su
+     * disco con l'indirizzo intero non verrebbe più trovato. Misurato: un blocco
+     * ATTIVO risultava rilasciato al primo riavvio dopo l'aggiornamento.
+     *
+     * Identità se non iniettato: lo store non sa nulla di indirizzi IP, e non
+     * deve saperne.
+     */
+    this.normalizeClientId = typeof config.normalizeClientId === 'function'
+      ? config.normalizeClientId
+      : (id) => id;
     this.flushTimer = null;
     this._onShutdown = null;
   }
@@ -83,12 +97,59 @@ class StateStore {
         return;
       }
       const data = loadJson5(this.filePath);
-      this.engine.load(data);
+      this.engine.load(this._rekey(data));
       // load() non deve marcare dirty: lo stato appena letto coincide col disco
       this.engine.dirty = false;
     } catch (err) {
       logger.warn(LOG_PREFIX, `Impossibile caricare lo stato dal disco: ${err.message}. Avvio con stato vuoto.`);
     }
+  }
+
+  /**
+   * Riscrive le chiavi dello stato letto da disco con la normalizzazione
+   * corrente, fondendo le voci che collassano sulla stessa chiave.
+   *
+   * La fusione tiene il blocco **più restrittivo** (il `blockedUntil` più
+   * lontano) e il conteggio dei fallimenti più alto: due indirizzi della stessa
+   * /64 che prima avevano contatori separati diventano un contatore solo, e
+   * scartare il più severo regalerebbe all'attaccante la differenza.
+   *
+   * @param {object} data - stato come letto dal disco
+   * @returns {object} stato con le chiavi correnti
+   */
+  _rekey(data) {
+    if (!data || typeof data !== 'object') return data;
+
+    const out = {};
+    let riscritte = 0;
+
+    for (const [key, entry] of Object.entries(data)) {
+      const sep = key.lastIndexOf('|');
+      if (sep <= 0 || !entry || typeof entry !== 'object') { out[key] = entry; continue; }
+
+      const clientId = key.slice(0, sep);
+      const ruleName = key.slice(sep + 1);
+      const nuovoId = this.normalizeClientId(clientId);
+      const nuovaKey = `${nuovoId}|${ruleName}`;
+      if (nuovaKey !== key) riscritte += 1;
+
+      const esistente = out[nuovaKey];
+      const voce = { ...entry, clientId: nuovoId };
+
+      out[nuovaKey] = !esistente ? voce : {
+        ...voce,
+        failureCount: Math.max(esistente.failureCount || 0, voce.failureCount || 0),
+        shortBlockCount: Math.max(esistente.shortBlockCount || 0, voce.shortBlockCount || 0),
+        blockedUntil: Math.max(esistente.blockedUntil || 0, voce.blockedUntil || 0),
+        lastFailureAt: Math.max(esistente.lastFailureAt || 0, voce.lastFailureAt || 0),
+        tier: (esistente.blockedUntil || 0) >= (voce.blockedUntil || 0) ? esistente.tier : voce.tier,
+      };
+    }
+
+    if (riscritte > 0) {
+      logger.info(LOG_PREFIX, `stato: ${riscritte} chiavi riscritte con la normalizzazione corrente`);
+    }
+    return out;
   }
 
   _startFlushTimer() {

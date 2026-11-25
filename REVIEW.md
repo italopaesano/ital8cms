@@ -1014,6 +1014,15 @@ che il `Location` non lo contenga.
 > orfani e NFS — più superficie di quanta ne risolva per un CMS dichiaratamente
 > single-process.
 >
+> **⚠️ Seguito (v3.50.0): la coda non copriva tutti i writer.** Una revisione del
+> codice ha trovato che `roleManagement.js` scriveva lo **stesso**
+> `userAccount.json5` con un suo `writeJson5Atomic`: una coda che serializza solo
+> i propri chiamanti non serializza niente. Misurato, con un `updateProfile` in
+> volo: la cancellazione di un ruolo veniva annullata **30 volte su 30**. Ora
+> anche `roleManagement` passa dalla coda, e un **censimento** dei writer dei due
+> file di dati (`tests/unit/core/writerCensus.test.js`) rende rossa la CI al
+> prossimo che ne aggiunge uno fuori.
+>
 > **Presidi:** 10 test in `tests/unit/core/json5UpdateQueue.test.js`, fra cui la
 > riproduzione della finestra di `await bcrypt.hash` e lo scenario misto
 > « cancellazione + modifica » dove l'utente cancellato **non** resuscita.
@@ -1797,6 +1806,17 @@ oppure rimuovere la rotta. Se serve per i test, spostarla dietro `debugMode`.
 > spariva appena creata. Ora è esclusa dallo sfratto: non tracciare chi sta
 > arrivando è il peggiore dei mali possibili.
 >
+> **⚠️ Seguito (v3.50.0): la normalizzazione era applicata in UN punto solo.**
+> `resolveClientId` la faceva, le API esposte al plugin admin no. Misurato: un ban
+> su `2001:db8::5` digitato nella GUI veniva salvato con quella chiave mentre
+> l'enforcement cercava `2001:db8:0:0::/64` — **il ban era inerte**. E lo stato
+> dei blocchi è persistito: un blocco **attivo** scritto dalla versione
+> precedente risultava rilasciato al primo riavvio dopo l'aggiornamento (rilievo
+> che la revisione automatica non aveva visto). Ora normalizzano tutti i confini,
+> lo stato viene **ri-chiavato** al caricamento tenendo il valore più
+> restrittivo, e la distinzione fra indirizzo e chiave è nei nomi
+> (`clientId` / `clientKey`), perché il difetto è nato da quell'ambiguità.
+>
 > **Presidi:** 18 test in `plugins/rateLimiter/tests/unit/ipv6AndCap.test.js`.
 
 **Dove:** `plugins/rateLimiter/lib/keyResolver.js:22`, `plugins/rateLimiter/lib/rateLimitEngine.js:40`
@@ -1984,6 +2004,14 @@ usata da entrambi. Rende l'invariante esplicita e la mette in un solo posto.
 > — chi usa la CLI riceve un errore di connessione, non un canale di cui non sa
 > chi ascolta. Lo stesso trattamento vale se il `chmod` **non lancia** ma il modo
 > misurato non è quello chiesto: la garanzia che conta è quella verificata.
+>
+> **⚠️ Seguito (v3.50.0): la umask restava avvelenata.** La ripristinavo solo
+> nella callback di `listen`, ma un errore di bind arriva sull'evento `error` —
+> quindi su un bind fallito restava a `0o777 & ~socketMode` per **tutta la vita
+> del processo**. Misurato: da `022` a `177`, con la conseguenza che ogni
+> **directory** creata dopo nasceva senza bit di esecuzione, cioè non
+> attraversabile. Ora è ripristinata su entrambe le uscite, e tre test lo
+> presidiano — compreso uno che verifica la *conseguenza*, non la variabile.
 >
 > **Presidi:** 5 test in `tests/unit/cliBridge/socketPermissions.test.js`. Il modo
 > è **misurato sul file** per `0600` e `0660`; uno verifica che la `umask` del

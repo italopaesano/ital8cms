@@ -37,7 +37,7 @@ const PatternMatcher = require('../../core/patternMatcher');
 const RateLimitEngine = require('./lib/rateLimitEngine');
 const StateStore = require('./lib/stateStore');
 const AttemptLog = require('./lib/attemptLog');
-const { resolveClientId } = require('./lib/keyResolver');
+const { resolveClientId, normalizeIpForKey } = require('./lib/keyResolver');
 const { validate } = require('./lib/configValidator');
 const { resolvePathZones, resolvePatternList } = require('../../core/pathZoneResolver');
 
@@ -227,7 +227,12 @@ module.exports = {
     });
 
     // Persistenza stato
-    stateStore = new StateStore(pathPluginFolder, engine, custom.state || {});
+    // `normalizeClientId` è iniettata qui e non vive nello store: la semantica
+    // degli IP appartiene al plugin, lo store sa solo di file.
+    stateStore = new StateStore(pathPluginFolder, engine, {
+      ...(custom.state || {}),
+      normalizeClientId: normalizeIpForKey,
+    });
     stateStore.init();
 
     // Sweep periodico dei blocchi scaduti
@@ -304,12 +309,17 @@ module.exports = {
           }
         }
 
-        const clientId = resolveClientId(ctx, { trustProxy: custom.trustProxy === true });
+        // `clientKey` e non `clientId`: il valore è GIÀ normalizzato
+        // (`resolveClientId` riduce gli IPv6 alla /64). La distinzione è nel nome
+        // di proposito — il difetto del ban inerte è nato perché « clientId »
+        // significava due cose diverse nello stesso file: l'indirizzo come
+        // arriva da fuori, e la chiave con cui si cerca nello stato.
+        const clientKey = resolveClientId(ctx, { trustProxy: custom.trustProxy === true });
         let verdict = null;
 
         // 1) Ban globale per LONG block
         if (enf.globalLongBlock) {
-          const v = engine.checkClientLongBlock(clientId);
+          const v = engine.checkClientLongBlock(clientKey);
           if (v.blocked) verdict = v;
         }
 
@@ -317,7 +327,7 @@ module.exports = {
         if (!verdict) {
           for (const rule of loadRules().values()) {
             if (rule.pathPattern && matcher.matches(urlPath, rule.pathPattern)) {
-              const v = engine.check(clientId, rule.name);
+              const v = engine.check(clientKey, rule.name);
               if (v.blocked) {
                 verdict = v;
                 break;
@@ -328,7 +338,7 @@ module.exports = {
 
         if (verdict && verdict.blocked) {
           if (custom.enableLogging) {
-            logger.info(LOG_PREFIX, `enforcement: negato ${clientId} su ${urlPath} (${verdict.tier}, ${verdict.retryAfterSeconds}s)`);
+            logger.info(LOG_PREFIX, `enforcement: negato ${clientKey} su ${urlPath} (${verdict.tier}, ${verdict.retryAfterSeconds}s)`);
           }
           if (enf.redirectTo) {
             ctx.redirect(enf.redirectTo);
@@ -355,14 +365,16 @@ module.exports = {
     if (!engine) return null;
 
     const trustProxy = custom.trustProxy === true;
-    const idFrom = (ctx) => resolveClientId(ctx, { trustProxy });
+    // Restituisce una CHIAVE già normalizzata, non un indirizzo: vedi la nota
+    // sul percorso di enforcement.
+    const keyFrom = (ctx) => resolveClientId(ctx, { trustProxy });
 
     return {
       // ── API ctx-aware (uso tipico dei consumer) ──
-      keyFromCtx: (ctx) => idFrom(ctx),
-      checkCtx: (ctx, ruleName) => engine.check(idFrom(ctx), ruleName),
-      recordFailureCtx: (ctx, ruleName) => engine.recordFailure(idFrom(ctx), ruleName),
-      recordSuccessCtx: (ctx, ruleName) => engine.recordSuccess(idFrom(ctx), ruleName),
+      keyFromCtx: (ctx) => keyFrom(ctx),
+      checkCtx: (ctx, ruleName) => engine.check(keyFrom(ctx), ruleName),
+      recordFailureCtx: (ctx, ruleName) => engine.recordFailure(keyFrom(ctx), ruleName),
+      recordSuccessCtx: (ctx, ruleName) => engine.recordSuccess(keyFrom(ctx), ruleName),
 
       /**
        * Guard "tutto-in-uno": se bloccato scrive 429 (+ Retry-After) e ritorna true.
@@ -370,7 +382,7 @@ module.exports = {
        * checkCtx + redirect verso una pagina con messaggio.
        */
       guardCtx: (ctx, ruleName) => {
-        const verdict = engine.check(idFrom(ctx), ruleName);
+        const verdict = engine.check(keyFrom(ctx), ruleName);
         if (verdict.blocked) {
           const resp = custom.response || {};
           ctx.status = resp.status || 429;
@@ -384,17 +396,25 @@ module.exports = {
       },
 
       // ── API basate su chiave esplicita ──
-      check: (clientId, ruleName) => engine.check(clientId, ruleName),
-      recordFailure: (clientId, ruleName) => engine.recordFailure(clientId, ruleName),
-      recordSuccess: (clientId, ruleName) => engine.recordSuccess(clientId, ruleName),
+      //
+      // ⚠️ Ogni identificatore che arriva da FUORI passa da `normalizeIpForKey`,
+      // come fa `resolveClientId` sul percorso di enforcement. Senza, le due
+      // strade usano chiavi diverse per lo stesso client: misurato, un ban su
+      // `2001:db8::5` digitato nella GUI veniva salvato con quella chiave mentre
+      // l'enforcement cercava `2001:db8:0:0::/64` — il ban risultava applicato e
+      // **non bloccava nulla**. Normalizzare in UN punto non basta: va fatto su
+      // tutti i confini del plugin.
+      check: (clientId, ruleName) => engine.check(normalizeIpForKey(clientId), ruleName),
+      recordFailure: (clientId, ruleName) => engine.recordFailure(normalizeIpForKey(clientId), ruleName),
+      recordSuccess: (clientId, ruleName) => engine.recordSuccess(normalizeIpForKey(clientId), ruleName),
       getActiveBlocks: () => engine.getActiveBlocks(),
       getRuleNames: () => Array.from(loadRules().keys()),
 
       // ── API per il plugin admin (adminRateLimiter) ──
       // Azioni live (effetto immediato sull'engine in memoria)
-      releaseBlock: (clientId, ruleName) => engine.release(clientId, ruleName),
-      releaseAllForClient: (clientId) => engine.releaseAllForClient(clientId),
-      banClient: (clientId, ruleName, opts) => engine.forceBlock(clientId, ruleName, opts),
+      releaseBlock: (clientId, ruleName) => engine.release(normalizeIpForKey(clientId), ruleName),
+      releaseAllForClient: (clientId) => engine.releaseAllForClient(normalizeIpForKey(clientId)),
+      banClient: (clientId, ruleName, opts) => engine.forceBlock(normalizeIpForKey(clientId), ruleName, opts),
 
       // Dati per la Vista Dati della GUI
       getStats: () => {

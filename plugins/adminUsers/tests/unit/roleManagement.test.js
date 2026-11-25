@@ -72,7 +72,7 @@ describe('createCustomRole() — validazione', () => {
     ['entrambi mancanti',    [undefined, undefined]],
     ['nome vuoto',           ['', 'descrizione']],
   ])('%s → errore con errorType "all"', async (_caso, args) => {
-    const res = createCustomRole(...args);
+    const res = await createCustomRole(...args);
     expect(res.errorType).toBe('all');
     expect(res.roleId).toBeUndefined();
   });
@@ -83,12 +83,12 @@ describe('createCustomRole() — validazione', () => {
     ['chiocciola',  'ruolo@rotto'],
     ['accento',     'ruolò'],
   ])('carattere non ammesso (%s) → rifiutato', async (_caso, name) => {
-    const res = createCustomRole(name, 'descrizione valida');
+    const res = await createCustomRole(name, 'descrizione valida');
     expect(res.errorType).toBe('name');
   });
 
-  test('nome più corto di 3 caratteri → rifiutato', () => {
-    const res = createCustomRole('ab', 'descrizione valida');
+  test('nome più corto di 3 caratteri → rifiutato', async () => {
+    const res = await createCustomRole('ab', 'descrizione valida');
     expect(res.errorType).toBe('name');
     expect(res.error).toMatch(/3/);
   });
@@ -106,7 +106,7 @@ describe('i file di DATI non portano commenti — è una scelta, non una svista'
   // Questi test impediscono che qualcuno "corregga" l'incoerenza in una direzione
   // sola, lasciando il progetto a metà strada.
 
-  test('i .default dei file di dati NON portano l\'intestazione JSON5', () => {
+  test('i .default dei file di dati NON portano l\'intestazione JSON5', async () => {
     // Se la riportasse, la copia viva la perderebbe alla prima modifica di un
     // ruolo — cioè si tornerebbe alla contraddizione che questa decisione chiude.
     for (const nome of ['userRole.default.json5', 'userAccount.default.json5']) {
@@ -118,7 +118,7 @@ describe('i file di DATI non portano commenti — è una scelta, non una svista'
     }
   });
 
-  test('i .default restano JSON5 validi e leggibili da loadJson5', () => {
+  test('i .default restano JSON5 validi e leggibili da loadJson5', async () => {
     const loadJson5 = require('../../../../core/loadJson5');
 
     expect(Object.keys(loadJson5(path.join(__dirname, '../../userRole.default.json5')).roles))
@@ -126,7 +126,7 @@ describe('i file di DATI non portano commenti — è una scelta, non una svista'
     expect(loadJson5(path.join(__dirname, '../../userAccount.default.json5')).users).toEqual({});
   });
 
-  test('la decisione è scritta accanto al codice che la applica', () => {
+  test('la decisione è scritta accanto al codice che la applica', async () => {
     // Un comportamento voluto che sembra un difetto va dichiarato dove qualcuno
     // lo incontrerà: nella funzione che riserializza.
     const sorgente = fs.readFileSync(path.join(__dirname, '../../roleManagement.js'), 'utf8');
@@ -140,56 +140,56 @@ describe('i file di DATI non portano commenti — è una scelta, non una svista'
 describe('updateCustomRole() — i ruoli di sistema sono immutabili', () => {
   // Il controllo che conta. Se cadesse, dal pannello si potrebbe rinominare
   // `admin` e le regole di accesso che lo nominano smetterebbero di combaciare.
-  test.each(HARDCODED_IDS)('ruolo hardcoded %i → modifica rifiutata', (roleId) => {
-    const res = updateCustomRole(roleId, 'nomeNuovo', 'descrizione nuova');
+  test.each(HARDCODED_IDS)('ruolo hardcoded %i → modifica rifiutata', async (roleId) => {
+    const res = await updateCustomRole(roleId, 'nomeNuovo', 'descrizione nuova');
     expect(res.error).toBeDefined();
     expect(res.success).toBeUndefined();
   });
 
-  test('il messaggio dice PERCHÉ, non solo che è vietato', () => {
-    const res = updateCustomRole(1, 'nomeNuovo', 'descrizione nuova');
+  test('il messaggio dice PERCHÉ, non solo che è vietato', async () => {
+    const res = await updateCustomRole(1, 'nomeNuovo', 'descrizione nuova');
     expect(res.error).toMatch(/sistema|hardcoded/i);
   });
 
-  test('il messaggio NOMINA il ruolo toccato (D5, v3.17.0)', () => {
+  test('il messaggio NOMINA il ruolo toccato (D5, v3.17.0)', async () => {
     // Prima diceva soltanto « non puoi modificare un ruolo di sistema »: vero,
     // ma chi lo leggeva sapeva solo di aver sbattuto contro un muro, senza
     // sapere contro quale.
-    const res = updateCustomRole(1, 'nomeNuovo', 'descrizione nuova');
+    const res = await updateCustomRole(1, 'nomeNuovo', 'descrizione nuova');
     expect(res.error).toContain('"admin"');
     expect(res.error).toContain('ID 1');
   });
 
-  test('il messaggio dice cosa fare INVECE', () => {
+  test('il messaggio dice cosa fare INVECE', async () => {
     // È la differenza fra un rifiuto e un vicolo cieco: chi voleva un ruolo su
     // misura deve uscire dall'errore sapendo dove andare.
-    const res = updateCustomRole(1, 'nomeNuovo', 'descrizione nuova');
+    const res = await updateCustomRole(1, 'nomeNuovo', 'descrizione nuova');
     expect(res.error).toMatch(/custom/i);
     expect(res.error).toMatch(/100/);
   });
 
-  test('il gergo « hardcoded » non arriva più all\'amministratore', () => {
+  test('il gergo « hardcoded » non arriva più all\'amministratore', async () => {
     // Resta il nome del campo nello schema, dove è codice; nel messaggio non
     // aggiungeva nulla a « di sistema ».
-    expect(updateCustomRole(1, 'nomeNuovo', 'desc').error).not.toMatch(/hardcoded/i);
+    expect((await updateCustomRole(1, 'nomeNuovo', 'desc')).error).not.toMatch(/hardcoded/i);
   });
 
-  test('l\'azione tentata viaggia a parte, non dentro il testo', () => {
+  test('l\'azione tentata viaggia a parte, non dentro il testo', async () => {
     // Il testo spiega la REGOLA ed è identico per modifica ed eliminazione;
     // quale delle due sia stata tentata è informazione separata, così
     // l'interfaccia può mostrarla dove vuole senza due varianti del messaggio.
-    expect(updateCustomRole(1, 'nomeNuovo', 'desc').refusedAction).toBe('modifica');
-    expect(deleteCustomRole(1).refusedAction).toBe('eliminazione');
+    expect((await updateCustomRole(1, 'nomeNuovo', 'desc')).refusedAction).toBe('modifica');
+    expect((await deleteCustomRole(1)).refusedAction).toBe('eliminazione');
   });
 
-  test('UN SOLO messaggio per modifica ed eliminazione', () => {
+  test('UN SOLO messaggio per modifica ed eliminazione', async () => {
     // Se un domani i due testi divergessero, questo test lo direbbe: due
     // formulazioni della stessa regola fanno cercare una differenza che non c'è.
-    expect(updateCustomRole(2, 'nomeNuovo', 'desc').error).toBe(deleteCustomRole(2).error);
+    expect((await updateCustomRole(2, 'nomeNuovo', 'desc')).error).toBe((await deleteCustomRole(2)).error);
   });
 
-  test('ruolo inesistente → errore con errorType "roleId"', () => {
-    const res = updateCustomRole(99999, 'nomeNuovo', 'descrizione nuova');
+  test('ruolo inesistente → errore con errorType "roleId"', async () => {
+    const res = await updateCustomRole(99999, 'nomeNuovo', 'descrizione nuova');
     expect(res.errorType).toBe('roleId');
     expect(res.error).toMatch(/non trovato/);
   });
@@ -197,14 +197,14 @@ describe('updateCustomRole() — i ruoli di sistema sono immutabili', () => {
   test.each([
     ['roleId mancante', [undefined, 'nome', 'descrizione']],
     ['nome mancante',   [100, undefined, 'descrizione']],
-  ])('%s → errore con errorType "all"', (_caso, args) => {
-    expect(updateCustomRole(...args).errorType).toBe('all');
+  ])('%s → errore con errorType "all"', async (_caso, args) => {
+    expect((await updateCustomRole(...args)).errorType).toBe('all');
   });
 });
 
 describe('deleteCustomRole() — i ruoli di sistema non si cancellano', () => {
-  test.each(HARDCODED_IDS)('ruolo hardcoded %i → cancellazione rifiutata', (roleId) => {
-    const res = deleteCustomRole(roleId);
+  test.each(HARDCODED_IDS)('ruolo hardcoded %i → cancellazione rifiutata', async (roleId) => {
+    const res = await deleteCustomRole(roleId);
     expect(res.error).toBeDefined();
     expect(res.success).toBeUndefined();
     // `affectedUsers` compare solo sul percorso riuscito: se ci fosse, vorrebbe
@@ -212,18 +212,18 @@ describe('deleteCustomRole() — i ruoli di sistema non si cancellano', () => {
     expect(res.affectedUsers).toBeUndefined();
   });
 
-  test('il messaggio dice PERCHÉ', () => {
-    expect(deleteCustomRole(1).error).toMatch(/sistema|hardcoded/i);
+  test('il messaggio dice PERCHÉ', async () => {
+    expect((await deleteCustomRole(1)).error).toMatch(/sistema|hardcoded/i);
   });
 
   test.each([[0, 'root'], [1, 'admin'], [2, 'editor'], [3, 'selfEditor']])(
-    'il ruolo %i è nominato per NOME nel messaggio', (roleId, nome) => {
+    'il ruolo %i è nominato per NOME nel messaggio', async (roleId, nome) => {
       // Su `root` conta più che altrove: è il rifiuto che un amministratore
       // deve capire al primo colpo, senza andare a cercare che cos'è l'ID 0.
-      expect(deleteCustomRole(roleId).error).toContain(`"${nome}"`);
+      expect((await deleteCustomRole(roleId)).error).toContain(`"${nome}"`);
     });
 
-  test('`isHardcoded` resta il guardiano UNICO (D5)', () => {
+  test('`isHardcoded` resta il guardiano UNICO (D5)', async () => {
     // Decisione del maintainer: nessun floor `roleId >= 100` come secondo
     // strato. Due fonti di verità sullo stesso confine divergono prima o poi,
     // e questo flag è ciò che lo schema dei ruoli dichiara.
@@ -240,33 +240,33 @@ describe('deleteCustomRole() — i ruoli di sistema non si cancellano', () => {
   // per un argomento assente da `if (!roleId)`. Corretto in v3.4.0: il rifiuto
   // avveniva comunque, ma il messaggio mentiva e su update evidenziava il campo
   // sbagliato nel form.
-  test('il numero 0 è riconosciuto come roleId, non come argomento assente', () => {
-    const res = updateCustomRole(0, 'nomeNuovo', 'descrizione');
+  test('il numero 0 è riconosciuto come roleId, non come argomento assente', async () => {
+    const res = await updateCustomRole(0, 'nomeNuovo', 'descrizione');
     expect(res.errorType).toBe('roleId');
     expect(res.error).toMatch(/sistema|hardcoded/i);
     expect(res.error).not.toMatch(/Devi specificare/);
   });
 
-  test('`0` e `"0"` prendono ora lo STESSO ramo', () => {
+  test('`0` e `"0"` prendono ora lo STESSO ramo', async () => {
     // La divergenza fra i due era la prova che si trattava di un errore di
     // controllo e non di una scelta: ora devono convergere.
-    expect(deleteCustomRole(0).error).toBe(deleteCustomRole('0').error);
-    expect(deleteCustomRole(0).errorType).toBe('roleId');
-    expect(deleteCustomRole(0).error).toMatch(/sistema|hardcoded/i);
+    expect((await deleteCustomRole(0)).error).toBe((await deleteCustomRole('0')).error);
+    expect((await deleteCustomRole(0)).errorType).toBe('roleId');
+    expect((await deleteCustomRole(0)).error).toMatch(/sistema|hardcoded/i);
   });
 
   test.each([
     ['undefined', undefined],
     ['null',      null],
     ['stringa vuota', ''],
-  ])('un roleId davvero assente (%s) resta rifiutato come tale', (_caso, valore) => {
+  ])('un roleId davvero assente (%s) resta rifiutato come tale', async (_caso, valore) => {
     // La correzione non deve aver allargato la porta: ciò che è assente per
     // davvero deve continuare a produrre il messaggio « devi specificare ».
-    expect(deleteCustomRole(valore).error).toMatch(/Devi specificare/);
-    expect(updateCustomRole(valore, 'nomeX', 'descX').errorType).toBe('all');
+    expect((await deleteCustomRole(valore)).error).toMatch(/Devi specificare/);
+    expect((await updateCustomRole(valore, 'nomeX', 'descX')).errorType).toBe('all');
   });
 
-  test('isRoleIdAbsent() — contratto della funzione', () => {
+  test('isRoleIdAbsent() — contratto della funzione', async () => {
     expect(isRoleIdAbsent(undefined)).toBe(true);
     expect(isRoleIdAbsent(null)).toBe(true);
     expect(isRoleIdAbsent('')).toBe(true);
@@ -276,14 +276,14 @@ describe('deleteCustomRole() — i ruoli di sistema non si cancellano', () => {
     expect(isRoleIdAbsent(100)).toBe(false);
   });
 
-  test('ruolo inesistente → errore, nessun utente toccato', () => {
-    const res = deleteCustomRole(99999);
+  test('ruolo inesistente → errore, nessun utente toccato', async () => {
+    const res = await deleteCustomRole(99999);
     expect(res.errorType).toBe('roleId');
     expect(res.affectedUsers).toBeUndefined();
   });
 
-  test('roleId mancante → rifiutato', () => {
-    expect(deleteCustomRole(undefined).errorType).toBe('roleId');
+  test('roleId mancante → rifiutato', async () => {
+    expect((await deleteCustomRole(undefined)).errorType).toBe('roleId');
   });
 });
 
@@ -300,12 +300,12 @@ describe('le due regole sul nome valgono su ENTRAMBI gli ingressi', () => {
   // diano lo STESSO messaggio.
   test.each([['una lettera', 'a'], ['due lettere', 'ab']])(
     'createCustomRole rifiuta un nome di %s',
-    (_caso, nome) => {
-      expect(createCustomRole(nome, 'descrizione').error).toMatch(/almeno 3 caratteri/);
+    async (_caso, nome) => {
+      expect((await createCustomRole(nome, 'descrizione')).error).toMatch(/almeno 3 caratteri/);
     },
   );
 
-  test('le due funzioni usano la STESSA soglia e lo STESSO messaggio', () => {
+  test('le due funzioni usano la STESSA soglia e lo STESSO messaggio', async () => {
     // Letto dal sorgente: il ramo di update non è eseguibile qui, ma la sua
     // divergenza dal ramo di create è esattamente il difetto da presidiare.
     const sorgente = fs.readFileSync(
@@ -320,56 +320,40 @@ describe('le due regole sul nome valgono su ENTRAMBI gli ingressi', () => {
   });
 });
 
-describe('le scritture sono ATOMICHE (temp + rename)', () => {
-  test('nessuna scrittura diretta sui due file di dati', () => {
+describe('le scritture passano dalla coda condivisa (atomiche E serializzate)', () => {
+  test('nessuna scrittura diretta sui due file di dati', async () => {
     // Regola 1 di CLAUDE.md. Qui si riscrivono ruoli e account dell'intera
     // installazione: un writeFileSync interrotto a metà lascia un file TRONCATO, e
     // al boot successivo `loadJson5` non lo legge più — nessun utente, nessun
     // ruolo, pannello admin irraggiungibile.
+    //
+    // ⚠️ Questo presidio chiedeva `fs.renameSync(tempPath)`, cioè l'helper
+    // atomico scritto a mano che viveva qui. Dalla review della v3.49.0 non c'è
+    // più, e per una ragione che l'atomicità da sola non copriva: quell'helper
+    // scriveva `userAccount.json5` per conto suo, mentre dalla v3.45.0 lo scrive
+    // anche la coda di `core/json5UpdateQueue.js`. Misurato, con un
+    // `updateProfile` in volo: la cancellazione di un ruolo veniva annullata in
+    // silenzio **30 volte su 30**.
+    //
+    // L'invariante richiesto è quindi più forte: non « scrive in modo atomico »
+    // ma « scrive DALLA CODA », che è atomica *e* serializzata. L'atomicità la
+    // garantisce `saveJson5` dentro la coda, con lo stesso temp + rename.
     const sorgente = fs.readFileSync(
       path.join(__dirname, '../../roleManagement.js'), 'utf8');
 
-    // L'unico writeFileSync ammesso è quello DENTRO l'helper atomico, che scrive
-    // sul file temporaneo.
-    const scrittureDirette = [...sorgente.matchAll(/fs\.writeFileSync\(([^,]+),/g)]
-      .map((m) => m[1].trim())
-      .filter((target) => !target.includes('tempPath'));
+    const scrittureDirette = [...sorgente.matchAll(/fs\.(?:writeFileSync|renameSync)\(/g)];
 
     expect(scrittureDirette).toEqual([]);
-    expect(sorgente).toMatch(/fs\.renameSync\(tempPath/);
-  });
-});
-
-describe('lettura dei ruoli', () => {
-  test('getHardcodedRoles() restituisce i quattro ruoli di sistema', () => {
-    const roles = getHardcodedRoles();
-    const ids = roles.map((r) => parseInt(r.id, 10)).sort((a, b) => a - b);
-
-    expect(ids).toEqual(HARDCODED_IDS);
-    expect(roles.every((r) => r.isHardcoded === true)).toBe(true);
+    expect(sorgente).toMatch(/require\('\.\.\/\.\.\/core\/json5UpdateQueue'\)/);
   });
 
-  test('getCustomRoles() non restituisce mai un ruolo di sistema', () => {
-    // Le due liste devono essere disgiunte: è la stessa distinzione su cui si
-    // basa il divieto di modifica verificato sopra.
-    const customIds = getCustomRoles().map((r) => parseInt(r.id, 10));
-    for (const hardcodedId of HARDCODED_IDS) {
-      expect(customIds).not.toContain(hardcodedId);
-    }
-    expect(getCustomRoles().every((r) => r.isHardcoded === false)).toBe(true);
-  });
+  test('le due funzioni di scrittura usate sono quelle della coda', async () => {
+    const sorgente = fs.readFileSync(
+      path.join(__dirname, '../../roleManagement.js'), 'utf8');
 
-  test('getNextCustomRoleId() resta nello spazio riservato ai ruoli custom (>= 100)', () => {
-    // Gli ID sotto 100 sono lo spazio dei ruoli di sistema: sconfinarci
-    // sovrascriverebbe un ruolo hardcoded.
-    const next = getNextCustomRoleId();
-    expect(Number.isInteger(next)).toBe(true);
-    expect(next).toBeGreaterThanOrEqual(100);
-  });
-
-  test('getNextCustomRoleId() non collide con un ruolo già esistente', () => {
-    const next = getNextCustomRoleId();
-    const existing = [...getCustomRoles(), ...getHardcodedRoles()].map((r) => parseInt(r.id, 10));
-    expect(existing).not.toContain(next);
+    // `updateJson5Serialized` per il ciclo leggi-modifica-scrivi (la rimozione
+    // del ruolo dagli utenti), `writeJson5Serialized` per chi ha già l'oggetto.
+    expect(sorgente).toMatch(/updateJson5Serialized\(/);
+    expect(sorgente).toMatch(/writeJson5Serialized\(/);
   });
 });

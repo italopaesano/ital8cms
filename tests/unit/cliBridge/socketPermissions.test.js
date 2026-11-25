@@ -99,3 +99,66 @@ describe('se i permessi non si possono garantire, il canale NON si apre', () => 
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining('invece di'));
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// La umask è GLOBALE: va ripristinata su ogni uscita, non solo sul successo.
+//
+// Il difetto che questi test presidiano (review della v3.49.0): la ripristinavo
+// soltanto nella callback di `listen`, ma un errore di bind arriva sull'evento
+// `error` — quindi la umask restava a `0o777 & ~socketMode` per TUTTA la vita
+// del processo. Misurato: da `022` a `177`. Da quel momento ogni file creato
+// nasce a 600 e ogni DIRECTORY a 600, cioè senza bit di esecuzione: non
+// attraversabile. Un socket in una cartella inesistente bastava a rompere, molto
+// più tardi e altrove, la creazione di una qualunque cartella.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('la umask non resta avvelenata', () => {
+  /** Legge la umask senza alterarla (process.umask(v) ritorna la precedente). */
+  const umaskCorrente = () => {
+    const v = process.umask(0o022);
+    process.umask(v);
+    return v;
+  };
+
+  test('bind FALLITO (cartella inesistente) → umask invariata', async () => {
+    const prima = umaskCorrente();
+    const inesistente = path.join(os.tmpdir(), `c6-mai-${Date.now()}`, 'x.sock');
+
+    const handle = await cliBridge.start(
+      { cli: { enabled: true, socketPath: inesistente, socketMode: '0600' } },
+      { projectRoot: os.tmpdir() }
+    );
+
+    expect(handle).toBeNull();            // il bind è davvero fallito
+    expect(umaskCorrente()).toBe(prima);  // ...e la umask è tornata com'era
+  });
+
+  test('bind riuscito → umask invariata', async () => {
+    const prima = umaskCorrente();
+    const { ital8Conf } = confCon('0600');
+
+    const handle = await cliBridge.start(ital8Conf, { projectRoot: os.tmpdir() });
+    avviati.push(handle);
+
+    expect(umaskCorrente()).toBe(prima);
+  });
+
+  test('dopo un bind fallito una directory nuova resta ATTRAVERSABILE', async () => {
+    // È la conseguenza che conta, e non si vede guardando la umask: con 177 una
+    // cartella nasce senza bit di esecuzione e non si può entrarci.
+    const inesistente = path.join(os.tmpdir(), `c6-mai2-${Date.now()}`, 'x.sock');
+    await cliBridge.start(
+      { cli: { enabled: true, socketPath: inesistente, socketMode: '0600' } },
+      { projectRoot: os.tmpdir() }
+    );
+
+    const dir = path.join(os.tmpdir(), `c6-dir-${Date.now()}`);
+    creati.push(dir);
+    fs.mkdirSync(dir);
+    const modo = fs.statSync(dir).mode & 0o777;
+
+    expect(modo & 0o100).toBe(0o100);     // bit di esecuzione per il proprietario
+    fs.rmdirSync(dir);
+  });
+});
+

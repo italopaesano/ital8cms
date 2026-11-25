@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const loadJson5 = require('../../core/loadJson5');
+const { updateJson5Serialized, writeJson5Serialized } = require('../../core/json5UpdateQueue');
 const escapeHtml = require('../../core/escapeHtml');
 
 // Percorso del file ruoli
@@ -75,7 +76,7 @@ function getNextCustomRoleId() {
  * @param {string} description - Descrizione del ruolo
  * @returns {object} - {success: ..., roleId: ...} oppure {error: ...}
  */
-function createCustomRole(name, description) {
+async function createCustomRole(name, description) {
     if (!name || !description) {
         return { error: 'Errore: Devi specificare nome e descrizione del ruolo.', errorType: 'all' };
     }
@@ -109,7 +110,7 @@ function createCustomRole(name, description) {
     };
 
     // Salva il file aggiornato
-    writeJson5Atomic(rolesFilePath, roleData);
+    await writeJson5Atomic(rolesFilePath, roleData);
 
     return { success: `Ruolo "${name}" creato con successo con ID ${newRoleId}.`, roleId: newRoleId };
 }
@@ -168,10 +169,21 @@ function isRoleIdAbsent(roleId) {
  * @param {string} filePath - Path del file da riscrivere
  * @param {object} data - Oggetto da serializzare
  */
-function writeJson5Atomic(filePath, data) {
-    const tempPath = filePath + '.tmp';
-    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf8');
-    fs.renameSync(tempPath, filePath);
+async function writeJson5Atomic(filePath, data) {
+    // Delega alla coda condivisa (REVIEW.md → B1/B2, e la review della v3.49.0).
+    //
+    // ⚠️ Questa funzione scriveva per conto suo, con lo STESSO nome di file
+    // temporaneo che usa `saveJson5` — e su `userAccount.json5`, che dalla
+    // v3.45.0 ha anche la coda come scrittore. Misurato: con un `updateProfile`
+    // in volo (i ~100 ms di `bcrypt.hash`), la cancellazione di un ruolo veniva
+    // **annullata in silenzio** dalla riscrittura della coda, 30 volte su 30.
+    // Risultato: `userRole.json5` senza il ruolo e `userAccount.json5` che
+    // continua a referenziarlo.
+    //
+    // Una coda che serializza solo i propri chiamanti non serializza niente: il
+    // presidio che accompagna questa correzione è un CENSIMENTO dei writer di
+    // questi due file, così il prossimo che ne aggiunge uno trova la CI rossa.
+    await writeJson5Serialized(filePath, data);
 }
 
 /**
@@ -181,7 +193,7 @@ function writeJson5Atomic(filePath, data) {
  * @param {string} description - Nuova descrizione
  * @returns {object} - {success: ...} oppure {error: ...}
  */
-function updateCustomRole(roleId, name, description) {
+async function updateCustomRole(roleId, name, description) {
     if (isRoleIdAbsent(roleId) || !name || !description) {
         return { error: 'Errore: Devi specificare roleId, nome e descrizione.', errorType: 'all' };
     }
@@ -234,7 +246,7 @@ function updateCustomRole(roleId, name, description) {
     roleData.roles[roleId].description = description;
 
     // Salva il file aggiornato
-    writeJson5Atomic(rolesFilePath, roleData);
+    await writeJson5Atomic(rolesFilePath, roleData);
 
     return { success: `Ruolo "${name}" aggiornato con successo.` };
 }
@@ -245,7 +257,7 @@ function updateCustomRole(roleId, name, description) {
  * @param {number} roleId - ID del ruolo da eliminare
  * @returns {object} - {success: ..., affectedUsers: ...} oppure {error: ...}
  */
-function deleteCustomRole(roleId) {
+async function deleteCustomRole(roleId) {
     if (isRoleIdAbsent(roleId)) {
         return { error: 'Errore: Devi specificare il roleId.', errorType: 'roleId' };
     }
@@ -271,27 +283,28 @@ function deleteCustomRole(roleId) {
 
     const roleName = roleData.roles[roleId].name;
 
-    // Rimuovi il ruolo dal file
-    delete roleData.roles[roleId];
-    writeJson5Atomic(rolesFilePath, roleData);
-
-    // Rimuovi il roleId da tutti gli utenti che lo hanno
-    const userData = loadJson5(usersFilePath);
-    let affectedUsers = [];
-
-    Object.keys(userData.users).forEach(username => {
-        const user = userData.users[username];
-        if (user.roleIds && user.roleIds.includes(roleId)) {
-            // Rimuovi il roleId dall'array
-            user.roleIds = user.roleIds.filter(id => id !== roleId);
-            affectedUsers.push(username);
-        }
+    // Rimozione del ruolo, sul dato riletto dentro la coda.
+    await updateJson5Serialized(rolesFilePath, (fresh) => {
+        if (!fresh.roles || !fresh.roles[roleId]) return null;   // già rimosso
+        delete fresh.roles[roleId];
+        return fresh;
     });
 
-    // Salva il file utenti aggiornato
-    if (affectedUsers.length > 0) {
-        writeJson5Atomic(usersFilePath, userData);
-    }
+    // Rimozione del roleId dagli utenti, anch'essa sul dato FRESCO: fra la
+    // lettura di prima e questa scrittura un profilo può essere stato salvato,
+    // e riscrivere una copia vecchia lo riporterebbe indietro.
+    let affectedUsers = [];
+    await updateJson5Serialized(usersFilePath, (fresh) => {
+        affectedUsers = [];
+        for (const username of Object.keys(fresh.users || {})) {
+            const user = fresh.users[username];
+            if (user.roleIds && user.roleIds.includes(roleId)) {
+                user.roleIds = user.roleIds.filter((id) => id !== roleId);
+                affectedUsers.push(username);
+            }
+        }
+        return affectedUsers.length > 0 ? fresh : null;          // null = niente da scrivere
+    });
 
     return {
         success: `Ruolo "${roleName}" eliminato con successo.`,
