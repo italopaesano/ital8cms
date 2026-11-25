@@ -405,7 +405,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       },
       handler: async (ctx) => {
         const { name, description } = ctx.request.body;
-        const result = roleManagement.createCustomRole(name, description);
+        const result = await roleManagement.createCustomRole(name, description);
         ctx.body = result;
         ctx.type = 'application/json';
       }
@@ -419,7 +419,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       },
       handler: async (ctx) => {
         const { roleId, name, description } = ctx.request.body;
-        const result = roleManagement.updateCustomRole(roleId, name, description);
+        const result = await roleManagement.updateCustomRole(roleId, name, description);
         ctx.body = result;
         ctx.type = 'application/json';
       }
@@ -433,7 +433,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
       },
       handler: async (ctx) => {
         const { roleId } = ctx.request.body;
-        const result = roleManagement.deleteCustomRole(roleId);
+        const result = await roleManagement.deleteCustomRole(roleId);
         ctx.body = result;
         ctx.type = 'application/json';
       }

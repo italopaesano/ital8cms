@@ -166,7 +166,17 @@ async function start(ital8Conf, options = {}) {
   const server = net.createServer((sock) => handleConnection(sock, dispatcher));
 
   return await new Promise((resolve) => {
+    // La umask va ripristinata su OGNI uscita, non solo sul successo: vedi la
+    // nota estesa sotto, accanto a dove viene impostata.
+    let umaskRipristinata = false;
+    const ripristinaUmask = () => {
+      if (umaskRipristinata) return;
+      umaskRipristinata = true;
+      try { process.umask(umaskPrecedente); } catch (_) { /* non fatale */ }
+    };
+
     server.once('error', (err) => {
+      ripristinaUmask();
       warnBindFailure(socketPath, err);
       resolve(null);
     });
@@ -188,13 +198,21 @@ async function start(ital8Conf, options = {}) {
     // E se nemmeno il chmod riesce, il canale NON si apre: un canale di
     // controllo con permessi ignoti è peggio di un canale assente. Chi usa la
     // CLI riceve un errore di connessione, non un canale che non sa chi ascolta.
+    // ⚠️ La umask è GLOBALE al processo, e va ripristinata su ogni uscita da
+    // qui — non solo sul successo. Prima la ripristinavo soltanto nella callback
+    // di `listen`: un errore di bind (cartella del socket inesistente, percorso
+    // occupato) arriva sull'evento `error`, quindi la umask restava a
+    // `0o777 & ~socketMode` per TUTTA la vita del processo.
+    //
+    // Misurato: da `022` a `177`. Da quel momento ogni file creato dal processo
+    // nasce a 600 e ogni **directory** a 600, cioè senza bit di esecuzione:
+    // non attraversabile. Un socket in una cartella che non esiste bastava a
+    // rompere, molto più tardi e altrove, la creazione di una qualunque dir.
     const umaskPerModo = 0o777 & ~socketMode;
     const umaskPrecedente = process.umask(umaskPerModo);
 
     server.listen(socketPath, () => {
-      // Ripristinata appena il socket esiste: la umask è globale al processo e
-      // non deve restare alterata per il resto della vita dell'applicazione.
-      try { process.umask(umaskPrecedente); } catch (_) { /* non fatale */ }
+      ripristinaUmask();
 
       let modoEffettivo = null;
       try {
