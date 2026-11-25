@@ -667,6 +667,19 @@ e senza ancoraggi, e wildcard su segmento vuoto.
 > del contesto zona per zona, header per superficie, HSTS gated, non-sovrascrive,
 > risposte di errore), più la verifica sulle risposte **reali** di un server
 > avviato.
+>
+> **Rifinita il 2026-11-25 (v3.51.0), su revisione del codice.** Due cuciture:
+> **(a)** `secure: true` sul cookie di sessione **con HTTPS acceso ma HTTP ancora
+> in ascolto** fa rispondere **500** a ogni richiesta HTTP — il modulo `cookies`
+> lancia invece di degradare. Ora il flag è `true` solo quando l'HTTP non è una
+> via d'accesso, cioè `https.enabled && AutoRedirectHttpPortToHttpsPort`; nel
+> caso a doppio ascolto resta `false` **con un avviso al boot** che nomina il
+> perché. La decisione è estratta in `resolveSecureCookieFlag()`, verificabile da
+> sola. **(b)** `X-Frame-Options: DENY` sulle superfici riservate arrivava dal
+> `.default`, quindi un'installazione **già esistente** — che il `.default` non lo
+> rigenera — restava senza l'header fino alla migrazione. Ora il default severo è
+> **nel codice** (`DEFAULTS_PER_CONTESTO`), e il config lo sovrascrive solo se lo
+> dichiara: l'indurimento vale dal **primo** riavvio.
 
 **Severità:** 🔴 alta (sistemica) · **Sforzo:** medio · **Natura:** lavoro nuovo, non una correzione
 
@@ -1114,6 +1127,15 @@ efficace contro la regressione.
 > scheda nota essere « corretto per caso » perché l'hash avveniva prima della
 > lettura, ora lo è per costruzione: l'equilibrio non dipende più dall'ordine
 > delle righe.
+>
+> **Rifinita il 2026-11-25 (v3.51.0), su revisione del codice.** Rimettere il
+> delta dentro il mutatore ha chiuso il lost update, ma il **rinomino** dello
+> username aveva ancora una finestra: il controllo di collisione girava sul dato
+> letto **prima** della coda, quindi due rinomini verso lo stesso nome nuovo
+> potevano passarlo entrambi — e il secondo avrebbe **sovrascritto** l'utente
+> appena creato dal primo. Ora la collisione è ricontrollata sul dato **riletto**
+> dentro il mutatore, che annulla la scrittura e risponde **409** nominando lo
+> username appena preso.
 
 **Severità:** 🟠 media · **Sforzo:** basso
 
@@ -1220,6 +1242,33 @@ correzioni puntuali.
 > *Nota registrata in `TODO.md`:* sotto `backups/` convivono ora **tre** schemi di
 > nomi (`backup-*` degli snapshot a comando, `init-*` del wizard, e
 > `systemSettings/`), e nessuno dei tre pota gli altri.
+>
+> **Rifinita il 2026-11-25 (v3.51.0), su revisione del codice.** Due cose, e la
+> seconda era più grave della card.
+>
+> **(a) La scrittura chirurgica non era atomica nell'insieme.** Le chiavi erano
+> scritte una per una **sul file vivo**: un guasto a metà (disco pieno, processo
+> ucciso) lasciava il config con alcune chiavi nuove e altre vecchie — proprio lo
+> stato incoerente che la card voleva evitare, solo più piccolo. Ora le scritture
+> vanno su una **copia**, e il file vivo è sostituito con un `rename` finale: o
+> tutte o nessuna. Se qualcosa cade, la copia è rimossa e la risposta dice dove
+> sta il backup.
+>
+> **(b) Salvare da System Settings era IMPOSSIBILE, non distruttivo.** Emerso
+> mentre scrivevo il presidio di (a): `validateSystemConfig()` pretendeva
+> `useHttps`, `httpsPort` e `AutoRedirectHttpPortToHttpsPort` — i nomi **piatti**
+> della struttura precedente al blocco `https` annidato, che il config non ha più.
+> La GUI è un editor: carica il config e rimanda ciò che ha caricato, quindi ogni
+> salvataggio rispondeva **« Campo obbligatorio mancante »** e la sezione era
+> inutilizzabile. Difetto **preesistente** a questa revisione, e a suite verde:
+> i test chiamavano il validatore con payload scritti a mano nella forma che lui
+> si aspettava, **mai** con il config reale.
+>
+> **Il presidio che mancava è il round-trip della cucitura:** ciò che
+> `getSystemConfig()` carica deve essere un config che `validateSystemConfig()`
+> accetta; e ogni campo che il validatore reclama deve **esistere** nel config
+> spedito — lista ricavata interrogando il validatore stesso, così il test non la
+> duplica. Reintrodotto il difetto, cadono 4 test.
 
 **Severità:** 🟠 alta · **Sforzo:** medio · **Decisione del progetto violata:** D1 (scrittura chirurgica)
 
@@ -1467,6 +1516,16 @@ Lettura del codice, applicando la semantica standard di JavaScript:
 > **Presidi:** 18 test in `tests/unit/core/resolveInsideRoot.test.js`, fra cui
 > tre **strutturali** che pretendono che entrambi i punti deleghino e che la forma
 > sbagliata non compaia più nel codice.
+>
+> **Rifinita il 2026-11-25 (v3.51.0), su revisione del codice.** La delega al
+> controllo condiviso aveva una **regressione di comportamento**: `path.join`
+> ignora lo slash iniziale del secondo argomento, `path.resolve` lo tratta come
+> assoluto e porta **fuori** dalla radice. Misurato: `/about.ejs` — la forma
+> naturale nel campo di testo del pannello — passava da **accettato** a
+> **rifiutato**. Ora `isPathSafe` normalizza lo slash iniziale prima di delegare;
+> `core/resolveInsideRoot` resta **stretto** (là un percorso assoluto è assoluto,
+> e `adminMedia` conta su quello). La guardia è esportata e presidiata da sola,
+> 17 test, inclusi i casi che devono restare rifiutati (`/../fuori.ejs`).
 
 **Severità:** 🟠 media (admin-only) · **Sforzo:** minimo
 
@@ -1818,6 +1877,16 @@ oppure rimuovere la rotta. Se serve per i test, spostarla dietro `debugMode`.
 > (`clientId` / `clientKey`), perché il difetto è nato da quell'ambiguità.
 >
 > **Presidi:** 18 test in `plugins/rateLimiter/tests/unit/ipv6AndCap.test.js`.
+>
+> **Rifinita il 2026-11-25 (v3.51.0), su revisione del codice.** Il tetto c'era
+> ma costava troppo: lo sfratto ordinava **l'intera** mappa per trovare una voce
+> sola, cioè O(n log n) a ogni inserimento oltre il tetto — il lavoro peggiora
+> proprio mentre l'attacco riempie la mappa. Ora è una scansione singola che
+> tiene il minimo (misurato su 10 000 voci: **1,36 ms → 0,69 ms**), e la voce
+> appena creata è **protetta** dallo sfratto: sfrattare quella che stai scrivendo
+> rende il contatore azzerabile a comando. Il tetto è inoltre **configurabile**
+> (`custom.maxTrackedEntries`, `schemaVersion` 2→3) invece che costante nel
+> codice: chi ospita molte regole su molti IP deve poterlo alzare.
 
 **Dove:** `plugins/rateLimiter/lib/keyResolver.js:22`, `plugins/rateLimiter/lib/rateLimitEngine.js:40`
 

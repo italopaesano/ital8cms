@@ -40,12 +40,35 @@
 
 const { resolvePathZones, zoneForPath } = require('../pathZoneResolver');
 
-/** Valori di default, usati quando la chiave manca dal config. */
+/**
+ * Valori di default, usati quando la chiave manca dal config.
+ *
+ * ⚠️ Devono coincidere con ciò che il `.default` spedisce, e non essere « il
+ * valore neutro »: un'installazione che si **aggiorna** legge il config vivo
+ * PRIMA che il merge additivo del boot gli aggiunga le chiavi nuove —
+ * `priorityMiddleware()` gira a livello di modulo (`index.js:190`),
+ * `reconcileSchemaVersions` dentro `startApp()`. Misurato con un vivo
+ * pre-aggiornamento: l'area admin **non riceveva `X-Frame-Options`** fino al
+ * secondo riavvio.
+ *
+ * Il default del codice è quindi quello **sicuro**, e il config serve a
+ * rilassarlo — non ad accenderlo.
+ */
 const DEFAULTS = Object.freeze({
   nosniff: true,
   referrerPolicy: 'strict-origin-when-cross-origin',
-  frameOptions: '',                 // '' = non emesso
+  frameOptions: '',                 // '' = non emesso (sito pubblico)
   csp: Object.freeze({ enabled: false, policy: '' }),
+});
+
+/**
+ * Default per contesto, dove il valore sicuro dipende dalla superficie.
+ *
+ * Solo `admin`: sul sito pubblico `X-Frame-Options` resta non emesso di
+ * proposito — una pagina pubblica può legittimamente essere inquadrata.
+ */
+const DEFAULTS_PER_CONTESTO = Object.freeze({
+  admin: Object.freeze({ frameOptions: 'DENY' }),
 });
 
 /** Nomi dei contesti configurabili. */
@@ -65,8 +88,9 @@ function contextForZone(zone) {
 }
 
 /** Fonde il config di un contesto con i default, una volta sola alla costruzione. */
-function contextSettings(raw) {
+function contextSettings(raw, contesto) {
   const conf = raw || {};
+  const perContesto = DEFAULTS_PER_CONTESTO[contesto] || {};
   return Object.freeze({
     nosniff: conf.nosniff !== false,
     referrerPolicy: typeof conf.referrerPolicy === 'string'
@@ -74,7 +98,7 @@ function contextSettings(raw) {
       : DEFAULTS.referrerPolicy,
     frameOptions: typeof conf.frameOptions === 'string'
       ? conf.frameOptions
-      : DEFAULTS.frameOptions,
+      : (perContesto.frameOptions !== undefined ? perContesto.frameOptions : DEFAULTS.frameOptions),
     csp: Object.freeze({
       enabled: conf.csp ? conf.csp.enabled === true : false,
       policy: conf.csp && typeof conf.csp.policy === 'string' ? conf.csp.policy : '',
@@ -94,7 +118,7 @@ function createSecurityHeaders({ ital8Conf }) {
   const zoneMap = resolvePathZones(ital8Conf);
 
   const perContext = Object.freeze(Object.fromEntries(
-    CONTEXTS.map((name) => [name, contextSettings(conf[name])])
+    CONTEXTS.map((name) => [name, contextSettings(conf[name], name)])
   ));
 
   // HSTS non è per contesto, ed è una scelta: la direttiva vale per l'INTERA
@@ -147,4 +171,4 @@ function createSecurityHeaders({ ital8Conf }) {
   };
 }
 
-module.exports = { createSecurityHeaders, contextForZone, CONTEXTS, DEFAULTS };
+module.exports = { createSecurityHeaders, contextForZone, CONTEXTS, DEFAULTS, DEFAULTS_PER_CONTESTO };

@@ -250,7 +250,17 @@ function isPathSafe(filePath) {
     // `adminMedia/lib/mediaManager.js`, a due file di distanza da questa: una
     // copia giusta e una sbagliata sono il modo in cui una correzione ne
     // raggiunge una sola. Ora è una sola, in `core/`.
-    return isInsideRoot(getWwwPath(), filePath);
+    // Lo slash iniziale è TOLLERATO: questo percorso arriva da un campo di testo
+    // libero del pannello, dove `/about.ejs` è la forma naturale, e il valore è
+    // per contratto relativo a `/www`. Prima funzionava perché `path.join`
+    // ignora lo slash iniziale del secondo argomento; `path.resolve` invece lo
+    // tratta come assoluto e porta FUORI dalla radice — misurato,
+    // `/about.ejs` passava da accettato a rifiutato.
+    //
+    // Si toglie qui e non in `core/resolveInsideRoot`, che resta stretto: là un
+    // percorso assoluto è un percorso assoluto, e `adminMedia` conta su quello.
+    const relativo = String(filePath || '').replace(/^[/\\]+/, '');
+    return isInsideRoot(getWwwPath(), relativo);
 }
 
 /**
@@ -1593,5 +1603,9 @@ module.exports = {
     deleteFolder,
     getFoldersList,
     getThemeInfo,
-    getRoutes
+    getRoutes,
+    // Esportata per il presidio: è la guardia che decide se un percorso può
+    // essere scritto dentro /www, e una guardia va verificabile da sola
+    // (REVIEW.md → B5, più la regressione dello slash iniziale della v3.51.0).
+    isPathSafe
 };

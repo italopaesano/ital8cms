@@ -78,9 +78,7 @@ function validateSystemConfig(config) {
         'wwwPath',
         'debugMode',
         'httpPort',
-        'useHttps',
-        'httpsPort',
-        'AutoRedirectHttpPortToHttpsPort'
+        'https'
     ];
 
     // Verifica presenza campi obbligatori
@@ -143,10 +141,28 @@ function validateSystemConfig(config) {
         }
     }
 
-    if (config.httpsPort !== undefined) {
-        // httpsPort può essere stringa vuota o numero
-        if (config.httpsPort !== '' && (typeof config.httpsPort !== 'number' || config.httpsPort < 1 || config.httpsPort > 65535)) {
-            errors.push('httpsPort deve essere un numero tra 1 e 65535 o stringa vuota');
+    // Blocco https: la forma REALE del config. Le chiavi piatte useHttps / httpsPort /
+    // AutoRedirectHttpPortToHttpsPort appartengono alla struttura precedente al blocco
+    // annidato e non esistono più. Pretenderle rendeva il salvataggio IMPOSSIBILE: la
+    // GUI è un editor che rimanda il config appena caricato, e il validatore lo
+    // rifiutava sempre con "Campo obbligatorio mancante". Presidiato dal round-trip
+    // getSystemConfig() -> validateSystemConfig() in tests/unit/admin/systemSettings.test.js
+    if (config.https !== undefined) {
+        if (typeof config.https !== 'object' || config.https === null || Array.isArray(config.https)) {
+            errors.push('https deve essere un oggetto');
+        } else {
+            if (config.https.enabled !== undefined && typeof config.https.enabled !== 'boolean') {
+                errors.push('https.enabled deve essere true o false');
+            }
+            if (config.https.port !== undefined) {
+                // la porta può restare stringa vuota quando HTTPS non è configurato
+                if (config.https.port !== '' && (typeof config.https.port !== 'number' || config.https.port < 1 || config.https.port > 65535)) {
+                    errors.push('https.port deve essere un numero tra 1 e 65535 o stringa vuota');
+                }
+            }
+            if (config.https.AutoRedirectHttpPortToHttpsPort !== undefined && typeof config.https.AutoRedirectHttpPortToHttpsPort !== 'boolean') {
+                errors.push('https.AutoRedirectHttpPortToHttpsPort deve essere true o false');
+            }
         }
     }
 
@@ -159,18 +175,6 @@ function validateSystemConfig(config) {
     if (config.enableAdmin !== undefined) {
         if (typeof config.enableAdmin !== 'boolean') {
             errors.push('enableAdmin deve essere true o false');
-        }
-    }
-
-    if (config.useHttps !== undefined) {
-        if (typeof config.useHttps !== 'boolean') {
-            errors.push('useHttps deve essere true o false');
-        }
-    }
-
-    if (config.AutoRedirectHttpPortToHttpsPort !== undefined) {
-        if (typeof config.AutoRedirectHttpPortToHttpsPort !== 'boolean') {
-            errors.push('AutoRedirectHttpPortToHttpsPort deve essere true o false');
         }
     }
 
@@ -316,8 +320,32 @@ async function updateSystemConfig(newConfig) {
         // recupera, un file perso no.
         const backupPath = backupConfigBeforeWrite(configPath);
 
-        for (const { keyPath, value } of changed) {
-            await setJson5Key(configPath, keyPath, value);
+        // ── Tutto-o-niente (rilievo della revisione v3.51.0) ─────────────────
+        //
+        // Le chiavi si applicano a una COPIA, che prende il posto dell'originale
+        // solo se tutte sono andate a buon fine. Prima il ciclo scriveva in
+        // posto: un errore a metà — un `setJson5Key` che non trova il path, un
+        // disco pieno — lasciava alcune chiavi scritte e altre no, rispondeva
+        // con un errore generico e non restituiva nemmeno il `backupPath`, cioè
+        // non diceva dove recuperare. Una configurazione a metà è peggio di una
+        // modifica rifiutata.
+        const tempPath = `${configPath}.applying`;
+        fs.copyFileSync(configPath, tempPath);
+
+        try {
+            for (const { keyPath, value } of changed) {
+                await setJson5Key(tempPath, keyPath, value);
+            }
+            // Lo scambio è atomico: o c'è il file di prima, o quello nuovo.
+            fs.renameSync(tempPath, configPath);
+        } catch (err) {
+            try { fs.unlinkSync(tempPath); } catch (_) { /* potrebbe non esistere */ }
+            return {
+                success: false,
+                error: `Scrittura annullata: ${err.message}. Nessuna chiave è stata modificata.`,
+                changedKeys: changed.map((c) => c.keyPath.join('.')),
+                backupPath,
+            };
         }
 
         return {

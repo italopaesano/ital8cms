@@ -213,6 +213,9 @@ module.exports = {
 
     // Motore
     engine = new RateLimitEngine({
+      // Tetto alle voci tracciate (REVIEW.md → C2). Arriva dal config: fino alla
+      // v3.51.0 l'opzione esisteva nell'engine ma nessuno la passava.
+      maxEntries: Number.isInteger(custom.maxTrackedEntries) ? custom.maxTrackedEntries : undefined,
       resolvePolicy,
       onEvent: (ev) => {
         if (custom.enableLogging) {

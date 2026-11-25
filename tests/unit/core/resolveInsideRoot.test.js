@@ -91,7 +91,11 @@ describe('non esistono più due copie del controllo', () => {
   test('isPathSafe delega al controllo condiviso', () => {
     const src = leggi('plugins/admin/pagesManagment.js');
     expect(src).toMatch(/require\(['"]\.\.\/\.\.\/core\/resolveInsideRoot['"]\)/);
-    expect(src).toMatch(/isInsideRoot\(getWwwPath\(\), filePath\)/);
+    // L'invariante è la DELEGA, non il nome dell'argomento: dalla v3.51.0 il
+    // percorso passa per una normalizzazione dello slash iniziale, quindi
+    // l'argomento non si chiama più `filePath`. Inchiodare il presidio al nome
+    // lo faceva cadere su una correzione corretta.
+    expect(src).toMatch(/isInsideRoot\(getWwwPath\(\),\s*\w+\)/);
     // La forma sbagliata non deve più comparire nel codice.
     expect(src).not.toMatch(/normalizedPath\.startsWith\(wwwPath\)/);
   });
