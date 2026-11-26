@@ -59,17 +59,31 @@ tests/
 
 ```bash
 # Tutti i test
-npx jest --verbose
+npx jest --config=tests/jest.config.js --verbose
 
 # Solo unit test
-npx jest tests/unit --verbose
+npx jest --config=tests/jest.config.js tests/unit --verbose
 
 # Solo test HTTPS (diagnostica)
-npx jest tests/integration/httpsDiagnostics.test.js --verbose
+npx jest --config=tests/jest.config.js tests/integration/httpsDiagnostics.test.js --verbose
 
 # Watch mode (sviluppo)
-npx jest --watch
+npx jest --config=tests/jest.config.js --watch
 ```
+
+> ⚠️ **Il `--config=tests/jest.config.js` non è opzionale, ed è una trappola
+> silenziosa.** Il progetto non ha un `jest.config.js` nella radice: senza il
+> flag, jest usa i propri default, quindi **non esegue `tests/globalSetup.js`** —
+> che è il file che sostituisce le chiavi di sessione pubbliche con chiavi
+> casuali vere. Senza quella sostituzione il gate `[SESSION]` fa **`exit 1`** su
+> ogni server che i test di integrazione avviano, e con i default jest raccoglie
+> anche gli spec Playwright di `tests/e2e/`, che non sono suoi.
+>
+> Il risultato non assomiglia a un errore di invocazione: **misurato, 155 test
+> falliti in 17 suite**, con messaggi che parlano di porte, socket e timeout — e
+> si finisce a cercare un difetto del codice che non esiste. Le righe qui sopra
+> portavano il flag solo più in basso in questo documento: ora lo portano tutte.
+> La via a prova di errore resta `npm test`, che lo passa da sé.
 
 ### Test di Integrazione HTTPS: httpsDiagnostics.test.js
 

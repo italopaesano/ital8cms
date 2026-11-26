@@ -19,5 +19,14 @@
       reason:
         "I percorsi di `exemptPaths` erano letterali (`/admin/**`) mentre i prefissi a  cui puntano sono VARIABILI di ital8Config.json5: cambiare `adminPrefix`  faceva perdere l'esenzione senza che nulla lo segnalasse. La conseguenza qui  e piu grave che in altri config: `exemptPaths` esiste per non auto-bloccare  l'amministratore sul pannello, quindi un'esenzione che non combacia gli  toglie proprio lo strumento con cui correggerebbe la cosa. Serve una  migrazione perche il merge additivo del boot sa solo aggiungere chiavi, e qui  le chiavi sono le stesse: cambiano i valori dentro un array, che il merge  tratta come un valore opaco. Lo script converte un elemento solo se e  esattamente uno dei tre distribuiti, preserva l'ordine, e dichiara cio che  non ha convertito: un percorso aggiunto o modificato dall'amministratore non  viene toccato.",
     },
+    {
+      from: 2,
+      to: 3,
+      title: "il tetto delle voci tracciate diventa configurabile",
+      automatic: true,
+      touches: ["pluginConfig.json5"],
+      reason:
+        "Aggiunge `custom.maxTrackedEntries` (default 10000, cioe' il valore che  prima era una costante nel codice). Il tetto limita quante coppie  `IP|regola` il motore tiene in memoria: serviva a non far crescere la mappa  senza limite sotto un attacco distribuito, ma inchiodato nel codice e'  il valore sbagliato per due installazioni opposte — chi ospita molte regole  su molti indirizzi lo raggiunge in esercizio normale e perde contatori che  gli servono, chi gira su una macchina piccola lo vorrebbe molto piu' basso.  NESSUNO SCRIPT: e' una pura aggiunta, che il merge additivo del boot sa  applicare da se'. Lo step e' dichiarato perche' il runner pretende che la  catena copra l'intero salto di schemaVersion: senza, il boot stampa che la  catena non copre il salto v2 -> v3 e la ignora. L'esito sarebbe corretto  comunque, ma un box che grida al lupo su un aggiornamento sano insegna a  non leggerlo.",
+    },
   ],
 }

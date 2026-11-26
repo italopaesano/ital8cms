@@ -1,6 +1,6 @@
 // This file follows the JSON5 standard - comments and trailing commas are supported
 {
-  "schemaVersion": 2,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
+  "schemaVersion": 3,  // Versione della STRUTTURA del file (incrementare quando cambiano le chiavi). Vedi docs/decisions/config-lifecycle.it.md
   "active": 1,
   "weight": 5,
   "dependency": {},
@@ -126,6 +126,20 @@
     // Intervallo (secondi) dello sweep periodico che rimuove dalla memoria i blocchi
     // scaduti e le voci ormai inattive (mantiene l'uso di RAM limitato).
     "sweepIntervalSeconds": 60,
+
+    // Tetto alle voci tracciate in memoria (coppie IP+regola con almeno un
+    // fallimento). Senza un tetto la mappa cresce senza limite sotto un attacco
+    // distribuito, e con lei il file di stato — riscritto per intero a ogni
+    // flush (REVIEW.md → C2).
+    //
+    // Lo sfratto sacrifica PRIMA le voci senza blocco attivo, dalla meno
+    // recente; solo se tutte sono bloccate, quella il cui blocco scade prima.
+    // Sfrattare un blocco attivo rilascerebbe un attaccante.
+    //
+    // 10.000 voci sono generose per un CMS single-process e stanno in pochi MB.
+    // Alzarlo costa memoria e un po' di CPU per inserimento quando il tetto è
+    // raggiunto (lo sfratto scorre le voci una volta).
+    "maxTrackedEntries": 10000,
 
     // Logga su console ogni evento (fallimento / short block / long block / success).
     "enableLogging": true,

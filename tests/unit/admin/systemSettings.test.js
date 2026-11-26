@@ -155,18 +155,167 @@ describe('updateSystemConfig usa davvero la scrittura chirurgica', () => {
   const SRC = path.join(__dirname, '../../../plugins/admin/systemSettings.js');
 
   test('non riscrive più il file intero', () => {
-    // Si asserisce sulle DUE righe che facevano la riscrittura — il temp e il
-    // rename del file intero — e non sulla stringa `JSON.stringify(newConfig)`:
-    // quella compare ancora nel commento che spiega il difetto, e un presidio
-    // che cade su un commento è un presidio che insegna a cancellare i commenti.
+    // ⚠️ Questo presidio asseriva l'ASSENZA di `fs.renameSync(tempPath, configPath)`,
+    // cioè la forma della riscrittura totale. Dalla v3.51.0 un temp + rename c'è
+    // di nuovo, ma per la ragione opposta: le chiavi si applicano a una COPIA che
+    // prende il posto dell'originale solo se TUTTE riescono (prima un errore a
+    // metà lasciava il config a metà). Quindi l'invariante da presidiare non è
+    // « nessun rename » ma « nessuna serializzazione dell'oggetto intero ».
     const src = fs.readFileSync(SRC, 'utf8');
-    expect(src).not.toMatch(/fs\.writeFileSync\(tempPath/);
-    expect(src).not.toMatch(/fs\.renameSync\(tempPath, configPath\)/);
+    const codice = src
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n').filter((r) => !r.trim().startsWith('//') && !r.trim().startsWith('*')).join('\n');
+
+    expect(codice).not.toMatch(/JSON\.stringify\(\s*newConfig/);
+    expect(codice).not.toMatch(/fs\.writeFileSync\(\s*(?:tempPath|configPath)\s*,\s*configContent/);
+  });
+
+  test('applica le chiavi a una COPIA e scambia in modo atomico', () => {
+    const src = fs.readFileSync(SRC, 'utf8');
+    expect(src).toMatch(/fs\.copyFileSync\(configPath, tempPath\)/);
+    expect(src).toMatch(/await setJson5Key\(tempPath, keyPath, value\)/);
+    expect(src).toMatch(/fs\.renameSync\(tempPath, configPath\)/);
   });
 
   test('scrive per chiave con setJson5Key', () => {
     const src = fs.readFileSync(SRC, 'utf8');
     expect(src).toMatch(/require\(['"]\.\.\/\.\.\/core\/setJson5Key['"]\)/);
-    expect(src).toMatch(/await setJson5Key\(configPath, keyPath, value\)/);
+    expect(src).toMatch(/setJson5Key\([a-zA-Z]+, keyPath, value\)/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// La scrittura è TUTTO-O-NIENTE (review della v3.51.0)
+//
+// Il ciclo per-foglia scriveva in posto: un errore a metà — un `setJson5Key`
+// che non trova il path, un disco pieno — lasciava alcune chiavi scritte e
+// altre no, rispondeva con un errore generico e non restituiva nemmeno il
+// `backupPath`, cioè non diceva dove recuperare. Una configurazione a metà è
+// peggio di una modifica rifiutata.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('un guasto a metà non lascia il config a metà', () => {
+  const VIVO = path.join(__dirname, '../../../ital8Config.json5');
+  let salvataggio;
+
+  beforeEach(() => {
+    salvataggio = fs.readFileSync(VIVO, 'utf8');
+    jest.resetModules();
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    fs.writeFileSync(VIVO, salvataggio, 'utf8');
+    jest.restoreAllMocks();
+    jest.resetModules();
+  });
+
+  test('il file resta identico se una scrittura fallisce a metà', async () => {
+    const prima = fs.readFileSync(VIVO, 'utf8');
+
+    // `setJson5Key` fallisce dalla SECONDA chiave: la prima è già applicata
+    // sulla copia, quindi senza lo scambio atomico il file resterebbe a metà.
+    let chiamate = 0;
+    jest.doMock('../../../core/setJson5Key', () => async (...args) => {
+      chiamate += 1;
+      if (chiamate > 1) throw new Error('disco pieno (simulato)');
+      return jest.requireActual('../../../core/setJson5Key')(...args);
+    });
+
+    const { updateSystemConfig } = require('../../../plugins/admin/systemSettings');
+    const config = loadJson5(VIVO);
+
+    const esito = await updateSystemConfig({
+      ...config,
+      httpPort: 3999,
+      debugMode: config.debugMode === 1 ? 0 : 1,
+    });
+
+    expect(chiamate).toBeGreaterThan(1);                 // il guasto è scattato
+    expect(esito.success).toBe(false);
+    expect(esito.error).toMatch(/annullata/i);
+    expect(esito.backupPath).toBeDefined();              // dice DOVE recuperare
+    expect(fs.readFileSync(VIVO, 'utf8')).toBe(prima);   // e il file non è cambiato
+  });
+
+  test('nessun file temporaneo resta in giro dopo un fallimento', () => {
+    expect(fs.existsSync(`${VIVO}.applying`)).toBe(false);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// La cucitura fra le due metà della stessa sezione.
+//
+// La GUI di System Settings è un editor: carica il config con getSystemConfig()
+// e rimanda al salvataggio esattamente ciò che ha caricato. Le due metà devono
+// quindi parlare della STESSA forma. Non lo facevano: validateSystemConfig()
+// pretendeva `useHttps` / `httpsPort` / `AutoRedirectHttpPortToHttpsPort`, nomi
+// piatti della struttura precedente al blocco `https` annidato. Conseguenza
+// misurata: ogni salvataggio rispondeva "Campo obbligatorio mancante" e la
+// sezione era inutilizzabile — difetto a suite verde, perché i test esistenti
+// chiamavano il validatore con payload scritti a mano nella forma che si
+// aspettava, mai con il config reale.
+// ──────────────────────────────────────────────────────────────────────────────
+describe('le due metà della sezione parlano della stessa forma', () => {
+  const DEFAULT = path.join(__dirname, '../../../ital8Config.default.json5');
+
+  test('il config che la GUI carica è un config che la GUI può salvare', () => {
+    const { getSystemConfig, validateSystemConfig } = require('../../../plugins/admin/systemSettings');
+
+    const caricato = getSystemConfig();
+    expect(caricato.success).toBe(true);
+
+    const esito = validateSystemConfig(caricato.config);
+    expect(esito.errors).toEqual([]);
+    expect(esito.valid).toBe(true);
+  });
+
+  test('ogni campo obbligatorio esiste davvero nel config spedito', () => {
+    const { validateSystemConfig } = require('../../../plugins/admin/systemSettings');
+    const spedito = loadJson5(DEFAULT);
+
+    // Si ricava la lista degli obbligatori dal validatore stesso: gli si passa
+    // un oggetto vuoto e si leggono i nomi che reclama. Così il presidio non
+    // duplica la lista — se qualcuno ne aggiunge uno inesistente, qui diventa
+    // rosso senza che nessuno si ricordi di aggiornare il test.
+    const reclamati = validateSystemConfig({}).errors
+      .map((riga) => /Campo obbligatorio mancante: "(.+)"/.exec(riga))
+      .filter(Boolean)
+      .map((m) => m[1]);
+
+    expect(reclamati.length).toBeGreaterThan(5);
+
+    const inesistenti = reclamati.filter((campo) => !(campo in spedito));
+    expect(inesistenti).toEqual([]);
+  });
+
+  test('i tipi sbagliati dentro il blocco https vengono ancora colti', () => {
+    const { getSystemConfig, validateSystemConfig } = require('../../../plugins/admin/systemSettings');
+    const base = getSystemConfig().config;
+
+    const casi = [
+      [{ enabled: 'si' }, /https\.enabled/],
+      [{ port: 99999 }, /https\.port/],
+      [{ port: 0 }, /https\.port/],
+      [{ AutoRedirectHttpPortToHttpsPort: 1 }, /AutoRedirect/],
+    ];
+
+    for (const [patch, atteso] of casi) {
+      const esito = validateSystemConfig({ ...base, https: { ...base.https, ...patch } });
+      expect(esito.valid).toBe(false);
+      expect(esito.errors.join(' ')).toMatch(atteso);
+    }
+
+    // porta non configurata: stringa vuota resta lecita
+    expect(validateSystemConfig({ ...base, https: { ...base.https, port: '' } }).valid).toBe(true);
+
+    // il blocco deve esserci, e deve essere un oggetto
+    const senzaHttps = { ...base };
+    delete senzaHttps.https;
+    expect(validateSystemConfig(senzaHttps).valid).toBe(false);
+    expect(validateSystemConfig({ ...base, https: 'x' }).valid).toBe(false);
+    expect(validateSystemConfig({ ...base, https: [] }).valid).toBe(false);
   });
 });

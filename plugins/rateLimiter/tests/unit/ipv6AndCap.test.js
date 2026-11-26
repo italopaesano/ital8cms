@@ -175,3 +175,55 @@ describe('il tetto alle voci tracciate', () => {
     expect(engine.maxEntries).toBe(10000);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Il tetto è configurabile DAVVERO (review della v3.51.0)
+//
+// L'opzione `maxEntries` esisteva nell'engine ed era documentata come
+// configurabile, ma nessuno la passava e non c'era una chiave di config: il
+// tetto era sempre il default, e la frase « chi ha bisogno di più lo configura »
+// era falsa.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('maxTrackedEntries arriva dal config', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const loadJson5 = require('../../../../core/loadJson5');
+
+  test('il `.default` del plugin dichiara la chiave', () => {
+    const cfg = loadJson5(path.join(__dirname, '../../pluginConfig.default.json5'));
+    expect(cfg.custom.maxTrackedEntries).toBe(10000);
+  });
+
+  test('main.js la passa all\'engine', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../../main.js'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n').filter((r) => !r.trim().startsWith('//') && !r.trim().startsWith('*')).join('\n');
+
+    expect(src).toMatch(/maxEntries:\s*Number\.isInteger\(custom\.maxTrackedEntries\)/);
+  });
+
+  test('un valore dal config sostituisce il default', () => {
+    const policy = {
+      findWindowSeconds: 600, maxFailures: 3, shortBlockSeconds: 60,
+      maxShortBlocks: 2, longBlockSeconds: 3600, escalationResetSeconds: 86400,
+    };
+    const engine = new RateLimitEngine({ resolvePolicy: () => policy, maxEntries: 7 });
+
+    for (let i = 0; i < 50; i += 1) engine.recordFailure(`c${i}`, 'r');
+
+    expect(engine.state.size).toBe(7);
+  });
+
+  test('un valore non valido ricade sul default, non su zero', () => {
+    const policy = {
+      findWindowSeconds: 600, maxFailures: 3, shortBlockSeconds: 60,
+      maxShortBlocks: 2, longBlockSeconds: 3600, escalationResetSeconds: 86400,
+    };
+    for (const valore of [0, -5, 1.5, 'molte', null]) {
+      const engine = new RateLimitEngine({ resolvePolicy: () => policy, maxEntries: valore });
+      expect(engine.maxEntries).toBe(10000);
+    }
+  });
+});
+

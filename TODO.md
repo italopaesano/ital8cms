@@ -298,6 +298,34 @@ Fonte: `docs/roadmap.it.md` (punti 11–15) e osservazioni di sessione.
       messaggio di fallimento. Applicato a **tutti e 13 i siti** dei due harness (11 in
       `bootLifecycle`, che non aveva ricevuto nulla nella v2.95.0, e 2 in
       `pluginNpmInstall`).
+- [x] ~~**E la terza volta era contesa di porta — ma non quella che si era esclusa**~~
+      (v3.51.0). Il 25/11/2026 il job con copertura di una PR ha fallito
+      `bootLifecycle` mentre i due job gemelli passavano, e per la prima volta il
+      messaggio **diceva perché**: il box `[SERVER]` « porta 35464 già in uso », cioè
+      proprio ciò che l'helper `expectBootListening` della voce precedente è stato
+      scritto per portare con sé. Senza quel lavoro sarebbe stata la quarta
+      iterazione di « flake senza causa ».
+      **Le due righe qui sopra non erano sbagliate, erano incomplete.** Con
+      `maxWorkers: 1` due server della suite non sono mai vivi insieme — e resta
+      vero. Ma la porta non la si contendeva con la suite: la si contendeva con il
+      **runner**. I due file pescavano `34000 + random(1500)` e `35000 +
+      random(1500)`, e quei range stanno **dentro l'intervallo effimero di Linux**
+      (tipicamente 32768-60999), cioè quello da cui il kernel prende le porte delle
+      connessioni in **uscita** — npm, git, le chiamate a GitHub. Nessun `maxWorkers`
+      può evitarlo. In più i due range si **sovrappongono** fra 35000 e 35500, e
+      35464 cade proprio lì.
+      **Corretto chiedendo la porta al kernel** invece di tirarla a sorte:
+      `tests/integration/reservePort.js` fa `listen(0)`, legge la porta assegnata e
+      chiude — e una porta in ascolto il kernel non la assegna. La finestra residua
+      (fra la nostra `close()` e la `listen()` del figlio) è coperta da un
+      ritentativo **singolo** in `runBoot`, che riconosce il box e riprova con una
+      porta nuova. Verificato sul percorso reale: occupata la porta del config, il
+      boot stampa il box e `PORT_BUSY` lo riconosce; 5 porte riservate di fila sono
+      distinte e tutte bindabili subito dopo. È caduto anche l'ultimo numero scelto
+      a mano (`httpPort: 3457`, nel test che fa quattro boot in sequenza): il
+      ritentativo è esattamente il rimedio per cui quella porta fissa esisteva.
+      *(Resta aperto il consolidamento di `killProc` e degli altri pezzi duplicati
+      dei due harness: `reservePort.js` è il primo modulo condiviso fra i due.)*
 - [ ] **Flake in CI del 22/11/2026, causa IGNOTA** — `bootLifecycle.test.js` →
       « boot graceful: plugin NON essenziale con dep npm inesistente » è caduto su
       **Node 24** (`started: false`, `timedOut` falsy → il processo è **uscito**),

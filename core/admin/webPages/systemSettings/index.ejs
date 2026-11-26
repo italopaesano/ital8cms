@@ -99,9 +99,10 @@
                         <li><code>adminThemeResourcesPrefix</code> (string)</li>
                         <li><code>debugMode</code> (0 o 1)</li>
                         <li><code>httpPort</code> (number, 1-65535)</li>
-                        <li><code>useHttps</code> (boolean)</li>
-                        <li><code>httpsPort</code> (number o "")</li>
-                        <li><code>AutoRedirectHttpPortToHttpsPort</code> (boolean)</li>
+                        <li><code>https</code> (oggetto)</li>
+                        <li><code>https.enabled</code> (boolean)</li>
+                        <li><code>https.port</code> (number o "")</li>
+                        <li><code>https.AutoRedirectHttpPortToHttpsPort</code> (boolean)</li>
                     </ul>
                 </div>
             </div>
@@ -154,9 +155,14 @@
                             <code>0</code> = Disattivo<br>
                             <code>1</code> = Attivo</dd>
 
-                        <dt><code>useHttps</code></dt>
+                        <dt><code>https.enabled</code></dt>
                         <dd>Abilita server HTTPS<br>
                             <code>true</code> o <code>false</code></dd>
+
+                        <dt><code>https.AutoRedirectHttpPortToHttpsPort</code></dt>
+                        <dd>Redirect 301 da HTTP a HTTPS<br>
+                            Con <code>https.enabled</code> serve anche questo a <code>true</code>
+                            perché il cookie di sessione diventi <code>secure</code>.</dd>
                     </dl>
                 </div>
             </div>
@@ -182,9 +188,13 @@
   "adminThemeResourcesPrefix": "admin-theme-resources",
   "debugMode": 1,
   "httpPort": 3000,
-  "useHttps": false,
-  "httpsPort": "",
-  "AutoRedirectHttpPortToHttpsPort": false
+  "https": {
+    "enabled": false,
+    "port": 3443,
+    "AutoRedirectHttpPortToHttpsPort": false,
+    "certFile": "./certs/fullchain.pem",
+    "keyFile": "./certs/privkey.pem"
+  }
 }</code></pre>
                 </div>
             </div>

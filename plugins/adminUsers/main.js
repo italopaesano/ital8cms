@@ -647,6 +647,7 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
           // Ora il mutatore riceve il contenuto FRESCO dentro la coda del file e
           // riapplica il delta: il rename, l'email e l'hash. Chi arriva secondo
           // vede le modifiche del primo.
+          let collisioneRilevata = null;
           const esito = await updateJson5Serialized(userFilePath, (fresh) => {
             const presente = fresh.users[usernameChanged ? currentUsername : targetUsername];
             if (!presente) {
@@ -656,6 +657,16 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
             }
 
             if (usernameChanged) {
+              // ⚠️ La collisione va RICONTROLLATA qui, sul dato fresco: il
+              // controllo fatto prima dell'`await bcrypt.hash` guardava una copia
+              // vecchia del file. Se in quei ~100 ms qualcuno ha creato quello
+              // username, l'assegnazione qui sotto ne sovrascriverebbe hash,
+              // email e ruoli — e l'handler risponderebbe « riuscito ». È la
+              // variante peggiore del lost update che questa coda chiude.
+              if (Object.hasOwn(fresh.users, targetUsername)) {
+                collisioneRilevata = targetUsername;
+                return null;
+              }
               fresh.users[targetUsername] = { ...fresh.users[currentUsername] };
               delete fresh.users[currentUsername];
             }
@@ -667,7 +678,13 @@ function getRouteArray(){// restituirà un array contenente tutte le rotte che p
 
           if (!esito.written) {
             ctx.status = 409;
-            ctx.body = { error: 'L\'utente non esiste più: la modifica non è stata salvata.' };
+            ctx.body = collisioneRilevata
+              ? {
+                error: `Lo username "${collisioneRilevata}" è stato appena preso da un altro account: `
+                  + 'la modifica non è stata salvata.',
+                errorField: 'newUsername',
+              }
+              : { error: 'L\'utente non esiste più: la modifica non è stata salvata.' };
             return;
           }
 

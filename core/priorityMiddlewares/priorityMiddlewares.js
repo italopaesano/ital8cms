@@ -112,8 +112,17 @@ function priorityMiddleware(app, ital8Conf, options = {}){
         // solo sul lato HTTPS, quindi il login funziona solo là. È il
         // comportamento voluto — un cookie di sessione non deve passare in chiaro
         // — ma è un cambiamento rispetto a prima.
-        if (koaSessionConfig.CONFIG.secure === 'auto') {
-            koaSessionConfig.CONFIG.secure = ital8Conf.https?.enabled === true;
+        // Chiave assente = `"auto"`: il default del CODICE deve essere quello
+        // sicuro, perché un'installazione che si aggiorna legge il vivo PRIMA che
+        // il merge additivo gli aggiunga la chiave (vedi la nota sotto).
+        const secureConfigurato = koaSessionConfig.CONFIG.secure === undefined
+            ? 'auto'
+            : koaSessionConfig.CONFIG.secure;
+
+        if (secureConfigurato === 'auto') {
+            const esito = resolveSecureCookieFlag(ital8Conf);
+            koaSessionConfig.CONFIG.secure = esito.secure;
+            if (esito.warning) console.warn(esito.warning);
         }
 
         app.use(koaSession(koaSessionConfig.CONFIG, app));
@@ -219,4 +228,44 @@ function priorityMiddleware(app, ital8Conf, options = {}){
 
 
 
+/**
+ * Decide se il cookie di sessione va marcato `secure`.
+ *
+ * ⚠️ `secure: true` NON significa « il login funziona solo su HTTPS », come un
+ * commento di questo file affermava: significa che la libreria `cookies`
+ * **LANCIA** se le si chiede un cookie secure su una connessione in chiaro.
+ * Misurato: `Error: Cannot send secure cookie over unencrypted connection` →
+ * status **500** su ogni scrittura di sessione via HTTP, pagina di login
+ * compresa.
+ *
+ * Quindi si marca `secure` solo quando l'applicazione **non è raggiungibile in
+ * chiaro**: con `https.enabled` E il redirect attivo, la porta HTTP è servita
+ * dal server di redirect, che non tocca le sessioni. Nello scenario « HTTPS e
+ * HTTP in parallelo » il cookie resta non-secure — più debole, ma funzionante —
+ * e il boot lo dice invece di lasciarlo scoprire da un 500.
+ *
+ * @param {object} ital8Conf
+ * @returns {{secure: boolean, warning: string|null}}
+ */
+function resolveSecureCookieFlag(ital8Conf) {
+    const httpsAttivo = ital8Conf?.https?.enabled === true;
+    const redirectAttivo = ital8Conf?.https?.AutoRedirectHttpPortToHttpsPort === true;
+    const soloHttps = httpsAttivo && redirectAttivo;
+
+    if (httpsAttivo && !soloHttps) {
+        return {
+            secure: false,
+            warning: '[PriorityMiddleware] \u26a0  cookie di sessione NON marcato `secure`: '
+                + "l'app è servita anche in chiaro (https.enabled con "
+                + 'AutoRedirectHttpPortToHttpsPort: false). Marcarlo farebbe fallire con 500 '
+                + 'ogni richiesta HTTP. Attiva il redirect per chiudere il punto.',
+        };
+    }
+
+    return { secure: soloHttps, warning: null };
+}
+
 module.exports = priorityMiddleware;
+// Esportato per il presidio: la decisione sul cookie `secure` è una regola, e
+// una regola va verificabile senza montare l'intera catena di middleware.
+module.exports.resolveSecureCookieFlag = resolveSecureCookieFlag;
