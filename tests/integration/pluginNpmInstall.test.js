@@ -25,6 +25,7 @@ const { spawn } = require('child_process');
 
 const loadJson5 = require('../../core/loadJson5');
 const editJson5 = require('../../core/editJson5');
+const { reservePort, PORT_BUSY } = require('./reservePort');
 
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 const REAL_NODE_MODULES = path.join(PROJECT_ROOT, 'node_modules');
@@ -56,7 +57,7 @@ async function buildFixture() {
 
   fs.symlinkSync(REAL_NODE_MODULES, path.join(dir, 'node_modules'), 'dir');
 
-  const port = 35000 + Math.floor(Math.random() * 1500);
+  const port = await reservePort();
   await editJson5(path.join(dir, 'ital8Config.json5'), 'httpPort', port);
 
   // Neutralizza adminMedia: default active→0 e rimuovi il vivo (rimaterializzato
@@ -92,7 +93,23 @@ function injectPlugin(dir, name, { packageJson, active = 1, weight = 250, liveIs
 }
 
 // Spawn di `node index.js`. Risolve quando il server è su o quando il processo esce.
-function runBoot(dir, { timeoutMs = 60000 } = {}) {
+async function runBoot(dir, { timeoutMs = 60000 } = {}) {
+  let esito = await spawnBoot(dir, { timeoutMs });
+
+  // Porta occupata non è un difetto del boot: si riprova con una porta nuova,
+  // UNA volta sola — un ritentativo illimitato nasconderebbe il caso in cui la
+  // porta è occupata per davvero e sempre. Vedi ./reservePort.js
+  if (!esito.started && PORT_BUSY.test(esito.output)) {
+    await killProc(esito.proc);
+    await editJson5(path.join(dir, 'ital8Config.json5'), 'httpPort', await reservePort());
+    esito = await spawnBoot(dir, { timeoutMs });
+    esito.portaRitentata = true;
+  }
+
+  return esito;
+}
+
+function spawnBoot(dir, { timeoutMs = 60000 } = {}) {
   return new Promise((resolve) => {
     const proc = spawn('node', ['index.js'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] });
     liveProcs.push(proc);

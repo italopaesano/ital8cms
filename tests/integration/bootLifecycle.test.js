@@ -30,6 +30,7 @@ const { spawn } = require('child_process');
 const loadJson5 = require('../../core/loadJson5');
 const setJson5Key = require('../../core/setJson5Key');
 const editJson5 = require('../../core/editJson5');
+const { reservePort, PORT_BUSY } = require('./reservePort');
 
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 const REAL_NODE_MODULES = path.join(PROJECT_ROOT, 'node_modules');
@@ -65,8 +66,7 @@ async function buildFixture() {
   // node_modules condiviso via symlink (evita 177 MB di copia).
   fs.symlinkSync(REAL_NODE_MODULES, path.join(dir, 'node_modules'), 'dir');
 
-  // Porta alta randomica per non collidere con altri server della suite.
-  const port = 34000 + Math.floor(Math.random() * 1500);
+  const port = await reservePort();
   await editJson5(path.join(dir, 'ital8Config.json5'), 'httpPort', port);
 
   return { dir, port };
@@ -87,7 +87,23 @@ function removeLiveDescriptors(dir) {
 
 // Spawn di `node index.js` nella fixture. Risolve quando il server è su
 // ("server started on port") OPPURE quando il processo esce (gate/[FATAL]).
-function runBoot(dir, { timeoutMs = 40000 } = {}) {
+async function runBoot(dir, { timeoutMs = 40000 } = {}) {
+  let esito = await spawnBoot(dir, { timeoutMs });
+
+  // Se la porta era occupata, non è un difetto del boot: si riprova con una
+  // porta nuova, UNA volta sola. Un ritentativo illimitato nasconderebbe un
+  // caso in cui la porta è occupata per davvero e sempre.
+  if (!esito.started && PORT_BUSY.test(esito.output)) {
+    await killProc(esito.proc);
+    await editJson5(path.join(dir, 'ital8Config.json5'), 'httpPort', await reservePort());
+    esito = await spawnBoot(dir, { timeoutMs });
+    esito.portaRitentata = true;
+  }
+
+  return esito;
+}
+
+function spawnBoot(dir, { timeoutMs = 40000 } = {}) {
   return new Promise((resolve) => {
     const proc = spawn('node', ['index.js'], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] });
     liveProcs.push(proc);
@@ -399,11 +415,13 @@ describe('boot — ciclo di vita config (integration)', () => {
   test('upgradePlugin: non gira alla prima installazione né a boot invariati, gira al bump di versione', async () => {
     const { dir } = await buildFixture();
 
-    // Questo test fa QUATTRO boot: su una porta dedicata, per non contendere la
-    // 3000 con gli altri test che spawnano un server (la suite gira seriale, ma
-    // un processo che tarda a chiudere basta a far fallire il boot successivo
-    // con EADDRINUSE).
-    await editJson5(path.join(dir, 'ital8Config.json5'), 'httpPort', 3457);
+    // Questo test fa QUATTRO boot in sequenza sulla stessa cartella, ed era il
+    // caso che aveva richiesto una porta fissa scritta a mano (3457): « un
+    // processo che tarda a chiudere basta a far fallire il boot successivo con
+    // EADDRINUSE ». Non serve più: `buildFixture` riserva ora una porta dal
+    // kernel, e `runBoot` riconosce il box della porta occupata e ritenta con
+    // una porta nuova — che è esattamente il rimedio a quel caso, senza
+    // scegliere a mano un numero che nessuno verifica.
 
     const pdir = path.join(dir, 'plugins', 'zzUpgradeProbe');
     const logPath = path.join(pdir, 'upgradeCalls.json');
