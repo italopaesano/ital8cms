@@ -87,7 +87,7 @@ Lavorando su questo codebase come AI assistant — regole operative (le più cri
 5. **Sicurezza:** password con bcrypt; valida l'input; output **escapato** (XSS); redirect **validati** (open-redirect); il CSRF è gestito dal plugin `csrfProtection`.
 6. **Documentazione — standard `ital8doc` v1-1** → [`docs/ITAL8DOC-latest.md`](./docs/ITAL8DOC-latest.md). Ogni plugin/tema ha `README.it.md` (obbligatorio) + `EXPLAIN.it.md` (opzionale, se interni non banali), con stub inglese `.md`. Quando tocchi un plugin/tema/sottosistema aggiorna il **suo** doc, non CLAUDE.md.
 7. **Architettura a plugin:** la maggior parte delle feature va implementata come plugin; rispetta dipendenze e ordine di caricamento; segui i pattern esistenti (rotte, middleware, hook).
-8. **Test:** dopo le modifiche verifica che il server parta, il plugin carichi, le rotte rispondano e l'auth funzioni (vedi *Testing* → `docs/testing.it.md`).
+8. **Test:** dopo le modifiche verifica che il server parta, il plugin carichi, le rotte rispondano e l'auth funzioni (vedi *Testing* → `docs/testing.it.md`). Chiudendo un **rilievo**, vale il *Metodo dei presidi* (sotto): il presidio di una **classe** è un **censimento** con esenzioni dichiarate, non un test del caso trovato; e un fallimento deve **portare con sé l'evidenza**, verificato per **mutazione**.
 9. **Temi:** considera sia il tema pubblico sia quello admin.
 10. **Commenti:** l'autore usa l'italiano; per i nuovi commenti preferisci l'inglese, rispettando gli esistenti.
 11. **Progetto alpha** (v0.0.1-alpha.0): breaking changes accettabili ma documentati in `CHANGELOG.md`.
@@ -1560,6 +1560,99 @@ Per lo storage JSON5: leggere con `loadJson5()`, scrivere in modo **atomico** (t
 
 Strategia, convenzioni, helper e isolamento dei test: spostato in [`docs/testing.it.md`](./docs/testing.it.md).
 
+### Metodo dei presidi — come si verifica una correzione
+
+Due principi, entrambi nati da difetti **misurati** su questo progetto e non da
+teoria. Valgono quando si chiude un rilievo, non quando si scrive una feature.
+
+#### 1. Il presidio di una CLASSE è un censimento, non un test di comportamento
+
+Correggendo un difetto si possono proteggere due cose diverse, e si confondono.
+
+Un **test di comportamento** protegge *quel punto*: « con questo ingresso deve
+uscire questa risposta ». Guarda un posto solo. Se lo stesso errore ricompare
+dieci centimetri più in là — in un file gemello, in un plugin aggiunto il mese
+prossimo — il test resta **verde**, perché lì non sta guardando.
+
+Un **censimento** protegge la *famiglia*: elenca tutti i punti che le
+appartengono, li verifica **tutti**, e diventa rosso quando compare un membro
+**nuovo** che nessuno ha classificato. Non difende dal passato: difende dal
+futuro.
+
+È già servito due volte, in entrambi i casi **a suite verde**:
+
+| Caso | I test c'erano e passavano | Cosa non potevano vedere | Censimento |
+|---|---|---|---|
+| Coda di scrittura dei file utente | che la coda **serializza** | un terzo writer dello stesso file **fuori** dalla coda, in un altro file: una coda che non copre tutti i writer non serializza niente | `tests/unit/core/writerCensus.test.js` |
+| GUI admin che salvano un config | che il validatore **valida** | che gli si passavano payload scritti a mano **nella forma che si aspettava**, mai il file reale: salvare da System Settings era *impossibile*, e una seconda GUI era rotta allo stesso modo | `tests/unit/admin/guiConfigRoundTrip.test.js` |
+
+In entrambi i difetti il problema non stava nel codice nuovo né in quello
+vecchio: stava nella **cucitura**, dove nessun test dei due pezzi separati può
+arrivare.
+
+> ⚠️ **Un censimento ha bisogno di ESENZIONI DICHIARATE con la loro ragione.**
+> Senza, degenera in due modi: diventa una lista che marcisce (qualcuno aggiunge
+> un membro e nessuno se ne accorge), o un test che si finisce per disattivare
+> perché dà fastidio. Con la ragione scritta accanto, l'esenzione è una
+> **decisione** invece di una dimenticanza — ed è leggibile da chi arriva dopo.
+
+**Quando il test di comportamento basta:** se la cosa è davvero un punto unico —
+un algoritmo che esiste in un posto solo, senza fratelli. Il censimento si ripaga
+quando c'è una **famiglia**: tutte le GUI admin, tutti i writer di un file, tutte
+le rotte dei plugin, tutte le zone di percorso, tutti i middleware della catena.
+
+**La domanda che individua la classe:** « perché *questo* punto e non i suoi
+fratelli? ». La risposta nomina la condizione che rende il difetto possibile, e
+quindi dove cercarlo ancora. Esempio reale: due GUI su otto erano rotte perché
+`adminAccessControl` valida il file reale **a ogni boot** — una deriva della
+forma ferma l'avvio e non arriva mai alla GUI. I validatori che girano **solo**
+sul payload della GUI sono gli unici che possono divergere in silenzio, ed erano
+esattamente i due rotti.
+
+#### 2. Un fallimento che non spiega sé stesso costa più del difetto
+
+In un test ci sono due qualità **indipendenti**: accorgersi del problema e
+**spiegarlo**. La seconda decide se un difetto viene corretto o inseguito.
+
+Il flake del boot se ne accorgeva da **mesi**: diventava rosso. Ma il messaggio
+diceva solo « Expected: true / Received: false » e **buttava via l'output del
+processo**, cioè l'unica cosa che spiegava l'uscita. Costo reale: tre tornate di
+ipotesi, due correzioni che non correggevano, e in `TODO.md` una conclusione
+scritta con sicurezza — « non era contesa di porta » — che era **incompleta** e
+ha allontanato dalla causa vera per mesi.
+
+Poi un intervento dedicato (v3.40.0) ha fatto stampare al fallimento le ultime
+30 righe di stdout+stderr del processo. Allora **non chiuse nulla**: il flake non
+si presentò. La prima volta che si è presentato, il messaggio diceva « porta
+35464 già in uso » e la causa è stata identificata in **una lettura**. Il lavoro
+di diagnostica che « non aveva chiuso niente » è esattamente quello che ha chiuso.
+
+> ⚠️ **`toMatchObject` non porta con sé le prove, e sembra che lo faccia.**
+> `expect({ started, code, output }).toMatchObject({ started: true })` era stato
+> adottato **proprio** per portarsi dietro stdout — e jest stampa **solo le
+> chiavi che differiscono**, quindi il messaggio è `- "started": true / +
+> "started": false` e nient'altro: identico a `toBe(true)`. Era un presidio che
+> si credeva esistente e che non diagnosticava niente. La forma che funziona è
+> **lanciare un `Error`** col messaggio costruito a mano, che jest stampa per
+> intero (vedi `expectBootListening` in `tests/integration/bootLifecycle.test.js`).
+
+**Regola pratica:** quando un'asserzione riguarda un processo, un sottoprocesso,
+un file o una chiamata di rete, deve **portare con sé l'evidenza** — exit code,
+output, percorso, risposta. Un «`false` invece di `true`» su una di queste cose
+è un messaggio che non si può usare.
+
+#### Il gesto comune ai due principi: la MUTAZIONE
+
+Un presidio non è finito quando è verde: è finito quando lo si è visto
+**diventare rosso** sul difetto che deve cogliere. Si reintroduce il difetto, si
+esegue, e **si legge il messaggio** — se non nomina la causa, la diagnostica non
+c'è ancora. Per un censimento la mutazione ha un fronte in più: va aggiunto un
+**membro nuovo non censito**, e il messaggio deve **nominarlo**.
+
+Vale anche per i presidi **strutturali** (quelli che leggono i sorgenti):
+ancorarli all'**invariante**, non alla grafia. Uno inchiodato al nome di un
+argomento cade su una correzione corretta — succede, ed è successo.
+
 ## Profilo di installazione demo
 
 Spostato in [`docs/demo-profile.it.md`](./docs/demo-profile.it.md).
@@ -1773,8 +1866,8 @@ git push                       # Push to remote
 
 ---
 
-**Last Updated:** 2026-11-22
-**Version:** 2.19.0
+**Last Updated:** 2026-11-26
+**Version:** 2.20.0
 **Maintained By:** AI Assistant (based on codebase analysis)
 **Standard documentazione:** ital8doc v1-1 → [`docs/ITAL8DOC-latest.md`](./docs/ITAL8DOC-latest.md)
 
